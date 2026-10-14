@@ -5,14 +5,19 @@
 // a calibration curve (declared confidence × hit rate per bin, against the
 // perfectly-calibrated diagonal) and the window's ten most surprising turns.
 //
-// Advisory only: no thresholds, no alerts. Fewer than 30 scored turns shows a
-// notice and still renders what exists. A turn_surprise WS frame (or the
-// socket's reconnect / reconcile tick) is only ever a refetch signal.
+// Advisory only: no thresholds, no alerts. The response's `n` counts only the
+// scored turns that ALSO carry a numeric confidence (the calibration input) —
+// a forecast whose model reply failed to parse is scored but has no confidence,
+// so `top` can hold rows while `n` is 0. Calibration and surprises therefore
+// render independently; the empty state needs both to be empty. Fewer than 30
+// confidence-bearing turns shows a notice and still renders what exists. A
+// turn_surprise WS frame for this page's scope (or the socket's reconnect /
+// reconcile tick) is only ever a refetch signal.
 
 import type { MessageDescriptor } from '@lingui/core';
 import { msg, plural } from '@lingui/core/macro';
 import { Trans, useLingui } from '@lingui/react/macro';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import {
   CartesianGrid,
@@ -299,26 +304,42 @@ export function TurnForecastPanel(): JSX.Element {
   const [days, setDays] = useState<TurnForecastDays>(14);
   const [data, setData] = useState<TurnForecastsResp | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  // The sequence number of the latest request (the request-sequence form of
+  // Plans.tsx's `fetchingFor` ref): the route element is reused across /p/:slug
+  // changes and the window buttons fire at will, so a slower response for a
+  // window or project we have since left must not land over the newer one.
+  const latestReq = useRef(0);
 
   const load = useCallback((): void => {
+    // Bumped before the pending check: a scope change also retires whatever
+    // was in flight for the previous scope.
+    latestReq.current += 1;
+    const req = latestReq.current;
     // A scoped page waits for the project list: an unscoped answer arriving
     // last would otherwise paint the whole fleet on a project page.
     if (pending) return;
     fetchTurnForecasts(days, projectId)
       .then((r) => {
+        if (req !== latestReq.current) return;
         setData(r);
         setErr(null);
       })
-      .catch((e: unknown) => setErr(String(e)));
+      .catch((e: unknown) => {
+        if (req !== latestReq.current) return;
+        setErr(String(e));
+      });
   }, [days, projectId, pending]);
 
   useEffect(load, [load]);
 
   // Both callbacks only refetch: onReconnect also fires on the socket's 60 s
   // reconcile tick, and a turn_surprise payload is one row, not the aggregate.
+  // A project page ignores another project's frame; the global page takes all.
   useLiveUpdates(
     (m) => {
-      if (m.type === 'turn_surprise') load();
+      if (m.type !== 'turn_surprise') return;
+      if (projectId !== null && String(m.payload.projectId) !== projectId) return;
+      load();
     },
     load,
   );
@@ -358,7 +379,14 @@ export function TurnForecastPanel(): JSX.Element {
         </fieldset>
         {data !== null && (
           <>
-            <span>{plural(n, { one: '# scored turn', few: '# scored turns', many: '# scored turns', other: '# scored turns' })}</span>
+            <span>
+              {plural(n, {
+                one: '# turn with a confidence',
+                few: '# turns with a confidence',
+                many: '# turns with a confidence',
+                other: '# turns with a confidence',
+              })}
+            </span>
             <span>
               <Trans>avg forecast cost {tokensText} tokens</Trans>
             </span>
@@ -371,7 +399,7 @@ export function TurnForecastPanel(): JSX.Element {
         </div>
       )}
       {data !== null &&
-        (n === 0 ? (
+        (n === 0 && data.top.length === 0 ? (
           <div className="mt-3 rounded border border-line p-3 text-[12px] text-ink-dim">
             <p className="m-0 text-ink">
               <Trans>No scored turns in this window.</Trans>
@@ -386,15 +414,26 @@ export function TurnForecastPanel(): JSX.Element {
           </div>
         ) : (
           <>
-            {data.tooFew && (
-              <p role="status" className="mt-3 mb-0 rounded border border-line px-2 py-1 text-[12px] text-ink-dim">
-                <Trans>n is too small to read (fewer than 30 turns) — what exists is shown as is.</Trans>
+            {n === 0 ? (
+              <p className="mt-3 mb-0 rounded border border-line px-2 py-1 text-[12px] text-ink-dim">
+                <Trans>
+                  No turns with a confidence yet — calibration needs forecasts whose confidence parsed. The
+                  scored turns below still count.
+                </Trans>
               </p>
+            ) : (
+              <>
+                {data.tooFew && (
+                  <p role="status" className="mt-3 mb-0 rounded border border-line px-2 py-1 text-[12px] text-ink-dim">
+                    <Trans>n is too small to read (fewer than 30 turns) — what exists is shown as is.</Trans>
+                  </p>
+                )}
+                <div className="mt-3">
+                  <CalibrationCurve bins={data.bins} />
+                  <BinsTable bins={data.bins} />
+                </div>
+              </>
             )}
-            <div className="mt-3">
-              <CalibrationCurve bins={data.bins} />
-              <BinsTable bins={data.bins} />
-            </div>
             {data.top.length > 0 && <SurprisesTable rows={data.top} slug={projectSlug} />}
           </>
         ))}

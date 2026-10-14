@@ -325,8 +325,8 @@ msgid "{missingCount, plural, one {# missing} few {# missing} many {# missing} o
 msgstr "{missingCount, plural, one {бракує #} few {бракує #} many {бракує #} other {бракує #}}"
 
 #: src/pages/learning/TurnForecastPanel.tsx
-msgid "{n, plural, one {# scored turn} few {# scored turns} many {# scored turns} other {# scored turns}}"
-msgstr "{n, plural, one {# оцінений хід} few {# оцінені ходи} many {# оцінених ходів} other {# оціненого ходу}}"
+msgid "{n, plural, one {# turn with a confidence} few {# turns with a confidence} many {# turns with a confidence} other {# turns with a confidence}}"
+msgstr "{n, plural, one {# хід з упевненістю} few {# ходи з упевненістю} many {# ходів з упевненістю} other {# ходу з упевненістю}}"
 
 #: src/pages/inbox/TriageBanner.tsx
 msgid "{nAccept, plural, one {# suggestion} few {# suggestions} many {# suggestions} other {# suggestions}}"
@@ -2789,6 +2789,10 @@ msgstr "цей агент не виконав жодної задачі"
 #: src/pages/Retro.tsx
 msgid "no tasks with retro artifacts in this range"
 msgstr "у цьому періоді немає задач з артефактами ретро"
+
+#: src/pages/learning/TurnForecastPanel.tsx
+msgid "No turns with a confidence yet — calibration needs forecasts whose confidence parsed. The scored turns below still count."
+msgstr "Ще немає ходів з упевненістю — калібруванню потрібні прогнози, чию упевненість вдалося розібрати. Оцінені ходи нижче все одно враховано."
 
 #: src/pages/health/FrictionTriageStrip.tsx
 msgid "no untriaged groups"

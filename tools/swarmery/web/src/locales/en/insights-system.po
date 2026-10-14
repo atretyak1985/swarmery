@@ -325,8 +325,8 @@ msgid "{missingCount, plural, one {# missing} few {# missing} many {# missing} o
 msgstr "{missingCount, plural, one {# missing} few {# missing} many {# missing} other {# missing}}"
 
 #: src/pages/learning/TurnForecastPanel.tsx
-msgid "{n, plural, one {# scored turn} few {# scored turns} many {# scored turns} other {# scored turns}}"
-msgstr "{n, plural, one {# scored turn} few {# scored turns} many {# scored turns} other {# scored turns}}"
+msgid "{n, plural, one {# turn with a confidence} few {# turns with a confidence} many {# turns with a confidence} other {# turns with a confidence}}"
+msgstr "{n, plural, one {# turn with a confidence} few {# turns with a confidence} many {# turns with a confidence} other {# turns with a confidence}}"
 
 #: src/pages/inbox/TriageBanner.tsx
 msgid "{nAccept, plural, one {# suggestion} few {# suggestions} many {# suggestions} other {# suggestions}}"
@@ -2789,6 +2789,10 @@ msgstr "no tasks this agent executed"
 #: src/pages/Retro.tsx
 msgid "no tasks with retro artifacts in this range"
 msgstr "no tasks with retro artifacts in this range"
+
+#: src/pages/learning/TurnForecastPanel.tsx
+msgid "No turns with a confidence yet — calibration needs forecasts whose confidence parsed. The scored turns below still count."
+msgstr "No turns with a confidence yet — calibration needs forecasts whose confidence parsed. The scored turns below still count."
 
 #: src/pages/health/FrictionTriageStrip.tsx
 msgid "no untriaged groups"

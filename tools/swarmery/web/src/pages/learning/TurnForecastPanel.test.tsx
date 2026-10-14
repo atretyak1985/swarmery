@@ -7,15 +7,19 @@
 //   2. An empty bin (n = 0, null mean / hit rate) is never handed to the chart
 //      as 0, and reads "—" in the text alternative.
 //   3. tooFew shows the "n is too small" notice and still renders the data.
-//   4. n = 0 shows the empty state naming the swarmery link `forecast` option.
+//   4. n = 0 AND no top rows shows the empty state naming the swarmery link
+//      `forecast` option; n = 0 with top rows (scored turns whose confidence
+//      did not parse) keeps the surprises table and notes the calibration gap.
 //   5. A turn_surprise frame (and the reconnect tick) refetches; other frames
-//      do not.
+//      do not; a project page ignores another project's frame.
 //   6. The window selector refetches with the chosen days; a /p/:slug page
 //      passes the numeric project id and scopes the session links.
+//   7. Only the latest request lands: a stale response for a window or a
+//      project the page has since left is dropped.
 //
 // On its own: `npx vitest run src/pages/learning/TurnForecastPanel`.
 
-import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import { Link, MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as api from '../../api/turnForecasts';
 import type { TurnForecastsResp, WSMessage } from '../../api/types';
@@ -34,9 +38,11 @@ vi.mock('../../lib/ws', () => ({
   },
 }));
 
+const PROJECT_IDS: Record<string, string> = { shop: '7', a: '1', b: '2' };
+
 vi.mock('../../lib/scope', () => ({
   useProjectScope: (key: string | null | undefined) =>
-    key == null || key === '' ? { id: null, pending: false } : { id: '7', pending: false },
+    key == null || key === '' ? { id: null, pending: false } : { id: PROJECT_IDS[key] ?? null, pending: false },
 }));
 
 vi.mock('../../api/turnForecasts', async (importOriginal) => {
@@ -84,9 +90,18 @@ const FIXTURE: TurnForecastsResp = {
   avgForecastTokens: 115.38,
 };
 
+function deferred<T>(): { promise: Promise<T>; resolve: (v: T) => void } {
+  let resolve: (v: T) => void = () => undefined;
+  const promise = new Promise<T>((r) => {
+    resolve = r;
+  });
+  return { promise, resolve };
+}
+
 function renderAt(url = '/learning'): void {
   render(
     <MemoryRouter initialEntries={[url]}>
+      <Link to="/p/b/learning">go to b</Link>
       <Routes>
         <Route path="/learning" element={<TurnForecastPanel />} />
         <Route path="/p/:slug/learning" element={<TurnForecastPanel />} />
@@ -122,7 +137,7 @@ describe('calibrationPoints', () => {
 describe('TurnForecastPanel', () => {
   it('renders header facts, every bin and the top surprises', async () => {
     renderAt();
-    expect(await screen.findByText('13 scored turns')).toBeTruthy();
+    expect(await screen.findByText('13 turns with a confidence')).toBeTruthy();
     expect(screen.getByText('avg forecast cost 115 tokens')).toBeTruthy();
     expect(api.fetchTurnForecasts).toHaveBeenCalledWith(14, null);
 
@@ -153,7 +168,7 @@ describe('TurnForecastPanel', () => {
   it('omits the notice when tooFew is false', async () => {
     vi.mocked(api.fetchTurnForecasts).mockResolvedValue({ ...FIXTURE, n: 40, tooFew: false });
     renderAt();
-    expect(await screen.findByText('40 scored turns')).toBeTruthy();
+    expect(await screen.findByText('40 turns with a confidence')).toBeTruthy();
     expect(screen.queryByRole('status')).toBeNull();
   });
 
@@ -173,9 +188,28 @@ describe('TurnForecastPanel', () => {
     expect(screen.queryByRole('status')).toBeNull();
   });
 
+  it('keeps the surprises when no scored turn carries a confidence', async () => {
+    // The daemon's `n` counts only confidence-bearing turns; `top` counts
+    // every scored turn (an unparsable model reply scores with a null confidence).
+    vi.mocked(api.fetchTurnForecasts).mockResolvedValue({
+      ...FIXTURE,
+      n: 0,
+      tooFew: true,
+      bins: FIXTURE.bins.map((b) => ({ ...b, n: 0, meanConfidence: null, hitRate: null })),
+    });
+    renderAt();
+    expect(await screen.findByRole('table', { name: 'Most surprising turns' })).toBeTruthy();
+    expect(screen.getByText('0 turns with a confidence')).toBeTruthy();
+    expect(screen.getByText(/No turns with a confidence yet/)).toBeTruthy();
+    expect(screen.queryByText('No scored turns in this window.')).toBeNull();
+    expect(screen.queryByRole('table', { name: 'Calibration by confidence bin' })).toBeNull();
+    // The "n too small" notice belongs to calibration, which has nothing to show.
+    expect(screen.queryByRole('status')).toBeNull();
+  });
+
   it('refetches on a turn_surprise frame and on reconnect, not on other frames', async () => {
     renderAt();
-    await screen.findByText('13 scored turns');
+    await screen.findByText('13 turns with a confidence');
     expect(api.fetchTurnForecasts).toHaveBeenCalledTimes(1);
 
     act(() => {
@@ -199,9 +233,77 @@ describe('TurnForecastPanel', () => {
     await waitFor(() => expect(api.fetchTurnForecasts).toHaveBeenCalledTimes(3));
   });
 
+  it("ignores another project's turn_surprise frame on a project page", async () => {
+    renderAt('/p/shop/learning');
+    await screen.findByText('13 turns with a confidence');
+    expect(api.fetchTurnForecasts).toHaveBeenCalledTimes(1);
+    const row = FIXTURE.top[0];
+    if (row === undefined) throw new Error('fixture has no top row');
+
+    act(() => {
+      ws.onMessage?.({ type: 'turn_surprise', payload: { ...row, projectId: 1 } });
+    });
+    act(() => {
+      ws.onMessage?.({ type: 'turn_surprise', payload: { ...row, projectId: null } });
+    });
+    expect(api.fetchTurnForecasts).toHaveBeenCalledTimes(1);
+
+    act(() => {
+      ws.onMessage?.({ type: 'turn_surprise', payload: { ...row, projectId: 7 } });
+    });
+    await waitFor(() => expect(api.fetchTurnForecasts).toHaveBeenCalledTimes(2));
+    expect(api.fetchTurnForecasts).toHaveBeenLastCalledWith(14, '7');
+  });
+
+  it('drops a stale response for a window the page has since left', async () => {
+    const d14 = deferred<TurnForecastsResp>();
+    const d30 = deferred<TurnForecastsResp>();
+    vi.mocked(api.fetchTurnForecasts).mockImplementation((days) => (days === 30 ? d30.promise : d14.promise));
+    renderAt();
+    fireEvent.click(screen.getByRole('button', { name: '30 days' }));
+    await waitFor(() => expect(api.fetchTurnForecasts).toHaveBeenLastCalledWith(30, null));
+
+    await act(async () => {
+      d30.resolve({ ...FIXTURE, days: 30, n: 31, tooFew: false });
+      await d30.promise;
+    });
+    await act(async () => {
+      d14.resolve(FIXTURE);
+      await d14.promise;
+    });
+    expect(screen.getByText('31 turns with a confidence')).toBeTruthy();
+    expect(screen.queryByText('13 turns with a confidence')).toBeNull();
+    expect(screen.getByRole('button', { name: '30 days' }).getAttribute('aria-pressed')).toBe('true');
+  });
+
+  it('drops a stale response for a project the page has since left', async () => {
+    const da = deferred<TurnForecastsResp>();
+    const db = deferred<TurnForecastsResp>();
+    vi.mocked(api.fetchTurnForecasts).mockImplementation((_days, project) =>
+      project === '2' ? db.promise : da.promise,
+    );
+    renderAt('/p/a/learning');
+    expect(api.fetchTurnForecasts).toHaveBeenLastCalledWith(14, '1');
+    fireEvent.click(screen.getByRole('link', { name: 'go to b' }));
+    await waitFor(() => expect(api.fetchTurnForecasts).toHaveBeenLastCalledWith(14, '2'));
+
+    await act(async () => {
+      db.resolve({ ...FIXTURE, n: 21, tooFew: true });
+      await db.promise;
+    });
+    await act(async () => {
+      da.resolve(FIXTURE);
+      await da.promise;
+    });
+    expect(screen.getByText('21 turns with a confidence')).toBeTruthy();
+    expect(screen.queryByText('13 turns with a confidence')).toBeNull();
+    const link = screen.getByRole('link', { name: 'session 1 · turn 12' });
+    expect(link.getAttribute('href')).toBe('/p/b/sessions/1');
+  });
+
   it('refetches with the chosen window', async () => {
     renderAt();
-    await screen.findByText('13 scored turns');
+    await screen.findByText('13 turns with a confidence');
     fireEvent.click(screen.getByRole('button', { name: '30 days' }));
     await waitFor(() => expect(api.fetchTurnForecasts).toHaveBeenLastCalledWith(30, null));
     expect(screen.getByRole('button', { name: '30 days' }).getAttribute('aria-pressed')).toBe('true');
