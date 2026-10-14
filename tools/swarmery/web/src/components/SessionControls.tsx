@@ -70,6 +70,8 @@ export const PROMPT_MAX_UNSETTLED_MS = 12 * 60_000;
 const MAX_UNSETTLED_MS: Readonly<Record<LinkCommandKind, number>> = {
   stop: STOP_MAX_UNSETTLED_MS,
   prompt: PROMPT_MAX_UNSETTLED_MS,
+  // Never tracked here (the swarm panel owns message commands); present for the Record.
+  message: PROMPT_MAX_UNSETTLED_MS,
 };
 
 /** The exact ack message of a prompt bounced by a running turn (protocol). */
@@ -109,7 +111,9 @@ function CommandWatcher({
 }): null {
   const onMessage = useCallback(
     (msg: WSMessage): void => {
-      if (msg.type === 'link_command' && msg.payload.sessionId === sessionId) onNote(msg.payload);
+      if (msg.type === 'link_command' && msg.payload.sessionId === sessionId && msg.payload.kind !== 'message') {
+        onNote(msg.payload);
+      }
     },
     [sessionId, onNote],
   );

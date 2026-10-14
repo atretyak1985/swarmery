@@ -49,6 +49,7 @@ import {
   STATUSES,
   type DayBucket,
 } from '../lib/sessionsView';
+import { SwarmConflictProvider } from '../lib/swarm';
 import { applySessionMessage, useLiveUpdates } from '../lib/ws';
 import { BULK_PROMPT_MAX, BulkPromptBar } from '../components/BulkPromptBar';
 import { ExplainPair } from '../components/Explain';
@@ -182,7 +183,17 @@ function ViewSegment({
   );
 }
 
+/** The list, wrapped so every card shares ONE claims fetch for its conflict badge. */
 export function Sessions(): JSX.Element {
+  const { scopeProject } = useScope();
+  return (
+    <SwarmConflictProvider projectId={scopeProject?.id}>
+      <SessionsList />
+    </SwarmConflictProvider>
+  );
+}
+
+function SessionsList(): JSX.Element {
   const { t } = useLingui();
   // Project filtering comes from the in-page scope chip (global useScope
   // context); the title/plan filter comes from the in-page search input.
