@@ -17,7 +17,11 @@ migration `0107_link_sessions.sql`. The control channel (phase 4, [Commands](#co
 adds `internal/api/link_commands.go`, `internal/link/commands.go` and migration
 `0108_link_commands.sql`. The approvals channel (phase 5, [Permission](#permission))
 adds `internal/api/link_permission.go`, `internal/approvals/mod.go` and migration
-`0114_permission_channel.sql`.
+`0114_permission_channel.sql`. The swarm (phase 6, [Swarm](#swarm)) adds
+`internal/api/link_swarm.go`, `internal/link/swarm.go` and migration
+`0115_link_swarm.sql`. The plan view (phase 7, [Plan](#plan)) adds
+`internal/api/link_plan.go`, `internal/link/drift.go` and migration
+`0116_session_plan.sql`.
 
 ## Transport
 
@@ -892,3 +896,185 @@ Claude session ids (`sessions.session_uuid`). There are no foreign keys, for the
 `0107` gives. `link_messages` ages on the `link_events` cutoff by its own `at`
 (`Stats.LinkMessages`); `link_claims` rows go 24 h after their release, and an
 unreleased claim 24 h after it was claimed (`Stats.LinkClaims`).
+
+## Plan
+
+**Status:** phase 7 contract (mods-swarmery-link, plan in the terminal). The mod shows
+the session's plan phase and its acceptance criteria, ticks a criterion, picks a plan,
+starts the next phase run and reports drift. **The daemon owns plan state and the one
+markdown parser** (decision D5). The mod never reads or parses a plan doc: it draws the
+view below and sends indexes back. Implementation: `internal/api/link_plan.go`,
+`internal/link/drift.go`, migration `0111_session_plan.sql`.
+
+Every `/api/link/plan*` route sits behind the bearer token like `/api/link/events`
+(`401` without it, `503 {"error":"link disabled"}` with the link off). There is no
+origin fence, and the Host fence applies. POST bodies are JSON, at most 16 KiB (`413`
+above). A body that is not JSON is `400`. `taskId` and `phaseId` may be sent as a string
+or a number.
+
+### The view
+
+`GET /api/link/plan`, every `200` of the POSTs below, has this shape:
+
+```json
+{ "taskId": "2026-10-01-alpha", "title": "Alpha plan",
+  "url": "http://127.0.0.1:7777/p/proj/plans/2026-10-01-alpha/phase/2",
+  "chosenBy": "auto",
+  "phase": { "id": "12", "n": 2, "title": "API", "status": "In progress", "done": 2, "total": 4,
+             "criteria": [ { "idx": 0, "text": "route registered", "done": true, "class": "" },
+                           { "idx": 1, "text": "tick flips the doc", "done": false, "class": "" },
+                           { "idx": 2, "text": "push the branch", "done": false, "class": "land" },
+                           { "idx": 3, "text": "check the console", "done": true, "class": "manual" } ] },
+  "next": { "id": "13", "n": 3, "title": "UI" } }
+```
+
+| Field | Meaning |
+|---|---|
+| `taskId` | the plan's canonical task id (`tasks.external_id`, `yyyy-mm-dd-slug`). A plan without one carries its numeric task id as a string. Every POST below takes it back as is |
+| `title` | the plan's title |
+| `url` | the daemon's own origin (the request's `Host`) plus the Plans page path of this phase: `/p/<project slug>/plans/<taskId>/phase/<n>` |
+| `chosenBy` | `terminal` when the operator picked the plan with `select`, `auto` when the daemon resolved it |
+| `phase.id` | the phase id as the epics API names it (`epic_phases.id`, as a string) |
+| `phase.n` | the phase number (its `seq`) |
+| `phase.title` | the phase name with a leading `Phase N — ` removed |
+| `phase.status` | `Pending`, `In progress`, `Blocked`, `Done`, `Unverified` or `Unreported`, derived the way the Plans page derives its phase chip: the completion gate (`internal/phasegate`), then the doc's `Status: In progress`, a running phase run, unfinished dependencies, any ticked criterion |
+| `phase.done` / `phase.total` | ticked / all criteria, counted from the doc on disk at request time |
+| `phase.criteria[]` | every acceptance criterion in document order. `text` drops the checkbox and the class marker. `class` is `land` for `[LAND]`, `manual` for `[MANUAL]`, `""` otherwise, ticked or not |
+| `next` | the first later phase (in sequencing order) that is not `Done`, or `null` |
+
+**The `idx` contract.** `idx` is the criterion's 0-based ordinal among the doc's
+criteria, which are every `- [ ]` / `- [x]` line outside a fenced code block
+(`wsingest.ListCriteria`, the same walker the checkbox counts use). A checkbox quoted
+inside a fenced agent prompt is not a criterion and has no `idx`. `tick` resolves `idx`
+over the same walker on the bytes it is about to write, so the index the mod drew is the
+line the daemon flips. After any doc change, the next `GET` renumbers. The mod should
+re-read the view before it offers another tick.
+
+`done`, `total` and `criteria` come from the file, so a tick shows on the next `GET`
+at once. `status` and `next` come from the indexed phase rows, which the workspace
+scanner refreshes within about a second of a doc change.
+
+### GET /api/link/plan
+
+```
+GET /api/link/plan?session=<Claude session id>&cwd=<absolute path>
+```
+
+At least one parameter is required (`400` otherwise). Resolution, first match wins:
+
+1. **The session's pick.** A `session_plan` row for `session` with `chosen_by =
+   'terminal'`: that plan, at its stored phase, else at the plan's active phase. A pick
+   whose plan is no longer indexed falls through to step 2.
+2. **The project's active plan.** The project is the session's (`sessions.session_uuid`
+   → `project_id`). If the daemon has no row for the session yet, or the row sits on
+   the `(unknown)` project, the project is the registered project whose path is `cwd`
+   or its closest registered ancestor (`ingest.CanonicalProjectPath`, the resolver
+   attribution uses). Among that project's non-archived plans (the newest 50), the one
+   with a phase `In progress` wins. If several have one, the one whose phase doc changed
+   last wins. If none has one, the newest plan the epics list calls `active` wins.
+
+The phase is the pick's phase, else the first `In progress` phase, else the first that
+is not `Done`, else the last. A step-2 answer is recorded as a `session_plan` row with
+`chosen_by = 'auto'` (this feeds the SPA list below). It never overwrites a `terminal`
+row.
+
+| Code | When |
+|---|---|
+| `200` | the view |
+| `204` | no plan: no project for this session or `cwd`, or a project with no plan to show |
+| `400` | neither `session` nor `cwd` |
+
+### POST /api/link/plan/select
+
+```json
+{ "session": "<uuid>", "taskId": "2026-10-01-alpha", "phaseId": "12" }
+```
+
+Pins the plan, and the phase when `phaseId` is given, to the session (`chosen_by =
+'terminal'`, replacing any earlier pick). Without `phaseId` the view follows the plan's
+active phase. Answers `200` with the view, `400` for a missing `session` or `taskId`,
+`404` for an unknown plan or a phase that is not that plan's.
+
+### POST /api/link/plan/tick
+
+```json
+{ "session": "<uuid>", "taskId": "2026-10-01-alpha", "phaseId": "12", "idx": 1, "done": true }
+```
+
+Flips criterion `idx` of that phase's doc to `done`. It runs through the same code as
+the Criteria tab's `PATCH /api/epics/{taskId}/docs {line, done}`: the doc stays
+confined to the plan directory, a timestamped backup lands in `plan/.backups/`, and a
+tick that closes the doc's last open criterion hands the phase to the plan branch
+review. The daemon then publishes `plan_updated` on the WS bus (the scanner publishes it
+again when it re-indexes the doc).
+
+| Code | When |
+|---|---|
+| `200` | the view of that phase, after the write |
+| `400` | `idx` or `done` missing, `idx` negative, `taskId` or `phaseId` missing |
+| `404` | unknown plan or phase, no plan directory, doc missing, or no criterion at `idx` (the doc has fewer, usually because it changed since the last `GET`) |
+
+There is no version check. A tick names a criterion by position in the doc as it is
+now, the same way `PATCH` names a line.
+
+### POST /api/link/plan/run
+
+```json
+{ "session": "<uuid>", "taskId": "2026-10-01-alpha", "phaseId": "13" }
+```
+
+Starts a headless run of that phase through the same code as the Plans page's
+`POST /api/epics/{taskId}/phases/{phaseId}/run` with no options (the doc's `**Model:**`,
+then the daemon default). The status and body are that route's: `202 {"status":
+"running", "sessionUuid": …}`, or a `409` with a `code` (`deps-unmet`, `already-running`,
+`manual-only`, `doc-model-unknown`, …), or `429` for an account below its quota floor.
+It adds `404` for an unknown plan or phase, `400` for a missing field, and
+`503 {"error":"phase runs not attached"}` on a daemon without phase runs.
+
+### POST /api/link/plan/drift
+
+```json
+{ "session": "<uuid>", "taskId": "2026-10-01-alpha", "phaseId": "12",
+  "verdict": "off-phase", "reason": "editing the billing module" }
+```
+
+The mod's judgement of whether the session's recent work matches its open phase.
+`verdict` is `off-phase`, `adjacent` or `on-phase`. `reason` is cut to 200 characters.
+The daemon stores it as a `link_events` row of kind `drift` for that session, with the
+body minus `session` as the payload, and answers `202 {"stored": true}`. A second report
+in the same millisecond is a duplicate (`"stored": false`). It touches no `link_status`
+and never runs through `POST /api/link/events`, which rejects the kind.
+
+| Code | When |
+|---|---|
+| `202` | stored (or a same-millisecond duplicate) |
+| `400` | missing `session`, or a `verdict` outside the set |
+| `404` | no `sessions` row carries this session id |
+
+### GET /api/epics/{taskId}/terminal-sessions
+
+A SPA read (no token, no origin fence, like `GET /api/epics`). `{taskId}` is the
+numeric task id the epics API uses. It answers which sessions have this plan open in a
+terminal, newest first:
+
+```json
+[ { "sessionId": 41, "sessionUuid": "efaa9b56-…", "phaseId": "12", "chosenBy": "terminal",
+    "at": "2026-10-14T09:12:03.120Z", "live": true } ]
+```
+
+The list holds every `terminal` pick of this plan, plus every session whose `GET`
+resolved to it automatically in the last 10 minutes. `phaseId` is `null` for a pick of
+the plan without a phase. `live` is the session's link freshness (`ingest.LinkFresh`,
+the same answer as the session DTO's `link.live`). A row whose session has no `sessions`
+row yet is left out. `[]` when none, `404` for an unknown task, `400` for a non-numeric
+id.
+
+### Storage and retention
+
+Table `session_plan` (migration `0111`): `session_id` (the Claude session id, primary
+key), `task_id`, `phase_id` (nullable), `chosen_by` (`terminal` | `auto`), `at`
+(fixed-width ms UTC), indexed on `task_id`. There is no foreign key, for the reason
+`0107` gives. The prune pass drops a row once its `at` is older than the `link_events`
+cutoff **and** its session has ended (`ended_at` set, the mod reported `session.end`,
+or no `sessions` row is left), `Stats.SessionPlans`. A long-lived terminal keeps its
+pick however old it is. Drift reports age with the rest of `link_events`.
