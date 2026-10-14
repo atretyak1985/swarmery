@@ -6,8 +6,9 @@
 //
 // The server takes at most BULK_PROMPT_MAX ids per call: a larger selection is
 // refused here, in the operator's language, rather than by the server's 400.
-// The page passes only the selected rows that are currently visible; the ones
-// a filter hides are counted in `hiddenCount` and never sent.
+// The page passes only the selected rows that are currently visible and whose
+// mod polls; the ones a filter hides (`hiddenCount`) and the ones still on
+// screen whose mod stopped polling (`notPollingCount`) are named, never sent.
 
 import { useLingui } from '@lingui/react/macro';
 import { useState } from 'react';
@@ -27,6 +28,7 @@ function sessionLabel(byId: ReadonlyMap<number, Session>, id: number): string {
 export function BulkPromptBar({
   selected,
   hiddenCount = 0,
+  notPollingCount = 0,
   selectableCount,
   byId,
   onSelectAll,
@@ -37,6 +39,9 @@ export function BulkPromptBar({
   selected: readonly number[];
   /** Selected sessions a filter hides now; named, never sent. */
   hiddenCount?: number;
+  /** Selected sessions on screen whose link mod stopped polling; named, never
+   * sent. */
+  notPollingCount?: number;
   /** How many loaded sessions could be selected (link.controllable). */
   selectableCount: number;
   /** Loaded sessions by id, to name the rows of the result. */
@@ -93,6 +98,11 @@ export function BulkPromptBar({
       {hiddenCount > 0 && (
         <div className="font-mono text-[10.5px] text-amber" data-testid="bulk-hidden-note">
           {t`${hiddenCount} selected sessions are hidden by the filter and will not be sent`}
+        </div>
+      )}
+      {notPollingCount > 0 && (
+        <div className="font-mono text-[10.5px] text-amber" data-testid="bulk-not-polling-note">
+          {t`${notPollingCount} selected sessions no longer have a polling link mod and will not be sent`}
         </div>
       )}
       <textarea

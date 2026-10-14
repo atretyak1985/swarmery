@@ -260,6 +260,10 @@ msgstr "{name}: вимкнено"
 msgid "{name}: enabled"
 msgstr "{name}: увімкнено"
 
+#: src/components/BulkPromptBar.tsx
+msgid "{notPollingCount} selected sessions no longer have a polling link mod and will not be sent"
+msgstr "вибрані сесії, у яких мод swarmery link більше не опитує команди ({notPollingCount}), не буде надіслано"
+
 #: src/lib/sessionsView.ts
 msgid "{nth} attempt — {tail}"
 msgstr "{nth} спроба — {tail}"
@@ -2414,6 +2418,10 @@ msgstr "У цій сесії немає мода swarmery link, тож керу�
 msgid "no tasks to graph"
 msgstr "немає задач для графа"
 
+#: src/components/SessionControls.tsx
+msgid "no update received — state unknown"
+msgstr "оновлень не надходило — стан невідомий"
+
 #: src/components/usage/UsageProviderCard.tsx
 msgid "No usage data available"
 msgstr "Даних про використання немає"
@@ -3682,10 +3690,6 @@ msgstr "запуск…"
 #: src/workspace/task/RunLog.tsx
 msgid "state"
 msgstr "стан"
-
-#: src/components/SessionControls.tsx
-msgid "state unknown after reconnect"
-msgstr "стан невідомий після перепідключення"
 
 #: src/components/StopButton.tsx
 msgid "Stop"

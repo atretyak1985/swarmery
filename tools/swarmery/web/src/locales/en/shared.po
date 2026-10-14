@@ -260,6 +260,10 @@ msgstr "{name}: disabled"
 msgid "{name}: enabled"
 msgstr "{name}: enabled"
 
+#: src/components/BulkPromptBar.tsx
+msgid "{notPollingCount} selected sessions no longer have a polling link mod and will not be sent"
+msgstr "{notPollingCount} selected sessions no longer have a polling link mod and will not be sent"
+
 #: src/lib/sessionsView.ts
 msgid "{nth} attempt — {tail}"
 msgstr "{nth} attempt — {tail}"
@@ -2414,6 +2418,10 @@ msgstr "No swarmery link mod reports on this session, so it cannot be steered fr
 msgid "no tasks to graph"
 msgstr "no tasks to graph"
 
+#: src/components/SessionControls.tsx
+msgid "no update received — state unknown"
+msgstr "no update received — state unknown"
+
 #: src/components/usage/UsageProviderCard.tsx
 msgid "No usage data available"
 msgstr "No usage data available"
@@ -3682,10 +3690,6 @@ msgstr "starting…"
 #: src/workspace/task/RunLog.tsx
 msgid "state"
 msgstr "state"
-
-#: src/components/SessionControls.tsx
-msgid "state unknown after reconnect"
-msgstr "state unknown after reconnect"
 
 #: src/components/StopButton.tsx
 msgid "Stop"

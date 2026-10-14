@@ -10,9 +10,14 @@
 //   4. The command's state follows the link_command WS frames, including a
 //      frame that beats the 202, and a failure shows its message.
 //   5. The bulk bar renders the server's queued and skipped (with reasons),
-//      refuses more than the server's 50 ids, and names hidden selections.
+//      refuses more than the server's 50 ids, and names hidden and
+//      no-longer-polling selections.
 //   6. An unsettled prompt (bounced by a running turn) never disables Stop
-//      turn; only an unsettled stop does; a WS reconnect releases both.
+//      turn; only an unsettled stop does.
+//   7. The WS "frames may have been lost" callback (a reopen, or the 60 s
+//      convergence tick) gives a command up as unknown only once it outlived
+//      its kind's server lifetime (stop 90 s, prompt 12 min); a younger one
+//      stays tracked and its later frames still land.
 //
 // `npx vitest run src/components/SessionControls.test.tsx`.
 
@@ -20,7 +25,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { LinkCommandNote, Session, SessionLink, WSMessage } from '../api/types';
 import { act, cleanup, fireEvent, render, screen } from '../test/render';
 import { BulkPromptBar } from './BulkPromptBar';
-import { SessionControls } from './SessionControls';
+import { PROMPT_MAX_UNSETTLED_MS, STOP_MAX_UNSETTLED_MS, SessionControls } from './SessionControls';
 
 const api = vi.hoisted(() => ({
   stopLinkTurn: vi.fn(),
@@ -72,7 +77,10 @@ beforeEach(() => {
   ws.handlers.clear();
   ws.reconnects.clear();
 });
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.useRealTimers();
+});
 
 function makeLink(over: Partial<SessionLink> = {}): SessionLink {
   return {
@@ -265,23 +273,89 @@ describe('Stop turn vs an unsettled prompt', () => {
     expect(promptBtn().disabled).toBe(false);
   });
 
-  it('releases both buttons as "state unknown" after a WS reconnect', async () => {
-    await bouncedPrompt();
-    api.stopLinkTurn.mockResolvedValue({ commandId: 6 });
+});
+
+describe('frames-may-be-lost callback (reopen or convergence tick)', () => {
+  // Only Date is faked: the POST promises and React's scheduling stay real.
+  const T0 = Date.parse('2026-10-14T10:00:00Z');
+  const at = (ms: number): void => {
+    vi.setSystemTime(T0 + ms);
+  };
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    at(0);
+  });
+
+  const QUEUED_BEHIND_TURN = 'Prompt · queued — waits for the running turn to end';
+  const UNKNOWN_PROMPT = 'Prompt · no update received — state unknown';
+  const UNKNOWN_STOP = 'Stop turn · no update received — state unknown';
+
+  async function bouncedPrompt(): Promise<void> {
+    api.sendLinkPrompt.mockResolvedValue({ commandId: 5 });
+    render(<SessionControls session={makeSession({ link: makeLink() })} />);
+    fireEvent.click(promptBtn());
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'next' } });
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    });
+    emit({ sessionId: 7, commandId: 5, kind: 'prompt', state: 'queued', message: 'turn in progress' });
+  }
+
+  async function sentStop(commandId: number): Promise<void> {
+    api.stopLinkTurn.mockResolvedValue({ commandId });
     fireEvent.click(stopBtn());
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: 'Confirm stop' }));
     });
-    expect(stopBtn().disabled).toBe(true);
-    expect(promptBtn().disabled).toBe(true);
+  }
 
+  it('keeps a prompt queued behind a running turn through ticks at 30 s and 5 min, gives it up at 13 min', async () => {
+    await bouncedPrompt();
+    for (const ms of [30_000, 5 * 60_000]) {
+      at(ms);
+      reconnect();
+      expect(stateOf('prompt')).toBe(QUEUED_BEHIND_TURN);
+      expect(promptBtn().disabled).toBe(true);
+      expect(ws.handlers.size).toBe(1);
+    }
+
+    at(13 * 60_000);
+    expect(13 * 60_000).toBeGreaterThan(PROMPT_MAX_UNSETTLED_MS);
     reconnect();
-    expect(stopBtn().disabled).toBe(false);
+    expect(stateOf('prompt')).toBe(UNKNOWN_PROMPT);
     expect(promptBtn().disabled).toBe(false);
-    expect(stateOf('stop')).toBe('Stop turn · state unknown after reconnect');
-    expect(stateOf('prompt')).toBe('Prompt · state unknown after reconnect');
-    // Nothing is listening any more.
     expect(ws.handlers.size).toBe(0);
+  });
+
+  it('keeps a just-sent stop through a tick at 1 s and still applies its frames', async () => {
+    render(<SessionControls session={makeSession({ link: makeLink() })} />);
+    await sentStop(31);
+    at(1_000);
+    reconnect();
+    expect(stateOf('stop')).toBe('Stop turn · queued, waiting for the mod to pick it up');
+    expect(stopBtn().disabled).toBe(true);
+
+    emit({ sessionId: 7, commandId: 31, kind: 'stop', state: 'delivered' });
+    expect(stateOf('stop')).toBe('Stop turn · delivered to the session');
+    emit({ sessionId: 7, commandId: 31, kind: 'stop', state: 'done' });
+    expect(stateOf('stop')).toBe('Stop turn · done');
+    expect(stopBtn().disabled).toBe(false);
+  });
+
+  it('gives a stop up at 100 s while a younger prompt stays tracked', async () => {
+    await bouncedPrompt();
+    await sentStop(6);
+    at(100_000);
+    expect(100_000).toBeGreaterThan(STOP_MAX_UNSETTLED_MS);
+    reconnect();
+    expect(stateOf('stop')).toBe(UNKNOWN_STOP);
+    expect(stopBtn().disabled).toBe(false);
+    // The prompt (answered at 0 s too, but its lifetime is 12 min) waits on.
+    expect(stateOf('prompt')).toBe(QUEUED_BEHIND_TURN);
+    expect(promptBtn().disabled).toBe(true);
+    expect(ws.handlers.size).toBe(1);
+    emit({ sessionId: 7, commandId: 5, kind: 'prompt', state: 'done' });
+    expect(stateOf('prompt')).toBe('Prompt · done');
   });
 });
 
@@ -342,6 +416,24 @@ describe('BulkPromptBar', () => {
     );
     expect(screen.getByRole('button', { name: 'Continue phase on 1 sessions' })).toBeTruthy();
     expect(screen.getByTestId('bulk-hidden-note').textContent).toBe('2 selected sessions are hidden by the filter and will not be sent');
+    expect(screen.queryByTestId('bulk-not-polling-note')).toBeNull();
+  });
+
+  it('names selected sessions whose mod stopped polling apart from filter-hidden ones', () => {
+    render(
+      <BulkPromptBar
+        selected={[1]}
+        notPollingCount={1}
+        selectableCount={1}
+        byId={new Map()}
+        onSelectAll={() => undefined}
+        onClear={() => undefined}
+      />,
+    );
+    expect(screen.getByTestId('bulk-not-polling-note').textContent).toBe(
+      '1 selected sessions no longer have a polling link mod and will not be sent',
+    );
+    expect(screen.queryByTestId('bulk-hidden-note')).toBeNull();
   });
 
   it('cannot send with nothing selected', () => {

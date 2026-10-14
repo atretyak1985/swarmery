@@ -284,12 +284,21 @@ describe('linkSelection', () => {
     expect(all.selectable.map((s) => s.id)).toEqual([a.id, b.id]);
     expect(all.visible).toEqual([b.id, a.id]);
     expect(all.hidden).toBe(0);
+    expect(all.notPolling).toBe(0);
+
+    // c was selected while it polled and is still on screen: not hidden by a
+    // filter, counted as not polling, never sent.
+    const stale = linkSelection(buildDays(sorted), [a.id, c.id]);
+    expect(stale.visible).toEqual([a.id]);
+    expect(stale.hidden).toBe(0);
+    expect(stale.notPolling).toBe(1);
 
     // A status filter hides b: it stays selected but is not sent.
     const active = linkSelection(buildDays(sorted, 'active'), [b.id, a.id]);
     expect(active.selectable.map((s) => s.id)).toEqual([a.id]);
     expect(active.visible).toEqual([a.id]);
     expect(active.hidden).toBe(1);
+    expect(active.notPolling).toBe(0);
 
     // The runs-only view shows no flat rows at all.
     const runs = linkSelection(runsOnly(buildDays(sorted)), [a.id]);

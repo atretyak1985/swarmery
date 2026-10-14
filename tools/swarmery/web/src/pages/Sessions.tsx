@@ -359,7 +359,12 @@ export function Sessions(): JSX.Element {
   // hides is kept (it comes back with the filter) but never sent: the bar gets
   // only the visible selected ids and a count of the hidden ones.
   const hasLinked = loaded.some((s) => s.link != null);
-  const { selectable, visible: visibleSelected, hidden: hiddenSelected } = linkSelection(days, selected);
+  const {
+    selectable,
+    visible: visibleSelected,
+    hidden: hiddenSelected,
+    notPolling: notPollingSelected,
+  } = linkSelection(days, selected);
   const byId = new Map(loaded.map((s) => [s.id, s] as const));
   const toggleSelected = (id: number): void => {
     setSelected((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
@@ -434,6 +439,7 @@ export function Sessions(): JSX.Element {
         <BulkPromptBar
           selected={visibleSelected}
           hiddenCount={hiddenSelected}
+          notPollingCount={notPollingSelected}
           selectableCount={selectable.length}
           byId={byId}
           onSelectAll={() => setSelected(selectable.slice(0, BULK_PROMPT_MAX).map((s) => s.id))}
