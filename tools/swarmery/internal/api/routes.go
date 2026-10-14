@@ -301,6 +301,13 @@ func Routes(root *http.ServeMux, h *Handler) {
 	mux.HandleFunc("POST /api/sessions/{id}/link/message", requireLocalOrigin(h.linkSessionMessage))
 	mux.HandleFunc("GET /api/swarm/messages", h.swarmMessages)
 	mux.HandleFunc("GET /api/swarm/claims", h.swarmClaims)
+	// plan in the terminal (link_plan.go, decision D5): the daemon owns plan
+	// state and its parser, the mod draws. Same token, same 503.
+	mux.HandleFunc("GET /api/link/plan", linkAuth(h.linkPlanGet))
+	mux.HandleFunc("POST /api/link/plan/select", linkAuth(h.linkPlanSelect))
+	mux.HandleFunc("POST /api/link/plan/tick", linkAuth(h.linkPlanTick))
+	mux.HandleFunc("POST /api/link/plan/run", linkAuth(h.linkPlanRun))
+	mux.HandleFunc("POST /api/link/plan/drift", linkAuth(h.linkPlanDrift))
 
 	// process liveness + kill (phase 4 step-07+)
 	mux.HandleFunc("POST /api/hooks/session-start", requireLocalOrigin(h.hookSessionStart))
@@ -453,6 +460,8 @@ func Routes(root *http.ServeMux, h *Handler) {
 	mux.HandleFunc("GET /api/epics/{taskId}/docs", h.getPlanDoc)
 	mux.HandleFunc("PUT /api/epics/{taskId}/docs", requireLocalOrigin(h.putPlanDoc))
 	mux.HandleFunc("PATCH /api/epics/{taskId}/docs", requireLocalOrigin(h.patchPlanDoc))
+	// Which terminal sessions have this plan open (link_plan.go) — a plain read.
+	mux.HandleFunc("GET /api/epics/{taskId}/terminal-sessions", h.terminalSessions)
 	// interactive planning v2 phase 5: run ONE plan phase headlessly in an
 	// isolated worktree straight from its phase doc (no board task). 503 until
 	// AttachPhaseRun wires the service.
