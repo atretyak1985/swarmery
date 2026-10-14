@@ -229,7 +229,8 @@ type HookInput struct {
 	Channel string
 }
 
-// channel returns the row's channel value ('' reads as ChannelShim).
+// channel returns the row's channel value (an empty Channel reads as
+// ChannelShim).
 func (in HookInput) channel() string {
 	if in.Channel == "" {
 		return ChannelShim

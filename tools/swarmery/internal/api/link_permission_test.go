@@ -556,12 +556,12 @@ func TestLinkPermissionErrors(t *testing.T) {
 	_, body := e.ask(t, good)
 	id := idOf(t, body)
 	for path, want := range map[string]int{
-		fmt.Sprintf("/api/link/permission/%d?session=other-uuid&wait=0", id): http.StatusNotFound,
+		fmt.Sprintf("/api/link/permission/%d?session=other-uuid&wait=0", id):  http.StatusNotFound,
 		fmt.Sprintf("/api/link/permission/%d?session=err-uuid&wait=0", id+99): http.StatusNotFound,
-		"/api/link/permission/abc?session=err-uuid":                          http.StatusBadRequest,
-		fmt.Sprintf("/api/link/permission/%d", id):                           http.StatusBadRequest,
-		fmt.Sprintf("/api/link/permission/%d?session=err-uuid&wait=x", id):   http.StatusBadRequest,
-		fmt.Sprintf("/api/link/permission/%d?session=err-uuid&wait=-5", id):  http.StatusNoContent,
+		"/api/link/permission/abc?session=err-uuid":                           http.StatusBadRequest,
+		fmt.Sprintf("/api/link/permission/%d", id):                            http.StatusBadRequest,
+		fmt.Sprintf("/api/link/permission/%d?session=err-uuid&wait=x", id):    http.StatusBadRequest,
+		fmt.Sprintf("/api/link/permission/%d?session=err-uuid&wait=-5", id):   http.StatusNoContent,
 	} {
 		if code, raw := e.req(t, http.MethodGet, path, e.token, ""); code != want {
 			t.Errorf("GET %s: %d %s, want %d", path, code, raw, want)
