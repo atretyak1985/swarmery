@@ -56,11 +56,12 @@ test('reserved options switched on only log "not implemented", once each', { opt
   const w = world(on, { tokens: [TOKEN] })
   await $.session.start(START)
   await $.session.start(START)
-  expect(w.logs.filter(l => l.includes('control: not implemented'))).toHaveLength(1)
   expect(w.logs.filter(l => l.includes('planBand: not implemented'))).toHaveLength(1)
   expect(w.logs.some(l => l.includes('swarm:') || l.includes('forecast:'))).toBe(false)
-  // control on still registers no gate in 0.1
+  // control is implemented in 0.2 (control.test.ts), and still registers no gate
+  expect(w.logs.some(l => l.includes('control: not implemented'))).toBe(false)
   expect((await $.tool.check({ tool: 'Bash', input: { command: 'ls' } })).decision).toBe('allow')
+  await $.session.end(END)
 })
 
 test('a failing daemon never surfaces as a hook error; the events wait for the next flush', async ($, on) => {
@@ -223,3 +224,63 @@ for (const [daemonUrl, expected] of DAEMON_URLS) {
     expect(refusals.some(l => l.includes(daemonUrl))).toBe(false)
   })
 }
+
+const CLEARED_ID = '0b6f1c2e-7d4a-4c1e-9a55-3f0e2b7c9d10'
+const CLEAR = { reason: 'clear', sessionId: SESSION_ID, resume: { sessionId: SESSION_ID } as never } as const
+
+test('/clear: the next turn.start moves the sensor to the new session id and announces it with the real session.start payload', async ($, on) => {
+  const w = world(on, { tokens: [TOKEN] })
+  await $.session.start({ ...START, surface: 'terminal', isInteractive: true })
+  await $.session.end(CLEAR)
+  w.moveTo(CLEARED_ID, '/work/apps/other-app')
+  // between the clear and the next turn nothing is queued: not under the ended id, not under the new one
+  await $.session.measure({ context: { tokens: 1, window: 10, percent: 10 }, rateLimits: [], changed: ['context'] })
+  await $.turn.start({ text: 'after clear', turnId: 'turn-2' })
+  await $.tool.call({ tool: 'Bash', command: 'echo hi', description: 'say hi' })
+  await $.turn.complete({ ...COMPLETE, turnId: 'turn-2' })
+  await w.clock.advance(2_000)
+  const events = sent(w.requests)
+  const ended = events.findIndex(e => e.kind === 'session.end')
+  expect(events.slice(0, ended + 1).every(e => e.sessionId === SESSION_ID)).toBe(true)
+  expect(events[ended]?.payload).toEqual({ reason: 'clear' })
+  const after = events.slice(ended + 1)
+  expect(after.map(e => e.kind)).toEqual(['session.start', 'turn.start', 'tool.call', 'turn.complete', 'session.measure'])
+  expect(after.every(e => e.sessionId === CLEARED_ID && e.cwd === '/work/apps/other-app')).toBe(true)
+  expect(after[0]?.payload).toEqual({ surface: 'terminal', isInteractive: true })
+  await $.session.end({ reason: 'other', sessionId: CLEARED_ID, resume: { sessionId: CLEARED_ID } as never })
+  expect(sent(w.requests).at(-1)).toMatchObject({ kind: 'session.end', sessionId: CLEARED_ID })
+})
+
+test('/clear with control off: the sensor still moves to the new id, and nothing polls', { options: { control: false } }, async ($, on) => {
+  const w = world(on, { tokens: [TOKEN], polls: [204] })
+  await $.session.start(START)
+  await $.session.end(CLEAR)
+  w.moveTo(CLEARED_ID)
+  await $.turn.start({ text: 'after clear', turnId: 'turn-2' })
+  await w.clock.advance(10_000)
+  expect(sent(w.requests).filter(e => e.kind === 'turn.start').map(e => e.sessionId)).toEqual([CLEARED_ID])
+  expect(sent(w.requests).filter(e => e.kind === 'session.start').map(e => e.sessionId)).toEqual([SESSION_ID, CLEARED_ID])
+  expect(w.polls).toHaveLength(0)
+})
+
+test('an in-process resume follows the resumed id like /clear does', async ($, on) => {
+  const w = world(on, { tokens: [TOKEN] })
+  await $.session.start(START)
+  await $.session.end({ reason: 'resume', sessionId: SESSION_ID, resume: { sessionId: SESSION_ID } as never })
+  w.moveTo(CLEARED_ID)
+  await $.turn.start({ text: 'after resume', turnId: 'turn-2' })
+  await w.clock.advance(2_000)
+  expect(sent(w.requests).filter(e => e.kind === 'session.start').map(e => e.sessionId)).toEqual([SESSION_ID, CLEARED_ID])
+  expect(sent(w.requests).filter(e => e.kind === 'turn.start').map(e => e.sessionId)).toEqual([CLEARED_ID])
+})
+
+test('any session.end other than /clear or resume is final: no resync, no new session announced', async ($, on) => {
+  const w = world(on, { tokens: [TOKEN] })
+  await $.session.start(START)
+  await $.session.end(END)
+  w.moveTo(CLEARED_ID)
+  await $.turn.start({ text: 'late', turnId: 'turn-2' })
+  await w.clock.advance(10_000)
+  expect(sent(w.requests).filter(e => e.kind === 'session.start')).toHaveLength(1)
+  expect(sent(w.requests).some(e => e.sessionId === CLEARED_ID)).toBe(false)
+})

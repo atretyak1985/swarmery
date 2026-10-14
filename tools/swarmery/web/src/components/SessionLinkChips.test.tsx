@@ -46,6 +46,7 @@ function makeLink(over: Partial<SessionLink> = {}): SessionLink {
       { kind: 'five_hour', percentUsed: 64, resetsAt: RESETS },
     ],
     costUsd: 1.25,
+    controllable: false,
     ...over,
   };
 }

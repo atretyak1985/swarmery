@@ -33,6 +33,12 @@ const (
 	// SWARMERY_SURPRISE_NOTIFY (at most once per run). Carries TaskID (the
 	// workspace task) + PhaseID; the WS layer hydrates the stored score.
 	NotePhaseSurprise = "phase_surprise"
+	// mods-swarmery-link phase 4 — control channel (additive): published by
+	// internal/link.Commands when a dashboard command for a mod-linked session
+	// is queued, delivered, acked or expires. Carries SessionID + CommandID +
+	// Kind (stop | prompt) + State (+ Message); the WS layer forwards them
+	// as-is — no row is re-read, so every transition is seen in order.
+	NoteLinkCommand = "link_command"
 )
 
 // Notification is one ingest event on the internal bus. It carries row ids
@@ -44,6 +50,7 @@ type Notification struct {
 	EventID   int64  // events.id — set for event_appended only
 	RequestID int64  // permission_requests.id — set for permission_* only
 	// phase 4 — system registry (additive): set for system_item_updated only.
+	// link_command reuses it for the command kind (stop | prompt).
 	Kind   string // agent | skill | hook | command
 	ItemID int64  // row id in the corresponding registry table
 	// fusion phase 1 — task board (additive): set for task_updated only.
@@ -54,6 +61,11 @@ type Notification struct {
 	ProjectID int64 // projects.id
 	// learning loop phase 13 (additive): set for phase_surprise only.
 	PhaseID int64 // epic_phases.id
+	// mods-swarmery-link phase 4 (additive): set for link_command only. The
+	// state is the transition being announced, not re-read from the row.
+	CommandID int64  // link_commands.id
+	State     string // queued | delivered | done | failed | expired
+	Message   string // the ack message, when there is one
 }
 
 // Bus is a minimal fan-out pub/sub channel for ingest notifications.

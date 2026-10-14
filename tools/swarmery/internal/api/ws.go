@@ -79,6 +79,16 @@ type wsTaskDeletedPayload struct {
 	ProjectID int64 `json:"projectId"`
 }
 
+// wsLinkCommandPayload is the link_command payload (docs/mods-link-protocol.md
+// "Commands"): one control-command transition.
+type wsLinkCommandPayload struct {
+	SessionID int64  `json:"sessionId"`
+	CommandID int64  `json:"commandId"`
+	Kind      string `json:"kind"`  // stop | prompt
+	State     string `json:"state"` // queued | delivered | done | failed | expired
+	Message   string `json:"message,omitempty"`
+}
+
 // GET /api/ws — upgrades to WebSocket and streams WSMessage JSON text frames.
 func (h *Handler) ws(w http.ResponseWriter, r *http.Request) {
 	if wsBus == nil {
@@ -211,6 +221,17 @@ func (h *Handler) buildWSMessage(n ingest.Notification) ([]byte, error) {
 			return nil, nil
 		}
 		payload = p
+	case ingest.NoteLinkCommand:
+		// mods-swarmery-link phase 4: a control command's transition. Carried on
+		// the notification itself (no re-read), so a fast queued → delivered →
+		// done sequence reaches the client as three frames, in order.
+		payload = wsLinkCommandPayload{
+			SessionID: n.SessionID,
+			CommandID: n.CommandID,
+			Kind:      n.Kind,
+			State:     n.State,
+			Message:   n.Message,
+		}
 	default:
 		return nil, errors.New("unknown notification type " + n.Type)
 	}

@@ -111,6 +111,9 @@ type normalized struct {
 // payload) is counted in Rejected and skipped; it never fails the batch. A
 // database error does, and rolls the whole batch back.
 //
+// A newly stored turn.complete also releases the session's link_commands
+// held for a turn end (see Commands.Ack); the caller wakes the poll.
+//
 // publish is called once per session the batch touched, after commit:
 // NoteSessionStarted for a row the batch minted, NoteSessionUpdated otherwise.
 // It may be nil.
@@ -170,6 +173,16 @@ func Ingest(ctx context.Context, db *sql.DB, publish func(ingest.Notification), 
 		res.Accepted++
 		if err := apply(ctx, tx, sid, n); err != nil {
 			return Result{}, err
+		}
+		// Control channel (Commands): a prompt that bounced on "turn in
+		// progress" is held until the session's next turn end. Released in the
+		// same transaction, and only for a newly stored turn.complete, so a
+		// resent one never releases twice. Waking the waiting poll is the
+		// caller's job (Commands.Wake): this function has no queue.
+		if n.Kind == KindTurnComplete {
+			if _, err := releaseWaitTurn(ctx, tx, sid); err != nil {
+				return Result{}, err
+			}
 		}
 		if !seen[sid] {
 			seen[sid] = true

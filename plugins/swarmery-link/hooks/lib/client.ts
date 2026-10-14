@@ -23,6 +23,8 @@ export const AUTH_RETRY_MS = 1_100
 const LOOPBACK_ORIGIN = /^http:\/\/(127\.0\.0\.1|\[::1\]|localhost)(?::(\d{1,5}))?(?:[/?#].*)?$/i
 
 export type DaemonEndpoint = {
+  /** The daemon's loopback origin, no path: the command channel's URLs hang off it. */
+  readonly origin: string
   /** Where events are POSTed. */
   readonly url: string
   /** A daemonUrl was configured but is not a loopback http origin, so the default is used. */
@@ -31,7 +33,7 @@ export type DaemonEndpoint = {
 
 /** The events endpoint under the configured loopback origin; the default origin for anything else. */
 export const daemonEndpoint = (daemonUrl: unknown): DaemonEndpoint => {
-  const fallback: DaemonEndpoint = { url: `${DEFAULT_DAEMON_URL}${EVENTS_PATH}`, isRefused: false }
+  const fallback: DaemonEndpoint = { origin: DEFAULT_DAEMON_URL, url: `${DEFAULT_DAEMON_URL}${EVENTS_PATH}`, isRefused: false }
   if (daemonUrl === undefined || daemonUrl === null) return fallback
   const raw = typeof daemonUrl === 'string' ? daemonUrl.trim() : undefined
   if (raw === '') return fallback
@@ -39,7 +41,8 @@ export const daemonEndpoint = (daemonUrl: unknown): DaemonEndpoint => {
   const host = match?.[1]?.toLowerCase()
   const port = match?.[2] === undefined ? undefined : Number(match[2])
   if (host === undefined || (port !== undefined && (port < 1 || port > 65_535))) return { ...fallback, isRefused: true }
-  return { url: `http://${host}${port === undefined ? '' : `:${port}`}${EVENTS_PATH}`, isRefused: false }
+  const origin = `http://${host}${port === undefined ? '' : `:${port}`}`
+  return { origin, url: `${origin}${EVENTS_PATH}`, isRefused: false }
 }
 
 export type LinkRequest = {

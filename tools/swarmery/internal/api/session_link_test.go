@@ -169,11 +169,11 @@ func TestSessionLinkLiveUsesAttachedThresholds(t *testing.T) {
 	scan := sessionLinkScan{seenAt: sql.NullString{String: linkTS(now.Add(-time.Hour)), Valid: true}}
 
 	AttachStatusThresholds(ingest.Thresholds{})
-	if scan.dto(now).Live {
+	if scan.dto(now, "").Live {
 		t.Error("default thresholds: a report 1h old is live, want stale (2×3m)")
 	}
 	AttachStatusThresholds(ingest.Thresholds{AwaitAfter: time.Hour})
-	if !scan.dto(now).Live {
+	if !scan.dto(now, "").Live {
 		t.Error("AwaitAfter=1h: a report 1h old is stale, want live (2×1h)")
 	}
 	if got := ingest.LinkFresh(linkTS(now.Add(-time.Hour)), now, ingest.Thresholds{AwaitAfter: time.Hour}); !got {
@@ -186,7 +186,7 @@ func TestSessionLinkDTOUnparseableSeenAt(t *testing.T) {
 		status: sql.NullString{String: "working", Valid: true},
 		seenAt: sql.NullString{String: "not-a-time", Valid: true},
 	}
-	got := scan.dto(time.Now())
+	got := scan.dto(time.Now(), "")
 	if got == nil || got.Live {
 		t.Errorf("dto = %+v, want present and live=false for an unparseable link_seen_at", got)
 	}

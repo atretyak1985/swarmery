@@ -27,6 +27,7 @@ import { useLiveUpdates } from '../lib/ws';
 import { ExplainPair } from '../components/Explain';
 import { OutcomePicker } from '../components/OutcomePicker';
 import { SessionLabelChips } from '../components/SessionLabelChips';
+import { SessionControls } from '../components/SessionControls';
 import { SessionLinkChips } from '../components/SessionLinkChips';
 import { TaskChip } from '../components/TaskChip';
 import { ProjectName } from '../components/ProjectName';
@@ -670,6 +671,9 @@ export function SessionDetailPage(): JSX.Element {
                 </button>
               </div>
             )}
+            {/* Link-mod remote control: always shown here, disabled with the
+                reason when no mod polls for this session. */}
+            <SessionControls session={detail} className="mt-2" />
           </div>
           <div className="flex shrink-0 flex-wrap gap-[22px]">
             <HeadStat value={fmtTokens(facts.tokens)} label={t`tokens`} />

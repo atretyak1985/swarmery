@@ -520,6 +520,10 @@ msgstr "підтвердити локально"
 msgid "context hogs"
 msgstr "пожирачі контексту"
 
+#: src/pages/Sessions.tsx
+msgid "continue phase…"
+msgstr "продовжити фазу…"
+
 #: src/pages/NeedsYou.tsx
 msgid "Copied — paste it into the session"
 msgstr "Скопійовано — вставте в сесію"
@@ -1352,6 +1356,11 @@ msgstr "виконується…"
 #: src/pages/today/loopModel.ts
 msgid "runs scored"
 msgstr "запусків оцінено"
+
+#. placeholder {0}: item.session.title ?? item.session.sessionUuid
+#: src/pages/Sessions.tsx
+msgid "select {0} for continue phase"
+msgstr "вибрати {0} для продовження фази"
 
 #: src/pages/detail/CommandInput.tsx
 msgid "Send"

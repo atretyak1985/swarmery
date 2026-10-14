@@ -1,35 +1,35 @@
 {
   "name": "swarmery-link",
-  "description": "Mod (function hooks): reports this session's live state (turn start and end, tool calls by name and input hash, context fill, rate limits, cost) to a local swarmery daemon over its token-guarded link API. A sensor only in 0.1: it never blocks, changes or answers anything, and it switches itself off when the daemon's token file is absent.",
-  "version": "0.1.0",
+  "description": "Mod (function hooks): reports this session's live state (turn start and end, tool calls by name and input hash, context fill, rate limits, cost) to a local swarmery daemon over its token-guarded link API, and switches itself off when the daemon's token file is absent. The sensor never blocks, changes or answers a hook's event. With the opt-in control option it also long-polls the daemon for this session's commands: stop aborts the running turn, prompt submits a prompt once the session is idle.",
+  "version": "0.2.0",
   "author": {
     "name": "atretyak",
     "email": "atretiak.work@gmail.com"
   },
-  "keywords": ["sensor", "telemetry", "dashboard", "mods"],
+  "keywords": ["sensor", "telemetry", "dashboard", "remote-control", "mods"],
   "userConfig": {
     "control": {
       "type": "boolean",
       "title": "Control from the dashboard",
-      "description": "Reserved for a later release (answering approvals and questions from the dashboard). In 0.1 it only logs that it is not implemented; it registers no gating hook.",
+      "description": "Let the swarmery dashboard stop this session's running turn and send it prompts. One background loop long-polls the daemon (loopback only, bearer token) for commands queued for this session alone; nothing runs inside a hook and no gating hook is registered. Off: no request goes to the command endpoints.",
       "default": false
     },
     "planBand": {
       "type": "boolean",
       "title": "Plan band",
-      "description": "Reserved for a later release (a band above the prompt showing the running plan). In 0.1 it only logs that it is not implemented.",
+      "description": "Reserved for a later release (a band above the prompt showing the running plan). In 0.2 it only logs that it is not implemented.",
       "default": false
     },
     "swarm": {
       "type": "boolean",
       "title": "Swarm view",
-      "description": "Reserved for a later release (sibling sessions of the same plan). In 0.1 it only logs that it is not implemented.",
+      "description": "Reserved for a later release (sibling sessions of the same plan). In 0.2 it only logs that it is not implemented.",
       "default": false
     },
     "forecast": {
       "type": "boolean",
       "title": "Forecast",
-      "description": "Reserved for a later release (the plan's forecast beside the live figures). In 0.1 it only logs that it is not implemented.",
+      "description": "Reserved for a later release (the plan's forecast beside the live figures). In 0.2 it only logs that it is not implemented.",
       "default": false
     },
     "daemonUrl": {

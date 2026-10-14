@@ -62,6 +62,11 @@ type Stats struct {
 	// ended_at, and link_events has no FK, so a session-derived delete would
 	// strand both. sessions.link_* keep the folded state; only the ledger goes.
 	LinkEvents int64
+	// LinkCommands is link_commands rows dropped (migration 0108, the link
+	// control channel's queue). Same rule as LinkEvents, by created_at: a
+	// command is expired (stop 30 s, prompt 10 min) long before any retention
+	// cutoff, so only finished history goes.
+	LinkCommands int64
 	// VacuumErr carries a post-commit VACUUM failure (e.g. SQLITE_BUSY).
 	// The destructive transaction has already committed by then, so the
 	// prune itself succeeded — callers should report this as a warning
@@ -225,6 +230,7 @@ func RunWithOptions(db *sql.DB, cutoff string, dryRun bool, opts Options) (Stats
 			{`SELECT COUNT(*) FROM file_changes fc JOIN (` + candidateSet + `) pr ON pr.id = fc.session_id`, &st.FileChanges},
 			{`SELECT COUNT(*) FROM worktree_sweeps WHERE ts < ?`, &st.WorktreeSweeps},
 			{`SELECT COUNT(*) FROM link_events WHERE at < ?`, &st.LinkEvents},
+			{`SELECT COUNT(*) FROM link_commands WHERE created_at < ?`, &st.LinkCommands},
 		}
 		counts = append(counts, undatableCounts(&st)...)
 		for _, c := range counts {
@@ -251,6 +257,13 @@ func RunWithOptions(db *sql.DB, cutoff string, dryRun bool, opts Options) (Stats
 		st.LinkEvents, _ = res.RowsAffected()
 	} else {
 		return st, fmt.Errorf("prune link_events: %w", err)
+	}
+	// The command queue ages the same way (see Stats.LinkCommands); created_at
+	// is fixed-width ms UTC too.
+	if res, err := db.Exec(`DELETE FROM link_commands WHERE created_at < ?`, cutoff); err == nil {
+		st.LinkCommands, _ = res.RowsAffected()
+	} else {
+		return st, fmt.Errorf("prune link_commands: %w", err)
 	}
 
 	if st.Sessions == 0 {

@@ -39,18 +39,53 @@ export type World = {
    * the connection and never answers. Default: 202.
    */
   readonly replies?: ReadonlyArray<number | 'throw' | 'hang'>
+  /**
+   * The daemon's answer per GET /api/link/commands, in order; the last repeats.
+   * A command is a 200 carrying it. Default: `hang` (a poll held open forever).
+   */
+  readonly polls?: ReadonlyArray<PollReply>
+  /** The status per POST /api/link/commands/{id}/ack, in order; the last repeats. Default: 204. */
+  readonly ackReplies?: ReadonlyArray<number | 'throw'>
+  /**
+   * The engine beneath answers `$.prompt.submit` with `{ drop: submitDrop }`.
+   * (A test hook that throws is skipped by the kit, so a rejection cannot be
+   * staged here; a drop carries the same reason.) Absent: the prompt enters.
+   */
+  readonly submitDrop?: string
   readonly now?: number
 }
+
+export type WireCommand = { readonly id: number; readonly kind: string; readonly payload: Readonly<Record<string, unknown>> }
+
+export type PollReply = number | 'throw' | 'hang' | { readonly command: WireCommand }
+
+export type Poll = { readonly url: string; readonly method: string | undefined; readonly authorization: string | undefined; readonly at: number }
+
+export type AckSent = { readonly url: string; readonly body: { readonly result: string; readonly message?: string } }
+
+export type Submitted = { readonly text: string; readonly asUser: boolean }
 
 export type Recorded = {
   readonly clock: MockClock
   readonly requests: Request[]
   readonly logs: string[]
+  /** The log lines meant for the transcript (not `to: 'debug'`). */
+  readonly shown: string[]
   /** How many times the token file was read. */
   readonly tokenReads: () => number
   /** What reached the engine's own tool.check beneath the plugin. */
   readonly checks: unknown[]
+  /** Every GET to the command endpoint, with the mock clock's time it was made. */
+  readonly polls: Poll[]
+  readonly acks: AckSent[]
+  /** The turnId of every `$.turn.abort`. */
+  readonly aborts: string[]
+  readonly submits: Submitted[]
+  /** What `$.session.id()` and `$.session.cwd()` answer from now on, as after a `/clear`. */
+  readonly moveTo: (sessionId: string, cwd?: string) => void
 }
+
+const COMMANDS = '/api/link/commands'
 
 const pick = <T>(list: readonly T[] | undefined, i: number, fallback: T): T =>
   list === undefined || list.length === 0 ? fallback : (list[Math.min(i, list.length - 1)] ?? fallback)
@@ -63,14 +98,21 @@ const pick = <T>(list: readonly T[] | undefined, i: number, fallback: T): T =>
 export const world = (on: On, w: World = {}): Recorded => {
   const requests: Request[] = []
   const logs: string[] = []
+  const shown: string[] = []
   const checks: unknown[] = []
+  const polls: Poll[] = []
+  const acks: AckSent[] = []
+  const aborts: string[] = []
+  const submits: Submitted[] = []
   let reads = 0
+  let sessionId: string = SESSION_ID
+  let cwd: string = CWD
   const clock = mock.clock(on, { now: w.now ?? Date.parse('2026-10-13T10:00:00.000Z') })
   mock.env(on, { HOME })
 
   on('session.start', ($, e) => ({ cwd: e.cwd }))
-  on('session.id', () => ({ value: SESSION_ID }))
-  on('session.cwd', () => ({ value: CWD }))
+  on('session.id', () => ({ value: sessionId }))
+  on('session.cwd', () => ({ value: cwd }))
   on('session.usage', () => ({ value: USAGE_AFTER_TURN_1 }))
   on('fs.read', ($, e) => {
     if (e.path !== TOKEN_PATH) return { deny: `ENOENT: ${e.path}` }
@@ -79,6 +121,20 @@ export const world = (on: On, w: World = {}): Recorded => {
     return text === undefined ? { deny: `ENOENT: ${e.path}` } : { value: text }
   })
   on('http.fetch', ($, e) => {
+    if (e.url.includes(`${COMMANDS}/`)) {
+      const status = pick(w.ackReplies, acks.length, 204)
+      acks.push({ url: e.url, body: JSON.parse(e.init?.body ?? '{}') })
+      if (status === 'throw') return { deny: 'connect ECONNREFUSED 127.0.0.1:7777' }
+      return { value: { status, ok: status >= 200 && status < 300, headers: {}, text: '' } }
+    }
+    if (e.url.includes(`${COMMANDS}?`)) {
+      const reply = pick<PollReply>(w.polls, polls.length, 'hang')
+      polls.push({ url: e.url, method: e.init?.method, authorization: e.init?.headers?.authorization, at: clock.now() })
+      if (reply === 'hang') return new Promise<never>(() => undefined)
+      if (reply === 'throw') return { deny: 'connect ECONNREFUSED 127.0.0.1:7777' }
+      if (typeof reply === 'number') return { value: { status: reply, ok: reply >= 200 && reply < 300, headers: {}, text: '' } }
+      return { value: { status: 200, ok: true, headers: {}, text: JSON.stringify(reply.command) } }
+    }
     const reply = pick(w.replies, requests.length, 202)
     requests.push({
       url: e.url,
@@ -92,6 +148,7 @@ export const world = (on: On, w: World = {}): Recorded => {
   })
   on('ui.log', ($, e) => {
     logs.push(e.text)
+    if (e.to !== 'debug') shown.push(e.text)
     return { value: undefined }
   })
   on('turn.start', ($, e) => ({ turnId: e.turnId }))
@@ -104,7 +161,22 @@ export const world = (on: On, w: World = {}): Recorded => {
     return { decision: 'allow' }
   })
 
-  return { clock, requests, logs, tokenReads: () => reads, checks }
+  on('turn.abort', ($, e) => {
+    aborts.push(e.turnId)
+    return { value: undefined }
+  })
+  on('prompt.submit', ($, e) => {
+    const origin = e.origin as { readonly asUser?: boolean }
+    submits.push({ text: e.text, asUser: origin.asUser === true })
+    return w.submitDrop !== undefined ? { drop: w.submitDrop } : { text: e.text }
+  })
+
+  const moveTo = (id: string, dir: string = cwd): void => {
+    sessionId = id
+    cwd = dir
+  }
+
+  return { clock, requests, logs, shown, tokenReads: () => reads, checks, polls, acks, aborts, submits, moveTo }
 }
 
 /** Every event the recorded requests carried, in order. */

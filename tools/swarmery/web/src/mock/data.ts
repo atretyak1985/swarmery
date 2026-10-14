@@ -298,6 +298,7 @@ export const mockSessions: Session[] = [
         { kind: 'seven_day', percentUsed: 21.5, resetsAt: new Date(Date.now() + 4 * 24 * 60 * MIN).toISOString() },
       ],
       costUsd: 0.41,
+      controllable: true,
     },
   },
   {
