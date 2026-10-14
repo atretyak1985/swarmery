@@ -81,6 +81,12 @@ type Stats struct {
 	// a released one goes 24 h (ClaimRetention) after its release, and one
 	// never released (a crashed session) 24 h after it was claimed.
 	LinkClaims int64
+	// SessionPlans is session_plan rows dropped (migration 0111, the link's
+	// plan-in-the-terminal pick). Same horizon as LinkEvents, by the row's own
+	// `at`, but only once its session has ENDED (ended_at set, the mod reported
+	// session.end, or no sessions row is left): a long-lived terminal keeps its
+	// pick however old the choice is.
+	SessionPlans int64
 	// VacuumErr carries a post-commit VACUUM failure (e.g. SQLITE_BUSY).
 	// The destructive transaction has already committed by then, so the
 	// prune itself succeeded — callers should report this as a warning
@@ -133,6 +139,16 @@ var candidateSet = fmt.Sprintf(`SELECT id, project_id, started_at FROM sessions
 var candidateProbe = fmt.Sprintf(`SELECT id FROM sessions
 	WHERE pruned = 0 AND ended_at IS NOT NULL AND ended_at < ?
 	ORDER BY ended_at, id LIMIT %d`, MaxSessionsPerPass+1)
+
+// sessionPlanExpired is the WHERE clause (one ? = the cutoff) of a session_plan
+// row the prune drops: its `at` (fixed-width ms UTC) is before the cutoff AND no
+// still-running session carries its uuid — a sessions row with no ended_at whose
+// mod has not reported session.end. A row with no sessions row at all is gone
+// with it.
+const sessionPlanExpired = `at < ? AND NOT EXISTS (
+	SELECT 1 FROM sessions s
+	 WHERE s.session_uuid = session_plan.session_id
+	   AND s.ended_at IS NULL AND COALESCE(s.link_status, '') <> 'done')`
 
 // rollupInsert aggregates the candidate sessions into daily_rollups
 // (agent_id NULL — the per-project grain). Tokens/cost bucket by the turn's
@@ -272,6 +288,7 @@ func RunWithOptions(db *sql.DB, cutoff string, dryRun bool, opts Options) (Stats
 			{`SELECT COUNT(*) FROM link_commands WHERE created_at < ?`, &st.LinkCommands},
 			{`SELECT COUNT(*) FROM turn_forecasts WHERE started_at < ?`, &st.TurnForecasts},
 			{`SELECT COUNT(*) FROM link_messages WHERE at < ?`, &st.LinkMessages},
+			{`SELECT COUNT(*) FROM session_plan WHERE ` + sessionPlanExpired, &st.SessionPlans},
 		}
 		counts = append(counts, undatableCounts(&st)...)
 		for _, c := range counts {
@@ -326,6 +343,13 @@ func RunWithOptions(db *sql.DB, cutoff string, dryRun bool, opts Options) (Stats
 		st.LinkClaims, _ = res.RowsAffected()
 	} else {
 		return st, fmt.Errorf("prune link_claims: %w", err)
+	}
+	// The terminal plan picks age like the link ledger, gated on their session
+	// having ended (see Stats.SessionPlans and sessionPlanExpired).
+	if res, err := db.Exec(`DELETE FROM session_plan WHERE `+sessionPlanExpired, cutoff); err == nil {
+		st.SessionPlans, _ = res.RowsAffected()
+	} else {
+		return st, fmt.Errorf("prune session_plan: %w", err)
 	}
 
 	if st.Sessions == 0 {
