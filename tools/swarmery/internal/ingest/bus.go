@@ -39,6 +39,10 @@ const (
 	// Kind (stop | prompt) + State (+ Message); the WS layer forwards them
 	// as-is — no row is re-read, so every transition is seen in order.
 	NoteLinkCommand = "link_command"
+	// mods-swarmery-link phase 10 — turn forecasts (additive): published by
+	// internal/link when a turn_forecasts row gets (or changes) its score.
+	// Carries SessionID + TurnForecastID; the WS layer hydrates the stored turn.
+	NoteTurnSurprise = "turn_surprise"
 )
 
 // Notification is one ingest event on the internal bus. It carries row ids
@@ -66,6 +70,8 @@ type Notification struct {
 	CommandID int64  // link_commands.id
 	State     string // queued | delivered | done | failed | expired
 	Message   string // the ack message, when there is one
+	// mods-swarmery-link phase 10 (additive): set for turn_surprise only.
+	TurnForecastID int64 // turn_forecasts.id
 }
 
 // Bus is a minimal fan-out pub/sub channel for ingest notifications.
