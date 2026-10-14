@@ -1853,7 +1853,8 @@ export type WSMessageType =
   | 'plan_updated'
   | 'task_deleted'
   | 'phase_surprise'
-  | 'link_command';
+  | 'link_command'
+  | 'turn_surprise';
 
 /** Messages pushed over /api/ws — see docs/ws-protocol.md. */
 export type WSMessage =
@@ -1872,7 +1873,10 @@ export type WSMessage =
   | { type: 'phase_surprise'; payload: PhaseSurpriseAttention }
   /** A swarmery link control command moved (queued → delivered → done /
    *  failed / expired) — docs/mods-link-protocol.md "Live updates". */
-  | { type: 'link_command'; payload: LinkCommandNote };
+  | { type: 'link_command'; payload: LinkCommandNote }
+  /** A swarmery link turn got both forecast halves and was scored
+   *  (docs/mods-link-protocol.md "Forecast"). Advisory; a refetch signal. */
+  | { type: 'turn_surprise'; payload: TurnSurprise };
 
 /** Payload of the phase_surprise WS frame. */
 export interface PhaseSurpriseAttention {
@@ -1885,6 +1889,52 @@ export interface PhaseSurpriseAttention {
   index: number;
   top: string;
   summary: string;
+}
+
+/** Component names of a turn's surprise vector (internal/turnforecast). */
+export type TurnSurpriseComponent =
+  | 'unexpected_files'
+  | 'missed_files'
+  | 'tests_miss'
+  | 'steps_miss'
+  | 'overconfidence';
+
+/** One scored turn — mirrors turnforecast.Turn; also the turn_surprise payload. */
+export interface TurnSurprise {
+  id: number;
+  sessionId: number;
+  sessionUuid: string | null;
+  projectId: number | null;
+  runId: string;
+  turnSeq: number;
+  startedAt: string;
+  surprise: number;
+  /** The largest component — a TurnSurpriseComponent, typed as string so an
+   *  unknown future name still renders. */
+  top: string;
+  model: string;
+}
+
+/** One confidence bin of the turn-forecast calibration — mirrors turnforecast.Bin.
+ *  An empty bin (n = 0) carries null meanConfidence and hitRate. */
+export interface TurnForecastBin {
+  lo: number;
+  hi: number;
+  n: number;
+  meanConfidence: number | null;
+  hitRate: number | null;
+}
+
+/** GET /api/insights/turn-forecasts — turnForecastsDTO in internal/api/link_forecast.go. */
+export interface TurnForecastsResp {
+  days: number;
+  n: number;
+  /** n < 30: too few scored turns to read the curve. */
+  tooFew: boolean;
+  bins: TurnForecastBin[];
+  /** The window's most surprising turns, highest first (at most 10). */
+  top: TurnSurprise[];
+  avgForecastTokens: number | null;
 }
 
 // --- Fusion phase 1: task board — additive contracts --------------------------

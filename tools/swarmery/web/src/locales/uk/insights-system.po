@@ -116,6 +116,11 @@ msgstr "{0, plural, one {# запуск · середня несподіванк
 msgid "{0, plural, one {# run} few {# runs} many {# runs} other {# runs}}"
 msgstr "{0, plural, one {# запуск} few {# запуски} many {# запусків} other {# запуску}}"
 
+#. placeholder {0}: p.n
+#: src/pages/learning/TurnForecastPanel.tsx
+msgid "{0, plural, one {# turn} few {# turns} many {# turns} other {# turns}}"
+msgstr "{0, plural, one {# хід} few {# ходи} many {# ходів} other {# ходу}}"
+
 #. placeholder {0}: mod.errors.length
 #: src/pages/system/ModsTab.tsx
 msgid "{0, plural, one {# validate error} few {# validate errors} many {# validate errors} other {# validate errors}}"
@@ -198,6 +203,10 @@ msgstr "сесій із модом сесії: {count} · {total} · розхо�
 #: src/pages/inbox/inboxModel.ts
 msgid "{count} waiting · oldest {age}"
 msgstr "{count} чекають · найстаріше {age}"
+
+#: src/pages/learning/TurnForecastPanel.tsx
+msgid "{d, plural, one {# day} few {# days} many {# days} other {# days}}"
+msgstr "{d, plural, one {# день} few {# дні} many {# днів} other {# дня}}"
 
 #: src/pages/system/ItemDetail.tsx
 msgid "{day}: {runs, plural, one {# run} few {# runs} many {# runs} other {# runs}}"
@@ -314,6 +323,10 @@ msgstr "{matches} у {percent} із {total} перевірених."
 #: src/pages/system/InsightsTab.tsx
 msgid "{missingCount, plural, one {# missing} few {# missing} many {# missing} other {# missing}}"
 msgstr "{missingCount, plural, one {бракує #} few {бракує #} many {бракує #} other {бракує #}}"
+
+#: src/pages/learning/TurnForecastPanel.tsx
+msgid "{n, plural, one {# scored turn} few {# scored turns} many {# scored turns} other {# scored turns}}"
+msgstr "{n, plural, one {# оцінений хід} few {# оцінені ходи} many {# оцінених ходів} other {# оціненого ходу}}"
 
 #: src/pages/inbox/TriageBanner.tsx
 msgid "{nAccept, plural, one {# suggestion} few {# suggestions} many {# suggestions} other {# suggestions}}"
@@ -889,6 +902,10 @@ msgstr "збіг зон {areaHit} · діапазони {bands} · резуль�
 msgid "Asked and logged; answers go to your Inbox for checking. <0>Nothing acts on them.</0>"
 msgstr "Питання ставляться й записуються; відповіді йдуть у ваш Вхідні на перевірку. <0>Ніщо на них не діє.</0>"
 
+#: src/pages/learning/TurnForecastPanel.tsx
+msgid "At the start of each turn the swarmery link mod forecasts the files it will touch, whether tests pass and how many steps it takes; the daemon scores that against what happened. A forecast held when its surprise stayed under 0.25. Advisory only — nothing here gates or alerts."
+msgstr "На початку кожного ходу мод swarmery link прогнозує, які файли він зачепить, чи пройдуть тести і скільки кроків знадобиться; демон звіряє прогноз із тим, що сталося насправді. Прогноз справдився, якщо його здивування лишилося нижче 0.25. Лише для довідки — тут нічого не блокує і не надсилає сповіщень."
+
 #: src/pages/health/Health.tsx
 #: src/pages/health/Health.tsx
 msgid "Auto mode permission check"
@@ -916,6 +933,10 @@ msgstr "Автономність"
 msgid "avg"
 msgstr "сер."
 
+#: src/pages/learning/TurnForecastPanel.tsx
+msgid "avg forecast cost {tokensText} tokens"
+msgstr "середня вартість прогнозу — {tokensText} токенів"
+
 #: src/pages/Retro.tsx
 msgid "Avg resolve"
 msgstr "Сер. рішення"
@@ -939,6 +960,10 @@ msgstr "Завдяки вам"
 #: src/pages/Retro.tsx
 msgid "behavior {behavior}"
 msgstr "поведінка {behavior}"
+
+#: src/pages/learning/TurnForecastPanel.tsx
+msgid "biggest miss"
+msgstr "найбільший промах"
 
 #: src/pages/Analytics.tsx
 msgid "biggest mover"
@@ -1019,6 +1044,10 @@ msgstr "Кеш віддав {pct}% токенів промпту за цей д�
 #: src/pages/Analytics.tsx
 msgid "Cache served {pct}% of prompt tokens this range."
 msgstr "Кеш віддав {pct}% токенів промпту за цей діапазон."
+
+#: src/pages/learning/TurnForecastPanel.tsx
+msgid "Calibration by confidence bin"
+msgstr "Калібрування за інтервалами упевненості"
 
 #: src/pages/LessonsCalibration.tsx
 msgid "calibration views"
@@ -1171,6 +1200,18 @@ msgstr "порівнюємо…"
 msgid "Complexity routing"
 msgstr "Маршрутизація за складністю"
 
+#: src/pages/learning/TurnForecastPanel.tsx
+msgid "confidence"
+msgstr "упевненість"
+
+#: src/pages/learning/TurnForecastPanel.tsx
+msgid "confidence {range}"
+msgstr "упевненість {range}"
+
+#: src/pages/learning/TurnForecastPanel.tsx
+msgid "confident and wrong"
+msgstr "впевнений, але хибний"
+
 #: src/pages/SystemHub.tsx
 msgid "Config"
 msgstr "Конфіг"
@@ -1301,6 +1342,10 @@ msgstr "вирішіть щось у Вхідних →"
 #: src/pages/inbox/Inbox.tsx
 msgid "Decisions that wait on you. An agent can label the classifier's guesses and close what is only informational; approvals, agent changes and alerts always wait for you."
 msgstr "Рішення, що чекають на вас. Агент може позначити здогади класифікатора й закрити те, що лише інформує; погодження, зміни агентів і сповіщення завжди чекають на вас."
+
+#: src/pages/learning/TurnForecastPanel.tsx
+msgid "declared confidence"
+msgstr "заявлена упевненість"
 
 #: src/pages/AgentHub.tsx
 #: src/pages/system/ItemDetail.tsx
@@ -1738,6 +1783,10 @@ msgstr "шлях до теки"
 msgid "forecast calibration"
 msgstr "калібрування прогнозів"
 
+#: src/pages/learning/TurnForecastPanel.tsx
+msgid "forecast files it never touched"
+msgstr "не зачепив файли з прогнозу"
+
 #: src/pages/learning/Learning.tsx
 msgid "Forecast honesty"
 msgstr "Чесність прогнозів"
@@ -1870,6 +1919,10 @@ msgstr "health…"
 msgid "healthy"
 msgstr "здоровий"
 
+#: src/pages/learning/TurnForecastPanel.tsx
+msgid "held"
+msgstr "справдилась"
+
 #: src/pages/Memory.tsx
 msgid "held back"
 msgstr "притримано"
@@ -1889,6 +1942,10 @@ msgstr "Історія"
 #: src/pages/Analytics.tsx
 msgid "Hit rate"
 msgstr "Частка влучань"
+
+#: src/pages/learning/TurnForecastPanel.tsx
+msgid "hit rate per confidence bin"
+msgstr "частка влучань за інтервалом упевненості"
 
 #: src/pages/system/ModsTab.tsx
 #: src/pages/SystemHub.tsx
@@ -2384,6 +2441,7 @@ msgid "mode for {question}"
 msgstr "режим для {question}"
 
 #: src/pages/Analytics.tsx
+#: src/pages/learning/TurnForecastPanel.tsx
 #: src/pages/RoutingReport.tsx
 msgid "model"
 msgstr "модель"
@@ -2416,6 +2474,10 @@ msgstr "модуль"
 msgid "module sha"
 msgstr "sha модуля"
 
+#: src/pages/learning/TurnForecastPanel.tsx
+msgid "Most surprising turns"
+msgstr "Найнесподіваніші ходи"
+
 #: src/pages/system/shared.tsx
 msgid "most used"
 msgstr "найуживаніші"
@@ -2435,6 +2497,10 @@ msgstr "перенесено {movedCount} · резервна копія {backup
 #: src/pages/Memory.tsx
 msgid "moves to {closedDir}"
 msgstr "переноситься в {closedDir}"
+
+#: src/pages/learning/TurnForecastPanel.tsx
+msgid "n is too small to read (fewer than 30 turns) — what exists is shown as is."
+msgstr "n замале, щоб робити висновки (менше 30 ходів) — показано те, що є."
 
 #: src/pages/system/CreateAgentForm.tsx
 #: src/pages/system/ModsTab.tsx
@@ -2696,6 +2762,10 @@ msgstr "за останні 30 днів запусків не було"
 msgid "no runs recorded in the last {days, plural, one {# days} few {# days} many {# days} other {# days}}"
 msgstr "за {days, plural, one {останній # день} few {останні # дні} many {останні # днів} other {останні # дня}} запусків не зафіксовано"
 
+#: src/pages/learning/TurnForecastPanel.tsx
+msgid "No scored turns in this window."
+msgstr "У цьому вікні немає оцінених ходів."
+
 #: src/pages/Retro.tsx
 msgid "no SKILL.md was resolved from the lesson; dismissing frees the slot so the rule can re-propose"
 msgstr "з уроку не вдалося визначити SKILL.md; відхилення звільнить слот, і правило зможе запропонувати знову"
@@ -2939,6 +3009,10 @@ msgstr "шаблон"
 #: src/pages/Retro.tsx
 msgid "Pending now"
 msgstr "Чекають зараз"
+
+#: src/pages/learning/TurnForecastPanel.tsx
+msgid "perfectly calibrated"
+msgstr "ідеальне калібрування"
 
 #: src/pages/inbox/inboxModel.ts
 msgid "Permission checks are getting no verdict"
@@ -3426,6 +3500,14 @@ msgstr "Запуски"
 msgid "runs 30d {runs30d}"
 msgstr "запусків за 30 дн. {runs30d}"
 
+#: src/pages/learning/TurnForecastPanel.tsx
+msgid "said"
+msgstr "заявлено"
+
+#: src/pages/learning/TurnForecastPanel.tsx
+msgid "said {said}, held {held}"
+msgstr "заявлено {said}, справдилося {held}"
+
 #: src/pages/health/HealthOverview.tsx
 msgid "Same error {count, plural, one {# times} few {# times} many {# times} other {# times}} in this window"
 msgstr "Та сама помилка {count, plural, one {# раз} few {# рази} many {# разів} other {# разу}} у цьому вікні"
@@ -3545,6 +3627,10 @@ msgstr "ряд · {metric}"
 #: src/pages/Analytics.tsx
 msgid "series…"
 msgstr "ряд…"
+
+#: src/pages/learning/TurnForecastPanel.tsx
+msgid "session {session} · turn {seq}"
+msgstr "сесія {session} · хід {seq}"
 
 #: src/pages/inbox/inboxModel.ts
 msgid "session {sessionId}"
@@ -3680,6 +3766,10 @@ msgstr "запустити"
 msgid "start serena"
 msgstr "запустити serena"
 
+#: src/pages/learning/TurnForecastPanel.tsx
+msgid "started"
+msgstr "почато"
+
 #: src/pages/Serena.tsx
 msgid "started {startedAgo}"
 msgstr "почато {startedAgo}"
@@ -3700,6 +3790,10 @@ msgstr "статус: {status}"
 #: src/pages/inbox/InboxDetail.tsx
 msgid "stays paused until a check succeeds — sign in to the account again first if it needs it"
 msgstr "лишається на паузі, доки перевірка не пройде — за потреби спершу знову увійдіть в акаунт"
+
+#: src/pages/learning/TurnForecastPanel.tsx
+msgid "step count off"
+msgstr "не вгадав кількість кроків"
 
 #: src/pages/Serena.tsx
 msgid "stop"
@@ -3735,6 +3829,10 @@ msgstr "замінено"
 #: src/pages/RoutingReport.tsx
 msgid "surface"
 msgstr "тип запуску"
+
+#: src/pages/learning/TurnForecastPanel.tsx
+msgid "surprise"
+msgstr "здивування"
 
 #: src/pages/Lessons.tsx
 msgid "surprise {before} → {after}"
@@ -3800,6 +3898,10 @@ msgstr "шаблон…"
 #: src/pages/SystemHub.tsx
 msgid "templates"
 msgstr "шаблони"
+
+#: src/pages/learning/TurnForecastPanel.tsx
+msgid "tests outcome missed"
+msgstr "не вгадав результат тестів"
 
 #: src/pages/health/healthModel.ts
 msgid "the {dayCount} days before"
@@ -4079,6 +4181,10 @@ msgstr "усього"
 msgid "Total wait"
 msgstr "Усього очікування"
 
+#: src/pages/learning/TurnForecastPanel.tsx
+msgid "touched files it did not forecast"
+msgstr "зачепив файли поза прогнозом"
+
 #: src/pages/inbox/inboxModel.ts
 #: src/pages/inbox/inboxModel.ts
 msgid "track this"
@@ -4104,6 +4210,26 @@ msgstr "Сортування"
 #: src/pages/inbox/TriageBanner.tsx
 msgid "triage running · {done} of {total}"
 msgstr "сортування триває · {done} з {total}"
+
+#: src/pages/learning/TurnForecastPanel.tsx
+msgid "turn"
+msgstr "хід"
+
+#: src/pages/LessonsCalibration.tsx
+msgid "turn forecasts"
+msgstr "прогнози ходів"
+
+#: src/pages/learning/TurnForecastPanel.tsx
+msgid "Turn forecasts"
+msgstr "Прогнози ходів"
+
+#: src/pages/learning/TurnForecastPanel.tsx
+msgid "Turn forecasts come from the swarmery link mod. Turn on its <0>forecast</0> option and every turn that starts from your own prompt gets one cheap forecast; it is scored once the turn completes."
+msgstr "Прогнози ходів надходять від мода swarmery link. Увімкніть його опцію <0>forecast</0> — і кожен хід, що починається з вашого власного запиту, отримає один дешевий прогноз; його оцінять, щойно хід завершиться."
+
+#: src/pages/learning/TurnForecastPanel.tsx
+msgid "turns"
+msgstr "ходи"
 
 #: src/pages/system/docsSection.ts
 msgid "two How-to-use blocks"
@@ -4333,6 +4459,10 @@ msgstr "Чому він провалився?"
 #: src/pages/learning/classifierModel.ts
 msgid "Why did the run leave the plan?"
 msgstr "Чому запуск зійшов із плану?"
+
+#: src/pages/learning/TurnForecastPanel.tsx
+msgid "window"
+msgstr "вікно"
 
 #: src/pages/Memory.tsx
 msgid "working…"
