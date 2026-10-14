@@ -43,3 +43,9 @@ paths = [
   '''tools/swarmery/internal/api/vcs_test\.go''',
   '''tools/swarmery/internal/api/tasks_review_test\.go''',
 ]
+
+[[allowlists]]
+description = "guard-pack redaction test fixtures — the mod replaces secret-shaped values in tool results, so its test must carry `AKIA…`/`sk-ant-`-shaped literals (e.g. `AKIAABCDEFGHIJKLMNOP`) to prove each rule fires. Every value is a literal placeholder. Path-scoped to this one test file, so a real credential committed anywhere else is still caught."
+paths = [
+  '''plugins/guard-pack/hooks/redaction\.test\.ts''',
+]
