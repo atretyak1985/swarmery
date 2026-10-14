@@ -558,9 +558,9 @@ func TestCommandsDeliveredStopExpiresInsteadOfRedelivery(t *testing.T) {
 	}
 }
 
-// A delivered prompt that is never acked and never re-polled (the mod went
-// away) expires once it is past PromptTTL and due for re-delivery; while a
-// poller keeps re-delivering it, or before PromptTTL, it stays delivered.
+// A delivered prompt that is never acked (the mod went away) expires once it
+// is past PromptTTL and due for re-delivery; before PromptTTL it stays
+// delivered (a live poller would get it re-delivered instead).
 func TestCommandsDeliveredPromptWithoutPollerExpires(t *testing.T) {
 	e := newCmdEnv(t)
 	e.poll(t)

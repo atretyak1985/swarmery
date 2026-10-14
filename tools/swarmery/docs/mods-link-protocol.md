@@ -256,7 +256,8 @@ a session that has no mod.
 queued ──poll──▶ delivered ──ack done──▶ done
   │                  │  ╰──ack failed──▶ failed
   │                  ├──ack failed "turn in progress" (prompt, < 3rd time)──▶ queued, held for turn.complete
-  │                  ╰──stop, no ack, older than 30 s──▶ expired
+  │                  ├──stop, no ack, older than 30 s──▶ expired
+  │                  ╰──prompt, no ack for 30 s, older than 10 min──▶ expired
   ╰──too old, never delivered──▶ expired
 ```
 
