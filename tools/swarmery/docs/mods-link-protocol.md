@@ -471,12 +471,13 @@ compares the two deterministically. No LLM runs on the daemon side.
 
 | `kind` | Sent on | `payload` |
 |---|---|---|
-| `turn.forecast` | the forecast call resolving (after `turn.start`, never blocking it; it may arrive after the turn completed) | `{ "turnSeq": int ≥ 1, "files": [string], "testsPass": bool \| null, "steps": int ≥ 0 \| null, "confidence": 0..1 \| null, "model": string, "forecastTokens": int ≥ 0 \| null }` |
-| `turn.actual` | main-loop `turn.complete` | `{ "turnSeq": int ≥ 1, "files": [string], "testsRan": bool, "testsPass": bool \| null, "steps": int ≥ 0 }` |
+| `turn.forecast` | the forecast call resolving (after `turn.start`, never blocking it; it may arrive after the turn completed) | `{ "runId": string, "turnSeq": int ≥ 1, "files": [string], "testsPass": bool \| null, "steps": int ≥ 0 \| null, "confidence": 0..1 \| null, "model": string, "forecastTokens": int ≥ 0 \| null }` |
+| `turn.actual` | main-loop `turn.complete` | `{ "runId": string, "turnSeq": int ≥ 1, "files": [string], "testsRan": bool, "testsPass": bool \| null, "steps": int ≥ 0 }` |
 
 | Field | Rule |
 |---|---|
-| `turnSeq` | required on both. The mod's counter of main-loop `turn.start`s, reset on `session.start` and on `session.end` with reason `clear`. The two halves of a turn carry the same value |
+| `runId` | required on both: 1 to 64 characters of `[A-Za-z0-9._:-]`. Names one run of the mod's turn counter. The mod mints a new one each time it restarts the counter: at `session.start`, at `session.end` with reason `clear`, and at the `turn.start` resync after `session.end` with reason `resume`. The mod's form is `<ms epoch of the reset>-<6 random base36 chars>`, or the ms alone where the runtime has no random source; the daemon checks only the shape. The two halves of a turn carry the same value |
+| `turnSeq` | required on both. The mod's counter of main-loop `turn.start`s within `runId`, starting at 1 at each new run. The two halves of a turn carry the same value |
 | `files` (forecast) | at most 50 entries, each at most 300 characters. Paths relative to the session cwd where possible. Absent means `[]` |
 | `files` (actual) | files touched by `Edit`/`Write`/`MultiEdit`/`NotebookEdit` calls of the main loop this turn (no `agentId`), relative to the cwd when under it |
 | `testsPass` (forecast) | `null` means the model made no claim |
@@ -497,12 +498,19 @@ rule is the mod's to keep.
 
 ### Storage and scoring
 
-The halves land in `turn_forecasts`, one row per `(session, turnSeq)`
-(`UNIQUE(session_id, turn_seq)`). `started_at` is the forecast's `at`, else the
+The halves land in `turn_forecasts`, one row per `(session, runId, turnSeq)`
+(`UNIQUE(session_id, run_id, turn_seq)`). `runId` is in the key because
+`turnSeq` alone is not unique within a session: `session.start` fires again on
+`--resume` with the same session id, the mod counts from 1 again, and an
+in-process `/resume` can land on a session that already has turns. Keyed on
+`(session, turnSeq)`, a resumed run's turn 1 would overwrite the first run's turn
+1 and rescore a stale pair (a headless `-p --resume` would put every message on
+row 1). With `runId`, a new run is new rows, and the old rows keep their halves
+and their score. `started_at` is the forecast's `at`, else the
 actual's. A half row is legal and stays unscored: `surprise` and `vector` are `NULL`
 until both halves are present. When the second half arrives, the row is scored in the
-same transaction. A half that is re-sent with a new `at` replaces the stored half
-and the row is rescored. A re-send with the same `at` is a link duplicate and changes
+same transaction. A half that is re-sent (same `runId` and `turnSeq`) with a new
+`at` replaces the stored half and the row is rescored. A re-send with the same `at` is a link duplicate and changes
 nothing.
 
 The score mirrors the phase-level `internal/surprise`. Each component is a number
@@ -541,7 +549,7 @@ that is not an integer gets `400`. The example below shortens `bins` and `top`:
   "bins": [ { "lo": 0, "hi": 0.2, "n": 2, "meanConfidence": 0.115, "hitRate": 0 },
             { "lo": 0.2, "hi": 0.4, "n": 0, "meanConfidence": null, "hitRate": null } ],
   "top": [ { "id": 12, "sessionId": 1, "sessionUuid": "efaa9b56-…", "projectId": 1,
-             "turnSeq": 12, "startedAt": "2026-10-14T08:44:30.794Z",
+             "runId": "1791885600000-25r6dv", "turnSeq": 12, "startedAt": "2026-10-14T08:44:30.794Z",
              "surprise": 0.7795, "top": "tests_miss", "model": "haiku" } ],
   "avgForecastTokens": 115.3846 }
 ```
@@ -553,7 +561,7 @@ that is not an integer gets `400`. The example below shortens `bins` and `top`:
   curve is noise, and the panel says so.
 - `top` lists the 10 most surprising scored turns in the window, highest first
   (ties go to the newest). `sessionUuid` and `projectId` are `null` when the session
-  row is gone.
+  row is gone. `runId` with `turnSeq` names the turn within its session.
 - `avgForecastTokens` is the mean `forecastTokens` over every turn in the window that
   reported one, scored or not. It is `null` when none did.
 

@@ -225,16 +225,21 @@ Two events per forecast turn, through the same queue as the sensor:
 
 | Event | Payload |
 |---|---|
-| `turn.forecast` | `{ turnSeq, files, testsPass, steps, confidence, model, forecastTokens }`: the model's claims, each `null` where it made none or its reply was unreadable |
-| `turn.actual` | `{ turnSeq, files, testsRan, testsPass, steps }`, at the turn's end |
+| `turn.forecast` | `{ runId, turnSeq, files, testsPass, steps, confidence, model, forecastTokens }`: the model's claims, each `null` where it made none or its reply was unreadable |
+| `turn.actual` | `{ runId, turnSeq, files, testsRan, testsPass, steps }`, at the turn's end |
 
 - **Paths and numbers only.** No prompt text, tool input or model reply text is
   sent. A `files` entry that is not one path-like token (spaces, quotes, no `/`
   or `.`) is dropped, so a model that echoes the prompt cannot leak it.
   Paths are made relative to the session's cwd where they are under it; at most
   50 entries of at most 300 characters.
-- **`turnSeq`** counts the main loop's turns from `session.start`, and starts
-  over at a `session.end` with reason `clear`.
+- **`turnSeq`** counts the main loop's turns from 1 within a **`runId`**. A new
+  run starts at `session.start` (a `--resume` too, which keeps the session id),
+  at a `session.end` with reason `clear`, and at the first turn after an
+  in-process resume. Its id is the reset's time in ms and 6 random base36
+  characters (`crypto.getRandomValues`), the time alone without a random
+  source. The daemon keys a turn on (session, `runId`, `turnSeq`), so a resumed
+  session's turn 1 never overwrites an older turn 1.
 - **The actual** is the main loop's tool calls this turn (a subagent's are left
   out): `files` that `Edit`, `Write`, `MultiEdit` or `NotebookEdit` wrote
   without error, `steps` the number of calls, `testsRan` when a `Bash` command
@@ -243,6 +248,8 @@ Two events per forecast turn, through the same queue as the sensor:
   call's result (an error result, as a non-zero exit is, reads as failing); it
   stays `null` for a run in the background and when no test ran.
 - A forecast that answers after its turn ended is still sent, after the actual.
+  One still running when the counter starts over (a `/clear`, a resume, a new
+  `session.start`) is dropped: its session and run are gone.
 
 ## Degradation
 

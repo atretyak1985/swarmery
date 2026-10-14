@@ -300,7 +300,7 @@ or unscored by the time the frame is built is skipped. Clients that do not know 
 type ignore it.
 
 ```json
-{"type":"turn_surprise","payload":{"id":12,"sessionId":1,"sessionUuid":"efaa9b56-…","projectId":1,"turnSeq":3,"startedAt":"2026-10-14T08:44:30.794Z","surprise":0.73,"top":"tests_miss","model":"haiku"}}
+{"type":"turn_surprise","payload":{"id":12,"sessionId":1,"sessionUuid":"efaa9b56-…","projectId":1,"runId":"1791885600000-25r6dv","turnSeq":3,"startedAt":"2026-10-14T08:44:30.794Z","surprise":0.73,"top":"tests_miss","model":"haiku"}}
 ```
 
 | Trigger | Message |
