@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -1043,6 +1044,26 @@ func TestNilNotifyAndNilWtAreSafe(t *testing.T) {
 	s.UUID = func() string { return "uuid-nil" }
 	s.notify(123)                     // nil Notify → no-op
 	s.removeWorktree("/r", "/p", "b") // nil Wt → no-op
+}
+
+// A panic in a dispatch goroutine must never take the daemon down: spawn
+// recovers it and logs the value. (Before the scheduling tests counted starts on
+// a channel, their WaitGroup's negative-counter panic was the only thing that
+// reached this branch, and only on some interleavings.)
+func TestSpawnRecoversAndLogsAPanic(t *testing.T) {
+	var buf strings.Builder
+	prev := log.Writer()
+	log.SetOutput(&buf)
+	t.Cleanup(func() { log.SetOutput(prev) })
+
+	s := NewService(testDB(t), Config{MaxConcurrent: 1, MaxWorktrees: 1, RunTimeout: time.Minute, Enabled: true},
+		&stubRunner{}, &stubWt{})
+	s.Go = func(fn func()) { fn() } // inline: a panic that escaped would fail this test
+	s.spawn(func() { panic("boom from a dispatch goroutine") })
+
+	if got := buf.String(); !strings.Contains(got, "dispatch: goroutine panic recovered: boom from a dispatch goroutine") {
+		t.Errorf("log = %q, want the recovered panic named", got)
+	}
 }
 
 func waitFor(t *testing.T, cond func() bool) {
