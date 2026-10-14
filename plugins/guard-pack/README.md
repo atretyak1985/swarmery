@@ -11,7 +11,7 @@ blocks a session.
 |---|---|---|
 | Isolation | `tool.call` | Denies `Read`, `Edit`, `Write`, `MultiEdit`, `NotebookEdit`, `Glob` and `Grep` on a path outside the project's roots. In `Bash` it denies `rm`/`mv`/`cp` of an absolute path outside the roots, an output redirect (`>`, `>>`, `&>`) to one, and `cd` into one. The deny reason is one line naming the path, the first roots, and the `extraRoots` option. |
 | Redaction | `session.append` | Before a row is stored or sent to the model, replaces every secret-shaped value inside a `tool_result` block with `[REDACTED:<rule>]`. Prompt rows, assistant rows and the row's other blocks are never touched. The status line counts redactions (`guard: 3 secrets redacted`). |
-| Production guard | `tool.check` | Sends a call that matches a production-deploy pattern to the native ask dialog, whatever the permission mode would have allowed. A deny from beneath stays a deny. |
+| Production guard | `tool.check` | Sends a call that matches a production-deploy pattern to the native ask dialog, even where the permission rules would have allowed it. A deny from beneath stays a deny. In `auto` mode the ask is settled without a dialog (see Limits). |
 | Agent offer | `agent.offer` | Hides `<name>-pack` agents of packs this project has not enabled from the model. Off by default. |
 | Heavy-tool deferral | `tool.describe` | Puts an MCP tool whose description is longer than 2048 characters behind ToolSearch. Off by default. |
 
@@ -118,5 +118,18 @@ Everything here is additive, and nothing depends on core or on the daemon:
   `mv`, `cp`, output redirects and `cd` are judged. Reading from outside with
   `cat` or `ls` is not blocked. A false deny costs more than a miss.
 - Hooks that run before `session.start` has been read let every call through.
-- Redaction covers the rows the session stores and sends. It does not cover
-  what a tool already printed to the terminal while it ran.
+- **`auto` mode settles the production ask itself.** Observed on Claude Code
+  2.1.296: with `decision: 'ask'` from `tool.check`, `default` mode draws the
+  native dialog ("Hook tool.check requires confirmation for this command: …
+  [plugin:guard-pack]"), and `-p` in `default` mode refuses the call ("Bash
+  needs approval (asked by plugin guard-pack: …)"). In `auto` mode, interactive
+  or `-p`, no dialog appeared and the matching command ran. Where production
+  calls must stop in `auto` mode, add a permission deny rule for them; whether
+  core's `prod-deploy-guard.sh` ask survives `auto` mode was not checked.
+- Redaction rewrites the `tool_result` blocks the model reads and the session
+  stores. It does not cover what a tool already printed to the terminal while
+  it ran, and (observed on Claude Code 2.1.296) the row's structured
+  `toolUseResult` field keeps the raw output: a Bash result's `stdout` is
+  still in the stored transcript JSONL and in `--output-format stream-json`
+  as `tool_use_result`. The prompt and the tool call's own input are never
+  rewritten either.
