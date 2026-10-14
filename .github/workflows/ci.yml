@@ -144,6 +144,7 @@ jobs:
           # One plugin per line, so branches adding a mod merge cleanly.
           PLUGINS=(
             plugins/swarmery-link
+            plugins/guard-pack
           )
           failed=0
           for p in "${PLUGINS[@]}"; do

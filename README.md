@@ -237,9 +237,10 @@ the native Claude Code plugin mechanism — **semver-versioned**, **namespaced**
 | `design-pack` | Design-handoff pack: /design-implement takes an exported design and re-expresses it in the project's stack pixel-accurately — computed-style token inventory, reuse-vs-create recon, an approval gate, and a measured pixel diff as the completion criterion. |
 | `review-pack` | Pull-request review pack: /pr-review reviews a GitHub PR and posts verified inline findings, or triages the reviewer comments on it — verify each against the code, fix the valid ones behind the repo's gates, rebut the rest with file:line evidence, reply in-thread. Requires the gh CLI. |
 | `swarmery-link` | Live-session sensor mod (function hooks): reports turn boundaries, tool calls by name and input hash, context fill, rate limits and cost to a local swarmery daemon over its token-guarded link API. Never blocks or rewrites anything; silent when the daemon's token file is absent. Requires the swarmery daemon. |
+| `guard-pack` | Guard mod pack (function hooks): keeps file tools inside the project's roots, redacts secret-shaped values in tool results before Claude sees them (the raw output may still be kept in the local transcript; see the pack README's Limits), routes production-deploy shell commands to the native ask dialog, and can hide agents of packs the project has not enabled. Policy comes from .claude/project.json at runtime. Needs neither core nor the swarmery daemon. |
 <!-- END generated:packs -->
 
-Every pack requires `core` and is opt-in per project.
+Every pack is opt-in per project and requires `core`, except `guard-pack`, which runs on its own.
 
 ### Consuming it
 
