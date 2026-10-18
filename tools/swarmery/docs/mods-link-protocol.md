@@ -750,7 +750,7 @@ with the same auth, the same dedup and the same per-event reject path; one comma
 kind; three routes. None of it touches `link_status`. Implementation:
 `internal/link/swarm.go` (ingest, correlation, claims), `internal/link/commands.go`
 (the `message` command), `internal/api/link_swarm.go` (routes), migration
-`0110_link_swarm.sql`.
+`0115_link_swarm.sql`.
 
 ### Event kinds
 

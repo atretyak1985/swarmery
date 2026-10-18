@@ -19,7 +19,7 @@ import (
 // report their $.session.send / session.receive traffic and the files each
 // turn starts editing. Every one also lands in link_events like any other
 // link kind (the dedup ledger); the side tables are link_messages and
-// link_claims (migration 0110). Contract: docs/mods-link-protocol.md, Swarm.
+// link_claims (migration 0115). Contract: docs/mods-link-protocol.md, Swarm.
 const (
 	KindSessionSend    = "session.send"
 	KindSessionReceive = "session.receive"

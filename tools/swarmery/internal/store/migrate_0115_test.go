@@ -2,20 +2,20 @@ package store
 
 import "testing"
 
-// TestMigrate0110AddsLinkSwarm: the swarm tables land with their columns and
+// TestMigrate0115AddsLinkSwarm: the swarm tables land with their columns and
 // indexes; link_claims is keyed one row per (session, path); link_messages
 // numbers rows with AUTOINCREMENT and leaves delivered NULL ("unknown").
-func TestMigrate0110AddsLinkSwarm(t *testing.T) {
+func TestMigrate0115AddsLinkSwarm(t *testing.T) {
 	db := openRaw(t)
 	if err := Migrate(db); err != nil {
 		t.Fatalf("migrate fresh db: %v", err)
 	}
 	var name string
-	if err := db.QueryRow(`SELECT name FROM schema_migrations WHERE version = 110`).Scan(&name); err != nil {
-		t.Fatalf("migration 110 not recorded: %v", err)
+	if err := db.QueryRow(`SELECT name FROM schema_migrations WHERE version = 115`).Scan(&name); err != nil {
+		t.Fatalf("migration 115 not recorded: %v", err)
 	}
-	if name != "0110_link_swarm.sql" {
-		t.Errorf("migration 110 name: want 0110_link_swarm.sql, got %s", name)
+	if name != "0115_link_swarm.sql" {
+		t.Errorf("migration 115 name: want 0115_link_swarm.sql, got %s", name)
 	}
 	mustHaveColumns(t, db, "link_messages",
 		"id", "kind", "from_session", "to_session", "to_address", "body", "truncated",

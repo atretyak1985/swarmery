@@ -1,4 +1,4 @@
--- 0110: link_messages + link_claims — swarm messaging and the file-claims
+-- 0115: link_messages + link_claims — swarm messaging and the file-claims
 -- registry (mods-swarmery-link phase 6, docs/mods-link-protocol.md "Swarm").
 --
 -- Sessions running the swarmery link mod report their $.session.send /
@@ -34,9 +34,9 @@
 -- refreshes claimed_at. Two or more sessions holding a live claim on one path
 -- is a conflict — advisory, nothing is blocked.
 --
--- WHY 0110: 0108–0111 are reserved for phases 4–7 of the same plan; 0109 and
--- 0111 belong to sibling phases. migrate.go applies files in sorted filename
--- order, so the gap until they land is harmless (see 0112's note).
+-- WHY 0115: 0109–0111 were first reserved for phases 5–7 of the same plan,
+-- but 0112/0113 landed first; numbering after the highest applied version
+-- keeps /api/health's MAX(version) a truthful "this schema is current" signal.
 --
 -- NO FOREIGN KEYS, for the reason 0107 spells out (an FK child of sessions
 -- wedged the first retention prune, 0073). Retention is internal/prune's job:

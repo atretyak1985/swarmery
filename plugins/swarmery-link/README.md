@@ -92,7 +92,7 @@ As `claude plugin validate --strict --json plugins/swarmery-link` reports it:
 ./register.ts gating hook with .catch: tool.call{tool=AskUserQuestion}
 ./register.ts gating hook with .catch: session.send
 ./register.ts gating hook with .catch: session.receive
-./register.ts calls: $.clock.after (via arm, beginForecast, bounded, pause, send, startControl, within), $.clock.now (via askSwarmery, claimFile, newRun, poll, push, waitForDecision), $.env.get (via readToken), $.fs.read (via readToken), $.http.fetch (via fetchCommand, post, request, sendAck), $.model.complete (via runForecast), $.prompt.submit (via submitPrompt), $.session.cwd, $.session.id, $.session.send (via sendToSession), $.session.usage, $.store.delete (via releaseClaims), $.store.get (via claimFile), $.store.keys (via claimFile), $.store.set (via claimFile), $.turn.abort (via abortTurn), $.ui.log (via log), $.ui.notice (via showNotice), $.ui.status (via showStatus)
+./register.ts calls: $.clock.after (via arm, beginForecast, bounded, pause, send, startControl, within), $.clock.now (via askSwarmery, claimFile, newRun, poll, pollDecision, push), $.env.get (via readToken), $.fs.read (via readToken), $.http.fetch (via cancelRequest, fetchCommand, post, request, sendAck), $.model.complete (via runForecast), $.prompt.submit (via submitPrompt), $.session.cwd, $.session.id, $.session.send (via sendToSession), $.session.usage, $.store.delete (via releaseClaims), $.store.get (via claimFile), $.store.keys (via claimFile), $.store.set (via claimFile), $.turn.abort (via abortTurn), $.ui.log (via log), $.ui.notice (via showNotice), $.ui.status (via showStatus)
 ./register.ts env writes: nothing
 ./register.ts env reads: HOME
 ```
