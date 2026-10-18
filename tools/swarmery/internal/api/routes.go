@@ -434,6 +434,9 @@ func Routes(root *http.ServeMux, h *Handler) {
 	// AttachPhaseRun wires the service.
 	mux.HandleFunc("POST /api/epics/{taskId}/phases/{phaseId}/run", requireLocalOrigin(h.runPhase))
 	mux.HandleFunc("POST /api/epics/{taskId}/phases/{phaseId}/run/cancel", requireLocalOrigin(h.cancelPhaseRun))
+	// "Verify again" (phase_reverify.go): grade a finished phase's existing run
+	// branch with the read-only verifier — no executor, nothing a run owns changes.
+	mux.HandleFunc("POST /api/epics/{taskId}/phases/{phaseId}/verify", requireLocalOrigin(h.reverifyPhase))
 	// Why a run achieved nothing (derived outcome + deterministic blockers), and
 	// the escape hatch for the branch-dirty 409 the run endpoint returns.
 	mux.HandleFunc("GET /api/epics/{taskId}/phases/{phaseId}/diagnosis", h.phaseDiagnosis)
