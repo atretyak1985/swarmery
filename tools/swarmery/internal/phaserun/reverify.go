@@ -50,6 +50,18 @@ const (
 type Eligibility struct {
 	VerifyMode, VerifyVerdict, RunState, RunBranch string
 	CriteriaDone, CriteriaTotal                    int
+	// LandOpen / ManualOpen: the unticked `[LAND]` / `[MANUAL]` criteria
+	// (epic_phases.criteria_land_open / criteria_manual_open). They are not the
+	// executor's work, so the verifier has nothing to grade in them — a phase whose
+	// only open criteria are classed is as re-gradable as a fully ticked one.
+	LandOpen, ManualOpen int
+}
+
+// executableMet reports whether every criterion that is NOT an open `[LAND]` /
+// `[MANUAL]` is ticked — the same effective total a run is settled against. A
+// phase with no criteria at all is still unprovable, as in phasegate.
+func (e Eligibility) executableMet() bool {
+	return e.CriteriaTotal > 0 && e.CriteriaDone+e.LandOpen+e.ManualOpen >= e.CriteriaTotal
 }
 
 // ReverifyRefusal is a typed admission refusal: the HTTP status it maps to, a
@@ -75,10 +87,10 @@ func ReverifyEligible(e Eligibility) *ReverifyRefusal {
 	case e.VerifyMode == "" || e.VerifyMode == wsingest.VerifyOff:
 		return refuseReverify(http.StatusUnprocessableEntity, ReverifyCodeVerifyOff,
 			"this phase does not ask to be verified (its doc has no **Verify:** normal|strict line)")
-	case !phasegate.CriteriaMetForDisplay(e.CriteriaDone, e.CriteriaTotal):
+	case !e.executableMet():
 		return refuseReverify(http.StatusUnprocessableEntity, ReverifyCodeCriteriaOpen,
-			fmt.Sprintf("the phase's acceptance criteria are not all ticked (%d/%d) — finish the phase first",
-				e.CriteriaDone, e.CriteriaTotal))
+			fmt.Sprintf("the phase's executable acceptance criteria are not all ticked (%d/%d, %d [LAND] and %d [MANUAL] open) — finish the phase first",
+				e.CriteriaDone, e.CriteriaTotal, e.LandOpen, e.ManualOpen))
 	case e.RunBranch == "":
 		return refuseReverify(http.StatusUnprocessableEntity, ReverifyCodeNoRunBranch,
 			"the phase has no recorded run branch to verify")
@@ -96,12 +108,14 @@ func ReverifyEligible(e Eligibility) *ReverifyRefusal {
 }
 
 // reverifyRow reads the row facts eligibility needs beyond what loadPhase
-// carries: the stamped verdict and the criteria counts.
+// carries: the stamped verdict and the criteria counts, classed-open included.
 func (s *Service) reverifyRow(phaseID int64, info phaseInfo) (Eligibility, error) {
 	el := Eligibility{VerifyMode: info.VerifyMode, RunState: info.RunState, RunBranch: info.RunBranch}
 	err := s.DB.QueryRow(`
-		SELECT COALESCE(verify_verdict, ''), checkboxes_done, checkboxes_total
-		  FROM epic_phases WHERE id = ?`, phaseID).Scan(&el.VerifyVerdict, &el.CriteriaDone, &el.CriteriaTotal)
+		SELECT COALESCE(verify_verdict, ''), checkboxes_done, checkboxes_total,
+		       COALESCE(criteria_land_open, 0), COALESCE(criteria_manual_open, 0)
+		  FROM epic_phases WHERE id = ?`, phaseID).Scan(&el.VerifyVerdict, &el.CriteriaDone, &el.CriteriaTotal,
+		&el.LandOpen, &el.ManualOpen)
 	if errors.Is(err, sql.ErrNoRows) {
 		return el, ErrPhaseNotFound
 	}

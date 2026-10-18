@@ -890,6 +890,8 @@ func (h *Handler) epicPhases(taskID int64, planDir string) ([]epicPhaseDTO, epic
 			RunBranch:     runBranch,
 			CriteriaDone:  p.CheckboxesDone,
 			CriteriaTotal: p.CheckboxesTotal,
+			LandOpen:      p.LandOpen,
+			ManualOpen:    p.ManualOpen,
 		}) == nil
 		rollup.Done += p.CheckboxesDone
 		rollup.Total += p.CheckboxesTotal
