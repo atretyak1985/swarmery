@@ -68,7 +68,11 @@ export type World = {
   readonly now?: number
   /** What the plugin's `$.store` holds at the start. Default: nothing. */
   readonly store?: Readonly<Record<string, unknown>>
-  /** How the engine beneath answers each `session.send`, in order; the last repeats. Default: delivered. */
+  /**
+   * How the engine beneath answers each `session.send`, in order; the last
+   * repeats. `{ result, afterMs }` settles once the mock clock moved that far.
+   * Default: delivered.
+   */
   readonly sendReplies?: ReadonlyArray<SendReply>
   /** The engine's own tool.check verdict beneath the plugin. Default: `allow`. */
   readonly verdict?: { readonly decision: 'allow' | 'ask' | 'deny'; readonly reason?: string }
@@ -91,7 +95,10 @@ export type PermissionCall = {
   readonly at: number
 }
 
-export type SendReply = { readonly isDelivered: true } | { readonly isDelivered: false; readonly reason: string }
+export type SendResult = { readonly isDelivered: true } | { readonly isDelivered: false; readonly reason: string }
+
+/** A send's result, or one that settles once the mock clock moved `afterMs`. */
+export type SendReply = SendResult | { readonly result: SendResult; readonly afterMs: number }
 
 export type SendSeen = { readonly to: unknown; readonly text: string; readonly origin: unknown; readonly agentId: string | undefined }
 
@@ -336,6 +343,7 @@ export const world = (on: On, w: World = {}): Recorded => {
   on('session.send', ($, e) => {
     const reply = pick<SendReply>(w.sendReplies, sends.length, { isDelivered: true })
     sends.push({ to: e.to, text: e.text, origin: e.origin, agentId: e.agentId })
+    if ('afterMs' in reply) return clock.sleep(reply.afterMs).then(() => reply.result)
     return reply
   })
   on('session.receive', ($, e) => ({ text: e.text }))

@@ -409,7 +409,7 @@ Through the same queue as the sensor:
 | `session.receive` | a delivery reached the main conversation (a subagent's is left out) | `{ text, truncated, originKind, fromPlugin? }`, plus one line on screen: `swarmery-link: from <originKind>[ <plugin>]: <first 80 characters>` |
 | `claim` | the first `Edit`, `Write`, `MultiEdit` or `NotebookEdit` of a path since the last release | `{ path }`, absolute (a relative one is resolved against the session's cwd) |
 | `conflict` | that claim found another live session holding the same path | `{ path, otherSession }` |
-| `release` | the main loop's `turn.complete` after a turn that claimed something; `session.end` | `{ paths: [...] }`; `{ all: true }` at `session.end` |
+| `release` | the main loop's `turn.complete` after a turn that claimed something; `session.end` | `{ paths: [...] }`, or `{ all: true }` when the turn claimed more than 500 paths (the daemon's limit per release); `{ all: true }` at `session.end` |
 
 - **Text is clipped** to 4096 characters (`truncated: true` when it was), never
   split inside a surrogate pair.
@@ -457,7 +457,10 @@ With `control` and `swarm` on, the dashboard can queue `message`
 it with `$.session.send({ to: { sessionId: to }, text })`, whether or not a turn
 is running (it lands in the recipient's queue, not this one), and acks `done`
 once it is queued there, or `failed` + `undeliverable: <reason>`. The send is
-reported as a `session.send` with the command's `commandId`. With `swarm` off it
+reported as a `session.send` with the command's `commandId` (a JSON number) once it
+settles: a send still unsettled after 10 s is acked `failed` +
+`undeliverable: no answer in 10s`, and reported, with its `commandId`, whenever it
+settles later, so the daemon takes its verdict over the ack's. With `swarm` off it
 is acked `failed` + `swarm option is off` and nothing is sent.
 
 ## Degradation

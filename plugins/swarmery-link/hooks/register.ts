@@ -101,6 +101,7 @@ import {
   conflictLines,
   receiveLine,
   receivePayload,
+  releasePayload,
   sendPayload,
   withBeneath,
 } from './lib/swarm'
@@ -319,13 +320,30 @@ async function resync($: EngineInterface, link: Link): Promise<void> {
   await push($, link, 'session.start', link.start)
 }
 
+/** A dashboard message whose `$.session.send` has not settled yet. */
+type PendingSend = { readonly commandId: string; readonly to: string; readonly text: string; isLogged: boolean }
+
 /** The swarm's state for one load of the module. Exists only with `swarm` on. */
 type Swarm = {
   turn: SwarmTurn
   /** Claims and releases run one at a time: parallel tool calls must not lose a claim. */
   lock: Promise<void>
-  /** The dashboard message being sent now: the `session.send` it raises carries the command's id. */
-  pending: { readonly commandId: string; isLogged: boolean } | undefined
+  /**
+   * Dashboard messages being sent, by command id, until their send settles —
+   * past the 10 s ack timeout too: the `session.send` a late send raises still
+   * carries the command's id.
+   */
+  readonly pending: Map<string, PendingSend>
+}
+
+/**
+ * The pending dashboard message a plugin send of `to`/`text` is, if any: the
+ * oldest unreported one with that text, one addressed as the engine spelled
+ * `to` first.
+ */
+const pendingFor = (pending: ReadonlyMap<string, PendingSend>, to: string, text: string): PendingSend | undefined => {
+  const open = [...pending.values()].filter(p => !p.isLogged && p.text === text)
+  return open.find(p => p.to === to) ?? open[0]
 }
 
 /** Runs `work` after every claim or release queued before it. Rejects as `work` does. */
@@ -366,7 +384,7 @@ async function endSwarmTurn($: EngineInterface, link: Link, swarm: Swarm): Promi
         logOnce($, link, 'swarm-store', `swarm: the claims registry refused (${shortError(error)}); the claim lapses in 30 min`)
       }
     }
-    if (claimed.length > 0) await push($, link, 'release', { paths: claimed })
+    if (claimed.length > 0) await push($, link, 'release', releasePayload(claimed))
     return conflictLines(conflicts)
   })
 }
@@ -387,7 +405,7 @@ async function endSwarmSession($: EngineInterface, link: Link, swarm: Swarm): Pr
 /** A message this conversation's main loop sent: `session.send`, with the command's id when the dashboard asked for it. */
 async function noteSend($: EngineInterface, link: Link, swarm: Swarm, e: SessionSendInput, result: SessionSendResult): Promise<void> {
   const name = e.origin.kind === 'plugin' ? e.origin.name : undefined
-  const pending = name === NAME || name?.startsWith(`${NAME}@`) === true ? swarm.pending : undefined
+  const pending = name === NAME || name?.startsWith(`${NAME}@`) === true ? pendingFor(swarm.pending, e.to, e.text) : undefined
   if (pending !== undefined) pending.isLogged = true
   await push(
     $,
@@ -410,30 +428,32 @@ async function noteReceive($: EngineInterface, link: Link, text: string, origin:
  * The dashboard's `message` command: `$.session.send` to the session it names.
  * `done` once queued at the recipient, else `failed` + `undeliverable: <reason>`.
  * The send's `session.send` event carries the command's id; when the send hook
- * did not report it, it is reported here.
+ * did not report it, it is reported here. Both happen once the send settles,
+ * also when that is after the 10 s timeout acked the command failed: the
+ * daemon then takes the send's verdict over the ack's.
  */
 async function deliverMessage($: EngineInterface, link: Link, swarm: Swarm, commandId: string, to: string, text: string): Promise<Ack> {
-  const pending = { commandId, isLogged: false }
-  swarm.pending = pending
-  let result: SessionSendResult
-  try {
-    const reply = await within($, sendToSession($, to, text), MESSAGE_TIMEOUT_MS)
-    if (reply === 'timeout') return undeliverable(`no answer in ${MESSAGE_TIMEOUT_MS / 1000}s`)
-    result = reply
-  } catch (error) {
-    result = { isDelivered: false, reason: shortError(error) }
-  } finally {
-    if (swarm.pending === pending) swarm.pending = undefined
-  }
-  if (!pending.isLogged) {
-    try {
+  const pending: PendingSend = { commandId, to, text, isLogged: false }
+  swarm.pending.set(commandId, pending)
+  const sending = sendToSession($, to, text).then(
+    (result): SessionSendResult => result,
+    (error: unknown): SessionSendResult => ({ isDelivered: false, reason: shortError(error) }),
+  )
+  const reported = sending
+    .then(async result => {
+      if (pending.isLogged) return
       await push($, link, 'session.send', sendPayload({ to, text, origin: 'plugin', isDelivered: result.isDelivered, reason: result.reason, commandId }))
       flushAtTurn($, link)
-    } catch {
-      // unreported
-    }
-  }
-  return result.isDelivered ? done() : undeliverable(result.reason)
+    })
+    .catch(() => undefined) // unreported
+    .finally(() => {
+      if (swarm.pending.get(commandId) === pending) swarm.pending.delete(commandId)
+    })
+  const reply = await within($, sending, MESSAGE_TIMEOUT_MS)
+  if (reply === 'timeout') return undeliverable(`no answer in ${MESSAGE_TIMEOUT_MS / 1000}s`)
+  // on time: the report is queued before the ack goes out
+  await reported
+  return reply.isDelivered ? done() : undeliverable(reply.reason)
 }
 
 /** The command channel's state for one session's loop. Exists only with `control` on. */
@@ -774,7 +794,7 @@ export const register: Register = (on, options) => {
   /** The forecast loop; undefined with `forecast` off, so none of it runs. */
   const forecaster: Forecaster | undefined = options.forecast === true ? { state: INITIAL_FORECAST, isResumed: false } : undefined
   /** The swarm; undefined with `swarm` off, so no store access, no swarm event and no send/receive hook. */
-  const swarm: Swarm | undefined = options.swarm === true ? { turn: EMPTY_TURN, lock: Promise.resolve(), pending: undefined } : undefined
+  const swarm: Swarm | undefined = options.swarm === true ? { turn: EMPTY_TURN, lock: Promise.resolve(), pending: new Map() } : undefined
   const noted = new Set<string>()
   const link: Link = {
     url: endpoint.url,

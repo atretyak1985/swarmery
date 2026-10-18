@@ -134,6 +134,27 @@ export const conflictsFor = (path: string, sessionId: string, others: readonly C
 export const noteClaim = (turn: SwarmTurn, path: string): { readonly isNew: boolean; readonly turn: SwarmTurn } =>
   turn.claimed.includes(path) ? { isNew: false, turn } : { isNew: true, turn: { ...turn, claimed: [...turn.claimed, path] } }
 
+/** The daemon refuses a `release` listing more paths than this (maxReleasePaths). */
+export const MAX_RELEASE_PATHS = 500
+
+/**
+ * The turn-end `release` payload: the turn's paths, or `{ all: true }` when
+ * they are more than the daemon takes in one release. Both free the same
+ * claims: every claim the session holds was taken this turn, since each
+ * turn's end releases them all.
+ */
+export const releasePayload = (claimed: readonly string[]): Readonly<Record<string, unknown>> =>
+  claimed.length > MAX_RELEASE_PATHS ? { all: true } : { paths: claimed }
+
+/**
+ * A command id as the wire carries it: a JSON number when the poll's id is a
+ * safe integer (the protocol's form), else the id as given.
+ */
+export const wireCommandId = (id: string): number | string => {
+  const n = Number(id)
+  return /^[0-9]+$/.test(id) && Number.isSafeInteger(n) ? n : id
+}
+
 /** At most `max` code units of `text`, never splitting a surrogate pair. */
 export const clip = (text: string, max: number = MAX_MESSAGE_TEXT): { readonly text: string; readonly truncated: boolean } => {
   if (text.length <= max) return { text, truncated: false }
@@ -151,7 +172,7 @@ export type SendFacts = {
   readonly commandId?: string | undefined
 }
 
-/** The `session.send` payload: `reason` only when not delivered, `commandId` only for a dashboard message. */
+/** The `session.send` payload: `reason` only when not delivered, `commandId` (a number) only for a dashboard message. */
 export const sendPayload = (facts: SendFacts): Readonly<Record<string, unknown>> => {
   const { text, truncated } = clip(facts.text)
   return {
@@ -161,7 +182,7 @@ export const sendPayload = (facts: SendFacts): Readonly<Record<string, unknown>>
     isDelivered: facts.isDelivered,
     ...(!facts.isDelivered ? { reason: facts.reason ?? '' } : {}),
     origin: facts.origin,
-    ...(facts.commandId !== undefined ? { commandId: facts.commandId } : {}),
+    ...(facts.commandId !== undefined ? { commandId: wireCommandId(facts.commandId) } : {}),
   }
 }
 

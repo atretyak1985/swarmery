@@ -1,7 +1,20 @@
 import type { On } from 'claude-code'
 import { type Engine, expect, test } from 'claude-code/testing'
 import { decide, parseCommand } from './lib/control'
-import { MAX_ENTRY_BYTES, absolutePath, addClaim, claimPath, claimsKey, clip, conflictLines, withBeneath } from './lib/swarm'
+import {
+  MAX_ENTRY_BYTES,
+  MAX_RELEASE_PATHS,
+  absolutePath,
+  addClaim,
+  claimPath,
+  claimsKey,
+  clip,
+  conflictLines,
+  releasePayload,
+  sendPayload,
+  wireCommandId,
+  withBeneath,
+} from './lib/swarm'
 import { COMPLETE, CWD, END, SESSION_ID, START, TOKEN, TURN, type PollReply, type World, sent, world } from './testkit'
 
 const ON = { options: { swarm: true } } as const
@@ -219,7 +232,7 @@ test('message command: $.session.send to {sessionId}, acked done, logged with th
   await $.session.end(END)
   const logged = payloads(sent(w.requests), 'session.send') as ReadonlyArray<Readonly<Record<string, unknown>>>
   expect(logged).toHaveLength(1)
-  expect(logged[0]).toEqual({ to: OTHER, text: 'please pull main', truncated: false, isDelivered: true, origin: 'plugin', commandId: '30' })
+  expect(logged[0]).toEqual({ to: OTHER, text: 'please pull main', truncated: false, isDelivered: true, origin: 'plugin', commandId: 30 })
 })
 
 test('message command not delivered: acked failed "undeliverable: <reason>"', BOTH, async ($, on) => {
@@ -228,8 +241,73 @@ test('message command not delivered: acked failed "undeliverable: <reason>"', BO
   expect(w.acks).toEqual([{ url: ACK_URL(31), body: { result: 'failed', message: 'undeliverable: session is not running' } }])
   await $.session.end(END)
   expect(payloads(sent(w.requests), 'session.send')).toEqual([
-    expect.objectContaining({ isDelivered: false, reason: 'session is not running', commandId: '31' }),
+    expect.objectContaining({ isDelivered: false, reason: 'session is not running', commandId: 31 }),
   ])
+})
+
+test('message command whose send settles after the 10 s timeout: acked failed at 10 s, the late send still carries the command id', BOTH, async ($, on) => {
+  const w = await begin($, on, { polls: [message(32, OTHER, 'still there?'), 'hang'], sendReplies: [{ result: { isDelivered: true }, afterMs: 15_000 }] })
+  await w.clock.settle()
+  expect(w.sends).toHaveLength(1)
+  await w.clock.advance(10_000)
+  expect(w.acks).toEqual([{ url: ACK_URL(32), body: { result: 'failed', message: 'undeliverable: no answer in 10s' } }])
+  // the send has not settled: nothing is reported for it yet
+  expect(payloads(sent(w.requests), 'session.send')).toEqual([])
+  await w.clock.advance(5_000)
+  await $.session.end(END)
+  expect(payloads(sent(w.requests), 'session.send')).toEqual([
+    { to: OTHER, text: 'still there?', truncated: false, isDelivered: true, origin: 'plugin', commandId: 32 },
+  ])
+})
+
+test('two dashboard messages, the first one late: each send is reported once, with its own command id', BOTH, async ($, on) => {
+  const w = await begin($, on, {
+    polls: [message(33, OTHER, 'first'), message(34, THIRD, 'second'), 'hang'],
+    sendReplies: [{ result: { isDelivered: false, reason: 'session is not running' }, afterMs: 12_000 }, { isDelivered: true }],
+  })
+  await w.clock.settle()
+  await w.clock.advance(10_000)
+  await w.clock.settle()
+  expect(w.acks).toEqual([
+    { url: ACK_URL(33), body: { result: 'failed', message: 'undeliverable: no answer in 10s' } },
+    { url: ACK_URL(34), body: { result: 'done' } },
+  ])
+  await w.clock.advance(2_000)
+  await $.session.end(END)
+  expect(payloads(sent(w.requests), 'session.send')).toEqual([
+    { to: THIRD, text: 'second', truncated: false, isDelivered: true, origin: 'plugin', commandId: 34 },
+    { to: OTHER, text: 'first', truncated: false, isDelivered: false, reason: 'session is not running', origin: 'plugin', commandId: 33 },
+  ])
+})
+
+test('commandId goes out as a JSON number when the id is a safe integer, else as given', () => {
+  expect(wireCommandId('30')).toBe(30)
+  expect(wireCommandId('9007199254740993')).toBe('9007199254740993')
+  expect(wireCommandId('abc')).toBe('abc')
+  expect(wireCommandId('1e3')).toBe('1e3')
+  expect(sendPayload({ to: OTHER, text: 'x', origin: 'plugin', isDelivered: true, commandId: '7' })).toEqual({
+    to: OTHER,
+    text: 'x',
+    truncated: false,
+    isDelivered: true,
+    origin: 'plugin',
+    commandId: 7,
+  })
+})
+
+test('a turn that claimed more paths than one release takes ends in release {all:true}', ON, async ($, on) => {
+  expect(releasePayload(['/a'])).toEqual({ paths: ['/a'] })
+  const atCap = Array.from({ length: MAX_RELEASE_PATHS }, (_, i) => `/p/${i}.ts`)
+  expect(releasePayload(atCap)).toEqual({ paths: atCap })
+  expect(releasePayload([...atCap, '/p/extra.ts'])).toEqual({ all: true })
+  const w = await begin($, on)
+  await $.turn.start(TURN)
+  for (let i = 0; i <= MAX_RELEASE_PATHS; i += 1) await $.tool.call(edit(`${CWD}/src/f${i}.ts`))
+  await $.turn.complete(COMPLETE)
+  expect(w.store.has(claimsKey(SESSION_ID))).toBe(false)
+  await $.session.end(END)
+  // never a release the daemon would refuse (> 500 paths); the session's own end adds {all:true}
+  expect(payloads(sent(w.requests), 'release')).toEqual([{ all: true }, { all: true }])
 })
 
 test('message commands: parsed with a recipient and text, refused without; run only with swarm on', () => {
