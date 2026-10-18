@@ -236,7 +236,7 @@ the native Claude Code plugin mechanism — **semver-versioned**, **namespaced**
 | `accounts-pack` | Multi-account pack: bind a project to one of several Claude Code accounts and run every session under it — /account, a shell wrapper, an optional shell function, and a wrong-account warning. The binding is machine-local, and a binding file committed to git is ignored. Requires the swarmery CLI. |
 | `design-pack` | Design-handoff pack: /design-implement takes an exported design and re-expresses it in the project's stack pixel-accurately — computed-style token inventory, reuse-vs-create recon, an approval gate, and a measured pixel diff as the completion criterion. |
 | `review-pack` | Pull-request review pack: /pr-review reviews a GitHub PR and posts verified inline findings, or triages the reviewer comments on it — verify each against the code, fix the valid ones behind the repo's gates, rebut the rest with file:line evidence, reply in-thread. Requires the gh CLI. |
-| `swarmery-link` | Live-session sensor mod (function hooks): reports turn boundaries, tool calls by name and input hash, context fill, rate limits and cost to a local swarmery daemon over its token-guarded link API. The sensor never blocks or rewrites anything; silent when the daemon's token file is absent. With the opt-in control option the dashboard can stop the session's running turn and send it prompts; with the opt-in forecast option one haiku call per user turn predicts what the turn will touch and the daemon scores the forecast against the actual (paths and numbers only); with the opt-in approvals option a permission ask goes to the swarmery approvals queue first and an AskUserQuestion can be answered from the dashboard, the shim or the native dialog taking over whenever the daemon does not decide; with the opt-in swarm option it logs messages between sessions, keeps a shared registry of the files each session is editing (an advisory line when two live sessions edit one file), and lets the dashboard message a session. Requires the swarmery daemon. |
+| `swarmery-link` | Live-session sensor mod (function hooks): reports turn boundaries, tool calls by name and input hash, context fill, rate limits and cost to a local swarmery daemon over its token-guarded link API. The sensor never blocks or rewrites anything; silent when the daemon's token file is absent. With the opt-in control option the dashboard can stop the session's running turn and send it prompts; with the opt-in forecast option one haiku call per user turn predicts what the turn will touch and the daemon scores the forecast against the actual (paths and numbers only); with the opt-in approvals option a permission ask goes to the swarmery approvals queue first and an AskUserQuestion can be answered from the dashboard, the shim or the native dialog taking over whenever the daemon does not decide; with the opt-in swarm option it logs messages between sessions, keeps a shared registry of the files each session is editing (an advisory line when two live sessions edit one file), and lets the dashboard message a session; with the opt-in planBand option a band above the prompt shows the session's swarmery plan phase and its checklist (/plan opens it, criteria tick from the terminal) and a line under the answer flags an editing turn that looks off the running phase. Requires the swarmery daemon. |
 | `guard-pack` | Guard mod pack (function hooks): keeps file tools inside the project's roots, redacts secret-shaped values in tool results before Claude sees them (the raw output may still be kept in the local transcript; see the pack README's Limits), routes production-deploy shell commands to the native ask dialog, and can hide agents of packs the project has not enabled. Policy comes from .claude/project.json at runtime. Needs neither core nor the swarmery daemon. |
 <!-- END generated:packs -->
 
@@ -270,6 +270,18 @@ reference overlay in `overlays/example/`). Core agents, skills, and hooks read i
 repos, the main app, cloud settings, and domain terms — **nothing project-specific is ever baked
 into a plugin** (policy: [docs/NEUTRALITY.md](docs/NEUTRALITY.md), enforced in CI by
 `scripts/scan-flavor.sh`, which must report zero hits).
+
+### Mods
+
+`swarmery-link` and `guard-pack` are **mods**: plugins of function hooks (one TypeScript
+hooks module each) that run inside the session rather than as shell scripts, on Claude Code
+2.1.287 or later. `swarmery-link` gives the dashboard a live line into each session — status,
+context fill and cost the moment they change, and with its opt-in options Stop and Send prompt,
+approvals, swarm messages, the plan band above the prompt and a per-turn forecast. `guard-pack`
+keeps file tools inside the project, redacts secrets from tool results and asks before a
+production deploy, with no daemon at all. Both are off until a project enables them; options go
+in your user settings, not the project's. How to enable them, the token file, every option, what
+`claude plugin validate` reports and how each degrades: [docs/MODS.md](docs/MODS.md).
 
 ### Design rules
 

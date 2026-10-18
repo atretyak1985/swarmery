@@ -32,11 +32,37 @@
 // sent through `$.session.send`. With `swarm` off none of it runs and the
 // send/receive hooks are not registered.
 //
-// `$` is handed only to top-level function declarations: this file's,
-// ./approvals.ts's and ./swarm.ts's. ./lib/* is pure (data in, data out).
+// With `planBand` on, the session's running plan phase is drawn in a band
+// above the prompt from a cache the daemon fills (GET /api/link/plan), `/plan`
+// shows its checklist, an interview-style AskUserQuestion gets a card above
+// the dialog, and a main-loop turn that edited files while a phase runs is
+// classified once; an `off-phase` turn gets a line beneath its answer. With
+// `planBand` off none of those hooks, the command, the timer or the
+// classification exists, and no plan request is made.
+//
+// `$` is handed only to top-level function declarations, as the engine
+// requires: the ones of this file, ./approvals.ts's, ./swarm.ts's, and the
+// band's in ./plan.ts, ./drift.ts and ./ask-render.ts. ./lib/* is pure (data
+// in, data out).
 
 import type { EngineInterface, PromptSubmitArgs, Register, SessionSendInput, SessionSendResult, Timer } from 'claude-code'
 import { type Gate, answerFromSwarmery, checkWithSwarmery } from './approvals'
+import { drawInterview } from './ask-render'
+import { checkDrift } from './drift'
+import { interviewsOf } from './lib/interview'
+import { PLAN_PANE_ID, editedPath, isEditTool, noteEdit } from './lib/plan'
+import {
+  type Planner,
+  drawBand,
+  drawPane,
+  newPlanner,
+  refreshPlan,
+  registerPlanCommand,
+  runPlanCommand,
+  setView,
+  startPlanTimer,
+  stopPlanTimer,
+} from './plan'
 import {
   AUTH_RETRY_MS,
   DEFAULT_DAEMON_URL,
@@ -111,7 +137,7 @@ import { claimFile, releaseClaims, sendToSession } from './swarm'
 const NAME = 'swarmery-link'
 
 /** Options reserved for later releases: each logs once when switched on, and hooks nothing else. */
-const RESERVED = ['planBand'] as const
+const RESERVED: readonly string[] = []
 
 /** A dashboard message's `$.session.send` resolves once queued at the recipient; past this it is reported undeliverable. */
 const MESSAGE_TIMEOUT_MS = 10_000
@@ -795,6 +821,8 @@ export const register: Register = (on, options) => {
   const forecaster: Forecaster | undefined = options.forecast === true ? { state: INITIAL_FORECAST, isResumed: false } : undefined
   /** The swarm; undefined with `swarm` off, so no store access, no swarm event and no send/receive hook. */
   const swarm: Swarm | undefined = options.swarm === true ? { turn: EMPTY_TURN, lock: Promise.resolve(), pending: new Map() } : undefined
+  /** The plan band; undefined with `planBand` off, so no band hook, command, timer or plan request exists. */
+  const planner: Planner | undefined = options.planBand === true ? newPlanner(endpoint.origin) : undefined
   const noted = new Set<string>()
   const link: Link = {
     url: endpoint.url,
@@ -826,6 +854,8 @@ export const register: Register = (on, options) => {
       noted.add(feature)
       log($, `${feature}: not implemented yet`)
     }
+    // the command answers with or without a token: it says what is missing
+    if (planner !== undefined) await registerPlanCommand($)
     if (endpoint.isRefused && !noted.has('daemonUrl')) {
       // the configured value is not echoed: it may carry credentials
       noted.add('daemonUrl')
@@ -846,6 +876,10 @@ export const register: Register = (on, options) => {
       if (isControlOn && !link.isOff && (control === undefined || control.isStopped || control.sessionId !== link.sessionId)) {
         control = openControl($, link, endpoint.origin, control, swarm)
       }
+      if (planner !== undefined) {
+        startPlanTimer($, planner, link)
+        void refreshPlan($, planner, link)
+      }
     } catch {
       // the sensor stays off; the session goes on
     }
@@ -858,11 +892,17 @@ export const register: Register = (on, options) => {
       try {
         await resync($, link)
         if (isControlOn && !link.isOff) control = openControl($, link, endpoint.origin, control, swarm)
+        // the band follows the new session id: its plan is read again under it
+        if (planner !== undefined) void refreshPlan($, planner, link)
       } catch {
         // the id is read again at the next turn.start
       }
     }
     if (control !== undefined) control.turnId = e.turnId
+    if (planner !== undefined) {
+      planner.turn = { turnId: e.turnId, edits: [], isClassified: false }
+      startPlanTimer($, planner, link)
+    }
     // the resync after an in-process resume: the counter starts over under a new run
     if (forecaster !== undefined && forecaster.isResumed) {
       forecaster.isResumed = false
@@ -899,11 +939,20 @@ export const register: Register = (on, options) => {
         // the edit goes on unclaimed
       }
     }
-    if (forecaster === undefined || e.agentId !== undefined || forecaster.state.turnId === undefined) return next(e)
+    const isMainLoop = e.agentId === undefined
+    const isForecastTurn = forecaster !== undefined && isMainLoop && forecaster.state.turnId !== undefined
+    // the drift check counts the main loop's edits alone
+    const isPlanEdit = planner?.turn !== undefined && isMainLoop && isEditTool(String(e.tool))
+    if (!isForecastTurn && !isPlanEdit) return next(e)
     const result = await next(e)
+    const fields = e as unknown as Readonly<Record<string, unknown>>
     try {
-      const facts = { tool: String(e.tool), agentId: e.agentId, fields: e as unknown as Readonly<Record<string, unknown>> }
-      forecaster.state = noteToolCall(forecaster.state, facts, toolOutcome(result), link.cwd)
+      if (forecaster !== undefined && isForecastTurn) {
+        const facts = { tool: String(e.tool), agentId: e.agentId, fields }
+        forecaster.state = noteToolCall(forecaster.state, facts, toolOutcome(result), link.cwd)
+      }
+      const path = isPlanEdit ? editedPath(String(e.tool), fields, link.cwd) : undefined
+      if (planner !== undefined && path !== undefined && toolOutcome(result) !== 'denied') planner.turn = noteEdit(planner.turn, path)
     } catch {
       // the journal misses one call; the call's result stands
     }
@@ -953,11 +1002,28 @@ export const register: Register = (on, options) => {
     } catch {
       // unreported
     }
-    return withBeneath(await next(e), e.answer, beneath)
+    const result = await next(e)
+    if (planner !== undefined) {
+      try {
+        const drift = await checkDrift($, planner, link, e.turnId, e.answer)
+        if (drift !== undefined) beneath.push(drift)
+      } catch {
+        // no line; the answer stands
+      }
+      void refreshPlan($, planner, link)
+    }
+    // each feature added its own line; they are joined once, beneath the answer
+    return withBeneath(result, e.answer, beneath)
   })
 
   on('session.end', async ($, e, next) => {
     if (control !== undefined) stopControl($, control, undefined)
+    if (planner !== undefined) {
+      stopPlanTimer(planner)
+      planner.turn = undefined
+      // `/clear` or an in-process resume: the old session's plan is not the next one's
+      if (e.reason === 'clear' || e.reason === 'resume') setView($, planner, undefined)
+    }
     // a /clear goes on in this process with no session.start: the turn count starts over here;
     // an in-process resume starts it over at the next turn.start's resync
     if (forecaster !== undefined && e.reason === 'clear') await newRun($, forecaster)
@@ -1005,4 +1071,23 @@ export const register: Register = (on, options) => {
       return next(e)
     }).catch(($, e, next) => next(e))
   }
+
+  if (planner === undefined) return
+
+  // The band draws from the cache alone: a render never fetches.
+  on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => drawBand($, planner, link, e) ?? next(e))
+
+  on('ui.render', { component: 'Pane', requestId: PLAN_PANE_ID }, async ($, e) => drawPane($, planner, e))
+
+  // An interview-style question gets a card above the engine's own dialog, which still answers it.
+  on('ui.render', { component: 'AskUserQuestion' }, async ($, e, next) => {
+    const interviews = interviewsOf(e.props.questions)
+    if (interviews.length === 0) return next(e)
+    return drawInterview($, e, interviews, await next(e))
+  })
+
+  // `/plan [task-id]`: answered here, so no model turn runs.
+  on('command.run', { command: 'plan' }, async ($, e) => runPlanCommand($, planner, link, e.args)).catch(() => ({
+    text: 'swarmery-link: /plan failed; the band shows the cached phase',
+  }))
 }

@@ -64,8 +64,18 @@ edit means editing the Go list, the JSON file and the testkit copy together.
 | `deferHeavyTools` | boolean | `false` | Defer MCP tools with a description over 2048 characters. |
 | `extraRoots` | string | `""` | Comma-separated extra roots: absolute paths, `~/…`, or paths relative to the project directory. |
 
-Options are stored in settings under `pluginConfigs["guard-pack"].options`,
-and each one is a row in `/config`.
+Set them in the plugin's config menu (`/plugin` → guard-pack → configure;
+each one is also a row in `/config`), or under `pluginConfigs` in your **user** settings,
+`~/.claude/settings.json`, keyed `guard-pack@swarmery`:
+
+```json
+{ "pluginConfigs": { "guard-pack@swarmery": { "options": { "agentOffer": true } } } }
+```
+
+Claude Code reads plugin options from user settings (and from the `--settings`
+flag) only. A `pluginConfigs` block in a project's `.claude/settings.json` or
+`.claude/settings.local.json` is ignored without a warning. Loaded through
+`--plugin-dir`, the key is `guard-pack@inline`.
 
 ## Enable
 

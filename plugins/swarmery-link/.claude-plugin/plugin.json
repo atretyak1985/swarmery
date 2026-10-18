@@ -1,12 +1,12 @@
 {
   "name": "swarmery-link",
-  "description": "Mod (function hooks): reports this session's live state (turn start and end, tool calls by name and input hash, context fill, rate limits, cost) to a local swarmery daemon over its token-guarded link API, and switches itself off when the daemon's token file is absent. The sensor never blocks, changes or answers a hook's event. With the opt-in control option it also long-polls the daemon for this session's commands: stop aborts the running turn, prompt submits a prompt once the session is idle. With the opt-in forecast option it asks a small model, once per user turn and without holding the turn, what the turn will touch, and reports the forecast beside the actual (paths and numbers only) so the daemon can score its surprise. With the opt-in approvals option a permission ask goes to the swarmery approvals queue first and an AskUserQuestion can be answered from the dashboard; whenever the daemon is down or does not decide in time, the engine's own verdict, the hook shim or the native dialog takes over. With the opt-in swarm option it reports messages sent to and received from other sessions, claims each file the session starts editing in a registry shared by its sessions (a line beneath the answer when another live session edits the same file), and lets the dashboard send another session a message.",
-  "version": "0.5.0",
+  "description": "Mod (function hooks): reports this session's live state (turn start and end, tool calls by name and input hash, context fill, rate limits, cost) to a local swarmery daemon over its token-guarded link API, and switches itself off when the daemon's token file is absent. The sensor never blocks, changes or answers a hook's event. With the opt-in control option it also long-polls the daemon for this session's commands: stop aborts the running turn, prompt submits a prompt once the session is idle. With the opt-in forecast option it asks a small model, once per user turn and without holding the turn, what the turn will touch, and reports the forecast beside the actual (paths and numbers only) so the daemon can score its surprise. With the opt-in approvals option a permission ask goes to the swarmery approvals queue first and an AskUserQuestion can be answered from the dashboard; whenever the daemon is down or does not decide in time, the engine's own verdict, the hook shim or the native dialog takes over. With the opt-in swarm option it reports messages sent to and received from other sessions, claims each file the session starts editing in a registry shared by its sessions (a line beneath the answer when another live session edits the same file), and lets the dashboard send another session a message. With the opt-in planBand option it draws the session's plan phase and checklist above the prompt from the daemon's plan view, adds /plan, shows interview-style questions as a card and flags a turn that drifts off the phase.",
+  "version": "0.6.1",
   "author": {
     "name": "atretyak",
     "email": "atretiak.work@gmail.com"
   },
-  "keywords": ["sensor", "telemetry", "dashboard", "remote-control", "forecast", "approvals", "permissions", "swarm", "mods"],
+  "keywords": ["sensor", "telemetry", "dashboard", "remote-control", "forecast", "approvals", "permissions", "swarm", "plan", "mods"],
   "userConfig": {
     "control": {
       "type": "boolean",
@@ -23,7 +23,7 @@
     "planBand": {
       "type": "boolean",
       "title": "Plan band",
-      "description": "Reserved for a later release (a band above the prompt showing the running plan). In 0.5 it only logs that it is not implemented.",
+      "description": "Show this session's swarmery plan phase in a band above the prompt (Phase n, its open criteria, [1] next phase, [2] open in Swarmery, [3] tick), add /plan [task-id] for the full checklist, draw a dashboard interview question (its JSON) as a card with the recommended option highlighted, and flag a turn that drifts off the phase with one line beneath its answer. Costs one small $.model.classify call per main-loop turn that edits files while a phase runs, plus a plan request (loopback, bearer token) at session start, after each turn and every 60 s. Off: no band, no command, no classification and no plan request.",
       "default": false
     },
     "swarm": {

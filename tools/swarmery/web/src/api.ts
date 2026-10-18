@@ -66,6 +66,7 @@ import type {
   PermissionRequestStatus,
   PlanDoc,
   PlanRevision,
+  TerminalSession,
   PlanRunMode,
   PlanningStart,
   PlanningStatus,
@@ -1655,6 +1656,19 @@ export async function fetchRevisions(taskId: number): Promise<PlanRevision[]> {
     `/api/epics/${String(taskId)}/revisions`,
   );
   return data.revisions;
+}
+
+/** GET /api/epics/{taskId}/terminal-sessions — the sessions with this plan open
+ * in a terminal, newest first. A 404 (the plan is gone) reads as "none", not an
+ * error: the badge simply does not render. */
+export async function fetchTerminalSessions(taskId: number): Promise<TerminalSession[]> {
+  if (MOCK) return [];
+  const path = `/api/epics/${String(taskId)}/terminal-sessions`;
+  const res = await fetch(path);
+  if (res.status === 404) return [];
+  if (!res.ok) throw new Error(`GET ${path}: ${String(res.status)}`);
+  const data: unknown = await res.json();
+  return Array.isArray(data) ? (data as TerminalSession[]) : [];
 }
 
 /** GET /api/revisions/{id} — one revision with per-file `stale` flags and

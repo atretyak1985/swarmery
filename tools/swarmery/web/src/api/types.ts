@@ -4311,6 +4311,19 @@ export interface EpicSpec {
   unknownRefs: SpecUnknownRef[];
 }
 
+/** One row of GET /api/epics/{taskId}/terminal-sessions: a session that has this
+ *  plan open in a terminal (a `terminal` pick, or an automatic resolution in the
+ *  last 10 minutes), newest first. `phaseId` is the EpicPhase id as a string, or
+ *  null for a pick of the plan without a phase. */
+export interface TerminalSession {
+  sessionId: number;
+  sessionUuid: string;
+  phaseId: string | null;
+  chosenBy: 'terminal' | 'auto';
+  at: string;
+  live: boolean;
+}
+
 /** One epic (a workspace plan) — mirrors epicDTO in internal/api/epics.go.
  * `status` is the derived planStatus (zone > README > rollup precedence). */
 export interface Epic {

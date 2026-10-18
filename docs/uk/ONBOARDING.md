@@ -70,6 +70,8 @@ chmod +x .claude/statusline/*.sh
 - `project.json` — конфіг флейвору (схема: `overlays/_schema/project.schema.json`): репозиторії, головний застосунок,
   репозиторій пристрою/edge, хмарні налаштування, доменні терміни, scope комітів, увімкнені пакети.
 - `settings.snippet.json` — блок для `.claude/settings.json` (маркетплейс + enabledPlugins + `env.AGENT_PROJECT`).
+- `user-settings.snippet.json` — опції мод-плагінів (`pluginConfigs`) для ваших *користувацьких* налаштувань
+  `~/.claude/settings.json`: проєктну копію Claude Code ігнорує (див. `docs/MODS.md`).
 
 Тримайте *справжні* заповнені конфіги у своєму проєкті (або в приватному репозиторії робочого простору) — не в цьому публічному репозиторії.
 
