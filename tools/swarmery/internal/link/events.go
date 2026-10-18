@@ -40,6 +40,7 @@ var statusFor = map[string]string{
 var knownKinds = map[string]bool{
 	KindTurnStart: true, KindTurnComplete: true, KindToolCall: true,
 	KindSessionMeasure: true, KindSessionStart: true, KindSessionEnd: true,
+	KindTurnForecast: true, KindTurnActual: true, // phase 10, forecast.go
 }
 
 // tsFormat is the fixed-width UTC form every link timestamp is stored in, so
@@ -93,6 +94,9 @@ type normalized struct {
 	at      string   // tsFormat
 	payload any      // nil → SQL NULL
 	measure *measure // set for session.measure only
+
+	// turn is set for turn.forecast / turn.actual only (forecast.go).
+	turn *turnHalf
 }
 
 // Ingest stores a batch of mod events in one transaction and returns its
@@ -111,9 +115,13 @@ type normalized struct {
 // payload) is counted in Rejected and skipped; it never fails the batch. A
 // database error does, and rolls the whole batch back.
 //
+// A newly stored turn.complete also releases the session's link_commands
+// held for a turn end (see Commands.Ack); the caller wakes the poll.
+//
 // publish is called once per session the batch touched, after commit:
-// NoteSessionStarted for a row the batch minted, NoteSessionUpdated otherwise.
-// It may be nil.
+// NoteSessionStarted for a row the batch minted, NoteSessionUpdated otherwise,
+// then NoteTurnSurprise once per turn.forecast/turn.actual that left its
+// turn_forecasts row scored (forecast.go). It may be nil.
 func Ingest(ctx context.Context, db *sql.DB, publish func(ingest.Notification), batch []Event) (Result, error) {
 	var res Result
 	valid := make([]normalized, 0, len(batch))
@@ -144,6 +152,7 @@ func Ingest(ctx context.Context, db *sql.DB, publish func(ingest.Notification), 
 	created := map[int64]bool{}
 	touched := []int64{}
 	seen := map[int64]bool{}
+	var scored []ingest.Notification // turn_surprise, published after commit
 	for _, n := range valid {
 		sid, ok := ids[n.SessionID]
 		if !ok {
@@ -171,6 +180,21 @@ func Ingest(ctx context.Context, db *sql.DB, publish func(ingest.Notification), 
 		if err := apply(ctx, tx, sid, n); err != nil {
 			return Result{}, err
 		}
+		// Control channel (Commands): a prompt that bounced on "turn in
+		// progress" is held until the session's next turn end. Released in the
+		// same transaction, and only for a newly stored turn.complete, so a
+		// resent one never releases twice. Waking the waiting poll is the
+		// caller's job (Commands.Wake): this function has no queue.
+		if n.Kind == KindTurnComplete {
+			if _, err := releaseWaitTurn(ctx, tx, sid); err != nil {
+				return Result{}, err
+			}
+		}
+		if id, err := applyTurn(ctx, tx, sid, n); err != nil {
+			return Result{}, err
+		} else if id != 0 {
+			scored = append(scored, ingest.Notification{Type: ingest.NoteTurnSurprise, SessionID: sid, TurnForecastID: id})
+		}
 		if !seen[sid] {
 			seen[sid] = true
 			touched = append(touched, sid)
@@ -186,6 +210,9 @@ func Ingest(ctx context.Context, db *sql.DB, publish func(ingest.Notification), 
 				typ = ingest.NoteSessionStarted
 			}
 			publish(ingest.Notification{Type: typ, SessionID: sid})
+		}
+		for _, n := range scored {
+			publish(n)
 		}
 	}
 	return res, nil
@@ -220,6 +247,9 @@ func validate(ev Event) (normalized, error) {
 			}
 		}
 		n.measure = &m
+	}
+	if n.turn, err = validateTurn(ev.Kind, raw); err != nil {
+		return n, err
 	}
 	return n, nil
 }

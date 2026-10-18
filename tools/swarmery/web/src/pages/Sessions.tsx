@@ -42,6 +42,7 @@ import {
   buildDays,
   countRuns,
   countSessions,
+  linkSelection,
   matchesQuery,
   runsOnly,
   STATUS_LABELS,
@@ -49,6 +50,7 @@ import {
   type DayBucket,
 } from '../lib/sessionsView';
 import { applySessionMessage, useLiveUpdates } from '../lib/ws';
+import { BULK_PROMPT_MAX, BulkPromptBar } from '../components/BulkPromptBar';
 import { ExplainPair } from '../components/Explain';
 import { FileContentionBanner } from '../components/FileContentionBanner';
 import { PageSearchInput } from '../components/PageSearchInput';
@@ -202,6 +204,8 @@ export function Sessions(): JSX.Element {
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [nowById, setNowById] = useState<Record<number, string>>({});
+  const [selectMode, setSelectMode] = useState(false);
+  const [selected, setSelected] = useState<number[]>([]);
   const loadingMoreRef = useRef(false);
   const sentinelRef = useRef<HTMLDivElement>(null);
   // Request generation: bumped whenever the scope resets the list so stale
@@ -349,6 +353,23 @@ export function Sessions(): JSX.Element {
   const shownRuns = countRuns(days);
   const statusLabel = status !== null ? STATUS_LABELS[status] : '';
 
+  // Bulk "continue phase" (link control channel): offered while any loaded
+  // session has a link mod; only the flat rows on screen whose mod polls for
+  // commands (link.controllable) get a checkbox. A selection a later filter
+  // hides is kept (it comes back with the filter) but never sent: the bar gets
+  // only the visible selected ids and a count of the hidden ones.
+  const hasLinked = loaded.some((s) => s.link != null);
+  const {
+    selectable,
+    visible: visibleSelected,
+    hidden: hiddenSelected,
+    notPolling: notPollingSelected,
+  } = linkSelection(days, selected);
+  const byId = new Map(loaded.map((s) => [s.id, s] as const));
+  const toggleSelected = (id: number): void => {
+    setSelected((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  };
+
   const toggleRun = (taskId: number): void => {
     setExpanded((prev) => {
       const next = new Set(prev);
@@ -401,7 +422,30 @@ export function Sessions(): JSX.Element {
           counts={accountCounts}
         />
         {hasPlanGroups && <ViewSegment view={activeView} onView={setView} />}
+        {(hasLinked || selectMode) && (
+          <FilterChip
+            selected={selectMode}
+            onClick={() => {
+              setSelectMode((on) => !on);
+              setSelected([]);
+            }}
+          >
+            {t`continue phase…`}
+          </FilterChip>
+        )}
       </div>
+
+      {selectMode && (
+        <BulkPromptBar
+          selected={visibleSelected}
+          hiddenCount={hiddenSelected}
+          notPollingCount={notPollingSelected}
+          selectableCount={selectable.length}
+          byId={byId}
+          onSelectAll={() => setSelected(selectable.slice(0, BULK_PROMPT_MAX).map((s) => s.id))}
+          onClear={() => setSelected([])}
+        />
+      )}
 
       {error !== null && <ErrorBox message={error} onRetry={load} />}
       {sessions === null && error === null && <Loading label={t`sessions…`} />}
@@ -442,14 +486,28 @@ export function Sessions(): JSX.Element {
               ) : (
                 <div
                   key={item.session.id}
-                  className="border-b border-line-soft last:border-b-0"
+                  className={`border-b border-line-soft last:border-b-0 ${selectMode ? 'flex items-center gap-2' : ''}`}
                 >
-                  <SessionCard
-                    session={item.session}
-                    now={nowById[item.session.id] ?? null}
-                    flat
-                    hideProject={effectiveScope !== null}
-                  />
+                  {selectMode && (
+                    <span className="flex w-5 shrink-0 justify-center">
+                      {item.session.link?.controllable === true && (
+                        <input
+                          type="checkbox"
+                          checked={selected.includes(item.session.id)}
+                          onChange={() => toggleSelected(item.session.id)}
+                          aria-label={t`select ${item.session.title ?? item.session.sessionUuid} for continue phase`}
+                        />
+                      )}
+                    </span>
+                  )}
+                  <div className={selectMode ? 'min-w-0 flex-1' : undefined}>
+                    <SessionCard
+                      session={item.session}
+                      now={nowById[item.session.id] ?? null}
+                      flat
+                      hideProject={effectiveScope !== null}
+                    />
+                  </div>
                 </div>
               ),
             )}

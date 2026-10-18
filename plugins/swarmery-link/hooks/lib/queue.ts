@@ -2,7 +2,15 @@
 // returns the next one. The wire shape and limits are the link protocol's
 // (tools/swarmery/docs/mods-link-protocol.md, POST /api/link/events).
 
-export type LinkKind = 'session.start' | 'turn.start' | 'tool.call' | 'session.measure' | 'turn.complete' | 'session.end'
+export type LinkKind =
+  | 'session.start'
+  | 'turn.start'
+  | 'tool.call'
+  | 'session.measure'
+  | 'turn.complete'
+  | 'session.end'
+  | 'turn.forecast'
+  | 'turn.actual'
 
 export type LinkEvent = {
   readonly sessionId: string

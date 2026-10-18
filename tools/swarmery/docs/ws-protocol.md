@@ -47,7 +47,33 @@ type WSMessage =
   // board task delete:
   | { type: 'task_deleted'; payload: { taskId: number; projectId: number } }
   // learning loop phase 13 — attention:
-  | { type: 'phase_surprise'; payload: PhaseSurpriseAttention };
+  | { type: 'phase_surprise'; payload: PhaseSurpriseAttention }
+  // mods-swarmery-link phase 4 — control channel:
+  | { type: 'link_command'; payload: LinkCommandUpdate };
+```
+
+### `link_command` (mods-swarmery-link phase 4)
+
+One transition of a dashboard → mod control command
+([`mods-link-protocol.md`](mods-link-protocol.md) "Commands"), published by
+`internal/link.Commands` (`ingest.NoteLinkCommand`) when a command is queued
+(also: a prompt sent back by a `turn in progress` ack), delivered to the mod's
+poll (again on a re-delivery), acked `done` / `failed`, or expired. The payload
+is carried on the notification, not re-read, so each transition arrives as its
+own frame in order:
+
+```ts
+type LinkCommandUpdate = {
+  sessionId: number;            // sessions.id
+  commandId: number;            // link_commands.id
+  kind: 'stop' | 'prompt';
+  state: 'queued' | 'delivered' | 'done' | 'failed' | 'expired';
+  message?: string;             // the ack message, when there is one
+};
+```
+
+```json
+{"type":"link_command","payload":{"sessionId":12,"commandId":7,"kind":"stop","state":"delivered"}}
 ```
 
 ### `phase_surprise` (learning loop phase 13)
@@ -242,6 +268,7 @@ for it.
 | Epic lifecycle endpoint: pause / resume / archive / restore applied | `plan_updated` |
 | Board create / patch (column move, field edit, pause) | `task_updated` |
 | `DELETE /api/board/tasks/{id}`: a queue row permanently removed | `task_deleted` |
+| Link control channel: a command queued / delivered / acked / expired | `link_command` |
 
 ## BoardTask provenance fields
 
@@ -261,3 +288,21 @@ verdict; `originSessionId` stays as the flat form of `source.sessionId`.
 A captured card's `prompt` no longer carries the session's opening prompt as prose
 (`That session opened with: …`); that text is `source.quote`, and the dispatcher
 appends it to the run exactly once.
+
+## `turn_surprise` (mods-swarmery-link phase 10)
+
+Emitted when a `turn_forecasts` row gets or changes its score, which happens when
+the second half of a turn's `turn.forecast`/`turn.actual` pair arrives through
+`POST /api/link/events` (see [`mods-link-protocol.md`](mods-link-protocol.md),
+Forecast). Advisory: nothing gates on it. The payload is the stored turn, the same
+shape as one `top[]` entry of `GET /api/insights/turn-forecasts`. A row that is gone
+or unscored by the time the frame is built is skipped. Clients that do not know the
+type ignore it.
+
+```json
+{"type":"turn_surprise","payload":{"id":12,"sessionId":1,"sessionUuid":"efaa9b56-…","projectId":1,"runId":"1791885600000-25r6dv","turnSeq":3,"startedAt":"2026-10-14T08:44:30.794Z","surprise":0.73,"top":"tests_miss","model":"haiku"}}
+```
+
+| Trigger | Message |
+|---|---|
+| Link: a turn's forecast and actual are both stored and something was measurable | `turn_surprise` |

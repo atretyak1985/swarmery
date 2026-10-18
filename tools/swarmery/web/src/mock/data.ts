@@ -285,6 +285,21 @@ export const mockSessions: Session[] = [
     tokens: 141_000,
     costUsd: 0.34,
     account: 'nabu-org',
+    // The swarmery link mod reporting live (migration 0107): the mod's
+    // per-process cost sits > 10 % above the pricing table, so the chip shows
+    // the divergence highlight.
+    link: {
+      status: 'working',
+      seenAt: iso(20 * 1000),
+      live: true,
+      contextPct: 78,
+      rateLimits: [
+        { kind: 'five_hour', percentUsed: 64, resetsAt: new Date(Date.now() + 3 * 60 * MIN).toISOString() },
+        { kind: 'seven_day', percentUsed: 21.5, resetsAt: new Date(Date.now() + 4 * 24 * 60 * MIN).toISOString() },
+      ],
+      costUsd: 0.41,
+      controllable: true,
+    },
   },
   {
     modelLast: null,

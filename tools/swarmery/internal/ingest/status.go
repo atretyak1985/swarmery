@@ -50,10 +50,17 @@ const (
 // the await window, so one late or lost measure does not flap the row back to
 // the heuristic. A NULL or unparseable link_seen_at is never fresh.
 func linkFresh(seenAt sql.NullString, now time.Time, t Thresholds) bool {
-	if !seenAt.Valid {
-		return false
-	}
-	seen := parseTS(seenAt.String)
+	return seenAt.Valid && LinkFresh(seenAt.String, now, t)
+}
+
+// LinkFresh is linkFresh over a plain link_seen_at string, exported so the API
+// reports the same "the mod is live" answer the ticker acts on (sessionDTO
+// link.live) instead of re-deriving the window. Zero thresholds take the
+// documented defaults, like RecomputeStatuses does. "" or an unparseable value
+// is never fresh.
+func LinkFresh(seenAt string, now time.Time, t Thresholds) bool {
+	t = t.orDefaults()
+	seen := parseTS(seenAt)
 	return !seen.IsZero() && now.Sub(seen) < 2*t.AwaitAfter
 }
 

@@ -160,6 +160,9 @@ func Routes(root *http.ServeMux, h *Handler) {
 	mux.HandleFunc("POST /api/lessons/retirements/{id}/confirm", requireLocalOrigin(h.confirmRetirement))
 	mux.HandleFunc("POST /api/lessons/retirements/{id}/keep", requireLocalOrigin(h.keepLesson))
 	mux.HandleFunc("GET /api/calibration", h.calibration)
+	// mods-swarmery-link phase 10 (link_forecast.go): per-turn forecast
+	// calibration + top surprises from the link's turn.forecast/turn.actual.
+	mux.HandleFunc("GET /api/insights/turn-forecasts", h.turnForecasts)
 	// complexity routing phase 3 (route.go): the shadow report beside the
 	// calibration view (same n<20 gate) and one subject's latest decision.
 	mux.HandleFunc("GET /api/route/report", h.routeReport)
@@ -277,6 +280,14 @@ func Routes(root *http.ServeMux, h *Handler) {
 	// fence above still applies. 503 until AttachLink (link.go).
 	mux.HandleFunc("POST /api/link/events", linkAuth(h.linkEvents))
 	mux.HandleFunc("GET /api/link/health", linkAuth(h.linkHealth))
+	// link control channel (link_commands.go): the mod long-polls its
+	// session's commands and acks them behind the same token; the SPA queues
+	// them behind the origin fence. 503 until AttachLinkCommands.
+	mux.HandleFunc("GET /api/link/commands", linkAuth(h.linkCommandsWait))
+	mux.HandleFunc("POST /api/link/commands/{id}/ack", linkAuth(h.linkCommandAck))
+	mux.HandleFunc("POST /api/sessions/{id}/link/stop", requireLocalOrigin(h.linkSessionStop))
+	mux.HandleFunc("POST /api/sessions/{id}/link/prompt", requireLocalOrigin(h.linkSessionPrompt))
+	mux.HandleFunc("POST /api/sessions/link/bulk-prompt", requireLocalOrigin(h.linkBulkPrompt))
 
 	// process liveness + kill (phase 4 step-07+)
 	mux.HandleFunc("POST /api/hooks/session-start", requireLocalOrigin(h.hookSessionStart))

@@ -79,6 +79,16 @@ type wsTaskDeletedPayload struct {
 	ProjectID int64 `json:"projectId"`
 }
 
+// wsLinkCommandPayload is the link_command payload (docs/mods-link-protocol.md
+// "Commands"): one control-command transition.
+type wsLinkCommandPayload struct {
+	SessionID int64  `json:"sessionId"`
+	CommandID int64  `json:"commandId"`
+	Kind      string `json:"kind"`  // stop | prompt
+	State     string `json:"state"` // queued | delivered | done | failed | expired
+	Message   string `json:"message,omitempty"`
+}
+
 // GET /api/ws — upgrades to WebSocket and streams WSMessage JSON text frames.
 func (h *Handler) ws(w http.ResponseWriter, r *http.Request) {
 	if wsBus == nil {
@@ -204,6 +214,28 @@ func (h *Handler) buildWSMessage(n ingest.Notification) ([]byte, error) {
 		// surprise score crossed SWARMERY_SURPRISE_NOTIFY. Hydrated from the stored
 		// score so the notch can say what surprised us without a second request.
 		p, err := h.phaseSurprisePayload(n.PhaseID)
+		if err != nil {
+			return nil, err
+		}
+		if p == nil {
+			return nil, nil
+		}
+		payload = p
+	case ingest.NoteLinkCommand:
+		// mods-swarmery-link phase 4: a control command's transition. Carried on
+		// the notification itself (no re-read), so a fast queued → delivered →
+		// done sequence reaches the client as three frames, in order.
+		payload = wsLinkCommandPayload{
+			SessionID: n.SessionID,
+			CommandID: n.CommandID,
+			Kind:      n.Kind,
+			State:     n.State,
+			Message:   n.Message,
+		}
+	case ingest.NoteTurnSurprise:
+		// mods-swarmery-link phase 10: a turn's forecast-vs-actual score landed
+		// (link_forecast.go). Hydrated from turn_forecasts; skipped if gone.
+		p, err := h.turnSurprisePayload(n.TurnForecastID)
 		if err != nil {
 			return nil, err
 		}

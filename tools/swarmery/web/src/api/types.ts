@@ -28,7 +28,9 @@ export type SessionStatus =
 export type ProcState = 'running' | 'orphaned' | 'dead' | 'unknown';
 
 /** sessions.source */
-export type SessionSource = 'jsonl' | 'hook' | 'both';
+/** sessions.source — 'mod' is a row the swarmery link mod minted before any
+ * transcript was tailed (migration 0107); ingest promotes it to 'both'. */
+export type SessionSource = 'jsonl' | 'hook' | 'both' | 'mod';
 
 /** turns.role */
 export type TurnRole = 'user' | 'assistant';
@@ -212,6 +214,75 @@ export interface SessionTerminal {
   tty?: string;
 }
 
+/** sessions.link_status — what the swarmery link mod last reported. */
+export type SessionLinkStatus = 'working' | 'waiting' | 'done';
+
+/** Go: sessionLinkRateLimitDTO — one entry of the mod's
+ * `$.session.usage().rateLimits[]` (docs/mods-format.md §M2). */
+export interface SessionLinkRateLimit {
+  /** `five_hour` | `seven_day` on a subscription; kept open for new kinds. */
+  kind: string;
+  /** 0–100, at most one decimal. */
+  percentUsed: number;
+  /** ISO 8601 with ms; null when the mod did not report one. */
+  resetsAt: string | null;
+}
+
+/**
+ * Go: sessionLinkDTO — the swarmery link mod's live view of a session
+ * (migration 0107). Null on Session.link when no mod ever reported on it.
+ */
+export interface SessionLink {
+  status: SessionLinkStatus | null;
+  /** Newest link event (fixed-width UTC, ms). */
+  seenAt: string | null;
+  /** Server-computed: seenAt younger than 2×AwaitAfter — the same window the
+   * status ticker uses to let `status` drive Session.status. The UI never
+   * recomputes status; it reads this for the source indicator. */
+  live: boolean;
+  /** context.percent, 0–100. */
+  contextPct: number | null;
+  rateLimits: SessionLinkRateLimit[];
+  /** cost.usd — PER PROCESS (a resumed session restarts it from 0), so it is
+   * not the session's lifetime cost. Session.costUsd is the pricing-table
+   * recomputation over every turn. */
+  costUsd: number | null;
+  /** Server-computed: the session's mod polled the command queue within
+   * link.PollFreshness (60 s), so Stop turn / Send prompt reach it
+   * (docs/mods-link-protocol.md "Commands"). Without it the control routes
+   * answer 409. */
+  controllable: boolean;
+}
+
+/** A dashboard → mod command kind (docs/mods-link-protocol.md "Commands"). */
+export type LinkCommandKind = 'stop' | 'prompt';
+
+/** link_commands.state — also the state of a link_command WS frame. */
+export type LinkCommandState = 'queued' | 'delivered' | 'done' | 'failed' | 'expired';
+
+/** Payload of the link_command WS frame: one command transition. */
+export interface LinkCommandNote {
+  /** sessions.id */
+  sessionId: number;
+  commandId: number;
+  kind: LinkCommandKind;
+  state: LinkCommandState;
+  /** The mod's ack message (a failure reason, or "turn in progress"). */
+  message?: string;
+}
+
+/** 202 body of POST /api/sessions/{id}/link/stop|prompt. */
+export interface LinkCommandQueued {
+  commandId: number;
+}
+
+/** 200 body of POST /api/sessions/link/bulk-prompt. */
+export interface LinkBulkPromptResult {
+  queued: { id: number; commandId: number }[];
+  /** reason is "session has no link" or "not found". */
+  skipped: { id: number; reason: string }[];
+}
+
 /** Go: sessionDTO */
 export interface Session {
   id: number;
@@ -321,6 +392,12 @@ export interface Session {
    * daemon that predates this field.
    */
   terminal?: SessionTerminal | null;
+  /**
+   * The swarmery link mod's live view (migration 0107): status, context %,
+   * rate limits, per-process cost. Explicit null when no mod reported on the
+   * session; optional only for an older daemon that predates the field.
+   */
+  link?: SessionLink | null;
 }
 
 /** Go: turnDTO */
@@ -1775,7 +1852,9 @@ export type WSMessageType =
   | 'task_updated'
   | 'plan_updated'
   | 'task_deleted'
-  | 'phase_surprise';
+  | 'phase_surprise'
+  | 'link_command'
+  | 'turn_surprise';
 
 /** Messages pushed over /api/ws — see docs/ws-protocol.md. */
 export type WSMessage =
@@ -1791,7 +1870,13 @@ export type WSMessage =
   | { type: 'task_deleted'; payload: { taskId: number; projectId: number } }
   /** A finished phase run's surprise score first reached SWARMERY_SURPRISE_NOTIFY
    *  (learning loop phase 13). Advisory attention, at most once per run. */
-  | { type: 'phase_surprise'; payload: PhaseSurpriseAttention };
+  | { type: 'phase_surprise'; payload: PhaseSurpriseAttention }
+  /** A swarmery link control command moved (queued → delivered → done /
+   *  failed / expired) — docs/mods-link-protocol.md "Live updates". */
+  | { type: 'link_command'; payload: LinkCommandNote }
+  /** A swarmery link turn got both forecast halves and was scored
+   *  (docs/mods-link-protocol.md "Forecast"). Advisory; a refetch signal. */
+  | { type: 'turn_surprise'; payload: TurnSurprise };
 
 /** Payload of the phase_surprise WS frame. */
 export interface PhaseSurpriseAttention {
@@ -1804,6 +1889,52 @@ export interface PhaseSurpriseAttention {
   index: number;
   top: string;
   summary: string;
+}
+
+/** Component names of a turn's surprise vector (internal/turnforecast). */
+export type TurnSurpriseComponent =
+  | 'unexpected_files'
+  | 'missed_files'
+  | 'tests_miss'
+  | 'steps_miss'
+  | 'overconfidence';
+
+/** One scored turn — mirrors turnforecast.Turn; also the turn_surprise payload. */
+export interface TurnSurprise {
+  id: number;
+  sessionId: number;
+  sessionUuid: string | null;
+  projectId: number | null;
+  runId: string;
+  turnSeq: number;
+  startedAt: string;
+  surprise: number;
+  /** The largest component — a TurnSurpriseComponent, typed as string so an
+   *  unknown future name still renders. */
+  top: string;
+  model: string;
+}
+
+/** One confidence bin of the turn-forecast calibration — mirrors turnforecast.Bin.
+ *  An empty bin (n = 0) carries null meanConfidence and hitRate. */
+export interface TurnForecastBin {
+  lo: number;
+  hi: number;
+  n: number;
+  meanConfidence: number | null;
+  hitRate: number | null;
+}
+
+/** GET /api/insights/turn-forecasts — turnForecastsDTO in internal/api/link_forecast.go. */
+export interface TurnForecastsResp {
+  days: number;
+  n: number;
+  /** n < 30: too few scored turns to read the curve. */
+  tooFew: boolean;
+  bins: TurnForecastBin[];
+  /** The window's most surprising turns, highest first (at most 10). */
+  top: TurnSurprise[];
+  avgForecastTokens: number | null;
 }
 
 // --- Fusion phase 1: task board — additive contracts --------------------------

@@ -9,6 +9,7 @@ import {
   fetchCalibration,
 } from '../api/calibration';
 import { UI_TERMS } from '../lib/glossary';
+import { TurnForecastPanel } from './learning/TurnForecastPanel';
 import { RoutingReport } from './RoutingReport';
 
 /** "How honest forecasts are" — the dictionary word, sentence-cased. */
@@ -54,17 +55,20 @@ function Curve({ group }: { group: CalibrationGroup }): JSX.Element {
   );
 }
 
-const VIEWS: readonly (readonly ['forecast' | 'routing', MessageDescriptor])[] = [
+type CalibrationView = 'forecast' | 'routing' | 'turns';
+
+const VIEWS: readonly (readonly [CalibrationView, MessageDescriptor])[] = [
   ['forecast', msg`forecast calibration`],
   ['routing', msg`routing`],
+  ['turns', msg`turn forecasts`],
 ];
 
-/** Calibration and its sibling, the routing report: two answers to "did the
- *  up-front guess match what happened", behind one pair of tabs. Both apply
- *  the same n<20 gate. */
+/** Calibration and its siblings, the routing report and the per-turn link
+ *  forecasts: three answers to "did the up-front guess match what happened",
+ *  behind one row of tabs. */
 export function CalibrationPanel(): JSX.Element {
   const { i18n, t } = useLingui();
-  const [view, setView] = useState<'forecast' | 'routing'>('forecast');
+  const [view, setView] = useState<CalibrationView>('forecast');
   return (
     <div className="mt-8">
       <div role="tablist" aria-label={t`calibration views`} className="flex gap-1 border-b border-line">
@@ -83,7 +87,13 @@ export function CalibrationPanel(): JSX.Element {
           </button>
         ))}
       </div>
-      {view === 'forecast' ? <ForecastCalibration /> : <RoutingReport />}
+      {view === 'forecast' ? (
+        <ForecastCalibration />
+      ) : view === 'routing' ? (
+        <RoutingReport />
+      ) : (
+        <TurnForecastPanel />
+      )}
     </div>
   );
 }

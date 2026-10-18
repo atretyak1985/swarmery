@@ -1842,6 +1842,11 @@ func cmdServe(args []string) error {
 	// reaches a log. A failure leaves the link disabled (503), never the daemon
 	// down: the JSONL tail and the hook shim do not depend on it.
 	attachLink(cfg.Exclude)
+	// link control channel (mods-link-protocol.md "Commands"): the dashboard →
+	// mod command queue over link_commands. Its expiry sweep starts with the
+	// other tickers under the shutdown context below.
+	linkCmds := link.NewCommands(db)
+	api.AttachLinkCommands(linkCmds)
 
 	// control-plane v2: outbound webhook notifier (nil = disabled; Emit is
 	// nil-receiver-safe everywhere it is wired). Built before the pipeline so
@@ -2764,6 +2769,10 @@ func cmdServe(args []string) error {
 	// The board derives each captured card's expiry from the same TTL the
 	// sweeper runs with, so the two can never tell the operator different dates.
 	api.AttachInboxTTL(envInboxTTL())
+	// sessionDTO.link.live uses the status ticker's own 2×AwaitAfter window, so
+	// the dashboard's "live from the session mod" never disagrees with the
+	// ticker that lets link_status drive sessions.status.
+	api.AttachStatusThresholds(cfg.Thresholds)
 	handler, err := api.NewServer(db, !*noIngest)
 	if err != nil {
 		return err
@@ -2795,6 +2804,10 @@ func cmdServe(args []string) error {
 	// on restart) then sweeps every PollInterval; the event fast path is the
 	// board handlers' pokeDispatch(). Exits when ctx is cancelled.
 	go dispatchSvc.StartScheduler(ctx)
+
+	// link control channel: expire overdue stop/prompt commands between mod
+	// polls so the dashboard hears `expired` on time (polls also sweep inline).
+	go linkCmds.Run(ctx, link.SweepEvery)
 
 	// Quota poller: per-account headroom into account_quota, the signal
 	// `swarmery account switch` gates on. SWARMERY_QUOTA_INTERVAL=0|off is a

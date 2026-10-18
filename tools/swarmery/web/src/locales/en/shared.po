@@ -200,9 +200,17 @@ msgstr "{free} of {max} slots free"
 msgid "{h} h ago"
 msgstr "{h} h ago"
 
+#: src/components/BulkPromptBar.tsx
+msgid "{hiddenCount} selected sessions are hidden by the filter and will not be sent"
+msgstr "{hiddenCount} selected sessions are hidden by the filter and will not be sent"
+
 #: src/components/SessionCard.tsx
 msgid "{k}k ctx"
 msgstr "{k}k ctx"
+
+#: src/components/BulkPromptBar.tsx
+msgid "{label} — {why}"
+msgstr "{label} — {why}"
 
 #: src/components/Sidebar.tsx
 msgid "{label} — opens in a project"
@@ -224,9 +232,25 @@ msgstr "{left}% remaining"
 msgid "{min} min ago"
 msgstr "{min} min ago"
 
+#: src/components/SessionLinkChips.tsx
+msgid "{mod} reported by Claude Code for this process (a resumed session restarts it from 0) · pricing table: {pricing} for the whole session"
+msgstr "{mod} reported by Claude Code for this process (a resumed session restarts it from 0) · pricing table: {pricing} for the whole session"
+
 #: src/components/FileContentionBanner.tsx
 msgid "{n, plural, one {# file is being edited by more than one live session} few {# files are being edited by more than one live session} many {# files are being edited by more than one live session} other {# files are being edited by more than one live session}}"
 msgstr "{n, plural, one {# file is being edited by more than one live session} few {# files are being edited by more than one live session} many {# files are being edited by more than one live session} other {# files are being edited by more than one live session}}"
+
+#: src/components/BulkPromptBar.tsx
+msgid "{n} selected of {selectableCount} with a polling link mod"
+msgstr "{n} selected of {selectableCount} with a polling link mod"
+
+#: src/components/SessionLinkChips.tsx
+msgid "{name} {used} % used"
+msgstr "{name} {used} % used"
+
+#: src/components/SessionLinkChips.tsx
+msgid "{name} {used} % used, resets {at}"
+msgstr "{name} {used} % used, resets {at}"
 
 #: src/components/ProjectPlugins.tsx
 msgid "{name}: disabled"
@@ -235,6 +259,10 @@ msgstr "{name}: disabled"
 #: src/components/ProjectPlugins.tsx
 msgid "{name}: enabled"
 msgstr "{name}: enabled"
+
+#: src/components/BulkPromptBar.tsx
+msgid "{notPollingCount} selected sessions no longer have a polling link mod and will not be sent"
+msgstr "{notPollingCount} selected sessions no longer have a polling link mod and will not be sent"
 
 #: src/lib/sessionsView.ts
 msgid "{nth} attempt — {tail}"
@@ -451,6 +479,14 @@ msgstr "🗑 Discard"
 msgid "2 done · 237 archived"
 msgstr "2 done · 237 archived"
 
+#: src/components/SessionLinkChips.tsx
+msgid "5-hour window"
+msgstr "5-hour window"
+
+#: src/components/SessionLinkChips.tsx
+msgid "7-day window"
+msgstr "7-day window"
+
 #: src/lib/docFigures.tsx
 msgid "9 gates"
 msgstr "9 gates"
@@ -490,6 +526,14 @@ msgstr "A revise wizard interviews you against this plan and stages its changes 
 #: src/components/OutcomePicker.tsx
 msgid "abandoned"
 msgstr "abandoned"
+
+#: src/components/SessionControls.tsx
+msgid "Abort the running turn?"
+msgstr "Abort the running turn?"
+
+#: src/components/SessionControls.tsx
+msgid "Abort the session's running turn through its link mod. The session stays open — unlike Stop, which ends a daemon-run process."
+msgstr "Abort the session's running turn through its link mod. The session stays open — unlike Stop, which ends a daemon-run process."
 
 #: src/components/NewProjectButton.tsx
 msgid "absolute path"
@@ -748,6 +792,18 @@ msgstr "archived at the next sweep"
 msgid "archived in {days}d"
 msgstr "archived in {days}d"
 
+#: src/components/SessionControls.tsx
+msgid "Arrives as a message from the swarmery link mod, not from you."
+msgstr "Arrives as a message from the swarmery link mod, not from you."
+
+#: src/components/SessionControls.tsx
+msgid "Arrives in the session as if you typed it."
+msgstr "Arrives in the session as if you typed it."
+
+#: src/components/SessionControls.tsx
+msgid "as user"
+msgstr "as user"
+
 #: src/components/PermissionPresets.tsx
 msgid "ask"
 msgstr "ask"
@@ -928,6 +984,8 @@ msgstr "cancel"
 #: src/components/PlanBranchDirtyModal.tsx
 #: src/components/RunOutcomeModal.tsx
 #: src/components/RunOutcomeModal.tsx
+#: src/components/SessionControls.tsx
+#: src/components/SessionControls.tsx
 #: src/components/StopButton.tsx
 msgid "Cancel"
 msgstr "Cancel"
@@ -1023,6 +1081,10 @@ msgstr "Claude usage unavailable — {error}"
 #: src/components/usage/UsageChip.tsx
 msgid "Claude usage unavailable — run `claude` to log in"
 msgstr "Claude usage unavailable — run `claude` to log in"
+
+#: src/components/BulkPromptBar.tsx
+msgid "clear"
+msgstr "clear"
 
 #: src/components/OutcomePicker.tsx
 msgid "clear {label}"
@@ -1123,6 +1185,10 @@ msgstr "confirm detach"
 msgid "Confirm locally"
 msgstr "Confirm locally"
 
+#: src/components/SessionControls.tsx
+msgid "Confirm stop"
+msgstr "Confirm stop"
+
 #: src/api.ts
 msgid "confirmation required"
 msgstr "confirmation required"
@@ -1159,6 +1225,22 @@ msgstr "connectors unavailable"
 #: src/api.ts
 msgid "consolidate failed: {status}"
 msgstr "consolidate failed: {status}"
+
+#: src/components/SessionLinkChips.tsx
+msgid "context window {ctx} % full, reported by the session mod"
+msgstr "context window {ctx} % full, reported by the session mod"
+
+#: src/components/BulkPromptBar.tsx
+msgid "Continue phase on {n} sessions"
+msgstr "Continue phase on {n} sessions"
+
+#: src/components/BulkPromptBar.tsx
+msgid "Continue phase on selected sessions"
+msgstr "Continue phase on selected sessions"
+
+#: src/components/BulkPromptBar.tsx
+msgid "Continue with the next phase of the plan per its phase doc; do not ask for confirmation if the criteria are clear"
+msgstr "Continue with the next phase of the plan per its phase doc; do not ask for confirmation if the criteria are clear"
 
 #: src/theme/palettes.ts
 msgid "cool blue, deep-sea"
@@ -1265,6 +1347,10 @@ msgstr "create rule failed: {status}"
 #: src/api.ts
 msgid "create task failed: {status}"
 msgstr "create task failed: {status}"
+
+#: src/components/SessionLinkChips.tsx
+msgid "ctx {ctx} %"
+msgstr "ctx {ctx} %"
 
 #: src/components/ApprovalContext.tsx
 msgid "cwd <0>{cwd}</0>"
@@ -1384,6 +1470,10 @@ msgstr "Deletes the branch <0>{taskBranch}</0> and every commit on it, reclaims 
 msgid "deleting…"
 msgstr "deleting…"
 
+#: src/components/SessionControls.tsx
+msgid "delivered to the session"
+msgstr "delivered to the session"
+
 #: src/workspace/NewTaskModal.tsx
 #: src/workspace/NewTaskModal.tsx
 #: src/workspace/task/RunConfig.tsx
@@ -1397,6 +1487,10 @@ msgstr "Dependencies: each must be done or archived, and none may carry a fail v
 #: src/lib/docFigures.tsx
 msgid "depends on: {dep}"
 msgstr "depends on: {dep}"
+
+#: src/components/SessionLinkChips.tsx
+msgid "derived from transcript"
+msgstr "derived from transcript"
 
 #: src/components/ProjectActions.tsx
 msgid "detach"
@@ -1437,6 +1531,10 @@ msgstr "diff failed"
 #: src/components/DiffView.tsx
 msgid "diff truncated at 200 KB — open a terminal in the worktree to read the rest"
 msgstr "diff truncated at 200 KB — open a terminal in the worktree to read the rest"
+
+#: src/components/SessionLinkChips.tsx
+msgid "differs from the pricing table by {gapPct} %"
+msgstr "differs from the pricing table by {gapPct} %"
 
 #: src/components/usage/UsageProviderCard.tsx
 msgid "disabled"
@@ -1573,6 +1671,7 @@ msgstr "docs: {configDocs}"
 #: src/components/DetachModal.tsx
 #: src/components/NewProjectButton.tsx
 #: src/components/PlanRunCard.tsx
+#: src/components/SessionControls.tsx
 #: src/lib/sessionsView.ts
 msgid "done"
 msgstr "done"
@@ -1627,6 +1726,10 @@ msgstr "Executor said: {said}"
 msgid "exited"
 msgstr "exited"
 
+#: src/components/SessionControls.tsx
+msgid "expired — the mod did not pick it up in time"
+msgstr "expired — the mod did not pick it up in time"
+
 #: src/components/AccountSelector.tsx
 msgid "explicit binding"
 msgstr "explicit binding"
@@ -1641,12 +1744,17 @@ msgstr "fail"
 
 #: src/components/ProjectPlugins.tsx
 #: src/components/RunOutcomeModal.tsx
+#: src/components/SessionControls.tsx
 msgid "failed"
 msgstr "failed"
 
 #: src/lib/needsYou.ts
 msgid "Failed"
 msgstr "Failed"
+
+#: src/components/SessionControls.tsx
+msgid "failed: {msg}"
+msgstr "failed: {msg}"
 
 #: src/workspace/task/TaskActions.tsx
 msgid "feedback is required — a re-run with no notes would repeat the same work"
@@ -2074,6 +2182,10 @@ msgstr "linked heuristically · {overlap}% overlap"
 msgid "linked via the task card (logs/sessions.md)"
 msgstr "linked via the task card (logs/sessions.md)"
 
+#: src/components/SessionLinkChips.tsx
+msgid "live from session mod"
+msgstr "live from session mod"
+
 #: src/components/Sidebar.tsx
 msgid "live sessions"
 msgstr "live sessions"
@@ -2278,6 +2390,10 @@ msgstr "no palette matches"
 msgid "no plugins in the marketplace clone"
 msgstr "no plugins in the marketplace clone"
 
+#: src/components/BulkPromptBar.tsx
+msgid "no polling link mod"
+msgstr "no polling link mod"
+
 #: src/components/RunOutcomeModal.tsx
 msgid "no progress"
 msgstr "no progress"
@@ -2294,9 +2410,17 @@ msgstr "no such lesson {id}"
 msgid "no such proposal {id}"
 msgstr "no such proposal {id}"
 
+#: src/components/SessionControls.tsx
+msgid "No swarmery link mod reports on this session, so it cannot be steered from the dashboard."
+msgstr "No swarmery link mod reports on this session, so it cannot be steered from the dashboard."
+
 #: src/workspace/TaskGraph.tsx
 msgid "no tasks to graph"
 msgstr "no tasks to graph"
+
+#: src/components/SessionControls.tsx
+msgid "no update received — state unknown"
+msgstr "no update received — state unknown"
 
 #: src/components/usage/UsageProviderCard.tsx
 msgid "No usage data available"
@@ -2327,6 +2451,10 @@ msgstr "not found"
 #: src/workspace/task/useTaskDraft.ts
 msgid "not saved — {fields} changed on the server while you were editing. Close and reopen the card to pick up the new version."
 msgstr "not saved — {fields} changed on the server while you were editing. Close and reopen the card to pick up the new version."
+
+#: src/components/SessionControls.tsx
+msgid "not sent: {msg}"
+msgstr "not sent: {msg}"
 
 #: src/components/usage/UsageModal.tsx
 msgid "not yet loaded"
@@ -2424,6 +2552,10 @@ msgstr "onboarded only"
 #: src/components/NewProjectButton.tsx
 msgid "onboarding is disabled — restart the daemon with an allow-list:"
 msgstr "onboarding is disabled — restart the daemon with an allow-list:"
+
+#: src/components/BulkPromptBar.tsx
+msgid "One send reaches at most {max} sessions; select all takes the first {max}."
+msgstr "One send reaches at most {max} sessions; select all takes the first {max}."
 
 #: src/api.ts
 msgid "Only a human can close the open criteria of this phase. Do the [MANUAL] checks and tick them in the Criteria tab — the phase is listed in Needs you."
@@ -2636,6 +2768,14 @@ msgstr "plan {planId}"
 msgid "plan {planId} — acceptance criteria and completion report"
 msgstr "plan {planId} — acceptance criteria and completion report"
 
+#: src/components/SessionLinkChips.tsx
+msgid "plan {used} %"
+msgstr "plan {used} %"
+
+#: src/components/SessionLinkChips.tsx
+msgid "plan {used} % · resets {reset}"
+msgstr "plan {used} % · resets {reset}"
+
 #: src/lib/sessionsView.ts
 msgid "plan controller"
 msgstr "plan controller"
@@ -2790,6 +2930,18 @@ msgstr "Projects on the locked-down preset — refused, stamped into dispatchErr
 msgid "prompt"
 msgstr "prompt"
 
+#: src/components/SessionControls.tsx
+msgid "Prompt"
+msgstr "Prompt"
+
+#: src/components/BulkPromptBar.tsx
+msgid "Prompt for the selected sessions"
+msgstr "Prompt for the selected sessions"
+
+#: src/components/SessionControls.tsx
+msgid "Prompt to send into the session"
+msgstr "Prompt to send into the session"
+
 #: src/pages/docsRail.ts
 msgid "Protocols"
 msgstr "Protocols"
@@ -2830,6 +2982,18 @@ msgstr "Queued"
 #: src/lib/docFigures.tsx
 msgid "Queued — waiting for a slot"
 msgstr "Queued — waiting for a slot"
+
+#: src/components/SessionControls.tsx
+msgid "queued — waits for the running turn to end"
+msgstr "queued — waits for the running turn to end"
+
+#: src/components/SessionControls.tsx
+msgid "queued, waiting for the mod to pick it up"
+msgstr "queued, waiting for the mod to pick it up"
+
+#: src/components/BulkPromptBar.tsx
+msgid "queued: {queuedCount}"
+msgstr "queued: {queuedCount}"
 
 #: src/components/SessionCard.tsx
 msgid "quiet {quiet}"
@@ -3269,9 +3433,34 @@ msgstr "search sessions, messages, files…"
 msgid "second"
 msgstr "second"
 
+#: src/components/BulkPromptBar.tsx
+msgid "select all"
+msgstr "select all"
+
+#: src/components/BulkPromptBar.tsx
+msgid "Select at most {max} sessions ({n} selected)"
+msgstr "Select at most {max} sessions ({n} selected)"
+
+#: src/components/SessionControls.tsx
+msgid "Send"
+msgstr "Send"
+
 #: src/api.ts
 msgid "send failed: {status}"
 msgstr "send failed: {status}"
+
+#: src/components/SessionControls.tsx
+msgid "Send prompt"
+msgstr "Send prompt"
+
+#: src/components/BulkPromptBar.tsx
+#: src/components/SessionControls.tsx
+msgid "sending…"
+msgstr "sending…"
+
+#: src/components/BulkPromptBar.tsx
+msgid "Sent as a message from the swarmery link mod, not as you."
+msgstr "Sent as a message from the swarmery link mod, not as you."
 
 #: src/workspace/task/TaskActions.tsx
 msgid "sent back to todo with your feedback appended to the prompt"
@@ -3317,6 +3506,10 @@ msgstr "Session finished"
 #: src/lib/notifications.ts
 msgid "Session killed"
 msgstr "Session killed"
+
+#: src/components/BulkPromptBar.tsx
+msgid "session not found"
+msgstr "session not found"
 
 #: src/components/OutcomePicker.tsx
 msgid "session outcome"
@@ -3438,6 +3631,10 @@ msgstr "sixth"
 msgid "skip"
 msgstr "skip"
 
+#: src/components/BulkPromptBar.tsx
+msgid "skipped: {skippedCount}"
+msgstr "skipped: {skippedCount}"
+
 #: src/components/NewProjectButton.tsx
 msgid "slug"
 msgstr "slug"
@@ -3505,6 +3702,11 @@ msgstr "Stop {label} and mark done?"
 #: src/api.ts
 msgid "stop failed: {status}"
 msgstr "stop failed: {status}"
+
+#: src/components/SessionControls.tsx
+#: src/components/SessionControls.tsx
+msgid "Stop turn"
+msgstr "Stop turn"
 
 #: src/lib/glossary.ts
 msgid "stop using this lesson?"
@@ -3751,6 +3953,10 @@ msgstr "the run ticked every acceptance criterion"
 #: src/components/RunOutcomeModal.tsx
 msgid "the run ticked some criteria but did not finish the phase"
 msgstr "the run ticked some criteria but did not finish the phase"
+
+#: src/components/SessionControls.tsx
+msgid "The session's link mod is not polling for commands. Enable the swarmery-link \"control\" option and keep the session open."
+msgstr "The session's link mod is not polling for commands. Enable the swarmery-link \"control\" option and keep the session open."
 
 #: src/components/VcsSignInDialog.tsx
 msgid "The sign-in was declined."
@@ -4075,6 +4281,10 @@ msgstr "what needs doing"
 #: src/workspace/NewTaskModal.tsx
 msgid "what should happen"
 msgstr "what should happen"
+
+#: src/components/SessionControls.tsx
+msgid "What should the session do next?"
+msgstr "What should the session do next?"
 
 #: src/workspace/task/TaskActions.tsx
 msgid "what to fix on the next pass — appended to the prompt"

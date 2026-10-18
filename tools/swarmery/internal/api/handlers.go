@@ -244,6 +244,11 @@ type sessionDTO struct {
 	// rather than an omitted key — that null is what the widget uses to offer
 	// "open in dashboard" instead of "focus the terminal".
 	Terminal *sessionTerminalDTO `json:"terminal"`
+	// Link is the swarmery link mod's live view of the session (migration
+	// 0107): status, context %, rate limits and per-process cost, plus a
+	// server-computed live flag. Always present as an explicit "link": null when
+	// no mod ever reported on the session. See internal/api/session_link.go.
+	Link *sessionLinkDTO `json:"link"`
 }
 
 // handoffDTO is the latest handoffs row projected onto a session, without the
@@ -554,7 +559,7 @@ const sessionCols = `
 	         WHERE t.session_id = s.id AND t.role = 'user'
 	           AND t.text IS NOT NULL AND TRIM(t.text) != ''
 	         ORDER BY t.seq LIMIT 1),
-	       ho.path, ho.created_at, ho.context_tokens` + sessionPlanGroupCols + sessionTerminalCols + sessionModelCols
+	       ho.path, ho.created_at, ho.context_tokens` + sessionPlanGroupCols + sessionTerminalCols + sessionModelCols + sessionLinkCols
 
 // sessionFrom is the FROM/JOIN tail shared by sessionSelect and the page CTE
 // built in listSessions, so both resolve rows — and the ?planTask predicate's
@@ -890,12 +895,13 @@ func scanSession(scan func(...any) error, s *sessionDTO) error {
 	var whyRaw sql.NullString
 	var hoPath, hoCreatedAt sql.NullString
 	var hoContextTokens sql.NullInt64
-	// Plan-group and terminal-identity tails (sessionPlanGroupCols,
-	// sessionTerminalCols), each scanned as one unit so the column order lives
+	// Plan-group, terminal-identity, model and link tails (sessionPlanGroupCols,
+	// sessionTerminalCols, sessionModelCols, sessionLinkCols), each scanned as one unit so the column order lives
 	// next to the projection that produced it.
 	var group sessionPlanGroupScan
 	var term sessionTerminalScan
 	var models sessionModelScan
+	var link sessionLinkScan
 	dest := append([]any{&s.ID, &s.ProjectID, &s.ProjectSlug, &s.ProjectName, &s.SessionUUID, &s.Model,
 		&s.GitBranch, &s.CWD, &s.Status, &s.StartedAt, &s.EndedAt, &s.Title, &s.Source,
 		&s.Account, &s.LaunchAccount,
@@ -906,11 +912,13 @@ func scanSession(scan func(...any) error, s *sessionDTO) error {
 		&hoPath, &hoCreatedAt, &hoContextTokens}, group.dest()...)
 	dest = append(dest, term.dest()...)
 	dest = append(dest, models.dest()...)
+	dest = append(dest, link.dest()...)
 	if err := scan(dest...); err != nil {
 		return err
 	}
 	s.PlanGroup = group.dto()
 	s.Terminal = term.dto()
+	s.Link = link.dto(time.Now(), s.SessionUUID)
 	models.apply(s)
 	if whyRaw.Valid {
 		if w := summarizeWhy(whyRaw.String); w != "" {

@@ -13,6 +13,8 @@ import { KillButton, killSlotKind } from './KillButton';
 import { OUTCOME_GLYPH } from './OutcomePicker';
 import { ProjectName } from './ProjectName';
 import { ProcBadge } from './ProcBadge';
+import { SessionControls } from './SessionControls';
+import { SessionLinkChips } from './SessionLinkChips';
 import { StopButton } from './StopButton';
 import { TaskChip } from './TaskChip';
 
@@ -315,6 +317,15 @@ export function SessionCard({
       <KillButton session={session} />
     ) : null;
 
+  /* Link-mod remote control (Stop turn / Send prompt) — only on sessions a
+   * swarmery link mod reports on: on every other row the controls could only
+   * ever be disabled, and a column of greyed buttons down the list is noise.
+   * Disabled with the reason while the mod is not polling for commands. */
+  const controls: JSX.Element | null =
+    session.link != null ? (
+      <SessionControls session={session} compact className="mt-[3px]" />
+    ) : null;
+
   /* Stacked card — standalone cards and the <900px rows inside day groups. */
   const card = (
     <>
@@ -332,6 +343,7 @@ export function SessionCard({
         <AccountBadge session={session} />
         <ContextBadge session={session} />
         <HandoffChip session={session} />
+        <SessionLinkChips session={session} />
         <ProcBadge session={session} />
         {session.outcome != null && (
           <span
@@ -375,6 +387,7 @@ export function SessionCard({
           {action}
         </div>
       )}
+      {controls}
     </>
   );
 
@@ -452,6 +465,7 @@ export function SessionCard({
             <AccountBadge session={session} />
             <ContextBadge session={session} />
             <HandoffChip session={session} />
+            <SessionLinkChips session={session} />
           </span>
           {/* Non-breaking space when there is no sub-line: the row keeps its
               height, so a fan-out with mixed notes does not shear. */}
@@ -473,6 +487,7 @@ export function SessionCard({
               )}
             </span>
           )}
+          {controls}
         </span>
         <SessionModelCell session={session} />
         <RowChip tone={tone} suffix={chipSuffix(session, tone, i18n)} />

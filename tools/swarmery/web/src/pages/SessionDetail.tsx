@@ -27,6 +27,8 @@ import { useLiveUpdates } from '../lib/ws';
 import { ExplainPair } from '../components/Explain';
 import { OutcomePicker } from '../components/OutcomePicker';
 import { SessionLabelChips } from '../components/SessionLabelChips';
+import { SessionControls } from '../components/SessionControls';
+import { SessionLinkChips } from '../components/SessionLinkChips';
 import { TaskChip } from '../components/TaskChip';
 import { ProjectName } from '../components/ProjectName';
 import { ErrorBox, Loading } from '../components/ui';
@@ -608,6 +610,9 @@ export function SessionDetailPage(): JSX.Element {
             <TitleEditor title={detail.title} onRename={rename} />
             <div className="mt-2 flex flex-wrap gap-x-3.5 gap-y-[5px] font-mono text-[11px] text-ink-dim">
               <LiveStateChip session={detail} />
+              {/* The link mod's live usage (context %, rate limit, per-process
+                  cost) with its source marker — null without the mod. */}
+              <SessionLinkChips session={detail} />
               <Kv label={t`status`} value={detail.status} tone={STATUS_TONES[detail.status]} />
               {detail.model !== null && <Kv label={t`model`} value={detail.model} />}
               {/* Subscription this session ran under (migration 0047) — shown
@@ -666,6 +671,9 @@ export function SessionDetailPage(): JSX.Element {
                 </button>
               </div>
             )}
+            {/* Link-mod remote control: always shown here, disabled with the
+                reason when no mod polls for this session. */}
+            <SessionControls session={detail} className="mt-2" />
           </div>
           <div className="flex shrink-0 flex-wrap gap-[22px]">
             <HeadStat value={fmtTokens(facts.tokens)} label={t`tokens`} />

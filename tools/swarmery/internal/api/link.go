@@ -132,6 +132,7 @@ func ingestLinkBatch(r *http.Request, h *Handler, batch []link.Event) (link.Resu
 	if err != nil {
 		return link.Result{}, err
 	}
+	wakeOnTurnEnd(kept)
 	res.Accepted = in.Accepted
 	res.Duplicates = in.Duplicates
 	res.Rejected += in.Rejected
@@ -139,6 +140,22 @@ func ingestLinkBatch(r *http.Request, h *Handler, batch []link.Event) (link.Resu
 		res.Rejects = append(res.Rejects, link.Reject{Index: origin[rj.Index], Reason: rj.Reason})
 	}
 	return res, nil
+}
+
+// wakeOnTurnEnd wakes the command long-poll of every session the batch
+// reported a turn.complete for: link.Ingest has just released that session's
+// prompts held for a turn end (a spurious wake — a duplicate event — only
+// costs the poll one look).
+func wakeOnTurnEnd(batch []link.Event) {
+	c := linkCommands
+	if c == nil {
+		return
+	}
+	for _, ev := range batch {
+		if ev.Kind == link.KindTurnComplete && ev.SessionID != "" {
+			c.Wake(ev.SessionID)
+		}
+	}
 }
 
 // publishLink forwards link.Ingest's notifications to the WS bus (a no-op when
