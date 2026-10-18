@@ -440,3 +440,110 @@ func TestReverifyKeepsACleanLeftoverWorktree(t *testing.T) {
 		t.Error("run slot still held after the re-verification finished")
 	}
 }
+
+// TestReverifyIgnoresManagerPlacedUntrackedPaths — the worktree manager lends a
+// `node_modules` symlink (which a dir-only `node_modules/` ignore rule does not
+// match) and copies an untracked .claude/settings.local.json into every checkout
+// it acquires. A leftover whose only untracked entries are those is clean: it is
+// graded, and kept.
+func TestReverifyIgnoresManagerPlacedUntrackedPaths(t *testing.T) {
+	t.Setenv(worktree.LendEnv, "") // the defaults, whatever the caller's env says
+	repo, s, v, p1, leftover := leftoverReverifyEnv(t)
+	// A developer's global ignore (e.g. ~/.config/git/ignore listing
+	// settings.local.json) would hide the entry this test is about.
+	repo.run("config", "core.excludesFile", os.DevNull)
+	deps := t.TempDir()
+	if err := os.Symlink(deps, filepath.Join(leftover, "node_modules")); err != nil {
+		t.Fatal(err)
+	}
+	writeNested(t, filepath.Join(leftover, ".claude", "settings.local.json"), "{}\n")
+	status := repo.runIn(leftover, "status", "--porcelain=v1", "--untracked-files=all")
+	for _, want := range []string{"?? node_modules", "?? .claude/settings.local.json"} {
+		if !strings.Contains(status, want) {
+			t.Fatalf("precondition: git status lacks %q:\n%s", want, status)
+		}
+	}
+
+	start, err := s.AdmitReverify(p1)
+	if err != nil {
+		t.Fatalf("AdmitReverify: %v", err)
+	}
+	start()
+
+	calls := v.calls()
+	if len(calls) != 1 {
+		t.Fatalf("VerifyPhase calls = %d, want 1", len(calls))
+	}
+	if !sameCheckout(calls[0].WorktreePath, leftover) {
+		t.Errorf("graded %s, want the reused leftover %s", calls[0].WorktreePath, leftover)
+	}
+	if _, err := os.Stat(leftover); err != nil {
+		t.Errorf("the reused leftover worktree was removed (stat err %v)", err)
+	}
+	if s.InFlight(p1) {
+		t.Error("run slot still held after the re-verification finished")
+	}
+}
+
+// writeNested is mustWriteDoc for a path whose parent directories may not exist.
+func writeNested(t *testing.T, path, body string) {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	mustWriteDoc(t, path, body)
+}
+
+// TestReverifyRefusesOtherUntrackedPaths — an untracked path that merely starts
+// like a placed one, or any other untracked file, is still uncommitted work.
+func TestReverifyRefusesOtherUntrackedPaths(t *testing.T) {
+	for _, rel := range []string{"node_modules_extra/x", "src/new.go"} {
+		t.Run(rel, func(t *testing.T) {
+			t.Setenv(worktree.LendEnv, "")
+			_, s, v, p1, leftover := leftoverReverifyEnv(t)
+			wip := filepath.Join(leftover, filepath.FromSlash(rel))
+			writeNested(t, wip, "work\n")
+
+			start, err := s.AdmitReverify(p1)
+			if start != nil {
+				t.Fatal("refused admission returned a start body")
+			}
+			if ref := asRefusal(t, err); ref.Code != ReverifyCodeWorktreeDirty {
+				t.Errorf("refusal = %+v, want %s", ref, ReverifyCodeWorktreeDirty)
+			}
+			if n := len(v.calls()); n != 0 {
+				t.Errorf("VerifyPhase calls = %d, want 0", n)
+			}
+			if _, err := os.Stat(wip); err != nil {
+				t.Errorf("the untracked file is gone (stat err %v)", err)
+			}
+		})
+	}
+}
+
+func TestStatusHasWork(t *testing.T) {
+	placed := []string{"node_modules", ".venv", ".claude/settings.json", ".claude/settings.local.json"}
+	for _, tc := range []struct {
+		status string
+		want   bool
+	}{
+		{"", false},
+		{"\n", false},
+		{"?? node_modules\n", false},
+		{"?? node_modules/\n", false},
+		{"?? \"node_modules\"\n", false},
+		{"?? .claude/settings.local.json\n?? .venv\n", false},
+		{"?? node_modules_extra/x\n", true},
+		{"?? node_modules/x\n", true},
+		{"?? src/new.go\n", true},
+		{"?? node_modules\n?? src/new.go\n", true},
+		{" M .claude/settings.json\n", true},
+		{"M  node_modules\n", true},
+		{"A  .claude/settings.local.json\n", true},
+		{" M main.go\n", true},
+	} {
+		if got := statusHasWork(tc.status, placed); got != tc.want {
+			t.Errorf("statusHasWork(%q) = %v, want %v", tc.status, got, tc.want)
+		}
+	}
+}

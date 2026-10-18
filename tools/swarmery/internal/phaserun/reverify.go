@@ -242,13 +242,13 @@ type leftoverCheckout struct {
 	path       string
 	registered bool   // git has a live checkout registered at path
 	branch     string // the branch it has checked out ("" when detached)
-	dirty      bool   // `git status` reports modified or untracked files
+	dirty      bool   // `git status` reports work (see statusHasWork)
 }
 
 // leftoverWorktree inspects the checkout AcquireExisting would hand this phase
 // BEFORE it is called: whether git has one registered at that path, on which
 // branch, and whether it holds uncommitted work (tracked edits or untracked
-// files). A registration whose directory is gone is a stale one AcquireExisting
+// files other than the ones the manager placed there itself). A registration whose directory is gone is a stale one AcquireExisting
 // prunes and replaces, so it reads as nothing there. Every git failure is an
 // error — the caller refuses rather than guesses whether work would be lost.
 func (s *Service) leftoverWorktree(repoRoot, projectSlug, taskName string) (leftoverCheckout, error) {
@@ -273,10 +273,47 @@ func (s *Service) leftoverWorktree(repoRoot, projectSlug, taskName string) (left
 			return left, fmt.Errorf("status of %s: %w", path, err)
 		}
 		left.registered, left.branch = true, e.Branch
-		left.dirty = strings.TrimSpace(status) != ""
+		left.dirty = statusHasWork(status, worktree.ManagerPlacedPaths())
 		return left, nil
 	}
 	return left, nil
+}
+
+// statusHasWork reports whether `git status --porcelain=v1` output names any
+// entry that may be someone's uncommitted work. The one exception is an
+// UNTRACKED entry on a path the worktree manager places into every checkout it
+// acquires (placed: a lent dependency symlink such as `node_modules`, a copied
+// untracked .claude config file) — git lists those in a perfectly clean
+// leftover. A tracked, modified or staged entry on such a path, and any other
+// untracked path, is still work.
+func statusHasWork(status string, placed []string) bool {
+	for _, line := range strings.Split(status, "\n") {
+		line = strings.TrimRight(line, "\r")
+		if strings.TrimSpace(line) == "" {
+			continue
+		}
+		rest, untracked := strings.CutPrefix(line, "?? ")
+		if !untracked || !isPlacedPath(rest, placed) {
+			return true
+		}
+	}
+	return false
+}
+
+// isPlacedPath matches a porcelain path against placed, exactly or with git's
+// trailing "/" for a directory. Porcelain quotes a path holding unusual
+// characters; the surrounding quotes are stripped, nothing is unescaped.
+func isPlacedPath(p string, placed []string) bool {
+	if len(p) >= 2 && strings.HasPrefix(p, `"`) && strings.HasSuffix(p, `"`) {
+		p = p[1 : len(p)-1]
+	}
+	p = strings.TrimSuffix(p, "/")
+	for _, want := range placed {
+		if p == want {
+			return true
+		}
+	}
+	return false
 }
 
 // sameCheckout reports whether a and b name the same directory. git prints the

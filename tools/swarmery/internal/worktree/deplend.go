@@ -90,6 +90,33 @@ func lendPaths() []string {
 	return out
 }
 
+// ManagerPlacedPaths lists the untracked paths Acquire itself may put into a
+// worktree it hands out: the lent dependency directories (lendPaths, honouring
+// LendEnv) and the copied config files (configFilesToSync). Paths are relative
+// to the worktree root, slash-separated and cleaned — the shape
+// `git status --porcelain` prints.
+//
+// It exists for callers that read "untracked files in a worktree" as "someone's
+// uncommitted work". A lent symlink is NOT matched by a dir-only ignore pattern
+// such as `node_modules/`, so git reports `?? node_modules` in every worktree
+// this manager lent it to, and an untracked settings file copied in by
+// syncUntrackedConfig shows the same way. Neither is work; a caller that skips
+// exactly these entries (untracked only, these exact paths) keeps every other
+// signal of a dirty tree.
+func ManagerPlacedPaths() []string {
+	lent := lendPaths()
+	out := make([]string, 0, len(lent)+len(configFilesToSync))
+	for _, rel := range lent {
+		if safeRelPath(rel) {
+			out = append(out, filepath.ToSlash(filepath.Clean(rel)))
+		}
+	}
+	for _, rel := range configFilesToSync {
+		out = append(out, filepath.ToSlash(rel))
+	}
+	return out
+}
+
 // linkMissingDir symlinks repoRoot/rel to worktreePath/rel when the source is a
 // real directory and the destination is free. linked=false with err=nil covers
 // every "nothing to do" case: a rejected path, no such directory in the source
