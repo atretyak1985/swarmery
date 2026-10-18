@@ -76,7 +76,7 @@ type needsYouItem struct {
 	// RequestID is the permission_requests.id (approval/question/prod_deploy_local).
 	RequestID *int64 `json:"requestId"`
 	// Channel is the hook channel of that request: 'shim' or 'mod'
-	// (permission_requests.channel, migration 0114). Absent on a session or
+	// (permission_requests.channel, migration 0115). Absent on a session or
 	// manual_phase item.
 	Channel  string `json:"channel,omitempty"`
 	ToolName string `json:"toolName"`

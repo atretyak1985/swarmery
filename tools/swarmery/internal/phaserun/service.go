@@ -987,7 +987,7 @@ func (s *Service) StartWith(phaseID int64, opts StartOptions) (sessionUUID strin
 	// model/effort ladders have been walked, so a refused Start leaves no row and
 	// the record names exactly what spec carries. Never changes spec; off ⇒
 	// nothing computed or written.
-	s.recordRoute(phaseID, model, effort, string(doc), info, spec, rt)
+	s.recordRoute(phaseID, model, info, spec, rt)
 	s.spawn(func() { s.runAndHandle(ctx, cancel, releaseSlot, phaseID, info, acq, spec, docRel, budget) })
 	return uuid, nil
 }

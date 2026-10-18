@@ -10,7 +10,6 @@ import (
 
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/claudeflags"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/route"
-	"github.com/atretyak1985/swarmery/tools/swarmery/internal/wsingest"
 )
 
 // routeModeEnv is this surface's complexity-router knob: off | shadow | active,
@@ -207,38 +206,19 @@ func modelRung(choice, docModel, routed string) string {
 	return route.RungDefault
 }
 
-// effortRung names which rung of resolveEffort's ladder produced the run's
-// effort, mirroring it exactly (a request or doc value that normalises to ""
-// falls through there, so it falls through here). Only called after
-// resolveEffort succeeded. Used for route_decisions.applied — won_rung is the
-// model rung only.
-func effortRung(choice, doc, routed string) string {
-	if c, _ := claudeflags.NormalizeEffort(choice); c != "" {
-		return route.RungRequest
-	}
-	if c, _ := claudeflags.NormalizeEffort(wsingest.ParseEffort(doc)); c != "" {
-		return route.RungDoc
-	}
-	if c, ok := claudeflags.NormalizeEffort(routed); ok && c != "" {
-		return route.RungRoute
-	}
-	return route.RungEnv // env or default: claudeflags does not say which
-}
-
 // recordRoute writes the phase run's route_decisions row: the decision beside
 // what resolveModel/resolveEffort put on the spawn. In shadow the row says
 // applied=0 and used_* are the pre-router picks; in active, applied says
-// whether the router's model or effort won its ladder and won_rung names the
-// model rung (route when the router's model ran). It never changes the spawn;
+// whether the router's MODEL ran (won_rung = route) — a route effort alone does
+// not count, or a run whose request pinned the model would read as routed. It never changes the spawn;
 // every failure is logged and swallowed. pick_model is recorded as the alias
 // the router chose; used_model is the full ID that ran.
-func (s *Service) recordRoute(phaseID int64, choice, effortChoice, doc string, info phaseInfo, spec RunSpec, rt phaseRoute) {
+func (s *Service) recordRoute(phaseID int64, choice string, info phaseInfo, spec RunSpec, rt phaseRoute) {
 	if !rt.ok {
 		return
 	}
 	rung := modelRung(choice, info.DocModel, rt.model)
-	applied := rt.mode == route.ModeActive &&
-		(rung == route.RungRoute || effortRung(effortChoice, doc, rt.effort) == route.RungRoute)
+	applied := rt.mode == route.ModeActive && rung == route.RungRoute
 	if err := route.Record(s.DB, route.Row{
 		Surface:     route.SurfacePhaseRun,
 		Subject:     route.SubjectPhase(phaseID),

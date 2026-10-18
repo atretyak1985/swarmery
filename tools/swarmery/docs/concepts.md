@@ -122,7 +122,7 @@ Reuse is conservative in the same spirit: an existing worktree is reused only wh
 | Lent | What | Knob |
 |---|---|---|
 | Project config | `.claude/settings.json`, `settings.local.json`, `project.json` — copied when the worktree has none, so the run keeps the project's plugins and permissions | — |
-| Installed dependencies | `node_modules`, `.venv`, `vendor` — **symlinked** to the source checkout's copies, so the run's build/test commands have a toolchain instead of failing on a missing module | `SWARMERY_WORKTREE_LEND` (comma-separated relative paths; `off` to lend nothing) |
+| Installed dependencies | `node_modules`, `.venv`, `vendor`, plus `<dir>/node_modules` for every committed nested `package.json` — **symlinked** to the source checkout's copies, so the run's build/test commands have a toolchain instead of failing on a missing module | `SWARMERY_WORKTREE_LEND` (comma-separated relative paths; `off` to lend nothing) |
 
 Dependencies are symlinked rather than copied because such a tree is routinely gigabytes. The consequence is explicit and stated in every run contract: the tree is **shared with your working copy**, so runs are told never to reinstall packages.
 

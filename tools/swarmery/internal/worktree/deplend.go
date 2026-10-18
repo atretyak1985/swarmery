@@ -45,9 +45,15 @@ const LendEnv = "SWARMERY_WORKTREE_LEND"
 
 // defaultLendPaths covers the ecosystems whose dependency root is a single
 // gitignored directory at the checkout root. Deliberately short: each entry is
-// a no-op for a project that does not have it, and an operator with a nested or
-// unusual layout sets LendEnv instead of waiting for a default to grow.
+// a no-op for a project that does not have it, and an operator with an unusual
+// layout sets LendEnv instead of waiting for a default to grow. Nested npm
+// packages are found by nestedNodeModules, not listed here.
 var defaultLendPaths = []string{"node_modules", ".venv", "vendor"}
+
+// nestedScanDepth bounds how deep nestedNodeModules looks for a package.json.
+// A sub-package sits a few directories down (tools/<app>/web); a walk without a
+// floor would read the whole tree on every Acquire.
+const nestedScanDepth = 4
 
 // lendDependencies links each configured dependency directory from repoRoot into
 // worktreePath. Best-effort by design, exactly like syncUntrackedConfig: this
@@ -56,7 +62,7 @@ var defaultLendPaths = []string{"node_modules", ".venv", "vendor"}
 // verification command with a message about the toolchain, which is a far better
 // outcome than a worktree nobody gets.
 func lendDependencies(repoRoot, worktreePath string) {
-	for _, rel := range lendPaths() {
+	for _, rel := range lentPaths(worktreePath) {
 		linked, err := linkMissingDir(repoRoot, worktreePath, rel)
 		if err != nil {
 			log.Printf("warning: worktree: lend %s into %s: %v", rel, worktreePath, err)
@@ -67,6 +73,17 @@ func lendDependencies(repoRoot, worktreePath string) {
 				rel, repoRoot, worktreePath)
 		}
 	}
+}
+
+// lentPaths is every path lendDependencies tries for worktreePath: the
+// configured list plus, only with the defaults, the nested node_modules found
+// under worktreePath. An explicit LendEnv is the operator's exact list.
+func lentPaths(worktreePath string) []string {
+	paths := lendPaths()
+	if strings.TrimSpace(os.Getenv(LendEnv)) == "" {
+		paths = append(paths, nestedNodeModules(worktreePath)...)
+	}
+	return paths
 }
 
 // lendPaths resolves the configured list. An unset knob means the defaults; an
@@ -91,10 +108,10 @@ func lendPaths() []string {
 }
 
 // ManagerPlacedPaths lists the untracked paths Acquire itself may put into a
-// worktree it hands out: the lent dependency directories (lendPaths, honouring
-// LendEnv) and the copied config files (configFilesToSync). Paths are relative
-// to the worktree root, slash-separated and cleaned — the shape
-// `git status --porcelain` prints.
+// worktree it hands out: the lent dependency directories (lentPaths, honouring
+// LendEnv and the nested node_modules found under worktreePath) and the copied
+// config files (configFilesToSync). Paths are relative to the worktree root,
+// slash-separated and cleaned — the shape `git status --porcelain` prints.
 //
 // It exists for callers that read "untracked files in a worktree" as "someone's
 // uncommitted work". A lent symlink is NOT matched by a dir-only ignore pattern
@@ -103,8 +120,8 @@ func lendPaths() []string {
 // syncUntrackedConfig shows the same way. Neither is work; a caller that skips
 // exactly these entries (untracked only, these exact paths) keeps every other
 // signal of a dirty tree.
-func ManagerPlacedPaths() []string {
-	lent := lendPaths()
+func ManagerPlacedPaths(worktreePath string) []string {
+	lent := lentPaths(worktreePath)
 	out := make([]string, 0, len(lent)+len(configFilesToSync))
 	for _, rel := range lent {
 		if safeRelPath(rel) {
@@ -114,6 +131,55 @@ func ManagerPlacedPaths() []string {
 	for _, rel := range configFilesToSync {
 		out = append(out, filepath.ToSlash(rel))
 	}
+	return out
+}
+
+// nestedNodeModules returns "<dir>/node_modules" for every directory below the
+// worktree root that holds a committed package.json. The root itself is covered
+// by defaultLendPaths.
+//
+// Observed 2026-10-14 (board card T-ybm5i4): the root node_modules was lent but
+// tools/swarmery/web/node_modules was not, so every run that built the web app
+// died on "ls: tools/swarmery/web/node_modules: No such file or directory", and
+// the run contract forbade the npm ci that would have fixed it.
+//
+// The walk reads the WORKTREE, not the source checkout: the worktree holds only
+// committed files, while the source can hold untracked nested checkouts
+// (.claude/worktrees/*) whose package.json files are not this project's.
+// Hidden and node_modules directories are skipped. linkMissingDir already
+// handles a candidate whose source was never installed.
+func nestedNodeModules(worktreePath string) []string {
+	var out []string
+	_ = filepath.WalkDir(worktreePath, func(path string, d os.DirEntry, err error) error {
+		if err != nil {
+			// An unreadable subtree loses only its own candidates.
+			if d != nil && d.IsDir() && path != worktreePath {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		rel, relErr := filepath.Rel(worktreePath, path)
+		if relErr != nil {
+			return nil
+		}
+		if d.IsDir() {
+			if rel == "." {
+				return nil
+			}
+			name := d.Name()
+			if name == "node_modules" || strings.HasPrefix(name, ".") ||
+				strings.Count(rel, string(filepath.Separator)) >= nestedScanDepth {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if d.Name() == "package.json" {
+			if dir := filepath.Dir(rel); dir != "." {
+				out = append(out, filepath.Join(dir, "node_modules"))
+			}
+		}
+		return nil
+	})
 	return out
 }
 
