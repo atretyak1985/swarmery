@@ -504,16 +504,17 @@ The shim's stdin has no `tool_use_id`, so the daemon matches it by dedup hash:
   | `denied` | `200 {"decision":"deny","message":<the row's reason>}` |
   | `approved` with an answer's `updatedInput` (kept for the mod's next poll) | the allow + `updatedInput`, delivered per `serve --answer-delivery` exactly like a dashboard answer on a shim row |
   | `approved` without one, on an `AskUserQuestion` row | `204`: a plain allow would resolve the question with empty answers (`hooks-format.md` E12d), so the native dialog asks |
-  | `approved` on any other tool | `200 {"decision":"allow"}` |
+  | `approved` on any other tool | `204`: the mod already returned that allow itself, so a shim request with the same hash is a **fresh** identical call; replaying the allow would approve a call no person saw, so the native dialog asks |
   | `expired`, `resolved_elsewhere` | `204`: Claude Code shows its native dialog |
 
   Every one of these is a response the frozen shim protocol already allows;
 - otherwise (no match, or the decision is older than 5 s): the shim opens its own row
   as always.
 
-The mod itself returns a refusal for a dashboard deny of a question (`{ deny }` from
-`tool.call`), so a deny normally fires no shim request; the window is what keeps the
-operator's decision when one does.
+A dashboard deny of a question is not answered by the mod: a question has nothing to
+refuse, so the mod hands the call on (`next(e)`). Where the shim is installed, the
+engine's permission stage then fires it for the same call, and this window delivers
+the operator's deny to it; without the shim, the question's native dialog opens.
 
 **Parallel subagents.** The dedup hash carries no `agentId` (the shim cannot see one,
 E11), so two subagents asking the identical call at the same moment share one row and

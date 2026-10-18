@@ -492,11 +492,14 @@ func TestShimAfterModWindowCarriesDecision(t *testing.T) {
 			},
 		},
 		{
+			// The mod delivered this allow itself: a shim ask with the same hash
+			// is a fresh identical call, and replaying the allow would approve a
+			// call no person saw.
 			name: "approved Bash", tool: "Bash", input: `{"command":"make","description":"d"}`,
 			decide: func(svc *Service, id int64) error { return svc.Decide(id, StatusApproved, "dashboard", "") },
 			check: func(t *testing.T, d Decision) {
-				if d.Status != StatusApproved || len(d.UpdatedInput) != 0 {
-					t.Errorf("decision = %+v, want approved", d)
+				if d.Status != StatusResolvedElsewhere || len(d.UpdatedInput) != 0 {
+					t.Errorf("decision = %+v, want resolved_elsewhere (no decision: the native dialog)", d)
 				}
 			},
 		},
@@ -536,19 +539,28 @@ func TestShimAfterModWindowCarriesDecision(t *testing.T) {
 	}
 }
 
-// TestShimDecisionAfterModFallbacks: once the kept decision is pruned
-// the answer's UpdatedInput is gone; an approved AskUserQuestion row then
-// reads as no decision, never a plain allow. (Pruning takes 80 s, far past the
-// window, so this pins shimDecisionAfterMod rather than a reachable path.)
+// TestShimDecisionAfterModFallbacks: only a deny and an answer (approved
+// with UpdatedInput) carry over to the shim. An approve without UpdatedInput
+// — a plain approve, an AskUserQuestion approved without answers, or an
+// answer whose kept decision was pruned (80 s, far past the window) — reads
+// as no decision, never a plain allow, and so do the hand-backs.
 func TestShimDecisionAfterModFallbacks(t *testing.T) {
-	d := shimDecisionAfterMod(Decision{Status: StatusApproved, Via: "dashboard"}, AskUserQuestionTool)
-	if d.Status != StatusResolvedElsewhere {
-		t.Errorf("approved AskUserQuestion without UpdatedInput → %+v, want resolved_elsewhere", d)
+	for _, via := range []string{"dashboard", ViaRule} {
+		if d := shimDecisionAfterMod(Decision{Status: StatusApproved, Via: via}); d.Status != StatusResolvedElsewhere {
+			t.Errorf("approved via %s without UpdatedInput → %+v, want resolved_elsewhere", via, d)
+		}
 	}
 	for _, status := range []string{StatusExpired, StatusResolvedElsewhere} {
-		if d := shimDecisionAfterMod(Decision{Status: status, Via: "terminal"}, "Bash"); d.Status != StatusResolvedElsewhere {
+		if d := shimDecisionAfterMod(Decision{Status: status, Via: "terminal"}); d.Status != StatusResolvedElsewhere {
 			t.Errorf("%s → %+v, want resolved_elsewhere", status, d)
 		}
+	}
+	answered := Decision{Status: StatusApproved, Via: "dashboard", UpdatedInput: []byte(`{"answers":{"Which?":"B"}}`)}
+	if d := shimDecisionAfterMod(answered); d.Status != StatusApproved || string(d.UpdatedInput) != string(answered.UpdatedInput) {
+		t.Errorf("answered → %+v, want the approve + UpdatedInput as is", d)
+	}
+	if d := shimDecisionAfterMod(Decision{Status: StatusDenied, Reason: "no", Via: "dashboard"}); d.Status != StatusDenied || d.Reason != "no" {
+		t.Errorf("denied → %+v, want denied/'no'", d)
 	}
 }
 

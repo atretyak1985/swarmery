@@ -435,7 +435,9 @@ func shimBodyFor(session, tool, toolInput string) string {
 // engine after a dashboard decision it cannot deliver itself (a deny of a
 // question, an approve without answers), the engine's permission stage fires
 // the shim for the same call within 5 s, and the shim gets THAT decision —
-// never a second pending row that loses the operator's deny.
+// never a second pending row that loses the operator's deny. A plain approve
+// is never replayed (204, the native dialog): the shim ask it would answer is
+// a fresh identical call no person saw.
 func TestLinkPermissionShimAfterModDecision(t *testing.T) {
 	cases := []struct {
 		name, tool, input, delivery, action string
@@ -450,8 +452,10 @@ func TestLinkPermissionShimAfterModDecision(t *testing.T) {
 			wantCode: http.StatusOK, wantBody: map[string]any{"decision": "deny"}},
 		{name: "approve question without answers", tool: "AskUserQuestion", input: askQuestionsInput,
 			action: `{"action":"approve"}`, wantCode: http.StatusNoContent},
+		// the mod delivered this allow itself: a shim ask with the same hash is
+		// a fresh identical call, which a replayed allow would approve unseen
 		{name: "approve Bash", tool: "Bash", input: `{"command":"make"}`,
-			action: `{"action":"approve"}`, wantCode: http.StatusOK, wantBody: map[string]any{"decision": "allow"}},
+			action: `{"action":"approve"}`, wantCode: http.StatusNoContent},
 		{name: "answer, deny-message delivery", tool: "AskUserQuestion", input: askQuestionsInput,
 			delivery: approvals.DeliveryDenyMessage, action: `{"action":"answer","answers":{"Which DB?":"Postgres"}}`,
 			wantCode: http.StatusOK, wantBody: map[string]any{"decision": "deny", "message": "User answered via dashboard: «Which DB?» → Postgres"}},
@@ -789,5 +793,30 @@ func TestLinkPermissionUnavailable(t *testing.T) {
 	AttachLink(nil, nil)
 	if code, _ := e.req(t, http.MethodPost, "/api/link/permission", e.token, permBody("u", "Bash", "t", `{}`)); code != http.StatusServiceUnavailable {
 		t.Errorf("POST without link: %d, want 503", code)
+	}
+}
+
+// TestLinkPermissionOpenHeartbeat: a mod's POST is a hook check-in like the
+// shim's, so a mod-only setup shows hooks alive in /api/health.
+func TestLinkPermissionOpenHeartbeat(t *testing.T) {
+	e := newLinkPermEnv(t, approvals.Options{})
+	var before map[string]any
+	getJSON(t, e.srv.URL+"/api/health", &before)
+	if _, ok := before["hooks_last_seen"]; ok {
+		t.Fatal("hooks_last_seen must be absent before any hook call")
+	}
+
+	if code, body := e.ask(t, permBody("heartbeat-uuid", "Bash", "toolu_hb", `{"command":"make deploy-staging"}`)); code != http.StatusAccepted {
+		t.Fatalf("mod ask: %d %v", code, body)
+	}
+
+	var after map[string]any
+	getJSON(t, e.srv.URL+"/api/health", &after)
+	ts, ok := after["hooks_last_seen"].(string)
+	if !ok || ts == "" {
+		t.Fatalf("hooks_last_seen = %v after a mod POST, want an RFC 3339 timestamp", after["hooks_last_seen"])
+	}
+	if _, err := time.Parse(time.RFC3339, ts); err != nil {
+		t.Errorf("hooks_last_seen %q is not RFC 3339: %v", ts, err)
 	}
 }

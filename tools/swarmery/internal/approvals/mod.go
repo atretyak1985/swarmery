@@ -59,19 +59,19 @@ type modDecision struct {
 // reached any terminal status within ShimAfterModWindow, and the decision a
 // shim request for the same call takes from it (index idx_pr_mod_hash). The
 // mod has just handed this very call back to the engine, whose permission
-// stage now fires the shim: the operator's decision on the mod's row — a deny
-// included — answers it rather than a second row.
+// stage now fires the shim: the operator's deny or answer on the mod's row
+// answers it rather than a second row (a plain approve does not: see
+// shimDecisionAfterMod).
 func (s *Service) recentModDecisionLocked(hash string) (int64, Decision, bool, error) {
 	since := s.opt.Now().UTC().Add(-ShimAfterModWindow).Format(tsFormat)
 	var id int64
-	var toolName string
 	err := s.db.QueryRow(
-		`SELECT id, tool_name FROM permission_requests
+		`SELECT id FROM permission_requests
 		 WHERE channel = ? AND dedup_hash = ? AND resolved_at >= ?
 		   AND status IN (?, ?, ?, ?)
 		 ORDER BY resolved_at DESC, id DESC LIMIT 1`,
 		ChannelMod, hash, since,
-		StatusApproved, StatusDenied, StatusExpired, StatusResolvedElsewhere).Scan(&id, &toolName)
+		StatusApproved, StatusDenied, StatusExpired, StatusResolvedElsewhere).Scan(&id)
 	switch {
 	case errors.Is(err, sql.ErrNoRows):
 		return 0, Decision{}, false, nil
@@ -82,7 +82,7 @@ func (s *Service) recentModDecisionLocked(hash string) (int64, Decision, bool, e
 	if err != nil {
 		return 0, Decision{}, false, err
 	}
-	return id, shimDecisionAfterMod(d, toolName), true, nil
+	return id, shimDecisionAfterMod(d), true, nil
 }
 
 // shimDecisionAfterMod maps a mod row's terminal decision onto what the
@@ -91,19 +91,17 @@ func (s *Service) recentModDecisionLocked(hash string) (int64, Decision, bool, e
 //   - denied → the deny, with the row's reason;
 //   - approved with an answer's UpdatedInput (kept in modDecided) → the
 //     allow + updatedInput, which the handler delivers per --answer-delivery;
-//   - approved without one on an AskUserQuestion row → no decision (204): a
-//     plain allow would resolve the question with empty answers (E12d), so the
-//     native dialog asks;
-//   - approved on any other tool → the allow;
+//   - approved without one → no decision (204), the native dialog. On an
+//     AskUserQuestion row a plain allow would resolve the question with empty
+//     answers (E12d). On any other tool the mod already delivered the allow
+//     itself, so a shim request with the same hash is a FRESH identical call:
+//     replaying the allow would approve a call no person saw;
 //   - expired / resolved_elsewhere → no decision (204), the native dialog.
-func shimDecisionAfterMod(d Decision, toolName string) Decision {
-	switch d.Status {
-	case StatusDenied:
+func shimDecisionAfterMod(d Decision) Decision {
+	switch {
+	case d.Status == StatusDenied:
 		return Decision{Status: StatusDenied, Reason: d.Reason, Via: d.Via}
-	case StatusApproved:
-		if len(d.UpdatedInput) == 0 && toolName == AskUserQuestionTool {
-			return Decision{Status: StatusResolvedElsewhere}
-		}
+	case d.Status == StatusApproved && len(d.UpdatedInput) > 0:
 		return d
 	default:
 		return Decision{Status: StatusResolvedElsewhere}

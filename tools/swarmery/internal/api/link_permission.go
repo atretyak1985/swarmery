@@ -101,6 +101,9 @@ func (h *Handler) linkPermissionOpen(w http.ResponseWriter, r *http.Request) {
 		writeJSONStatus(w, http.StatusServiceUnavailable, map[string]string{"error": "approvals unavailable"})
 		return
 	}
+	// A hook check-in like the shim's: a mod-only setup shows hooks alive in
+	// /api/health (hooks_last_seen).
+	svc.Heartbeat()
 	r.Body = http.MaxBytesReader(w, r.Body, maxHookBody)
 	var req linkPermissionRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
