@@ -273,7 +273,7 @@ func (s *Service) leftoverWorktree(repoRoot, projectSlug, taskName string) (left
 			return left, fmt.Errorf("status of %s: %w", path, err)
 		}
 		left.registered, left.branch = true, e.Branch
-		left.dirty = statusHasWork(status, worktree.ManagerPlacedPaths())
+		left.dirty = statusHasWork(status, worktree.ManagerPlacedPaths(path))
 		return left, nil
 	}
 	return left, nil

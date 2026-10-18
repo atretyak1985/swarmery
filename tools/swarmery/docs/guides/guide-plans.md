@@ -535,7 +535,7 @@ one of exactly three ways:
 | `SWARMERY_VERIFY_MAX_DIFF_FILES` | `40` | Diff-size bound above which verification returns inconclusive |
 | `SWARMERY_VERIFY_TIMEOUT_MIN` | `15` | Minutes before a verification run is abandoned |
 | `SWARMERY_VERIFY_PERMISSION_MODE` | `bypassPermissions` | Permission mode of the read-only verifier (falls back to `SWARMERY_PERMISSION_MODE`); the edit tools stay disallowed in every mode, `off` omits the flag |
-| `SWARMERY_WORKTREE_LEND` | `node_modules`, `.venv`, `vendor` | Directories lent into a fresh worktree so builds work immediately |
+| `SWARMERY_WORKTREE_LEND` | `node_modules`, `.venv`, `vendor` + nested `<dir>/node_modules` | Directories lent into a fresh worktree so builds work immediately; setting it replaces the defaults and turns off nested discovery |
 
 > [!NOTE]
 > These are read once, when the daemon starts. Changing one means restarting the

@@ -2,27 +2,49 @@ package store
 
 import "testing"
 
-// TestMigrate0115AddsLinkSwarm: the swarm tables land with their columns and
-// indexes; link_claims is keyed one row per (session, path); link_messages
-// numbers rows with AUTOINCREMENT and leaves delivered NULL ("unknown").
-func TestMigrate0115AddsLinkSwarm(t *testing.T) {
+// TestMigrate0115AddsPermissionChannel: a permission request written before
+// 0115 reads channel 'shim' and a NULL tool_use_id afterwards, both indexes
+// land, and a new mod row keeps the values it is written with.
+func TestMigrate0115AddsPermissionChannel(t *testing.T) {
 	db := openRaw(t)
+	if err := MigrateUpTo(db, 114); err != nil {
+		t.Fatalf("migrate to 114: %v", err)
+	}
+	if _, err := db.Exec(`INSERT INTO projects (id, path, slug, name, first_seen)
+		VALUES (1, '/p', '-p', 'p', '2026-10-14T00:00:00.000Z')`); err != nil {
+		t.Fatalf("seed project: %v", err)
+	}
+	if _, err := db.Exec(`INSERT INTO sessions (id, project_id, session_uuid, cwd, status, started_at, source)
+		VALUES (1, 1, 'uuid-0115', '/p', 'active', '2026-10-14T00:00:00.000Z', 'jsonl')`); err != nil {
+		t.Fatalf("seed session: %v", err)
+	}
+	if _, err := db.Exec(`INSERT INTO permission_requests (id, session_id, tool_name, request_json, requested_at)
+		VALUES (1, 1, 'Bash', '{}', '2026-10-14T00:00:00.000Z')`); err != nil {
+		t.Fatalf("seed request: %v", err)
+	}
+
 	if err := Migrate(db); err != nil {
-		t.Fatalf("migrate fresh db: %v", err)
+		t.Fatalf("migrate: %v", err)
 	}
 	var name string
 	if err := db.QueryRow(`SELECT name FROM schema_migrations WHERE version = 115`).Scan(&name); err != nil {
 		t.Fatalf("migration 115 not recorded: %v", err)
 	}
-	if name != "0115_link_swarm.sql" {
-		t.Errorf("migration 115 name: want 0115_link_swarm.sql, got %s", name)
+	if name != "0115_permission_channel.sql" {
+		t.Errorf("migration 115 name: want 0115_permission_channel.sql, got %s", name)
 	}
-	mustHaveColumns(t, db, "link_messages",
-		"id", "kind", "from_session", "to_session", "to_address", "body", "truncated",
-		"origin", "at", "delivered", "reason", "command_id", "matched_id")
-	mustHaveColumns(t, db, "link_claims", "session_id", "path", "claimed_at", "released_at")
+	mustHaveColumns(t, db, "permission_requests", "channel", "tool_use_id")
 
-	for _, idx := range []string{"idx_link_messages_at", "idx_link_messages_from", "idx_link_messages_to", "idx_link_claims_path"} {
+	var channel string
+	var toolUse any
+	if err := db.QueryRow(`SELECT channel, tool_use_id FROM permission_requests WHERE id = 1`).Scan(&channel, &toolUse); err != nil {
+		t.Fatal(err)
+	}
+	if channel != "shim" || toolUse != nil {
+		t.Errorf("pre-0115 row: channel=%q tool_use_id=%v, want 'shim' and NULL", channel, toolUse)
+	}
+
+	for _, idx := range []string{"idx_pr_tool_use", "idx_pr_mod_hash"} {
 		var n int
 		if err := db.QueryRow(`SELECT COUNT(*) FROM sqlite_master WHERE type = 'index' AND name = ?`, idx).Scan(&n); err != nil {
 			t.Fatal(err)
@@ -32,29 +54,16 @@ func TestMigrate0115AddsLinkSwarm(t *testing.T) {
 		}
 	}
 
-	if _, err := db.Exec(`INSERT INTO link_messages (kind, body, at) VALUES ('send', 'hi', '2026-10-14T00:00:00.000Z')`); err != nil {
-		t.Fatalf("insert message: %v", err)
+	if _, err := db.Exec(`INSERT INTO permission_requests
+		(id, session_id, tool_name, request_json, requested_at, channel, tool_use_id)
+		VALUES (2, 1, 'Bash', '{}', '2026-10-14T00:00:01.000Z', 'mod', 'toolu_1')`); err != nil {
+		t.Fatalf("insert mod row: %v", err)
 	}
-	var delivered any
-	var truncated int
-	if err := db.QueryRow(`SELECT delivered, truncated FROM link_messages`).Scan(&delivered, &truncated); err != nil {
+	var id int64
+	if err := db.QueryRow(`SELECT id FROM permission_requests WHERE session_id = 1 AND tool_use_id = 'toolu_1'`).Scan(&id); err != nil {
 		t.Fatal(err)
 	}
-	if delivered != nil || truncated != 0 {
-		t.Errorf("delivered/truncated = %v/%d, want NULL/0", delivered, truncated)
-	}
-	if _, err := db.Exec(`INSERT INTO link_messages (kind, at) VALUES ('send', '2026-10-14T00:00:00.000Z')`); err == nil {
-		t.Error("insert without body succeeded; want NOT NULL")
-	}
-
-	ins := `INSERT INTO link_claims (session_id, path, claimed_at) VALUES ('s1', '/a', '2026-10-14T00:00:00.000Z')`
-	if _, err := db.Exec(ins); err != nil {
-		t.Fatalf("first claim: %v", err)
-	}
-	if _, err := db.Exec(ins); err == nil {
-		t.Fatal("second claim of the same (session, path) succeeded; want a PRIMARY KEY conflict")
-	}
-	if _, err := db.Exec(`INSERT INTO link_claims (session_id, path, claimed_at) VALUES ('s2', '/a', '2026-10-14T00:00:00.000Z')`); err != nil {
-		t.Fatalf("another session's claim on the same path: %v", err)
+	if id != 2 {
+		t.Errorf("lookup by (session, tool_use_id) = %d, want 2", id)
 	}
 }
