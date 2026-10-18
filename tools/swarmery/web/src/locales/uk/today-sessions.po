@@ -17,6 +17,10 @@ msgstr ""
 msgid "— <0>untick onboarded only</0> to see them"
 msgstr "— <0>зніміть «лише підключені»</0>, щоб їх побачити"
 
+#: src/pages/sessions/SwarmPanel.tsx
+msgid "… (truncated)"
+msgstr "… (обрізано)"
+
 #: src/pages/NeedsYou.tsx
 msgid "· suggested"
 msgstr "· пропонується"
@@ -259,6 +263,10 @@ msgstr "~токенів"
 msgid "✓ auto-approved"
 msgstr "✓ автопогоджено"
 
+#: src/pages/sessions/SwarmPanel.tsx
+msgid "✓ delivered"
+msgstr "✓ доставлено"
+
 #: src/pages/Approvals.tsx
 msgid "a pause is a feature, not a failure"
 msgstr "пауза — це задум, а не збій"
@@ -466,6 +474,14 @@ msgstr "Зміна"
 msgid "Chat"
 msgstr "Чат"
 
+#: src/pages/sessions/SwarmPanel.tsx
+msgid "Choose a session…"
+msgstr "Оберіть сесію…"
+
+#: src/pages/sessions/SwarmPanel.tsx
+msgid "claims…"
+msgstr "зайняті файли…"
+
 #: src/pages/SessionDetail.tsx
 msgid "click to rename"
 msgstr "клацніть, щоб перейменувати"
@@ -515,6 +531,10 @@ msgstr "підтвердити відмову"
 #: src/pages/Overview.tsx
 msgid "confirm locally"
 msgstr "підтвердити локально"
+
+#: src/pages/sessions/SwarmPanel.tsx
+msgid "conflict"
+msgstr "конфлікт"
 
 #: src/pages/detail/ContextHogsCard.tsx
 msgid "context hogs"
@@ -576,6 +596,10 @@ msgstr "Рахує"
 #: src/pages/Projects.tsx
 msgid "daemon telemetry"
 msgstr "телеметрія демона"
+
+#: src/pages/sessions/SwarmPanel.tsx
+msgid "dashboard"
+msgstr "дашборд"
 
 #: src/pages/today/LoopMap.tsx
 msgid "data flows →"
@@ -689,6 +713,10 @@ msgstr "розгорнути сирий JSON запиту"
 msgid "expired"
 msgstr "прострочено"
 
+#: src/pages/sessions/SwarmPanel.tsx
+msgid "expired — the mod did not pick it up in time"
+msgstr "прострочено — мод не забрав команду вчасно"
+
 #: src/pages/Approvals.tsx
 msgid "expires {expires}"
 msgstr "минає {expires}"
@@ -707,6 +735,7 @@ msgstr "витягуємо…"
 
 #: src/pages/detail/CallTree.tsx
 #: src/pages/detail/CallTree.tsx
+#: src/pages/sessions/SwarmPanel.tsx
 msgid "failed"
 msgstr "збій"
 
@@ -726,9 +755,18 @@ msgstr "не вдалося завантажити групи помилок"
 msgid "failed to load handoff"
 msgstr "не вдалося завантажити передачу"
 
+#: src/pages/sessions/SwarmPanel.tsx
+msgid "failed: {msg}"
+msgstr "збій: {msg}"
+
 #: src/pages/detail/Timeline.tsx
 msgid "File change"
 msgstr "Зміна файлу"
+
+#: src/pages/sessions/SwarmPanel.tsx
+#: src/pages/sessions/SwarmPanel.tsx
+msgid "File claims"
+msgstr "Зайняті файли"
 
 #: src/pages/detail/DetailRail.tsx
 msgid "files changed"
@@ -746,6 +784,10 @@ msgstr "Перейти до термінала сесії {sessionName}"
 msgid "generate insights"
 msgstr "згенерувати інсайти"
 
+#: src/pages/sessions/SwarmPanel.tsx
+msgid "handed to the session's mod"
+msgstr "передано моду сесії"
+
 #: src/pages/detail/HandoffCard.tsx
 msgid "handoff"
 msgstr "передача"
@@ -762,6 +804,10 @@ msgstr "Здоров’я · останні 7 днів проти поперед
 #: src/pages/today/loopModel.ts
 msgid "Health →"
 msgstr "Здоров’я →"
+
+#: src/pages/sessions/SwarmPanel.tsx
+msgid "held by"
+msgstr "у роботі в"
 
 #: src/pages/detail/ContextHogsCard.tsx
 #: src/pages/detail/HandoffCard.tsx
@@ -895,9 +941,21 @@ msgstr "маркетплейс: {marketplace}"
 msgid "Measure"
 msgstr "Вимір"
 
+#: src/pages/sessions/SwarmPanel.tsx
+msgid "Message"
+msgstr "Повідомлення"
+
 #: src/pages/detail/CommandInput.tsx
 msgid "Message this session"
 msgstr "Написати цій сесії"
+
+#: src/pages/sessions/SwarmPanel.tsx
+msgid "Messages"
+msgstr "Повідомлення"
+
+#: src/pages/sessions/SwarmPanel.tsx
+msgid "messages…"
+msgstr "повідомлення…"
 
 #: src/pages/SessionDetail.tsx
 msgid "model"
@@ -967,6 +1025,10 @@ msgstr "у цій сесії ще немає подій"
 msgid "no file changes in this session"
 msgstr "у цій сесії файли не змінювалися"
 
+#: src/pages/sessions/SwarmPanel.tsx
+msgid "No files are claimed right now."
+msgstr "Зараз жоден файл не зайнято."
+
 #: src/pages/detail/Chat.tsx
 msgid "no final message (stop_reason={noFinalMessage})"
 msgstr "немає фінального повідомлення (stop_reason={noFinalMessage})"
@@ -975,9 +1037,17 @@ msgstr "немає фінального повідомлення (stop_reason={n
 msgid "no health data yet"
 msgstr "даних здоров’я ще немає"
 
+#: src/pages/sessions/SwarmPanel.tsx
+msgid "No messages between this project's sessions yet."
+msgstr "Сесії цього проєкту ще не обмінювалися повідомленнями."
+
 #: src/pages/SessionDetail.tsx
 msgid "No new tasks — this session had nothing left to suggest."
 msgstr "Нових задач немає — цій сесії нічого запропонувати."
+
+#: src/pages/sessions/SwarmPanel.tsx
+msgid "No other session of this project has a link mod to message."
+msgstr "Жодна інша сесія цього проєкту не має мода swarmery link, якому можна написати."
 
 #: src/pages/detail/LiveActivity.tsx
 msgid "no output for {quietFor}"
@@ -1035,6 +1105,10 @@ msgstr "сесій ще немає"
 msgid "no sessions yet — run <0>swarmery ingest <file.jsonl></0>"
 msgstr "сесій ще немає — запустіть <0>swarmery ingest <file.jsonl></0>"
 
+#: src/pages/sessions/SwarmPanel.tsx
+msgid "No swarmery link mod reports on this session, so it cannot be steered from the dashboard."
+msgstr "У цій сесії немає мода swarmery link, тож керувати нею з дашборда неможливо."
+
 #: src/pages/Overview.tsx
 msgid "no tool activity recorded"
 msgstr "активності інструментів не зафіксовано"
@@ -1063,6 +1137,18 @@ msgstr "ви ще жодної не перевірили."
 #: src/pages/detail/LiveActivity.tsx
 msgid "Noodling"
 msgstr "Прикидає"
+
+#: src/pages/sessions/SwarmPanel.tsx
+msgid "not delivered"
+msgstr "не доставлено"
+
+#: src/pages/sessions/SwarmPanel.tsx
+msgid "not delivered: {reason}"
+msgstr "не доставлено: {reason}"
+
+#: src/pages/sessions/SwarmPanel.tsx
+msgid "not sent: {msg}"
+msgstr "не надіслано: {msg}"
 
 #: src/pages/Approvals.tsx
 msgid "note (optional)"
@@ -1157,6 +1243,7 @@ msgid "out of scope"
 msgstr "поза межами"
 
 #: src/pages/Approvals.tsx
+#: src/pages/sessions/SwarmPanel.tsx
 msgid "pending"
 msgstr "очікує"
 
@@ -1249,6 +1336,10 @@ msgstr "проєкти…"
 msgid "Proof →"
 msgstr "Докази →"
 
+#: src/pages/sessions/SwarmPanel.tsx
+msgid "queued, waiting for the mod to pick it up"
+msgstr "у черзі, чекає, доки мод її забере"
+
 #: src/pages/SessionDetail.tsx
 msgid "quiet · {quietFor}"
 msgstr "тихо · {quietFor}"
@@ -1273,9 +1364,17 @@ msgstr "причина: «{reason}»"
 msgid "Reasoning"
 msgstr "Міркує"
 
+#: src/pages/sessions/SwarmPanel.tsx
+msgid "received"
+msgstr "отримано"
+
 #: src/pages/ProjectDetail.tsx
 msgid "recent sessions"
 msgstr "останні сесії"
+
+#: src/pages/sessions/SwarmPanel.tsx
+msgid "Recipient"
+msgstr "Отримувач"
 
 #: src/pages/SessionDetail.tsx
 msgid "recovered"
@@ -1363,16 +1462,27 @@ msgid "select {0} for continue phase"
 msgstr "вибрати {0} для продовження фази"
 
 #: src/pages/detail/CommandInput.tsx
+#: src/pages/sessions/SwarmPanel.tsx
 msgid "Send"
 msgstr "Надіслати"
 
+#: src/pages/sessions/SwarmPanel.tsx
+msgid "Send a message from this session"
+msgstr "Надіслати повідомлення від цієї сесії"
+
 #: src/pages/detail/Chat.tsx
+#: src/pages/sessions/SwarmPanel.tsx
 msgid "sending…"
 msgstr "надсилаємо…"
 
 #: src/pages/detail/CommandInput.tsx
 msgid "Sending…"
 msgstr "Надсилаємо…"
+
+#: src/pages/sessions/SwarmPanel.tsx
+#: src/pages/sessions/SwarmPanel.tsx
+msgid "sent"
+msgstr "надіслано"
 
 #: src/pages/Overview.tsx
 msgid "session #{sessionId}"
@@ -1554,6 +1664,16 @@ msgstr "надіслати відповіді"
 msgid "suggested replies"
 msgstr "пропоновані відповіді"
 
+#: src/pages/ProjectOverview.tsx
+#: src/pages/SessionDetail.tsx
+#: src/pages/sessions/SwarmPanel.tsx
+msgid "Swarm"
+msgstr "Swarm"
+
+#: src/pages/sessions/SwarmPanel.tsx
+msgid "Swarm messages"
+msgstr "Повідомлення Swarm"
+
 #: src/pages/detail/LiveActivity.tsx
 msgid "Synthesizing"
 msgstr "Синтезує"
@@ -1604,6 +1724,10 @@ msgstr "процес ОС живий (procwatch, крок 30 с); за цей ч
 msgid "the session ended its turn and waits for your typed reply"
 msgstr "сесія завершила хід і чекає на вашу відповідь"
 
+#: src/pages/sessions/SwarmPanel.tsx
+msgid "The session's link mod is not polling for commands. Enable the swarmery-link \"control\" option and keep the session open."
+msgstr "Мод swarmery link цієї сесії не опитує команди. Увімкніть опцію \"control\" у swarmery-link і не закривайте сесію."
+
 #: src/pages/Overview.tsx
 msgid "The spine · today"
 msgstr "Хребет дня · сьогодні"
@@ -1629,6 +1753,10 @@ msgstr "хронологія"
 #: src/pages/SessionDetail.tsx
 msgid "Timeline"
 msgstr "Хронологія"
+
+#: src/pages/sessions/SwarmPanel.tsx
+msgid "to"
+msgstr "до"
 
 #: src/pages/ProjectOverview.tsx
 msgid "to do"
@@ -1700,6 +1828,10 @@ msgstr "неприв’язані події"
 msgid "unknown project"
 msgstr "невідомий проєкт"
 
+#: src/pages/sessions/SwarmPanel.tsx
+msgid "unknown sender"
+msgstr "невідомий відправник"
+
 #: src/pages/Projects.tsx
 msgid "unpin"
 msgstr "відкріпити"
@@ -1749,6 +1881,10 @@ msgstr "чекає на вас"
 #: src/pages/today/WaitingOnYou.tsx
 msgid "Waiting on you"
 msgstr "Чекає на вас"
+
+#: src/pages/sessions/SwarmPanel.tsx
+msgid "What should the other session know?"
+msgstr "Що має знати інша сесія?"
 
 #: src/pages/ProjectOverview.tsx
 msgid "Where work sits"

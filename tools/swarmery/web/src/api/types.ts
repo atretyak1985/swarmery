@@ -255,7 +255,7 @@ export interface SessionLink {
 }
 
 /** A dashboard → mod command kind (docs/mods-link-protocol.md "Commands"). */
-export type LinkCommandKind = 'stop' | 'prompt';
+export type LinkCommandKind = 'stop' | 'prompt' | 'message';
 
 /** link_commands.state — also the state of a link_command WS frame. */
 export type LinkCommandState = 'queued' | 'delivered' | 'done' | 'failed' | 'expired';
@@ -281,6 +281,65 @@ export interface LinkBulkPromptResult {
   queued: { id: number; commandId: number }[];
   /** reason is "session has no link" or "not found". */
   skipped: { id: number; reason: string }[];
+}
+
+// --- mods-swarmery-link phase 6: swarm messages + file claims ----------------
+// internal/link/swarm.go (Message, Claim, Conflict), internal/api/link_swarm.go.
+
+/** link_messages.kind: the sender's side, the receiver's side, or a dashboard relay. */
+export type SwarmMessageKind = 'send' | 'receive' | 'dashboard';
+
+/** Go: link.SessionRef — a session a swarm message names. */
+export interface SwarmSessionRef {
+  id: number;
+  uuid: string;
+  title: string | null;
+}
+
+/** Go: link.Message — one row of GET /api/swarm/messages (newest first). */
+export interface SwarmMessage {
+  id: number;
+  kind: SwarmMessageKind;
+  fromSession: SwarmSessionRef | null;
+  toSession: SwarmSessionRef | null;
+  /** The recipient as the sender spelled it (uuid, agent id or name). */
+  toAddress: string | null;
+  body: string;
+  /** The body was cut at 4096 characters. */
+  truncated: boolean;
+  origin: string | null;
+  /** Fixed-width UTC, ms. */
+  at: string;
+  /** null = unknown (no ack yet / a receive row). */
+  delivered: boolean | null;
+  /** Why it was not delivered, when delivered === false. */
+  reason: string | null;
+}
+
+/** Go: link.Claim — a live file claim. */
+export interface SwarmClaim {
+  sessionId: number;
+  sessionUuid: string;
+  path: string;
+  claimedAt: string;
+}
+
+/** Go: link.Conflict — a path two or more sessions hold at once (advisory). */
+export interface SwarmConflict {
+  path: string;
+  sessions: { sessionId: number; sessionUuid: string }[];
+}
+
+/** Go: swarmClaimsDTO — GET /api/swarm/claims. */
+export interface SwarmClaims {
+  claims: SwarmClaim[];
+  conflicts: SwarmConflict[];
+}
+
+/** 202 body of POST /api/sessions/{id}/link/message. */
+export interface LinkMessageQueued {
+  commandId: number;
+  messageId: number;
 }
 
 /** Go: sessionDTO */
@@ -1701,7 +1760,16 @@ export interface PermissionRequest {
    * daemon omits it — treat absent as ''.
    */
   riskClass?: '' | 'prod-deploy';
+  /**
+   * How the request reached the daemon: 'mod' = answered inside the session by
+   * the swarmery-link mod (no hook process); 'shim' = through the hook process.
+   * Optional because an older daemon omits it — render nothing when absent.
+   */
+  channel?: ApprovalChannel;
 }
+
+/** The transport that carried a permission request (see PermissionRequest.channel). */
+export type ApprovalChannel = 'shim' | 'mod';
 
 // --- needs-you queue (GET /api/needs-you; internal/api/needs_you.go) ---------
 
@@ -1765,6 +1833,8 @@ export interface NeedsYouItem {
   suggestion: ReplySuggestion | null;
   /** `manual_phase` only: the phase to open. Absent on every session item. */
   phase?: NeedsYouPhase;
+  /** approval items only: the transport of the permission request. Absent on an older daemon. */
+  channel?: ApprovalChannel;
 }
 
 /** GET /api/needs-you — items sorted oldest blocker first. */
@@ -1854,7 +1924,9 @@ export type WSMessageType =
   | 'task_deleted'
   | 'phase_surprise'
   | 'link_command'
-  | 'turn_surprise';
+  | 'turn_surprise'
+  | 'swarm_message'
+  | 'swarm_claim';
 
 /** Messages pushed over /api/ws — see docs/ws-protocol.md. */
 export type WSMessage =
@@ -1876,7 +1948,11 @@ export type WSMessage =
   | { type: 'link_command'; payload: LinkCommandNote }
   /** A swarmery link turn got both forecast halves and was scored
    *  (docs/mods-link-protocol.md "Forecast"). Advisory; a refetch signal. */
-  | { type: 'turn_surprise'; payload: TurnSurprise };
+  | { type: 'turn_surprise'; payload: TurnSurprise }
+  /** A swarm message row was stored, paired or acked (phase 6). A refetch signal. */
+  | { type: 'swarm_message'; payload: { sessionId: number; projectId: number } }
+  /** A project's live file claims changed (phase 6). A refetch signal. */
+  | { type: 'swarm_claim'; payload: { projectId: number } };
 
 /** Payload of the phase_surprise WS frame. */
 export interface PhaseSurpriseAttention {

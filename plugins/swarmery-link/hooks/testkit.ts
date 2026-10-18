@@ -66,7 +66,41 @@ export type World = {
    */
   readonly tools?: ReadonlyArray<'ok' | 'error' | 'deny'>
   readonly now?: number
+  /** What the plugin's `$.store` holds at the start. Default: nothing. */
+  readonly store?: Readonly<Record<string, unknown>>
+  /**
+   * How the engine beneath answers each `session.send`, in order; the last
+   * repeats. `{ result, afterMs }` settles once the mock clock moved that far.
+   * Default: delivered.
+   */
+  readonly sendReplies?: ReadonlyArray<SendReply>
+  /** The engine's own tool.check verdict beneath the plugin. Default: `allow`. */
+  readonly verdict?: { readonly decision: 'allow' | 'ask' | 'deny'; readonly reason?: string }
+  /** The daemon's answer per POST /api/link/permission, in order; the last repeats. Default: 204. */
+  readonly permissionReplies?: ReadonlyArray<PermissionReply>
+  /** The daemon's answer per GET /api/link/permission/{id}, in order; the last repeats. Default: `hang`. */
+  readonly permissionPollReplies?: ReadonlyArray<PermissionReply>
+  /** The daemon's answer per DELETE /api/link/permission/{id}, in order; the last repeats. Default: 204. */
+  readonly permissionCancelReplies?: ReadonlyArray<PermissionReply>
 }
+
+/** A status alone (empty body), a status with a JSON body, a failed connection, or a daemon that never answers. */
+export type PermissionReply = number | 'throw' | 'hang' | { readonly status: number; readonly body: Readonly<Record<string, unknown>> }
+
+export type PermissionCall = {
+  readonly url: string
+  readonly method: string | undefined
+  readonly authorization: string | undefined
+  readonly body: Readonly<Record<string, unknown>> | undefined
+  readonly at: number
+}
+
+export type SendResult = { readonly isDelivered: true } | { readonly isDelivered: false; readonly reason: string }
+
+/** A send's result, or one that settles once the mock clock moved `afterMs`. */
+export type SendReply = SendResult | { readonly result: SendResult; readonly afterMs: number }
+
+export type SendSeen = { readonly to: unknown; readonly text: string; readonly origin: unknown; readonly agentId: string | undefined }
 
 export type ModelReply =
   | string
@@ -117,9 +151,28 @@ export type Recorded = {
   readonly moveTo: (sessionId: string, cwd?: string) => void
   /** Every `$.model.complete` that reached the engine beneath the plugin. */
   readonly modelCalls: ModelCall[]
+  /** Every POST /api/link/permission, with the mock clock's time it was made. */
+  readonly permissionPosts: PermissionCall[]
+  /** Every GET /api/link/permission/{id}, with the mock clock's time it was made. */
+  readonly permissionPolls: PermissionCall[]
+  /** Every DELETE /api/link/permission/{id}, with the mock clock's time it was made. */
+  readonly permissionCancels: PermissionCall[]
+  /** Every `$.ui.status` text, undefined for a clear. */
+  readonly statuses: Array<string | undefined>
+  /** Every `$.ui.notice`. */
+  readonly notices: Array<{ readonly toolUseId: string; readonly text: string | undefined }>
+  /** The tool of every `tool.call` that reached the engine beneath the plugin. */
+  readonly calls: string[]
+  /** The plugin's `$.store`, as the engine beneath keeps it. */
+  readonly store: Map<string, unknown>
+  /** Every `$.store` call, in order: `get <key>`, `set <key>`, `delete <key>`, `keys`. */
+  readonly storeOps: string[]
+  /** Every `session.send` that reached the engine beneath the plugin. */
+  readonly sends: SendSeen[]
 }
 
 const COMMANDS = '/api/link/commands'
+const PERMISSION = '/api/link/permission'
 
 const pick = <T>(list: readonly T[] | undefined, i: number, fallback: T): T =>
   list === undefined || list.length === 0 ? fallback : (list[Math.min(i, list.length - 1)] ?? fallback)
@@ -139,6 +192,15 @@ export const world = (on: On, w: World = {}): Recorded => {
   const aborts: string[] = []
   const submits: Submitted[] = []
   const modelCalls: ModelCall[] = []
+  const permissionPosts: PermissionCall[] = []
+  const permissionPolls: PermissionCall[] = []
+  const permissionCancels: PermissionCall[] = []
+  const statuses: Array<string | undefined> = []
+  const notices: Array<{ readonly toolUseId: string; readonly text: string | undefined }> = []
+  const calls: string[] = []
+  const store = new Map<string, unknown>(Object.entries(w.store ?? {}))
+  const storeOps: string[] = []
+  const sends: SendSeen[] = []
   let toolCalls = 0
   let reads = 0
   let sessionId: string = SESSION_ID
@@ -157,6 +219,28 @@ export const world = (on: On, w: World = {}): Recorded => {
     return text === undefined ? { deny: `ENOENT: ${e.path}` } : { value: text }
   })
   on('http.fetch', ($, e) => {
+    if (e.url.includes(PERMISSION)) {
+      const isCancel = e.init?.method === 'DELETE'
+      const isPoll = !isCancel && e.url.includes(`${PERMISSION}/`)
+      const made = isCancel ? permissionCancels : isPoll ? permissionPolls : permissionPosts
+      const reply = isCancel
+        ? pick<PermissionReply>(w.permissionCancelReplies, made.length, 204)
+        : isPoll
+          ? pick<PermissionReply>(w.permissionPollReplies, made.length, 'hang')
+          : pick<PermissionReply>(w.permissionReplies, made.length, 204)
+      made.push({
+        url: e.url,
+        method: e.init?.method,
+        authorization: e.init?.headers?.authorization,
+        body: e.init?.body === undefined ? undefined : JSON.parse(e.init.body),
+        at: clock.now(),
+      })
+      if (reply === 'hang') return new Promise<never>(() => undefined)
+      if (reply === 'throw') return { deny: 'connect ECONNREFUSED 127.0.0.1:7777' }
+      const status = typeof reply === 'number' ? reply : reply.status
+      const text = typeof reply === 'number' ? '' : JSON.stringify(reply.body)
+      return { value: { status, ok: status >= 200 && status < 300, headers: {}, text } }
+    }
     if (e.url.includes(`${COMMANDS}/`)) {
       const status = pick(w.ackReplies, acks.length, 204)
       acks.push({ url: e.url, body: JSON.parse(e.init?.body ?? '{}') })
@@ -191,7 +275,16 @@ export const world = (on: On, w: World = {}): Recorded => {
   on('turn.complete', ($, e) => ({ text: e.answer }))
   on('session.measure', ($, e) => ({ changed: e.changed }))
   on('session.end', ($, e) => ({ sessionId: e.sessionId }))
-  on('tool.call', () => {
+  on('ui.status', ($, e) => {
+    statuses.push(e.text)
+    return { value: undefined }
+  })
+  on('ui.notice', ($, e) => {
+    notices.push({ toolUseId: e.tool_use_id, text: e.text })
+    return { value: undefined }
+  })
+  on('tool.call', ($, e) => {
+    calls.push(String(e.tool))
     const outcome = pick(w.tools, toolCalls, 'ok')
     toolCalls += 1
     if (outcome === 'deny') return { deny: 'refused beneath' }
@@ -214,7 +307,7 @@ export const world = (on: On, w: World = {}): Recorded => {
   })
   on('tool.check', ($, e) => {
     checks.push(e)
-    return { decision: 'allow' }
+    return w.verdict ?? { decision: 'allow' }
   })
 
   on('turn.abort', ($, e) => {
@@ -227,12 +320,62 @@ export const world = (on: On, w: World = {}): Recorded => {
     return w.submitDrop !== undefined ? { drop: w.submitDrop } : { text: e.text }
   })
 
+  // the plugin's own store, read back as JSON data the way the engine keeps it
+  const copy = (value: unknown): unknown => (value === undefined ? undefined : JSON.parse(JSON.stringify(value)))
+  on('store.get', ($, e) => {
+    storeOps.push(`get ${e.key}`)
+    return { value: copy(store.get(e.key)) }
+  })
+  on('store.set', ($, e) => {
+    storeOps.push(`set ${e.key}`)
+    store.set(e.key, copy(e.value))
+    return { value: undefined }
+  })
+  on('store.delete', ($, e) => {
+    storeOps.push(`delete ${e.key}`)
+    store.delete(e.key)
+    return { value: undefined }
+  })
+  on('store.keys', () => {
+    storeOps.push('keys')
+    return { value: [...store.keys()] }
+  })
+  on('session.send', ($, e) => {
+    const reply = pick<SendReply>(w.sendReplies, sends.length, { isDelivered: true })
+    sends.push({ to: e.to, text: e.text, origin: e.origin, agentId: e.agentId })
+    if ('afterMs' in reply) return clock.sleep(reply.afterMs).then(() => reply.result)
+    return reply
+  })
+  on('session.receive', ($, e) => ({ text: e.text }))
+
   const moveTo = (id: string, dir: string = cwd): void => {
     sessionId = id
     cwd = dir
   }
 
-  return { clock, requests, logs, shown, tokenReads: () => reads, checks, polls, acks, aborts, submits, moveTo, modelCalls }
+  return {
+    clock,
+    requests,
+    logs,
+    shown,
+    tokenReads: () => reads,
+    checks,
+    polls,
+    acks,
+    aborts,
+    submits,
+    moveTo,
+    modelCalls,
+    permissionPosts,
+    permissionPolls,
+    permissionCancels,
+    statuses,
+    notices,
+    calls,
+    store,
+    storeOps,
+    sends,
+  }
 }
 
 /** Every event the recorded requests carried, in order. */

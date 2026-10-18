@@ -1,12 +1,12 @@
 {
   "name": "swarmery-link",
-  "description": "Mod (function hooks): reports this session's live state (turn start and end, tool calls by name and input hash, context fill, rate limits, cost) to a local swarmery daemon over its token-guarded link API, and switches itself off when the daemon's token file is absent. The sensor never blocks, changes or answers a hook's event. With the opt-in control option it also long-polls the daemon for this session's commands: stop aborts the running turn, prompt submits a prompt once the session is idle. With the opt-in forecast option it asks a small model, once per user turn and without holding the turn, what the turn will touch, and reports the forecast beside the actual (paths and numbers only) so the daemon can score its surprise.",
-  "version": "0.3.0",
+  "description": "Mod (function hooks): reports this session's live state (turn start and end, tool calls by name and input hash, context fill, rate limits, cost) to a local swarmery daemon over its token-guarded link API, and switches itself off when the daemon's token file is absent. The sensor never blocks, changes or answers a hook's event. With the opt-in control option it also long-polls the daemon for this session's commands: stop aborts the running turn, prompt submits a prompt once the session is idle. With the opt-in forecast option it asks a small model, once per user turn and without holding the turn, what the turn will touch, and reports the forecast beside the actual (paths and numbers only) so the daemon can score its surprise. With the opt-in approvals option a permission ask goes to the swarmery approvals queue first and an AskUserQuestion can be answered from the dashboard; whenever the daemon is down or does not decide in time, the engine's own verdict, the hook shim or the native dialog takes over. With the opt-in swarm option it reports messages sent to and received from other sessions, claims each file the session starts editing in a registry shared by its sessions (a line beneath the answer when another live session edits the same file), and lets the dashboard send another session a message.",
+  "version": "0.5.0",
   "author": {
     "name": "atretyak",
     "email": "atretiak.work@gmail.com"
   },
-  "keywords": ["sensor", "telemetry", "dashboard", "remote-control", "forecast", "mods"],
+  "keywords": ["sensor", "telemetry", "dashboard", "remote-control", "forecast", "approvals", "permissions", "swarm", "mods"],
   "userConfig": {
     "control": {
       "type": "boolean",
@@ -14,16 +14,22 @@
       "description": "Let the swarmery dashboard stop this session's running turn and send it prompts. One background loop long-polls the daemon (loopback only, bearer token) for commands queued for this session alone; nothing runs inside a hook and no gating hook is registered. Off: no request goes to the command endpoints.",
       "default": false
     },
+    "approvals": {
+      "type": "boolean",
+      "title": "Approvals in Swarmery",
+      "description": "Routes each permission ask to the Swarmery approvals queue first, ahead of the dialog or auto mode's classifier; the shim/dialog takes over if the daemon is down or does not decide in time. Only the engine's own ask goes there (its allow and deny stand), a production deploy is still confirmed in the terminal, and an AskUserQuestion can be answered from the dashboard. In auto mode this puts the ask to the dashboard before the classifier would have settled it. Off: no tool.check or AskUserQuestion hook is registered and no request goes to the permission endpoint.",
+      "default": false
+    },
     "planBand": {
       "type": "boolean",
       "title": "Plan band",
-      "description": "Reserved for a later release (a band above the prompt showing the running plan). In 0.3 it only logs that it is not implemented.",
+      "description": "Reserved for a later release (a band above the prompt showing the running plan). In 0.5 it only logs that it is not implemented.",
       "default": false
     },
     "swarm": {
       "type": "boolean",
-      "title": "Swarm view",
-      "description": "Reserved for a later release (sibling sessions of the same plan). In 0.3 it only logs that it is not implemented.",
+      "title": "Swarm coordination",
+      "description": "Report messages this session sends to or receives from other sessions (text clipped to 4096 characters; a subagent's are left out), and claim each file the session starts editing in a registry its sessions share on this machine (paths and times only). When another live session holds the same file, a line beneath the answer says so; nothing is blocked. Claims are released at the end of each turn. With control on too, the dashboard can send another session a message. Off: no message hook, no registry access, no swarm events.",
       "default": false
     },
     "forecast": {

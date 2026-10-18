@@ -65,6 +65,7 @@ export const nextPollDelay = (outcome: 'command' | 'idle' | 'retry', elapsedMs: 
 export type Command =
   | { readonly id: string; readonly kind: 'stop' }
   | { readonly id: string; readonly kind: 'prompt'; readonly text: string; readonly asUser: boolean }
+  | { readonly id: string; readonly kind: 'message'; readonly to: string; readonly text: string }
   | { readonly id: string; readonly kind: 'invalid'; readonly reason: string }
 
 const isRecord = (value: unknown): value is Readonly<Record<string, unknown>> =>
@@ -99,6 +100,12 @@ export const parseCommand = (text: unknown): Command | undefined => {
     if (typeof text !== 'string' || text.trim() === '') return { id, kind: 'invalid', reason: 'prompt without text' }
     return { id, kind: 'prompt', text, asUser: payload.asUser === true }
   }
+  if (body.kind === 'message') {
+    const { to, text } = payload
+    if (typeof to !== 'string' || to.trim() === '') return { id, kind: 'invalid', reason: 'message without a recipient' }
+    if (typeof text !== 'string' || text.trim() === '') return { id, kind: 'invalid', reason: 'message without text' }
+    return { id, kind: 'message', to: to.trim(), text }
+  }
   return { id, kind: 'invalid', reason: `unknown command kind: ${String(body.kind).slice(0, 40)}` }
 }
 
@@ -132,18 +139,25 @@ export type Action =
   | { readonly do: 'ack'; readonly ack: Ack }
   | { readonly do: 'abort'; readonly turnId: string }
   | { readonly do: 'submit'; readonly text: string; readonly asUser: boolean }
+  | { readonly do: 'message'; readonly to: string; readonly text: string }
+
+/** The ack for a `message` command while the `swarm` option is off. */
+export const SWARM_OFF = 'swarm option is off'
 
 /**
- * What to do with a delivered command, given the commands already executed
- * and the main loop's running turn (`turn.start`'s id, until its
- * `turn.complete`).
+ * What to do with a delivered command, given the commands already executed,
+ * the main loop's running turn (`turn.start`'s id, until its
+ * `turn.complete`), and whether the `swarm` option is on. A `message` is sent
+ * whether or not a turn runs: it lands in the recipient's queue, not this one.
  */
-export const decide = (command: Command, executed: Executed, runningTurnId: string | undefined): Action => {
+export const decide = (command: Command, executed: Executed, runningTurnId: string | undefined, isSwarmOn = false): Action => {
   const previous = executed.get(command.id)
   if (previous !== undefined) return { do: 'ack', ack: previous }
   switch (command.kind) {
     case 'invalid':
       return { do: 'ack', ack: failed(command.reason) }
+    case 'message':
+      return isSwarmOn ? { do: 'message', to: command.to, text: command.text } : { do: 'ack', ack: failed(SWARM_OFF) }
     case 'stop':
       return runningTurnId === undefined ? { do: 'ack', ack: done('no turn running') } : { do: 'abort', turnId: runningTurnId }
     case 'prompt':
@@ -165,6 +179,9 @@ export const isTurnRunning = (error: unknown): boolean =>
 
 /** The ack for a `$.prompt.submit` that rejected. */
 export const submitFailure = (error: unknown): Ack => (isTurnRunning(error) ? failed(TURN_IN_PROGRESS) : failed(shortError(error)))
+
+/** The ack for a `$.session.send` that delivered nothing. */
+export const undeliverable = (reason: string): Ack => failed(`undeliverable: ${shortError(reason)}`)
 
 /** The ack for a `$.prompt.submit` a hook answered with `{ drop }`: the same rule, the reason marked as a drop. */
 export const dropAck = (reason: string): Ack => (isTurnRunning(reason) ? failed(TURN_IN_PROGRESS) : failed(`dropped: ${shortError(reason)}`))

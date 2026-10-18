@@ -49,17 +49,21 @@ type permissionRequestDTO struct {
 	// RiskClass is '' (ordinary) or 'prod-deploy' (approvals.RiskProdDeploy):
 	// a production deploy that only the session's terminal may confirm.
 	RiskClass string `json:"riskClass"`
+	// Channel is the hook channel that delivered the request (additive,
+	// mods-link phase 5): 'shim' (POST /api/hooks/permission-request) or
+	// 'mod' (POST /api/link/permission). resolvedVia still says who decided.
+	Channel string `json:"channel"`
 }
 
 const permissionRequestSelect = `
 	SELECT id, session_id, tool_name, request_json, status,
 	       requested_at, resolved_at, resolved_via, reason, COALESCE(expires_at, ''),
-	       COALESCE(risk_class, '')
+	       COALESCE(risk_class, ''), COALESCE(channel, 'shim')
 	FROM permission_requests`
 
 func scanPermissionRequest(scan func(...any) error, p *permissionRequestDTO) error {
 	return scan(&p.ID, &p.SessionID, &p.ToolName, &p.RequestJSON, &p.Status,
-		&p.RequestedAt, &p.ResolvedAt, &p.ResolvedVia, &p.Reason, &p.ExpiresAt, &p.RiskClass)
+		&p.RequestedAt, &p.ResolvedAt, &p.ResolvedVia, &p.Reason, &p.ExpiresAt, &p.RiskClass, &p.Channel)
 }
 
 func (h *Handler) permissionRequestByID(id int64) (*permissionRequestDTO, error) {
@@ -106,20 +110,7 @@ func (h *Handler) hookPermissionRequest(w http.ResponseWriter, r *http.Request) 
 	}
 
 	id, ch, _, err := approvalsSvc.Open(in)
-	switch {
-	case errors.Is(err, approvals.ErrExcludedProject):
-		// Excluded cwd: still served, but nothing is persisted — no decision,
-		// the shim fails open to the native dialog (same contract as expiry).
-		w.WriteHeader(http.StatusNoContent)
-		return
-	case errors.Is(err, approvals.ErrTooManyPending):
-		http.Error(w, `{"error":"too many pending requests for session"}`, http.StatusTooManyRequests)
-		return
-	case errors.Is(err, approvals.ErrBadRequest):
-		http.Error(w, `{"error":"malformed hook payload"}`, http.StatusBadRequest)
-		return
-	case err != nil:
-		writeErr(w, err)
+	if writeOpenErr(w, err) {
 		return
 	}
 
@@ -172,6 +163,28 @@ func (h *Handler) hookPermissionRequest(w http.ResponseWriter, r *http.Request) 
 		// expired / resolved_elsewhere → no decision → 204, shim fails open.
 		w.WriteHeader(http.StatusNoContent)
 	}
+}
+
+// writeOpenErr answers the failure modes of opening a permission request,
+// shared by both hook channels (the shim's POST /api/hooks/permission-request
+// and the mod's POST /api/link/permission). It reports false, writing
+// nothing, when err is nil.
+func writeOpenErr(w http.ResponseWriter, err error) bool {
+	switch {
+	case err == nil:
+		return false
+	case errors.Is(err, approvals.ErrExcludedProject):
+		// Excluded cwd: still served, but nothing is persisted — no decision,
+		// the hook fails open to the native dialog (same contract as expiry).
+		w.WriteHeader(http.StatusNoContent)
+	case errors.Is(err, approvals.ErrTooManyPending):
+		http.Error(w, `{"error":"too many pending requests for session"}`, http.StatusTooManyRequests)
+	case errors.Is(err, approvals.ErrBadRequest):
+		http.Error(w, `{"error":"malformed hook payload"}`, http.StatusBadRequest)
+	default:
+		writeErr(w, err)
+	}
+	return true
 }
 
 // ── POST /api/hooks/stop ─────────────────────────────────────────────────────
@@ -299,7 +312,7 @@ func (h *Handler) listApprovals(w http.ResponseWriter, r *http.Request) {
 	query := `
 		SELECT pr.id, pr.session_id, pr.tool_name, pr.request_json, pr.status,
 		       pr.requested_at, pr.resolved_at, pr.resolved_via, pr.reason,
-		       COALESCE(pr.expires_at, ''), COALESCE(pr.risk_class, '')
+		       COALESCE(pr.expires_at, ''), COALESCE(pr.risk_class, ''), COALESCE(pr.channel, 'shim')
 		FROM permission_requests pr
 		JOIN sessions s ON s.id = pr.session_id
 		JOIN projects p ON p.id = s.project_id

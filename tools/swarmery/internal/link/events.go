@@ -41,6 +41,9 @@ var knownKinds = map[string]bool{
 	KindTurnStart: true, KindTurnComplete: true, KindToolCall: true,
 	KindSessionMeasure: true, KindSessionStart: true, KindSessionEnd: true,
 	KindTurnForecast: true, KindTurnActual: true, // phase 10, forecast.go
+	// phase 6, swarm.go
+	KindSessionSend: true, KindSessionReceive: true,
+	KindClaim: true, KindRelease: true, KindConflict: true,
 }
 
 // tsFormat is the fixed-width UTC form every link timestamp is stored in, so
@@ -97,6 +100,9 @@ type normalized struct {
 
 	// turn is set for turn.forecast / turn.actual only (forecast.go).
 	turn *turnHalf
+
+	// swarm is set for the swarm kinds only (swarm.go).
+	swarm *swarmEvent
 }
 
 // Ingest stores a batch of mod events in one transaction and returns its
@@ -121,7 +127,9 @@ type normalized struct {
 // publish is called once per session the batch touched, after commit:
 // NoteSessionStarted for a row the batch minted, NoteSessionUpdated otherwise,
 // then NoteTurnSurprise once per turn.forecast/turn.actual that left its
-// turn_forecasts row scored (forecast.go). It may be nil.
+// turn_forecasts row scored (forecast.go), then NoteSwarmMessage once per
+// stored session.send / session.receive and NoteSwarmClaim once per project
+// whose live claims a claim / release changed (swarm.go). It may be nil.
 func Ingest(ctx context.Context, db *sql.DB, publish func(ingest.Notification), batch []Event) (Result, error) {
 	var res Result
 	valid := make([]normalized, 0, len(batch))
@@ -152,7 +160,10 @@ func Ingest(ctx context.Context, db *sql.DB, publish func(ingest.Notification), 
 	created := map[int64]bool{}
 	touched := []int64{}
 	seen := map[int64]bool{}
-	var scored []ingest.Notification // turn_surprise, published after commit
+	var scored []ingest.Notification  // turn_surprise, published after commit
+	var swarmed []ingest.Notification // swarm_message / swarm_claim, after commit
+	claimed := map[int64]bool{}       // projects whose swarm_claim is queued
+	projects := map[int64]int64{}     // sessions.id → project_id
 	for _, n := range valid {
 		sid, ok := ids[n.SessionID]
 		if !ok {
@@ -195,6 +206,24 @@ func Ingest(ctx context.Context, db *sql.DB, publish func(ingest.Notification), 
 		} else if id != 0 {
 			scored = append(scored, ingest.Notification{Type: ingest.NoteTurnSurprise, SessionID: sid, TurnForecastID: id})
 		}
+		if msg, claims, err := applySwarm(ctx, tx, n); err != nil {
+			return Result{}, err
+		} else if msg || claims {
+			pid, ok := projects[sid]
+			if !ok {
+				if pid, err = sessionProject(ctx, tx, sid); err != nil {
+					return Result{}, err
+				}
+				projects[sid] = pid
+			}
+			if msg {
+				swarmed = append(swarmed, ingest.Notification{Type: ingest.NoteSwarmMessage, SessionID: sid, ProjectID: pid})
+			}
+			if claims && !claimed[pid] {
+				claimed[pid] = true
+				swarmed = append(swarmed, ingest.Notification{Type: ingest.NoteSwarmClaim, SessionID: sid, ProjectID: pid})
+			}
+		}
 		if !seen[sid] {
 			seen[sid] = true
 			touched = append(touched, sid)
@@ -214,8 +243,20 @@ func Ingest(ctx context.Context, db *sql.DB, publish func(ingest.Notification), 
 		for _, n := range scored {
 			publish(n)
 		}
+		for _, n := range swarmed {
+			publish(n)
+		}
 	}
 	return res, nil
+}
+
+// sessionProject returns the session's project_id.
+func sessionProject(ctx context.Context, q dbtx, sid int64) (int64, error) {
+	var pid int64
+	if err := q.QueryRowContext(ctx, `SELECT project_id FROM sessions WHERE id = ?`, sid).Scan(&pid); err != nil {
+		return 0, fmt.Errorf("link: project of session %d: %w", sid, err)
+	}
+	return pid, nil
 }
 
 // validate checks one event and brings it to its stored form.
@@ -249,6 +290,9 @@ func validate(ev Event) (normalized, error) {
 		n.measure = &m
 	}
 	if n.turn, err = validateTurn(ev.Kind, raw); err != nil {
+		return n, err
+	}
+	if n.swarm, err = validateSwarm(ev.Kind, ev.SessionID, n.at, raw); err != nil {
 		return n, err
 	}
 	return n, nil

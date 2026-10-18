@@ -23,6 +23,7 @@ import { Link, useParams } from 'react-router-dom';
 import { fetchApprovals, resolveApproval, type ApprovalAction } from '../api';
 import type { NeedsYouItem, NeedsYouKind, PermissionRequest } from '../api/types';
 import { PendingCard } from './Approvals';
+import { ChannelBadge } from '../components/ChannelBadge';
 import { ProjectName } from '../components/ProjectName';
 import { Empty, ErrorBox, Loading } from '../components/ui';
 import type { AnswerMap } from '../lib/approvals';
@@ -250,6 +251,7 @@ function Row({
           />
         ) : (
           <div className="mt-2 flex flex-wrap items-center gap-3">
+            <ChannelBadge channel={item.channel} />
             <code className="min-w-0 flex-1 truncate font-mono text-[11.5px] text-ink-3">{item.preview}</code>
             <Link to={inboxHref} className={LINK}>
               <Trans>review in Inbox →</Trans>

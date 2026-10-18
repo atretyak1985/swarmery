@@ -17,6 +17,10 @@ msgstr ""
 msgid "— <0>untick onboarded only</0> to see them"
 msgstr "— <0>untick onboarded only</0> to see them"
 
+#: src/pages/sessions/SwarmPanel.tsx
+msgid "… (truncated)"
+msgstr "… (truncated)"
+
 #: src/pages/NeedsYou.tsx
 msgid "· suggested"
 msgstr "· suggested"
@@ -259,6 +263,10 @@ msgstr "~tokens"
 msgid "✓ auto-approved"
 msgstr "✓ auto-approved"
 
+#: src/pages/sessions/SwarmPanel.tsx
+msgid "✓ delivered"
+msgstr "✓ delivered"
+
 #: src/pages/Approvals.tsx
 msgid "a pause is a feature, not a failure"
 msgstr "a pause is a feature, not a failure"
@@ -466,6 +474,14 @@ msgstr "Change"
 msgid "Chat"
 msgstr "Chat"
 
+#: src/pages/sessions/SwarmPanel.tsx
+msgid "Choose a session…"
+msgstr "Choose a session…"
+
+#: src/pages/sessions/SwarmPanel.tsx
+msgid "claims…"
+msgstr "claims…"
+
 #: src/pages/SessionDetail.tsx
 msgid "click to rename"
 msgstr "click to rename"
@@ -515,6 +531,10 @@ msgstr "confirm deny"
 #: src/pages/Overview.tsx
 msgid "confirm locally"
 msgstr "confirm locally"
+
+#: src/pages/sessions/SwarmPanel.tsx
+msgid "conflict"
+msgstr "conflict"
 
 #: src/pages/detail/ContextHogsCard.tsx
 msgid "context hogs"
@@ -576,6 +596,10 @@ msgstr "Crunching"
 #: src/pages/Projects.tsx
 msgid "daemon telemetry"
 msgstr "daemon telemetry"
+
+#: src/pages/sessions/SwarmPanel.tsx
+msgid "dashboard"
+msgstr "dashboard"
 
 #: src/pages/today/LoopMap.tsx
 msgid "data flows →"
@@ -689,6 +713,10 @@ msgstr "expand raw request JSON"
 msgid "expired"
 msgstr "expired"
 
+#: src/pages/sessions/SwarmPanel.tsx
+msgid "expired — the mod did not pick it up in time"
+msgstr "expired — the mod did not pick it up in time"
+
 #: src/pages/Approvals.tsx
 msgid "expires {expires}"
 msgstr "expires {expires}"
@@ -707,6 +735,7 @@ msgstr "extracting…"
 
 #: src/pages/detail/CallTree.tsx
 #: src/pages/detail/CallTree.tsx
+#: src/pages/sessions/SwarmPanel.tsx
 msgid "failed"
 msgstr "failed"
 
@@ -726,9 +755,18 @@ msgstr "failed to load error groups"
 msgid "failed to load handoff"
 msgstr "failed to load handoff"
 
+#: src/pages/sessions/SwarmPanel.tsx
+msgid "failed: {msg}"
+msgstr "failed: {msg}"
+
 #: src/pages/detail/Timeline.tsx
 msgid "File change"
 msgstr "File change"
+
+#: src/pages/sessions/SwarmPanel.tsx
+#: src/pages/sessions/SwarmPanel.tsx
+msgid "File claims"
+msgstr "File claims"
 
 #: src/pages/detail/DetailRail.tsx
 msgid "files changed"
@@ -746,6 +784,10 @@ msgstr "Focus the terminal of {sessionName}"
 msgid "generate insights"
 msgstr "generate insights"
 
+#: src/pages/sessions/SwarmPanel.tsx
+msgid "handed to the session's mod"
+msgstr "handed to the session's mod"
+
 #: src/pages/detail/HandoffCard.tsx
 msgid "handoff"
 msgstr "handoff"
@@ -762,6 +804,10 @@ msgstr "Health · last 7 days vs previous"
 #: src/pages/today/loopModel.ts
 msgid "Health →"
 msgstr "Health →"
+
+#: src/pages/sessions/SwarmPanel.tsx
+msgid "held by"
+msgstr "held by"
 
 #: src/pages/detail/ContextHogsCard.tsx
 #: src/pages/detail/HandoffCard.tsx
@@ -895,9 +941,21 @@ msgstr "marketplace: {marketplace}"
 msgid "Measure"
 msgstr "Measure"
 
+#: src/pages/sessions/SwarmPanel.tsx
+msgid "Message"
+msgstr "Message"
+
 #: src/pages/detail/CommandInput.tsx
 msgid "Message this session"
 msgstr "Message this session"
+
+#: src/pages/sessions/SwarmPanel.tsx
+msgid "Messages"
+msgstr "Messages"
+
+#: src/pages/sessions/SwarmPanel.tsx
+msgid "messages…"
+msgstr "messages…"
 
 #: src/pages/SessionDetail.tsx
 msgid "model"
@@ -967,6 +1025,10 @@ msgstr "no events in this session yet"
 msgid "no file changes in this session"
 msgstr "no file changes in this session"
 
+#: src/pages/sessions/SwarmPanel.tsx
+msgid "No files are claimed right now."
+msgstr "No files are claimed right now."
+
 #: src/pages/detail/Chat.tsx
 msgid "no final message (stop_reason={noFinalMessage})"
 msgstr "no final message (stop_reason={noFinalMessage})"
@@ -975,9 +1037,17 @@ msgstr "no final message (stop_reason={noFinalMessage})"
 msgid "no health data yet"
 msgstr "no health data yet"
 
+#: src/pages/sessions/SwarmPanel.tsx
+msgid "No messages between this project's sessions yet."
+msgstr "No messages between this project's sessions yet."
+
 #: src/pages/SessionDetail.tsx
 msgid "No new tasks — this session had nothing left to suggest."
 msgstr "No new tasks — this session had nothing left to suggest."
+
+#: src/pages/sessions/SwarmPanel.tsx
+msgid "No other session of this project has a link mod to message."
+msgstr "No other session of this project has a link mod to message."
 
 #: src/pages/detail/LiveActivity.tsx
 msgid "no output for {quietFor}"
@@ -1035,6 +1105,10 @@ msgstr "no sessions yet"
 msgid "no sessions yet — run <0>swarmery ingest <file.jsonl></0>"
 msgstr "no sessions yet — run <0>swarmery ingest <file.jsonl></0>"
 
+#: src/pages/sessions/SwarmPanel.tsx
+msgid "No swarmery link mod reports on this session, so it cannot be steered from the dashboard."
+msgstr "No swarmery link mod reports on this session, so it cannot be steered from the dashboard."
+
 #: src/pages/Overview.tsx
 msgid "no tool activity recorded"
 msgstr "no tool activity recorded"
@@ -1063,6 +1137,18 @@ msgstr "none checked by you yet."
 #: src/pages/detail/LiveActivity.tsx
 msgid "Noodling"
 msgstr "Noodling"
+
+#: src/pages/sessions/SwarmPanel.tsx
+msgid "not delivered"
+msgstr "not delivered"
+
+#: src/pages/sessions/SwarmPanel.tsx
+msgid "not delivered: {reason}"
+msgstr "not delivered: {reason}"
+
+#: src/pages/sessions/SwarmPanel.tsx
+msgid "not sent: {msg}"
+msgstr "not sent: {msg}"
 
 #: src/pages/Approvals.tsx
 msgid "note (optional)"
@@ -1157,6 +1243,7 @@ msgid "out of scope"
 msgstr "out of scope"
 
 #: src/pages/Approvals.tsx
+#: src/pages/sessions/SwarmPanel.tsx
 msgid "pending"
 msgstr "pending"
 
@@ -1249,6 +1336,10 @@ msgstr "projects…"
 msgid "Proof →"
 msgstr "Proof →"
 
+#: src/pages/sessions/SwarmPanel.tsx
+msgid "queued, waiting for the mod to pick it up"
+msgstr "queued, waiting for the mod to pick it up"
+
 #: src/pages/SessionDetail.tsx
 msgid "quiet · {quietFor}"
 msgstr "quiet · {quietFor}"
@@ -1273,9 +1364,17 @@ msgstr "reason: “{reason}”"
 msgid "Reasoning"
 msgstr "Reasoning"
 
+#: src/pages/sessions/SwarmPanel.tsx
+msgid "received"
+msgstr "received"
+
 #: src/pages/ProjectDetail.tsx
 msgid "recent sessions"
 msgstr "recent sessions"
+
+#: src/pages/sessions/SwarmPanel.tsx
+msgid "Recipient"
+msgstr "Recipient"
 
 #: src/pages/SessionDetail.tsx
 msgid "recovered"
@@ -1363,16 +1462,27 @@ msgid "select {0} for continue phase"
 msgstr "select {0} for continue phase"
 
 #: src/pages/detail/CommandInput.tsx
+#: src/pages/sessions/SwarmPanel.tsx
 msgid "Send"
 msgstr "Send"
 
+#: src/pages/sessions/SwarmPanel.tsx
+msgid "Send a message from this session"
+msgstr "Send a message from this session"
+
 #: src/pages/detail/Chat.tsx
+#: src/pages/sessions/SwarmPanel.tsx
 msgid "sending…"
 msgstr "sending…"
 
 #: src/pages/detail/CommandInput.tsx
 msgid "Sending…"
 msgstr "Sending…"
+
+#: src/pages/sessions/SwarmPanel.tsx
+#: src/pages/sessions/SwarmPanel.tsx
+msgid "sent"
+msgstr "sent"
 
 #: src/pages/Overview.tsx
 msgid "session #{sessionId}"
@@ -1554,6 +1664,16 @@ msgstr "submit answers"
 msgid "suggested replies"
 msgstr "suggested replies"
 
+#: src/pages/ProjectOverview.tsx
+#: src/pages/SessionDetail.tsx
+#: src/pages/sessions/SwarmPanel.tsx
+msgid "Swarm"
+msgstr "Swarm"
+
+#: src/pages/sessions/SwarmPanel.tsx
+msgid "Swarm messages"
+msgstr "Swarm messages"
+
 #: src/pages/detail/LiveActivity.tsx
 msgid "Synthesizing"
 msgstr "Synthesizing"
@@ -1604,6 +1724,10 @@ msgstr "the OS process is alive (procwatch, 30s resolution); nothing written to 
 msgid "the session ended its turn and waits for your typed reply"
 msgstr "the session ended its turn and waits for your typed reply"
 
+#: src/pages/sessions/SwarmPanel.tsx
+msgid "The session's link mod is not polling for commands. Enable the swarmery-link \"control\" option and keep the session open."
+msgstr "The session's link mod is not polling for commands. Enable the swarmery-link \"control\" option and keep the session open."
+
 #: src/pages/Overview.tsx
 msgid "The spine · today"
 msgstr "The spine · today"
@@ -1629,6 +1753,10 @@ msgstr "timeline"
 #: src/pages/SessionDetail.tsx
 msgid "Timeline"
 msgstr "Timeline"
+
+#: src/pages/sessions/SwarmPanel.tsx
+msgid "to"
+msgstr "to"
 
 #: src/pages/ProjectOverview.tsx
 msgid "to do"
@@ -1700,6 +1828,10 @@ msgstr "unassigned events"
 msgid "unknown project"
 msgstr "unknown project"
 
+#: src/pages/sessions/SwarmPanel.tsx
+msgid "unknown sender"
+msgstr "unknown sender"
+
 #: src/pages/Projects.tsx
 msgid "unpin"
 msgstr "unpin"
@@ -1749,6 +1881,10 @@ msgstr "waiting on you"
 #: src/pages/today/WaitingOnYou.tsx
 msgid "Waiting on you"
 msgstr "Waiting on you"
+
+#: src/pages/sessions/SwarmPanel.tsx
+msgid "What should the other session know?"
+msgstr "What should the other session know?"
 
 #: src/pages/ProjectOverview.tsx
 msgid "Where work sits"

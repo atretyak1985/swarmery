@@ -53,6 +53,7 @@ import { ScopeChip } from '../components/ScopeChip';
 import { Empty, ErrorBox, Loading } from '../components/ui';
 import { ProjectName } from '../components/ProjectName';
 import { ApprovalContext } from '../components/ApprovalContext';
+import { ChannelBadge } from '../components/ChannelBadge';
 import { QuestionBlock } from '../components/QuestionForm';
 
 const HISTORY_LIMIT = 50;
@@ -319,6 +320,7 @@ export function PendingCard({
           aria-hidden="true"
         />
         <span className="font-mono text-[13px] font-bold text-ink">{request.toolName}</span>
+        <ChannelBadge channel={request.channel} />
         <span className="ml-auto font-mono text-[10.5px] whitespace-nowrap text-ink-dim">
           <Trans>hangs {hangs}</Trans> · {expireSec > 0 ? t`expires ${expires}` : t`expiring…`}
         </span>

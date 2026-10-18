@@ -15,7 +15,9 @@ Implementation: `internal/api/link.go` (routes), `internal/link` (token, auth,
 ingest), `internal/ingest/status.go` (status override), `internal/prune` (retention),
 migration `0107_link_sessions.sql`. The control channel (phase 4, [Commands](#commands))
 adds `internal/api/link_commands.go`, `internal/link/commands.go` and migration
-`0108_link_commands.sql`.
+`0108_link_commands.sql`. The approvals channel (phase 5, [Permission](#permission))
+adds `internal/api/link_permission.go`, `internal/approvals/mod.go` and migration
+`0115_permission_channel.sql`.
 
 ## Transport
 
@@ -232,6 +234,7 @@ acks it. Two kinds exist:
 |---|---|---|
 | `stop` | `{}` | `$.turn.abort()` |
 | `prompt` | `{"text": string, "asUser": bool}` | `$.prompt.submit({ text, asUser })` |
+| `message` | `{"to": string, "text": string}` | `$.session.send({ to, text })` — a dashboard message relayed through this (the sending) session; see [Swarm](#swarm) |
 
 The mod runs commands only when its `userConfig.control` is `true`. With `control`
 off it never polls, so its sessions are never controllable and the dashboard's
@@ -354,6 +357,169 @@ Table `link_commands` (migration `0108`): `id, session_id, kind, payload, state,
 attempts, created_at, delivered_at, acked_at, result, message, wait_turn`, indexed on
 `(session_id, state, created_at)`. There is no foreign key, for the reason `0107`
 gives.
+
+## Permission
+
+**Status:** phase 5 contract (approvals channel). The mod asks the daemon about a
+tool call from inside its `tool.check` hook and polls for the operator's decision
+(design A of [`mods-format.md`](mods-format.md) "Design consequences (a)", verified by
+M3). All three routes sit behind the bearer token like the rest of `/api/link/*`: no origin
+fence, the Host fence applies, `401 {"error":"link token required"}` without a valid
+token, `503 {"error":"link disabled"}` with the link off and
+`503 {"error":"approvals unavailable"}` with the approvals service off.
+
+**Layered on the shim, not beside it.** The shim protocol
+([`hooks-protocol.md`](hooks-protocol.md), frozen) is **unchanged**:
+`POST /api/hooks/permission-request` keeps its body, statuses and behaviour byte for
+byte. This channel writes the **same** `permission_requests` rows through the same
+approvals service: the same D6 dedup hash (`session + tool + canonical tool_input`,
+no agent id, so a shim request for the same call hashes equal), the same
+production-deploy guard, the same auto-approve rules, the same per-session cap, the
+same dashboard actions (`POST /api/approvals/{id}`), WS frames and needs-you items.
+Only the delivery differs: the shim holds one long-poll for the whole window, the mod
+asks once and then polls in short GETs. The shim stays the fallback whenever the mod
+hands a call back.
+
+| Column | Meaning |
+|---|---|
+| `channel` | `shim` or `mod`: which hook channel delivered the row (migration `0115`). The `PermissionRequest` DTO and the needs-you item carry it as `channel` |
+| `tool_use_id` | the engine's `toolu_…` id of the call (`e.tool_use_id`). NULL on shim rows |
+| `resolved_via` | **who decided**, as before: `dashboard`, `rule`, `terminal`, `local-only`, `restart`, or NULL on an expiry. Never `mod` |
+
+### POST /api/link/permission
+
+Body (≤ 4 MiB):
+
+```json
+{"sessionId":"<uuid>","cwd":"/abs/path","toolName":"Bash","toolInput":{"command":"make test"},
+ "toolUseId":"toolu_…","agentId":"…","permissionMode":"default"}
+```
+
+`sessionId` and `toolName` are required. `agentId` and `permissionMode` are optional.
+The row's `request_json` is synthesized in the hook-stdin shape the shim stores —
+`{"session_id","cwd","tool_name","tool_input","tool_use_id","agent_id"?,"permission_mode"?,"hook_event_name":"tool.check"}`
+— so the dashboard, the needs-you preview and the AskUserQuestion answer path read a
+mod row exactly like a shim row.
+
+| Code | Body | When |
+|---|---|---|
+| `202` | `{"id":N,"status":"pending","expiresAt":"2026-10-14T12:10:00.000Z","pollMs":25000}` | the row is waiting for a decision. `expiresAt` is the end of the approval window (RFC 3339, ms, UTC): stop polling there and return `next(e)` |
+| `200` | `{"id":N,"decision":"local"}` | production deploy: the row is handed to the session's own terminal at once (`resolved_elsewhere`, via `local-only`). Return `next(e)` so the engine's own dialog asks. The dashboard can never approve it (`403 prod_deploy_local_only`) |
+| `200` | `{"id":N,"decision":"allow","via":"rule"}` | an enabled auto-approve rule matched |
+| `200` | `{"id":N, …}` + the GET body below | a re-POST of a call (same `sessionId` + `toolUseId`) that is already decided |
+| `204` | none | the cwd is excluded and the session has no row: nothing is stored. Return `next(e)` |
+| `400` | `{"error":…}` | body not JSON, `sessionId` or `toolName` missing |
+| `413` | `{"error":…}` | body over 4 MiB |
+| `429` | `{"error":…}` | 20 requests of this session already pending (the shim's cap) |
+
+**Idempotent.** A re-POST with the same `toolUseId` (a retry after a lost reply) finds
+the row the first POST created (`(session, tool_use_id)`): `202` with the same id while
+it is pending, its decision once it is not. A POST whose call matches a **pending** row
+by dedup hash (any channel) attaches to that row instead of opening another one. A
+shim-created row it attaches to takes the mod's `tool_use_id`.
+
+### GET /api/link/permission/{id}
+
+```
+GET /api/link/permission/{id}?session=<uuid>&wait=<seconds>
+```
+
+| Parameter | Rule |
+|---|---|
+| `session` | required, the `sessionId` of the POST. A row of another session is `404` |
+| `wait` | integer seconds. Missing means `25`, above `25` is clamped to `25`, negative is `0`, not an integer is `400` |
+
+| Code | Body | When |
+|---|---|---|
+| `204` | none | still pending after `wait` (or the request ended). Poll again at once |
+| `200` | `{"decision":"allow"}` | approved |
+| `200` | `{"decision":"allow","answer":{"questions":[…],"answers":{…}}}` | an `AskUserQuestion` answered from the dashboard. `answer` is the `{questions, answers}` object verbatim; return it as `tool.call`'s `{ result }` (M4). This is the form **whatever** `serve --answer-delivery` says: that flag only switches the shim's wire form |
+| `200` | `{"decision":"deny","message":"<reason>"}` | denied. `message` is the operator's reason, possibly `""` |
+| `200` | `{"decision":"pass","status":"expired"\|"resolved_elsewhere"}` | no decision: the window closed, the operator chose "answer in terminal", the call is a production deploy, or the lease lapsed. Return `next(e)`: the engine's own verdict (and the shim, see below) takes over |
+| `400` | `{"error":…}` | `id` not an integer, `session` missing, bad `wait` |
+| `404` | `{"error":…}` | no such row, or a row of another session |
+
+### DELETE /api/link/permission/{id}
+
+```
+DELETE /api/link/permission/{id}?session=<uuid>
+```
+
+The mod gives up on a request: its hook's dispatch was abandoned mid-wait
+(`next.signal` aborted — the person interrupted, or a hook above settled first).
+Without it the row would stay pending under a live lease for up to 40 s, and a
+dashboard decision in that gap would answer `200` while reaching no hook.
+
+| Code | Body | When |
+|---|---|---|
+| `204` | none | given up. A **pending** row with no shim long-poll on it resolves `resolved_elsewhere` via `terminal` at once (the record a lapsed lease leaves); with a shim attached, only the mod's lease and its own in-flight polls are dropped, and the shim's decision or hang-up settles the row. A row already terminal is left as is (idempotent) |
+| `400` | `{"error":…}` | `id` not an integer, `session` missing |
+| `404` | `{"error":…}` | no such row, or a row of another session |
+
+The mod sends it fire-and-forget, raced against a 2 s `$.clock` timer, and never
+holds the hook's return on it: a lost `DELETE` only falls back to the lease lapsing.
+
+### Lease
+
+The shim's single long-poll is how the daemon knows someone can still receive a
+decision. The mod polls in GETs with gaps between them, so it claims its row with a
+**lease** instead: every POST and GET (pending or timed-out alike) renews it to
+**40 s** from now (`approvals.ModLeaseTTL`: one 25 s poll plus slack).
+
+- While the lease is live the row counts as listened to: a dashboard approve, deny,
+  answer or terminal hand-off made **between two polls** succeeds (`200`, not the
+  `410` of a row with no waiter), and the decision is kept for the mod's next GET.
+- When the lease lapses with nobody attached, the asking hook is gone: the sweeper
+  (every 5 s) resolves the row `resolved_elsewhere` via `terminal`, the same record the
+  shim's client-disconnect leaves. A dashboard decision on such a row is `410`. A mod
+  that gives up says so at once with `DELETE` (above) instead of letting the lease run
+  out.
+- A kept decision is held for 80 s (2 × the lease); after that, or after a daemon
+  restart, a GET rebuilds it from the row. An `AskUserQuestion` answer is not stored
+  in the row, so a GET that comes that late sees a plain `allow`. A healthy mod polls
+  again within milliseconds.
+- A daemon restart expires every pending row (`resolved_via = restart`), mod rows
+  included; the mod's next GET reads `pass`/`expired`.
+
+The mod should race each GET against a 28 s timer (`$.http.fetch` has no timeout),
+check `next.signal.aborted` after every fetch (and `DELETE` the request when it is),
+stop at `expiresAt`, and fall through to
+`next(e)` on any network error or `5xx` (fail open to the shim, never to `deny`).
+
+### Shim after mod
+
+When the mod returns `next(e)` without a decision of its own, the engine may show its
+permission dialog and fire the shim's `PermissionRequest` hook for the **same** call:
+after a `pass` from `tool.check`, and on the `AskUserQuestion` path after an `allow`
+that carries no answer (`tool.call` wraps the permission stage, `mods-format.md` M4).
+The shim's stdin has no `tool_use_id`, so the daemon matches it by dedup hash:
+
+- a **pending** row with that hash (the mod is still asking): the shim attaches to it
+  and waits on the same row. One row, and one dashboard decision reaches both;
+- a `channel = 'mod'` row with that hash that reached **any** terminal status in the
+  **last 5 s** (`approvals.ShimAfterModWindow`): the shim's long-poll is answered at
+  once **from that row** — no row and no event are written:
+
+  | Mod row | Shim answer |
+  |---|---|
+  | `denied` | `200 {"decision":"deny","message":<the row's reason>}` |
+  | `approved` with an answer's `updatedInput` (kept for the mod's next poll) | the allow + `updatedInput`, delivered per `serve --answer-delivery` exactly like a dashboard answer on a shim row |
+  | `approved` without one, on an `AskUserQuestion` row | `204`: a plain allow would resolve the question with empty answers (`hooks-format.md` E12d), so the native dialog asks |
+  | `approved` on any other tool | `204`: the mod already returned that allow itself, so a shim request with the same hash is a **fresh** identical call; replaying the allow would approve a call no person saw, so the native dialog asks |
+  | `expired`, `resolved_elsewhere` | `204`: Claude Code shows its native dialog |
+
+  Every one of these is a response the frozen shim protocol already allows;
+- otherwise (no match, or the decision is older than 5 s): the shim opens its own row
+  as always.
+
+A dashboard deny of a question is not answered by the mod: a question has nothing to
+refuse, so the mod hands the call on (`next(e)`). Where the shim is installed, the
+engine's permission stage then fires it for the same call, and this window delivers
+the operator's deny to it; without the shim, the question's native dialog opens.
+
+**Parallel subagents.** The dedup hash carries no `agentId` (the shim cannot see one,
+E11), so two subagents asking the identical call at the same moment share one row and
+one decision, exactly as two shim requests do.
 
 ## Dedup
 
@@ -575,3 +741,154 @@ The output is advisory. There are no thresholds and no alerts.
 TODO: `internal/lessons` could take `turn_surprise` as a future lesson source, beside
 `phase_surprise`. That has not been built. It needs calibrated data first, which means
 real turns, not a threshold picked in advance.
+
+## Swarm
+
+**Status:** phase 6 contract (mods-swarmery-link, swarm messaging and the file-claims
+registry). Additive: five event kinds on the same `POST /api/link/events` envelope,
+with the same auth, the same dedup and the same per-event reject path; one command
+kind; three routes. None of it touches `link_status`. Implementation:
+`internal/link/swarm.go` (ingest, correlation, claims), `internal/link/commands.go`
+(the `message` command), `internal/api/link_swarm.go` (routes), migration
+`0116_link_swarm.sql`.
+
+### Event kinds
+
+Every one is also stored in `link_events`, like every other kind (that table is the
+dedup ledger), so a resent event is a `duplicate` and is applied once. Only a newly
+stored event writes the side tables below.
+
+| `kind` | The event's `sessionId` is | `payload` |
+|---|---|---|
+| `session.send` | the **sender** | `{ "to": string, "text": string, "truncated"?: bool, "isDelivered"?: bool, "reason"?: string, "origin"?: "model" \| "plugin", "commandId"?: int }` |
+| `session.receive` | the **receiver** | `{ "text": string, "truncated"?: bool, "originKind"?: string, "fromPlugin"?: string }` |
+| `claim` | the session that started editing | `{ "path": string }` |
+| `release` | the session whose turn (or session) ended | `{ "paths": [string] }` or `{ "all": true }` |
+| `conflict` | the session that saw the clash | `{ "path": string, "otherSession": string }` |
+
+| Field | Rule |
+|---|---|
+| `to` | required, 1 to 512 characters: the recipient as the engine spells it (a session uuid, an agent id or a name) |
+| `text` | required on both message kinds (may be empty). At most 4096 characters are stored; a longer text is cut and stored with `truncated = 1`. `truncated: true` from the mod is kept |
+| `isDelivered` | the engine's `SessionSendResult.isDelivered`. Absent means "unknown" (`delivered` NULL) |
+| `reason` | stored only when `isDelivered` is `false` |
+| `origin` | `model` (the model called the tool) or `plugin` (a mod called `$.session.send`). Anything else rejects the event |
+| `commandId` | a positive integer, set when the send ran a dashboard `message` command (below). Send it as a JSON number (the swarmery-link mod does). A string of decimal digits (`"30"`, what mods before the phase-6 fix sent) is accepted as the same id; zero, a negative, a fraction, an exponent or any other text rejects the event |
+| `originKind` | the receive's `e.origin.kind` (`peer`, `coordinator`, `bridge`, …), at most 64 characters. Stored as the row's `origin` |
+| `fromPlugin` | accepted and kept in `link_events` only; there is no column for it |
+| `path`, `paths[]` | absolute (else the event is rejected), cleaned (`/repo/./a.go` → `/repo/a.go`). At most 500 paths per release: a turn that claimed more ends in `{ "all": true }` instead (the swarmery-link mod does) |
+| `otherSession` | required. A `conflict` is an advisory record kept in `link_events` only; the daemon's own conflict detection (below) is what the dashboard shows |
+
+Unknown fields are ignored. A violation (wrong type, missing required field, relative
+path, a payload that is absent or not an object) rejects **that one event** with
+reason `<kind> payload: <why>`, inside the usual `202`.
+
+**Privacy.** `text` is message text the user's sessions exchanged, which the
+transcripts hold anyway. The mod cuts it at 4096 characters; the daemon cuts again.
+
+### Correlation
+
+The engine does not tell the receiver who sent a message, so the daemon pairs the two
+sides. On a stored `session.receive` it looks for the most recent unpaired `send` (or
+dashboard) row:
+
+1. addressed to the receiver: `to` equals the receiver's session uuid;
+2. with the same text (sha-256 of the stored body);
+3. whose `at` is within **120 s** of the receive's `at`, either side;
+4. not sent by the receiver itself.
+
+The match sets the send's `delivered = 1` and the receive's `from_session` to the
+sender. No match leaves `from_session` NULL. When no uuid-addressed send matches, a
+send whose address resolved to no session (a name or an agent id) with the same text
+in the window is taken instead — only one sent from a session in the **receiver's
+project**: a name never pairs across projects. Batches from different sessions arrive
+in any order, so a `send` stored after its `receive` pairs the same way (a
+name-addressed send then pairs only with a receive in the sender's project, or one
+whose session uuid is the address itself). Each row pairs at most once (`matched_id`
+names the other side).
+
+### Claims
+
+`claim` upserts `link_claims(session, path)`: a new row, or a re-claim that clears
+`released_at` and refreshes `claimed_at`. A `release` stamps `released_at` on the
+session's live claims (the listed paths, or all of them) that were claimed at or before
+the release's `at`. A claim whose `at` is older than the row's release (a late or
+reordered event) changes nothing, so the mod does not need to sort.
+
+A claim is **live** while `released_at` is NULL and `claimed_at` is younger than
+**30 min**; an older unreleased claim is treated as left behind by a crashed session.
+A **conflict** is a path two or more sessions hold a live claim on. Conflicts are
+**advisory**: nothing is blocked, and the mod's own `conflict` events are only a
+record.
+
+### The `message` command
+
+The dashboard relays a message by queueing a `message` command for the **sending**
+session, because `$.session.send` always sends from the session that calls it.
+
+```json
+{"id": 9, "kind": "message", "payload": {"to": "<recipient session uuid>", "text": "rebase on main"}}
+```
+
+It follows the prompt lifecycle (queued, delivered, re-delivery after 30 s, expiry
+after 10 min) without the `turn in progress` bounce: a send needs no idle session, so
+every `failed` ack is final. The mod acks with the usual body:
+
+| Outcome | Ack |
+|---|---|
+| `isDelivered` is `true` | `{"result":"done"}` |
+| otherwise | `{"result":"failed","message":"undeliverable: <engine reason>"}` |
+
+The mod also reports the send as a `session.send` event with `commandId`; it folds into
+the command's dashboard row (address, truncation, origin) instead of adding a second
+row. The row's `delivered` is the ack's to set: `done` → `1`, `failed` → `0` with the
+ack message as `reason`, expired → `0` with reason `expired`. The command's final
+state and its row's `delivered` are written in one transaction: an ack (or expiry)
+that fails leaves both as they were, and the mod's re-delivered ack settles both.
+
+One exception: a send that settles **after** the ack. The mod gives a send 10 s; past
+that it acks `failed` with `undeliverable: no answer in 10s`, but keeps the send's
+command id and reports the send, with that `commandId`, once it settles. A
+`session.send` folding into a row the ack already settled overrides it with the
+engine's verdict: `isDelivered: true` → `delivered = 1`, reason cleared;
+`isDelivered: false` → `delivered = 0`, reason `undeliverable: <engine reason>`. The
+command itself stays `failed`.
+
+### Routes
+
+| Route | Fence | Answers |
+|---|---|---|
+| `POST /api/sessions/{id}/link/message` | `requireLocalOrigin`. `{id}` is the **sender's** `sessions.id` | body `{"to": <recipient sessions.id \| session uuid>, "text": string}`. `202 {"commandId": n, "messageId": m}`. `400` bad id or body, empty text, text over 4096 characters, unknown recipient, recipient = sender. `404` unknown sender. `409 {"error":"session has no link"}` sender not controllable. `503` control channel detached |
+| `GET /api/swarm/messages?projectId=&since=&limit=` | read-only, no origin fence | `200 [Message]`, newest first. `projectId` absent = every project, else a message is listed when either side's session is in it. `since` is RFC 3339 (lower bound on `at`). `limit` 1–500, default 100, above 500 clamped. `400` for a bad `projectId`, `since` or `limit` |
+| `GET /api/swarm/claims?projectId=` | read-only, no origin fence | `200 {"claims": [Claim], "conflicts": [Conflict]}`. With `projectId`, claims of that project's sessions, and conflicts any of whose holders is in it (every holder listed) |
+
+```ts
+type SessionRef = { id: number; uuid: string; title: string | null }; // title as the sessions list shows it
+type Message = {
+  id: number; kind: 'send' | 'receive' | 'dashboard';
+  fromSession: SessionRef | null;   // null: receive not correlated, or the session row is gone
+  toSession: SessionRef | null;     // null: the address is no session of ours
+  toAddress: string | null;         // as the engine spelled it; null on a receive
+  body: string; truncated: boolean; origin: string | null;
+  at: string;                       // fixed-width ms UTC
+  delivered: boolean | null;        // null = unknown
+  reason: string | null;
+};
+type Claim = { sessionId: number; sessionUuid: string; path: string; claimedAt: string };
+type Conflict = { path: string; sessions: { sessionId: number; sessionUuid: string }[] };
+```
+
+### Live updates
+
+`swarm_message` and `swarm_claim` WS frames ([`ws-protocol.md`](ws-protocol.md)) are
+thin hints, published after the batch commits; the client refetches the reads above.
+
+### Storage and retention
+
+`link_messages(id, kind, from_session, to_session, to_address, body, truncated, origin,
+at, delivered, reason, command_id, matched_id)` and `link_claims(session_id, path,
+claimed_at, released_at)`, primary key `(session_id, path)`. Session columns hold
+Claude session ids (`sessions.session_uuid`). There are no foreign keys, for the reason
+`0107` gives. `link_messages` ages on the `link_events` cutoff by its own `at`
+(`Stats.LinkMessages`); `link_claims` rows go 24 h after their release, and an
+unreleased claim 24 h after it was claimed (`Stats.LinkClaims`).

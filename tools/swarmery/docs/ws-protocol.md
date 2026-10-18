@@ -49,7 +49,10 @@ type WSMessage =
   // learning loop phase 13 — attention:
   | { type: 'phase_surprise'; payload: PhaseSurpriseAttention }
   // mods-swarmery-link phase 4 — control channel:
-  | { type: 'link_command'; payload: LinkCommandUpdate };
+  | { type: 'link_command'; payload: LinkCommandUpdate }
+  // mods-swarmery-link phase 6 — swarm (see the section at the end):
+  | { type: 'swarm_message'; payload: { sessionId: number; projectId: number } }
+  | { type: 'swarm_claim'; payload: { projectId: number } };
 ```
 
 ### `link_command` (mods-swarmery-link phase 4)
@@ -149,8 +152,16 @@ attach to the existing pending row and do **not** re-emit. The payload is the fu
   "status":"pending",
   "requestedAt":"2026-07-13T10:15:04.000Z",
   "resolvedAt":null,"resolvedVia":null,"reason":null,
-  "expiresAt":"2026-07-13T10:17:04.000Z"}}
+  "expiresAt":"2026-07-13T10:17:04.000Z","riskClass":"","channel":"shim"}}
 ```
+
+Two fields were added later, both additive: `riskClass` (`""` or `"prod-deploy"`,
+needs-you-queue phase 2) and `channel` (`"shim"` or `"mod"`, mods-swarmery-link
+phase 5): the hook channel that delivered the request — the shim's
+`POST /api/hooks/permission-request` or the link mod's `POST /api/link/permission`
+([`mods-link-protocol.md`](mods-link-protocol.md#permission)). A mod row's
+`requestJson` has the same hook-stdin shape, with `"hook_event_name":"tool.check"`.
+`resolvedVia` still says who decided and is never `"mod"`.
 
 ### `permission_resolved` (phase 2)
 
@@ -269,6 +280,8 @@ for it.
 | Board create / patch (column move, field edit, pause) | `task_updated` |
 | `DELETE /api/board/tasks/{id}`: a queue row permanently removed | `task_deleted` |
 | Link control channel: a command queued / delivered / acked / expired | `link_command` |
+| Link swarm: a `session.send` / `session.receive` stored, a dashboard message queued, acked or expired | `swarm_message` |
+| Link swarm: a `claim` / `release` changed a project's live file claims | `swarm_claim` |
 
 ## BoardTask provenance fields
 
@@ -306,3 +319,35 @@ type ignore it.
 | Trigger | Message |
 |---|---|
 | Link: a turn's forecast and actual are both stored and something was measurable | `turn_surprise` |
+
+## `swarm_message` and `swarm_claim` (mods-swarmery-link phase 6)
+
+Thin hints for the swarm views ([`mods-link-protocol.md`](mods-link-protocol.md),
+Swarm). Both carry ids only, set on the notification itself (no row is re-read), and
+the client refetches the matching REST read. Clients that do not know the types
+ignore them.
+
+`swarm_message` is published by `internal/link` after a `link_messages` row is
+stored by a `POST /api/link/events` batch (`session.send`, `session.receive`; one
+frame per stored event, after the batch commits and after its `session_*` frames),
+and by the command queue when a dashboard message is queued, acked or expires.
+`sessionId` is the session the change belongs to (the sender of a send or a
+dashboard message, the receiver of a receive) and `projectId` its project. Refetch
+`GET /api/swarm/messages`.
+
+```json
+{"type":"swarm_message","payload":{"sessionId":12,"projectId":3}}
+```
+
+`swarm_claim` is published once per project per batch whose `claim` / `release`
+events changed the live claims set (a resent or out-of-date claim that changes no
+row publishes nothing). Refetch `GET /api/swarm/claims`.
+
+```json
+{"type":"swarm_claim","payload":{"projectId":3}}
+```
+
+| Trigger | Message |
+|---|---|
+| Link: a send / receive stored; a dashboard message queued, acked or expired | `swarm_message` |
+| Link: a claim / release changed a project's live claims | `swarm_claim` |

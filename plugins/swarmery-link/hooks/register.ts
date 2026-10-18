@@ -16,11 +16,27 @@
 // `turn.forecast` and `turn.actual` (paths and numbers only). With `forecast`
 // off no model call is made and neither event is sent.
 //
-// Every `$` call is spelled in this module, as the engine requires: `$` is
-// handed only to the functions declared at the top of this file, and ./lib/*
-// is pure (data in, data out).
+// With `approvals` on, a permission `ask` the engine reached for a real call
+// goes to the daemon's approvals queue first (tool.check), and an
+// AskUserQuestion is put to the dashboard (tool.call); every failure leaves
+// the engine's verdict or the question's dialog (./approvals.ts). With
+// `approvals` off neither hook is registered and no request goes to the
+// permission endpoint.
+//
+// With `swarm` on, messages this conversation sends to or receives from other
+// sessions go to the daemon as `session.send` / `session.receive`, each file
+// the session starts editing is claimed in a registry shared through
+// `$.store` (a `claim`, and a `conflict` when another live session holds the
+// same path, shown as a line beneath the answer), claims are released at each
+// turn's end, and with `control` on too the dashboard's `message` command is
+// sent through `$.session.send`. With `swarm` off none of it runs and the
+// send/receive hooks are not registered.
+//
+// `$` is handed only to top-level function declarations: this file's,
+// ./approvals.ts's and ./swarm.ts's. ./lib/* is pure (data in, data out).
 
-import type { EngineInterface, PromptSubmitArgs, Register, Timer } from 'claude-code'
+import type { EngineInterface, PromptSubmitArgs, Register, SessionSendInput, SessionSendResult, Timer } from 'claude-code'
+import { type Gate, answerFromSwarmery, checkWithSwarmery } from './approvals'
 import {
   AUTH_RETRY_MS,
   DEFAULT_DAEMON_URL,
@@ -50,9 +66,11 @@ import {
   parseCommand,
   pollOutcome,
   pollRequest,
+  SWARM_OFF,
   remember,
   shortError,
   submitFailure,
+  undeliverable,
 } from './lib/control'
 import {
   FORECAST_MAX_TOKENS,
@@ -76,12 +94,27 @@ import {
 } from './lib/forecast'
 import { inputHash, toolInput } from './lib/hash'
 import { type LinkEvent, type LinkKind, type Stamps, drop, enqueue, stamp, takeBatch } from './lib/queue'
+import {
+  EMPTY_TURN,
+  type SwarmTurn,
+  claimPath,
+  conflictLines,
+  receiveLine,
+  receivePayload,
+  releasePayload,
+  sendPayload,
+  withBeneath,
+} from './lib/swarm'
 import { measurePayload } from './lib/usage'
+import { claimFile, releaseClaims, sendToSession } from './swarm'
 
 const NAME = 'swarmery-link'
 
 /** Options reserved for later releases: each logs once when switched on, and hooks nothing else. */
-const RESERVED = ['planBand', 'swarm'] as const
+const RESERVED = ['planBand'] as const
+
+/** A dashboard message's `$.session.send` resolves once queued at the recipient; past this it is reported undeliverable. */
+const MESSAGE_TIMEOUT_MS = 10_000
 
 type Reply = { readonly status?: number; readonly error?: unknown }
 
@@ -287,6 +320,142 @@ async function resync($: EngineInterface, link: Link): Promise<void> {
   await push($, link, 'session.start', link.start)
 }
 
+/** A dashboard message whose `$.session.send` has not settled yet. */
+type PendingSend = { readonly commandId: string; readonly to: string; readonly text: string; isLogged: boolean }
+
+/** The swarm's state for one load of the module. Exists only with `swarm` on. */
+type Swarm = {
+  turn: SwarmTurn
+  /** Claims and releases run one at a time: parallel tool calls must not lose a claim. */
+  lock: Promise<void>
+  /**
+   * Dashboard messages being sent, by command id, until their send settles —
+   * past the 10 s ack timeout too: the `session.send` a late send raises still
+   * carries the command's id.
+   */
+  readonly pending: Map<string, PendingSend>
+}
+
+/**
+ * The pending dashboard message a plugin send of `to`/`text` is, if any: the
+ * oldest unreported one with that text, one addressed as the engine spelled
+ * `to` first.
+ */
+const pendingFor = (pending: ReadonlyMap<string, PendingSend>, to: string, text: string): PendingSend | undefined => {
+  const open = [...pending.values()].filter(p => !p.isLogged && p.text === text)
+  return open.find(p => p.to === to) ?? open[0]
+}
+
+/** Runs `work` after every claim or release queued before it. Rejects as `work` does. */
+function serialize<T>(swarm: Swarm, work: () => Promise<T>): Promise<T> {
+  const run = swarm.lock.then(work)
+  swarm.lock = run.then(
+    () => undefined,
+    () => undefined,
+  )
+  return run
+}
+
+/** A tool call that writes a file claims its absolute path: `claim`, plus a `conflict` per other live session holding it. */
+async function claimEdit($: EngineInterface, link: Link, swarm: Swarm, tool: string, fields: Readonly<Record<string, unknown>>): Promise<void> {
+  const path = claimPath(tool, fields, link.cwd)
+  if (path === undefined) return
+  await serialize(swarm, async () => {
+    const outcome = await claimFile($, swarm.turn, link.sessionId, link.cwd, path)
+    swarm.turn = outcome.turn
+    if (!outcome.isNew) return
+    if (outcome.storeError !== undefined) {
+      logOnce($, link, 'swarm-store', `swarm: the claims registry refused (${shortError(outcome.storeError)}); the claim is still reported`)
+    }
+    await push($, link, 'claim', { path })
+    for (const conflict of outcome.conflicts) await push($, link, 'conflict', { path: conflict.path, otherSession: conflict.otherSession })
+  })
+}
+
+/** The main loop's turn ended: its claims are released; returns the lines to show beneath the answer. */
+async function endSwarmTurn($: EngineInterface, link: Link, swarm: Swarm): Promise<readonly string[]> {
+  return serialize(swarm, async () => {
+    const { claimed, conflicts, entry } = swarm.turn
+    swarm.turn = EMPTY_TURN
+    if (entry !== undefined) {
+      try {
+        await releaseClaims($, link.sessionId)
+      } catch (error) {
+        logOnce($, link, 'swarm-store', `swarm: the claims registry refused (${shortError(error)}); the claim lapses in 30 min`)
+      }
+    }
+    if (claimed.length > 0) await push($, link, 'release', releasePayload(claimed))
+    return conflictLines(conflicts)
+  })
+}
+
+/** The session ends: every claim it holds is released. */
+async function endSwarmSession($: EngineInterface, link: Link, swarm: Swarm): Promise<void> {
+  await serialize(swarm, async () => {
+    swarm.turn = EMPTY_TURN
+    try {
+      await releaseClaims($, link.sessionId)
+    } catch {
+      // the entry lapses with its TTL
+    }
+    await push($, link, 'release', { all: true })
+  })
+}
+
+/** A message this conversation's main loop sent: `session.send`, with the command's id when the dashboard asked for it. */
+async function noteSend($: EngineInterface, link: Link, swarm: Swarm, e: SessionSendInput, result: SessionSendResult): Promise<void> {
+  const name = e.origin.kind === 'plugin' ? e.origin.name : undefined
+  const pending = name === NAME || name?.startsWith(`${NAME}@`) === true ? pendingFor(swarm.pending, e.to, e.text) : undefined
+  if (pending !== undefined) pending.isLogged = true
+  await push(
+    $,
+    link,
+    'session.send',
+    sendPayload({ to: e.to, text: e.text, origin: e.origin.kind, isDelivered: result.isDelivered, reason: result.reason, commandId: pending?.commandId }),
+  )
+  flushAtTurn($, link)
+}
+
+/** A delivery to the main conversation: `session.receive`, and one line naming where it came from. */
+async function noteReceive($: EngineInterface, link: Link, text: string, origin: unknown): Promise<void> {
+  if (!isActive(link) || link.isClearing) return
+  await push($, link, 'session.receive', receivePayload(text, origin))
+  log($, receiveLine(text, origin))
+  flushAtTurn($, link)
+}
+
+/**
+ * The dashboard's `message` command: `$.session.send` to the session it names.
+ * `done` once queued at the recipient, else `failed` + `undeliverable: <reason>`.
+ * The send's `session.send` event carries the command's id; when the send hook
+ * did not report it, it is reported here. Both happen once the send settles,
+ * also when that is after the 10 s timeout acked the command failed: the
+ * daemon then takes the send's verdict over the ack's.
+ */
+async function deliverMessage($: EngineInterface, link: Link, swarm: Swarm, commandId: string, to: string, text: string): Promise<Ack> {
+  const pending: PendingSend = { commandId, to, text, isLogged: false }
+  swarm.pending.set(commandId, pending)
+  const sending = sendToSession($, to, text).then(
+    (result): SessionSendResult => result,
+    (error: unknown): SessionSendResult => ({ isDelivered: false, reason: shortError(error) }),
+  )
+  const reported = sending
+    .then(async result => {
+      if (pending.isLogged) return
+      await push($, link, 'session.send', sendPayload({ to, text, origin: 'plugin', isDelivered: result.isDelivered, reason: result.reason, commandId }))
+      flushAtTurn($, link)
+    })
+    .catch(() => undefined) // unreported
+    .finally(() => {
+      if (swarm.pending.get(commandId) === pending) swarm.pending.delete(commandId)
+    })
+  const reply = await within($, sending, MESSAGE_TIMEOUT_MS)
+  if (reply === 'timeout') return undeliverable(`no answer in ${MESSAGE_TIMEOUT_MS / 1000}s`)
+  // on time: the report is queued before the ack goes out
+  await reported
+  return reply.isDelivered ? done() : undeliverable(reply.reason)
+}
+
 /** The command channel's state for one session's loop. Exists only with `control` on. */
 type Control = {
   readonly origin: string
@@ -302,11 +471,13 @@ type Control = {
   /** Settles every race of the loop the moment it stops. */
   readonly stopped: Promise<'stopped'>
   readonly settleStopped: () => void
+  /** The swarm's state, for the `message` command; undefined with `swarm` off. */
+  readonly swarm: Swarm | undefined
 }
 
 type PollReply = { readonly status?: number; readonly text?: string; readonly error?: unknown }
 
-const newControl = (origin: string, sessionId: string, previous: Control | undefined): Control => {
+const newControl = (origin: string, sessionId: string, previous: Control | undefined, swarm: Swarm | undefined): Control => {
   let settleStopped: () => void = () => undefined
   const stopped = new Promise<'stopped'>(resolve => {
     settleStopped = () => resolve('stopped')
@@ -322,6 +493,7 @@ const newControl = (origin: string, sessionId: string, previous: Control | undef
     pause: undefined,
     stopped,
     settleStopped,
+    swarm,
   }
 }
 
@@ -403,7 +575,7 @@ async function submitPrompt($: EngineInterface, text: string, asUser: boolean): 
 
 /** Runs one delivered command (or answers a re-delivered one from the executed set) and acks it. */
 async function execute($: EngineInterface, link: Link, control: Control, command: Command): Promise<void> {
-  const action = decide(command, control.executed, control.turnId)
+  const action = decide(command, control.executed, control.turnId, control.swarm !== undefined)
   let ack: Ack
   switch (action.do) {
     case 'ack':
@@ -414,6 +586,9 @@ async function execute($: EngineInterface, link: Link, control: Control, command
       break
     case 'submit':
       ack = await submitPrompt($, action.text, action.asUser)
+      break
+    case 'message':
+      ack = control.swarm === undefined ? failed(SWARM_OFF) : await deliverMessage($, link, control.swarm, command.id, action.to, action.text)
       break
   }
   // recorded before the ack goes out: a lost ack must not run it twice
@@ -482,9 +657,9 @@ function startControl($: EngineInterface, link: Link, control: Control): void {
 }
 
 /** Replaces `previous` (stopped first) with a loop for the link's current session id, and starts it. */
-function openControl($: EngineInterface, link: Link, origin: string, previous: Control | undefined): Control {
+function openControl($: EngineInterface, link: Link, origin: string, previous: Control | undefined, swarm: Swarm | undefined): Control {
   if (previous !== undefined) stopControl($, previous, undefined)
-  const control = newControl(origin, link.sessionId, previous)
+  const control = newControl(origin, link.sessionId, previous, swarm)
   startControl($, link, control)
   return control
 }
@@ -586,6 +761,20 @@ async function finishForecast($: EngineInterface, link: Link, forecaster: Foreca
   if (actual !== undefined) await push($, link, 'turn.actual', actual)
 }
 
+/** The approvals channel's view of the link for one call: its session as of now, its token, the token re-read. */
+function gateOf($: EngineInterface, link: Link, origin: string, waiting: { count: number }): Gate {
+  return {
+    origin,
+    sessionId: link.sessionId,
+    cwd: link.cwd,
+    token: () => link.token ?? '',
+    reread: async () => {
+      link.token = (await readToken($)) ?? link.token
+    },
+    waiting,
+  }
+}
+
 /** How a tool call ended, from what `next(e)` resolved to. */
 const toolOutcome = (result: unknown): ToolOutcome => {
   const r = result as { readonly deny?: unknown; readonly isError?: unknown } | undefined
@@ -596,11 +785,16 @@ const toolOutcome = (result: unknown): ToolOutcome => {
 export const register: Register = (on, options) => {
   const reserved = RESERVED.filter(feature => options[feature] === true)
   const isControlOn = options.control === true
+  const isApprovalsOn = options.approvals === true
   const endpoint = daemonEndpoint(options.daemonUrl)
+  /** Calls waiting on the dashboard right now; the status line shows while any does. */
+  const waiting = { count: 0 }
   /** The command loop; only ever set with `control` on. */
   let control: Control | undefined
   /** The forecast loop; undefined with `forecast` off, so none of it runs. */
   const forecaster: Forecaster | undefined = options.forecast === true ? { state: INITIAL_FORECAST, isResumed: false } : undefined
+  /** The swarm; undefined with `swarm` off, so no store access, no swarm event and no send/receive hook. */
+  const swarm: Swarm | undefined = options.swarm === true ? { turn: EMPTY_TURN, lock: Promise.resolve(), pending: new Map() } : undefined
   const noted = new Set<string>()
   const link: Link = {
     url: endpoint.url,
@@ -630,7 +824,7 @@ export const register: Register = (on, options) => {
     for (const feature of reserved) {
       if (noted.has(feature)) continue
       noted.add(feature)
-      log($, `${feature}: not implemented in 0.3`)
+      log($, `${feature}: not implemented yet`)
     }
     if (endpoint.isRefused && !noted.has('daemonUrl')) {
       // the configured value is not echoed: it may carry credentials
@@ -650,7 +844,7 @@ export const register: Register = (on, options) => {
       await push($, link, 'session.start', link.start)
       // one loop per session: a second session.start of the same session keeps it
       if (isControlOn && !link.isOff && (control === undefined || control.isStopped || control.sessionId !== link.sessionId)) {
-        control = openControl($, link, endpoint.origin, control)
+        control = openControl($, link, endpoint.origin, control, swarm)
       }
     } catch {
       // the sensor stays off; the session goes on
@@ -663,7 +857,7 @@ export const register: Register = (on, options) => {
     if (link.isClearing && isActive(link)) {
       try {
         await resync($, link)
-        if (isControlOn && !link.isOff) control = openControl($, link, endpoint.origin, control)
+        if (isControlOn && !link.isOff) control = openControl($, link, endpoint.origin, control, swarm)
       } catch {
         // the id is read again at the next turn.start
       }
@@ -698,6 +892,13 @@ export const register: Register = (on, options) => {
         // the call goes on unreported
       }
     }
+    if (swarm !== undefined && isActive(link) && !link.isClearing) {
+      try {
+        await claimEdit($, link, swarm, String(e.tool), e as unknown as Readonly<Record<string, unknown>>)
+      } catch {
+        // the edit goes on unclaimed
+      }
+    }
     if (forecaster === undefined || e.agentId !== undefined || forecaster.state.turnId === undefined) return next(e)
     const result = await next(e)
     try {
@@ -708,6 +909,23 @@ export const register: Register = (on, options) => {
     }
     return result
   }).catch(($, e, next) => next(e))
+
+  // Registered after the sensor's tool.call, so the sensor sits above it and
+  // still reports (and journals) an AskUserQuestion answered from the dashboard.
+  if (isApprovalsOn) {
+    on('tool.check', async ($, e, next) => {
+      const verdict = await next(e)
+      if (!isActive(link) || link.isClearing) return verdict
+      return checkWithSwarmery($, gateOf($, link, endpoint.origin, waiting), e, verdict, next.signal)
+    }).catch(($, e, next) => next(e))
+
+    on('tool.call', { tool: 'AskUserQuestion' }, async ($, e, next) => {
+      if (!isActive(link) || link.isClearing) return next(e)
+      const fields = e as unknown as Readonly<Record<string, unknown>>
+      const answer = await answerFromSwarmery($, gateOf($, link, endpoint.origin, waiting), fields, next.signal)
+      return answer === undefined ? next(e) : { result: answer }
+    }).catch(($, e, next) => next(e))
+  }
 
   on('session.measure', async ($, e, next) => {
     try {
@@ -723,16 +941,19 @@ export const register: Register = (on, options) => {
     // A subagent's run ends in a turn.complete too; only the main loop's means the session waits.
     if (control !== undefined && e.agentId === undefined && control.turnId === e.turnId) control.turnId = undefined
     if (e.agentId !== undefined || !isActive(link)) return next(e)
+    /** Lines shown beneath the answer: each feature that has one adds it here. */
+    const beneath: string[] = []
     try {
       await push($, link, 'turn.complete', { durationMs: e.durationMs, stopReason: e.reason })
       if (forecaster !== undefined) await finishForecast($, link, forecaster, e.turnId)
+      if (swarm !== undefined) beneath.push(...(await endSwarmTurn($, link, swarm)))
       const snapshot = measurePayload(await $.session.usage())
       if (snapshot !== undefined) await push($, link, 'session.measure', snapshot)
       flushAtTurn($, link)
     } catch {
       // unreported
     }
-    return next(e)
+    return withBeneath(await next(e), e.answer, beneath)
   })
 
   on('session.end', async ($, e, next) => {
@@ -743,6 +964,7 @@ export const register: Register = (on, options) => {
     if (forecaster !== undefined && e.reason === 'resume') forecaster.isResumed = true
     if (!isActive(link)) return next(e)
     try {
+      if (swarm !== undefined) await endSwarmSession($, link, swarm)
       await push($, link, 'session.end', { reason: e.reason })
       link.timer?.cancel()
       link.timer = undefined
@@ -756,4 +978,31 @@ export const register: Register = (on, options) => {
     if (e.reason === 'clear' || e.reason === 'resume') link.isClearing = true
     return next(e)
   })
+
+  // Registered with `swarm` on alone: off, no message hook runs at all.
+  if (swarm !== undefined) {
+    // The main conversation's messages to other sessions or agents; a subagent's are left out.
+    on('session.send', async ($, e, next) => {
+      const result = await next(e)
+      if (e.agentId !== undefined || !isActive(link)) return result
+      try {
+        await noteSend($, link, swarm, e, result)
+      } catch {
+        // unreported; the send stands
+      }
+      return result
+    }).catch(($, e, next) => next(e))
+
+    // A delivery to the main conversation; one for a subagent is left out. Passed on as received.
+    on('session.receive', async ($, e, next) => {
+      if (e.agentId === undefined) {
+        try {
+          await noteReceive($, link, e.text, e.origin)
+        } catch {
+          // unreported
+        }
+      }
+      return next(e)
+    }).catch(($, e, next) => next(e))
+  }
 }

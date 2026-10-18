@@ -25,7 +25,7 @@ export const RUN_ID_RANDOM = 6
 export const TEST_COMMAND = /\b(test|vitest|jest|go test|pytest|cargo test|npm (run )?test)\b/
 
 /** Tools whose input names the file they write, and the field that names it. */
-const FILE_TOOLS: Readonly<Record<string, string>> = {
+export const FILE_TOOLS: Readonly<Record<string, string>> = {
   Edit: 'file_path',
   Write: 'file_path',
   MultiEdit: 'file_path',

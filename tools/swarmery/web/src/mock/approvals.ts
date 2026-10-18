@@ -51,6 +51,7 @@ const store: PermissionRequest[] = [
     resolvedVia: null,
     reason: null,
     expiresAt: iso(42 * SEC - APPROVAL_TIMEOUT_MS),
+    channel: 'shim',
   },
   {
     id: 42,
@@ -66,6 +67,7 @@ const store: PermissionRequest[] = [
     resolvedVia: null,
     reason: null,
     expiresAt: iso(95 * SEC - APPROVAL_TIMEOUT_MS),
+    channel: 'mod',
   },
   {
     id: 40,

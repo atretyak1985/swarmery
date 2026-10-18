@@ -120,6 +120,9 @@ import type {
   ToolsResponse,
   LinkBulkPromptResult,
   LinkCommandQueued,
+  LinkMessageQueued,
+  SwarmClaims,
+  SwarmMessage,
 } from './api/types';
 import { t } from '@lingui/core/macro';
 import { currentLocale } from './i18n/locale';
@@ -2020,6 +2023,46 @@ export function stopLinkTurn(id: number): Promise<LinkCommandQueued> {
  */
 export function sendLinkPrompt(id: number, text: string, asUser: boolean): Promise<LinkCommandQueued> {
   return linkCommand(`/api/sessions/${String(id)}/link/prompt`, { text, asUser });
+}
+
+/**
+ * GET /api/swarm/messages — the swarm's messages, newest first. projectId 0 /
+ * absent is every project.
+ */
+export async function fetchSwarmMessages(projectId?: number, limit = 100): Promise<SwarmMessage[]> {
+  if (MOCK) return mockApi.swarmMessages(projectId);
+  const qs = new URLSearchParams({ limit: String(limit) });
+  if (projectId !== undefined) qs.set('projectId', String(projectId));
+  return get(`/api/swarm/messages?${qs.toString()}`);
+}
+
+/** GET /api/swarm/claims — live file claims plus the paths held twice. */
+export async function fetchSwarmClaims(projectId?: number): Promise<SwarmClaims> {
+  if (MOCK) return mockApi.swarmClaims(projectId);
+  const qs = projectId === undefined ? '' : `?projectId=${String(projectId)}`;
+  return get(`/api/swarm/claims${qs}`);
+}
+
+/**
+ * POST /api/sessions/{id}/link/message — {id} is the SENDING session; its mod
+ * relays text to `to` (a recipient sessions.id or Claude session uuid).
+ */
+export async function sendSwarmMessage(
+  senderId: number,
+  to: number | string,
+  text: string,
+): Promise<LinkMessageQueued> {
+  if (MOCK) {
+    mockCommandId += 1;
+    return { commandId: mockCommandId, messageId: 1000 + mockCommandId };
+  }
+  const res = await fetch(`/api/sessions/${String(senderId)}/link/message`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ to, text }),
+  });
+  if (!res.ok) throw new Error(await errText(res));
+  return (await res.json()) as LinkMessageQueued;
 }
 
 /**

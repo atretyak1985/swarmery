@@ -31,6 +31,7 @@ import { Empty, ErrorBox, Loading } from '../components/ui';
 import { ProjectName } from '../components/ProjectName';
 import { boardParked } from '../lib/parked';
 import { PluginBadge, ProjectActions } from '../components/ProjectActions';
+import { SwarmPanel } from './sessions/SwarmPanel';
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
@@ -621,6 +622,10 @@ export function ProjectOverview(): JSX.Element {
 
       {/* ── §6 Insights (kept verbatim) ── */}
       <InsightsCard slug={project.slug} />
+
+      {/* ── §6b Swarm: messages between the project's sessions + file claims ── */}
+      <SectionRule label={t`Swarm`} />
+      <SwarmPanel projectId={project.id} projectSlug={project.slug} />
 
       {/* ── §7 Capability ── */}
       {managed ? (

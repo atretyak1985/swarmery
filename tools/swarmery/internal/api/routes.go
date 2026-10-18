@@ -285,9 +285,22 @@ func Routes(root *http.ServeMux, h *Handler) {
 	// them behind the origin fence. 503 until AttachLinkCommands.
 	mux.HandleFunc("GET /api/link/commands", linkAuth(h.linkCommandsWait))
 	mux.HandleFunc("POST /api/link/commands/{id}/ack", linkAuth(h.linkCommandAck))
+	// link approvals channel (link_permission.go): the mod asks from its
+	// tool.check hook and polls the decision, on the same permission_requests
+	// rows as the shim above. 503 until AttachLink, and while approvals are
+	// not attached.
+	mux.HandleFunc("POST /api/link/permission", linkAuth(h.linkPermissionOpen))
+	mux.HandleFunc("GET /api/link/permission/{id}", linkAuth(h.linkPermissionWait))
+	mux.HandleFunc("DELETE /api/link/permission/{id}", linkAuth(h.linkPermissionCancel))
 	mux.HandleFunc("POST /api/sessions/{id}/link/stop", requireLocalOrigin(h.linkSessionStop))
 	mux.HandleFunc("POST /api/sessions/{id}/link/prompt", requireLocalOrigin(h.linkSessionPrompt))
 	mux.HandleFunc("POST /api/sessions/link/bulk-prompt", requireLocalOrigin(h.linkBulkPrompt))
+	// link swarm (link_swarm.go): sessions' send/receive traffic and live file
+	// claims, read-only; the relay queues a `message` command for the SENDING
+	// session's mod behind the origin fence.
+	mux.HandleFunc("POST /api/sessions/{id}/link/message", requireLocalOrigin(h.linkSessionMessage))
+	mux.HandleFunc("GET /api/swarm/messages", h.swarmMessages)
+	mux.HandleFunc("GET /api/swarm/claims", h.swarmClaims)
 
 	// process liveness + kill (phase 4 step-07+)
 	mux.HandleFunc("POST /api/hooks/session-start", requireLocalOrigin(h.hookSessionStart))

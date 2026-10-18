@@ -89,6 +89,19 @@ type wsLinkCommandPayload struct {
 	Message   string `json:"message,omitempty"`
 }
 
+// wsSwarmMessagePayload is the swarm_message payload (docs/mods-link-protocol.md
+// "Swarm"): a thin hint — the client refetches GET /api/swarm/messages.
+type wsSwarmMessagePayload struct {
+	SessionID int64 `json:"sessionId"`
+	ProjectID int64 `json:"projectId"`
+}
+
+// wsSwarmClaimPayload is the swarm_claim payload: the project whose live
+// claims changed; the client refetches GET /api/swarm/claims.
+type wsSwarmClaimPayload struct {
+	ProjectID int64 `json:"projectId"`
+}
+
 // GET /api/ws — upgrades to WebSocket and streams WSMessage JSON text frames.
 func (h *Handler) ws(w http.ResponseWriter, r *http.Request) {
 	if wsBus == nil {
@@ -243,6 +256,13 @@ func (h *Handler) buildWSMessage(n ingest.Notification) ([]byte, error) {
 			return nil, nil
 		}
 		payload = p
+	case ingest.NoteSwarmMessage:
+		// mods-swarmery-link phase 6: a swarm message was stored or its delivery
+		// changed. Ids only, carried on the notification (no re-read).
+		payload = wsSwarmMessagePayload{SessionID: n.SessionID, ProjectID: n.ProjectID}
+	case ingest.NoteSwarmClaim:
+		// mods-swarmery-link phase 6: a project's live file claims changed.
+		payload = wsSwarmClaimPayload{ProjectID: n.ProjectID}
 	default:
 		return nil, errors.New("unknown notification type " + n.Type)
 	}
