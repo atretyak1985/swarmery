@@ -21,6 +21,7 @@ const NOW = Date.parse('2026-10-13T10:00:00.000Z')
 const ASK = { verdict: { decision: 'ask' } } as const
 const POST_URL = 'http://127.0.0.1:7777/api/link/permission'
 const pollUrl = (id: number): string => `http://127.0.0.1:7777/api/link/permission/${id}?session=${SESSION_ID}&wait=25`
+const cancelUrl = (id: number): string => `http://127.0.0.1:7777/api/link/permission/${id}?session=${SESSION_ID}`
 
 /** A real call the engine asks about: it carries its tool_use_id. */
 const CALL = { tool: 'Bash', input: { command: 'rm -rf build' }, tool_use_id: 'toolu_01' } as const
@@ -221,6 +222,9 @@ test('the deadline (expiresAt + 5 s) bounds a poll that never answers: the verdi
   expect((await pendingCheck).decision).toBe('ask')
   expect(w.permissionPolls).toHaveLength(1)
   expect(w.statuses).toEqual([WAITING_STATUS, undefined])
+  // the deadline is not an interrupt: the row stays pending for the shim
+  await w.clock.advance(60_000)
+  expect(w.permissionCancels).toHaveLength(0)
 })
 
 test('the deadline ends a wait on a daemon that keeps answering 204', ON, async ($, on) => {
@@ -235,12 +239,15 @@ test('the deadline ends a wait on a daemon that keeps answering 204', ON, async 
   expect(polled).toBeLessThanOrEqual(16)
   await w.clock.advance(60_000)
   expect(w.permissionPolls).toHaveLength(polled)
+  expect(w.permissionCancels).toHaveLength(0)
 })
 
 test('three failed polls in a row: the verdict stands', ON, async ($, on) => {
   const w = await begin($, on, { ...ASK, permissionReplies: [pending(9, 600_000)], permissionPollReplies: [500, 'throw', 502, decided({ decision: 'allow' })] })
   expect((await $.tool.check(CALL)).decision).toBe('ask')
   expect(w.permissionPolls).toHaveLength(3)
+  await w.clock.advance(60_000)
+  expect(w.permissionCancels).toHaveLength(0)
 })
 
 test('a failure between empty polls does not add up: 500, 204, 500, 500, allow → allow', ON, async ($, on) => {
@@ -271,6 +278,7 @@ test('a poll\'s 404 (the request is gone): the verdict stands', ON, async ($, on
   const w = await begin($, on, { ...ASK, permissionReplies: [pending(9, 600_000)], permissionPollReplies: [404, decided({ decision: 'allow' })] })
   expect((await $.tool.check(CALL)).decision).toBe('ask')
   expect(w.permissionPolls).toHaveLength(1)
+  expect(w.permissionCancels).toHaveLength(0)
 })
 
 test('401: the token is re-read once and the request retried with it', ON, async ($, on) => {
@@ -303,40 +311,69 @@ test('a poll\'s 401 after the POST\'s: no second re-read, the verdict stands', O
   expect((await pendingCheck).decision).toBe('ask')
   expect(w.tokenReads()).toBe(2)
   expect(w.permissionPolls).toHaveLength(1)
+  expect(w.permissionCancels).toHaveLength(0)
 })
 
-test(
-  'the person interrupts (next.signal aborts): the wait ends at once, nothing more is polled, the status line is cleared',
-  {
-    ...ON,
-    plugins: [
-      {
-        name: 'interrupter',
-        tier: 'prepend',
-        register(on) {
-          on('tool.check', async ($, e, next) => {
-            next(e).catch(() => undefined)
-            await $.clock.sleep(3_000)
-            return { decision: 'deny', reason: 'interrupted above' }
-          })
-        },
+/** A hook above the mod that settles tool.check itself 3 s in, abandoning (aborting) the mod's dispatch. */
+const INTERRUPTED = {
+  ...ON,
+  plugins: [
+    {
+      name: 'interrupter',
+      tier: 'prepend' as const,
+      register(on: On) {
+        on('tool.check', async ($, e, next) => {
+          next(e).catch(() => undefined)
+          await $.clock.sleep(3_000)
+          return { decision: 'deny' as const, reason: 'interrupted above' }
+        })
       },
-    ],
-  },
+    },
+  ],
+}
+
+test(
+  'the person interrupts (next.signal aborts): the wait ends at once, nothing more is polled, the status line is cleared, one DELETE gives the request up',
+  INTERRUPTED,
   async ($, on) => {
     const w = await begin($, on, { ...ASK, permissionReplies: [pending(9, 600_000)], permissionPollReplies: ['hang'] })
     const pendingCheck = $.tool.check(CALL)
     await w.clock.settle()
     expect(w.permissionPolls).toHaveLength(1)
     expect(w.statuses).toEqual([WAITING_STATUS])
+    expect(w.permissionCancels).toHaveLength(0)
     await w.clock.advance(3_000)
     expect((await pendingCheck).decision).toBe('deny')
     await w.clock.settle()
     expect(w.statuses).toEqual([WAITING_STATUS, undefined])
+    expect(w.permissionCancels).toHaveLength(1)
+    const [cancel] = w.permissionCancels
+    expect(cancel?.url).toBe(cancelUrl(9))
+    expect(cancel?.method).toBe('DELETE')
+    expect(cancel?.authorization).toBe(`Bearer ${TOKEN}`)
+    expect(cancel?.at).toBe(NOW + 3_000)
     await w.clock.advance(120_000)
     expect(w.permissionPolls).toHaveLength(1)
+    expect(w.permissionCancels).toHaveLength(1)
   },
 )
+
+test('a DELETE that never answers does not hold the hook\'s return', INTERRUPTED, async ($, on) => {
+  const w = await begin($, on, {
+    ...ASK,
+    permissionReplies: [pending(9, 600_000)],
+    permissionPollReplies: ['hang'],
+    permissionCancelReplies: ['hang'],
+  })
+  const pendingCheck = $.tool.check(CALL)
+  const call = track(pendingCheck)
+  await w.clock.advance(3_000)
+  expect(call.isDone()).toBe(true)
+  expect((await pendingCheck).decision).toBe('deny')
+  expect(w.permissionCancels).toHaveLength(1)
+  await w.clock.advance(120_000)
+  expect(w.permissionCancels).toHaveLength(1)
+})
 
 test('two calls waiting at once share one status line, cleared when the last ends', ON, async ($, on) => {
   const w = await begin($, on, {
@@ -382,6 +419,15 @@ test('AskUserQuestion: an answer without the questions is given the questions as
   expect(r.result).toEqual({ questions: QUESTIONS, answers })
 })
 
+test('AskUserQuestion multi-select answered in Swarmery: the labels the dashboard lists are comma-joined (M4)', ON, async ($, on) => {
+  const multi = [{ ...QUESTIONS[0], question: 'Which colors?', multiSelect: true }]
+  await begin($, on, {
+    permissionReplies: [decided({ decision: 'allow', answer: { questions: multi, answers: { 'Which colors?': ['Red', 'Blue'] } } })],
+  })
+  const r = await $.tool.call({ tool: 'AskUserQuestion', questions: multi })
+  expect(r.result).toEqual({ questions: multi, answers: { 'Which colors?': 'Red, Blue' } })
+})
+
 const fallbacks: ReadonlyArray<readonly [string, Partial<World>, number]> = [
   ['pass', { permissionReplies: [decided({ decision: 'pass' })] }, 0],
   ['deny', { permissionReplies: [decided({ decision: 'deny', message: 'no' })] }, 0],
@@ -402,6 +448,7 @@ for (const [name, replies, wait] of fallbacks) {
     expect(r.result).toBe('ran')
     expect(w.calls).toEqual(['AskUserQuestion'])
     expect(w.permissionPosts).toHaveLength(1)
+    expect(w.permissionCancels).toHaveLength(0)
     expect(w.statuses.at(-1)).toBeUndefined()
   })
 }
@@ -462,4 +509,8 @@ test('checkResult never invents an ask or a deny of its own', () => {
   expect(checkResult({ kind: 'deny', message: '' }, verdict)).toEqual({ decision: 'deny', reason: DENIED_REASON })
   expect(questionAnswer({ kind: 'allow', answer: { questions: [] } }, [])).toBeUndefined()
   expect(questionAnswer({ kind: 'deny', message: 'x' }, [])).toBeUndefined()
+  expect(questionAnswer({ kind: 'allow', answer: { answers: { a: ['x', 'y'], b: 'z' } } }, [])).toEqual({
+    questions: [],
+    answers: { a: 'x, y', b: 'z' },
+  })
 })

@@ -84,7 +84,7 @@ As `claude plugin validate --strict --json plugins/swarmery-link` reports it:
 ./register.ts gating hook with .catch: tool.call
 ./register.ts gating hook with .catch: tool.check
 ./register.ts gating hook with .catch: tool.call{tool=AskUserQuestion}
-./register.ts calls: $.clock.after (via arm, beginForecast, bounded, pause, send, startControl, within), $.clock.now (via askSwarmery, newRun, poll, push, waitForDecision), $.env.get (via readToken), $.fs.read (via readToken), $.http.fetch (via fetchCommand, post, request, sendAck), $.model.complete (via runForecast), $.prompt.submit (via submitPrompt), $.session.cwd, $.session.id, $.session.usage, $.turn.abort (via abortTurn), $.ui.log (via log), $.ui.notice (via showNotice), $.ui.status (via showStatus)
+./register.ts calls: $.clock.after (via arm, beginForecast, bounded, pause, send, startControl, within), $.clock.now (via askSwarmery, newRun, poll, pollDecision, push), $.env.get (via readToken), $.fs.read (via readToken), $.http.fetch (via cancelRequest, fetchCommand, post, request, sendAck), $.model.complete (via runForecast), $.prompt.submit (via submitPrompt), $.session.cwd, $.session.id, $.session.usage, $.turn.abort (via abortTurn), $.ui.log (via log), $.ui.notice (via showNotice), $.ui.status (via showStatus)
 ./register.ts env writes: nothing
 ./register.ts env reads: HOME
 ```
@@ -321,6 +321,11 @@ The hook sits on `tool.check`, which fires after the `tool.call` and
    above, a `404` (the request is gone) leaves the engine's verdict. The wait
    ends with the engine's verdict when the person interrupts the call
    (`next.signal`), at `expiresAt` plus 5 s, or after 3 failed polls in a row.
+   Only the interrupt gives the request up: the mod sends
+   `DELETE /api/link/permission/{id}?session=<id>` fire-and-forget (bounded at
+   2 s, never awaited), so a later dashboard decision cannot land on a call no
+   hook reads. On every other end the request stays pending, and the shim the
+   engine fires next attaches to it.
    The time spent inside a long poll does not count against the hook's 10 s
    budget (`tools/swarmery/docs/mods-format.md`, M3), so the mod can wait out
    the daemon's whole approval window. While it waits, the status line reads

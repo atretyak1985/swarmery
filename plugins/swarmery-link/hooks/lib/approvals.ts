@@ -24,6 +24,8 @@ export const MIN_POLL_GAP_MS = 1_000
 export const MAX_POLL_FAILURES = 3
 /** After a 401, the one retry waits past the daemon's 1 s token re-read throttle. */
 export const PERMISSION_AUTH_RETRY_MS = 1_100
+/** The fire-and-forget DELETE's own bound: nothing waits on it past this. */
+export const PERMISSION_CANCEL_TIMEOUT_MS = 2_000
 
 export const WAITING_STATUS = 'waiting for Swarmery approval…'
 export const LOCAL_NOTICE = 'production deploy: confirm it here, not in Swarmery'
@@ -87,6 +89,20 @@ export type PermissionPoll = {
 
 export const permissionPoll = (token: string): PermissionPoll => ({
   method: 'GET',
+  headers: { authorization: `Bearer ${token}` },
+})
+
+/** The DELETE that gives up on request `id` (the dispatch was abandoned mid-wait). */
+export const permissionCancelUrl = (origin: string, id: string, sessionId: string): string =>
+  `${origin}${PERMISSION_PATH}/${encodeURIComponent(id)}?session=${encodeURIComponent(sessionId)}`
+
+export type PermissionCancel = {
+  readonly method: 'DELETE'
+  readonly headers: Record<string, string>
+}
+
+export const permissionCancel = (token: string): PermissionCancel => ({
+  method: 'DELETE',
   headers: { authorization: `Bearer ${token}` },
 })
 
@@ -209,15 +225,21 @@ export const checkResult = <V extends Verdict>(answer: Answer, verdict: V): V | 
 
 export type QuestionAnswer = { readonly questions: readonly unknown[]; readonly answers: Readonly<Record<string, unknown>> }
 
+/** A multi-select's labels (the dashboard sends them as a list) comma-joined, the form M4 verified; any other answer as is. */
+const answerText = (value: unknown): unknown => (Array.isArray(value) ? value.join(', ') : value)
+
 /**
  * The AskUserQuestion result an `allow` carries: `{ questions, answers }`,
- * the questions as asked when the answer leaves them out. Undefined when it
- * carries no answers map, so the native dialog takes over.
+ * the questions as asked when the answer leaves them out, a multi-select's
+ * labels comma-joined. Undefined when it carries no answers map, so the
+ * native dialog takes over.
  */
 export const questionAnswer = (answer: Answer, asked: unknown): QuestionAnswer | undefined => {
   if (answer.kind !== 'allow' || !isRecord(answer.answer)) return undefined
   const { questions, answers } = answer.answer
   if (!isRecord(answers)) return undefined
   const shown = Array.isArray(questions) ? questions : Array.isArray(asked) ? asked : undefined
-  return shown === undefined ? undefined : { questions: shown, answers }
+  if (shown === undefined) return undefined
+  const joined = Object.fromEntries(Object.entries(answers).map(([question, value]) => [question, answerText(value)]))
+  return { questions: shown, answers: joined }
 }

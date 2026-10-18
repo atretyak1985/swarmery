@@ -8,7 +8,9 @@
 // Every failure falls back to the engine's verdict (tool.check) or to the
 // question's own dialog (tool.call): no answer, a timeout, a 5xx, a second
 // 401, the deadline, the person interrupting. The mod never answers `ask` of
-// its own and never refuses on a failure.
+// its own and never refuses on a failure. Only an interrupt mid-wait gives
+// the daemon's request up (a fire-and-forget DELETE); on every other end the
+// request stays pending for the shim to attach to.
 //
 // The `$` calls live in the functions declared at the top of this file;
 // ./lib/approvals.ts holds the pure parts.
@@ -20,12 +22,15 @@ import {
   LOCAL_NOTICE,
   MAX_POLL_FAILURES,
   PERMISSION_AUTH_RETRY_MS,
+  PERMISSION_CANCEL_TIMEOUT_MS,
   PERMISSION_POST_TIMEOUT_MS,
   type PermissionRequest,
   type QuestionAnswer,
   WAITING_STATUS,
   checkResult,
   permissionBody,
+  permissionCancel,
+  permissionCancelUrl,
   permissionPoll,
   permissionPollUrl,
   permissionUrl,
@@ -124,7 +129,75 @@ function showNotice($: EngineInterface, toolUseId: string, text: string): void {
   }
 }
 
-/** Polls a pending request until the dashboard decides, the deadline passes, the dispatch is abandoned or the daemon fails. */
+/**
+ * Tells the daemon the mod gave up on request `id` (DELETE), so a dashboard
+ * decision no longer lands on a row no hook reads. Fire-and-forget: raced
+ * against a 2 s `$.clock` timer and never awaited, so the hook's return never
+ * waits on it; a lost DELETE only leaves the daemon's lease to lapse.
+ */
+function cancelRequest($: EngineInterface, gate: Gate, id: string): void {
+  try {
+    const sent = $.http.fetch(permissionCancelUrl(gate.origin, id, gate.sessionId), permissionCancel(gate.token())).catch(() => undefined)
+    // the dispatch is already abandoned, so the race runs against a wait that never ends rather than its abort
+    bounded($, sent, PERMISSION_CANCEL_TIMEOUT_MS, new Promise<never>(() => undefined)).catch(() => undefined)
+  } catch {
+    // the lease lapsing says the same, later
+  }
+}
+
+/**
+ * Polls a pending request until the dashboard decides, the deadline passes,
+ * the dispatch is abandoned (`'aborted'`) or the daemon fails (`pass`).
+ */
+async function pollDecision(
+  $: EngineInterface,
+  gate: Gate,
+  id: string,
+  deadline: number,
+  signal: AbortSignal,
+  aborted: Promise<'aborted'>,
+  hasRetriedAuth: boolean,
+): Promise<Answer | 'aborted'> {
+  let failures = 0
+  let isRetried = hasRetriedAuth
+  for (;;) {
+    const startedAt = await $.clock.now()
+    const bound = pollBound(deadline, startedAt)
+    if (signal.aborted) return 'aborted'
+    if (bound <= 0) return PASS
+    const reply = await request($, permissionPollUrl(gate.origin, id, gate.sessionId), permissionPoll(gate.token()), bound, aborted)
+    if (reply === 'aborted' || signal.aborted) return 'aborted'
+    const answer = pollAnswer(reply)
+    switch (answer.kind) {
+      case 'wait': {
+        failures = 0
+        if ((await pause($, pollGap((await $.clock.now()) - startedAt), aborted)) === 'aborted') return 'aborted'
+        continue
+      }
+      case 'auth': {
+        if (isRetried) return PASS
+        isRetried = true
+        await gate.reread()
+        if ((await pause($, PERMISSION_AUTH_RETRY_MS, aborted)) === 'aborted') return 'aborted'
+        continue
+      }
+      case 'fail': {
+        failures += 1
+        if (failures >= MAX_POLL_FAILURES) return PASS
+        continue
+      }
+      default:
+        return answer
+    }
+  }
+}
+
+/**
+ * Waits on a pending request (pollDecision) with the status line up. An
+ * abandoned dispatch gives the request up with a DELETE; every other end
+ * (the deadline, failed polls, a 404, a second 401) leaves the row pending,
+ * so the shim the engine fires next can attach to it by hash.
+ */
 async function waitForDecision(
   $: EngineInterface,
   gate: Gate,
@@ -134,40 +207,13 @@ async function waitForDecision(
   aborted: Promise<'aborted'>,
   hasRetriedAuth: boolean,
 ): Promise<Answer> {
-  let failures = 0
-  let isRetried = hasRetriedAuth
   gate.waiting.count += 1
   if (gate.waiting.count === 1) showStatus($, WAITING_STATUS)
   try {
-    for (;;) {
-      const startedAt = await $.clock.now()
-      const bound = pollBound(deadline, startedAt)
-      if (signal.aborted || bound <= 0) return PASS
-      const reply = await request($, permissionPollUrl(gate.origin, id, gate.sessionId), permissionPoll(gate.token()), bound, aborted)
-      if (reply === 'aborted' || signal.aborted) return PASS
-      const answer = pollAnswer(reply)
-      switch (answer.kind) {
-        case 'wait': {
-          failures = 0
-          if ((await pause($, pollGap((await $.clock.now()) - startedAt), aborted)) === 'aborted') return PASS
-          continue
-        }
-        case 'auth': {
-          if (isRetried) return PASS
-          isRetried = true
-          await gate.reread()
-          if ((await pause($, PERMISSION_AUTH_RETRY_MS, aborted)) === 'aborted') return PASS
-          continue
-        }
-        case 'fail': {
-          failures += 1
-          if (failures >= MAX_POLL_FAILURES) return PASS
-          continue
-        }
-        default:
-          return answer
-      }
-    }
+    const answer = await pollDecision($, gate, id, deadline, signal, aborted, hasRetriedAuth)
+    if (answer !== 'aborted') return answer
+    cancelRequest($, gate, id)
+    return PASS
   } finally {
     gate.waiting.count -= 1
     if (gate.waiting.count === 0) showStatus($, undefined)

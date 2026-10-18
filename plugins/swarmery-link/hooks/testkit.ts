@@ -72,6 +72,8 @@ export type World = {
   readonly permissionReplies?: ReadonlyArray<PermissionReply>
   /** The daemon's answer per GET /api/link/permission/{id}, in order; the last repeats. Default: `hang`. */
   readonly permissionPollReplies?: ReadonlyArray<PermissionReply>
+  /** The daemon's answer per DELETE /api/link/permission/{id}, in order; the last repeats. Default: 204. */
+  readonly permissionCancelReplies?: ReadonlyArray<PermissionReply>
 }
 
 /** A status alone (empty body), a status with a JSON body, a failed connection, or a daemon that never answers. */
@@ -138,6 +140,8 @@ export type Recorded = {
   readonly permissionPosts: PermissionCall[]
   /** Every GET /api/link/permission/{id}, with the mock clock's time it was made. */
   readonly permissionPolls: PermissionCall[]
+  /** Every DELETE /api/link/permission/{id}, with the mock clock's time it was made. */
+  readonly permissionCancels: PermissionCall[]
   /** Every `$.ui.status` text, undefined for a clear. */
   readonly statuses: Array<string | undefined>
   /** Every `$.ui.notice`. */
@@ -169,6 +173,7 @@ export const world = (on: On, w: World = {}): Recorded => {
   const modelCalls: ModelCall[] = []
   const permissionPosts: PermissionCall[] = []
   const permissionPolls: PermissionCall[] = []
+  const permissionCancels: PermissionCall[] = []
   const statuses: Array<string | undefined> = []
   const notices: Array<{ readonly toolUseId: string; readonly text: string | undefined }> = []
   const calls: string[] = []
@@ -191,11 +196,14 @@ export const world = (on: On, w: World = {}): Recorded => {
   })
   on('http.fetch', ($, e) => {
     if (e.url.includes(PERMISSION)) {
-      const isPoll = e.url.includes(`${PERMISSION}/`)
-      const made = isPoll ? permissionPolls : permissionPosts
-      const reply = isPoll
-        ? pick<PermissionReply>(w.permissionPollReplies, made.length, 'hang')
-        : pick<PermissionReply>(w.permissionReplies, made.length, 204)
+      const isCancel = e.init?.method === 'DELETE'
+      const isPoll = !isCancel && e.url.includes(`${PERMISSION}/`)
+      const made = isCancel ? permissionCancels : isPoll ? permissionPolls : permissionPosts
+      const reply = isCancel
+        ? pick<PermissionReply>(w.permissionCancelReplies, made.length, 204)
+        : isPoll
+          ? pick<PermissionReply>(w.permissionPollReplies, made.length, 'hang')
+          : pick<PermissionReply>(w.permissionReplies, made.length, 204)
       made.push({
         url: e.url,
         method: e.init?.method,
@@ -308,6 +316,7 @@ export const world = (on: On, w: World = {}): Recorded => {
     modelCalls,
     permissionPosts,
     permissionPolls,
+    permissionCancels,
     statuses,
     notices,
     calls,
