@@ -25,12 +25,12 @@ func TestBuildPrompt(t *testing.T) {
 		"PRIVATE WORKSPACE",                   // plan lands in the workspace
 		"PLAN SAVED:",                         // unambiguous completion signal
 		"workspace/working/<YYYY>/<MM>/<DD>/<slug>/plan/README.md", // literal scanner-visible path template (#188)
-		"workspace/plans/",        // the frozen tree is explicitly forbidden (#188)
-		"@planner", // core 3.0 consolidated planning agent
-		"fenced json block",       // structured-output contract
-		"runningPlan",             // running plan required every turn
-		"plan/spec.md",            // spec artifact required in PHASE B
-		"**Covers:**",             // per-phase spec-coverage line
+		"workspace/plans/",  // the frozen tree is explicitly forbidden (#188)
+		"@planner",          // core 3.0 consolidated planning agent
+		"fenced json block", // structured-output contract
+		"runningPlan",       // running plan required every turn
+		"plan/spec.md",      // spec artifact required in PHASE B
+		"**Covers:**",       // per-phase spec-coverage line
 	} {
 		if !strings.Contains(p, must) {
 			t.Errorf("prompt missing required instruction %q", must)

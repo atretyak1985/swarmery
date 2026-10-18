@@ -29,7 +29,7 @@ func assertNoPhantom(t *testing.T, db *sql.DB) {
 // TestTitleOnlyTranscriptMintsNoSession pins the root cause: a transcript
 // carrying no timestamp anywhere is not evidence that a session ran, so
 // neither ingest path may mint a session row. Before the fix each such file
-// produced a session with started_at '' that the status ticker could never
+// produced a session with started_at "" that the status ticker could never
 // move — the dashboard reported dozens of "active" agents with no process
 // behind them.
 func TestTitleOnlyTranscriptMintsNoSession(t *testing.T) {

@@ -207,7 +207,7 @@ func TestRouteSkillNeedsTargetWhenSkillIsUnknown(t *testing.T) {
 	}
 }
 
-// TestRouteSkillRejectsEmptyIdentity: '' is retro_lessons' "not folded yet"
+// TestRouteSkillRejectsEmptyIdentity: "" is retro_lessons' "not folded yet"
 // marker, never an identity. Routing on it would gather every unfolded lesson in
 // the database into one bogus target.
 func TestRouteSkillRejectsEmptyIdentity(t *testing.T) {

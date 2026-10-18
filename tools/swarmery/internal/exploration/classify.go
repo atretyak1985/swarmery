@@ -203,7 +203,7 @@ func isAssignment(t string) bool {
 }
 
 // tokenize splits a shell command into the words the classifier needs: quotes
-// and backslashes are honoured (so `sed -i '' …` keeps its empty argument and
+// and backslashes are honoured (so `sed -i "" …` keeps its empty argument and
 // `-exec rm {} \;` ends in a bare `;`), and the operators ; & | ( ) { } come
 // out as their own tokens. It is NOT a shell parser — it expands nothing — it
 // only has to find the first word of a command.

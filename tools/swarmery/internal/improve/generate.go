@@ -28,7 +28,7 @@ func (s *Service) OpenProposalID(agent string) (int64, error) {
 // Keyed on the TARGET, not the agent name, since phase 5: `key` is the agent
 // registry key for an agent proposal and the SKILL.md path — or, while the file
 // is still unknown, the lesson identity — for a skill proposal. The SQL mirrors
-// the index expression COALESCE(NULLIF(target_path,''), agent) exactly; if one
+// the index expression COALESCE(NULLIF(target_path, <empty string>), agent) exactly; if one
 // changes the other must, or the friendly 409 and the hard constraint will
 // disagree about what "already open" means.
 func (s *Service) OpenTargetProposalID(targetKind, key string) (int64, error) {
