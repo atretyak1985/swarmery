@@ -105,6 +105,17 @@ export async function reopenPhase(
   return (await res.json()) as { reopen: PhaseReopen; unticked: number };
 }
 
+/** POST …/verify — grade the phase's run branch again, read-only. No executor
+ *  runs; the verdict lands later through the plan's live refresh. A refusal
+ *  (verify-off, already-running, plan-running, …) rejects with the server's
+ *  own message. */
+export async function reverifyPhase(taskId: number, phaseId: number): Promise<{ status: 'verifying' }> {
+  if (MOCK) return { status: 'verifying' };
+  const res = await fetch(phasePath(taskId, phaseId, 'verify'), { method: 'POST' });
+  if (!res.ok) throw new Error(await errorText(res, t`verify again failed`));
+  return (await res.json()) as { status: 'verifying' };
+}
+
 /** The server's `{error}` message when there is one, else `fallback: status`. */
 async function errorText(res: Response, fallback: string): Promise<string> {
   try {

@@ -1608,6 +1608,7 @@ const mockEpicPhase = (
       | 'verifyMode'
       | 'verifyVerdict'
       | 'verifyDetail'
+      | 'canReverify'
       | 'landing'
       | 'reopens'
       | 'reviews'
@@ -1796,8 +1797,23 @@ const mockEpics: Epic[] = [
         runCheckboxesBefore: 0,
         landing: mockLanding({ state: 'pushed' }),
       }),
+      // Every criterion ticked, the verifier timed out: `unverified`, and the
+      // server says it may be graded again — demos the Verify again button.
+      mockEpicPhase(6, 6, 'Verifier smoke check', [1], 4, 4, {
+        runState: 'done',
+        runSessionUuid: 'mock-run-unverified-uuid',
+        runModel: 'claude-opus-5',
+        runStartedAt: iso(30 * MIN),
+        runEndedAt: iso(22 * MIN),
+        runOutcome: 'completed',
+        runCheckboxesBefore: 0,
+        verifyMode: 'normal',
+        verifyVerdict: 'inconclusive',
+        verifyDetail: 'timeout: the verifier did not answer within 20 minutes',
+        canReverify: true,
+      }),
     ],
-    rollup: { done: 13, total: 28, pct: 46, incompletePhases: 3 },
+    rollup: { done: 17, total: 32, pct: 53, incompletePhases: 4 },
     cardExternalId: null,
     // The union the sessions panel renders: a daemon run the ?planTask= grouping also
     // finds, and an operator's own session that ONLY the inferred link can surface.

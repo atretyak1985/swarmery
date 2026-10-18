@@ -168,3 +168,28 @@ func TestSafeRelPath(t *testing.T) {
 		}
 	}
 }
+
+func TestManagerPlacedPaths(t *testing.T) {
+	config := []string{".claude/settings.json", ".claude/settings.local.json", ".claude/project.json"}
+	for _, tc := range []struct {
+		name, lend string
+		want       []string
+	}{
+		{"defaults", "", append([]string{"node_modules", ".venv", "vendor"}, config...)},
+		{"lend off", "off", config},
+		{"custom list", " web/node_modules/ ,./tools/.venv,../escape", append([]string{"web/node_modules", "tools/.venv"}, config...)},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Setenv(LendEnv, tc.lend)
+			got := ManagerPlacedPaths()
+			if len(got) != len(tc.want) {
+				t.Fatalf("ManagerPlacedPaths() = %q, want %q", got, tc.want)
+			}
+			for i := range got {
+				if got[i] != tc.want[i] {
+					t.Errorf("ManagerPlacedPaths()[%d] = %q, want %q (all: %q)", i, got[i], tc.want[i], got)
+				}
+			}
+		})
+	}
+}

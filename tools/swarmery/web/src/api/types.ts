@@ -3791,6 +3791,10 @@ export interface PhaseBlocker {
      *  `runOutcome` stays checkbox-derived, and this blocker carries the verifier's
      *  own reasons in `detail` (phasediag.KindVerifyFailed). */
     | 'verify-failed'
+    /** the phase opted into verification, every criterion is ticked, and no verdict
+     *  landed (or it was `inconclusive`) — the ABSENCE of a grade, not a grade
+     *  against the work (phasediag.KindUnverified). */
+    | 'unverified'
     | 'no-criteria'
     /** a swarm/phase-<id> branch whose id matches no phase row: work stranded under
      *  a previous id generation. A legitimate delete target, but only through the
@@ -3950,6 +3954,13 @@ export interface EpicPhase {
   /** Why the gate refused, in the operator's words; [] when complete. A list because
    *  one gate cites every reason it has. */
   completionBlockers: string[];
+  /** The server's answer to "may this phase be graded again?" (phaserun.ReverifyEligible):
+   *  verification on, every criterion ticked, a run branch, verdict not `pass`, no run
+   *  live. Gates the **Verify again** action — the client never re-derives it. Absent
+   *  from a daemon older than the re-verify endpoint. */
+  canReverify?: boolean;
+  /** A verification of this phase is in flight right now (verification_runs). */
+  verifyRunning?: boolean;
   /** The doc's `## Forecast` blocks (migration 0079) — the PRIOR the planner wrote
    *  and/or the POSTERIOR the executor wrote, in document order. [] for every phase
    *  that declares none, which is all of them until an author opts in.

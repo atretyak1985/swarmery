@@ -105,12 +105,13 @@ import { ForecastSection, RailSection, SurpriseChip } from './plans/ForecastVsAc
 import { ForecastStory } from './plans/ForecastStory';
 import { DepsUnmergedActions } from './plans/DepsUnmergedActions';
 import { CriterionLint } from './plans/CriterionLint';
-import { PhaseCard } from './plans/PhaseCard';
+import { PhaseCard, type PhaseCardAction } from './plans/PhaseCard';
 import { PHASE_TABS, PhasePanel, type PhaseTab } from './plans/PhasePanel';
 import { PhaseReopens } from './plans/PhaseReopens';
 import { PhaseReview } from './plans/PhaseReview';
 import { RunsReviewBlock } from './plans/RunsReviewBlock';
 import { VerifyVerdictChip } from './plans/VerifyVerdictChip';
+import { reverifyAction, useReverify, type Reverify } from './plans/useReverify';
 import { hasReviewTab, NEUTRAL_TERMS } from './plans/landingModel';
 import { useProjectVcs } from '../lib/useProjectVcs';
 import {
@@ -1049,12 +1050,15 @@ export function Plans(): JSX.Element {
   );
   useLiveUpdates(onMessage, reload);
 
-  // Reconcile net while any visible phase run is live: plan_updated covers the
-  // run edges, this 5s poll covers a missed frame mid-run. Cleared when none run.
+  // Reconcile net while any visible phase run (or re-verification) is live:
+  // plan_updated covers the run edges and the verdict stamp, this 5s poll covers
+  // a missed frame mid-run. Cleared when none run.
   const anyRunning = useMemo(
     () =>
       (epics ?? []).some(
-        (e) => e.planRun?.runState === 'running' || e.phases.some((p) => p.runState === 'running'),
+        (e) =>
+          e.planRun?.runState === 'running' ||
+          e.phases.some((p) => p.runState === 'running' || p.verifyRunning === true),
       ),
     [epics],
   );
@@ -1220,6 +1224,15 @@ export function Plans(): JSX.Element {
     },
     [reload, failRunMsg],
   );
+
+  // "Verify again": grade a finished phase's run branch with the read-only
+  // verifier, no executor. One hook for every site that offers it (row, detail
+  // panel, diagnosis modal); a refusal lands in the same strip as a run's.
+  const clearRunMsg = useCallback((): void => setRunMsg(null), []);
+  const refuseReverify = useCallback((taskId: number, e: unknown): void => failRunMsg(taskId)(e), [failRunMsg]);
+  const reverify = useReverify({ onStart: clearRunMsg, onAccepted: reload, onRefused: refuseReverify });
+  // The phase the diagnosis modal is open on — its Verify again reads the same row.
+  const outcomePhase = activeEpic?.phases.find((p) => p.id === outcomeFor);
 
   // Whole-plan runs: one agent driving core's run-plan skill over every phase.
   // Same error strip as phase runs — the server re-checks every gate and its
@@ -1486,6 +1499,8 @@ export function Plans(): JSX.Element {
               onForceRun={forceRunFor(activeEpic.taskId)}
               onRun={(phaseId) => startRun(activeEpic.taskId, phaseId)}
               onCancelRun={(phaseId) => cancelRun(activeEpic.taskId, phaseId)}
+              reverify={reverify}
+              onReverify={(phaseId) => reverify.start(activeEpic.taskId, phaseId)}
               phaseRunModel={phaseRunModel}
               onPhaseRunModel={setPhaseRunModel}
               phaseRunEffort={phaseRunEffort}
@@ -1521,6 +1536,11 @@ export function Plans(): JSX.Element {
           }
           onClose={() => setOutcomeFor(null)}
           onRetry={() => startRun(activeEpic.taskId, outcomeFor)}
+          reverify={
+            outcomePhase === undefined
+              ? null
+              : reverifyAction(outcomePhase, reverify, (id) => reverify.start(activeEpic.taskId, id), i18n)
+          }
           onOpenRevisions={() => {
             setOutcomeFor(null);
             go({ plan: activeEpic.externalId, detail: { kind: 'plan', tab: 'revisions' } });
@@ -1563,6 +1583,8 @@ function EpicDetail({
   onForceRun,
   onRun,
   onCancelRun,
+  reverify,
+  onReverify,
   phaseRunModel,
   onPhaseRunModel,
   phaseRunEffort,
@@ -1600,6 +1622,9 @@ function EpicDetail({
   onForceRun: (() => void) | null;
   onRun: (phaseId: number) => void;
   onCancelRun: (phaseId: number) => void;
+  /** "Verify again" — the page's one hook, shared by the list and the panel. */
+  reverify: Reverify;
+  onReverify: (phaseId: number) => void;
   /** The model every per-phase run on this plan starts with — owned by the page
    * so the list's Run, the detail panel's Retry and the diagnosis modal's Retry
    * all spend the same way. */
@@ -1891,6 +1916,8 @@ function EpicDetail({
               phaseRunModel={phaseRunModel}
               onRetry={() => onRun(detail.phase.id)}
               onCancelRun={() => onCancelRun(detail.phase.id)}
+              reverify={reverify}
+              onReverify={onReverify}
               onOpenOutcome={() => onOpenOutcome(detail.phase.id)}
               onDocChanged={onDocChanged}
               revisions={revisions}
@@ -1925,6 +1952,8 @@ function EpicDetail({
               phaseHref={(seq) => phaseHref(seq, 'story')}
               onRun={onRun}
               onCancelRun={onCancelRun}
+              reverify={reverify}
+              onReverify={onReverify}
               onOpenOutcome={onOpenOutcome}
             />
           )}
@@ -2195,6 +2224,37 @@ function PlanSessions({
   );
 }
 
+/** The **Verify again** button of the phase row and the panel's Runs tab. The
+ *  action itself (label, busy, tip) comes from `reverifyAction`, the one builder
+ *  every site shares; null renders nothing. */
+function ReverifyButton({
+  action,
+  size,
+  className = '',
+}: {
+  action: PhaseCardAction | null;
+  size: 'row' | 'panel';
+  className?: string;
+}): JSX.Element | null {
+  if (action === null) return null;
+  return (
+    <button
+      type="button"
+      disabled={action.disabled}
+      data-tip={action.tip}
+      onClick={(e) => {
+        e.stopPropagation();
+        action.onClick();
+      }}
+      className={`rounded-md border border-line-strong font-mono text-ink-3 transition-colors hover:text-ink disabled:cursor-not-allowed disabled:opacity-50 ${
+        size === 'row' ? 'px-1.5 py-px text-[9.5px]' : 'px-2 py-1 text-[10px]'
+      } ${className}`}
+    >
+      {action.label}
+    </button>
+  );
+}
+
 /** The phase timeline — seq order, depends-on badges, per-phase progress and
  * run controls. A row opens that phase's details, which replace this list. */
 function PhaseList({
@@ -2208,6 +2268,8 @@ function PhaseList({
   phaseHref,
   onRun,
   onCancelRun,
+  reverify,
+  onReverify,
   onOpenOutcome,
 }: {
   epic: Epic;
@@ -2226,6 +2288,8 @@ function PhaseList({
   phaseHref: (seq: number) => string;
   onRun: (phaseId: number) => void;
   onCancelRun: (phaseId: number) => void;
+  reverify: Reverify;
+  onReverify: (phaseId: number) => void;
   onOpenOutcome: (phaseId: number) => void;
 }): JSX.Element {
   const { t, i18n } = useLingui();
@@ -2253,6 +2317,9 @@ function PhaseList({
         const openPhase = (): void => {
           onOpenPhase(p.seq, 'story');
         };
+        // Offered on the server's word alone — a `fail` phase reads `done` in the
+        // pill and is still re-gradable, so both branches below render it.
+        const again = reverifyAction(p, reverify, onReverify, i18n);
         const seq = String(p.seq);
         const name = p.name;
         return (
@@ -2382,6 +2449,7 @@ function PhaseList({
                         onOpen={() => onOpenOutcome(p.id)}
                       />
                     )}
+                    <ReverifyButton action={again} size="row" />
                     <button
                       type="button"
                       onClick={() => {
@@ -2405,6 +2473,7 @@ function PhaseList({
                         onOpen={() => onOpenOutcome(p.id)}
                       />
                     )}
+                    <ReverifyButton action={again} size="row" />
                     <button
                       type="button"
                       disabled={runDisabled}
@@ -3080,6 +3149,8 @@ function PhaseDetailPanel({
   phaseRunModel,
   onRetry,
   onCancelRun,
+  reverify,
+  onReverify,
   onOpenOutcome,
   onDocChanged,
   revisions,
@@ -3101,6 +3172,8 @@ function PhaseDetailPanel({
   phaseRunModel: PhaseRunModel;
   onRetry: () => void;
   onCancelRun: () => void;
+  reverify: Reverify;
+  onReverify: (phaseId: number) => void;
   /** Open the run-diagnosis modal for this phase. */
   onOpenOutcome: () => void;
   onDocChanged: () => void;
@@ -3181,6 +3254,9 @@ function PhaseDetailPanel({
           tip: runTitle,
         }
       : null;
+  // Beside the primary, never instead of it — and on a `done` (failed-verdict)
+  // phase too, which has no primary at all.
+  const again = reverifyAction(phase, reverify, onReverify, i18n);
   const revisedAgo =
     appliedRevision !== undefined ? fmtAgo(appliedRevision.decidedAt ?? appliedRevision.createdAt) : '';
 
@@ -3209,9 +3285,10 @@ function PhaseDetailPanel({
           <PhaseCard
             phase={phase}
             {...(primary !== null ? { primary } : {})}
-            secondaries={
-              isUnresolvedOutcome(phase.runOutcome) ? [{ label: t`why it did not move`, onClick: onOpenOutcome }] : []
-            }
+            secondaries={[
+              ...(again !== null ? [again] : []),
+              ...(isUnresolvedOutcome(phase.runOutcome) ? [{ label: t`why it did not move`, onClick: onOpenOutcome }] : []),
+            ]}
             {...(phase.completionReport !== null ? { report: <Markdown text={phase.completionReport} /> } : {})}
             terms={terms}
           />
@@ -3246,13 +3323,14 @@ function PhaseDetailPanel({
                 ← #{seq}
               </span>
             ))}
+            <ReverifyButton action={again} size="panel" className="ml-auto" />
             {primary !== null && (
               <button
                 type="button"
                 disabled={primary.disabled}
                 data-tip={'tip' in primary ? primary.tip : undefined}
                 onClick={primary.onClick}
-                className={`ml-auto rounded-md border px-2 py-1 font-mono text-[10px] transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${running ? 'border-red/40 text-red hover:bg-red/10' : runButtonCls(phase.runOutcome)}`}
+                className={`${again === null ? 'ml-auto' : ''} rounded-md border px-2 py-1 font-mono text-[10px] transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${running ? 'border-red/40 text-red hover:bg-red/10' : runButtonCls(phase.runOutcome)}`}
               >
                 {primary.label}
               </button>

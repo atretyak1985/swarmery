@@ -4199,6 +4199,10 @@ msgstr "verified"
 msgid "verify {verify}"
 msgstr "verify {verify}"
 
+#: src/api/phasereport.ts
+msgid "verify again failed"
+msgstr "verify again failed"
+
 #: src/api.ts
 #: src/components/RunOutcomeModal.tsx
 msgid "verify failed"

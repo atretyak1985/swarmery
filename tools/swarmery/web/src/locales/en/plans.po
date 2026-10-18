@@ -930,6 +930,10 @@ msgstr "global"
 msgid "Global (daemon cwd)"
 msgstr "Global (daemon cwd)"
 
+#: src/pages/plans/useReverify.ts
+msgid "grade this phase's run branch again with the read-only verifier — no executor runs"
+msgstr "grade this phase's run branch again with the read-only verifier — no executor runs"
+
 #: src/pages/Board.tsx
 msgid "Graph"
 msgstr "Graph"
@@ -2462,6 +2466,10 @@ msgstr "verified"
 msgid "verifier"
 msgstr "verifier"
 
+#: src/pages/plans/useReverify.ts
+msgid "Verify again"
+msgstr "Verify again"
+
 #: src/pages/plans/VerifyVerdictChip.tsx
 msgid "verify failed"
 msgstr "verify failed"
@@ -2469,6 +2477,10 @@ msgstr "verify failed"
 #: src/pages/plans/VerifyVerdictChip.tsx
 msgid "verify inconclusive"
 msgstr "verify inconclusive"
+
+#: src/pages/plans/useReverify.ts
+msgid "verifying…"
+msgstr "verifying…"
 
 #: src/pages/Plans.tsx
 #: src/pages/Plans.tsx

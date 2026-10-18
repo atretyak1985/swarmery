@@ -4199,6 +4199,10 @@ msgstr "підтверджено"
 msgid "verify {verify}"
 msgstr "перевірка {verify}"
 
+#: src/api/phasereport.ts
+msgid "verify again failed"
+msgstr "перевірити ще раз не вдалося"
+
 #: src/api.ts
 #: src/components/RunOutcomeModal.tsx
 msgid "verify failed"

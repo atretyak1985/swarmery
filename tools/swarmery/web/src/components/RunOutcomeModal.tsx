@@ -148,6 +148,7 @@ export function RunOutcomeModal({
   writesDisabledReason,
   onClose,
   onRetry,
+  reverify = null,
   onOpenRevisions,
 }: {
   taskId: number;
@@ -158,6 +159,10 @@ export function RunOutcomeModal({
   onClose: () => void;
   /** Fires the caller's own phase-run handler (Plans.tsx owns the busy state). */
   onRetry: () => void;
+  /** "Verify again", offered on the `unverified` blocker — the caller's own action
+   *  (Plans.tsx's shared reverify hook builds label, busy state and tip); null when
+   *  the server says this phase is not re-gradable. */
+  reverify?: { label: string; onClick: () => void; disabled?: boolean; tip?: string } | null;
   /** Jump to the plan's Revisions tab (the "revision already open" 409 path). */
   onOpenRevisions: () => void;
 }): JSX.Element {
@@ -488,6 +493,24 @@ export function RunOutcomeModal({
                       <div className="mt-1 font-mono text-[10px] whitespace-pre-line text-ink-faint">
                         {b.detail}
                       </div>
+                      {/* The remedy for a missing grade is a grade: re-run the
+                          read-only verifier on the branch as it stands. Closes the
+                          modal like Retry does — busy state and any refusal show
+                          on the page, where the action lives. */}
+                      {b.kind === 'unverified' && reverify !== null && (
+                        <button
+                          type="button"
+                          disabled={reverify.disabled}
+                          data-tip={reverify.tip}
+                          onClick={() => {
+                            reverify.onClick();
+                            onClose();
+                          }}
+                          className="mt-2 rounded-lg border border-brand/40 bg-brand/5 px-3 py-1 font-mono text-[11px] text-brand transition-colors hover:bg-brand/10 disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          {reverify.label}
+                        </button>
+                      )}
                     </li>
                   ))}
                 </ul>

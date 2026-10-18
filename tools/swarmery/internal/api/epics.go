@@ -168,6 +168,15 @@ type epicPhaseDTO struct {
 	// because one gate cites every reason it has, rather than several gates each
 	// refusing for its own.
 	CompletionBlockers []string `json:"completionBlockers"`
+	// CanReverify: the row is eligible for "Verify again" (POST …/verify) —
+	// phaserun.ReverifyEligible, the SAME predicate the endpoint applies before
+	// its live gates, so the UI never re-derives the rule. Live conditions (a
+	// held slot, a plan run, a busy branch) are answered by the endpoint only.
+	CanReverify bool `json:"canReverify"`
+	// VerifyRunning: a verification of this phase is in flight right now (a
+	// verification_runs row in status 'running' for its target key) — whether a
+	// run's own grading or a re-verification.
+	VerifyRunning bool `json:"verifyRunning"`
 	// Forecasts are the doc's `## Forecast` blocks (migration 0079): the PRIOR the
 	// planner wrote and/or the POSTERIOR the executor wrote, in document order.
 	// Empty for every phase that declares none, which is all of them until an
@@ -727,6 +736,7 @@ func (h *Handler) epicPhases(taskID int64, planDir string) ([]epicPhaseDTO, epic
 		       e.verify_mode, e.verify_verdict, e.verify_detail,
 		       e.doc_model,
 		       se.model,
+		       COALESCE(e.run_branch, ''),
 		       `+landingColumns+`
 		FROM epic_phases e
 		LEFT JOIN tasks bt ON bt.id = e.activated_board_task_id
@@ -775,6 +785,8 @@ func (h *Handler) epicPhases(taskID int64, planDir string) ([]epicPhaseDTO, epic
 			// every phase whose doc carries no `**Model:**` header, which is all of
 			// them until an author opts in.
 			docModel sql.NullString
+			// epic_phases.run_branch (0043), read for one decision: canReverify.
+			runBranch string
 			// The landing columns (0103), daemon-owned.
 			landing landingRow
 		)
@@ -784,7 +796,7 @@ func (h *Handler) epicPhases(taskID int64, planDir string) ([]epicPhaseDTO, epic
 			&completion, &p.ActivatedAt, &boardTaskID, &boardExtID, &boardCol,
 			&p.RunState, &runUUID, &runStartedAt, &runError,
 			&runEndedAt, &runCheckboxesBefore, &runCheckboxesAfter,
-			&p.VerifyMode, &verifyVerdict, &verifyDetail, &docModel, &runModel}
+			&p.VerifyMode, &verifyVerdict, &verifyDetail, &docModel, &runModel, &runBranch}
 		if err := rows.Scan(append(dest, landing.dest()...)...); err != nil {
 			return nil, epicRollupDTO{}, nil, err
 		}
@@ -870,6 +882,15 @@ func (h *Handler) epicPhases(taskID int64, planDir string) ([]epicPhaseDTO, epic
 		if gate.HoldsPlanBack(gateIn) {
 			rollup.IncompletePhases++
 		}
+		// The endpoint's own row predicate, never a copy of it.
+		p.CanReverify = phaserun.ReverifyEligible(phaserun.Eligibility{
+			VerifyMode:    p.VerifyMode,
+			VerifyVerdict: verifyVerdict.String,
+			RunState:      p.RunState,
+			RunBranch:     runBranch,
+			CriteriaDone:  p.CheckboxesDone,
+			CriteriaTotal: p.CheckboxesTotal,
+		}) == nil
 		rollup.Done += p.CheckboxesDone
 		rollup.Total += p.CheckboxesTotal
 		phases = append(phases, p)
@@ -896,7 +917,9 @@ func (h *Handler) epicPhases(taskID int64, planDir string) ([]epicPhaseDTO, epic
 	}
 	reopens := h.phaseReopens(taskID, docs) // and again
 	reviews := h.phaseReviews(taskID)       // and again
+	verifying := h.phasesVerifying(phases)  // and again
 	for i := range phases {
+		phases[i].VerifyRunning = verifying[phases[i].ID]
 		phases[i].RunEvents = runEventsOrEmpty(runcore.RunEvents(h.DB, phaserun.Engine, phases[i].ID))
 		used := usage[phases[i].ID]
 		if used == nil {

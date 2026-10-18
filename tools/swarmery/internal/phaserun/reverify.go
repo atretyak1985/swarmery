@@ -1,0 +1,362 @@
+package phaserun
+
+// Re-verification of a finished phase ("Verify again"): the read-only verifier
+// grades the phase's EXISTING run branch as it stands, with no executor and no
+// reviewer. Nothing a run owns is touched — run_state, the checkboxes and the
+// branch's commits stay exactly as they were; the only write is the verdict,
+// which verify.Service.VerifyPhase stamps through its own Stamp + Notify.
+//
+// It reuses what a run already owns: the phase's run slot (so a run and a
+// re-verification of the same phase can never overlap), the plan-run gate, and
+// a worktree of the existing branch that is removed afterwards with the branch
+// kept — unless it was a clean leftover this call merely reused; a leftover
+// holding uncommitted work is refused (worktree-dirty) and never touched.
+
+import (
+	"context"
+	"database/sql"
+	"errors"
+	"fmt"
+	"io/fs"
+	"log"
+	"net/http"
+	"os"
+	"path/filepath"
+	"strings"
+
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/phasegate"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/runcore"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/worktree"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/wsingest"
+)
+
+// Reverify refusal codes. Stable wire values: the api renders them as the
+// `code` of the refusal body and the web client switches on them.
+const (
+	ReverifyCodeVerifyOff      = "verify-off"
+	ReverifyCodeCriteriaOpen   = "criteria-open"
+	ReverifyCodeNoRunBranch    = "no-run-branch"
+	ReverifyCodeAlreadyPassed  = "already-passed"
+	ReverifyCodeAlreadyRunning = "already-running"
+	ReverifyCodePlanRunning    = "plan-running"
+	ReverifyCodeBranchBusy     = "branch-busy"
+	ReverifyCodeWorktreeDirty  = "worktree-dirty"
+	ReverifyCodeNotWired       = "verifier-not-attached"
+)
+
+// Eligibility is the row-only input of ReverifyEligible: every field comes from
+// the epic_phases row, so the endpoint and the phase JSON (canReverify) answer
+// the same question from the same facts.
+type Eligibility struct {
+	VerifyMode, VerifyVerdict, RunState, RunBranch string
+	CriteriaDone, CriteriaTotal                    int
+}
+
+// ReverifyRefusal is a typed admission refusal: the HTTP status it maps to, a
+// stable code, and the operator-facing sentence.
+type ReverifyRefusal struct {
+	Status int
+	Code   string
+	Msg    string
+}
+
+func (e *ReverifyRefusal) Error() string { return e.Msg }
+
+func refuseReverify(status int, code, msg string) *ReverifyRefusal {
+	return &ReverifyRefusal{Status: status, Code: code, Msg: msg}
+}
+
+// ReverifyEligible is the one pure eligibility predicate (decision D5): nil means
+// the row may be re-verified. Order: verify-off, criteria-open, no-run-branch,
+// already-passed, already-running. Live conditions (the slot, a plan run, a busy
+// branch) are not row facts and are checked only by AdmitReverify.
+func ReverifyEligible(e Eligibility) *ReverifyRefusal {
+	switch {
+	case e.VerifyMode == "" || e.VerifyMode == wsingest.VerifyOff:
+		return refuseReverify(http.StatusUnprocessableEntity, ReverifyCodeVerifyOff,
+			"this phase does not ask to be verified (its doc has no **Verify:** normal|strict line)")
+	case !phasegate.CriteriaMetForDisplay(e.CriteriaDone, e.CriteriaTotal):
+		return refuseReverify(http.StatusUnprocessableEntity, ReverifyCodeCriteriaOpen,
+			fmt.Sprintf("the phase's acceptance criteria are not all ticked (%d/%d) — finish the phase first",
+				e.CriteriaDone, e.CriteriaTotal))
+	case e.RunBranch == "":
+		return refuseReverify(http.StatusUnprocessableEntity, ReverifyCodeNoRunBranch,
+			"the phase has no recorded run branch to verify")
+	// D7: a pass is final — the tree-hash cache would answer the same, and a button
+	// there only invites spend. A fail IS re-gradable: the branch may have been
+	// fixed by hand.
+	case e.VerifyVerdict == phasegate.VerdictPass:
+		return refuseReverify(http.StatusConflict, ReverifyCodeAlreadyPassed,
+			"the phase already passed verification")
+	case e.RunState == "running":
+		return refuseReverify(http.StatusConflict, ReverifyCodeAlreadyRunning,
+			"a run is already active for this phase")
+	}
+	return nil
+}
+
+// reverifyRow reads the row facts eligibility needs beyond what loadPhase
+// carries: the stamped verdict and the criteria counts.
+func (s *Service) reverifyRow(phaseID int64, info phaseInfo) (Eligibility, error) {
+	el := Eligibility{VerifyMode: info.VerifyMode, RunState: info.RunState, RunBranch: info.RunBranch}
+	err := s.DB.QueryRow(`
+		SELECT COALESCE(verify_verdict, ''), checkboxes_done, checkboxes_total
+		  FROM epic_phases WHERE id = ?`, phaseID).Scan(&el.VerifyVerdict, &el.CriteriaDone, &el.CriteriaTotal)
+	if errors.Is(err, sql.ErrNoRows) {
+		return el, ErrPhaseNotFound
+	}
+	return el, err
+}
+
+// AdmitReverify runs every admission gate of a re-verification synchronously and,
+// when all pass, returns the body to run asynchronously (decision D6). On
+// success the phase's run slot is HELD and a worktree of its run branch exists;
+// start releases the slot and removes the worktree if this call created it. Every
+// refusal after the slot was taken releases it.
+//
+// Refusals are *ReverifyRefusal, except ErrPhaseNotFound / ErrNoPath / repo
+// resolution errors and a full run pool (*runcore.NoSlotError), which travel as
+// themselves the way StartWith's do.
+func (s *Service) AdmitReverify(phaseID int64) (start func(), err error) {
+	info, err := s.loadPhase(phaseID)
+	if err != nil {
+		return nil, err
+	}
+	el, err := s.reverifyRow(phaseID, info)
+	if err != nil {
+		return nil, err
+	}
+	if ref := ReverifyEligible(el); ref != nil {
+		return nil, ref
+	}
+	if busy, err := s.planRunActive(info.WorkspaceTaskID); err != nil {
+		return nil, err
+	} else if busy {
+		return nil, refuseReverify(http.StatusConflict, ReverifyCodePlanRunning,
+			"a plan run is active for this plan — wait for it or cancel it before re-verifying one phase")
+	}
+	if s.Verify == nil {
+		return nil, refuseReverify(http.StatusServiceUnavailable, ReverifyCodeNotWired,
+			"phase verification is not attached")
+	}
+	// The worktree manager checks out swarm/<taskName>, i.e. the DERIVED name. A row
+	// whose stamped branch differs (renamed doc, older row id) holds its work on a
+	// branch that name does not reach — refuse rather than guess.
+	if want := runcore.PhaseBranch(phaseID); info.RunBranch != want {
+		return nil, refuseReverify(http.StatusUnprocessableEntity, ReverifyCodeNoRunBranch,
+			fmt.Sprintf("the phase's run branch is %s, not %s — it ran under a previous phase id, so it cannot be re-verified here",
+				info.RunBranch, want))
+	}
+	if info.ProjectPath == "" {
+		return nil, ErrNoPath
+	}
+	// loadPhase does not resolve the repository; StartWith does it itself, and so
+	// must this — the branch lives in the repo the run resolved to.
+	info.RepoRoot, err = s.runRoot(info)
+	if err != nil {
+		return nil, err
+	}
+	if s.branchTip(info.RepoRoot, info.RunBranch) == "" {
+		return nil, refuseReverify(http.StatusUnprocessableEntity, ReverifyCodeNoRunBranch,
+			fmt.Sprintf("the run branch %s does not exist in %s", info.RunBranch, info.RepoRoot))
+	}
+	ex, ok := s.Wt.(ExistingBranchWorktrees)
+	if !ok {
+		return nil, refuseReverify(http.StatusServiceUnavailable, ReverifyCodeNotWired,
+			"the worktree manager cannot check out an existing branch")
+	}
+
+	// D4: the run's own slot, held for the whole re-verification, so StartWith
+	// answers ErrRunning meanwhile and a re-verification refuses while a run holds it.
+	// The cancel only frees the slot's bookkeeping: the verifier runs on its own
+	// background context, the way verifyRun's does.
+	_, cancel := context.WithCancel(context.Background())
+	releaseSlot, err := s.Slots.TryAcquire(s.slotKey(phaseID), s.UUID(), cancel)
+	if err != nil {
+		cancel()
+		if errors.Is(err, runcore.ErrBusy) {
+			return nil, refuseReverify(http.StatusConflict, ReverifyCodeAlreadyRunning,
+				"a run or a re-verification is already active for this phase")
+		}
+		return nil, err // runcore.ErrNoSlot travels as itself
+	}
+	release := func() {
+		cancel()
+		releaseSlot()
+	}
+
+	// AcquireExisting warm-reuses a checkout already registered at the phase's path
+	// (a crashed run's leftover) and reclaims a foreign one in place. Either may hold
+	// the only copy of uncommitted work: grading it would stamp a verdict on edits
+	// the branch does not contain, and the removal below would then destroy them.
+	// So look first, under the slot, and refuse rather than touch a dirty one — the
+	// same posture StartWith takes towards a leftover it did not create.
+	taskName := runcore.PhaseTaskName(phaseID)
+	left, err := s.leftoverWorktree(info.RepoRoot, info.ProjectSlug, taskName)
+	if err != nil {
+		release()
+		return nil, fmt.Errorf("worktree inspect: %w", err)
+	}
+	if left.dirty {
+		release()
+		return nil, refuseReverify(http.StatusConflict, ReverifyCodeWorktreeDirty,
+			fmt.Sprintf("a leftover worktree of this phase at %s holds uncommitted changes — commit them to %s "+
+				"or remove the worktree (`git worktree remove`, after saving anything worth keeping), then verify again",
+				left.path, info.RunBranch))
+	}
+
+	// D2: the branch as it stands — no ref is deleted or re-cut.
+	acq, err := ex.AcquireExisting(info.RepoRoot, info.ProjectSlug, taskName)
+	if err != nil {
+		release()
+		switch {
+		case errors.Is(err, worktree.ErrBranchBusy):
+			return nil, refuseReverify(http.StatusConflict, ReverifyCodeBranchBusy,
+				"the run branch is checked out in another worktree — remove it or finish what holds it, then verify again")
+		case errors.Is(err, worktree.ErrStartRefUnresolved):
+			return nil, refuseReverify(http.StatusUnprocessableEntity, ReverifyCodeNoRunBranch,
+				fmt.Sprintf("the run branch %s no longer resolves", info.RunBranch))
+		}
+		return nil, fmt.Errorf("worktree acquire: %w", err)
+	}
+
+	// A clean checkout already on the run branch at this path is the one
+	// AcquireExisting warm-reused: this call did not create it, so it stays. Any
+	// other outcome (nothing there, a stale registration, a foreign branch reclaimed
+	// in place) is a checkout this call cut, and it is removed afterwards.
+	created := !(left.registered && left.branch == acq.Branch)
+
+	return func() {
+		// Worktree FIRST, slot LAST (defers run LIFO) — the invariant runAndHandle
+		// keeps, so no run can warm-reuse a worktree that is about to be removed.
+		defer release()
+		if created {
+			defer s.removeWorktree(info.RepoRoot, acq)
+		}
+		s.reverifyBody(phaseID, info, acq)
+	}, nil
+}
+
+// leftoverCheckout is what leftoverWorktree saw at the phase's worktree path.
+type leftoverCheckout struct {
+	path       string
+	registered bool   // git has a live checkout registered at path
+	branch     string // the branch it has checked out ("" when detached)
+	dirty      bool   // `git status` reports work (see statusHasWork)
+}
+
+// leftoverWorktree inspects the checkout AcquireExisting would hand this phase
+// BEFORE it is called: whether git has one registered at that path, on which
+// branch, and whether it holds uncommitted work (tracked edits or untracked
+// files other than the ones the manager placed there itself). A registration whose directory is gone is a stale one AcquireExisting
+// prunes and replaces, so it reads as nothing there. Every git failure is an
+// error — the caller refuses rather than guesses whether work would be lost.
+func (s *Service) leftoverWorktree(repoRoot, projectSlug, taskName string) (leftoverCheckout, error) {
+	path, err := s.Wt.Path(projectSlug, taskName)
+	if err != nil {
+		return leftoverCheckout{}, err
+	}
+	left := leftoverCheckout{path: path}
+	list, err := s.Git.Run(repoRoot, "worktree", "list", "--porcelain")
+	if err != nil {
+		return left, fmt.Errorf("list worktrees: %w", err)
+	}
+	for _, e := range worktree.ParseWorktreeList(list) {
+		if !sameCheckout(e.Path, path) {
+			continue
+		}
+		if _, err := os.Stat(path); errors.Is(err, fs.ErrNotExist) {
+			return left, nil
+		}
+		status, err := s.Git.Run(path, "status", "--porcelain=v1", "--untracked-files=all")
+		if err != nil {
+			return left, fmt.Errorf("status of %s: %w", path, err)
+		}
+		left.registered, left.branch = true, e.Branch
+		left.dirty = statusHasWork(status, worktree.ManagerPlacedPaths())
+		return left, nil
+	}
+	return left, nil
+}
+
+// statusHasWork reports whether `git status --porcelain=v1` output names any
+// entry that may be someone's uncommitted work. The one exception is an
+// UNTRACKED entry on a path the worktree manager places into every checkout it
+// acquires (placed: a lent dependency symlink such as `node_modules`, a copied
+// untracked .claude config file) — git lists those in a perfectly clean
+// leftover. A tracked, modified or staged entry on such a path, and any other
+// untracked path, is still work.
+func statusHasWork(status string, placed []string) bool {
+	for _, line := range strings.Split(status, "\n") {
+		line = strings.TrimRight(line, "\r")
+		if strings.TrimSpace(line) == "" {
+			continue
+		}
+		rest, untracked := strings.CutPrefix(line, "?? ")
+		if !untracked || !isPlacedPath(rest, placed) {
+			return true
+		}
+	}
+	return false
+}
+
+// isPlacedPath matches a porcelain path against placed, exactly or with git's
+// trailing "/" for a directory. Porcelain quotes a path holding unusual
+// characters; the surrounding quotes are stripped, nothing is unescaped.
+func isPlacedPath(p string, placed []string) bool {
+	if len(p) >= 2 && strings.HasPrefix(p, `"`) && strings.HasSuffix(p, `"`) {
+		p = p[1 : len(p)-1]
+	}
+	p = strings.TrimSuffix(p, "/")
+	for _, want := range placed {
+		if p == want {
+			return true
+		}
+	}
+	return false
+}
+
+// sameCheckout reports whether a and b name the same directory. git prints the
+// worktree paths it registered with symlinks resolved (/private/var on macOS),
+// while the manager derives its path from the configured root, so a textual
+// comparison would miss the leftover it is looking for.
+func sameCheckout(a, b string) bool {
+	fa, errA := os.Stat(a)
+	fb, errB := os.Stat(b)
+	if errA != nil || errB != nil {
+		return filepath.Clean(a) == filepath.Clean(b)
+	}
+	return os.SameFile(fa, fb)
+}
+
+// reverifyBody grades the acquired worktree. Errors are logged and dropped: the
+// verdict (or its absence) is the only outcome, and the phase's run facts are
+// never touched.
+func (s *Service) reverifyBody(phaseID int64, info phaseInfo, acq worktree.Acquired) {
+	doc, err := os.ReadFile(info.DocPath)
+	if err != nil {
+		log.Printf("warning: phaserun: phase=%d reverify skipped, doc %q unreadable: %v", phaseID, info.DocPath, err)
+		return
+	}
+	log.Printf("phaserun: phase=%d reverify (%s) branch=%s base=%q worktree=%q",
+		phaseID, info.VerifyMode, acq.Branch, info.RunStartPoint, acq.Path)
+	if err := s.Verify.VerifyPhase(context.Background(), runcore.PhaseVerifyRequest{
+		PhaseID:         phaseID,
+		WorkspaceTaskID: info.WorkspaceTaskID,
+		Mode:            info.VerifyMode,
+		WorktreePath:    acq.Path,
+		Branch:          acq.Branch,
+		// D3: the run's recorded start point, NOT acq.StartPoint — AcquireExisting
+		// reports the branch TIP, and a diff of the branch against its own tip is
+		// empty by construction. "" (a pre-0057 row) makes the verifier skip the
+		// scope gate, as it already does.
+		StartPoint:  info.RunStartPoint,
+		Title:       info.Name,
+		Prompt:      string(doc),
+		ProjectPath: info.ProjectPath,
+	}); err != nil {
+		log.Printf("error: phaserun: phase=%d reverify: %v", phaseID, err)
+		return
+	}
+	log.Printf("phaserun: phase=%d reverify finished", phaseID)
+}
