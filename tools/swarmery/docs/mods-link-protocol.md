@@ -912,6 +912,16 @@ origin fence, and the Host fence applies. POST bodies are JSON, at most 16 KiB (
 above). A body that is not JSON is `400`. `taskId` and `phaseId` may be sent as a string
 or a number.
 
+**Which plan a `taskId` names.** `tasks.external_id` is unique per workspace only, so
+two projects can carry the same `yyyy-mm-dd-slug`. Every lookup is therefore scoped to
+the session's project, found the way `GET` finds it (the session's `sessions` row,
+else the project owning `cwd`); `select`, `tick` and `run` take an optional `cwd` for
+a session the daemon has not indexed yet. A body with a `phaseId` resolves the plan
+through that phase's row (`epic_phases.id` is unique) and requires `taskId` to name
+the same plan (its external id or numeric id), else `404 phase not found`. Only when
+neither the session nor `cwd` names a project is the lookup unscoped, and then it is
+deterministic: an unarchived plan first, then the newest task.
+
 ### The view
 
 `GET /api/link/plan`, every `200` of the POSTs below, has this shape:
@@ -946,9 +956,11 @@ or a number.
 criteria, which are every `- [ ]` / `- [x]` line outside a fenced code block
 (`wsingest.ListCriteria`, the same walker the checkbox counts use). A checkbox quoted
 inside a fenced agent prompt is not a criterion and has no `idx`. `tick` resolves `idx`
-over the same walker on the bytes it is about to write, so the index the mod drew is the
-line the daemon flips. After any doc change, the next `GET` renumbers. The mod should
-re-read the view before it offers another tick.
+over the same walker on the bytes it is about to write. After any doc change, the next
+`GET` renumbers, so a tick also carries the criterion's `text` as the mod drew it: if
+the doc's `idx`-th criterion no longer reads so (a line inserted above it, the
+criterion reworded or removed), the tick is refused `409` and nothing is written. The
+mod re-reads the view and the person ticks again.
 
 `done`, `total` and `criteria` come from the file, so a tick shows on the next `GET`
 at once. `status` and `next` come from the indexed phase rows, which the workspace
@@ -963,8 +975,10 @@ GET /api/link/plan?session=<Claude session id>&cwd=<absolute path>
 At least one parameter is required (`400` otherwise). Resolution, first match wins:
 
 1. **The session's pick.** A `session_plan` row for `session` with `chosen_by =
-   'terminal'`: that plan, at its stored phase, else at the plan's active phase. A pick
-   whose plan is no longer indexed falls through to step 2.
+   'terminal'`: that plan, at its stored phase, else at the plan's active phase. A
+   stored phase pins the plan through its row; without one (or with a phase that is
+   gone) the stored `task_id` is looked up within the session's project. A pick whose
+   plan is no longer indexed falls through to step 2.
 2. **The project's active plan.** The project is the session's (`sessions.session_uuid`
    → `project_id`). If the daemon has no row for the session yet, or the row sits on
    the `(unknown)` project, the project is the registered project whose path is `cwd`
@@ -987,10 +1001,10 @@ row.
 ### POST /api/link/plan/select
 
 ```json
-{ "session": "<uuid>", "taskId": "2026-10-01-alpha", "phaseId": "12" }
+{ "session": "<uuid>", "cwd": "/work/proj", "taskId": "2026-10-01-alpha", "phaseId": "12" }
 ```
 
-Pins the plan, and the phase when `phaseId` is given, to the session (`chosen_by =
+`cwd` and `phaseId` are optional. Pins the plan, and the phase when `phaseId` is given, to the session (`chosen_by =
 'terminal'`, replacing any earlier pick). Without `phaseId` the view follows the plan's
 active phase. Answers `200` with the view, `400` for a missing `session` or `taskId`,
 `404` for an unknown plan or a phase that is not that plan's.
@@ -998,10 +1012,15 @@ active phase. Answers `200` with the view, `400` for a missing `session` or `tas
 ### POST /api/link/plan/tick
 
 ```json
-{ "session": "<uuid>", "taskId": "2026-10-01-alpha", "phaseId": "12", "idx": 1, "done": true }
+{ "session": "<uuid>", "cwd": "/work/proj", "taskId": "2026-10-01-alpha", "phaseId": "12",
+  "idx": 1, "text": "tick flips the doc", "done": true }
 ```
 
-Flips criterion `idx` of that phase's doc to `done`. It runs through the same code as
+Flips criterion `idx` of that phase's doc to `done`. `text` (optional) is the
+criterion's text as the view gave it: when it is sent and the doc's `idx`-th criterion
+no longer reads so (compared with surrounding whitespace trimmed), or the doc has no
+criterion at `idx` any more, the tick is refused `409 {"error":"criterion changed"}`
+and nothing is written. Without `text` the tick is positional, as it always was. It runs through the same code as
 the Criteria tab's `PATCH /api/epics/{taskId}/docs {line, done}`: the doc stays
 confined to the plan directory, a timestamped backup lands in `plan/.backups/`, and a
 tick that closes the doc's last open criterion hands the phase to the plan branch
@@ -1012,15 +1031,17 @@ again when it re-indexes the doc).
 |---|---|
 | `200` | the view of that phase, after the write |
 | `400` | `idx` or `done` missing, `idx` negative, `taskId` or `phaseId` missing |
-| `404` | unknown plan or phase, no plan directory, doc missing, or no criterion at `idx` (the doc has fewer, usually because it changed since the last `GET`) |
+| `404` | unknown plan or phase, no plan directory, doc missing, or (without `text`) no criterion at `idx` |
+| `409` | `text` sent and the criterion at `idx` no longer matches it, or is gone: `{"error":"criterion changed"}` |
 
-There is no version check. A tick names a criterion by position in the doc as it is
-now, the same way `PATCH` names a line.
+The `text` check is the version check: a tick names a criterion by position in the doc
+as it is now, the same way `PATCH` names a line, and the text proves it is still the
+criterion the mod drew.
 
 ### POST /api/link/plan/run
 
 ```json
-{ "session": "<uuid>", "taskId": "2026-10-01-alpha", "phaseId": "13" }
+{ "session": "<uuid>", "cwd": "/work/proj", "taskId": "2026-10-01-alpha", "phaseId": "13" }
 ```
 
 Starts a headless run of that phase through the same code as the Plans page's
@@ -1063,7 +1084,11 @@ terminal, newest first:
 ```
 
 The list holds every `terminal` pick of this plan, plus every session whose `GET`
-resolved to it automatically in the last 10 minutes. `phaseId` is `null` for a pick of
+resolved to it automatically in the last 10 minutes. A `session_plan` row belongs to
+this plan when its `task_id` is the plan's numeric id, or its external id and either
+its `phase_id` is one of this plan's phases or its session is in this plan's project
+(and its `phase_id` is not another plan's). Another project's plan with the same
+external id never lends its sessions. `phaseId` is `null` for a pick of
 the plan without a phase. `live` is the session's link freshness (`ingest.LinkFresh`,
 the same answer as the session DTO's `link.live`). A row whose session has no `sessions`
 row yet is left out. `[]` when none, `404` for an unknown task, `400` for a non-numeric

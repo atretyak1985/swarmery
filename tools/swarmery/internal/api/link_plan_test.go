@@ -623,3 +623,201 @@ func TestPhaseViewStatuses(t *testing.T) {
 		t.Error("phaseViewTitle prefix strip")
 	}
 }
+
+// A tick that carries the criterion's drawn text is refused 409 when the doc's
+// idx-th criterion no longer reads so (a line inserted above, or the
+// criterion gone); a matching text ticks; no text keeps the positional tick.
+func TestLinkPlanTickText(t *testing.T) {
+	f := newPlanFixture(t)
+	doc := filepath.Join(f.alphaDir, "phase-2.md")
+	p2 := sid(f.alpha[1])
+
+	// Absent: the positional tick, as before.
+	if code, body := f.tok(t, http.MethodPost, "/api/link/plan/tick", tickBody(alphaRef, p2, `,"idx":1,"done":true`)); code != http.StatusOK {
+		t.Fatalf("tick without text = %d (%s), want 200", code, body)
+	}
+	if got := readDoc(t, doc); !strings.Contains(got, "- [x] tick flips the doc") {
+		t.Fatalf("tick without text did not flip idx 1:\n%s", got)
+	}
+
+	// Match: ticks (here: unticks) the criterion it names.
+	if code, body := f.tok(t, http.MethodPost, "/api/link/plan/tick",
+		tickBody(alphaRef, p2, `,"idx":1,"done":false,"text":"tick flips the doc"`)); code != http.StatusOK {
+		t.Fatalf("tick with matching text = %d (%s), want 200", code, body)
+	}
+	if got := readDoc(t, doc); got != alphaPhase2 {
+		t.Fatalf("matching untick did not restore the doc:\n%s", got)
+	}
+
+	// A criterion inserted above idx 1 since the mod drew the band: idx 1 is
+	// now the new line. Mismatch → 409, nothing written.
+	moved := strings.Replace(alphaPhase2, "- [x] route registered\n", "- [x] route registered\n- [ ] a criterion added since\n", 1)
+	if err := os.WriteFile(doc, []byte(moved), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	code, body := f.tok(t, http.MethodPost, "/api/link/plan/tick",
+		tickBody(alphaRef, p2, `,"idx":1,"done":true,"text":"tick flips the doc"`))
+	if code != http.StatusConflict || strings.TrimSpace(body) != `{"error":"criterion changed"}` {
+		t.Fatalf("stale tick = %d %s, want 409 criterion changed", code, body)
+	}
+	// Out of range with text is the same conflict, not a 404.
+	if code, body := f.tok(t, http.MethodPost, "/api/link/plan/tick",
+		tickBody(alphaRef, p2, `,"idx":9,"done":true,"text":"tick flips the doc"`)); code != http.StatusConflict {
+		t.Errorf("stale idx past the end = %d (%s), want 409", code, body)
+	}
+	if got := readDoc(t, doc); got != moved {
+		t.Errorf("a refused tick changed the doc:\n%s", got)
+	}
+}
+
+// otherAlpha seeds project `other` (/work/other, id 3) with a plan whose
+// external id is alphaRef too — tasks.external_id is unique per workspace, not
+// across projects — and returns its task id, plan dir and phase ids. It is the
+// newer task, so an unscoped, newest-first lookup would pick it.
+func otherAlpha(t *testing.T, f *planFixture) (int64, string, []int64) {
+	t.Helper()
+	if _, err := f.db.Exec(`INSERT INTO projects(id, path, slug, first_seen) VALUES (3, '/work/other', 'other', '2026-01-01T00:00:00Z')`); err != nil {
+		t.Fatal(err)
+	}
+	dir := filepath.Join(t.TempDir(), "other", "plan")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	body := "# Phase 1 — Elsewhere\nStatus: In progress\n\n## Acceptance Criteria\n- [ ] the other project's criterion\n\n## Completion Report\n"
+	if err := os.WriteFile(filepath.Join(dir, "phase-1.md"), []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	res, err := f.db.Exec(`INSERT INTO tasks (project_id, title, prompt, status, created_at, started_at, source, external_id)
+		VALUES (3, 'Other alpha', 'goal', 'running', '2026-10-12T00:00:00Z', '2026-10-12T00:00:00Z', 'workspace', ?)`, alphaRef)
+	if err != nil {
+		t.Fatal(err)
+	}
+	id, _ := res.LastInsertId()
+	if _, err := f.db.Exec(`INSERT INTO task_artifacts (task_id, kind, path, content_hash, parsed_at)
+		VALUES (?, 'plan', ?, 'hash', '2026-10-12T00:00:00Z')`, id, dir); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.db.Exec(`INSERT INTO epic_phases (workspace_task_id, seq, name, doc_path, depends_on,
+		checkboxes_total, checkboxes_done, doc_status) VALUES (?, 1, 'Elsewhere', ?, '[]', 1, 0, 'in_progress')`,
+		id, filepath.Join(dir, "phase-1.md")); err != nil {
+		t.Fatal(err)
+	}
+	return id, dir, phaseIDs(t, f, id)
+}
+
+// Two projects share an external id: every lookup stays in the session's
+// project, a phaseId pins the plan exactly, and an unscoped lookup is
+// deterministic.
+func TestLinkPlanSharedExternalIDAcrossProjects(t *testing.T) {
+	f := newPlanFixture(t)
+	otherID, otherDir, other := otherAlpha(t, f)
+	f.addSession(t, "s-proj", 1, "")
+	if _, err := f.db.Exec(`INSERT INTO sessions (project_id, session_uuid, cwd, status, started_at)
+		VALUES (3, 's-other', '/work/other', 'active', '2026-10-14T00:00:00.000Z')`); err != nil {
+		t.Fatal(err)
+	}
+
+	// select by ref, no phase: each session gets its own project's plan.
+	for _, tc := range []struct{ session, cwd, want string }{
+		{"s-proj", "", "Alpha plan"},
+		{"s-other", "", "Other alpha"},
+		{"s-new", "/work/proj/sub", "Alpha plan"}, // no sessions row yet: the body's cwd scopes it
+		{"s-new2", "/work/other", "Other alpha"},
+	} {
+		body := fmt.Sprintf(`{"session":%q,"cwd":%q,"taskId":%q}`, tc.session, tc.cwd, alphaRef)
+		code, resp := f.tok(t, http.MethodPost, "/api/link/plan/select", body)
+		if code != http.StatusOK {
+			t.Fatalf("select %s = %d (%s)", tc.session, code, resp)
+		}
+		if v := decodeView(t, resp); v.Title != tc.want {
+			t.Errorf("select from %s = %q, want %q", tc.session, v.Title, tc.want)
+		}
+	}
+
+	// GET of the terminal pick (task_id = the shared ref, no phase) stays in
+	// the session's project.
+	for _, tc := range []struct{ session, want string }{{"s-proj", "Alpha plan"}, {"s-other", "Other alpha"}} {
+		code, resp := f.tok(t, http.MethodGet, "/api/link/plan?session="+tc.session, "")
+		if code != http.StatusOK {
+			t.Fatalf("get %s = %d (%s)", tc.session, code, resp)
+		}
+		if v := decodeView(t, resp); v.Title != tc.want || v.ChosenBy != planChosenTerminal {
+			t.Errorf("get %s = %q/%s, want %q terminal", tc.session, v.Title, v.ChosenBy, tc.want)
+		}
+	}
+
+	// A phaseId pins the plan through its row, even unscoped and even though
+	// the other plan is the newer task: the tick lands in project 1's doc.
+	if code, resp := f.tok(t, http.MethodPost, "/api/link/plan/tick",
+		tickBody(alphaRef, sid(f.alpha[1]), `,"idx":1,"done":true`)); code != http.StatusOK {
+		t.Fatalf("tick alpha phase 2 = %d (%s)", code, resp)
+	}
+	if got := readDoc(t, filepath.Join(f.alphaDir, "phase-2.md")); !strings.Contains(got, "- [x] tick flips the doc") {
+		t.Errorf("project 1's doc not ticked:\n%s", got)
+	}
+	if got := readDoc(t, filepath.Join(otherDir, "phase-1.md")); strings.Contains(got, "[x]") {
+		t.Errorf("the other project's doc was ticked:\n%s", got)
+	}
+	// The other plan's phase under the shared ref is that plan's, from any session.
+	if code, resp := f.tok(t, http.MethodPost, "/api/link/plan/tick",
+		fmt.Sprintf(`{"session":"s-proj","taskId":%q,"phaseId":%q,"idx":0,"done":true}`, alphaRef, sid(other[0]))); code != http.StatusOK {
+		t.Fatalf("tick other phase 1 = %d (%s)", code, resp)
+	}
+	if got := readDoc(t, filepath.Join(otherDir, "phase-1.md")); !strings.Contains(got, "- [x] the other project's criterion") {
+		t.Errorf("the other project's doc not ticked by its phase id:\n%s", got)
+	}
+	// A phase of another plan under a ref that does not name it: 404.
+	if code, _ := f.tok(t, http.MethodPost, "/api/link/plan/tick",
+		tickBody(betaRef, sid(other[0]), `,"idx":0,"done":true`)); code != http.StatusNotFound {
+		t.Errorf("foreign phase under beta = %d, want 404", code)
+	}
+
+	// Unscoped (no session row, no cwd) and no phase: deterministic, the newest
+	// unarchived plan — the same answer every time.
+	for i := 0; i < 3; i++ {
+		_, resp := f.tok(t, http.MethodPost, "/api/link/plan/select", `{"session":"s-loose","taskId":"`+alphaRef+`"}`)
+		if v := decodeView(t, resp); v.Title != "Other alpha" {
+			t.Fatalf("unscoped select #%d = %q, want the newest (Other alpha)", i, v.Title)
+		}
+	}
+
+	// terminal-sessions lists only the sessions of each plan's own project
+	// (s-new / s-new2 / s-loose have no sessions row and are left out).
+	list := func(taskID int64) string {
+		t.Helper()
+		code, body := f.do(t, http.MethodGet, fmt.Sprintf("/api/epics/%d/terminal-sessions", taskID), "", "")
+		if code != http.StatusOK {
+			t.Fatalf("terminal-sessions %d = %d (%s)", taskID, code, body)
+		}
+		var got []terminalSessionDTO
+		if err := json.Unmarshal([]byte(body), &got); err != nil {
+			t.Fatal(err)
+		}
+		var uuids []string
+		for _, d := range got {
+			uuids = append(uuids, d.SessionUUID)
+		}
+		return strings.Join(uuids, ",")
+	}
+	if got := list(f.alphaID); got != "s-proj" {
+		t.Errorf("alpha terminal-sessions = %q, want s-proj only", got)
+	}
+	if got := list(otherID); got != "s-other" {
+		t.Errorf("other terminal-sessions = %q, want s-other only", got)
+	}
+
+	// A row keyed by the numeric task id, or pinned to one of the plan's
+	// phases, counts whatever project the session sits in.
+	if _, err := f.db.Exec(`UPDATE session_plan SET task_id = ?, phase_id = NULL WHERE session_id = 's-proj'`, sid(otherID)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.db.Exec(`UPDATE session_plan SET task_id = ?, phase_id = ? WHERE session_id = 's-other'`, alphaRef, sid(f.alpha[1])); err != nil {
+		t.Fatal(err)
+	}
+	if got := list(f.alphaID); got != "s-other" {
+		t.Errorf("alpha terminal-sessions after re-pin = %q, want s-other (pinned to alpha's phase)", got)
+	}
+	if got := list(otherID); got != "s-proj" {
+		t.Errorf("other terminal-sessions after re-pin = %q, want s-proj (numeric id)", got)
+	}
+}

@@ -163,10 +163,48 @@ func scanPlanEpic(sc interface{ Scan(...any) error }) (*planEpic, error) {
 	return &e, nil
 }
 
-// planEpicByRef finds the workspace plan a link body names: by external_id,
-// else — for a ref that is all digits — by tasks.id. nil, nil when there is no
-// such plan (a task without phases is not one).
-func (h *Handler) planEpicByRef(ref string) (*planEpic, error) {
+// planScope confines a link request's plan lookups to one project: the
+// session's, else the project owning its cwd (planProjectFor).
+// tasks.external_id is unique per workspace only, so two projects can carry
+// the same `yyyy-mm-dd-slug`; unscoped, a ref could resolve to the other
+// project's plan. A request whose session and cwd name no project (a session
+// the daemon has not indexed yet, no cwd) looks across every project.
+type planScope struct {
+	projectID int64
+	known     bool
+}
+
+// sql is the scope's extra WHERE clause (on tasks aliased t) and its args.
+func (s planScope) sql() (string, []any) {
+	if !s.known {
+		return "", nil
+	}
+	return ` AND t.project_id = ?`, []any{s.projectID}
+}
+
+func (h *Handler) planScopeFor(uuid, cwd string) (planScope, error) {
+	pid, ok, err := h.planProjectFor(uuid, cwd)
+	if err != nil {
+		return planScope{}, err
+	}
+	return planScope{projectID: pid, known: ok}, nil
+}
+
+// planEpicOrder makes a lookup that may match several plans deterministic (an
+// unscoped one, with two projects sharing a ref): an unarchived plan first,
+// then the newest task.
+const planEpicOrder = ` ORDER BY t.archived_at IS NOT NULL, t.id DESC LIMIT 1`
+
+// matchesRef reports whether ref names e: its external_id or its numeric id.
+func (e *planEpic) matchesRef(ref string) bool {
+	ref = strings.TrimSpace(ref)
+	return ref != "" && (ref == e.ref || ref == strconv.FormatInt(e.id, 10))
+}
+
+// planEpicByRef finds the workspace plan a link body names, within scope: by
+// external_id, else — for a ref that is all digits — by tasks.id. nil, nil
+// when there is no such plan (a task without phases is not one).
+func (h *Handler) planEpicByRef(ref string, scope planScope) (*planEpic, error) {
 	ref = strings.TrimSpace(ref)
 	if ref == "" {
 		return nil, nil
@@ -175,7 +213,8 @@ func (h *Handler) planEpicByRef(ref string) (*planEpic, error) {
 		  FROM tasks t JOIN projects p ON p.id = t.project_id
 		 WHERE t.source = 'workspace'
 		   AND EXISTS (SELECT 1 FROM epic_phases e WHERE e.workspace_task_id = t.id)`
-	e, err := scanPlanEpic(h.DB.QueryRow(q+` AND t.external_id = ?`, ref))
+	clause, args := scope.sql()
+	e, err := scanPlanEpic(h.DB.QueryRow(q+` AND t.external_id = ?`+clause+planEpicOrder, append([]any{ref}, args...)...))
 	if err == nil {
 		return e, nil
 	}
@@ -186,11 +225,53 @@ func (h *Handler) planEpicByRef(ref string) (*planEpic, error) {
 	if perr != nil {
 		return nil, nil
 	}
-	e, err = scanPlanEpic(h.DB.QueryRow(q+` AND t.id = ?`, id))
+	e, err = scanPlanEpic(h.DB.QueryRow(q+` AND t.id = ?`+clause, append([]any{id}, args...)...))
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}
 	return e, err
+}
+
+// planEpicByPhase finds the plan that owns phase phaseID (epic_phases.id is
+// unique across projects, so no scope is needed), provided ref names it too.
+// nil, nil for a phase that is not a number, unknown, or another plan's.
+func (h *Handler) planEpicByPhase(phaseID, ref string) (*planEpic, error) {
+	id, err := strconv.ParseInt(strings.TrimSpace(phaseID), 10, 64)
+	if err != nil {
+		return nil, nil
+	}
+	e, err := scanPlanEpic(h.DB.QueryRow(`SELECT `+planEpicCols+`
+		  FROM epic_phases ph
+		  JOIN tasks t ON t.id = ph.workspace_task_id
+		  JOIN projects p ON p.id = t.project_id
+		 WHERE ph.id = ? AND t.source = 'workspace'`, id))
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	if !e.matchesRef(ref) {
+		return nil, nil
+	}
+	return e, nil
+}
+
+// planEpicFor resolves a plan by ref and, when phaseID is set, by that phase:
+// the phase row first (exact), else the ref within scope. ok=false: the phase
+// is set but is not the plan's — the epic returned is then the ref's plan (or
+// nil), so a caller can tell an unknown plan from a foreign phase.
+func (h *Handler) planEpicFor(ref, phaseID string, scope planScope) (*planEpic, bool, error) {
+	if phaseID != "" {
+		e, err := h.planEpicByPhase(phaseID, ref)
+		if err != nil || e != nil {
+			return e, err == nil, err
+		}
+		e, err = h.planEpicByRef(ref, scope)
+		return e, false, err
+	}
+	e, err := h.planEpicByRef(ref, scope)
+	return e, true, err
 }
 
 // loadPlanPhases reads an epic's phases (the epics API's own read, so every
@@ -544,6 +625,13 @@ func (h *Handler) linkPlanGet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// The session's project scopes every lookup below.
+	scope, err := h.planScopeFor(uuid, cwd)
+	if err != nil {
+		writeErr(w, err)
+		return
+	}
+
 	// 1. The operator's pick in the terminal.
 	row, err := h.sessionPlan(uuid)
 	if err != nil {
@@ -551,7 +639,9 @@ func (h *Handler) linkPlanGet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if row != nil && row.chosenBy == planChosenTerminal {
-		e, err := h.planEpicByRef(row.taskID)
+		// A stored phase pins the plan exactly; a phase that is gone (or not
+		// the plan's) leaves the ref, looked up within the project.
+		e, _, err := h.planEpicFor(row.taskID, row.phaseID, scope)
 		if err != nil {
 			writeErr(w, err)
 			return
@@ -573,16 +663,11 @@ func (h *Handler) linkPlanGet(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 2. The active plan of the session's project.
-	pid, ok, err := h.planProjectFor(uuid, cwd)
-	if err != nil {
-		writeErr(w, err)
-		return
-	}
-	if !ok {
+	if !scope.known {
 		w.WriteHeader(http.StatusNoContent)
 		return
 	}
-	ep, err := h.activePlanEpic(pid)
+	ep, err := h.activePlanEpic(scope.projectID)
 	if err != nil {
 		writeErr(w, err)
 		return
@@ -611,12 +696,18 @@ func (h *Handler) linkPlanGet(w http.ResponseWriter, r *http.Request) {
 // reads its own fields.
 type linkPlanBody struct {
 	Session string `json:"session"`
+	// Cwd (optional) scopes the plan lookup to the project owning it when
+	// the daemon has no sessions row for Session yet, as GET's ?cwd= does.
+	Cwd     string `json:"cwd"`
 	TaskID  flexID `json:"taskId"`
 	PhaseID flexID `json:"phaseId"`
 	Idx     *int   `json:"idx"`
 	Done    *bool  `json:"done"`
-	Verdict string `json:"verdict"`
-	Reason  string `json:"reason"`
+	// Text (tick, optional) is the criterion's text as the mod drew it: the
+	// tick is refused 409 when the doc's idx-th criterion no longer reads so.
+	Text    *string `json:"text"`
+	Verdict string  `json:"verdict"`
+	Reason  string  `json:"reason"`
 }
 
 // decodeLinkPlanBody reads a bounded JSON body; writes the 400/413 itself.
@@ -633,11 +724,13 @@ func decodeLinkPlanBody(w http.ResponseWriter, r *http.Request) (linkPlanBody, b
 		return b, false
 	}
 	b.Session = strings.TrimSpace(b.Session)
+	b.Cwd = strings.TrimSpace(b.Cwd)
 	return b, true
 }
 
 // resolvePlanTarget loads the body's plan and, when wantPhase, its phase;
-// writes the 400/404 itself.
+// writes the 400/404 itself. A phaseId pins the plan through its phase row;
+// otherwise the taskId is looked up within the session's project.
 func (h *Handler) resolvePlanTarget(w http.ResponseWriter, b linkPlanBody, wantPhase bool) (*planEpicPhases, epicPhaseDTO, bool) {
 	if b.TaskID == "" {
 		writeClientErr(w, http.StatusBadRequest, "taskId is required")
@@ -647,13 +740,22 @@ func (h *Handler) resolvePlanTarget(w http.ResponseWriter, b linkPlanBody, wantP
 		writeClientErr(w, http.StatusBadRequest, "phaseId is required")
 		return nil, epicPhaseDTO{}, false
 	}
-	e, err := h.planEpicByRef(string(b.TaskID))
+	scope, err := h.planScopeFor(b.Session, b.Cwd)
+	if err != nil {
+		writeErr(w, err)
+		return nil, epicPhaseDTO{}, false
+	}
+	e, phaseOK, err := h.planEpicFor(string(b.TaskID), string(b.PhaseID), scope)
 	if err != nil {
 		writeErr(w, err)
 		return nil, epicPhaseDTO{}, false
 	}
 	if e == nil {
 		writeClientErr(w, http.StatusNotFound, "plan not found")
+		return nil, epicPhaseDTO{}, false
+	}
+	if !phaseOK {
+		writeClientErr(w, http.StatusNotFound, "phase not found")
 		return nil, epicPhaseDTO{}, false
 	}
 	ep, err := h.loadPlanPhases(e)
@@ -703,10 +805,15 @@ func (h *Handler) linkPlanSelect(w http.ResponseWriter, r *http.Request) {
 
 // ── POST /api/link/plan/tick ──────────────────────────────────────────────────
 
-// linkPlanTick — POST /api/link/plan/tick {session, taskId, phaseId, idx, done}:
-// flip the idx-th criterion of the phase doc through flipPlanDocCheckbox (the
-// PATCH /api/epics/{taskId}/docs core), then publish plan_updated. 200 planView;
-// 400 bad body / negative idx; 404 unknown plan, phase, doc or idx.
+// criterionChanged is the tick's 409 message: the drawn text no longer matches.
+const criterionChanged = "criterion changed"
+
+// linkPlanTick — POST /api/link/plan/tick {session, taskId, phaseId, idx, done,
+// text?}: flip the idx-th criterion of the phase doc through
+// flipPlanDocCheckbox (the PATCH /api/epics/{taskId}/docs core), then publish
+// plan_updated. 200 planView; 400 bad body / negative idx; 404 unknown plan,
+// phase, doc or idx; 409 "criterion changed" when text is sent and the doc's
+// idx-th criterion no longer reads so (or is gone).
 func (h *Handler) linkPlanTick(w http.ResponseWriter, r *http.Request) {
 	b, ok := decodeLinkPlanBody(w, r)
 	if !ok {
@@ -728,6 +835,12 @@ func (h *Handler) linkPlanTick(w http.ResponseWriter, r *http.Request) {
 	rel := relToPlan(ep.epic.planDir, p.DocPath)
 	_, err := h.flipPlanDocCheckbox(ep.epic.id, rel, *b.Done, func(lines []string) (int, error) {
 		crit := wsingest.ListCriteria(strings.Join(lines, "\n"))
+		// With the drawn text, a doc that moved under the mod (a line
+		// inserted above, a criterion reworded or removed) is a conflict,
+		// never a tick of whatever now sits at idx.
+		if b.Text != nil && (idx >= len(crit) || strings.TrimSpace(crit[idx].Text) != strings.TrimSpace(*b.Text)) {
+			return 0, &planDocRefusal{status: http.StatusConflict, msg: criterionChanged}
+		}
 		if idx >= len(crit) {
 			return 0, &planDocRefusal{status: http.StatusNotFound,
 				msg: "no criterion at idx " + strconv.Itoa(idx) + " (the doc has " + strconv.Itoa(len(crit)) + ")"}
@@ -828,7 +941,9 @@ type terminalSessionDTO struct {
 
 // terminalSessions — GET /api/epics/{taskId}/terminal-sessions: the sessions
 // whose terminal picked this plan, plus those that fetched it by automatic
-// resolution in the last 10 minutes, newest first. A session_plan row whose
+// resolution in the last 10 minutes, newest first. A row matches by the
+// numeric task id, by one of the task's phases, or by its external id for a
+// session of the task's own project (see the query). A session_plan row whose
 // session has no sessions row yet is left out (there is no id to link to).
 // 200 [] when none; 400 bad id; 404 no such workspace task.
 func (h *Handler) terminalSessions(w http.ResponseWriter, r *http.Request) {
@@ -836,8 +951,12 @@ func (h *Handler) terminalSessions(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	var ext string
-	err := h.DB.QueryRow(`SELECT COALESCE(external_id, '') FROM tasks WHERE id = ? AND source = 'workspace'`, taskID).Scan(&ext)
+	var (
+		ext       string
+		projectID int64
+	)
+	err := h.DB.QueryRow(`SELECT COALESCE(external_id, ''), project_id FROM tasks WHERE id = ? AND source = 'workspace'`, taskID).
+		Scan(&ext, &projectID)
 	if errors.Is(err, sql.ErrNoRows) {
 		writeClientErr(w, http.StatusNotFound, "plan not found")
 		return
@@ -851,14 +970,23 @@ func (h *Handler) terminalSessions(w http.ResponseWriter, r *http.Request) {
 		ext = numeric
 	}
 	now := time.Now().UTC()
+	// session_plan.task_id carries the view's taskId — the external id, which
+	// is unique per workspace only. The numeric id is this task's alone. The
+	// external id counts for a row pinned to one of this task's phases
+	// (epic_phases.id is unique), or for a session of this task's project
+	// whose row is not pinned to another plan's phase.
 	rows, err := h.DB.Query(`
 		SELECT s.id, sp.session_id, sp.phase_id, sp.chosen_by, sp.at, COALESCE(s.link_seen_at, '')
 		  FROM session_plan sp
 		  JOIN sessions s ON s.session_uuid = sp.session_id
-		 WHERE sp.task_id IN (?, ?)
+		 WHERE (sp.task_id = ?
+		        OR (sp.task_id = ? AND (
+		              sp.phase_id IN (SELECT CAST(e.id AS TEXT) FROM epic_phases e WHERE e.workspace_task_id = ?)
+		           OR (s.project_id = ? AND NOT EXISTS (SELECT 1 FROM epic_phases o
+		                WHERE CAST(o.id AS TEXT) = sp.phase_id AND o.workspace_task_id <> ?)))))
 		   AND (sp.chosen_by = 'terminal' OR sp.at >= ?)
 		 ORDER BY sp.at DESC, s.id DESC`,
-		ext, numeric, now.Add(-planAutoWindow).Format(sessionPlanTS))
+		numeric, ext, taskID, projectID, taskID, now.Add(-planAutoWindow).Format(sessionPlanTS))
 	if err != nil {
 		writeErr(w, err)
 		return

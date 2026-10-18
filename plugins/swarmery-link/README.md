@@ -510,8 +510,10 @@ Phase 2 — Line-item CRUD · 1/4
 - **`2` open in Swarmery** copies the plan's dashboard URL (no mod call opens a
   browser) and shows it in a toast.
 - **`3` tick** asks which open criterion is done (at most four are offered) and
-  has the daemon tick it in the phase doc. If the doc changed since the band drew
-  it (`409`), the band is refreshed and says so; tick again.
+  has the daemon tick it in the phase doc. The tick carries the criterion's text
+  as the band drew it: if that criterion moved or changed in the doc since
+  (`409 criterion changed`), nothing is ticked, the band is refreshed and says
+  so; tick again.
 - The digits press the buttons once the band has the focus (a click, ctrl+x tab),
   or from an empty prompt. The band yields to a survey and draws nothing while
   the session has no plan.

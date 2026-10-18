@@ -214,7 +214,7 @@ test('/plan with no plan says so in one line', ON, async ($, on) => {
 test('/plan <task-id> POSTs select, then shows the plan the daemon answered', ON, async ($, on) => {
   const w = await begin($, on, { plans: [204], planPosts: { select: [{ status: 200, body: PLAN_VIEW }] } })
   const result = await $.command.run(slash('2026-10-13-order-line-items'))
-  expect(posts(w, 'select').map(c => c.body)).toEqual([{ session: SESSION_ID, taskId: '2026-10-13-order-line-items' }])
+  expect(posts(w, 'select').map(c => c.body)).toEqual([{ session: SESSION_ID, cwd: CWD, taskId: '2026-10-13-order-line-items' }])
   expect(posts(w, 'select')[0]?.authorization).toBe(`Bearer ${TOKEN}`)
   expect(result.text).toContain('Phase 2 — Line-item CRUD')
   const ui = await band($)
@@ -240,7 +240,7 @@ test('[3] tick asks which open criterion, then POSTs tick with its idx and done'
     },
   ])
   expect(posts(w, 'tick').map(c => c.body)).toEqual([
-    { session: SESSION_ID, taskId: PLAN_VIEW.taskId, phaseId: 'phase-2', idx: 2, done: true },
+    { session: SESSION_ID, cwd: CWD, taskId: PLAN_VIEW.taskId, phaseId: 'phase-2', idx: 2, text: 'DELETE removes one and answers 204', done: true },
   ])
   expect(await ui.find({ text: /· 2\/4$/ })).toBeDefined()
 })
@@ -254,12 +254,42 @@ test('a tick answered 409 refreshes the plan and tells the person', ON, async ($
   expect(w.toasts).toEqual(['the phase doc changed since the band drew it: refreshed, tick again'])
 })
 
+test('a tick of a criterion that moved: the drawn text goes along, 409 "criterion changed" redraws the band from the doc', ON, async ($, on) => {
+  // A criterion was inserted above the one picked: idx 1 now reads differently.
+  const moved = {
+    ...PLAN_VIEW,
+    phase: {
+      ...PLAN_VIEW.phase,
+      total: 5,
+      criteria: [
+        PLAN_VIEW.phase.criteria[0],
+        { idx: 1, text: 'PATCH edits a line item', done: false, class: '' },
+        ...PLAN_VIEW.phase.criteria.slice(1).map(c => ({ ...c, idx: c.idx + 1 })),
+      ],
+    },
+  }
+  const w = await begin($, on, {
+    plans: [{ view: PLAN_VIEW }, { view: moved }],
+    planPosts: { tick: [{ status: 409, body: { error: 'criterion changed' } }] },
+    asks: ['1. GET lists the line items in insert order'],
+  })
+  const ui = await band($)
+  await ui.press({ key: 'plan-tick' })
+  expect(posts(w, 'tick').map(c => c.body)).toEqual([
+    { session: SESSION_ID, cwd: CWD, taskId: PLAN_VIEW.taskId, phaseId: 'phase-2', idx: 1, text: 'GET lists the line items in insert order', done: true },
+  ])
+  expect(gets(w)).toHaveLength(2)
+  expect(w.toasts).toEqual(['the phase doc changed since the band drew it: refreshed, tick again'])
+  expect(await ui.find({ text: /· 1\/5$/ })).toBeDefined()
+  expect(await ui.find({ text: '☐ PATCH edits a line item' })).toBeDefined()
+})
+
 test('[1] next phase asks first, then POSTs run for the next phase', ON, async ($, on) => {
   const w = await begin($, on, { asks: [] })
   const ui = await band($)
   await ui.press({ key: 'plan-next' })
   expect(w.asked.map(a => a.question)).toEqual(['Start phase 3 — Totals and tax now?'])
-  expect(posts(w, 'run').map(c => c.body)).toEqual([{ session: SESSION_ID, taskId: PLAN_VIEW.taskId, phaseId: 'phase-3' }])
+  expect(posts(w, 'run').map(c => c.body)).toEqual([{ session: SESSION_ID, cwd: CWD, taskId: PLAN_VIEW.taskId, phaseId: 'phase-3' }])
   expect(w.toasts).toEqual(['phase 3 started'])
 })
 

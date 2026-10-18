@@ -180,7 +180,7 @@ export async function runPlanCommand($: EngineInterface, planner: Planner, acces
   if (access.token === undefined) return { text: 'swarmery-link: no daemon token (~/.swarmery/link-token); /plan needs the swarmery daemon' }
   const taskId = (args ?? '').trim().split(/\s+/)[0] ?? ''
   if (taskId !== '') {
-    const reply = await postPlan($, planner, access, 'select', { session: access.sessionId, taskId })
+    const reply = await postPlan($, planner, access, 'select', { session: access.sessionId, cwd: access.cwd, taskId })
     if (reply.status !== 200) return { text: `swarmery-link: could not select ${taskId}: ${replyError(reply.status, reply.text)}` }
     const selected = parsePlanView(reply.text)
     if (selected !== undefined) setView($, planner, selected)
@@ -212,7 +212,7 @@ export async function pressNext($: EngineInterface, planner: Planner, access: Pl
     return
   }
   if (answer !== START_LABEL) return
-  const reply = await postPlan($, planner, access, 'run', { session: access.sessionId, taskId: view.taskId, phaseId: next.id })
+  const reply = await postPlan($, planner, access, 'run', { session: access.sessionId, cwd: access.cwd, taskId: view.taskId, phaseId: next.id })
   const isStarted = reply.status !== undefined && reply.status >= 200 && reply.status < 300
   toast($, isStarted ? `phase ${next.n} started` : `could not start phase ${next.n}: ${replyError(reply.status, reply.text)}`)
   await refreshPlan($, planner, access)
@@ -255,7 +255,18 @@ export async function pressTick($: EngineInterface, planner: Planner, access: Pl
     return
   }
   if (idx === undefined) return
-  const reply = await postPlan($, planner, access, 'tick', { session: access.sessionId, taskId: view.taskId, phaseId: view.phase.id, idx, done: true })
+  // The drawn text rides along: the daemon answers 409 when the doc's idx-th
+  // criterion no longer reads so, instead of ticking whatever moved there.
+  const text = view.phase.criteria.find(c => c.idx === idx)?.text
+  const reply = await postPlan($, planner, access, 'tick', {
+    session: access.sessionId,
+    cwd: access.cwd,
+    taskId: view.taskId,
+    phaseId: view.phase.id,
+    idx,
+    text,
+    done: true,
+  })
   if (reply.status === 200) {
     const ticked = parsePlanView(reply.text)
     if (ticked !== undefined) setView($, planner, ticked)
