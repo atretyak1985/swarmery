@@ -35,6 +35,12 @@ type Git interface {
 // fast; a hang here means a stuck lock or a wedged filesystem, not slow work.
 const gitTimeout = 30 * time.Second
 
+// checkoutTimeout bounds the commands that write or delete a whole working tree
+// (`worktree add` checks out every file, `worktree remove` deletes them). On a
+// busy external volume a ~3k-file checkout took longer than gitTimeout: the add
+// finished on disk, but the run start had already failed with a 500.
+const checkoutTimeout = 5 * time.Minute
+
 // outputTailBytes caps how much combined output lands in an error message.
 const outputTailBytes = 2048
 
@@ -49,7 +55,7 @@ type ExecGit struct {
 func (g ExecGit) Run(dir string, args ...string) (string, error) {
 	timeout := g.Timeout
 	if timeout <= 0 {
-		timeout = gitTimeout
+		timeout = defaultTimeout(args)
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
@@ -70,6 +76,15 @@ func (g ExecGit) Run(dir string, args ...string) (string, error) {
 			strings.Join(args, " "), err, tail(combined, outputTailBytes))
 	}
 	return combined, nil
+}
+
+// defaultTimeout picks the bound for a git invocation: checkoutTimeout for the
+// whole-tree commands, gitTimeout for everything else.
+func defaultTimeout(args []string) time.Duration {
+	if len(args) >= 2 && args[0] == "worktree" && (args[1] == "add" || args[1] == "remove") {
+		return checkoutTimeout
+	}
+	return gitTimeout
 }
 
 // tail returns the last <= n bytes of s, trimmed.
