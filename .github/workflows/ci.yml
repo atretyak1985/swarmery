@@ -27,6 +27,9 @@ jobs:
       - name: Pack requirements in sync with the overlay schema
         run: bash scripts/check-plugin-requirements.sh
 
+      - name: Plugin versions (semver, marketplace, metadata.version = core)
+        run: bash scripts/check-plugin-versions.sh
+
       - name: Shell syntax (bash -n)
         run: |
           set -e
