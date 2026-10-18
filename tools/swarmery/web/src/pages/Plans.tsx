@@ -87,7 +87,7 @@ import {
   type RevisionStartError,
 } from '../api';
 import { fetchSystemItems } from '../api/system';
-import type { PlanRunMode, RunEvent } from '../api/types';
+import type { PlanRunMode, RunEvent, TerminalSession } from '../api/types';
 import { useProjectWorkspace } from '../workspace/ProjectContext';
 import { useLiveUpdates } from '../lib/ws';
 import { Markdown } from '../lib/markdown';
@@ -108,6 +108,7 @@ import { CriterionLint } from './plans/CriterionLint';
 import { PhaseCard, type PhaseCardAction } from './plans/PhaseCard';
 import { PHASE_TABS, PhasePanel, type PhaseTab } from './plans/PhasePanel';
 import { PhaseReopens } from './plans/PhaseReopens';
+import { TerminalBadge, useTerminalSessions } from './plans/TerminalBadge';
 import { PhaseReview } from './plans/PhaseReview';
 import { RunsReviewBlock } from './plans/RunsReviewBlock';
 import { VerifyVerdictChip } from './plans/VerifyVerdictChip';
@@ -1647,6 +1648,12 @@ function EpicDetail({
   const resolvedSeqs = useMemo(() => computeResolvedSeqs(epic.phases), [epic.phases]);
   const complete = planComplete(epic, resolvedSeqs);
   const now = useNow(1000);
+  // Sessions with this plan (or one of its phases) open in a terminal.
+  const terminalSessions = useTerminalSessions(epic.taskId);
+  const planTerminal = useMemo(
+    () => terminalSessions.filter((s) => s.phaseId === null),
+    [terminalSessions],
+  );
   const phaseRunActive = epic.phases.some((p) => p.runState === 'running');
   // A plan run owns every phase doc for its duration — offering per-phase runs
   // next to it would invite two worktrees editing the same files.
@@ -1767,6 +1774,7 @@ function EpicDetail({
             {i18n._(EPIC_STATUS_LABEL[epic.status])}
           </span>
           <CopyIdBadge id={epic.externalId} label={t`plan`} className="shrink-0" />
+          <TerminalBadge sessions={planTerminal} scope="plan" />
         </div>
         <span className="shrink-0 font-mono text-[11px] text-ink-dim">
           {epic.rollup.done}/{epic.rollup.total} ({Math.round(epic.rollup.pct)}%)
@@ -1947,6 +1955,7 @@ function EpicDetail({
               now={now}
               runBusy={runBusy}
               planRunning={planRunning}
+              terminalSessions={terminalSessions}
               phaseRunModel={phaseRunModel}
               onOpenPhase={onOpenPhase}
               phaseHref={(seq) => phaseHref(seq, 'story')}
@@ -2263,6 +2272,7 @@ function PhaseList({
   now,
   runBusy,
   planRunning,
+  terminalSessions,
   phaseRunModel,
   onOpenPhase,
   phaseHref,
@@ -2278,6 +2288,8 @@ function PhaseList({
   runBusy: number | null;
   /** A whole-plan run owns the phase docs — per-phase runs stand down. */
   planRunning: boolean;
+  /** The plan's terminal sessions; a phase shows the ones that picked it. */
+  terminalSessions: readonly TerminalSession[];
   /** The picker's current value — read ONLY to tell whether a phase doc's own
    * declaration is in effect or overridden (DocModelChip). The resolution itself
    * stays server-side, in phaserun.resolveModel: a second ladder here would be a
@@ -2364,6 +2376,10 @@ function PhaseList({
                   {status === 'in_progress' && (
                     <PhaseActivity docUpdatedAt={p.docUpdatedAt} running={running} />
                   )}
+                  <TerminalBadge
+                    sessions={terminalSessions.filter((s) => s.phaseId === String(p.id))}
+                    scope="phase"
+                  />
                 </div>
                 <div className="mt-1 flex flex-wrap items-center gap-1.5">
                   {p.dependsOn.map((seq) => (

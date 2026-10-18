@@ -129,6 +129,14 @@ msgstr "{hours} год {minutes} хв"
 msgid "{label} (no cards)"
 msgstr "{label} (без карток)"
 
+#: src/pages/plans/TerminalBadge.tsx
+msgid "{label}: {subject} is open in {count} sessions — {listing}"
+msgstr "{label}: {subject} — сесій: {count} ({listing})"
+
+#: src/pages/plans/TerminalBadge.tsx
+msgid "{label}: {subject} is open in session {shortId} ({liveNote})"
+msgstr "{label}: {subject} — сесія {shortId} ({liveNote})"
+
 #: src/pages/plans/forecastStoryModel.ts
 msgid "{m, plural, one {# minute} few {# minutes} many {# minutes} other {# minutes}}"
 msgstr "{m, plural, one {# хвилину} few {# хвилини} many {# хвилин} other {# хвилини}}"
@@ -1055,6 +1063,10 @@ msgstr "прив’язано"
 msgid "linked to this plan by the daemon"
 msgstr "прив’язано до цього плану демоном"
 
+#: src/pages/plans/TerminalBadge.tsx
+msgid "live"
+msgstr "наживо"
+
 #: src/pages/plans/PhaseReopens.tsx
 msgid "loading criteria…"
 msgstr "завантажуємо критерії…"
@@ -1286,6 +1298,10 @@ msgstr "не доставлено"
 msgid "not landed"
 msgstr "не здано"
 
+#: src/pages/plans/TerminalBadge.tsx
+msgid "not live"
+msgstr "не наживо"
+
 #: src/pages/plans/ForecastVsActual.tsx
 msgid "not run yet — a score appears once a run of this phase has finished and been measured"
 msgstr "ще не запускалась — оцінка з’явиться, коли запуск цієї фази завершиться й буде виміряний"
@@ -1353,6 +1369,10 @@ msgstr "Відкрити {changeShort} для {branch}"
 #: src/pages/plans/DepsUnmergedActions.tsx
 msgid "Open a {change} for each unmerged branch"
 msgstr "Відкрити {change} для кожної незлитої гілки"
+
+#: src/pages/plans/TerminalBadge.tsx
+msgid "open in terminal"
+msgstr "відкрито в терміналі"
 
 #: src/pages/Plans.tsx
 msgid "open Phase {seq} — {name} details"
@@ -2391,6 +2411,10 @@ msgstr "цей документ змінила застосована ревіз
 msgid "this is a project playbook — edit its file directly; it overrides the built-in of the same name"
 msgstr "це плейбук проєкту — редагуйте його файл напряму; він перекриває вбудований з такою ж назвою"
 
+#: src/pages/plans/TerminalBadge.tsx
+msgid "this phase"
+msgstr "ця фаза"
+
 #: src/pages/plans/ForecastVsActual.tsx
 msgid "this phase declares no ## Forecast, so its run has nothing to be scored against"
 msgstr "ця фаза не має розділу ## Forecast, тож її запуск ні з чим порівнювати"
@@ -2402,6 +2426,10 @@ msgstr "У цієї фази ще немає гілки запуску — сп�
 #: src/pages/Plans.tsx
 msgid "this phase has no sessions of its own — showing the whole plan; click to narrow anyway"
 msgstr "у цієї фази немає власних сесій — показано весь план; клікніть, щоб усе ж звузити"
+
+#: src/pages/plans/TerminalBadge.tsx
+msgid "this plan"
+msgstr "цей план"
 
 #: src/pages/plans/PhaseReview.tsx
 msgid "This project sets vcs.forkRemote, and landing through a fork is not supported yet — remove it to land to origin, or push and open the {change} by hand."
