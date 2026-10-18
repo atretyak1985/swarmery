@@ -904,7 +904,7 @@ the session's plan phase and its acceptance criteria, ticks a criterion, picks a
 starts the next phase run and reports drift. **The daemon owns plan state and the one
 markdown parser** (decision D5). The mod never reads or parses a plan doc: it draws the
 view below and sends indexes back. Implementation: `internal/api/link_plan.go`,
-`internal/link/drift.go`, migration `0111_session_plan.sql`.
+`internal/link/drift.go`, migration `0116_session_plan.sql`.
 
 Every `/api/link/plan*` route sits behind the bearer token like `/api/link/events`
 (`401` without it, `503 {"error":"link disabled"}` with the link off). There is no
@@ -1096,7 +1096,7 @@ id.
 
 ### Storage and retention
 
-Table `session_plan` (migration `0111`): `session_id` (the Claude session id, primary
+Table `session_plan` (migration `0116`): `session_id` (the Claude session id, primary
 key), `task_id`, `phase_id` (nullable), `chosen_by` (`terminal` | `auto`), `at`
 (fixed-width ms UTC), indexed on `task_id`. There is no foreign key, for the reason
 `0107` gives. The prune pass drops a row once its `at` is older than the `link_events`

@@ -2,20 +2,20 @@ package store
 
 import "testing"
 
-// TestMigrate0111AddsSessionPlan: the terminal plan-choice table lands keyed one
+// TestMigrate0116AddsSessionPlan: the terminal plan-choice table lands keyed one
 // row per session uuid, with the task index, and chosen_by / task_id / at are
 // required while phase_id may be NULL ("the plan's active phase").
-func TestMigrate0111AddsSessionPlan(t *testing.T) {
+func TestMigrate0116AddsSessionPlan(t *testing.T) {
 	db := openRaw(t)
 	if err := Migrate(db); err != nil {
 		t.Fatalf("migrate fresh db: %v", err)
 	}
 	var name string
-	if err := db.QueryRow(`SELECT name FROM schema_migrations WHERE version = 111`).Scan(&name); err != nil {
-		t.Fatalf("migration 111 not recorded: %v", err)
+	if err := db.QueryRow(`SELECT name FROM schema_migrations WHERE version = 116`).Scan(&name); err != nil {
+		t.Fatalf("migration 116 not recorded: %v", err)
 	}
-	if name != "0111_session_plan.sql" {
-		t.Errorf("migration 111 name: want 0111_session_plan.sql, got %s", name)
+	if name != "0116_session_plan.sql" {
+		t.Errorf("migration 116 name: want 0116_session_plan.sql, got %s", name)
 	}
 	mustHaveColumns(t, db, "session_plan", "session_id", "task_id", "phase_id", "chosen_by", "at")
 

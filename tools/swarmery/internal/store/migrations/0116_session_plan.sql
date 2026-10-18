@@ -1,4 +1,4 @@
--- 0111: session_plan — which plan (and phase) a terminal session has open
+-- 0116: session_plan — which plan (and phase) a terminal session has open
 -- (mods-swarmery-link phase 7, plan in the terminal; decision D5: the daemon
 -- owns plan state and its one markdown parser, the mod only draws).
 --
@@ -19,6 +19,10 @@
 --   at         fixed-width ms UTC (the link's tsFormat) of the choice / of the
 --              latest automatic resolution — the SPA's "recently fetched" window
 --              and the prune horizon key
+--
+-- WHY 0116: 0109–0111 were first reserved for phases 5–7 of the same plan,
+-- but 0112/0113 landed first; numbering after the highest applied version
+-- keeps /api/health's MAX(version) a truthful "this schema is current" signal.
 --
 -- NO FOREIGN KEY, for the reason 0107 spells out: the daemon runs with
 -- PRAGMA foreign_keys=ON, sessions and tasks rows are re-derived and pruned by
