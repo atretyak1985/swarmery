@@ -214,7 +214,7 @@ func TestBuildRows(t *testing.T) {
 		KeyNoopRepeat: 1, KeyNoopAfterNoop: 2, KeyNoopCost: 6,
 		KeyRouter: 2, KeyRouterApplied: 1, KeyRouterDivergent: 1,
 		"verifier_phase_fail": 2, "verifier_phase_inconclusive": 1, "verifier_phase_pass": 1,
-		"verifier_class:tests": 1, "verifier_class:env": 1, "verifier_class:unspecified": 1,
+		"verifier_class:env": 1,
 		"verifier_all_fail": 3, KeyReviewRuns: 0,
 		KeyReopens: 2, "reopens_review": 1, "reopens_none": 1, "reopens_operator": 0,
 	}
@@ -352,6 +352,40 @@ func TestVerdictClass(t *testing.T) {
 	}
 	if got := verdictClass(strings.Repeat("x", 80)); len([]rune(got)) != 61 {
 		t.Errorf("long class not capped: %q", got)
+	}
+}
+
+// TestVerifierClassesInconclusiveOnly: fail/error phase verdicts count toward
+// verifier_phase_<status> but their detail classes are not tallied — only an
+// inconclusive verdict's class is.
+func TestVerifierClassesInconclusiveOnly(t *testing.T) {
+	f := newFixture(t)
+	exec1(t, f.db, `INSERT INTO verification_runs (target_key, status, detail, started_at) VALUES
+		('phase:1', 'fail', '- **Nothing new on the branch:** x', '2026-10-01T00:00:00Z'),
+		('phase:2', 'error', 'boom: y', '2026-10-01T00:00:00Z'),
+		('phase:3', 'inconclusive', 'could-not-conclude: z', '2026-10-01T00:00:00Z')`)
+	lo, hi := parseWin(t, "2026-10-01", "2026-10-01")
+	rep, err := Build(f.db, lo, hi)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := map[string]int{
+		"verifier_phase_fail": 1, "verifier_phase_error": 1, "verifier_phase_inconclusive": 1,
+		"verifier_class:could-not-conclude": 1,
+	}
+	for key, n := range want {
+		if got := rowN(t, rep, key); got != n {
+			t.Errorf("%s = %d, want %d", key, got, n)
+		}
+	}
+	var classKeys []string
+	for _, row := range rep.Rows {
+		if strings.HasPrefix(row.Key, "verifier_class:") {
+			classKeys = append(classKeys, row.Key)
+		}
+	}
+	if len(classKeys) != 1 || classKeys[0] != "verifier_class:could-not-conclude" {
+		t.Errorf("verifier_class rows = %v, want only verifier_class:could-not-conclude", classKeys)
 	}
 }
 
