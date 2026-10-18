@@ -128,6 +128,7 @@ jobs:
     # Plugins that ship a hooks module (function hooks): strict validate reads
     # the manifest and the module's source the way the engine will, and
     # `claude plugin test` runs the module's *.test.ts files against the engine.
+    # The mods are discovered (hooks/hooks.json with `modules`), not listed.
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -137,22 +138,14 @@ jobs:
         with:
           node-version: '22'
       - name: Install the Claude Code CLI
-        run: npm i -g @anthropic-ai/claude-code@^2.1.296
+        # Exact pin: the mods API is pinned to what a known build showed
+        # (tools/swarmery/docs/mods-format.md). Bump it on purpose, after
+        # running this job's script against the new build locally.
+        run: npm i -g @anthropic-ai/claude-code@2.1.302
       - name: Validate (strict) and test each mod
-        run: |
-          set -euo pipefail
-          # One plugin per line, so branches adding a mod merge cleanly.
-          PLUGINS=(
-            plugins/swarmery-link
-            plugins/guard-pack
-          )
-          failed=0
-          for p in "${PLUGINS[@]}"; do
-            echo "── $p"
-            claude plugin validate --strict --json "$p" || failed=1
-            claude plugin test "$p" || failed=1
-          done
-          [ "$failed" -eq 0 ]
+        env:
+          MODS_CI_REQUIRE_CLI: '1'
+        run: bash scripts/tests/mods-ci.test.sh
 
   agent-evals:
     runs-on: ubuntu-latest
