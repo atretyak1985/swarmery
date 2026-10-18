@@ -12,6 +12,7 @@ const INCLUDE: Record<CatalogName, string[]> = {
     `${P}/Sessions.tsx`,
     `${P}/SessionDetail.tsx`,
     `${P}/detail`,
+    `${P}/sessions`,
     `${P}/NeedsYou.tsx`,
     `${P}/Approvals.tsx`,
     `${P}/Projects.tsx`,

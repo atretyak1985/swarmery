@@ -11,6 +11,11 @@ export type LinkKind =
   | 'session.end'
   | 'turn.forecast'
   | 'turn.actual'
+  | 'session.send'
+  | 'session.receive'
+  | 'claim'
+  | 'release'
+  | 'conflict'
 
 export type LinkEvent = {
   readonly sessionId: string

@@ -15,6 +15,7 @@ import { ProjectName } from './ProjectName';
 import { ProcBadge } from './ProcBadge';
 import { SessionControls } from './SessionControls';
 import { SessionLinkChips } from './SessionLinkChips';
+import { ConflictBadge } from '../lib/swarm';
 import { StopButton } from './StopButton';
 import { TaskChip } from './TaskChip';
 
@@ -344,6 +345,7 @@ export function SessionCard({
         <ContextBadge session={session} />
         <HandoffChip session={session} />
         <SessionLinkChips session={session} />
+        <ConflictBadge sessionId={session.id} />
         <ProcBadge session={session} />
         {session.outcome != null && (
           <span
@@ -466,6 +468,7 @@ export function SessionCard({
             <ContextBadge session={session} />
             <HandoffChip session={session} />
             <SessionLinkChips session={session} />
+            <ConflictBadge sessionId={session.id} />
           </span>
           {/* Non-breaking space when there is no sub-line: the row keeps its
               height, so a fan-out with mixed notes does not shear. */}

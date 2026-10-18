@@ -1,8 +1,8 @@
 // Session detail (Redesign parity): the header block (breadcrumb, title,
 // facts row, TOKENS/COST/ERRORS numerals, tab strip) is PINNED — only the tab
-// content (Chat | Timeline | Diffs, Chat first and default) scrolls, and the
+// content (Chat | Timeline | Diffs | Swarm, Chat first and default) scrolls, and the
 // desktop right rail (agents / skills / files changed) scrolls in its own
-// column. Tabs deep-link via ?tab=timeline|diffs. Live: session_updated
+// column. Tabs deep-link via ?tab=timeline|diffs|swarm. Live: session_updated
 // merges header state; event_appended is attributed via its sessionId and
 // appended (or, for refined durations, replaced in place) on the open detail.
 
@@ -34,6 +34,7 @@ import { ProjectName } from '../components/ProjectName';
 import { ErrorBox, Loading } from '../components/ui';
 import { Timeline } from './detail/Timeline';
 import { Diffs } from './detail/Diffs';
+import { SwarmPanel } from './sessions/SwarmPanel';
 import { scrollToDiffGroup } from './detail/diffJump';
 import { Chat, type PendingSend } from './detail/Chat';
 import { CommandInput } from './detail/CommandInput';
@@ -96,11 +97,11 @@ const STATUS_TONES: Record<SessionStatus, string> = {
   killed: 'text-red',
 };
 
-type Tab = 'chat' | 'timeline' | 'diffs';
+type Tab = 'chat' | 'timeline' | 'diffs' | 'swarm';
 
 /** ?tab=timeline|diffs deep-links; anything else (or absent) is the Chat default. */
 function parseTab(value: string | null): Tab {
-  return value === 'timeline' || value === 'diffs' ? value : 'chat';
+  return value === 'timeline' || value === 'diffs' || value === 'swarm' ? value : 'chat';
 }
 
 function Kv({ label, value, tone = 'text-ink' }: { label: string; value: string; tone?: string }): JSX.Element {
@@ -705,6 +706,9 @@ export function SessionDetailPage(): JSX.Element {
           <TabButton active={tab === 'diffs'} onClick={() => setTab('diffs')}>
             {diffCount > 0 ? t`Diffs · ${diffCount}` : t`Diffs`}
           </TabButton>
+          <TabButton active={tab === 'swarm'} onClick={() => setTab('swarm')}>
+            {t`Swarm`}
+          </TabButton>
         </div>
       </div>
 
@@ -725,6 +729,9 @@ export function SessionDetailPage(): JSX.Element {
             )}
             {tab === 'timeline' && <Timeline detail={detail} />}
             {tab === 'diffs' && <Diffs changes={detail.fileChanges} />}
+            {tab === 'swarm' && (
+              <SwarmPanel projectId={detail.projectId} projectSlug={detail.projectSlug} sender={detail} />
+            )}
           </div>
           {tab === 'chat' && !atBottom && (
             <button

@@ -704,6 +704,10 @@ msgstr "аналізуємо…"
 msgid "Analytics"
 msgstr "Аналітика"
 
+#: src/lib/swarm.tsx
+msgid "Another session holds a claim on the same file: {list}"
+msgstr "Інша сесія тримає ті самі файли: {list}"
+
 #: src/api.ts
 msgid "answer planning failed: {status}"
 msgstr "відповідь плануванню не вдалася: {status}"
@@ -1200,6 +1204,10 @@ msgstr "Підтвердити зупинку"
 #: src/api.ts
 msgid "confirmation required"
 msgstr "потрібне підтвердження"
+
+#: src/lib/swarm.tsx
+msgid "conflict"
+msgstr "конфлікт"
 
 #: src/components/usage/UsageConnect.tsx
 msgid "connect"

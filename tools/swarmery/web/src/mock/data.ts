@@ -56,6 +56,8 @@ import type {
 } from '../api/types';
 import type {
   Account,
+  SwarmClaims,
+  SwarmMessage,
   AccountBinding,
   AccountsResponse,
   AdviseStats,
@@ -408,8 +410,100 @@ export const mockSessions: Session[] = [
     source: 'hook',
     tokens: null,
     costUsd: null,
+    // A second mod-linked session in project 2, so the swarm panel has a
+    // recipient and the claims below can conflict.
+    link: {
+      status: 'waiting',
+      seenAt: iso(40 * 1000),
+      live: true,
+      contextPct: 31,
+      rateLimits: [],
+      costUsd: null,
+      controllable: true,
+    },
   },
 ];
+
+// Swarm demo (phase 6): sessions 2 and 7 (project 2) talk and both claim one file.
+const SWARM_A = { id: 2, uuid: 'e1f2a3b4-c5d6-4e7f-8091-a2b3c4d5e6f7', title: 'Analyze the agent system and summarize orchestration' };
+const SWARM_B = { id: 7, uuid: 'e7f8a9b0-c1d2-4e3f-8a4b-5c6d7e8f9012', title: 'Bulk dependency upgrade' };
+
+const mockSwarmMessages: SwarmMessage[] = [
+  {
+    id: 4,
+    kind: 'dashboard',
+    fromSession: SWARM_A,
+    toSession: null,
+    toAddress: 'ghost-session',
+    // i18n-ignore — demo fixture (VITE_MOCK): a sample message body, not UI copy
+    body: 'Please hold off on the lockfile until I merge.',
+    truncated: false,
+    origin: 'plugin',
+    at: iso(2 * MIN),
+    delivered: false,
+    // i18n-ignore — demo fixture (VITE_MOCK): the mod's reason string (protocol)
+    reason: 'undeliverable: no such session',
+  },
+  {
+    id: 3,
+    kind: 'receive',
+    fromSession: SWARM_A,
+    toSession: SWARM_B,
+    toAddress: null,
+    // i18n-ignore — demo fixture (VITE_MOCK): a sample message body, not UI copy
+    body: 'Rebase on main before touching package.json.',
+    truncated: false,
+    origin: 'peer',
+    at: iso(9 * MIN),
+    delivered: null,
+    reason: null,
+  },
+  {
+    id: 2,
+    kind: 'send',
+    fromSession: SWARM_A,
+    toSession: SWARM_B,
+    toAddress: SWARM_B.uuid,
+    // i18n-ignore — demo fixture (VITE_MOCK): a sample message body, not UI copy
+    body: 'Rebase on main before touching package.json.',
+    truncated: false,
+    origin: 'model',
+    at: iso(9 * MIN + 1000),
+    delivered: true,
+    reason: null,
+  },
+  {
+    id: 1,
+    kind: 'send',
+    fromSession: SWARM_B,
+    toSession: SWARM_A,
+    toAddress: SWARM_A.uuid,
+    // i18n-ignore — demo fixture (VITE_MOCK): a sample message body, not UI copy
+    body: 'Which of the two dependency bumps is yours? '.repeat(3),
+    truncated: true,
+    origin: 'model',
+    at: iso(20 * MIN),
+    delivered: null,
+    reason: null,
+  },
+];
+
+const mockSwarmClaims: SwarmClaims = {
+  claims: [
+    { sessionId: 2, sessionUuid: SWARM_A.uuid, path: '/Users/user/work/example-app/package.json', claimedAt: iso(4 * MIN) },
+    { sessionId: 7, sessionUuid: SWARM_B.uuid, path: '/Users/user/work/example-app/package.json', claimedAt: iso(3 * MIN) },
+    { sessionId: 2, sessionUuid: SWARM_A.uuid, path: '/Users/user/work/example-app/src/main.ts', claimedAt: iso(1 * MIN) },
+  ],
+  conflicts: [
+    {
+      path: '/Users/user/work/example-app/package.json',
+      sessions: [
+        { sessionId: 2, sessionUuid: SWARM_A.uuid },
+        { sessionId: 7, sessionUuid: SWARM_B.uuid },
+      ],
+    },
+  ],
+};
 
 export const mockStatsToday: StatsToday = {
   sessions: 14,
@@ -2431,6 +2525,18 @@ export const mockApi = {
         },
       ],
     };
+  },
+
+  async swarmMessages(projectId?: number): Promise<SwarmMessage[]> {
+    await delay(120);
+    return projectId === undefined || projectId === 0 || projectId === 2 ? mockSwarmMessages : [];
+  },
+
+  async swarmClaims(projectId?: number): Promise<SwarmClaims> {
+    await delay(120);
+    return projectId === undefined || projectId === 0 || projectId === 2
+      ? mockSwarmClaims
+      : { claims: [], conflicts: [] };
   },
 
   async sessions(filters: MockFilters = {}): Promise<SessionsResponse> {
