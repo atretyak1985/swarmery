@@ -8,7 +8,7 @@ import (
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/store"
 )
 
-// session_plan (migration 0116) ages on the link_events cutoff by its own `at`,
+// session_plan (migration 0117) ages on the link_events cutoff by its own `at`,
 // but only once its session has ended — ended_at set, the mod reported
 // session.end, or no sessions row is left. A live terminal keeps its pick
 // however old the choice is.

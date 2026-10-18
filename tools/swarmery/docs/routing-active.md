@@ -120,16 +120,18 @@ The route pick takes the rung just above the env/default rung and never beats
 an explicit choice. For a phase run the model and effort ladders are
 request → doc `**Model:**` / `**Effort:**` → **route** → env → default.
 
-- `applied = 1`: in `active`, the router's model **or** effort won its ladder.
-  In `shadow` it is always `0`.
+- `applied = 1`: in `active`, the router's **model** won its ladder
+  (`won_rung = 'route'`). A route effort under a model pinned by the request or
+  the doc does not count. In `shadow` it is always `0`. Rows written before
+  migration `0114` were rewritten to this rule.
 - `won_rung` names the rung that won the **model** ladder only: `request`,
   `doc`, `route`, `env` or `default`.
 - `pick_model` is the alias the router chose (`sonnet`); `used_model` is the
   full ID that ran.
 
 So a phase whose doc carries `**Model:** opus` still runs opus in `active`:
-`won_rung = 'doc'`. Its row may still be `applied = 1` if the doc set no effort
-and the route effort won.
+`won_rung = 'doc'` and `applied = 0`, even when the doc set no effort and the
+route effort won (`used_effort` shows that).
 
 ## Reading the report
 

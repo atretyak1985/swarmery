@@ -2,10 +2,10 @@ package store
 
 import "testing"
 
-// TestMigrate0116AddsSessionPlan: the terminal plan-choice table lands keyed one
-// row per session uuid, with the task index, and chosen_by / task_id / at are
-// required while phase_id may be NULL ("the plan's active phase").
-func TestMigrate0116AddsSessionPlan(t *testing.T) {
+// TestMigrate0116AddsLinkSwarm: the swarm tables land with their columns and
+// indexes; link_claims is keyed one row per (session, path); link_messages
+// numbers rows with AUTOINCREMENT and leaves delivered NULL ("unknown").
+func TestMigrate0116AddsLinkSwarm(t *testing.T) {
 	db := openRaw(t)
 	if err := Migrate(db); err != nil {
 		t.Fatalf("migrate fresh db: %v", err)
@@ -14,34 +14,47 @@ func TestMigrate0116AddsSessionPlan(t *testing.T) {
 	if err := db.QueryRow(`SELECT name FROM schema_migrations WHERE version = 116`).Scan(&name); err != nil {
 		t.Fatalf("migration 116 not recorded: %v", err)
 	}
-	if name != "0116_session_plan.sql" {
-		t.Errorf("migration 116 name: want 0116_session_plan.sql, got %s", name)
+	if name != "0116_link_swarm.sql" {
+		t.Errorf("migration 116 name: want 0116_link_swarm.sql, got %s", name)
 	}
-	mustHaveColumns(t, db, "session_plan", "session_id", "task_id", "phase_id", "chosen_by", "at")
+	mustHaveColumns(t, db, "link_messages",
+		"id", "kind", "from_session", "to_session", "to_address", "body", "truncated",
+		"origin", "at", "delivered", "reason", "command_id", "matched_id")
+	mustHaveColumns(t, db, "link_claims", "session_id", "path", "claimed_at", "released_at")
 
-	var n int
-	if err := db.QueryRow(`SELECT COUNT(*) FROM sqlite_master WHERE type = 'index' AND name = 'idx_session_plan_task'`).Scan(&n); err != nil {
+	for _, idx := range []string{"idx_link_messages_at", "idx_link_messages_from", "idx_link_messages_to", "idx_link_claims_path"} {
+		var n int
+		if err := db.QueryRow(`SELECT COUNT(*) FROM sqlite_master WHERE type = 'index' AND name = ?`, idx).Scan(&n); err != nil {
+			t.Fatal(err)
+		}
+		if n != 1 {
+			t.Errorf("%s missing", idx)
+		}
+	}
+
+	if _, err := db.Exec(`INSERT INTO link_messages (kind, body, at) VALUES ('send', 'hi', '2026-10-14T00:00:00.000Z')`); err != nil {
+		t.Fatalf("insert message: %v", err)
+	}
+	var delivered any
+	var truncated int
+	if err := db.QueryRow(`SELECT delivered, truncated FROM link_messages`).Scan(&delivered, &truncated); err != nil {
 		t.Fatal(err)
 	}
-	if n != 1 {
-		t.Error("idx_session_plan_task missing")
+	if delivered != nil || truncated != 0 {
+		t.Errorf("delivered/truncated = %v/%d, want NULL/0", delivered, truncated)
+	}
+	if _, err := db.Exec(`INSERT INTO link_messages (kind, at) VALUES ('send', '2026-10-14T00:00:00.000Z')`); err == nil {
+		t.Error("insert without body succeeded; want NOT NULL")
 	}
 
-	ins := `INSERT INTO session_plan (session_id, task_id, phase_id, chosen_by, at)
-		VALUES ('s-1', '2026-10-13-x', ?, 'terminal', '2026-10-14T00:00:00.000Z')`
-	if _, err := db.Exec(ins, nil); err != nil {
-		t.Fatalf("insert with NULL phase_id: %v", err)
+	ins := `INSERT INTO link_claims (session_id, path, claimed_at) VALUES ('s1', '/a', '2026-10-14T00:00:00.000Z')`
+	if _, err := db.Exec(ins); err != nil {
+		t.Fatalf("first claim: %v", err)
 	}
-	if _, err := db.Exec(ins, "7"); err == nil {
-		t.Fatal("second row for the same session succeeded; want a PRIMARY KEY conflict")
+	if _, err := db.Exec(ins); err == nil {
+		t.Fatal("second claim of the same (session, path) succeeded; want a PRIMARY KEY conflict")
 	}
-	for _, q := range []string{
-		`INSERT INTO session_plan (session_id, phase_id, chosen_by, at) VALUES ('s-2', NULL, 'auto', '2026-10-14T00:00:00.000Z')`,
-		`INSERT INTO session_plan (session_id, task_id, phase_id, at) VALUES ('s-3', 't', NULL, '2026-10-14T00:00:00.000Z')`,
-		`INSERT INTO session_plan (session_id, task_id, phase_id, chosen_by) VALUES ('s-4', 't', NULL, 'auto')`,
-	} {
-		if _, err := db.Exec(q); err == nil {
-			t.Errorf("%s succeeded; want NOT NULL", q)
-		}
+	if _, err := db.Exec(`INSERT INTO link_claims (session_id, path, claimed_at) VALUES ('s2', '/a', '2026-10-14T00:00:00.000Z')`); err != nil {
+		t.Fatalf("another session's claim on the same path: %v", err)
 	}
 }

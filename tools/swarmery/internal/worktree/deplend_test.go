@@ -181,7 +181,7 @@ func TestManagerPlacedPaths(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Setenv(LendEnv, tc.lend)
-			got := ManagerPlacedPaths()
+			got := ManagerPlacedPaths(t.TempDir())
 			if len(got) != len(tc.want) {
 				t.Fatalf("ManagerPlacedPaths() = %q, want %q", got, tc.want)
 			}
@@ -192,4 +192,100 @@ func TestManagerPlacedPaths(t *testing.T) {
 			}
 		})
 	}
+}
+
+// writePackageJSON commits (in the fixture's sense) a package.json under the
+// worktree, which is what makes a directory a nested npm package.
+func writePackageJSON(t *testing.T, worktreePath, dir string) {
+	t.Helper()
+	full := filepath.Join(worktreePath, dir)
+	if err := os.MkdirAll(full, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(full, "package.json"), []byte("{}"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// Board card T-ybm5i4: the root node_modules was lent, the web app's was not,
+// and every run that built the web app failed on the missing tree.
+func TestLendDependencies_LendsNestedNodeModules(t *testing.T) {
+	t.Setenv(LendEnv, "")
+	web := filepath.Join("tools", "app", "web")
+	repoRoot, wt := lendFixture(t, "node_modules", filepath.Join(web, "node_modules"))
+	writePackageJSON(t, wt, web)
+
+	lendDependencies(repoRoot, wt)
+
+	for _, rel := range []string{"node_modules", filepath.Join(web, "node_modules")} {
+		if _, err := os.ReadFile(filepath.Join(wt, rel, "marker.txt")); err != nil {
+			t.Errorf("%s not lent: %v", rel, err)
+		}
+	}
+}
+
+// A package.json whose source tree was never installed, or that sits where a
+// checkout does not own it (hidden dirs, inside node_modules, too deep), must
+// not produce a link.
+func TestLendDependencies_NestedSkipsUninstalledAndOutOfScope(t *testing.T) {
+	t.Setenv(LendEnv, "")
+	hidden := filepath.Join(".claude", "worktrees", "x")
+	deep := filepath.Join("a", "b", "c", "d", "e")
+	repoRoot, wt := lendFixture(t,
+		filepath.Join(hidden, "node_modules"),
+		filepath.Join(deep, "node_modules"))
+	writePackageJSON(t, wt, "uninstalled")
+	writePackageJSON(t, wt, hidden)
+	writePackageJSON(t, wt, deep)
+
+	lendDependencies(repoRoot, wt)
+
+	for _, dir := range []string{"uninstalled", hidden, deep} {
+		if _, err := os.Lstat(filepath.Join(wt, dir, "node_modules")); !os.IsNotExist(err) {
+			t.Errorf("%s/node_modules exists (err=%v), want nothing lent", dir, err)
+		}
+	}
+}
+
+// An explicit knob is the operator's exact list: discovery stays off.
+func TestLendDependencies_ExplicitEnvSkipsNestedDiscovery(t *testing.T) {
+	repoRoot, wt := lendFixture(t, "node_modules", filepath.Join("web", "node_modules"))
+	writePackageJSON(t, wt, "web")
+	t.Setenv(LendEnv, "node_modules")
+
+	lendDependencies(repoRoot, wt)
+
+	if _, err := os.Lstat(filepath.Join(wt, "web", "node_modules")); !os.IsNotExist(err) {
+		t.Errorf("web/node_modules was discovered although %s named an explicit list", LendEnv)
+	}
+}
+
+func TestNestedNodeModules(t *testing.T) {
+	wt := t.TempDir()
+	writePackageJSON(t, wt, ".")
+	writePackageJSON(t, wt, filepath.Join("tools", "app", "web"))
+	writePackageJSON(t, wt, filepath.Join("pkg", "node_modules", "dep"))
+
+	got := nestedNodeModules(wt)
+	want := filepath.Join("tools", "app", "web", "node_modules")
+	if len(got) != 1 || got[0] != want {
+		t.Errorf("nestedNodeModules = %v, want [%s]", got, want)
+	}
+}
+
+// phaserun reads untracked paths as leftover work unless ManagerPlacedPaths
+// names them. A lent nested node_modules it missed would make every worktree
+// look dirty and block the next run.
+func TestManagerPlacedPathsIncludesNestedNodeModules(t *testing.T) {
+	t.Setenv(LendEnv, "")
+	wt := t.TempDir()
+	writePackageJSON(t, wt, filepath.Join("tools", "app", "web"))
+
+	want := "tools/app/web/node_modules"
+	for _, got := range ManagerPlacedPaths(wt) {
+		if got == want {
+			return
+		}
+	}
+	t.Errorf("ManagerPlacedPaths(%s) lacks %q", wt, want)
 }

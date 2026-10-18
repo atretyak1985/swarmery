@@ -17,11 +17,11 @@ migration `0107_link_sessions.sql`. The control channel (phase 4, [Commands](#co
 adds `internal/api/link_commands.go`, `internal/link/commands.go` and migration
 `0108_link_commands.sql`. The approvals channel (phase 5, [Permission](#permission))
 adds `internal/api/link_permission.go`, `internal/approvals/mod.go` and migration
-`0114_permission_channel.sql`. The swarm (phase 6, [Swarm](#swarm)) adds
+`0115_permission_channel.sql`. The swarm (phase 6, [Swarm](#swarm)) adds
 `internal/api/link_swarm.go`, `internal/link/swarm.go` and migration
-`0115_link_swarm.sql`. The plan view (phase 7, [Plan](#plan)) adds
+`0116_link_swarm.sql`. The plan view (phase 7, [Plan](#plan)) adds
 `internal/api/link_plan.go`, `internal/link/drift.go` and migration
-`0116_session_plan.sql`.
+`0117_session_plan.sql`.
 
 ## Transport
 
@@ -386,7 +386,7 @@ hands a call back.
 
 | Column | Meaning |
 |---|---|
-| `channel` | `shim` or `mod`: which hook channel delivered the row (migration `0114`). The `PermissionRequest` DTO and the needs-you item carry it as `channel` |
+| `channel` | `shim` or `mod`: which hook channel delivered the row (migration `0115`). The `PermissionRequest` DTO and the needs-you item carry it as `channel` |
 | `tool_use_id` | the engine's `toolu_…` id of the call (`e.tool_use_id`). NULL on shim rows |
 | `resolved_via` | **who decided**, as before: `dashboard`, `rule`, `terminal`, `local-only`, `restart`, or NULL on an expiry. Never `mod` |
 
@@ -754,7 +754,7 @@ with the same auth, the same dedup and the same per-event reject path; one comma
 kind; three routes. None of it touches `link_status`. Implementation:
 `internal/link/swarm.go` (ingest, correlation, claims), `internal/link/commands.go`
 (the `message` command), `internal/api/link_swarm.go` (routes), migration
-`0115_link_swarm.sql`.
+`0116_link_swarm.sql`.
 
 ### Event kinds
 
@@ -904,7 +904,7 @@ the session's plan phase and its acceptance criteria, ticks a criterion, picks a
 starts the next phase run and reports drift. **The daemon owns plan state and the one
 markdown parser** (decision D5). The mod never reads or parses a plan doc: it draws the
 view below and sends indexes back. Implementation: `internal/api/link_plan.go`,
-`internal/link/drift.go`, migration `0116_session_plan.sql`.
+`internal/link/drift.go`, migration `0117_session_plan.sql`.
 
 Every `/api/link/plan*` route sits behind the bearer token like `/api/link/events`
 (`401` without it, `503 {"error":"link disabled"}` with the link off). There is no
@@ -1096,7 +1096,7 @@ id.
 
 ### Storage and retention
 
-Table `session_plan` (migration `0116`): `session_id` (the Claude session id, primary
+Table `session_plan` (migration `0117`): `session_id` (the Claude session id, primary
 key), `task_id`, `phase_id` (nullable), `chosen_by` (`terminal` | `auto`), `at`
 (fixed-width ms UTC), indexed on `task_id`. There is no foreign key, for the reason
 `0107` gives. The prune pass drops a row once its `at` is older than the `link_events`

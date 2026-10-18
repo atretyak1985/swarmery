@@ -72,16 +72,16 @@ type Stats struct {
 	// per-turn forecast vs actual). Same horizon and same reasoning as
 	// LinkEvents, aged by the row's own started_at.
 	TurnForecasts int64
-	// LinkMessages is link_messages rows dropped (migration 0115, the link's
+	// LinkMessages is link_messages rows dropped (migration 0116, the link's
 	// swarm messages). Same horizon and same reasoning as LinkEvents, aged by
 	// the row's own at.
 	LinkMessages int64
-	// LinkClaims is link_claims rows dropped (migration 0115, the file-claims
+	// LinkClaims is link_claims rows dropped (migration 0116, the file-claims
 	// registry). NOT on the cutoff: a claim is only interesting while live, so
 	// a released one goes 24 h (ClaimRetention) after its release, and one
 	// never released (a crashed session) 24 h after it was claimed.
 	LinkClaims int64
-	// SessionPlans is session_plan rows dropped (migration 0116, the link's
+	// SessionPlans is session_plan rows dropped (migration 0117, the link's
 	// plan-in-the-terminal pick). Same horizon as LinkEvents, by the row's own
 	// `at`, but only once its session has ENDED (ended_at set, the mod reported
 	// session.end, or no sessions row is left): a long-lived terminal keeps its

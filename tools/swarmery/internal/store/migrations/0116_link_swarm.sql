@@ -1,4 +1,4 @@
--- 0115: link_messages + link_claims — swarm messaging and the file-claims
+-- 0116: link_messages + link_claims — swarm messaging and the file-claims
 -- registry (mods-swarmery-link phase 6, docs/mods-link-protocol.md "Swarm").
 --
 -- Sessions running the swarmery link mod report their $.session.send /
@@ -34,8 +34,8 @@
 -- refreshes claimed_at. Two or more sessions holding a live claim on one path
 -- is a conflict — advisory, nothing is blocked.
 --
--- WHY 0115: 0109–0111 were first reserved for phases 5–7 of the same plan,
--- but 0112/0113 landed first; numbering after the highest applied version
+-- WHY 0116: 0109–0111 were first reserved for phases 5–7 of the same plan,
+-- but 0112–0114 landed first; numbering after the highest applied version
 -- keeps /api/health's MAX(version) a truthful "this schema is current" signal.
 --
 -- NO FOREIGN KEYS, for the reason 0107 spells out (an FK child of sessions
