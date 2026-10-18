@@ -1,4 +1,4 @@
-.PHONY: build build-web build-go copy-docs copy-probe dev test clean install
+.PHONY: build build-web build-go copy-docs copy-probe dev test clean install install-unlocked
 
 # Repo docs snapshotted into the go:embed content dir for /api/docs.
 DOCS_SRC := ../../docs
@@ -69,7 +69,44 @@ ROUTE_INSTALL_FLAGS := $(strip \
 	$(if $(SWARMERY_ROUTE_PHASERUN),--route-phaserun='$(SWARMERY_ROUTE_PHASERUN)') \
 	$(if $(SWARMERY_ROUTE_POLICY),--route-policy='$(SWARMERY_ROUTE_POLICY)'))
 
-install: build
+# install holds a machine-wide lock around the whole build + swap + restart, so a
+# second `make install` waits for the first instead of racing it. Observed
+# 2026-10-19: two sessions ran it seconds apart in one checkout, the second's
+# `npm ci` wiped web/node_modules under the first's vite build, and that build
+# died on "Cannot find module '../lightningcss.darwin-arm64.node'". The lock is
+# per machine, not per checkout: every install replaces the same $(INSTALL_BIN)
+# and restarts the same service, and worktrees can share a lent node_modules.
+#
+# mkdir is the lock because it is atomic and macOS ships no flock. The holder's
+# pid sits in the lock dir; a lock whose pid is gone (a killed run) is taken
+# over. A lock with no pid yet is a holder between mkdir and the write, and is
+# waited on like any other. The waiter rebuilds once it gets the lock — it may
+# be on a newer commit than the run it waited for.
+#
+# INSTALL_STEP is the goal run under the lock; scripts/tests/make-install-lock.test.sh
+# points it (and INSTALL_LOCK) at a cheap target to exercise the lock alone.
+INSTALL_LOCK := $(HOME)/.swarmery/make-install.lock
+INSTALL_STEP := install-unlocked
+
+install:
+	@mkdir -p $(dir $(INSTALL_LOCK))
+	@lock='$(INSTALL_LOCK)'; \
+	while ! mkdir "$$lock" 2>/dev/null; do \
+		holder=$$(cat "$$lock/pid" 2>/dev/null); \
+		if [ -n "$$holder" ] && ! kill -0 "$$holder" 2>/dev/null; then \
+			echo "→ taking over a stale install lock (pid $$holder is gone)"; \
+			rm -rf "$$lock"; \
+			continue; \
+		fi; \
+		echo "→ another make install holds $$lock (pid $${holder:-?}) — waiting"; \
+		sleep 5; \
+	done; \
+	echo $$$$ > "$$lock/pid"; \
+	trap 'rm -rf "$$lock"' EXIT; \
+	trap 'exit 130' INT TERM; \
+	$(MAKE) --no-print-directory $(INSTALL_STEP)
+
+install-unlocked: build
 	mkdir -p $(dir $(INSTALL_BIN))
 	cp -f swarmery $(INSTALL_BIN).new
 	mv -f $(INSTALL_BIN).new $(INSTALL_BIN)
