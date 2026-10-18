@@ -240,6 +240,25 @@ func TestPhaseReverify_PhaseJSONCarriesCanReverifyAndVerifyRunning(t *testing.T)
 		t.Error("phase 2 verifyRunning = true, want false (its run is finished)")
 	}
 
+	// One criterion unticked but classed [MANUAL]: still offered — the verifier
+	// grades the executor's work, and a manual leg is not that. The same untick
+	// without the class is refused.
+	if _, err := db.Exec(`UPDATE epic_phases SET checkboxes_done=checkboxes_total-1, criteria_manual_open=1 WHERE id=?`, p1); err != nil {
+		t.Fatal(err)
+	}
+	if !list()[p1].CanReverify {
+		t.Error("phase 1 canReverify = false with only a [MANUAL] criterion open, want true")
+	}
+	if _, err := db.Exec(`UPDATE epic_phases SET criteria_manual_open=0 WHERE id=?`, p1); err != nil {
+		t.Fatal(err)
+	}
+	if list()[p1].CanReverify {
+		t.Error("phase 1 canReverify = true with an executable criterion open, want false")
+	}
+	if _, err := db.Exec(`UPDATE epic_phases SET checkboxes_done=checkboxes_total WHERE id=?`, p1); err != nil {
+		t.Fatal(err)
+	}
+
 	// A passed phase is no longer offered.
 	if _, err := db.Exec(`UPDATE epic_phases SET verify_verdict='pass' WHERE id=?`, p1); err != nil {
 		t.Fatal(err)
