@@ -66,6 +66,17 @@ jobs:
           cache-dependency-path: tools/swarmery/go.sum
           check-latest: true
 
+      - name: gofmt
+        run: |
+          set -euo pipefail
+          # Tracked files only, so nothing vendored under web/node_modules counts.
+          unformatted=$(git ls-files -z '*.go' | xargs -0 gofmt -l)
+          if [ -n "$unformatted" ]; then
+            echo "gofmt would reformat these files (run: gofmt -w <file>):"
+            echo "$unformatted"
+            exit 1
+          fi
+
       - name: Vet
         run: go vet ./...
 

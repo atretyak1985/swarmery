@@ -198,7 +198,7 @@ func (r ClaudeRunner) Start(ctx context.Context, spec RunSpec) (*Run, error) {
 		// SAME resolution (spec.Cwd IS the project path here, see above). No
 		// admitted estate ⇒ "" ⇒ no flag, argv byte-identical to before.
 		SettingsFile: runsettings.Compose("planning", resolution, runsettings.Inputs{}),
-		Timeout: timeout,
+		Timeout:      timeout,
 		// Bin left nil: runcore resolves through claudebin by default (launchd's
 		// minimal PATH omits npm/homebrew, so a bare lookup would miss).
 	})

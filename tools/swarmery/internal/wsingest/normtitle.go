@@ -123,12 +123,12 @@ func capNormTitle(s string) string {
 }
 
 // BackfillNormTitles fills retro_lessons.norm_title for rows that predate
-// migration 0070 (norm_title = ''), and returns how many rows it wrote.
+// migration 0070 (norm_title = ""), and returns how many rows it wrote.
 //
 // Idempotent by construction: it only ever selects rows whose key is still
 // empty, so a second call after a complete pass writes nothing and returns 0.
-// A row whose title folds to "" stays '' and is re-examined on the next start —
-// that costs one bounded scan and keeps the "'' is not an identity" invariant
+// A row whose title folds to "" stays "" and is re-examined on the next start —
+// that costs one bounded scan and keeps the "empty is not an identity" invariant
 // true for every reader.
 //
 // Run() calls this once, before the first scan pass, so the first advisor tick

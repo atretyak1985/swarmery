@@ -119,8 +119,8 @@ func TestNormTitleReinsertKeepsIdentity(t *testing.T) {
 }
 
 // TestNormTitleBackfill covers the pre-0070 history path: rows written before
-// the column existed carry '', the startup backfill folds them, a second call is
-// a no-op, and a title that folds to nothing is left '' rather than being given
+// the column existed carry "", the startup backfill folds them, a second call is
+// a no-op, and a title that folds to nothing is left "" rather than being given
 // a fake shared identity.
 func TestNormTitleBackfill(t *testing.T) {
 	db := testDB(t)
