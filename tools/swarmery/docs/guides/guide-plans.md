@@ -486,7 +486,10 @@ recorded when the run began, runs the read-only verifier and no executor, and
 changes no checkbox, commit or run state — only the verdict. A `pass` is not offered
 again, and the action is refused while a run or a whole-plan run holds the phase.
 Because results are cached on the tree hash, pressing it on an unchanged `fail`
-returns the cached verdict for free; fix the branch first.
+returns the cached verdict for free; fix the branch first. Open `[LAND]` and
+`[MANUAL]` criteria do not hold the button back: the verifier grades the executor's
+work, so a phase whose only unticked criteria are the merge or a manual check is
+offered as soon as every other criterion is ticked.
 
 ### Review lane: three real exits
 

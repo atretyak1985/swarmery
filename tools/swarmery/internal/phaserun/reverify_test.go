@@ -96,6 +96,11 @@ func TestReverifyEligible(t *testing.T) {
 		{"verify mode off", with(func(e *Eligibility) { e.VerifyMode = "off" }), ReverifyCodeVerifyOff, http.StatusUnprocessableEntity},
 		{"criteria open", with(func(e *Eligibility) { e.CriteriaDone = 2 }), ReverifyCodeCriteriaOpen, http.StatusUnprocessableEntity},
 		{"no criteria at all", with(func(e *Eligibility) { e.CriteriaDone, e.CriteriaTotal = 0, 0 }), ReverifyCodeCriteriaOpen, http.StatusUnprocessableEntity},
+		// Classed criteria are not the verifier's to grade: only executable ones gate.
+		{"only [MANUAL] open", with(func(e *Eligibility) { e.CriteriaDone, e.ManualOpen = 2, 1 }), "", 0},
+		{"only [LAND] open", with(func(e *Eligibility) { e.CriteriaDone, e.LandOpen = 2, 1 }), "", 0},
+		{"[LAND] and [MANUAL] open", with(func(e *Eligibility) { e.CriteriaDone, e.LandOpen, e.ManualOpen = 1, 1, 1 }), "", 0},
+		{"executable open beside [MANUAL]", with(func(e *Eligibility) { e.CriteriaDone, e.ManualOpen = 1, 1 }), ReverifyCodeCriteriaOpen, http.StatusUnprocessableEntity},
 		{"no run branch", with(func(e *Eligibility) { e.RunBranch = "" }), ReverifyCodeNoRunBranch, http.StatusUnprocessableEntity},
 		{"already passed", with(func(e *Eligibility) { e.VerifyVerdict = "pass" }), ReverifyCodeAlreadyPassed, http.StatusConflict},
 		{"already running", with(func(e *Eligibility) { e.RunState = "running" }), ReverifyCodeAlreadyRunning, http.StatusConflict},

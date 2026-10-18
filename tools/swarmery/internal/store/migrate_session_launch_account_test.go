@@ -31,7 +31,7 @@ func TestMigrateSessionLaunchAccountFreshDB(t *testing.T) {
 	mustHaveColumns(t, db, "sessions", "launch_account")
 }
 
-// Column absent before, present after, and a pre-existing row reads ''.
+// Column absent before, present after, and a pre-existing row reads "".
 func TestMigrateSessionLaunchAccountOnPopulatedDB(t *testing.T) {
 	v := launchAccountVersion(t)
 	db := openRaw(t)
@@ -59,7 +59,7 @@ func TestMigrateSessionLaunchAccountOnPopulatedDB(t *testing.T) {
 }
 
 // AccountDrift returns exactly the rows where both columns are known and
-// differ: '' on either side is unknown, never drift.
+// differ: "" on either side is unknown, never drift.
 func TestAccountDrift(t *testing.T) {
 	db := openRaw(t)
 	if err := Migrate(db); err != nil {

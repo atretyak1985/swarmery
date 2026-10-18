@@ -163,8 +163,8 @@ func TestStart_NoDocModelFallsThroughToEnvVerbatim(t *testing.T) {
 // A whitespace-only declaration is "no opinion", so the ladder falls THROUGH it
 // to rung 4 — which is now planning.DefaultModel rather than no flag at all (see
 // TestStart_NoModelAnywhereUsesTheHouseDefault for why). What this test still
-// pins is the fall-through itself: a blank line must not be refused as "unknown
-// model ''", and must not be treated as a declaration.
+// pins is the fall-through itself: a blank line must not be refused as an unknown
+// model "", and must not be treated as a declaration.
 func TestStart_EmptyDocModelIsNoOpinion(t *testing.T) {
 	db, _, p1, _ := fixture(t)
 	t.Setenv(modelEnv, "")

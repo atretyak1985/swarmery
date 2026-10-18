@@ -127,7 +127,7 @@ func TestResolveEffort_UnknownDocValueNamesTheDoc(t *testing.T) {
 }
 
 // A blank declaration is "no opinion", not a declaration: it must fall through
-// to the env/default rung rather than be refused as "unknown effort ''".
+// to the env/default rung rather than be refused as an unknown effort "".
 func TestResolveEffort_BlankDocDeclarationFallsThrough(t *testing.T) {
 	t.Setenv(effortEnv, "")
 	t.Setenv(claudeflags.EffortEnv, "")

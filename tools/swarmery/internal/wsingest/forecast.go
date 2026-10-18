@@ -116,12 +116,12 @@ type ForecastLint struct {
 
 // Forecast lint codes.
 const (
-	LintUnknownKind          = "unknown-kind"
-	LintUnknownSizeBand      = "unknown-size-band"
-	LintUnknownDurationBand  = "unknown-duration-band"
-	LintUnknownOutcome       = "unknown-outcome"
-	LintBadConfidence        = "bad-confidence"
-	LintMissingAreas         = "missing-areas"
+	LintUnknownKind           = "unknown-kind"
+	LintUnknownSizeBand       = "unknown-size-band"
+	LintUnknownDurationBand   = "unknown-duration-band"
+	LintUnknownOutcome        = "unknown-outcome"
+	LintBadConfidence         = "bad-confidence"
+	LintMissingAreas          = "missing-areas"
 	LintPosteriorWithoutPrior = "posterior-without-prior"
 )
 

@@ -769,7 +769,7 @@ func TestStart_StampsRunEndedAt(t *testing.T) {
 func TestStart_ClearsPriorEndedAt(t *testing.T) {
 	db, _, p1, _ := fixture(t)
 	r := &stubRunner{block: make(chan struct{})}
-	r.tickDB = db // a stub run that finishes its work — exit 0 alone no longer proves it
+	r.tickDB = db                     // a stub run that finishes its work — exit 0 alone no longer proves it
 	s := NewService(db, r, &stubWt{}) // real goroutine — run stays in flight
 	s.RepoRoot = func(p string, _ ...string) (string, error) { return p, nil }
 	s.UUID = func() string { return "uuid-1" }
@@ -1021,7 +1021,7 @@ func TestStart_DepsGate(t *testing.T) {
 func TestStart_DoubleStart_ErrRunning(t *testing.T) {
 	db, _, p1, _ := fixture(t)
 	r := &stubRunner{block: make(chan struct{})}
-	r.tickDB = db // a stub run that finishes its work — exit 0 alone no longer proves it
+	r.tickDB = db                     // a stub run that finishes its work — exit 0 alone no longer proves it
 	s := NewService(db, r, &stubWt{}) // real goroutine — run stays in flight
 	s.RepoRoot = func(p string, _ ...string) (string, error) { return p, nil }
 	s.UUID = func() string { return "uuid-1" }
@@ -1106,7 +1106,7 @@ func TestStart_ResetsPriorCheckboxesAfter(t *testing.T) {
 		    run_checkboxes_before=1, run_checkboxes_after=5 WHERE id=?`, p1)
 
 	r := &stubRunner{block: make(chan struct{})}
-	r.tickDB = db // a stub run that finishes its work — exit 0 alone no longer proves it
+	r.tickDB = db                     // a stub run that finishes its work — exit 0 alone no longer proves it
 	s := NewService(db, r, &stubWt{}) // real goroutine — the run stays in flight
 	s.RepoRoot = func(p string, _ ...string) (string, error) { return p, nil }
 	s.UUID = func() string { return "uuid-1" }
@@ -1373,7 +1373,7 @@ func TestDeleteRunBranch_ErrRunning(t *testing.T) {
 	db, _, p1, _ := fixture(t)
 	r := &stubRunner{block: make(chan struct{})}
 	wt := &stubWt{}
-	r.tickDB = db // a stub run that finishes its work — exit 0 alone no longer proves it
+	r.tickDB = db              // a stub run that finishes its work — exit 0 alone no longer proves it
 	s := NewService(db, r, wt) // real goroutine — run stays in flight
 	s.RepoRoot = func(p string, _ ...string) (string, error) { return p, nil }
 	s.UUID = func() string { return "uuid-1" }
@@ -1424,7 +1424,7 @@ func TestCancel(t *testing.T) {
 	db, _, p1, _ := fixture(t)
 	r := &stubRunner{block: make(chan struct{})}
 	wt := &stubWt{}
-	r.tickDB = db // a stub run that finishes its work — exit 0 alone no longer proves it
+	r.tickDB = db              // a stub run that finishes its work — exit 0 alone no longer proves it
 	s := NewService(db, r, wt) // real goroutine
 	s.RepoRoot = func(p string, _ ...string) (string, error) { return p, nil }
 	s.UUID = func() string { return "uuid-1" }

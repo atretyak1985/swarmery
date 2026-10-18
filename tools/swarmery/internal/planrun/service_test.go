@@ -595,7 +595,7 @@ func TestCancelStampsCancelled(t *testing.T) {
 	db, taskID, _ := fixture(t)
 	r := &stubRunner{block: make(chan struct{})}
 	wt := &stubWt{}
-	r.tickDB = db // a stub run that finished its plan — exit 0 alone no longer proves it
+	r.tickDB = db              // a stub run that finished its plan — exit 0 alone no longer proves it
 	s := NewService(db, r, wt) // real goroutine — the run must be observable in flight
 	s.UUID = func() string { return "uuid-1" }
 	s.RepoRoot = func(p string, _ ...string) (string, error) { return p, nil }
@@ -1049,7 +1049,7 @@ func TestDeleteRunBranch_ErrRunning(t *testing.T) {
 	db, taskID, _ := fixture(t)
 	r := &stubRunner{block: make(chan struct{})}
 	wt := &stubWt{}
-	r.tickDB = db // a stub run that finished its plan — exit 0 alone no longer proves it
+	r.tickDB = db              // a stub run that finished its plan — exit 0 alone no longer proves it
 	s := NewService(db, r, wt) // real goroutine — run stays in flight
 	s.UUID = func() string { return "uuid-1" }
 	s.RepoRoot = func(p string, _ ...string) (string, error) { return p, nil }

@@ -362,7 +362,7 @@ func TestD1_NoCallOutsideTheAmbiguousBranch(t *testing.T) {
 	s := &stub{name: BackendLocal, a: Answer{Value: D1Blocked, Confidence: 1, Calibrated: true}}
 	active := &Engine{DB: db, Local: s, DefaultModes: map[string]Mode{"d1": ModeActive}}
 	for _, in := range []D1Input{
-		{StopReason: "", Done: 1, Total: 2},         // no stop_reason recorded
+		{StopReason: "", Done: 1, Total: 2},           // no stop_reason recorded
 		{StopReason: "max_tokens", Done: 1, Total: 2}, // not a plain end of turn
 		{StopReason: "end_turn", Done: 2, Total: 2},   // all ticked
 		{StopReason: "end_turn", Done: 0, Total: 0},   // nothing to measure
@@ -387,9 +387,9 @@ func TestD1_NoCallOutsideTheAmbiguousBranch(t *testing.T) {
 
 func TestD1_GroundTruthAfterContinuation(t *testing.T) {
 	cases := []struct {
-		end            string
-		before, after  int
-		want           string
+		end           string
+		before, after int
+		want          string
 	}{
 		{"blocked", 1, 1, D1Blocked},
 		{"done", 1, 2, D1Report},

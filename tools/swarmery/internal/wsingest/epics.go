@@ -886,7 +886,7 @@ func parseSpec(planDir string, warn func(string, ...any)) []SpecCriterion {
 //
 // v8: phase_forecasts.post_hoc_reason plus the POSTERIOR ordering check
 // (ordering.go, migration 0080). Both are computed by the scan, so an
-// already-indexed plan keeps post_hoc_reason = '' and an unflagged posterior
+// already-indexed plan keeps post_hoc_reason = "" and an unflagged posterior
 // until its bytes change — and a posterior written after the run's first edit is
 // exactly the row a stale parse would hand to calibration as trustworthy.
 //

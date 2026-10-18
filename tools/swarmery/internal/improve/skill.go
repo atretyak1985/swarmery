@@ -29,7 +29,7 @@ import (
 // the evidence is real, only the file is unknown.
 var ErrSkillNotFound = errors.New("skill not found in the apply repo")
 
-// ErrNoLessonIdentity — routing was asked for an empty norm_title. '' is the
+// ErrNoLessonIdentity — routing was asked for an empty norm_title. "" is the
 // "not folded yet" marker in retro_lessons, never an identity, so grouping by it
 // would gather every unrelated lesson in the database into one bogus target.
 var ErrNoLessonIdentity = errors.New("recommendation has no lesson identity (norm_title)")
@@ -150,7 +150,7 @@ func (s *Service) resolveSkillFromAction(action string) (relPath, content string
 }
 
 // insertNeedsTarget records an unresolved routing as an OPEN proposal the
-// operator can act on. diff/rationale stay empty and base_sha256 is '' — there
+// operator can act on. diff/rationale stay empty and base_sha256 is "" — there
 // is no file yet to hash.
 func (s *Service) insertNeedsTarget(req SkillRouteReq, norm, why string) (int64, error) {
 	var recID any
