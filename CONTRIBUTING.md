@@ -67,7 +67,7 @@ the `core` version. Control-plane releases are cut separately, by pushing a
 
 ## The gates your PR must pass
 
-CI (`.github/workflows/ci.yml`) runs three jobs. `validate` is eleven gates, all
+CI (`.github/workflows/ci.yml`) runs four jobs. `validate` is twelve gates, all
 runnable locally from the repo root:
 
 ```bash
@@ -76,26 +76,29 @@ for f in .claude-plugin/marketplace.json plugins/*/.claude-plugin/plugin.json \
   plugins/*/requirements.json plugins/core/hooks/hooks.json overlays/*/*.json; do
   node -e "JSON.parse(require('fs').readFileSync('$f'))" || echo "INVALID: $f"; done
 bash scripts/check-plugin-requirements.sh   # 2  requirements match the schema
-# 3  shell syntax
+bash scripts/check-plugin-versions.sh       # 3  semver plugin.json, marketplace in step
+# 4  shell syntax
 find plugins scripts -name '*.sh' -print0 \
   | while IFS= read -r -d '' f; do bash -n "$f" || echo "SYNTAX: $f"; done
-# 4  shellcheck — CI floor is error severity; run it bare for the stricter signal
+# 5  shellcheck — CI floor is error severity; run it bare for the stricter signal
 find plugins scripts -name '*.sh' -print0 | xargs -0 shellcheck -S error
-# 5  every suite in scripts/tests/, discovered — not listed
+# 6  every suite in scripts/tests/, discovered — not listed
 for t in scripts/tests/*.test.sh; do bash "$t" || echo "FAILED: $t"; done
-# 6  agent frontmatter: name + description inside the first 15 lines
+# 7  agent frontmatter: name + description inside the first 15 lines
 for f in plugins/*/agents/*.md; do head -15 "$f" | grep -q '^name:' \
   && head -15 "$f" | grep -q '^description:' || echo "PROBLEM: $f"; done
-bash scripts/validate-agent-refs.sh         # 7  no dead refs or pinned models
-bash scripts/tests/cc-version-floor.test.sh # 8  Claude Code version floor
-bash scripts/docgen/check-coverage.sh       # 9  '# How to use' on every item
-bash scripts/docgen/apply-counts.sh --check # 10 published counts match the tree
-bash scripts/scan-flavor.sh                 # 11 neutrality — must say "✓ clean"
+bash scripts/validate-agent-refs.sh         # 8  no dead refs or pinned models
+bash scripts/tests/cc-version-floor.test.sh # 9  Claude Code version floor
+bash scripts/docgen/check-coverage.sh       # 10 '# How to use' on every item
+bash scripts/docgen/apply-counts.sh --check # 11 published counts match the tree
+bash scripts/scan-flavor.sh                 # 12 neutrality — must say "✓ clean"
 ```
 
-Gates 9 and 10 are ratchets with no slack: docs coverage sits at 106/106, and every
+Gates 10 and 11 are ratchets with no slack: docs coverage sits at 106/106, and every
 published count is spliced in from the corpus by `scripts/docgen/counts.sh`. Never
-raise a floor to make a build pass. The other two jobs are `agent-evals` (promptfoo,
+raise a floor to make a build pass. `mods` installs a pinned Claude Code CLI and runs
+`bash scripts/tests/mods-ci.test.sh` (strict validate + `claude plugin test` of every
+mod plugin; without the CLI the script prints SKIP). The other two jobs are `agent-evals` (promptfoo,
 in `evals/`; skips cleanly without `ANTHROPIC_API_KEY`) and `secret-scan` (gitleaks
 over full history).
 
