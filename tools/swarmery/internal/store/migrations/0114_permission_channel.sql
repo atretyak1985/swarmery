@@ -1,4 +1,4 @@
--- 0109: the delivering channel of a permission request (mods-swarmery-link
+-- 0114: the delivering channel of a permission request (mods-swarmery-link
 -- phase 5, the mod's approvals channel).
 --
 -- A permission request now reaches the daemon one of two ways:
@@ -24,9 +24,9 @@
 --   ALTER TABLE permission_requests DROP COLUMN tool_use_id;
 --   ALTER TABLE permission_requests DROP COLUMN channel;
 --
--- WHY 0109: 0108 is the link command queue; 0109–0111 were reserved for phases
--- 5–7 of the same plan. migrate.go applies by version set, so landing after
--- 0112/0113 is harmless (see 0112's note).
+-- WHY 0114: 0109–0111 were first reserved for phases 5–7 of the same plan,
+-- but 0112/0113 landed first; numbering after the highest applied version
+-- keeps /api/health's MAX(version) a truthful "this schema is current" signal.
 ALTER TABLE permission_requests ADD COLUMN channel TEXT NOT NULL DEFAULT 'shim';
 ALTER TABLE permission_requests ADD COLUMN tool_use_id TEXT;
 

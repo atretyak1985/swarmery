@@ -17,7 +17,7 @@ migration `0107_link_sessions.sql`. The control channel (phase 4, [Commands](#co
 adds `internal/api/link_commands.go`, `internal/link/commands.go` and migration
 `0108_link_commands.sql`. The approvals channel (phase 5, [Permission](#permission))
 adds `internal/api/link_permission.go`, `internal/approvals/mod.go` and migration
-`0109_permission_channel.sql`.
+`0114_permission_channel.sql`.
 
 ## Transport
 
@@ -381,7 +381,7 @@ hands a call back.
 
 | Column | Meaning |
 |---|---|
-| `channel` | `shim` or `mod`: which hook channel delivered the row (migration `0109`). The `PermissionRequest` DTO and the needs-you item carry it as `channel` |
+| `channel` | `shim` or `mod`: which hook channel delivered the row (migration `0114`). The `PermissionRequest` DTO and the needs-you item carry it as `channel` |
 | `tool_use_id` | the engine's `toolu_…` id of the call (`e.tool_use_id`). NULL on shim rows |
 | `resolved_via` | **who decided**, as before: `dashboard`, `rule`, `terminal`, `local-only`, `restart`, or NULL on an expiry. Never `mod` |
 

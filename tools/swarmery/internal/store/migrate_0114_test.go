@@ -2,20 +2,20 @@ package store
 
 import "testing"
 
-// TestMigrate0109AddsPermissionChannel: a permission request written before
-// 0109 reads channel 'shim' and a NULL tool_use_id afterwards, both indexes
+// TestMigrate0114AddsPermissionChannel: a permission request written before
+// 0114 reads channel 'shim' and a NULL tool_use_id afterwards, both indexes
 // land, and a new mod row keeps the values it is written with.
-func TestMigrate0109AddsPermissionChannel(t *testing.T) {
+func TestMigrate0114AddsPermissionChannel(t *testing.T) {
 	db := openRaw(t)
-	if err := MigrateUpTo(db, 108); err != nil {
-		t.Fatalf("migrate to 108: %v", err)
+	if err := MigrateUpTo(db, 113); err != nil {
+		t.Fatalf("migrate to 113: %v", err)
 	}
 	if _, err := db.Exec(`INSERT INTO projects (id, path, slug, name, first_seen)
 		VALUES (1, '/p', '-p', 'p', '2026-10-14T00:00:00.000Z')`); err != nil {
 		t.Fatalf("seed project: %v", err)
 	}
 	if _, err := db.Exec(`INSERT INTO sessions (id, project_id, session_uuid, cwd, status, started_at, source)
-		VALUES (1, 1, 'uuid-0109', '/p', 'active', '2026-10-14T00:00:00.000Z', 'jsonl')`); err != nil {
+		VALUES (1, 1, 'uuid-0114', '/p', 'active', '2026-10-14T00:00:00.000Z', 'jsonl')`); err != nil {
 		t.Fatalf("seed session: %v", err)
 	}
 	if _, err := db.Exec(`INSERT INTO permission_requests (id, session_id, tool_name, request_json, requested_at)
@@ -27,11 +27,11 @@ func TestMigrate0109AddsPermissionChannel(t *testing.T) {
 		t.Fatalf("migrate: %v", err)
 	}
 	var name string
-	if err := db.QueryRow(`SELECT name FROM schema_migrations WHERE version = 109`).Scan(&name); err != nil {
-		t.Fatalf("migration 109 not recorded: %v", err)
+	if err := db.QueryRow(`SELECT name FROM schema_migrations WHERE version = 114`).Scan(&name); err != nil {
+		t.Fatalf("migration 114 not recorded: %v", err)
 	}
-	if name != "0109_permission_channel.sql" {
-		t.Errorf("migration 109 name: want 0109_permission_channel.sql, got %s", name)
+	if name != "0114_permission_channel.sql" {
+		t.Errorf("migration 114 name: want 0114_permission_channel.sql, got %s", name)
 	}
 	mustHaveColumns(t, db, "permission_requests", "channel", "tool_use_id")
 
@@ -41,7 +41,7 @@ func TestMigrate0109AddsPermissionChannel(t *testing.T) {
 		t.Fatal(err)
 	}
 	if channel != "shim" || toolUse != nil {
-		t.Errorf("pre-0109 row: channel=%q tool_use_id=%v, want 'shim' and NULL", channel, toolUse)
+		t.Errorf("pre-0114 row: channel=%q tool_use_id=%v, want 'shim' and NULL", channel, toolUse)
 	}
 
 	for _, idx := range []string{"idx_pr_tool_use", "idx_pr_mod_hash"} {
