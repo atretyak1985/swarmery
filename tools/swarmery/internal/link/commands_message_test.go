@@ -234,7 +234,8 @@ func TestCommandsMessageSendEventFolds(t *testing.T) {
 // pluginSend is the session.send event the swarmery-link mod queues for a
 // dashboard message, byte for byte as plugins/swarmery-link/hooks/swarm.test.ts
 // expects it (sendPayload); commandID is spliced in raw, so a test can send
-// the number the mod sends now or the string older mods sent.
+// the JSON number the mod sends (wireCommandId) or the digit string mods
+// before the phase-6 fix sent.
 func pluginSend(from, to, text, at, isDelivered, commandID string) Event {
 	extra := ""
 	if isDelivered == "false" {
@@ -322,5 +323,85 @@ func TestCommandsMessageLateSendOverridesFailedAck(t *testing.T) {
 				t.Errorf("rows = %d (%v), want 1", n, err)
 			}
 		})
+	}
+}
+
+// failSettles makes every UPDATE of a dashboard row fail until the returned
+// func drops the trigger.
+func failSettles(t *testing.T, db *sql.DB) func() {
+	t.Helper()
+	if _, err := db.Exec(`CREATE TRIGGER fail_settle BEFORE UPDATE ON link_messages
+		WHEN OLD.kind = 'dashboard' BEGIN SELECT RAISE(ABORT, 'settle refused'); END`); err != nil {
+		t.Fatal(err)
+	}
+	return func() {
+		if _, err := db.Exec(`DROP TRIGGER fail_settle`); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
+// The ack's command update and the dashboard row's settle are one
+// transaction: a settle that fails leaves the command delivered (not a final
+// state with a row pending forever), and the mod's retried ack settles both.
+func TestCommandsMessageAckSettleIsAtomic(t *testing.T) {
+	e := newMsgEnv(t)
+	e.poll(t)
+	id, _, err := e.c.EnqueueMessage(context.Background(), e.sid, msgRecipient, "atomic?")
+	if err != nil {
+		t.Fatal(err)
+	}
+	e.poll(t)
+	restore := failSettles(t, e.db)
+	if err := e.c.Ack(context.Background(), id, ResultDone, ""); err == nil || !strings.Contains(err.Error(), "settle refused") {
+		t.Fatalf("Ack with a failing settle: err = %v, want the settle's error", err)
+	}
+	if got := e.row(t, id); got.state != StateDelivered {
+		t.Errorf("after the failed settle: command state = %s, want delivered (rolled back)", got.state)
+	}
+	if r := e.dashboardRow(t, id); r.delivered.Valid {
+		t.Errorf("after the failed settle: dashboard row = %+v, want delivered NULL", r)
+	}
+	if got := e.notes.states(id); !equalStrings(got, []string{StateQueued, StateDelivered}) {
+		t.Errorf("link_command states after the failed settle = %v, want no done note", got)
+	}
+	restore()
+	if err := e.c.Ack(context.Background(), id, ResultDone, ""); err != nil {
+		t.Fatalf("retried Ack: %v", err)
+	}
+	if got := e.row(t, id); got.state != StateDone {
+		t.Errorf("after the retried ack: command state = %s, want done", got.state)
+	}
+	if r := e.dashboardRow(t, id); !r.delivered.Valid || r.delivered.Int64 != 1 {
+		t.Errorf("after the retried ack: dashboard row = %+v, want delivered 1", r)
+	}
+}
+
+// Expiry is atomic the same way: a failing settle keeps the message queued,
+// and the next sweep expires it and settles its row.
+func TestCommandsMessageExpireSettleIsAtomic(t *testing.T) {
+	e := newMsgEnv(t)
+	e.poll(t)
+	id, _, err := e.c.EnqueueMessage(context.Background(), e.sid, msgRecipient, "late")
+	if err != nil {
+		t.Fatal(err)
+	}
+	e.clk.Add(PromptTTL + time.Second)
+	restore := failSettles(t, e.db)
+	if err := e.c.Sweep(context.Background()); err == nil {
+		t.Fatal("Sweep with a failing settle: err = nil, want the settle's error")
+	}
+	if got := e.row(t, id); got.state != StateQueued {
+		t.Errorf("after the failed settle: command state = %s, want queued (rolled back)", got.state)
+	}
+	restore()
+	if err := e.c.Sweep(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if got := e.row(t, id); got.state != StateExpired {
+		t.Errorf("after the next sweep: command state = %s, want expired", got.state)
+	}
+	if r := e.dashboardRow(t, id); !r.delivered.Valid || r.delivered.Int64 != 0 || r.reason.String != expiredReason {
+		t.Errorf("after the next sweep: dashboard row = %+v", r)
 	}
 }

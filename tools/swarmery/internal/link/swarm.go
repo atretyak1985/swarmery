@@ -104,11 +104,11 @@ func validateSwarm(kind, sessionUUID, at string, raw []byte) (*swarmEvent, error
 	switch kind {
 	case KindSessionSend:
 		var p struct {
-			To          string  `json:"to"`
-			Text        *string `json:"text"`
-			Truncated   bool    `json:"truncated"`
-			IsDelivered *bool   `json:"isDelivered"`
-			Reason      string  `json:"reason"`
+			To          string     `json:"to"`
+			Text        *string    `json:"text"`
+			Truncated   bool       `json:"truncated"`
+			IsDelivered *bool      `json:"isDelivered"`
+			Reason      string     `json:"reason"`
 			Origin      string     `json:"origin"`
 			CommandID   *commandID `json:"commandId"`
 		}

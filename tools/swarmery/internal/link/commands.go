@@ -288,10 +288,12 @@ func (c *Commands) EnqueueMessage(ctx context.Context, senderID int64, toUUID, t
 	return commandID, messageID, nil
 }
 
-// settleMessageLocked records a message command's final outcome on its
-// dashboard link_messages row and announces it: done → delivered, failed or
-// expired → not delivered with reason. The caller holds c.rmw.
-func (c *Commands) settleMessageLocked(ctx context.Context, commandID, sessionID int64, delivered bool, reason string) error {
+// settleMessage records a message command's final outcome on its dashboard
+// link_messages row: done → delivered, failed or expired → not delivered with
+// reason. ex is the transaction that moves the command to that final state,
+// so the two never part: a failed settle leaves the command where it was and a
+// retried ack (or the next sweep) settles both.
+func settleMessage(ctx context.Context, ex dbtx, commandID int64, delivered bool, reason string) error {
 	var why any
 	if !delivered {
 		if reason == "" {
@@ -299,16 +301,50 @@ func (c *Commands) settleMessageLocked(ctx context.Context, commandID, sessionID
 		}
 		why = reason
 	}
-	if _, err := c.db.ExecContext(ctx,
+	if _, err := ex.ExecContext(ctx,
 		`UPDATE link_messages SET delivered = ?, reason = ? WHERE kind = 'dashboard' AND command_id = ?`,
 		boolInt(delivered), why, commandID); err != nil {
 		return fmt.Errorf("link commands: settle message: %w", err)
 	}
-	pid, err := sessionProject(ctx, c.db, sessionID)
+	return nil
+}
+
+// finish is one command's move to a final state.
+type finish struct {
+	id, sid     int64
+	kind, state string
+	note        string // the link_command note's message
+	delivered   bool   // a message's outcome on its dashboard row
+	reason      string // its reason when not delivered
+}
+
+// finishLocked moves a command to its final state with update (a statement
+// over link_commands taking args) and, for a message, settles its dashboard
+// row in the same transaction. Notes go out after the commit. The caller holds
+// c.rmw.
+func (c *Commands) finishLocked(ctx context.Context, f finish, update string, args ...any) error {
+	tx, err := c.db.BeginTx(ctx, nil)
 	if err != nil {
-		return nil // the session row is gone: nothing to address the note to
+		return fmt.Errorf("link commands: begin: %w", err)
 	}
-	c.noteSwarm(sessionID, pid)
+	defer tx.Rollback() //nolint:errcheck // no-op after Commit
+	if _, err := tx.ExecContext(ctx, update, args...); err != nil {
+		return fmt.Errorf("link commands: %s: %w", f.state, err)
+	}
+	if f.kind == CmdMessage {
+		if err := settleMessage(ctx, tx, f.id, f.delivered, f.reason); err != nil {
+			return err
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("link commands: commit: %w", err)
+	}
+	c.note(f.sid, f.id, f.kind, f.state, f.note)
+	if f.kind == CmdMessage {
+		if pid, err := sessionProject(ctx, c.db, f.sid); err == nil {
+			c.noteSwarm(f.sid, pid)
+		} // else the session row is gone: nothing to address the note to
+	}
 	return nil
 }
 
@@ -403,17 +439,11 @@ func (c *Commands) Ack(ctx context.Context, id int64, result, message string) er
 	if kind == CmdPrompt && message == TurnInProgress {
 		bump = 1 // the MaxAttempts-th bounce
 	}
-	if _, err := c.db.ExecContext(ctx,
+	f := finish{id: id, sid: sid, kind: kind, state: final, note: message, delivered: final == StateDone, reason: message}
+	return c.finishLocked(ctx, f,
 		`UPDATE link_commands
 		    SET state = ?, acked_at = ?, result = ?, message = ?, attempts = attempts + ?
-		  WHERE id = ?`, final, stamp(c.now()), result, msg, bump, id); err != nil {
-		return fmt.Errorf("link commands: ack: %w", err)
-	}
-	c.note(sid, id, kind, final, message)
-	if kind == CmdMessage {
-		return c.settleMessageLocked(ctx, id, sid, final == StateDone, message)
-	}
-	return nil
+		  WHERE id = ?`, final, stamp(c.now()), result, msg, bump, id)
 }
 
 // bounceLocked sends a prompt the mod could not submit ("turn in progress")
@@ -644,15 +674,10 @@ func (c *Commands) expireLocked(ctx context.Context) error {
 		return fmt.Errorf("link commands: expire: %w", err)
 	}
 	for _, o := range due {
-		if _, err := c.db.ExecContext(ctx,
+		f := finish{id: o.id, sid: o.sid, kind: o.kind, state: StateExpired, reason: expiredReason}
+		if err := c.finishLocked(ctx, f,
 			`UPDATE link_commands SET state = 'expired' WHERE id = ? AND state IN ('queued', 'delivered')`, o.id); err != nil {
-			return fmt.Errorf("link commands: expire: %w", err)
-		}
-		c.note(o.sid, o.id, o.kind, StateExpired, "")
-		if o.kind == CmdMessage {
-			if err := c.settleMessageLocked(ctx, o.id, o.sid, false, expiredReason); err != nil {
-				return err
-			}
+			return err
 		}
 	}
 	return nil

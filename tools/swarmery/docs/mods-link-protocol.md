@@ -773,10 +773,10 @@ stored event writes the side tables below.
 | `isDelivered` | the engine's `SessionSendResult.isDelivered`. Absent means "unknown" (`delivered` NULL) |
 | `reason` | stored only when `isDelivered` is `false` |
 | `origin` | `model` (the model called the tool) or `plugin` (a mod called `$.session.send`). Anything else rejects the event |
-| `commandId` | a positive integer, set when the send ran a dashboard `message` command (below). Send it as a JSON number. A string of decimal digits (`"30"`, what mods before the phase-6 fix sent) is accepted as the same id; zero, a negative, a fraction, an exponent or any other text rejects the event |
+| `commandId` | a positive integer, set when the send ran a dashboard `message` command (below). Send it as a JSON number (the swarmery-link mod does). A string of decimal digits (`"30"`, what mods before the phase-6 fix sent) is accepted as the same id; zero, a negative, a fraction, an exponent or any other text rejects the event |
 | `originKind` | the receive's `e.origin.kind` (`peer`, `coordinator`, `bridge`, …), at most 64 characters. Stored as the row's `origin` |
 | `fromPlugin` | accepted and kept in `link_events` only; there is no column for it |
-| `path`, `paths[]` | absolute (else the event is rejected), cleaned (`/repo/./a.go` → `/repo/a.go`). At most 500 paths per release |
+| `path`, `paths[]` | absolute (else the event is rejected), cleaned (`/repo/./a.go` → `/repo/a.go`). At most 500 paths per release: a turn that claimed more ends in `{ "all": true }` instead (the swarmery-link mod does) |
 | `otherSession` | required. A `conflict` is an advisory record kept in `link_events` only; the daemon's own conflict detection (below) is what the dashboard shows |
 
 Unknown fields are ignored. A violation (wrong type, missing required field, relative
@@ -842,7 +842,9 @@ every `failed` ack is final. The mod acks with the usual body:
 The mod also reports the send as a `session.send` event with `commandId`; it folds into
 the command's dashboard row (address, truncation, origin) instead of adding a second
 row. The row's `delivered` is the ack's to set: `done` → `1`, `failed` → `0` with the
-ack message as `reason`, expired → `0` with reason `expired`.
+ack message as `reason`, expired → `0` with reason `expired`. The command's final
+state and its row's `delivered` are written in one transaction: an ack (or expiry)
+that fails leaves both as they were, and the mod's re-delivered ack settles both.
 
 One exception: a send that settles **after** the ack. The mod gives a send 10 s; past
 that it acks `failed` with `undeliverable: no answer in 10s`, but keeps the send's
