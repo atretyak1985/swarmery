@@ -1,7 +1,7 @@
 {
   "name": "guard-pack",
   "description": "Mod pack (function hooks, no daemon needed): keeps file tools inside this project's roots, redacts secret-shaped values in tool results before Claude sees them (the raw output may still be kept in the local transcript; see README Limits), routes production-deploy shell commands to the native ask dialog, and can hide agents of packs this project has not enabled. Reads policy from .claude/project.json at runtime; additive to core's shell hooks.",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "author": {
     "name": "atretyak",
     "email": "atretiak.work@gmail.com"
