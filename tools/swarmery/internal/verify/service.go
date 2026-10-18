@@ -408,10 +408,10 @@ func (s *Service) VerifyPhase(ctx context.Context, req runcore.PhaseVerifyReques
 		FocusHint:    req.FocusHint,
 		ProjectPath:  req.ProjectPath,
 		Strictness:   StrictnessFromMode(req.Mode),
+		// The row may have been re-keyed (archive, doc rename) while grading ran;
+		// stampPhaseVerdict follows the run branch onto its successor.
 		Stamp: func(v Verdict, detail string) error {
-			_, err := s.DB.Exec(
-				`UPDATE epic_phases SET verify_verdict=?, verify_detail=NULLIF(?, '') WHERE id=?`,
-				string(v), detail, req.PhaseID)
+			_, err := stampPhaseVerdict(s.DB, req.PhaseID, req.WorkspaceTaskID, req.Branch, v, detail)
 			return err
 		},
 		Notify: func() { s.notifyPlan(req.WorkspaceTaskID) },
