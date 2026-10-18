@@ -70,6 +70,8 @@ Copy `overlays/example/` as a model:
 - `project.json` — flavor config (schema: `overlays/_schema/project.schema.json`): repos, main app,
   device/edge repo, cloud settings, domain terms, commit scopes, enabled packs.
 - `settings.snippet.json` — the `.claude/settings.json` block (marketplace + enabledPlugins + `env.AGENT_PROJECT`).
+- `user-settings.snippet.json` — mod plugin options (`pluginConfigs`) for your *user* settings,
+  `~/.claude/settings.json`: Claude Code ignores a project copy (see `docs/MODS.md`).
 
 Keep the *real* filled-in configs in your project (or a private workspace repo) — not in this public repo.
 

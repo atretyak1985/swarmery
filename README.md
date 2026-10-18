@@ -271,6 +271,18 @@ repos, the main app, cloud settings, and domain terms — **nothing project-spec
 into a plugin** (policy: [docs/NEUTRALITY.md](docs/NEUTRALITY.md), enforced in CI by
 `scripts/scan-flavor.sh`, which must report zero hits).
 
+### Mods
+
+`swarmery-link` and `guard-pack` are **mods**: plugins of function hooks (one TypeScript
+hooks module each) that run inside the session rather than as shell scripts, on Claude Code
+2.1.287 or later. `swarmery-link` gives the dashboard a live line into each session — status,
+context fill and cost the moment they change, and with its opt-in options Stop and Send prompt,
+approvals, swarm messages, the plan band above the prompt and a per-turn forecast. `guard-pack`
+keeps file tools inside the project, redacts secrets from tool results and asks before a
+production deploy, with no daemon at all. Both are off until a project enables them; options go
+in your user settings, not the project's. How to enable them, the token file, every option, what
+`claude plugin validate` reports and how each degrades: [docs/MODS.md](docs/MODS.md).
+
 ### Design rules
 
 - **Cross-project isolation.** Enabling swarmery is additive: a project's own `.claude/agents/`

@@ -1,0 +1,8 @@
+{
+  "//": "Merge into your USER settings (~/.claude/settings.json), not a project's .claude/settings.json or settings.local.json: Claude Code reads pluginConfigs only from user settings and the --settings flag, and silently ignores a project or local copy (docs/MODS.md → Options). Options apply wherever the plugin is enabled; enable it per project with enabledPlugins in settings.snippet.json. The /plugin config menu writes the same block. Every swarmery-link option is off by default; this turns on the dashboard's Stop / Send prompt and the plan band.",
+  "pluginConfigs": {
+    "swarmery-link@swarmery": {
+      "options": { "control": true, "planBand": true }
+    }
+  }
+}

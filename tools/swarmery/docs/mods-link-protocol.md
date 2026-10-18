@@ -1,10 +1,15 @@
 # Link HTTP protocol — daemon ↔ swarmery link mod
 
-**Status:** phase 1 contract (mods-swarmery-link). This document defines the HTTP
-contract between the daemon and the swarmery link, a Claude Code mod (a plugin
-`hooks/register.tsx` module) that reports live session state to the daemon. The mod
-side is built against this text in phase 2. Changes are additive. A breaking change
-needs a new route, not an edit to this one.
+**Status:** v1 — additive changes only. Shipped by the mods-swarmery-link program
+(phases 1–10) and matched against the code at its close (phase 11). This document
+defines the HTTP contract between the daemon and the swarmery link, a Claude Code mod
+(the plugin `plugins/swarmery-link`, one `hooks/register.ts` module) that reports live
+session state to the daemon. A new field, event kind or route may be added; a breaking
+change needs a new route, not an edit to this one.
+
+Sections: [Transport](#transport) and [Auth](#auth), [Events](#events-post-apilinkevents),
+[Commands](#commands), [Permission](#permission), [Forecast](#forecast),
+[Swarm](#swarm), [Plan](#plan).
 
 Every mod-side fact below comes from the live spike
 [`mods-format.md`](mods-format.md) (Claude Code `2.1.296`). M1…M7 refer to its
@@ -21,7 +26,12 @@ adds `internal/api/link_permission.go`, `internal/approvals/mod.go` and migratio
 `internal/api/link_swarm.go`, `internal/link/swarm.go` and migration
 `0115_link_swarm.sql`. The plan view (phase 7, [Plan](#plan)) adds
 `internal/api/link_plan.go`, `internal/link/drift.go` and migration
-`0116_session_plan.sql`.
+`0116_session_plan.sql`. The turn forecast (phase 10, [Forecast](#forecast)) adds
+`internal/link/forecast.go`, `internal/turnforecast`, `internal/api/link_forecast.go`
+and migration `0113_turn_forecasts.sql`. Outside this contract, the System → Mods audit
+(phase 9: `internal/modscan`, `internal/sysscan`) adds migration `0112_mods.sql`. The
+program's migrations are therefore 0107, 0108, 0112, 0113, 0114, 0115 and 0116; the
+gap 0109–0111 is deliberate (those numbers were moved to 0114–0116 before merging).
 
 ## Transport
 
@@ -100,7 +110,7 @@ than 1 s after the `401` so the retry lands past the throttle window, then treat
 the link as off for the rest of the session. A re-read and retry on every event
 would hammer the disk and the daemon.
 
-## POST /api/link/events
+## Events: POST /api/link/events
 
 Delivers a batch of session events.
 
