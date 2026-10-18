@@ -177,14 +177,14 @@ type sessionDTO struct {
 	// operator escalating sonnet -> opus is the same crying-wolf this phase
 	// removed from the hooks. Same rule as a phase run's runModelFellBack —
 	// both call modelid.IsFallback, deliberately one function.
-	ModelFellBack bool `json:"modelFellBack"`
-	GitBranch    *string `json:"gitBranch"`
-	CWD         *string `json:"cwd"`
-	Status      string  `json:"status"`
-	StartedAt   string  `json:"startedAt"`
-	EndedAt     *string `json:"endedAt"`
-	Title       *string `json:"title"`
-	Source      string  `json:"source"`
+	ModelFellBack bool    `json:"modelFellBack"`
+	GitBranch     *string `json:"gitBranch"`
+	CWD           *string `json:"cwd"`
+	Status        string  `json:"status"`
+	StartedAt     string  `json:"startedAt"`
+	EndedAt       *string `json:"endedAt"`
+	Title         *string `json:"title"`
+	Source        string  `json:"source"`
 	// Account is the Claude Code subscription this session ran under
 	// (migration 0047), derived at ingest from the config dir of its
 	// transcript root. "" — pre-0047 rows and every hook-minted session —

@@ -61,6 +61,31 @@ func shrinkKnobs(t *testing.T) {
 	probePorts = nil
 }
 
+// execCeiling bounds every wait on a stub this file spawned. It is a ceiling,
+// not an expected duration: the waits return the moment their condition holds,
+// so an idle machine never pays it. Exec'ing a freshly written script under
+// full-suite load (CPU contention, plus macOS's first-exec assessment of a new
+// file) is environmental latency these tests do not measure.
+const execCeiling = 30 * time.Second
+
+// waitDone blocks until the reaper closes p.done for projectID. readAndReap
+// settles state and errMsg before close(p.done), so once this returns the
+// final state is observable through Status without polling.
+func waitDone(t *testing.T, m *Manager, projectID int64, timeout time.Duration) {
+	t.Helper()
+	m.mu.Lock()
+	p := m.procs[projectID]
+	m.mu.Unlock()
+	if p == nil {
+		t.Fatalf("no proc for project %d", projectID)
+	}
+	select {
+	case <-p.done:
+	case <-time.After(timeout):
+		t.Fatalf("timed out after %s waiting for project %d to be reaped (tail: %v)", timeout, projectID, m.Status(projectID).LogTail)
+	}
+}
+
 func waitFor(t *testing.T, timeout time.Duration, what string, cond func() bool) {
 	t.Helper()
 	deadline := time.Now().Add(timeout)
@@ -155,7 +180,7 @@ func TestStartFallbackProbe(t *testing.T) {
 	if err := m.Start(1, t.TempDir()); err != nil {
 		t.Fatal(err)
 	}
-	waitFor(t, 3*time.Second, "state=running via port probe", func() bool {
+	waitFor(t, execCeiling, "state=running via port probe", func() bool {
 		return m.Status(1).State == StateRunning
 	})
 	want := fmt.Sprintf("http://127.0.0.1:%d/dashboard/index.html", port)
@@ -172,10 +197,11 @@ func TestProcessExitBecomesFailed(t *testing.T) {
 	if err := m.Start(1, t.TempDir()); err != nil {
 		t.Fatal(err)
 	}
-	waitFor(t, 3*time.Second, "state=failed after exit 1", func() bool {
-		return m.Status(1).State == StateFailed
-	})
+	waitDone(t, m, 1, execCeiling)
 	st := m.Status(1)
+	if st.State != StateFailed {
+		t.Fatalf("state after exit 1 = %q, want %q", st.State, StateFailed)
+	}
 	if st.Err == "" {
 		t.Error("Err is empty for failed process")
 	}
@@ -206,7 +232,7 @@ func TestStopTerminatesGroup(t *testing.T) {
 	if got := m.Status(1).State; got != StateStopped {
 		t.Errorf("state after Stop = %q, want %q", got, StateStopped)
 	}
-	waitFor(t, 5*time.Second, "process group to die", func() bool {
+	waitFor(t, execCeiling, "process group to die", func() bool {
 		return processGone(pid)
 	})
 
@@ -251,7 +277,7 @@ func TestLogTailCap(t *testing.T) {
 	if err := m.Start(1, t.TempDir()); err != nil {
 		t.Fatal(err)
 	}
-	waitFor(t, 3*time.Second, "all 60 lines to be scanned", func() bool {
+	waitFor(t, execCeiling, "all 60 lines to be scanned", func() bool {
 		tail := m.Status(1).LogTail
 		return len(tail) > 0 && tail[len(tail)-1] == "line 60"
 	})
@@ -298,7 +324,7 @@ func TestStopAll(t *testing.T) {
 			t.Errorf("project %d state after StopAll = %q, want %q", id, got, StateStopped)
 		}
 	}
-	waitFor(t, 5*time.Second, "both process groups to die", func() bool {
+	waitFor(t, execCeiling, "both process groups to die", func() bool {
 		return processGone(pid1) && processGone(pid2)
 	})
 }

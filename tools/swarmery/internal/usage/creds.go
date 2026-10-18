@@ -39,10 +39,11 @@ const (
 	credentialsFile = ".credentials.json"
 	// keychainService is the macOS login-keychain item the CLI writes.
 	keychainService = "Claude Code-credentials"
-	// keychainTimeout bounds the `security` invocation so a keychain prompt
-	// can never wedge a dashboard poll.
-	keychainTimeout = 5 * time.Second
 )
+
+// keychainTimeout bounds the `security` invocation so a keychain prompt
+// can never wedge a dashboard poll.
+var keychainTimeout = 5 * time.Second
 
 // Creds is the operator's Claude OAuth credential. It never leaves this
 // package: it is not persisted, not logged, and not serialized into any API

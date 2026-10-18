@@ -47,7 +47,10 @@ func startProxyStub(t *testing.T, backendURL string) {
 	if err := m.Start(1, t.TempDir()); err != nil {
 		t.Fatalf("start stub: %v", err)
 	}
-	deadline := time.Now().Add(5 * time.Second)
+	// A ceiling, not an expected duration: the loop returns the moment the
+	// state flips. Exec'ing a freshly written script under full-suite load is
+	// environmental latency; the guards under test do not depend on it.
+	deadline := time.Now().Add(30 * time.Second)
 	for time.Now().Before(deadline) {
 		if m.Status(1).State == toolproc.StateRunning {
 			return
