@@ -81,6 +81,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -115,12 +116,23 @@ func (v trackVerdict) String() string {
 	}
 }
 
-const (
-	// gitProbeTimeout bounds one invocation. A git that hangs — a network
-	// fsmonitor, an NFS stall — must degrade to "unknown" (ignore the binding),
-	// never to a stuck spawn.
-	gitProbeTimeout = 2 * time.Second
+// gitProbeTimeout bounds one invocation, in nanoseconds. A git that hangs — a
+// network fsmonitor, an NFS stall — must degrade to "unknown" (ignore the
+// binding), never to a stuck spawn. Production never changes it from 2 s; it is
+// atomic only so SetGitProbeTimeoutForTest can widen it while a test's dispatch
+// goroutines may still be probing.
+var gitProbeTimeout = newProbeTimeout(2 * time.Second)
 
+func newProbeTimeout(d time.Duration) *atomic.Int64 {
+	v := new(atomic.Int64)
+	v.Store(int64(d))
+	return v
+}
+
+// probeTimeout is the current bound on one git invocation.
+func probeTimeout() time.Duration { return time.Duration(gitProbeTimeout.Load()) }
+
+const (
 	// gitUntrackedMarker is git's own wording for "that path is not in the
 	// index", which is exactly the untracked verdict. Matching the TEXT and not
 	// merely exit 1 is what keeps every other exit-1 failure fail-closed.
@@ -231,7 +243,7 @@ type gitProbeResult struct {
 // runGitProbe is a package var so a test can count invocations and stand in for
 // git without a real repository. Production never replaces it.
 var runGitProbe = func(dir, name string) gitProbeResult {
-	ctx, cancel := context.WithTimeout(context.Background(), gitProbeTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), probeTimeout())
 	defer cancel()
 
 	cmd := exec.CommandContext(ctx, "git",
@@ -480,7 +492,7 @@ func gitFailureDetail(r gitProbeResult) string {
 	case errors.Is(r.err, exec.ErrNotFound):
 		return gitNotFound
 	case errors.Is(r.err, context.DeadlineExceeded):
-		return fmt.Sprintf("git timed out after %s", gitProbeTimeout)
+		return fmt.Sprintf("git timed out after %s", probeTimeout())
 	case r.err != nil:
 		return r.err.Error()
 	}

@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/claudeacct"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/ingest"
 )
 
@@ -40,6 +41,10 @@ func gitCounter(t *testing.T) func() int {
 // 5 seeds and 2 pins cost a bounded number of git probes the first time and
 // none the second; the API's own binding write invalidates the view.
 func TestAccountsListBindingDiscoveryIsCached(t *testing.T) {
+	// The probe count is read through a shim that logs BEFORE it execs git; a
+	// probe the 2 s production bound kills (or never starts) on a loaded machine
+	// counts zero. Widen the bound so the count measures the cache, not the load.
+	t.Cleanup(claudeacct.SetGitProbeTimeoutForTest(30 * time.Second))
 	attachHomeAccounts(t, ingest.DefaultAccount, "work")
 	t.Setenv("SWARMERY_SECRETS_DIR", filepath.Join(t.TempDir(), "secrets"))
 	repo := t.TempDir()
