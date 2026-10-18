@@ -347,3 +347,96 @@ func TestReverifyUnknownPhase(t *testing.T) {
 		t.Errorf("err = %v, want ErrPhaseNotFound", err)
 	}
 }
+
+// leftoverReverifyEnv is the real-git setup of the leftover-worktree tests: a run
+// branch with commits, a ready row, a real worktree.Manager, and a crashed run's
+// leftover checkout of that branch ALREADY registered at the phase's own path —
+// the one AcquireExisting would warm-reuse.
+func leftoverReverifyEnv(t *testing.T) (repo *tempRepo, s *Service, v *stubVerifier, p1 int64, leftover string) {
+	t.Helper()
+	repo = newTempRepo(t)
+	db, _, p1, _ := fixture(t)
+	mustExec(t, db, `UPDATE projects SET path=? WHERE id=1`, repo.dir)
+	mainTip := repo.tip("main")
+	repo.branch(runcore.PhaseBranch(p1), "main", 1)
+	readyForReverify(t, db, p1, mainTip)
+
+	s = newTestService(db, &stubRunner{}, &stubWt{})
+	m := &worktree.Manager{Git: repo.git, Root: filepath.Join(t.TempDir(), "wts")}
+	s.Wt = m
+	s.Git = repo.git
+	v = &stubVerifier{}
+	s.Verify = v
+
+	info, err := s.loadPhase(p1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	acq, err := m.AcquireExisting(repo.dir, info.ProjectSlug, runcore.PhaseTaskName(p1))
+	if err != nil {
+		t.Fatalf("leftover acquire: %v", err)
+	}
+	return repo, s, v, p1, acq.Path
+}
+
+// TestReverifyRefusesADirtyLeftoverWorktree — a crashed run's leftover checkout
+// holds an uncommitted file. Grading it would stamp a verdict on work the branch
+// does not contain, and removing it afterwards would destroy the only copy: the
+// admission refuses worktree-dirty, never calls the verifier, leaves the file and
+// the checkout in place, and frees the slot.
+func TestReverifyRefusesADirtyLeftoverWorktree(t *testing.T) {
+	_, s, v, p1, leftover := leftoverReverifyEnv(t)
+	wip := filepath.Join(leftover, "uncommitted.txt")
+	mustWriteDoc(t, wip, "the only copy of a crashed run's work\n")
+
+	start, err := s.AdmitReverify(p1)
+	if start != nil {
+		t.Fatal("refused admission returned a start body")
+	}
+	ref := asRefusal(t, err)
+	if ref.Code != ReverifyCodeWorktreeDirty || ref.Status != http.StatusConflict {
+		t.Errorf("refusal = %+v, want 409 %s", ref, ReverifyCodeWorktreeDirty)
+	}
+	if !strings.Contains(ref.Msg, leftover) {
+		t.Errorf("message %q does not name the leftover worktree %s", ref.Msg, leftover)
+	}
+	if n := len(v.calls()); n != 0 {
+		t.Errorf("VerifyPhase calls = %d, want 0", n)
+	}
+	if _, err := os.Stat(wip); err != nil {
+		t.Errorf("the uncommitted file is gone (stat err %v)", err)
+	}
+	if s.InFlight(p1) {
+		t.Error("refusal left the run slot held")
+	}
+}
+
+// TestReverifyKeepsACleanLeftoverWorktree — a clean leftover on the run branch is
+// warm-reused and graded, but this call did not create it, so it is still there
+// afterwards (and the slot is free).
+func TestReverifyKeepsACleanLeftoverWorktree(t *testing.T) {
+	repo, s, v, p1, leftover := leftoverReverifyEnv(t)
+
+	start, err := s.AdmitReverify(p1)
+	if err != nil {
+		t.Fatalf("AdmitReverify: %v", err)
+	}
+	start()
+
+	calls := v.calls()
+	if len(calls) != 1 {
+		t.Fatalf("VerifyPhase calls = %d, want 1", len(calls))
+	}
+	if !sameCheckout(calls[0].WorktreePath, leftover) {
+		t.Errorf("graded %s, want the reused leftover %s", calls[0].WorktreePath, leftover)
+	}
+	if _, err := os.Stat(leftover); err != nil {
+		t.Errorf("the reused leftover worktree was removed (stat err %v)", err)
+	}
+	if out := repo.run("worktree", "list", "--porcelain"); !strings.Contains(out, "branch refs/heads/"+runcore.PhaseBranch(p1)) {
+		t.Errorf("the leftover is no longer registered on its branch:\n%s", out)
+	}
+	if s.InFlight(p1) {
+		t.Error("run slot still held after the re-verification finished")
+	}
+}

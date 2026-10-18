@@ -63,7 +63,7 @@ func (h *Handler) phasesVerifying(phases []epicPhaseDTO) map[int64]bool {
 // requireLocalOrigin. 202 when admitted; 404 unknown phase or a phase of another
 // task; 409/422/503 coded refusals {"error","code"} (verify-off, criteria-open,
 // no-run-branch, already-passed, already-running, plan-running, branch-busy,
-// verifier-not-attached); 409 no-free-run-slot; 503 phase runs not attached.
+// worktree-dirty, verifier-not-attached); 409 no-free-run-slot; 503 phase runs not attached.
 func (h *Handler) reverifyPhase(w http.ResponseWriter, r *http.Request) {
 	if phaserunSvc == nil {
 		writeClientErr(w, http.StatusServiceUnavailable, "phase runs not attached")
@@ -78,7 +78,9 @@ func (h *Handler) reverifyPhase(w http.ResponseWriter, r *http.Request) {
 		writeReverifyRefusal(w, err)
 		return
 	}
-	go start()
+	// Recovered: a panic in the grading goroutine must not take the daemon down.
+	// start's own defers (worktree, then slot) still run while it unwinds.
+	runcore.Go(phaserun.Engine, nil, start)
 	writeJSONStatus(w, http.StatusAccepted, map[string]any{"status": "verifying", "phaseId": phaseID})
 }
 

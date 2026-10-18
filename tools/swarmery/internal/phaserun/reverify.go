@@ -9,16 +9,20 @@ package phaserun
 // It reuses what a run already owns: the phase's run slot (so a run and a
 // re-verification of the same phase can never overlap), the plan-run gate, and
 // a worktree of the existing branch that is removed afterwards with the branch
-// kept.
+// kept — unless it was a clean leftover this call merely reused; a leftover
+// holding uncommitted work is refused (worktree-dirty) and never touched.
 
 import (
 	"context"
 	"database/sql"
 	"errors"
 	"fmt"
+	"io/fs"
 	"log"
 	"net/http"
 	"os"
+	"path/filepath"
+	"strings"
 
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/phasegate"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/runcore"
@@ -36,6 +40,7 @@ const (
 	ReverifyCodeAlreadyRunning = "already-running"
 	ReverifyCodePlanRunning    = "plan-running"
 	ReverifyCodeBranchBusy     = "branch-busy"
+	ReverifyCodeWorktreeDirty  = "worktree-dirty"
 	ReverifyCodeNotWired       = "verifier-not-attached"
 )
 
@@ -106,7 +111,8 @@ func (s *Service) reverifyRow(phaseID int64, info phaseInfo) (Eligibility, error
 // AdmitReverify runs every admission gate of a re-verification synchronously and,
 // when all pass, returns the body to run asynchronously (decision D6). On
 // success the phase's run slot is HELD and a worktree of its run branch exists;
-// start releases both. Every refusal after the slot was taken releases it.
+// start releases the slot and removes the worktree if this call created it. Every
+// refusal after the slot was taken releases it.
 //
 // Refusals are *ReverifyRefusal, except ErrPhaseNotFound / ErrNoPath / repo
 // resolution errors and a full run pool (*runcore.NoSlotError), which travel as
@@ -179,8 +185,28 @@ func (s *Service) AdmitReverify(phaseID int64) (start func(), err error) {
 		releaseSlot()
 	}
 
+	// AcquireExisting warm-reuses a checkout already registered at the phase's path
+	// (a crashed run's leftover) and reclaims a foreign one in place. Either may hold
+	// the only copy of uncommitted work: grading it would stamp a verdict on edits
+	// the branch does not contain, and the removal below would then destroy them.
+	// So look first, under the slot, and refuse rather than touch a dirty one — the
+	// same posture StartWith takes towards a leftover it did not create.
+	taskName := runcore.PhaseTaskName(phaseID)
+	left, err := s.leftoverWorktree(info.RepoRoot, info.ProjectSlug, taskName)
+	if err != nil {
+		release()
+		return nil, fmt.Errorf("worktree inspect: %w", err)
+	}
+	if left.dirty {
+		release()
+		return nil, refuseReverify(http.StatusConflict, ReverifyCodeWorktreeDirty,
+			fmt.Sprintf("a leftover worktree of this phase at %s holds uncommitted changes — commit them to %s "+
+				"or remove the worktree (`git worktree remove`, after saving anything worth keeping), then verify again",
+				left.path, info.RunBranch))
+	}
+
 	// D2: the branch as it stands — no ref is deleted or re-cut.
-	acq, err := ex.AcquireExisting(info.RepoRoot, info.ProjectSlug, runcore.PhaseTaskName(phaseID))
+	acq, err := ex.AcquireExisting(info.RepoRoot, info.ProjectSlug, taskName)
 	if err != nil {
 		release()
 		switch {
@@ -194,13 +220,76 @@ func (s *Service) AdmitReverify(phaseID int64) (start func(), err error) {
 		return nil, fmt.Errorf("worktree acquire: %w", err)
 	}
 
+	// A clean checkout already on the run branch at this path is the one
+	// AcquireExisting warm-reused: this call did not create it, so it stays. Any
+	// other outcome (nothing there, a stale registration, a foreign branch reclaimed
+	// in place) is a checkout this call cut, and it is removed afterwards.
+	created := !(left.registered && left.branch == acq.Branch)
+
 	return func() {
 		// Worktree FIRST, slot LAST (defers run LIFO) — the invariant runAndHandle
 		// keeps, so no run can warm-reuse a worktree that is about to be removed.
 		defer release()
-		defer s.removeWorktree(info.RepoRoot, acq)
+		if created {
+			defer s.removeWorktree(info.RepoRoot, acq)
+		}
 		s.reverifyBody(phaseID, info, acq)
 	}, nil
+}
+
+// leftoverCheckout is what leftoverWorktree saw at the phase's worktree path.
+type leftoverCheckout struct {
+	path       string
+	registered bool   // git has a live checkout registered at path
+	branch     string // the branch it has checked out ("" when detached)
+	dirty      bool   // `git status` reports modified or untracked files
+}
+
+// leftoverWorktree inspects the checkout AcquireExisting would hand this phase
+// BEFORE it is called: whether git has one registered at that path, on which
+// branch, and whether it holds uncommitted work (tracked edits or untracked
+// files). A registration whose directory is gone is a stale one AcquireExisting
+// prunes and replaces, so it reads as nothing there. Every git failure is an
+// error — the caller refuses rather than guesses whether work would be lost.
+func (s *Service) leftoverWorktree(repoRoot, projectSlug, taskName string) (leftoverCheckout, error) {
+	path, err := s.Wt.Path(projectSlug, taskName)
+	if err != nil {
+		return leftoverCheckout{}, err
+	}
+	left := leftoverCheckout{path: path}
+	list, err := s.Git.Run(repoRoot, "worktree", "list", "--porcelain")
+	if err != nil {
+		return left, fmt.Errorf("list worktrees: %w", err)
+	}
+	for _, e := range worktree.ParseWorktreeList(list) {
+		if !sameCheckout(e.Path, path) {
+			continue
+		}
+		if _, err := os.Stat(path); errors.Is(err, fs.ErrNotExist) {
+			return left, nil
+		}
+		status, err := s.Git.Run(path, "status", "--porcelain=v1", "--untracked-files=all")
+		if err != nil {
+			return left, fmt.Errorf("status of %s: %w", path, err)
+		}
+		left.registered, left.branch = true, e.Branch
+		left.dirty = strings.TrimSpace(status) != ""
+		return left, nil
+	}
+	return left, nil
+}
+
+// sameCheckout reports whether a and b name the same directory. git prints the
+// worktree paths it registered with symlinks resolved (/private/var on macOS),
+// while the manager derives its path from the configured root, so a textual
+// comparison would miss the leftover it is looking for.
+func sameCheckout(a, b string) bool {
+	fa, errA := os.Stat(a)
+	fb, errB := os.Stat(b)
+	if errA != nil || errB != nil {
+		return filepath.Clean(a) == filepath.Clean(b)
+	}
+	return os.SameFile(fa, fb)
 }
 
 // reverifyBody grades the acquired worktree. Errors are logged and dropped: the
