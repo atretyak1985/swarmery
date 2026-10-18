@@ -102,7 +102,11 @@ type Service struct {
 	// open) stays in Todo. nil ⇒ runcore.CheckAccount. Test seam, like QuotaCheck.
 	AccountCheck runcore.AccountCheckFunc
 
-	scheduling atomic.Bool // re-entrance guard: overlapping Schedule passes skip
+	scheduling atomic.Bool // re-entrance guard: one admission pass at a time
+	// rerun records a poke that arrived while another pass held the guard. That
+	// pass may already have loaded its candidates and cannot see the poker's
+	// writes, so it loops once more instead of the poke being dropped.
+	rerun atomic.Bool
 }
 
 // NewService builds a dispatcher. The caller wires DB, Cfg, Run (ClaudeRunner),
@@ -199,7 +203,8 @@ func (s *Service) activeCount() int {
 // created, moved to todo, unpaused, run exit, pause toggle, dependency
 // completion). It runs Schedule inline — a caller that must not wait pokes from
 // a goroutine — and Schedule is re-entrance-guarded, so concurrent Pokes
-// coalesce. Its cost is one indexed
+// coalesce: a Poke that overlaps a running pass is not dropped, it makes that
+// pass run one follow-up pass before it returns. Its cost is one indexed
 // query plus a bounded admission loop — and, since the account gate, at most
 // ONE account pre-flight probe per account per SWARMERY_PREFLIGHT_TTL (15m by
 // default) inside that loop. A pass that lands on a stale verdict therefore
@@ -232,15 +237,35 @@ func (s *Service) StartScheduler(ctx context.Context) {
 	}
 }
 
-// Schedule runs one admission pass: pick eligible Todo tasks in priority order
+// Schedule runs admission passes: pick eligible Todo tasks in priority order
 // and admit as many as the gates allow. Re-entrance-guarded — an overlapping
-// call (concurrent Poke + tick) returns immediately.
+// call (concurrent Poke + tick, two runs finishing together) returns at once,
+// but it is not dropped: it sets rerun, and the call holding the guard runs one
+// more pass after its current one, so the poker's writes are seen. Any number
+// of overlapping calls coalesce into that one follow-up pass.
+//
+// The guard is released between passes and re-acquired by CAS, so a poke that
+// lands after the rerun check simply wins the guard itself.
 func (s *Service) Schedule() {
-	if !s.scheduling.CompareAndSwap(false, true) {
-		return // a pass is already running; it will observe our writes
+	for {
+		if !s.scheduling.CompareAndSwap(false, true) {
+			s.rerun.Store(true) // the running pass will loop once more
+			return
+		}
+		s.rerun.Store(false)
+		s.schedulePass()
+		s.scheduling.Store(false)
+		if !s.rerun.Load() {
+			return
+		}
 	}
-	defer s.scheduling.Store(false)
+}
 
+// schedulePass is one admission pass; Schedule owns the guard around it. Nothing
+// reachable from here may call Poke or Schedule synchronously — a pass that pokes
+// itself would make Schedule's rerun loop spin. A spawned run's exitRun pokes from
+// the run goroutine, which is the only way a pass's work asks for another pass.
+func (s *Service) schedulePass() {
 	// Gate 1: kill-switch / global pause.
 	if !s.Cfg.Enabled || s.isPaused("global") {
 		return
@@ -1180,7 +1205,10 @@ func (s *Service) failAdmission(id int64, msg string) {
 // behavior is byte-for-byte the pre-playbook runAndHandle: link → sentinel →
 // exit-code routing → pokeVerify.
 func (s *Service) runPlaybook(c candidate, acq worktree.Acquired, pb resolvedPlaybook, firstUUID, taskDoc, repoRoot string, resolution claudeacct.Resolution) {
-	defer s.clearActive(c.ID)
+	// FIRST defer, so it runs LAST — after returnRunOutput below. It is the one
+	// place every exit path frees the slot and then pokes, in that order: a poke
+	// sent while the slot is still held starts a pass that sees a full board.
+	defer s.exitRun(c.ID)
 
 	// Lend the card's micro-plan doc INTO the worktree and quote it by its
 	// relative path: the contract's first line makes this worktree the agent's
@@ -1286,7 +1314,6 @@ func (s *Service) runPlaybook(c candidate, acq worktree.Acquired, pb resolvedPla
 			// stop; keep the worktree for inspection. Name the stage on a multi-stage
 			// playbook so the error points at where the chain broke.
 			s.finishError(c.ID, s.stageErr(stages, st.name, "runner start: "+err.Error()))
-			s.Poke()
 			return
 		}
 
@@ -1321,11 +1348,10 @@ func (s *Service) runPlaybook(c candidate, acq worktree.Acquired, pb resolvedPla
 			// TestDoneSentinelPokesVerifyBeforeWorktreeCleared.
 			s.pokeVerify(c.ID)
 			s.finishDone(c, sentinel.Line)
-			s.Poke() // a completed task may unblock dependents (FN-3895)
+			// exitRun's poke: a completed task may unblock dependents (FN-3895)
 			return
 		case "blocked":
 			s.finishBlocked(c.ID, sentinel.Line)
-			s.Poke()
 			return
 		}
 
@@ -1335,7 +1361,6 @@ func (s *Service) runPlaybook(c candidate, acq worktree.Acquired, pb resolvedPla
 			// kept for review). Verification is NOT poked — the work is incomplete.
 			if run.ExitCode != 0 {
 				s.finishReview(c.ID, s.stageErr(stages, st.name, stageExitMsg(run, s.Cfg.RunTimeout)))
-				s.Poke()
 				return
 			}
 			// Carry this stage's last assistant text into the next stage as
@@ -1353,10 +1378,13 @@ func (s *Service) runPlaybook(c candidate, acq worktree.Acquired, pb resolvedPla
 		// nothing gradeable). The verifier resolves this task's playbook verify knob
 		// itself (strict/normal/off) from the tasks.playbook column at grade time.
 		s.pokeVerify(c.ID)
-		s.Poke()
 		return
 	}
 }
+
+// exitRun frees the run's slot and only then asks for a scheduling pass, so
+// the pass sees the capacity this run just gave back.
+func (s *Service) exitRun(id int64) { s.clearActive(id); s.Poke() }
 
 // runStage runs one stage's headless process to completion, bounded by the
 // per-run timeout, and returns its Run (a timeout is an outcome, not an error).

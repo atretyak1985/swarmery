@@ -1670,45 +1670,57 @@ func TestDepGateEmptyDepsPass(t *testing.T) {
 // (PATCH /api/board/tasks/{id}). Disjoint scopes here reproduce exactly that,
 // and without a worktree-identity gate both rows admit and two headless agents
 // get the same checkout on the same branch.
+//
+// The first run HOLDS its checkout (real goroutines, a blocking runner) while the
+// single-flight assertion is made, so "concurrently" is literal. With an inline
+// run the checkout is already free again by the time the pass ends, and the
+// run's exit poke legitimately admits the second row in the same Schedule call.
 func TestScheduleWorktreeSingleFlight(t *testing.T) {
 	db := testDB(t)
-	r := &stubRunner{}
+	release := make(chan struct{})
+	started := make(chan string, 8)
+	var calls atomic.Int32
+	r := &stubRunner{run: func(spec RunSpec) (*Run, error) {
+		noteStart(started, spec)
+		if calls.Add(1) == 1 {
+			<-release // the first row holds the worktree until released
+		}
+		return &Run{SessionUUID: spec.SessionUUID, ExitCode: 0}, nil
+	}}
 	wt := &stubWt{}
 	s := newTestService(t, db, r, wt)
+	s.Go = func(fn func()) { go fn() }
 
 	// Same external id (⇒ same worktree + branch), deliberately DISJOINT scopes
 	// so the file-scope gate cannot be what saves us.
 	insertTask(t, db, "T-root1", taskOpts{fileScope: `["a/"]`})
 	insertTask(t, db, "T-root1", taskOpts{fileScope: `["b/"]`, priority: 3})
 
-	s.Schedule()
-
-	var n int
-	for _, id := range wt.acquiredIDs() {
-		if id == "T-root1" {
-			n++
+	acquired := func() int {
+		var n int
+		for _, id := range wt.acquiredIDs() {
+			if id == "T-root1" {
+				n++
+			}
 		}
+		return n
 	}
-	if n != 1 {
+
+	s.Schedule()
+	awaitStarts(t, started, 1)
+	s.Schedule() // a second pass while the checkout is held must skip the row too
+	if n := acquired(); n != 1 {
+		close(release)
 		t.Fatalf("Acquire(T-root1) called %d time(s), want 1 — two board rows sharing an "+
 			"external id must never hold the same worktree/branch concurrently", n)
 	}
 
-	// The gate DEFERS, it does not drop: the run above finished inline and left
-	// in_review, so the checkout is free and the loser admits on the next pass.
-	// Without this half, a gate that silently stranded the second row forever
-	// would pass the assertion above.
-	s.Schedule()
-	n = 0
-	for _, id := range wt.acquiredIDs() {
-		if id == "T-root1" {
-			n++
-		}
-	}
-	if n != 2 {
-		t.Fatalf("Acquire(T-root1) called %d time(s) across two passes, want 2 — the "+
-			"deferred row must be admitted once the checkout is free", n)
-	}
+	// The gate DEFERS, it does not drop: once the first run leaves in_review the
+	// checkout is free, and that run's exit admits the loser. Without this half, a
+	// gate that silently stranded the second row forever would pass the assertion
+	// above.
+	close(release)
+	waitForWithin(t, 30*time.Second, func() bool { return acquired() == 2 && s.activeCount() == 0 })
 }
 
 // ── dispatched-prompt assembly (board redesign v2 phase 3) ──
