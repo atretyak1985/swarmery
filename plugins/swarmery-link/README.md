@@ -534,14 +534,17 @@ is placed (a narrow terminal), the checklist is the command's output instead.
 
 ### Interview questions
 
-An AskUserQuestion asked in the dashboard interview's shape (the question text a
-`{"type":"question","data":{…}}` JSON, or options marked `(Recommended)` or
-carrying `Pros:`/`Cons:` in their descriptions) gets a card above the dialog:
-the question, each option's description, its pros (`+`) and cons (`−`), the
-recommended one highlighted. The dialog's props carry no answer callback, and
+An AskUserQuestion asked in the dashboard interview's shape (the question's text
+or description is a `{"type":"question","data":{question, description,
+options:[{label, description, pros, cons, recommended}]}}` JSON, a ```` ```json ````
+fence allowed) gets a card above the dialog: the question, each option's
+description, its pros (`+`) and cons (`−`), the recommended one highlighted.
+Nothing else makes a question an interview: an option labelled `(Recommended)`
+or a description with `Pros:`/`Cons:` is what Claude Code's own guidance asks
+of ordinary questions, and those draw as they always do. The dialog's props carry no answer callback, and
 the engine refuses an AskUserQuestion tree without exactly one engine node, so
 the card is drawn **above** the engine's own dialog, which still takes the
-answer. Any other question draws as it always does.
+answer.
 
 ### The drift line
 

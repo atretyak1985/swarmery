@@ -71,26 +71,24 @@ test('an interview question gets a card above the dialog, the recommended option
   expect(engineNodes(drawn)).toBe(1)
 })
 
-test('options marked "(Recommended)" with Pros:/Cons: in their descriptions get the card too', ON, async ($, on) => {
+test('options marked "(Recommended)" with Pros:/Cons: in their descriptions keep the standard dialog', ON, async ($, on) => {
   on('ui.render', () => ENGINE_DRAWING)
+  // Claude Code's own AskUserQuestion guidance has the model write exactly this
+  // in an ordinary question: it is no dashboard interview, so no card.
   const q = question('Which cache?', [
     { label: 'In-process LRU (Recommended)', description: 'Fast to ship. Pros: no new service; simple. Cons: per-instance only' },
     { label: 'Redis', description: 'Shared. Pros: shared across instances. Cons: one more service to run' },
   ])
   const ui = await $.ui.mount({ plugin: PLUGIN, surface: 'terminal', component: 'AskUserQuestion', props: props([q]) })
-  const texts = (await ui.findAll({ type: 'Text' })).map(t => t.text)
-  expect(texts).toEqual([
-    'Which cache?',
-    '★ In-process LRU (recommended)',
-    '  Fast to ship.',
-    '  + no new service',
-    '  + simple.',
-    '  − per-instance only',
-    '• Redis',
-    '  Shared.',
-    '  + shared across instances.',
-    '  − one more service to run',
-  ])
+  expect(await ui.drawn()).toEqual(ENGINE_DRAWING)
+  expect(parseInterview(q)).toBeUndefined()
+})
+
+test('the interview JSON in the question\'s description gets the card too', ON, async ($, on) => {
+  on('ui.render', () => ENGINE_DRAWING)
+  const q = { ...question('Where do line items live?', [{ label: 'A line_items table', description: 'One row per item.' }]), description: INTERVIEW_JSON }
+  const ui = await $.ui.mount({ plugin: PLUGIN, surface: 'terminal', component: 'AskUserQuestion', props: props([q]) })
+  expect(await ui.find({ type: 'Text', text: '★ A line_items table (recommended)' })).toBeDefined()
   expect(engineNodes(await ui.drawn())).toBe(1)
 })
 
@@ -130,4 +128,8 @@ test('parseInterview: the JSON in a ```json fence, the Other option left out; pl
   expect(parseInterview(PLAIN)).toBeUndefined()
   expect(parseInterview('not a question')).toBeUndefined()
   expect(interviewsOf([PLAIN, PLAIN])).toHaveLength(0)
+  // JSON that is not the interview's shape is a plain question
+  expect(parseInterview({ question: JSON.stringify({ type: 'answer', data: { question: 'x' } }), options: [] })).toBeUndefined()
+  expect(parseInterview({ question: JSON.stringify({ type: 'question', data: 'x' }), options: [] })).toBeUndefined()
+  expect(parseInterview({ question: '{"type":"question","data":', options: [] })).toBeUndefined()
 })
