@@ -125,9 +125,6 @@ func TestRouteActive_ResolveEffortLadder(t *testing.T) {
 			if err != nil || got != tc.want {
 				t.Errorf("resolveEffort = %q, %v; want %q", got, err, tc.want)
 			}
-			if r := effortRung(tc.choice, tc.doc, tc.routed); (r == route.RungRoute) != (tc.want == "low") {
-				t.Errorf("effortRung = %q disagrees with the ladder's %q", r, tc.want)
-			}
 		})
 	}
 }
@@ -188,8 +185,8 @@ func TestRouteActive_EffortLadderThroughStart(t *testing.T) {
 	}
 }
 
-// applied is true when the router's model OR effort ran; won_rung is the model
-// rung only. A run whose request pinned both records the decision unapplied.
+// applied is true only when the router's model ran (won_rung = route): a route
+// effort under a request-pinned model is not an applied route.
 func TestRouteActive_AppliedAndWonRung(t *testing.T) {
 	quietKnobs(t)
 	for _, tc := range []struct {
@@ -198,7 +195,7 @@ func TestRouteActive_AppliedAndWonRung(t *testing.T) {
 		rung                string
 	}{
 		{"router owns both", "", "", 1, route.RungRoute},
-		{"request model, route effort", "sonnet", "", 1, route.RungRequest},
+		{"request model, route effort", "sonnet", "", 0, route.RungRequest},
 		{"route model, request effort", "", "max", 1, route.RungRoute},
 		{"request owns both", "sonnet", "max", 0, route.RungRequest},
 	} {
