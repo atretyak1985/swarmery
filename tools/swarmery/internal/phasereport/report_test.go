@@ -215,7 +215,7 @@ func TestBuildRows(t *testing.T) {
 		KeyRouter: 2, KeyRouterApplied: 1, KeyRouterDivergent: 1,
 		"verifier_phase_fail": 2, "verifier_phase_inconclusive": 1, "verifier_phase_pass": 1,
 		"verifier_class:env": 1,
-		"verifier_all_fail": 3, KeyReviewRuns: 0,
+		"verifier_all_fail":  3, KeyReviewRuns: 0,
 		KeyReopens: 2, "reopens_review": 1, "reopens_none": 1, "reopens_operator": 0,
 	}
 	for key, n := range want {
