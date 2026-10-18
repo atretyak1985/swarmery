@@ -629,8 +629,8 @@ func family(m string) string {
 var verifierStatuses = []string{"pass", "fail", "inconclusive", "error"}
 
 // verifier: verification_runs by verdict, for phase targets (the phase gate)
-// and for every target (the fleet verifier as a whole), plus the phase verdicts'
-// classes — the detail up to its first ": ".
+// and for every target (the fleet verifier as a whole), plus the inconclusive
+// phase verdicts' classes — the detail up to its first ": ".
 func (b builder) verifier() error {
 	ok, err := b.hasTable("verification_runs")
 	if err != nil {
@@ -655,7 +655,7 @@ func (b builder) verifier() error {
 			all[status]++
 			if strings.HasPrefix(target, "phase:") {
 				phase[status]++
-				if status != "pass" && status != "running" {
+				if status == "inconclusive" {
 					classes[verdictClass(detail)]++
 				}
 			}
