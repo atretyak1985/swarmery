@@ -474,7 +474,19 @@ looping. Verification also refuses to start on a runaway diff: more than
 `SWARMERY_VERIFY_MAX_DIFF_FILES` files (40 by default) returns `inconclusive` with a
 note telling you to split the work or raise the bound. The bound needs the card's
 `start_point` and a readable diff to apply — when either is missing it is skipped
-rather than guessed at.
+rather than guessed at. Raising `SWARMERY_VERIFY_MAX_DIFF_FILES` applies to new
+verifications only: a phase already refused under the old bound keeps its
+`inconclusive` until you press **Verify again** on it.
+
+A plan phase whose grade is missing — `unverified`: every criterion ticked and no
+verdict, or an `inconclusive` one — or whose verdict is `fail` can be graded again
+with **Verify again**, on the phase row, in the phase panel, and on the `unverified`
+blocker of the run diagnosis. It reuses the phase's run branch and the start point
+recorded when the run began, runs the read-only verifier and no executor, and
+changes no checkbox, commit or run state — only the verdict. A `pass` is not offered
+again, and the action is refused while a run or a whole-plan run holds the phase.
+Because results are cached on the tree hash, pressing it on an unchanged `fail`
+returns the cached verdict for free; fix the branch first.
 
 ### Review lane: three real exits
 

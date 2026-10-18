@@ -930,6 +930,10 @@ msgstr "глобально"
 msgid "Global (daemon cwd)"
 msgstr "Глобально (cwd демона)"
 
+#: src/pages/plans/useReverify.ts
+msgid "grade this phase's run branch again with the read-only verifier — no executor runs"
+msgstr "ще раз оцінити гілку запуску цієї фази перевіряльником без права на запис — виконавець не запускається"
+
 #: src/pages/Board.tsx
 msgid "Graph"
 msgstr "Граф"
@@ -2462,6 +2466,10 @@ msgstr "підтверджено"
 msgid "verifier"
 msgstr "перевіряльник"
 
+#: src/pages/plans/useReverify.ts
+msgid "Verify again"
+msgstr "Перевірити ще раз"
+
 #: src/pages/plans/VerifyVerdictChip.tsx
 msgid "verify failed"
 msgstr "не пройдено"
@@ -2469,6 +2477,10 @@ msgstr "не пройдено"
 #: src/pages/plans/VerifyVerdictChip.tsx
 msgid "verify inconclusive"
 msgstr "без висновку"
+
+#: src/pages/plans/useReverify.ts
+msgid "verifying…"
+msgstr "перевіряється…"
 
 #: src/pages/Plans.tsx
 #: src/pages/Plans.tsx
