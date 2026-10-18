@@ -790,11 +790,19 @@ func TestDisjointScopesRunConcurrentlyToLimit(t *testing.T) {
 		t.Fatalf("third task should wait for a free slot")
 	}
 	close(blockCh)
-	// A freed slot admits the waiting task: a finished run re-pokes Schedule. The
+	// A freed slot admits the waiting task. In the daemon that happens on a run's
+	// completion re-poke or, failing that, on the next poll tick (StartScheduler).
+	// The re-poke alone is not guaranteed: each run pokes BEFORE its deferred
+	// clearActive releases its slot, and Schedule's re-entrance guard drops a poke
+	// that overlaps another pass, so two runs finishing together can both see a
+	// full board. Calling Schedule in the wait stands in for the poll tick. The
 	// third run must then complete — a start counter that cannot absorb a run it
 	// did not expect (the old WaitGroup's negative-counter panic, recovered by
 	// spawn) would leave it wedged in_progress.
-	waitForWithin(t, 30*time.Second, func() bool { return column(t, db, third) == "in_review" })
+	waitForWithin(t, 30*time.Second, func() bool {
+		s.Schedule()
+		return column(t, db, third) == "in_review"
+	})
 }
 
 func TestMaxWorktreesCap(t *testing.T) {
