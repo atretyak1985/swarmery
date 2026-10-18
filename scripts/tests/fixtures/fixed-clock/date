@@ -1,0 +1,10 @@
+#!/bin/sh
+# Test shim: a frozen wall clock for statusline render diffs.
+# Only the exact single argument `+%H:%M` (the statusline's TIME field) is
+# pinned; every other invocation (`+%s`, `-r`, `-j -u -f`, `-d`, ...) is passed
+# through to the real date untouched.
+if [ "$#" -eq 1 ] && [ "$1" = "+%H:%M" ]; then
+  printf '12:34\n'
+  exit 0
+fi
+exec /bin/date "$@"

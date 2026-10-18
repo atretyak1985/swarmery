@@ -23,6 +23,12 @@ trap 'rm -rf "$WORK"' EXIT
 OUTSIDE_REPO="$WORK/outside-repo"
 mkdir -p "$OUTSIDE_REPO"
 
+# A `date` shim first on PATH pins the TIME field (`date +%H:%M`) to 12:34 for
+# every render, the OLD script's included (it can never learn an env knob), so
+# two renders taken across a minute boundary still diff empty. Every other
+# `date` call passes through to the real binary.
+FIXED_CLOCK="$ROOT/scripts/tests/fixtures/fixed-clock"
+
 pass=0
 fail=0
 
@@ -43,7 +49,7 @@ render() {
     unset CLAUDE_CONFIG_DIR SWARMERY_USAGE_OAUTH SWARMERY_STATUSLINE_FABLE
     [ -n "$cfgdir" ] && export CLAUDE_CONFIG_DIR="$cfgdir"
     [ -n "$oauth" ] && export SWARMERY_USAGE_OAUTH="$oauth"
-    printf '%s' "$stdin_json" | TMPDIR="$tmp" bash "$script" 2>/dev/null
+    printf '%s' "$stdin_json" | PATH="$FIXED_CLOCK:$PATH" TMPDIR="$tmp" bash "$script" 2>/dev/null
   )"
   rm -rf "$tmp"
   printf '%s' "$out"
@@ -128,7 +134,7 @@ render_pf() {
     "$OUTSIDE_REPO" "$OUTSIDE_REPO" "$PF_TRANSCRIPT")"
   out="$(
     unset CLAUDE_CONFIG_DIR SWARMERY_USAGE_OAUTH SWARMERY_STATUSLINE_FABLE
-    printf '%s' "$stdin_json" | HOME="$PF_HOME" PATH="$SENT_BIN:$PATH" TMPDIR="$tmp" bash "$script" 2>/dev/null
+    printf '%s' "$stdin_json" | HOME="$PF_HOME" PATH="$FIXED_CLOCK:$SENT_BIN:$PATH" TMPDIR="$tmp" bash "$script" 2>/dev/null
   )"
   rm -rf "$tmp"
   printf '%s' "$out"
@@ -158,8 +164,9 @@ D="$(diff <(printf '%s\n' "$OLD_NOCACHE") <(printf '%s\n' "$NEW_NOCACHE") 2>&1 |
 if [ -z "$D" ]; then ok
 else bad "(e5) no cache file -> render byte-identical to the old script" "empty diff" "$D"; fi
 for junk in 'varsExpected=13' "$(printf 'estate=a b\nvarsExpected=1\nvarsPresent=0')" "$(printf 'estate=x\nvarsExpected=many\nvarsPresent=0')" "$(printf 'evil=1\nvarsExpected=2\nvarsPresent=0')"; do
-  # A fresh old render right before each new one: the TIME line moves with the
-  # clock, so a baseline taken minutes earlier can differ for no code reason.
+  # A fresh old render right before each new one. The fixed-clock shim already
+  # pins the TIME line, so this is no longer load-bearing; it is kept because it
+  # costs nothing and still guards against any other drift between renders.
   OLD_NOW="$(render_pf "$OLD_STATUSLINE" "")"
   NEW_JUNK="$(render_pf "$STATUSLINE" "$junk")"
   D="$(diff <(printf '%s\n' "$OLD_NOW") <(printf '%s\n' "$NEW_JUNK") 2>&1 || true)"

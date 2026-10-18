@@ -1,0 +1,18 @@
+#!/bin/sh
+# Test shim: a wall clock that advances one minute on every `date +%H:%M` call.
+# Used only to prove, deterministically, that a render-diff test is exposed to
+# the clock: put this directory first on PATH and set TICKING_CLOCK_STATE to a
+# scratch file. Every other invocation is passed through to the real date.
+if [ "$#" -eq 1 ] && [ "$1" = "+%H:%M" ]; then
+  state="${TICKING_CLOCK_STATE:-}"
+  n=0
+  if [ -n "$state" ] && [ -f "$state" ]; then
+    n="$(cat "$state")"
+    case "$n" in ''|*[!0-9]*) n=0 ;; esac
+  fi
+  n=$((n + 1))
+  [ -n "$state" ] && printf '%d\n' "$n" >"$state"
+  printf '12:%02d\n' $((n % 60))
+  exit 0
+fi
+exec /bin/date "$@"
