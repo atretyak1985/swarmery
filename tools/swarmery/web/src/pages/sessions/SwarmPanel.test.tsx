@@ -9,6 +9,10 @@
 //   3. A failed link_command ack for the message shows "undeliverable".
 //   4. A card whose session is in a conflict wears the badge; others do not.
 //   5. swarm_message / swarm_claim frames refetch the feed / the claims.
+//   6. Only the newest fetch lands: a late answer for a previous project or an
+//      older overlapping refetch is dropped.
+//   7. An unpaired receive names an "unknown sender"; a lost link_command
+//      frame cannot lock the send form — the refetched feed settles it.
 //
 // `npx vitest run src/pages/sessions/SwarmPanel.test.tsx`.
 
@@ -22,8 +26,8 @@ import type {
   SwarmMessage,
   WSMessage,
 } from '../../api/types';
-import { ConflictBadge, SwarmConflictProvider } from '../../lib/swarm';
-import { act, cleanup, fireEvent, render, screen, waitFor, within } from '../../test/render';
+import { ConflictBadge, SwarmConflictProvider, useSwarmMessages } from '../../lib/swarm';
+import { act, cleanup, fireEvent, render, renderHook, screen, waitFor, within } from '../../test/render';
 import { SwarmPanel } from './SwarmPanel';
 
 const api = vi.hoisted(() => ({
@@ -136,6 +140,14 @@ describe('feed', () => {
     expect(within(rows[2]!).getByRole('link', { name: 'Alpha' }).getAttribute('href')).toBe('/sessions/1');
   });
 
+  it('names an unpaired receive "unknown sender", never "dashboard"', async () => {
+    api.fetchSwarmMessages.mockResolvedValue([msg({ id: 4, kind: 'receive', fromSession: null, toSession: ref(B), body: 'who sent this?' })]);
+    renderPanel();
+    const [row] = await screen.findAllByTestId('swarm-message');
+    expect(within(row!).getByText('unknown sender')).toBeTruthy();
+    expect(within(row!).queryByText('dashboard')).toBeNull();
+  });
+
   it('shows the empty and the error state', async () => {
     renderPanel();
     expect(await screen.findByText(/No messages between/)).toBeTruthy();
@@ -228,6 +240,52 @@ describe('send form', () => {
     expect(state.textContent).toContain('failed: undeliverable: no such session');
   });
 
+  it.each([
+    { row: { delivered: true, reason: null }, shows: 'sent' },
+    { row: { delivered: false, reason: 'undeliverable: session is not running' }, shows: 'failed: undeliverable: session is not running' },
+    { row: { delivered: false, reason: 'expired' }, shows: 'expired' },
+  ])('unlocks from the refetched feed when the link_command frame is lost ($shows)', async ({ row, shows }) => {
+    api.sendSwarmMessage.mockResolvedValue({ commandId: 11, messageId: 5 });
+    renderPanel({ id: 1, link: LINK });
+    const select = (await screen.findByLabelText('Recipient')) as HTMLSelectElement;
+    await waitFor(() => expect(select.options.length).toBe(2));
+    fireEvent.change(select, { target: { value: '2' } });
+    fireEvent.change(screen.getByLabelText('Message'), { target: { value: 'hi' } });
+    const send = screen.getByRole('button', { name: 'Send' }) as HTMLButtonElement;
+    fireEvent.click(send);
+    expect((await screen.findByTestId('swarm-command-state')).textContent).toContain('queued');
+
+    // Locked while the command runs, whatever is typed.
+    fireEvent.change(screen.getByLabelText('Message'), { target: { value: 'next one' } });
+    expect(send.disabled).toBe(true);
+
+    // No link_command frame arrives; the settle's swarm_message hint refetches the feed.
+    api.fetchSwarmMessages.mockResolvedValue([
+      msg({ id: 5, kind: 'dashboard', fromSession: ref(A), toSession: ref(B), body: 'hi', ...row }),
+    ]);
+    emit({ type: 'swarm_message', payload: { sessionId: 1, projectId: 7 } });
+    await waitFor(() => expect(screen.getByTestId('swarm-command-state').textContent).toContain(shows));
+    expect(send.disabled).toBe(false);
+  });
+
+  it('stays locked while its row is still pending in the feed', async () => {
+    api.sendSwarmMessage.mockResolvedValue({ commandId: 11, messageId: 5 });
+    renderPanel({ id: 1, link: LINK });
+    const select = (await screen.findByLabelText('Recipient')) as HTMLSelectElement;
+    await waitFor(() => expect(select.options.length).toBe(2));
+    fireEvent.change(select, { target: { value: '2' } });
+    fireEvent.change(screen.getByLabelText('Message'), { target: { value: 'hi' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    await screen.findByTestId('swarm-command-state');
+    api.fetchSwarmMessages.mockResolvedValue([msg({ id: 5, kind: 'dashboard', fromSession: ref(A), body: 'hi', delivered: null })]);
+    emit({ type: 'swarm_message', payload: { sessionId: 1, projectId: 7 } });
+    await waitFor(() => expect(api.fetchSwarmMessages).toHaveBeenCalledTimes(2));
+    await screen.findAllByTestId('swarm-message');
+    fireEvent.change(screen.getByLabelText('Message'), { target: { value: 'next one' } });
+    expect(screen.getByTestId('swarm-command-state').textContent).toContain('queued');
+    expect((screen.getByRole('button', { name: 'Send' }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
   it('shows a refused POST (409) inline', async () => {
     api.sendSwarmMessage.mockRejectedValue(new Error('session has no link'));
     renderPanel({ id: 1, link: LINK });
@@ -264,6 +322,74 @@ describe('conflict badge', () => {
   it('renders nothing outside a provider', () => {
     render(<ConflictBadge sessionId={1} />);
     expect(screen.queryByTestId('swarm-conflict')).toBeNull();
+  });
+});
+
+function deferred<T>(): { promise: Promise<T>; resolve: (v: T) => void } {
+  let resolve: (v: T) => void = () => undefined;
+  const promise = new Promise<T>((r) => {
+    resolve = r;
+  });
+  return { promise, resolve };
+}
+
+describe('swarm resource ordering', () => {
+  const bodies = (data: SwarmMessage[] | null): string => (data === null ? 'loading' : data.map((m) => m.body).join(','));
+
+  it('drops a late answer for the previous project', async () => {
+    const first = deferred<SwarmMessage[]>();
+    const second = deferred<SwarmMessage[]>();
+    api.fetchSwarmMessages.mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise);
+    const { result, rerender } = renderHook(({ projectId }: { projectId: number }) => useSwarmMessages(projectId), {
+      initialProps: { projectId: 1 },
+    });
+    rerender({ projectId: 2 });
+    expect(api.fetchSwarmMessages.mock.calls).toEqual([[1], [2]]);
+    await act(async () => {
+      second.resolve([msg({ id: 2, kind: 'send', body: 'project 2' })]);
+    });
+    await act(async () => {
+      first.resolve([msg({ id: 1, kind: 'send', body: 'project 1' })]);
+    });
+    expect(bodies(result.current.data)).toBe('project 2');
+  });
+
+  it('keeps the newer of two overlapping refetches when the older answers last', async () => {
+    const older = deferred<SwarmMessage[]>();
+    const newer = deferred<SwarmMessage[]>();
+    api.fetchSwarmMessages
+      .mockResolvedValueOnce([msg({ id: 1, kind: 'send', body: 'initial' })])
+      .mockReturnValueOnce(older.promise)
+      .mockReturnValueOnce(newer.promise);
+    const { result } = renderHook(() => useSwarmMessages(7));
+    await waitFor(() => expect(bodies(result.current.data)).toBe('initial'));
+    emit({ type: 'swarm_message', payload: { sessionId: 1, projectId: 7 } });
+    emit({ type: 'swarm_message', payload: { sessionId: 1, projectId: 7 } });
+    expect(api.fetchSwarmMessages).toHaveBeenCalledTimes(3);
+    await act(async () => {
+      newer.resolve([msg({ id: 3, kind: 'send', body: 'newest' })]);
+    });
+    await act(async () => {
+      older.resolve([msg({ id: 2, kind: 'send', body: 'stale' })]);
+    });
+    expect(bodies(result.current.data)).toBe('newest');
+  });
+
+  it('drops a late error for the previous project too', async () => {
+    let failFirst: (e: Error) => void = () => undefined;
+    const failing = new Promise<SwarmMessage[]>((_, reject) => {
+      failFirst = reject;
+    });
+    api.fetchSwarmMessages.mockReturnValueOnce(failing).mockResolvedValueOnce([msg({ id: 2, kind: 'send', body: 'ok' })]);
+    const { result, rerender } = renderHook(({ projectId }: { projectId: number }) => useSwarmMessages(projectId), {
+      initialProps: { projectId: 1 },
+    });
+    rerender({ projectId: 2 });
+    await waitFor(() => expect(bodies(result.current.data)).toBe('ok'));
+    await act(async () => {
+      failFirst(new Error('old project failed'));
+    });
+    expect(result.current.error).toBeNull();
   });
 });
 

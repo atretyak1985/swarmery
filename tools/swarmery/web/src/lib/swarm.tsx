@@ -7,7 +7,7 @@
 // costs at most a minute.
 
 import { useLingui } from '@lingui/react/macro';
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { fetchSwarmClaims, fetchSwarmMessages } from '../api';
 import type { SwarmClaims, SwarmConflict, SwarmMessage, WSMessage } from '../api/types';
 import { useLiveUpdates } from './ws';
@@ -19,7 +19,11 @@ export interface SwarmResource<T> {
   reload: () => void;
 }
 
-/** Fetches `fetcher` on mount and again whenever `matches` accepts a WS frame. */
+/**
+ * Fetches `fetcher` on mount and again whenever `matches` accepts a WS frame.
+ * Only the newest request's answer lands: a late answer for a previous scope,
+ * or for an older refetch that overlapped a newer one, is dropped.
+ */
 function useSwarmResource<T>(
   fetcher: () => Promise<T>,
   matches: (msg: WSMessage) => boolean,
@@ -27,15 +31,24 @@ function useSwarmResource<T>(
 ): SwarmResource<T> {
   const [data, setData] = useState<T | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Bumped by every request and by a scope change / unmount: an answer whose
+  // number is no longer current is stale.
+  const seq = useRef(0);
 
   // `key` (the scope) is the only thing that changes what `fetcher` returns.
   const reload = useCallback((): void => {
+    seq.current += 1;
+    const mine = seq.current;
     fetcher()
       .then((d) => {
+        if (seq.current !== mine) return;
         setData(d);
         setError(null);
       })
-      .catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)));
+      .catch((e: unknown) => {
+        if (seq.current !== mine) return;
+        setError(e instanceof Error ? e.message : String(e));
+      });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key]);
 
@@ -43,6 +56,9 @@ function useSwarmResource<T>(
     setData(null);
     setError(null);
     reload();
+    return () => {
+      seq.current += 1;
+    };
   }, [reload]);
 
   const onMessage = useCallback(

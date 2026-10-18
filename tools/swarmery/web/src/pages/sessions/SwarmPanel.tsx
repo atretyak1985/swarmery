@@ -28,7 +28,7 @@ import type {
 import { Empty, ErrorBox, Loading } from '../../components/ui';
 import { fmtAgo } from '../../lib/format';
 import { useSessionHref } from '../../lib/sessionHref';
-import { useSwarmClaims, useSwarmMessages } from '../../lib/swarm';
+import { type SwarmResource, useSwarmClaims, useSwarmMessages } from '../../lib/swarm';
 import { useLiveUpdates } from '../../lib/ws';
 
 /** The server's text limit, in characters (link.MaxMessageBody). */
@@ -91,7 +91,12 @@ function MessageRow({ m, labels }: { m: SwarmMessage; labels: SessionLabels }): 
     <li className="flex flex-col gap-1 border-b border-line px-3 py-2 last:border-b-0" data-testid="swarm-message" data-kind={m.kind}>
       <div className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5 font-mono text-[11px] text-ink-dim">
         <span className="rounded border border-line px-1 text-[9.5px] tracking-[0.06em] text-ink-faint uppercase">{kind}</span>
-        {m.fromSession === null ? <span>{t`dashboard`}</span> : <SessionLink ref_={m.fromSession} labels={labels} />}
+        {/* null: a receive the daemon could not pair with its send, or a sender whose session row is gone */}
+        {m.fromSession === null ? (
+          <span className="text-ink-faint">{t`unknown sender`}</span>
+        ) : (
+          <SessionLink ref_={m.fromSession} labels={labels} />
+        )}
         <span aria-hidden="true">→</span>
         <span className="sr-only">{t`to`}</span>
         {m.toSession === null ? <span className="truncate">{toAddress}</span> : <SessionLink ref_={m.toSession} labels={labels} />}
@@ -110,9 +115,9 @@ function MessageRow({ m, labels }: { m: SwarmMessage; labels: SessionLabels }): 
   );
 }
 
-function Feed({ projectId, labels }: { projectId: number; labels: SessionLabels }): JSX.Element {
+function Feed({ messages, labels }: { messages: SwarmResource<SwarmMessage[]>; labels: SessionLabels }): JSX.Element {
   const { t } = useLingui();
-  const { data, error, reload } = useSwarmMessages(projectId);
+  const { data, error, reload } = messages;
   if (error !== null && data === null) return <ErrorBox message={error} onRetry={reload} />;
   if (data === null) return <Loading label={t`messages…`} />;
   if (data.length === 0) return <Empty>{t`No messages between this project's sessions yet.`}</Empty>;
@@ -174,13 +179,43 @@ function Claims({ projectId, labels }: { projectId: number; labels: SessionLabel
 /** The command this form last sent. 'sending' until the POST answers. */
 interface Sent {
   commandId: number | null;
+  /** The command's dashboard row in the feed (link_messages id), once the POST answered. */
+  messageId?: number | undefined;
   state: LinkCommandState | 'sending' | 'rejected';
   message?: string | undefined;
 }
 
 type Sender = Pick<Session, 'id' | 'link'>;
 
-function SendForm({ sender, recipients }: { sender: Sender; recipients: readonly Session[] }): JSX.Element {
+/** The command is still running: the form stays locked until it settles. */
+const isPending = (s: Sent | null): boolean =>
+  s !== null && (s.state === 'sending' || s.state === 'queued' || s.state === 'delivered');
+
+/**
+ * A pending command whose feed row already settled (delivered set): the state
+ * that row says it ended in. A lost link_command frame then cannot keep the
+ * form locked — the swarm_message hint (or the bus's convergence refetch)
+ * brings the row. Unchanged otherwise.
+ */
+function reconcileSent(sent: Sent | null, messages: readonly SwarmMessage[] | null): Sent | null {
+  if (!isPending(sent) || sent === null || sent.messageId === undefined || messages === null) return sent;
+  const row = messages.find((m) => m.id === sent.messageId);
+  if (row === undefined || row.delivered === null) return sent;
+  if (row.delivered) return { ...sent, state: 'done', message: undefined };
+  if (row.reason === 'expired') return { ...sent, state: 'expired', message: undefined };
+  return { ...sent, state: 'failed', message: row.reason ?? undefined };
+}
+
+function SendForm({
+  sender,
+  recipients,
+  messages,
+}: {
+  sender: Sender;
+  recipients: readonly Session[];
+  /** The feed as last fetched: settles a command whose link_command frame was lost. */
+  messages: readonly SwarmMessage[] | null;
+}): JSX.Element {
   const { t } = useLingui();
   const reasonId = useId();
   const [to, setTo] = useState('');
@@ -210,19 +245,24 @@ function SendForm({ sender, recipients }: { sender: Sender; recipients: readonly
   );
   useLiveUpdates(onMessage, () => undefined);
 
+  // Each feed refetch may carry the command's settled row.
+  useEffect(() => {
+    setSent((prev) => reconcileSent(prev, messages));
+  }, [messages]);
+
   const count = runeCount(text);
   const over = count > SWARM_MESSAGE_MAX;
-  const busy = sent !== null && (sent.state === 'sending' || sent.state === 'queued' || sent.state === 'delivered');
+  const busy = isPending(sent);
   const canSend = controllable && to !== '' && text.trim() !== '' && !over && !busy;
 
   const send = async (): Promise<void> => {
     if (!canSend) return;
     setSent({ commandId: null, state: 'sending' });
     try {
-      const { commandId } = await sendSwarmMessage(sender.id, Number(to), text);
+      const { commandId, messageId } = await sendSwarmMessage(sender.id, Number(to), text);
       const seen = early.current.get(commandId);
       early.current.delete(commandId);
-      setSent({ commandId, state: seen?.state ?? 'queued', message: seen?.message });
+      setSent(reconcileSent({ commandId, messageId, state: seen?.state ?? 'queued', message: seen?.message }, messages));
       setText('');
     } catch (err) {
       setSent({ commandId: null, state: 'rejected', message: err instanceof Error ? err.message : String(err) });
@@ -374,19 +414,21 @@ export function SwarmPanel({
   const labels = new Map<number, string>();
   for (const s of sessions) labels.set(s.id, s.title ?? shortUuid(s.sessionUuid));
   const recipients = sender === undefined ? [] : sessions.filter((s) => s.id !== sender.id && s.link != null);
+  // One feed for the list and the send form, which reads its command's row from it.
+  const messages = useSwarmMessages(projectId);
 
   return (
     <section aria-label={t`Swarm`} className={className} data-testid="swarm-panel">
       {sender !== undefined && (
         <>
           <Heading>{t`Send a message from this session`}</Heading>
-          <SendForm sender={sender} recipients={recipients} />
+          <SendForm sender={sender} recipients={recipients} messages={messages.data} />
         </>
       )}
       <Heading>{t`File claims`}</Heading>
       <Claims projectId={projectId} labels={labels} />
       <Heading>{t`Messages`}</Heading>
-      <Feed projectId={projectId} labels={labels} />
+      <Feed messages={messages} labels={labels} />
     </section>
   );
 }

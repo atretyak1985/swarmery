@@ -704,6 +704,10 @@ msgstr "analysing…"
 msgid "Analytics"
 msgstr "Analytics"
 
+#: src/lib/swarm.tsx
+msgid "Another session holds a claim on the same file: {list}"
+msgstr "Another session holds a claim on the same file: {list}"
+
 #: src/api.ts
 msgid "answer planning failed: {status}"
 msgstr "answer planning failed: {status}"
@@ -1200,6 +1204,10 @@ msgstr "Confirm stop"
 #: src/api.ts
 msgid "confirmation required"
 msgstr "confirmation required"
+
+#: src/lib/swarm.tsx
+msgid "conflict"
+msgstr "conflict"
 
 #: src/components/usage/UsageConnect.tsx
 msgid "connect"
