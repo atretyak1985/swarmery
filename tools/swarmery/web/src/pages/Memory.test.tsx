@@ -6,6 +6,7 @@
 //      the lint error stays inside its own panel.
 //   2. Clicking a stale-fact row opens that file in the editor.
 
+import { Profiler } from 'react';
 import { cleanup, fireEvent, render, screen, waitFor } from '../test/render';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as api from '../api';
@@ -94,4 +95,63 @@ describe('Memory', () => {
     const active = nav.querySelector('[aria-current="true"]');
     expect(active?.textContent).toContain('checkout-rollout.md');
   });
+
+  // W2 of the flaky-tests plan, reproduced without load. The click lands during
+  // the commit that first shows the list, before React has flushed that
+  // commit's passive effects — the window a loaded runner hits between findBy*
+  // resolving and fireEvent. The probe is a Profiler onRender callback: it runs
+  // in the commit's layout phase on every commit of the Memory subtree (a
+  // sibling component's layout effect would not re-run on Memory's own state
+  // updates).
+  it('a stale-fact click in the commit that shows the list is not overwritten by the auto-select', async () => {
+    vi.mocked(api.fetchMemoryLint).mockResolvedValue(staleReport());
+    // The lint resolves first, the list one macrotask later, so the stale-fact
+    // row first appears in the same commit that sets `files`.
+    vi.mocked(api.fetchMemoryList).mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          setTimeout(() => resolve({ files: [file(INDEX), file(TOPIC)] }), 0);
+        }),
+    );
+    let clicked = false;
+    const probe = (): void => {
+      if (clicked) return;
+      const row = screen.queryByRole('button', { name: /checkout-rollout\.md:2/ });
+      if (row === null) return;
+      clicked = true;
+      row.click();
+    };
+    render(
+      <Profiler id="memory" onRender={probe}>
+        <Memory />
+      </Profiler>,
+    );
+    await waitFor(() => expect(clicked).toBe(true));
+    await waitFor(() => expect(api.fetchMemoryFile).toHaveBeenCalledWith('shop', TOPIC));
+    // The broken order shows TOPIC for one commit and then INDEX, so read the
+    // selection only after every queued render has run.
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    const nav = screen.getByRole('navigation', { name: 'Memory files' });
+    const active = nav.querySelector('[aria-current="true"]');
+    expect(active?.textContent, 'the selected file in the list').toContain('checkout-rollout.md');
+  });
 });
+
+function staleReport(): MemoryLintReport {
+  return {
+    dir: '/home/dev/.claude/projects/-work-shop/memory',
+    project: '/work/shop',
+    files: 2,
+    claims: 1,
+    findings: [
+      {
+        file: TOPIC,
+        lineNo: 2,
+        pr: 41,
+        claim: 'PR #41 open: flip the guard',
+        mergeSha: 'abc',
+        mergedAt: new Date(Date.now() - 86_400_000).toISOString(),
+      },
+    ],
+  };
+}

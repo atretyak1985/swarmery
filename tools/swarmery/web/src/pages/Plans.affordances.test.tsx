@@ -26,7 +26,7 @@
 import { act, cleanup, configure, fireEvent, render, screen, waitFor, within } from '../test/render';
 import { useState } from 'react';
 import { createMemoryRouter, RouterProvider, useLocation } from 'react-router-dom';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Epic, EpicPhase, PlanRevision } from '../api/types';
 import { Tabs, useTabParam } from '../components/Tabs';
 import { PlansPlace } from './plans/PlansPlace';
@@ -37,6 +37,14 @@ import { PLANS_ROUTE_PATHS } from './plans/plansUrl';
 // findBy* in this file gets a longer budget. Still under vitest's 5 s test
 // timeout. Vitest isolates each test file, so this doesn't leak into others.
 configure({ asyncUtilTimeout: 3000 });
+
+// PlansPlace loads Plans through React.lazy. On a cold, loaded run the first
+// dynamic import (and its transform) alone can outlast that budget, leaving the
+// first tests stuck on the `plans…` fallback. Import it once up front, in the
+// hook's own budget: lazy() then resolves from the module cache.
+beforeAll(async () => {
+  await import('./Plans');
+});
 
 // The project follows the URL's :slug, as the real ProjectWorkspaceProvider
 // does; its display NAME differs from the slug so the title test can tell them apart.

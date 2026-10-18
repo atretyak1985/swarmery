@@ -114,12 +114,10 @@ export function Memory(): JSX.Element {
     loadLint();
   }, [loadList, loadLint]);
 
-  // Auto-select the first file (usually CLAUDE.md) once the list resolves.
-  useEffect(() => {
-    if (selected === null && files !== null && files.length > 0) {
-      setSelected(files[0]?.path ?? null);
-    }
-  }, [files, selected]);
+  // The first file (usually CLAUDE.md) is shown until the operator picks one.
+  // Derived, not set from an effect: an effect's setSelected could land after a
+  // click's and overwrite it.
+  const shown = selected ?? files?.[0]?.path ?? null;
 
   const groups = useMemo(() => groupByKind(files ?? []), [files]);
 
@@ -178,11 +176,11 @@ export function Memory(): JSX.Element {
           <div className="mt-4 grid min-h-0 flex-1 grid-cols-1 gap-4 lg:grid-cols-[260px_minmax(0,1fr)]">
             <FileList
               groups={groups}
-              selected={selected}
+              selected={shown}
               onSelect={setSelected}
             />
-            {selected !== null ? (
-              <MemoryEditor key={selected} project={slug} path={selected} onSaved={onSaved} />
+            {shown !== null ? (
+              <MemoryEditor key={shown} project={slug} path={shown} onSaved={onSaved} />
             ) : (
               <Empty>
                 <Trans>Select a file to view or edit.</Trans>

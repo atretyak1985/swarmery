@@ -11,7 +11,7 @@
 import type { MessageDescriptor } from '@lingui/core';
 import { msg, t } from '@lingui/core/macro';
 import { Trans, useLingui } from '@lingui/react/macro';
-import { useEffect, useId, useRef, type ReactNode } from 'react';
+import { useEffect, useId, useLayoutEffect, useRef, type ReactNode } from 'react';
 import type { Epic, EpicPhase } from '../../api/types';
 import { type TabItem, Tabs } from '../../components/Tabs';
 import { modelShortName } from '../../lib/sessionModelChip';
@@ -84,8 +84,10 @@ export function PhasePanel({
   const panelRef = useRef<HTMLElement | null>(null);
   const titleId = useId();
   // Latest handlers without re-running the listener effect (callers pass arrows).
+  // Synced in the layout phase, like the listener below, so a key pressed right
+  // after a commit never reaches a stale handler.
   const handlers = useRef({ onPrev, onNext });
-  useEffect(() => {
+  useLayoutEffect(() => {
     handlers.current = { onPrev, onNext };
   });
 
@@ -97,8 +99,10 @@ export function PhasePanel({
   }, []);
 
   // ↑/↓ step through the plan's phases from anywhere on the page, except while
-  // typing in a field (the Edit tab's textarea, the criteria filter).
-  useEffect(() => {
+  // typing in a field (the Edit tab's textarea, the criteria filter). Installed
+  // in the layout phase so the shortcut exists as soon as the panel's DOM does:
+  // a passive effect can run after the panel is already visible.
+  useLayoutEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
       if (typingIn(e.target)) return;
       const { onPrev: prev, onNext: next } = handlers.current;
