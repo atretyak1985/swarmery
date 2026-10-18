@@ -37,7 +37,13 @@ phase. See [Plan band](#plan-band).
 
 ## Opt-in
 
-Nothing is installed by default. Enable it per project in `.claude/settings.json`:
+Nothing is installed by default. Install it from the swarmery marketplace:
+
+```text
+/plugin install swarmery-link@swarmery
+```
+
+Or enable it for one project, in that project's `.claude/settings.json`:
 
 ```json
 { "enabledPlugins": { "swarmery-link@swarmery": true } }
@@ -153,7 +159,19 @@ registered and none of those calls is made.
 | `swarm` | `false` | swarm coordination: message events, the file-claims registry, the conflict line, and the dashboard's `message` command with `control` on ([Swarm](#swarm)) |
 | `planBand` | `false` | the plan band, `/plan`, the interview card and the drift line ([Plan band](#plan-band)) |
 
-Set them in the plugin's config menu, or under `pluginConfigs` in settings.
+Set them in the plugin's config menu (`/plugin` → swarmery-link → configure),
+which writes your user settings, or under `pluginConfigs` in your **user**
+settings, `~/.claude/settings.json`:
+
+```json
+{ "pluginConfigs": { "swarmery-link@swarmery": { "options": { "control": true } } } }
+```
+
+Claude Code reads plugin options from user settings (and from the `--settings`
+flag) only. A `pluginConfigs` block in a project's `.claude/settings.json` or
+`.claude/settings.local.json` is ignored without a warning, so an option set
+there stays off. `enabledPlugins` is different: it still goes in the project's
+settings. Each "Enable it" section below follows that split.
 
 ## Control
 
@@ -162,17 +180,17 @@ bulk "continue phase" action) reach this session.
 
 ### Enable it
 
-Per project, in `.claude/settings.json` beside `enabledPlugins`:
+With the plugin enabled (see [Opt-in](#opt-in)), set the option in your user
+settings, `~/.claude/settings.json` (a project's settings are ignored for
+options, see [Options](#options)):
 
 ```json
-{
-  "enabledPlugins": { "swarmery-link@swarmery": true },
-  "pluginConfigs": { "swarmery-link@swarmery": { "options": { "control": true } } }
-}
+{ "pluginConfigs": { "swarmery-link@swarmery": { "options": { "control": true } } } }
 ```
 
-or flip **Control from the dashboard** in the plugin's config menu, which
-reloads the mod with the new value. Loaded through `--plugin-dir`, the key is
+or flip **Control from the dashboard** in the plugin's config menu
+(`/plugin` → swarmery-link → configure), which reloads the mod with the new
+value. Loaded through `--plugin-dir`, the key is
 `swarmery-link` (or `swarmery-link@inline`) instead of `swarmery-link@swarmery`.
 
 ### How it works
@@ -235,11 +253,11 @@ It is advisory: nothing is blocked or changed.
 
 ### Enable it
 
+With the plugin enabled, in your user settings, `~/.claude/settings.json` (see
+[Options](#options)):
+
 ```json
-{
-  "enabledPlugins": { "swarmery-link@swarmery": true },
-  "pluginConfigs": { "swarmery-link@swarmery": { "options": { "forecast": true } } }
-}
+{ "pluginConfigs": { "swarmery-link@swarmery": { "options": { "forecast": true } } } }
 ```
 
 or flip **Turn forecast** in the plugin's config menu. It needs the token file
@@ -300,11 +318,11 @@ mod first, the shim when the mod cannot decide.
 
 ### Enable it
 
+With the plugin enabled, in your user settings, `~/.claude/settings.json` (see
+[Options](#options)):
+
 ```json
-{
-  "enabledPlugins": { "swarmery-link@swarmery": true },
-  "pluginConfigs": { "swarmery-link@swarmery": { "options": { "approvals": true } } }
-}
+{ "pluginConfigs": { "swarmery-link@swarmery": { "options": { "approvals": true } } } }
 ```
 
 or flip **Approvals in Swarmery** in the plugin's config menu. It needs the
@@ -398,11 +416,11 @@ about it. It is advisory: nothing is blocked, rewritten or refused.
 
 ### Enable it
 
+With the plugin enabled, in your user settings, `~/.claude/settings.json` (see
+[Options](#options)):
+
 ```json
-{
-  "enabledPlugins": { "swarmery-link@swarmery": true },
-  "pluginConfigs": { "swarmery-link@swarmery": { "options": { "swarm": true, "control": true } } }
-}
+{ "pluginConfigs": { "swarmery-link@swarmery": { "options": { "swarm": true, "control": true } } } }
 ```
 
 or flip **Swarm coordination** in the plugin's config menu. `control` is needed
@@ -480,11 +498,11 @@ With `planBand` on, the session's swarmery plan travels with it in the terminal.
 
 ### Enable it
 
+With the plugin enabled, in your user settings, `~/.claude/settings.json` (see
+[Options](#options)):
+
 ```json
-{
-  "enabledPlugins": { "swarmery-link@swarmery": true },
-  "pluginConfigs": { "swarmery-link@swarmery": { "options": { "planBand": true } } }
-}
+{ "pluginConfigs": { "swarmery-link@swarmery": { "options": { "planBand": true } } } }
 ```
 
 or flip **Plan band** in the plugin's config menu. It needs the token file like
