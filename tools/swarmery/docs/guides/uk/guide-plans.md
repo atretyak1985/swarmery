@@ -526,7 +526,7 @@ flowchart LR
 | `SWARMERY_VERIFY_MAX_DIFF_FILES` | `40` | Межа розміру диффа, понад яку перевірка повертає inconclusive |
 | `SWARMERY_VERIFY_TIMEOUT_MIN` | `15` | Хвилин до того, як прогін перевірки буде покинуто |
 | `SWARMERY_VERIFY_PERMISSION_MODE` | `bypassPermissions` | Режим дозволів перевіряльника без права на запис (відкочується до `SWARMERY_PERMISSION_MODE`); інструменти редагування заборонені в кожному режимі, `off` прибирає прапорець |
-| `SWARMERY_WORKTREE_LEND` | `node_modules`, `.venv`, `vendor` | Теки, що позичаються у свіжий worktree, щоб збірки працювали одразу |
+| `SWARMERY_WORKTREE_LEND` | `node_modules`, `.venv`, `vendor` + вкладені `<dir>/node_modules` | Теки, що позичаються у свіжий worktree, щоб збірки працювали одразу; явне значення замінює типові й вимикає пошук вкладених |
 
 > [!NOTE]
 > Ці змінні читаються один раз, під час старту демона. Зміна будь-якої означає перезапуск
