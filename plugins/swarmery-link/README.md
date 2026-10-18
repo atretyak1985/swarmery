@@ -549,8 +549,9 @@ answer.
 ### The drift line
 
 At the end of a main-loop turn that edited files (`Edit`, `Write`, `MultiEdit`,
-`NotebookEdit`; a subagent's edits are left out) while the session has a plan
-phase, one `$.model.classify` labels the turn `on-phase`, `adjacent` or
+`NotebookEdit`; a subagent's edits are left out) while the session's plan phase
+is `In progress`, or was picked in the terminal with `/plan <task-id>`, one
+`$.model.classify` labels the turn `on-phase`, `adjacent` or
 `off-phase`. Its text is the phase title and its open criteria, the files the
 turn edited and the last 2048 characters of the answer. On `off-phase` the daemon
 gets `POST /api/link/plan/drift` and one line is shown beneath the answer:
@@ -559,8 +560,10 @@ gets `POST /api/link/plan/drift` and one line is shown beneath the answer:
 ↯ this turn looks outside phase 2: edited src/billing/invoice.ts, docs/notes.md
 ```
 
-`classify` names a label and nothing else, so the reason is the edited files
-(at most 120 characters). The transcript is never rewritten. With `swarm` on too,
+`classify` names a label and nothing else, so the reason is the edited files;
+the whole line is cut to 120 characters (`…` marks the cut). A view the daemon
+resolved on its own that lands on a `Pending` or `Blocked` phase is never
+classified: nothing is off a phase nobody has started. The transcript is never rewritten. With `swarm` on too,
 a conflict line and the drift line are joined beneath the same answer.
 
 **What it costs.** One classification (the engine's small fast model) per

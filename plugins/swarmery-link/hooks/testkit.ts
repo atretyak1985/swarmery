@@ -539,7 +539,7 @@ export const PLAN_VIEW = {
     id: 'phase-2',
     n: 2,
     title: 'Line-item CRUD',
-    status: 'running',
+    status: 'In progress',
     done: 1,
     total: 4,
     criteria: [

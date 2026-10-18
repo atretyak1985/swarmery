@@ -169,7 +169,7 @@ test('/plan runs no model turn and opens the Plan pane with the whole checklist'
   const texts = (await pane.findAll({ type: 'Text' })).map(t => t.text)
   expect(texts).toEqual([
     'Order line items (2026-10-13-order-line-items)',
-    'Phase 2 — Line-item CRUD · 1/4 · running',
+    'Phase 2 — Line-item CRUD · 1/4 · In progress',
     '☑ POST /orders/{id}/line-items creates a row',
     '☐ GET lists the line items in insert order',
     '☐ DELETE removes one and answers 204',
@@ -184,7 +184,7 @@ test('/plan where no pane is placed: the checklist is the command\'s output', ON
   const result = await $.command.run(slash())
   expect(result.text?.split('\n')).toEqual([
     'Order line items (2026-10-13-order-line-items)',
-    'Phase 2 — Line-item CRUD · 1/4 · running',
+    'Phase 2 — Line-item CRUD · 1/4 · In progress',
     '☑ POST /orders/{id}/line-items creates a row',
     '☐ GET lists the line items in insert order',
     '☐ DELETE removes one and answers 204',

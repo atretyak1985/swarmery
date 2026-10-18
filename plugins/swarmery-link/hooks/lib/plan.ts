@@ -16,6 +16,10 @@ export const DRIFT_TIMEOUT_MS = 15_000
 export const DRIFT_ANSWER_LIMIT = 2_048
 /** The drift line's reason is cut to this many characters. */
 export const DRIFT_REASON_LIMIT = 120
+/** The whole drift line, its `↯ … phase N:` lead included, is cut to this many characters. */
+export const DRIFT_LINE_LIMIT = 120
+/** The view's `phase.status` of a phase that is running (the Plans page's chip). */
+export const PHASE_IN_PROGRESS = 'In progress'
 /** The labels the drift classification picks from. */
 export const DRIFT_LABELS = ['on-phase', 'adjacent', 'off-phase'] as const
 /** At most this many criteria rows in the band. */
@@ -261,14 +265,13 @@ export const driftInput = (phase: PlanPhase, answer: string, edits: readonly str
 /** Why the turn looks off-phase: `classify` names a label alone, so the edited files say it. */
 export const driftReason = (edits: readonly string[]): string => truncate(`edited ${edits.join(', ')}`, DRIFT_REASON_LIMIT)
 
-export const driftLine = (n: number, reason: string): string => `↯ this turn looks outside phase ${n}: ${reason}`
+/** The drift line, cut as a whole to DRIFT_LINE_LIMIT characters. */
+export const driftLine = (n: number, reason: string): string => truncate(`↯ this turn looks outside phase ${n}: ${reason}`, DRIFT_LINE_LIMIT)
 
 /**
- * turn.complete's text with `beneath` added: a text other than the answer is
- * shown beneath it, so the lines join what another hook already put there.
+ * Whether a turn's edits are held against the view's phase: only a phase that
+ * is running, or one the person picked in the terminal. An automatic view can
+ * land on a Pending or Blocked phase (the first not Done), and no work is
+ * "off" a phase nobody has started.
  */
-export const withBeneath = (text: string, answer: string, beneath: readonly string[]): string => {
-  if (beneath.length === 0) return text
-  const lines = beneath.join('\n')
-  return text === answer ? lines : `${text}\n${lines}`
-}
+export const isDriftWatched = (view: PlanView): boolean => view.phase.status === PHASE_IN_PROGRESS || view.chosenBy === 'terminal'

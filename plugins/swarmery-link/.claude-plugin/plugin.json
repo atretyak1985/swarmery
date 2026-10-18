@@ -23,7 +23,7 @@
     "planBand": {
       "type": "boolean",
       "title": "Plan band",
-      "description": "Show this session's swarmery plan phase in a band above the prompt (Phase n, its open criteria, [1] next phase, [2] open in Swarmery, [3] tick), add /plan [task-id] for the full checklist, draw interview-style questions as a card with the recommended option highlighted, and flag a turn that drifts off the phase with one line beneath its answer. Costs one small $.model.classify call per main-loop turn that edits files while a phase runs, plus a plan request (loopback, bearer token) at session start, after each turn and every 60 s. Off: no band, no command, no classification and no plan request.",
+      "description": "Show this session's swarmery plan phase in a band above the prompt (Phase n, its open criteria, [1] next phase, [2] open in Swarmery, [3] tick), add /plan [task-id] for the full checklist, draw a dashboard interview question (its JSON) as a card with the recommended option highlighted, and flag a turn that drifts off the phase with one line beneath its answer. Costs one small $.model.classify call per main-loop turn that edits files while a phase runs, plus a plan request (loopback, bearer token) at session start, after each turn and every 60 s. Off: no band, no command, no classification and no plan request.",
       "default": false
     },
     "swarm": {

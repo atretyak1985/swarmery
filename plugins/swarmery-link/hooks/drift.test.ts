@@ -1,6 +1,7 @@
 import type { On } from 'claude-code'
 import { type Engine, expect, test } from 'claude-code/testing'
-import { DRIFT_LABELS, DRIFT_TIMEOUT_MS, driftInput, withBeneath } from './lib/plan'
+import { DRIFT_LABELS, DRIFT_LINE_LIMIT, DRIFT_TIMEOUT_MS, driftInput, driftLine, driftReason } from './lib/plan'
+import { withBeneath } from './lib/swarm'
 import { COMPLETE, CWD, PLAN_VIEW, SESSION_ID, START, TOKEN, type World, track, world } from './testkit'
 
 const ON = { options: { planBand: true } } as const
@@ -136,7 +137,51 @@ test('driftInput keeps the answer\'s last 2 KiB; withBeneath appends to a line a
   )
   expect(text).toContain(`${'x'.repeat(2_044)}TAIL`)
   expect(text).not.toContain('x'.repeat(2_045))
-  expect(withBeneath('hi', 'hi', ['one'])).toBe('one')
-  expect(withBeneath('TL;DR', 'hi', ['one', 'two'])).toBe('TL;DR\none\ntwo')
-  expect(withBeneath('hi', 'hi', [])).toBe('hi')
+  expect(withBeneath({ text: 'hi' }, 'hi', ['one']).text).toBe('one')
+  expect(withBeneath({ text: 'TL;DR' }, 'hi', ['one', 'two']).text).toBe('TL;DR\none\ntwo')
+  expect(withBeneath({ text: 'hi' }, 'hi', []).text).toBe('hi')
+})
+
+/** PLAN_VIEW with its phase's status (and who chose it) replaced. */
+const viewAt = (status: string, chosenBy: 'auto' | 'terminal' = 'auto') => ({
+  view: { ...PLAN_VIEW, chosenBy, phase: { ...PLAN_VIEW.phase, status } },
+})
+
+for (const status of ['Pending', 'Blocked']) {
+  test(`an automatic view of a ${status} phase never classifies`, ON, async ($, on) => {
+    const w = await begin($, on, { plans: [viewAt(status)], classify: ['off-phase'] })
+    await $.turn.start({ text: 'go', turnId: 'turn-1' })
+    await $.tool.call(EDIT)
+    const result = await $.turn.complete({ ...COMPLETE, turnId: 'turn-1' })
+    expect(result.text).toBe('hi')
+    expect(w.classifyCalls).toHaveLength(0)
+    await w.clock.advance(0)
+    expect(drifts(w)).toHaveLength(0)
+  })
+}
+
+test('an automatic view In progress classifies once on a turn that edited', ON, async ($, on) => {
+  const w = await begin($, on, { plans: [viewAt('In progress')] })
+  await $.turn.start({ text: 'go', turnId: 'turn-1' })
+  await $.tool.call(EDIT)
+  await $.turn.complete({ ...COMPLETE, turnId: 'turn-1' })
+  expect(w.classifyCalls).toHaveLength(1)
+})
+
+test('a phase picked in the terminal is watched whatever its status', ON, async ($, on) => {
+  const w = await begin($, on, { plans: [viewAt('Pending', 'terminal')], classify: ['off-phase'] })
+  await $.turn.start({ text: 'go', turnId: 'turn-1' })
+  await $.tool.call(EDIT)
+  const result = await $.turn.complete({ ...COMPLETE, turnId: 'turn-1' })
+  expect(w.classifyCalls).toHaveLength(1)
+  expect(result.text).toBe('↯ this turn looks outside phase 2: edited src/billing/invoice.ts')
+})
+
+test('the drift line is cut to 120 characters as a whole, the reason included', () => {
+  const edits = Array.from({ length: 12 }, (_, i) => `src/a/very/deep/module/path/file-${i}.ts`)
+  const line = driftLine(12, driftReason(edits))
+  expect(line).toHaveLength(DRIFT_LINE_LIMIT)
+  expect(line.startsWith('↯ this turn looks outside phase 12: edited src/a/very/deep/module/path/file-0.ts')).toBe(true)
+  expect(line.endsWith('…')).toBe(true)
+  expect(driftLine(2, 'edited a.ts')).toBe('↯ this turn looks outside phase 2: edited a.ts')
 })
