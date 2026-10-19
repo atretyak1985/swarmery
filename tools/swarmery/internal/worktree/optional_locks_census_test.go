@@ -23,15 +23,30 @@ import (
 //
 // GIT_OPTIONAL_LOCKS=0 (or --no-optional-locks) turns off only that
 // opportunistic write; commands that must write the index still lock. So every
-// file under internal/ that spawns git directly has to opt out, and a new spawn
+// file under internal/ and cmd/ that spawns git has to opt out, and a new spawn
 // site added without it fails this test.
+//
+// git is spawned in two shapes, and the census catches both:
+//
+//   - Direct: exec.Command / exec.CommandContext whose program is "git" (a
+//     literal, or a package const whose value is "git"). That file must carry
+//     the marker.
+//   - Through a wrapper: a generic runner calls exec.Command(Context) with the
+//     program taken from a variable (a `name string` parameter), and a caller
+//     hands it "git" — `ex.Run(ctx, dir, nil, "git", "remote", …)`. The scanner
+//     has no type information, so it works per package: a package where any
+//     call passes "git" as an argument drives git through a wrapper, and EVERY
+//     by-name spawner file in it must carry the marker, unless
+//     spawnsOnlyOtherBinaries names it with the binary it runs instead.
+//     mustWrapGit pins the wrappers known today, so a heuristic that stops
+//     seeing one fails loudly instead of passing over it.
 
 // optionalLocksMarkers are the two spellings git accepts.
 var optionalLocksMarkers = []string{"GIT_OPTIONAL_LOCKS=0", "--no-optional-locks"}
 
-// mustSpawnGit are files the scanner has to keep finding. Without this, a
-// heuristic that stopped matching (a renamed import, a helper wrapping
-// exec.Command) would let the whole guard pass while covering nothing.
+// mustSpawnGit are files the scanner has to keep finding as DIRECT git spawns.
+// Without this, a heuristic that stopped matching (a renamed import, a helper
+// wrapping exec.Command) would let the whole guard pass while covering nothing.
 var mustSpawnGit = []string{
 	"internal/worktree/git.go",
 	"internal/archmap/git.go",
@@ -41,45 +56,102 @@ var mustSpawnGit = []string{
 	"internal/handoff/anchor.go",
 }
 
+// mustWrapGit are the by-name exec wrappers known to be handed "git"; the
+// scanner has to keep classifying each as a git wrapper.
+var mustWrapGit = []string{
+	"internal/repoprovider/exec.go", // repoprovider.OSExec: Detect, Push, the land path
+	"internal/improve/apply.go",     // improve.OSExec: the improve apply/resolver pipeline
+	"internal/api/tasks_diff.go",    // execReview: the board diff reads (reviewGitBinary)
+}
+
+// spawnsOnlyOtherBinaries are by-name spawners that sit in a package which
+// drives git but never run git themselves. Each entry says what it runs; an
+// entry the scanner no longer needs fails the test, so the list cannot rot.
+var spawnsOnlyOtherBinaries = map[string]string{
+	"internal/api/resume.go":     "claude --resume (bin from claudebin)",
+	"internal/improve/runner.go": "claude -p (the rewriter)",
+}
+
+// censusFile is what the scanner learns about one non-test .go file.
+type censusFile struct {
+	key       string // module-relative, slash-separated
+	f         *ast.File
+	direct    bool // exec.Command(Context) with program "git"
+	byName    bool // exec.Command(Context) with the program taken from a variable
+	passesGit bool // some other call passes "git" as an argument
+	hasMarker bool // a string literal carries an optional-locks spelling
+}
+
 func TestGitSpawnsSetOptionalLocks(t *testing.T) {
 	root := moduleRootDir(t)
-	internal := filepath.Join(root, "internal")
-	var missing []string
-	seen := map[string]bool{}
 
-	err := filepath.WalkDir(internal, func(path string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		if d.IsDir() {
-			switch d.Name() {
-			// memlinttest is a test-fixture helper that builds throwaway repos;
-			// it never runs against an operator's checkout.
-			case "testdata", "node_modules", "memlinttest":
-				return fs.SkipDir
+	// Pass 1: parse every non-test file, grouped by package directory.
+	pkgs := map[string][]*censusFile{}
+	for _, top := range []string{"internal", "cmd"} {
+		err := filepath.WalkDir(filepath.Join(root, top), func(path string, d fs.DirEntry, err error) error {
+			if err != nil {
+				return err
 			}
+			if d.IsDir() {
+				switch d.Name() {
+				// memlinttest is a test-fixture helper that builds throwaway repos;
+				// it never runs against an operator's checkout.
+				case "testdata", "node_modules", "memlinttest":
+					return fs.SkipDir
+				}
+				return nil
+			}
+			if !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") {
+				return nil
+			}
+			f, perr := parser.ParseFile(token.NewFileSet(), path, nil, 0)
+			if perr != nil {
+				return perr
+			}
+			rel, _ := filepath.Rel(root, path)
+			dir := filepath.Dir(path)
+			pkgs[dir] = append(pkgs[dir], &censusFile{key: filepath.ToSlash(rel), f: f})
 			return nil
+		})
+		if err != nil {
+			t.Fatal(err)
 		}
-		if !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") {
-			return nil
+	}
+
+	// Pass 2: classify each file with its package's "git" consts in scope,
+	// then require the marker on direct spawns and on by-name spawners in a
+	// package that drives git.
+	var missing []string
+	direct := map[string]bool{}
+	wrappers := map[string]bool{}
+	exempted := map[string]bool{}
+	for _, files := range pkgs {
+		gitConsts := map[string]bool{}
+		for _, cf := range files {
+			collectGitConsts(cf.f, gitConsts)
 		}
-		f, perr := parser.ParseFile(token.NewFileSet(), path, nil, 0)
-		if perr != nil {
-			return perr
+		pkgPassesGit := false
+		for _, cf := range files {
+			classify(cf, gitConsts)
+			pkgPassesGit = pkgPassesGit || cf.passesGit
 		}
-		if !spawnsGit(f) {
-			return nil
+		for _, cf := range files {
+			switch {
+			case cf.direct:
+				direct[cf.key] = true
+			case cf.byName && pkgPassesGit:
+				if _, ok := spawnsOnlyOtherBinaries[cf.key]; ok {
+					exempted[cf.key] = true
+					continue
+				}
+				wrappers[cf.key] = true
+			default:
+				continue
+			}
+			if !cf.hasMarker {
+				missing = append(missing, cf.key)
+			}
 		}
-		rel, _ := filepath.Rel(root, path)
-		key := filepath.ToSlash(rel)
-		seen[key] = true
-		if !hasOptionalLocksMarker(f) {
-			missing = append(missing, key)
-		}
-		return nil
-	})
-	if err != nil {
-		t.Fatal(err)
 	}
 
 	if len(missing) > 0 {
@@ -90,76 +162,134 @@ func TestGitSpawnsSetOptionalLocks(t *testing.T) {
 
 A read-only git (status, diff, log) takes index.lock to refresh the index, and a
 killed one strands that lock in the operator's checkout. Set
-cmd.Env = append(os.Environ(), "GIT_OPTIONAL_LOCKS=0") on the command, or pass
---no-optional-locks as git's first argument.`, strings.Join(missing, "\n  "))
+cmd.Env = append(os.Environ(), "GIT_OPTIONAL_LOCKS=0") on the command (in a
+by-name wrapper: when the program is git), or pass --no-optional-locks as git's
+first argument. A by-name spawner that never runs git goes in
+spawnsOnlyOtherBinaries with the binary it runs.`, strings.Join(missing, "\n  "))
 	}
 
 	for _, key := range mustSpawnGit {
-		if !seen[key] {
-			t.Errorf("scanner no longer detects a git spawn in %q — the heuristic drifted, fix it before trusting this guard", key)
+		if !direct[key] {
+			t.Errorf("scanner no longer detects a direct git spawn in %q — the heuristic drifted, fix it before trusting this guard", key)
+		}
+	}
+	for _, key := range mustWrapGit {
+		if !wrappers[key] {
+			t.Errorf("scanner no longer classifies %q as a git exec wrapper — the heuristic drifted, fix it before trusting this guard", key)
+		}
+	}
+	for key := range spawnsOnlyOtherBinaries {
+		if !exempted[key] {
+			t.Errorf("spawnsOnlyOtherBinaries entry %q no longer applies — drop it", key)
 		}
 	}
 }
 
-// spawnsGit reports whether f calls exec.Command or exec.CommandContext with the
-// literal "git" as the program name.
-func spawnsGit(f *ast.File) bool {
-	found := false
-	ast.Inspect(f, func(n ast.Node) bool {
-		call, ok := n.(*ast.CallExpr)
-		if !ok {
-			return true
+// collectGitConsts adds to out every const declared in f whose value is the
+// literal "git" (e.g. `reviewGitBinary = "git"`).
+func collectGitConsts(f *ast.File, out map[string]bool) {
+	for _, decl := range f.Decls {
+		gd, ok := decl.(*ast.GenDecl)
+		if !ok || gd.Tok != token.CONST {
+			continue
 		}
-		sel, ok := call.Fun.(*ast.SelectorExpr)
-		if !ok {
-			return true
-		}
-		pkg, ok := sel.X.(*ast.Ident)
-		if !ok || pkg.Name != "exec" {
-			return true
-		}
-		nameArg := -1
-		switch sel.Sel.Name {
-		case "Command":
-			nameArg = 0
-		case "CommandContext":
-			nameArg = 1
-		}
-		if nameArg < 0 || len(call.Args) <= nameArg {
-			return true
-		}
-		if lit, ok := call.Args[nameArg].(*ast.BasicLit); ok && lit.Kind == token.STRING {
-			if s, err := strconv.Unquote(lit.Value); err == nil && s == "git" {
-				found = true
+		for _, spec := range gd.Specs {
+			vs, ok := spec.(*ast.ValueSpec)
+			if !ok {
+				continue
+			}
+			for i, name := range vs.Names {
+				if i < len(vs.Values) && isGitLiteral(vs.Values[i]) {
+					out[name.Name] = true
+				}
 			}
 		}
-		return true
-	})
-	return found
+	}
 }
 
-// hasOptionalLocksMarker reports whether a string literal in f carries one of
-// the optional-locks spellings. Literals only: a comment naming the variable
-// is not a command that sets it.
-func hasOptionalLocksMarker(f *ast.File) bool {
-	found := false
-	ast.Inspect(f, func(n ast.Node) bool {
-		lit, ok := n.(*ast.BasicLit)
-		if !ok || lit.Kind != token.STRING {
+// classify fills cf's spawn flags and marker from its AST. Markers count only
+// in string literals: a comment naming the variable is not a command that
+// sets it.
+func classify(cf *censusFile, gitConsts map[string]bool) {
+	isGit := func(e ast.Expr) bool {
+		if isGitLiteral(e) {
 			return true
 		}
-		s, err := strconv.Unquote(lit.Value)
-		if err != nil {
-			return true
-		}
-		for _, m := range optionalLocksMarkers {
-			if strings.Contains(s, m) {
-				found = true
+		id, ok := e.(*ast.Ident)
+		return ok && gitConsts[id.Name]
+	}
+	ast.Inspect(cf.f, func(n ast.Node) bool {
+		switch n := n.(type) {
+		case *ast.BasicLit:
+			if n.Kind != token.STRING {
+				return true
+			}
+			s, err := strconv.Unquote(n.Value)
+			if err != nil {
+				return true
+			}
+			for _, m := range optionalLocksMarkers {
+				if strings.Contains(s, m) {
+					cf.hasMarker = true
+				}
+			}
+		case *ast.CallExpr:
+			if nameArg, isExec := execProgramArg(n); isExec {
+				if nameArg < 0 || len(n.Args) <= nameArg {
+					return true // exec.LookPath and friends spawn nothing
+				}
+				prog := n.Args[nameArg]
+				switch {
+				case isGit(prog):
+					cf.direct = true
+				case !isStringLiteral(prog):
+					cf.byName = true
+				}
+				return true
+			}
+			for _, a := range n.Args {
+				if isGit(a) {
+					cf.passesGit = true
+				}
 			}
 		}
 		return true
 	})
-	return found
+}
+
+// execProgramArg reports whether call is an `exec.X(...)` call and, for
+// exec.Command / exec.CommandContext, the index of the program argument
+// (-1 for any other exec function).
+func execProgramArg(call *ast.CallExpr) (int, bool) {
+	sel, ok := call.Fun.(*ast.SelectorExpr)
+	if !ok {
+		return -1, false
+	}
+	pkg, ok := sel.X.(*ast.Ident)
+	if !ok || pkg.Name != "exec" {
+		return -1, false
+	}
+	switch sel.Sel.Name {
+	case "Command":
+		return 0, true
+	case "CommandContext":
+		return 1, true
+	}
+	return -1, true
+}
+
+func isStringLiteral(e ast.Expr) bool {
+	lit, ok := e.(*ast.BasicLit)
+	return ok && lit.Kind == token.STRING
+}
+
+func isGitLiteral(e ast.Expr) bool {
+	lit, ok := e.(*ast.BasicLit)
+	if !ok || lit.Kind != token.STRING {
+		return false
+	}
+	s, err := strconv.Unquote(lit.Value)
+	return err == nil && s == "git"
 }
 
 // moduleRootDir walks up from this package to the directory holding go.mod.

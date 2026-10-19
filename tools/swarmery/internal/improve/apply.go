@@ -558,6 +558,12 @@ func (e OSExec) Run(ctx context.Context, dir, name string, args ...string) (stri
 	defer cancel()
 	cmd := exec.CommandContext(ctx, name, args...)
 	cmd.Dir = dir
+	if filepath.Base(name) == "git" {
+		// Optional locks off: `git show`/`ls-tree`/`fetch` run in the
+		// operator's repo, and one killed at its deadline must not strand an
+		// index.lock there. Index writers (add, commit) still take their lock.
+		cmd.Env = append(os.Environ(), "GIT_OPTIONAL_LOCKS=0")
+	}
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		return string(out), fmt.Errorf("%s %s: %w", name, strings.Join(args, " "), err)

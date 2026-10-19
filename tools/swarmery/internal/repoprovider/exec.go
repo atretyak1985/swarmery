@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -49,6 +50,12 @@ func (OSExec) Run(ctx context.Context, dir string, env []string, name string, ar
 	}
 	cmd := exec.CommandContext(ctx, name, args...)
 	cmd.Dir = dir
+	if filepath.Base(name) == "git" {
+		// Optional locks off: a read like `remote get-url` or `rev-parse` runs
+		// in the operator's checkout, and one killed at its deadline must not
+		// strand an index.lock there. Prepended, so a caller's delta still wins.
+		env = append([]string{"GIT_OPTIONAL_LOCKS=0"}, env...)
+	}
 	if len(env) > 0 {
 		cmd.Env = append(os.Environ(), env...)
 	}

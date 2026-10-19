@@ -3,7 +3,9 @@ package repoprovider
 import (
 	"context"
 	"errors"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -32,6 +34,27 @@ func TestOSExecNilEnvInheritsAndNilCtx(t *testing.T) {
 	stdout, _, err := OSExec{}.Run(nil, "", nil, "sh", "-c", `printf '%s' "$REPOPROVIDER_TEST_INHERIT"`)
 	if err != nil || stdout != "kept" {
 		t.Fatalf("stdout=%q err=%v", stdout, err)
+	}
+}
+
+// A git spawn runs with optional locks off (a killed read must not strand
+// index.lock in the operator's checkout); a caller's delta still wins, and any
+// other binary's environment is left alone. The "git" here is a sh stub.
+func TestOSExecTurnsOptionalLocksOffForGitOnly(t *testing.T) {
+	t.Setenv("GIT_OPTIONAL_LOCKS", "")
+	stub := filepath.Join(t.TempDir(), "git")
+	if err := os.WriteFile(stub, []byte("#!/bin/sh\nprintf '%s' \"$GIT_OPTIONAL_LOCKS\"\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+	if out, _, err := (OSExec{}).Run(ctx, "", nil, stub, "status"); err != nil || out != "0" {
+		t.Fatalf("git: GIT_OPTIONAL_LOCKS=%q err=%v, want 0", out, err)
+	}
+	if out, _, err := (OSExec{}).Run(ctx, "", []string{"GIT_OPTIONAL_LOCKS=1"}, stub, "status"); err != nil || out != "1" {
+		t.Fatalf("git with caller delta: GIT_OPTIONAL_LOCKS=%q err=%v, want the caller's 1", out, err)
+	}
+	if out, _, err := (OSExec{}).Run(ctx, "", nil, "sh", "-c", `printf '%s' "$GIT_OPTIONAL_LOCKS"`); err != nil || out != "" {
+		t.Fatalf("sh: GIT_OPTIONAL_LOCKS=%q err=%v, want it untouched", out, err)
 	}
 }
 
