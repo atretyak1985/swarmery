@@ -3,6 +3,7 @@ package worktree
 import (
 	"errors"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -299,34 +300,70 @@ func (m *Manager) acquireAt(repoRoot, projectSlug, taskID, startRef string, exis
 		return Acquired{}, fmt.Errorf("%w: %s is on %s", ErrBranchBusy, other, branch)
 	}
 
+	// reuseBranchRef forces the create step below to check the ALREADY-EXISTING
+	// branch out (no -b, see AcquireExisting) instead of minting a fresh one.
+	// True for AcquireExisting's own contract, and flipped on below when a
+	// branch-matched worktree turns out to be an incomplete checkout: its branch
+	// survives the force-remove that follows, so re-adding with -b would fail
+	// ("a branch named ... already exists").
+	reuseBranchRef := existing
+
 	// Invariant 4: our path already registered?
 	if reg, ok := entries.byPath(path); ok {
 		if reg.branch == branch {
-			// Branch-matched → warm reuse as-is. Still worth a sync pass: the
-			// project's untracked .claude/ files may have changed (or been added)
-			// since this worktree was first acquired.
-			syncUntrackedConfig(repoRoot, path)
-			// Same reasoning for the dependency tree: a warm worktree may predate
-			// the source checkout's first install, or have had its link removed by
-			// a run that reinstalled.
-			lendDependencies(repoRoot, path)
-			reused := startSHA
-			// An existing branch checked out at our path IS the branch at its tip
-			// (startSHA), so there is no fork point to report.
-			if startRef != "" && !existing {
-				// The branch predates this call, so it was not cut from startSHA as
-				// resolved NOW. Report where it actually forks from (see AcquireAt).
-				reused, err = m.mergeBase(repoRoot, branch, startSHA)
-				if err != nil {
-					return Acquired{}, err
-				}
+			// Branch-matched → a warm-reuse CANDIDATE, but only once the working
+			// tree is proven complete. A `worktree add` killed mid-checkout by
+			// checkoutTimeout (git.go) registers the branch and the directory
+			// before it finishes writing every tracked file, so a matched branch
+			// alone is not enough (#571 / card T-tcs71j: 222 tracked files left
+			// deleted-on-disk, silently warm-reused on every retry after).
+			n, probeErr := m.deletedTrackedCount(path)
+			if probeErr != nil {
+				// Treat a status-probe failure the same as "incomplete": the cost
+				// of an unneeded recreate is low, the cost of silently handing out
+				// a broken tree is a wasted executor run.
+				log.Printf("worktree: %s status probe failed, treating as incomplete: %v", path, probeErr)
+				n = 1
 			}
-			return Acquired{Path: path, Branch: branch, StartPoint: reused}, nil
-		}
-		// Foreign branch / detached at our path → reclaim in place: remove then
-		// recreate below.
-		if _, err := m.Git.Run(repoRoot, "worktree", "remove", "--force", path); err != nil {
-			return Acquired{}, fmt.Errorf("worktree: reclaim %s: %w", path, err)
+			if n == 0 {
+				// Complete → warm reuse as-is. Still worth a sync pass: the
+				// project's untracked .claude/ files may have changed (or been added)
+				// since this worktree was first acquired.
+				syncUntrackedConfig(repoRoot, path)
+				// Same reasoning for the dependency tree: a warm worktree may predate
+				// the source checkout's first install, or have had its link removed by
+				// a run that reinstalled.
+				lendDependencies(repoRoot, path)
+				reused := startSHA
+				// An existing branch checked out at our path IS the branch at its tip
+				// (startSHA), so there is no fork point to report.
+				if startRef != "" && !existing {
+					// The branch predates this call, so it was not cut from startSHA as
+					// resolved NOW. Report where it actually forks from (see AcquireAt).
+					reused, err = m.mergeBase(repoRoot, branch, startSHA)
+					if err != nil {
+						return Acquired{}, err
+					}
+				}
+				return Acquired{Path: path, Branch: branch, StartPoint: reused}, nil
+			}
+			log.Printf("worktree: %s on %s has %d tracked files missing from disk (partial checkout) — recreating instead of warm-reusing", path, branch, n)
+			if _, err := m.Git.Run(repoRoot, "worktree", "remove", "--force", path); err != nil {
+				return Acquired{}, fmt.Errorf("worktree: recreate incomplete checkout %s: %w", path, err)
+			}
+			// The branch itself survives the remove above — recreate against its
+			// own tip rather than minting a fresh one under -b.
+			reuseBranchRef = true
+			startSHA, err = m.resolveCommit(repoRoot, "refs/heads/"+branch)
+			if err != nil {
+				return Acquired{}, err
+			}
+		} else {
+			// Foreign branch / detached at our path → reclaim in place: remove then
+			// recreate below.
+			if _, err := m.Git.Run(repoRoot, "worktree", "remove", "--force", path); err != nil {
+				return Acquired{}, fmt.Errorf("worktree: reclaim %s: %w", path, err)
+			}
 		}
 	} else if dirExists(path) {
 		// Path exists on disk but is not a registered worktree (crash leftover,
@@ -356,12 +393,21 @@ func (m *Manager) acquireAt(repoRoot, projectSlug, taskID, startRef string, exis
 	// An existing-branch add mints nothing: there is never a ref to roll back.
 	branchExisted, branchProbeErr := true, error(nil)
 	addArgs := []string{"worktree", "add", path, branch}
-	if !existing {
+	if !reuseBranchRef {
 		branchExisted, branchProbeErr = m.branchExists(repoRoot, branch)
 		addArgs = []string{"worktree", "add", "-b", branch, path, startSHA}
 	}
 
 	if out, err := m.Git.Run(repoRoot, addArgs...); err != nil {
+		// Undo any partial checkout the failed add left registered — BEFORE the
+		// branch rollback below. `worktree add` creates the registration and
+		// checks the branch out before it writes a single tracked file, so a kill
+		// mid-checkout (checkoutTimeout, git.go) leaves the branch checked out at
+		// path; attempted in the other order, `branch -D` would fail silently
+		// (git refuses to delete a checked-out branch) and the partial checkout
+		// would linger for the next Acquire to find. Best-effort: a `worktree add`
+		// that failed before registering anything makes this a harmless no-op.
+		_, _ = m.Git.Run(repoRoot, "worktree", "remove", "--force", path)
 		// Roll back a ref this failed add just minted — never one that predates it
 		// (that branch may hold the only copy of a crashed run's commits).
 		if !branchExisted && branchProbeErr == nil {
@@ -392,7 +438,40 @@ func (m *Manager) acquireAt(repoRoot, projectSlug, taskID, startRef string, exis
 	// which the run's own verification command cannot execute.
 	syncUntrackedConfig(repoRoot, path)
 	lendDependencies(repoRoot, path)
+	// Defense in depth: `worktree add` reporting success does not itself prove
+	// every tracked file landed on disk (a partial write that still exits 0 is
+	// unlikely but cheap to guard). Unlike the warm-reuse path above, there is no
+	// safe inline self-heal here — a freshly created checkout that is already
+	// broken signals a deeper filesystem problem, not a stale leftover — so this
+	// refuses rather than recreates.
+	if n, probeErr := m.deletedTrackedCount(path); probeErr != nil {
+		log.Printf("worktree: %s post-checkout status probe failed: %v", path, probeErr)
+	} else if n > 0 {
+		return Acquired{}, fmt.Errorf("worktree: %s checked out incomplete (%d tracked files missing)", path, n)
+	}
 	return Acquired{Path: path, Branch: branch, StartPoint: startSHA}, nil
+}
+
+// deletedTrackedCount reports how many tracked files are missing from path's
+// working tree relative to its own index — the signature of a `worktree add`
+// interrupted mid-checkout (checkoutTimeout, git.go; #571 / card T-tcs71j).
+//
+// Only the WORKTREE-status column (porcelain byte index 1) counts, never the
+// index column: a file an executor genuinely `git rm`'d as part of its own
+// uncommitted work is a real edit git already knows about, and must not be
+// mistaken for a broken checkout.
+func (m *Manager) deletedTrackedCount(path string) (int, error) {
+	out, err := m.Git.Run(path, "status", "--porcelain=v1", "-z", "--untracked-files=no")
+	if err != nil {
+		return 0, fmt.Errorf("worktree: status %s: %w", path, err)
+	}
+	n := 0
+	for _, rec := range strings.Split(out, "\x00") {
+		if len(rec) >= 2 && rec[1] == 'D' {
+			n++
+		}
+	}
+	return n, nil
 }
 
 // orphanSuffix marks a leftover directory freeOrphanPath moved aside. The leaf of
