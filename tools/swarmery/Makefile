@@ -40,8 +40,66 @@ build: copy-docs copy-probe build-web build-go
 # the lockfile — an older npm drops the "libc" fields a newer one records — so
 # every `make install` left a dirty lockfile in the checkout. A package.json the
 # lockfile no longer matches now fails the build instead of being papered over.
+#
+# npm ci only when it has something to do, and never under a borrower. A phase
+# run's worktree borrows this checkout's web/node_modules through a symlink
+# (internal/worktree/deplend.go), and npm ci starts by deleting the whole tree:
+# observed 2026-10-19, `make install` here wiped it under a running phase, and
+# the next build died on "vite: command not found". So:
+#   - the sha256 of package-lock.json is stamped into node_modules after a
+#     successful npm ci; a matching stamp skips npm ci entirely (npm ci deletes
+#     the stamp along with everything else, so an interrupted install never
+#     leaves a stamp that lies);
+#   - on a miss, every symlink named node_modules under the worktree roots is
+#     resolved, and if any lands on THIS node_modules the build refuses and
+#     names them. The roots are the daemon's own (worktree.DefaultRoot under
+#     $HOME — cmd/swarmery builds its Manager without a Root) and the harness's
+#     .claude/worktrees in the MAIN checkout, found through git's common dir so
+#     a build run from inside a worktree still looks in the right place. The
+#     comparison is on the physical path, so a borrower's own build (its
+#     node_modules IS the link) refuses too instead of wiping the lender.
+# BUILD_WEB_DIR / BUILD_WEB_NPM / BUILD_WEB_LEND_ROOTS are overridable like
+# INSTALL_STEP / INSTALL_LOCK; scripts/tests/make-build-web-stamp.test.sh points
+# them at a temp dir and a fake npm. `BUILD_WEB_LEND_ROOTS=` skips the check.
+BUILD_WEB_DIR        := web
+BUILD_WEB_NPM        := npm
+BUILD_WEB_STAMP      := .swarmery-lock-sha
+GIT_COMMON_DIR        = $(shell git rev-parse --path-format=absolute --git-common-dir 2>/dev/null)
+BUILD_WEB_LEND_ROOTS  = $(HOME)/.swarmery/worktrees $(if $(GIT_COMMON_DIR),$(abspath $(GIT_COMMON_DIR)/..)/.claude/worktrees)
+
 build-web:
-	cd web && rm -rf dist/assets dist/index.html && npm ci && npm run build
+	@set -e; cd '$(BUILD_WEB_DIR)'; \
+	rm -rf dist/assets dist/index.html; \
+	if command -v shasum >/dev/null 2>&1; then \
+		want=$$(shasum -a 256 package-lock.json | awk '{print $$1}'); \
+	else \
+		want=$$(sha256sum package-lock.json | awk '{print $$1}'); \
+	fi; \
+	if [ -z "$$want" ]; then echo "build-web: cannot hash $(BUILD_WEB_DIR)/package-lock.json" >&2; exit 1; fi; \
+	have=$$(cat 'node_modules/$(BUILD_WEB_STAMP)' 2>/dev/null || true); \
+	if [ "$$want" = "$$have" ]; then \
+		echo "→ build-web: node_modules already matches package-lock.json — skipping npm ci"; \
+	else \
+		if self=$$(cd -P node_modules 2>/dev/null && pwd -P); then \
+			borrowers=$$(for root in $(BUILD_WEB_LEND_ROOTS); do \
+				if [ -d "$$root" ]; then find "$$root" -maxdepth 7 -name node_modules -prune -type l -print 2>/dev/null || true; fi; \
+			done | while IFS= read -r link; do \
+				target=$$(cd -P "$$link" 2>/dev/null && pwd -P) || continue; \
+				if [ "$$target" = "$$self" ]; then printf '  %s\n' "$$link"; fi; \
+			done); \
+			if [ -n "$$borrowers" ]; then \
+				echo "build-web: refusing to run npm ci — $$self is lent to these worktrees (internal/worktree/deplend.go):" >&2; \
+				printf '%s\n' "$$borrowers" >&2; \
+				echo "npm ci would delete it under them. Remove those worktrees first, or rerun with BUILD_WEB_LEND_ROOTS= to skip this check." >&2; \
+				exit 1; \
+			fi; \
+		fi; \
+		echo "$(BUILD_WEB_NPM) ci"; \
+		$(BUILD_WEB_NPM) ci; \
+		printf '%s\n' "$$want" > 'node_modules/$(BUILD_WEB_STAMP)'; \
+	fi; \
+	echo "$(BUILD_WEB_NPM) run build"; \
+	$(BUILD_WEB_NPM) run build
 
 build-go:
 	go build -ldflags "-X $(VERSION_PKG).Build=$(BUILD_ID)" -o swarmery ./cmd/swarmery
