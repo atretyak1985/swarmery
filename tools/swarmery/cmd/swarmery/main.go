@@ -75,6 +75,7 @@ import (
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/planrun"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/playbooks"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/plugindrift"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/pprofopt"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/procwatch"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/prune"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/quota"
@@ -1818,6 +1819,20 @@ func cmdServe(args []string) error {
 	log.SetOutput(logbuf.NewWriter(ring, "daemon", os.Stderr))
 	api.AttachLogRing(ring)
 	api.AttachUptime(bootStart)
+
+	// Opt-in profiling listener (internal/pprofopt): off unless SWARMERY_PPROF
+	// names a loopback address. Started before the store opens so a daemon that
+	// wedges during migration or the startup replay can still be dumped. A bad
+	// value is refused and logged, never fatal: it is a diagnostic knob.
+	if addr, on, perr := pprofopt.FromEnv(os.Getenv); perr != nil {
+		log.Printf("warning: pprof listener NOT started: %v", perr)
+	} else if on {
+		if _, bound, lerr := pprofopt.Start(addr); lerr != nil {
+			log.Printf("warning: pprof listener NOT started: %v", lerr)
+		} else {
+			log.Printf("swarmery pprof listening on http://%s/debug/pprof/ (%s)", bound, pprofopt.Env)
+		}
+	}
 
 	// Under launchd PATH is /usr/bin:/bin:/usr/sbin:/sbin. `claude` itself is
 	// found by claudebin's probes, but the stdio MCP servers it then starts

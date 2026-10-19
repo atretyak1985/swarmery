@@ -18,6 +18,11 @@ package api
 //
 // Two more additive fields follow the same rule — pluginDrift{error,warn} and
 // autoModeClassifier{noVerdictLastHour,sessionsLastHour,lastAt,alerting}.
+//
+// db{openConnections,inUse,waitCount,waitDurationMs} is the connection pool's
+// own counters (sql.DB.Stats). It runs no query, so it is the one part of this
+// response that stays true while the store's single connection is held by
+// someone else — the first thing to read when health itself is slow.
 
 import (
 	"database/sql"
@@ -66,6 +71,30 @@ type healthDTO struct {
 	// permission check is answering: how many tool calls it left without a
 	// verdict in the last hour, and whether the outage alert is open.
 	AutoModeClassifier healthAutoMode `json:"autoModeClassifier"`
+	// DB is the database pool's counters, read from sql.DB.Stats() with no
+	// query. The store runs on one connection (internal/store.Open), so a
+	// waitCount climbing while inUse stays 1 names a long holder of it.
+	DB healthDBPool `json:"db"`
+}
+
+// healthDBPool is the subset of sql.DBStats that tells a starved pool from a
+// slow query: how many connections exist, how many are checked out, and how
+// many callers have queued for one (cumulative since open) and for how long.
+type healthDBPool struct {
+	OpenConnections int   `json:"openConnections"`
+	InUse           int   `json:"inUse"`
+	WaitCount       int64 `json:"waitCount"`
+	WaitDurationMs  int64 `json:"waitDurationMs"`
+}
+
+// dbPoolStats maps sql.DBStats onto the health shape.
+func dbPoolStats(st sql.DBStats) healthDBPool {
+	return healthDBPool{
+		OpenConnections: st.OpenConnections,
+		InUse:           st.InUse,
+		WaitCount:       st.WaitCount,
+		WaitDurationMs:  st.WaitDuration.Milliseconds(),
+	}
 }
 
 // healthAutoMode is the auto mode classifier summary (internal/automode). Zero
@@ -119,6 +148,9 @@ type healthDispatch struct {
 // fusion-phase-9 operational fields are best-effort: a failed sub-query leaves
 // its field at the zero value rather than failing the whole endpoint.
 func (h *Handler) health(w http.ResponseWriter, r *http.Request) {
+	// Read the pool counters before any query below queues for the connection:
+	// this snapshot is what the pool looked like when the probe arrived.
+	pool := dbPoolStats(h.DB.Stats())
 	var size int64
 	err := h.DB.QueryRow(
 		`SELECT page_count * page_size FROM pragma_page_count(), pragma_page_size()`).Scan(&size)
@@ -137,6 +169,7 @@ func (h *Handler) health(w http.ResponseWriter, r *http.Request) {
 		PluginDrift:      h.pluginDriftCounts(),
 
 		AutoModeClassifier: h.autoModeHealth(time.Now()),
+		DB:                 pool,
 	}
 	if !processStart.IsZero() {
 		dto.UptimeSec = int64(time.Since(processStart).Seconds())
