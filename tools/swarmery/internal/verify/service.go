@@ -36,6 +36,15 @@ type Trees interface {
 	DiffFileCount(worktreePath, base string) (int, error)
 }
 
+// CheckoutProbe refuses a worktree with tracked files missing against its own
+// HEAD — the leftover of a killed `git worktree remove` (see
+// worktree.ErrIncompleteCheckout). Satisfied by *worktree.Manager; NewService wires
+// it whenever its Trees argument implements it. Grading such a tree would stamp a
+// FAIL on code nobody wrote that way.
+type CheckoutProbe interface {
+	CheckComplete(worktreePath string) error
+}
+
 // Service owns verification: single-flight per task, tree-hash cache gate, the
 // read-only run + verdict parse + stamp, fix-task creation with root-inherited
 // retry budget, the stale-run reaper, and startup heal. Async execution is the
@@ -46,9 +55,13 @@ type Service struct {
 	Cfg   Config
 	Run   Runner
 	Trees Trees
-	UUID  func() string    // verifier session-uuid generator (test seam)
-	now   func() time.Time // clock (test seam)
-	Go    func(func())     // async-spawn seam (nil ⇒ real `go`), mirrors dispatch.Go
+	// Checkout, when non-nil, gates grading on a complete checkout: an incomplete
+	// one stamps INCONCLUSIVE (unverifiable), never FAIL, and spawns no run.
+	Checkout CheckoutProbe
+
+	UUID func() string    // verifier session-uuid generator (test seam)
+	now  func() time.Time // clock (test seam)
+	Go   func(func())     // async-spawn seam (nil ⇒ real `go`), mirrors dispatch.Go
 	// Notify emits task_updated (wired to api.publishTaskUpdated) so a stamped
 	// verdict reaches the board over the FROZEN WS bus — no new message type.
 	Notify func(taskID int64)
@@ -89,12 +102,16 @@ func NewService(db *sql.DB, cfg Config, r Runner, trees Trees) *Service {
 	if cfg.DaemonPort <= 0 {
 		cfg.DaemonPort = DefaultDaemonPort
 	}
-	return &Service{
+	svc := &Service{
 		DB: db, Cfg: cfg, Run: r, Trees: trees,
 		UUID: runcore.NewUUID,
 		now:  time.Now,
 		sem:  make(chan struct{}, conc),
 	}
+	if probe, ok := trees.(CheckoutProbe); ok {
+		svc.Checkout = probe
+	}
+	return svc
 }
 
 func (s *Service) clock() time.Time {
@@ -247,6 +264,14 @@ func (s *Service) VerifyTarget(ctx context.Context, t Target) error {
 	// reaper fires). Concurrency cap around the actual work.
 	s.sem <- struct{}{}
 	defer func() { <-s.sem }()
+
+	// Gate: a complete checkout. A half-deleted tree (a killed teardown) is not the
+	// executor's work — grading it would FAIL code that does not exist that way.
+	if s.Checkout != nil {
+		if err := s.Checkout.CheckComplete(t.WorktreePath); err != nil {
+			return s.stampInconclusive(t, runID, "", ClassUnverifiable, "worktree is incomplete, refusing to grade it: "+err.Error())
+		}
+	}
 
 	// Step 2: tree-hash gate. A cache hit for (tree_hash, target_key) stamps the
 	// cached verdict and records a detail='cache' run WITHOUT spawning. A

@@ -3,7 +3,6 @@ package worktree
 import (
 	"errors"
 	"fmt"
-	"log"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -70,6 +69,14 @@ var (
 	// default-branch tip — that substitution is exactly the "phase started on a tree
 	// without its dependency's work" failure an explicit start ref exists to prevent.
 	ErrStartRefUnresolved = errors.New("worktree: start ref does not resolve to a commit")
+	// ErrIncompleteCheckout: a checkout about to be handed out again has tracked
+	// files missing against its own HEAD. `git worktree remove` deletes the working
+	// tree BEFORE it drops .git/worktrees/<id>, so a remove killed part-way (the git
+	// timeout, a daemon restart) leaves a half-deleted checkout still registered on
+	// its run branch — exactly what warm reuse looks for. Handing it out ran a phase
+	// on a tree without its go.mod (2026-10-19, 222 files). Refused, never repaired
+	// or removed here: whether what is left holds work is the operator's call.
+	ErrIncompleteCheckout = errors.New("worktree: checkout is missing tracked files")
 )
 
 // staleLockAge is how old a .git/worktrees/*/index.lock must be before the
@@ -300,70 +307,39 @@ func (m *Manager) acquireAt(repoRoot, projectSlug, taskID, startRef string, exis
 		return Acquired{}, fmt.Errorf("%w: %s is on %s", ErrBranchBusy, other, branch)
 	}
 
-	// reuseBranchRef forces the create step below to check the ALREADY-EXISTING
-	// branch out (no -b, see AcquireExisting) instead of minting a fresh one.
-	// True for AcquireExisting's own contract, and flipped on below when a
-	// branch-matched worktree turns out to be an incomplete checkout: its branch
-	// survives the force-remove that follows, so re-adding with -b would fail
-	// ("a branch named ... already exists").
-	reuseBranchRef := existing
-
 	// Invariant 4: our path already registered?
 	if reg, ok := entries.byPath(path); ok {
 		if reg.branch == branch {
-			// Branch-matched → a warm-reuse CANDIDATE, but only once the working
-			// tree is proven complete. A `worktree add` killed mid-checkout by
-			// checkoutTimeout (git.go) registers the branch and the directory
-			// before it finishes writing every tracked file, so a matched branch
-			// alone is not enough (#571 / card T-tcs71j: 222 tracked files left
-			// deleted-on-disk, silently warm-reused on every retry after).
-			n, probeErr := m.deletedTrackedCount(path)
-			if probeErr != nil {
-				// Treat a status-probe failure the same as "incomplete": the cost
-				// of an unneeded recreate is low, the cost of silently handing out
-				// a broken tree is a wasted executor run.
-				log.Printf("worktree: %s status probe failed, treating as incomplete: %v", path, probeErr)
-				n = 1
-			}
-			if n == 0 {
-				// Complete → warm reuse as-is. Still worth a sync pass: the
-				// project's untracked .claude/ files may have changed (or been added)
-				// since this worktree was first acquired.
-				syncUntrackedConfig(repoRoot, path)
-				// Same reasoning for the dependency tree: a warm worktree may predate
-				// the source checkout's first install, or have had its link removed by
-				// a run that reinstalled.
-				lendDependencies(repoRoot, path)
-				reused := startSHA
-				// An existing branch checked out at our path IS the branch at its tip
-				// (startSHA), so there is no fork point to report.
-				if startRef != "" && !existing {
-					// The branch predates this call, so it was not cut from startSHA as
-					// resolved NOW. Report where it actually forks from (see AcquireAt).
-					reused, err = m.mergeBase(repoRoot, branch, startSHA)
-					if err != nil {
-						return Acquired{}, err
-					}
-				}
-				return Acquired{Path: path, Branch: branch, StartPoint: reused}, nil
-			}
-			log.Printf("worktree: %s on %s has %d tracked files missing from disk (partial checkout) — recreating instead of warm-reusing", path, branch, n)
-			if _, err := m.Git.Run(repoRoot, "worktree", "remove", "--force", path); err != nil {
-				return Acquired{}, fmt.Errorf("worktree: recreate incomplete checkout %s: %w", path, err)
-			}
-			// The branch itself survives the remove above — recreate against its
-			// own tip rather than minting a fresh one under -b.
-			reuseBranchRef = true
-			startSHA, err = m.resolveCommit(repoRoot, "refs/heads/"+branch)
-			if err != nil {
+			// As-is — but never half-deleted: a killed teardown leaves exactly this
+			// registration behind (see ErrIncompleteCheckout).
+			if err := m.CheckComplete(path); err != nil {
 				return Acquired{}, err
 			}
-		} else {
-			// Foreign branch / detached at our path → reclaim in place: remove then
-			// recreate below.
-			if _, err := m.Git.Run(repoRoot, "worktree", "remove", "--force", path); err != nil {
-				return Acquired{}, fmt.Errorf("worktree: reclaim %s: %w", path, err)
+			// Branch-matched → warm reuse as-is. Still worth a sync pass: the
+			// project's untracked .claude/ files may have changed (or been added)
+			// since this worktree was first acquired.
+			syncUntrackedConfig(repoRoot, path)
+			// Same reasoning for the dependency tree: a warm worktree may predate
+			// the source checkout's first install, or have had its link removed by
+			// a run that reinstalled.
+			lendDependencies(repoRoot, path)
+			reused := startSHA
+			// An existing branch checked out at our path IS the branch at its tip
+			// (startSHA), so there is no fork point to report.
+			if startRef != "" && !existing {
+				// The branch predates this call, so it was not cut from startSHA as
+				// resolved NOW. Report where it actually forks from (see AcquireAt).
+				reused, err = m.mergeBase(repoRoot, branch, startSHA)
+				if err != nil {
+					return Acquired{}, err
+				}
 			}
+			return Acquired{Path: path, Branch: branch, StartPoint: reused}, nil
+		}
+		// Foreign branch / detached at our path → reclaim in place: remove then
+		// recreate below.
+		if _, err := m.Git.Run(repoRoot, "worktree", "remove", "--force", path); err != nil {
+			return Acquired{}, fmt.Errorf("worktree: reclaim %s: %w", path, err)
 		}
 	} else if dirExists(path) {
 		// Path exists on disk but is not a registered worktree (crash leftover,
@@ -393,28 +369,29 @@ func (m *Manager) acquireAt(repoRoot, projectSlug, taskID, startRef string, exis
 	// An existing-branch add mints nothing: there is never a ref to roll back.
 	branchExisted, branchProbeErr := true, error(nil)
 	addArgs := []string{"worktree", "add", path, branch}
-	if !reuseBranchRef {
+	if !existing {
 		branchExisted, branchProbeErr = m.branchExists(repoRoot, branch)
 		addArgs = []string{"worktree", "add", "-b", branch, path, startSHA}
 	}
 
-	if out, err := m.Git.Run(repoRoot, addArgs...); err != nil {
-		// Undo any partial checkout the failed add left registered — BEFORE the
-		// branch rollback below. `worktree add` creates the registration and
-		// checks the branch out before it writes a single tracked file, so a kill
-		// mid-checkout (checkoutTimeout, git.go) leaves the branch checked out at
-		// path; attempted in the other order, `branch -D` would fail silently
-		// (git refuses to delete a checked-out branch) and the partial checkout
-		// would linger for the next Acquire to find. Best-effort: a `worktree add`
-		// that failed before registering anything makes this a harmless no-op.
+	// undoAdd tears down whatever this call's add left behind. The worktree goes
+	// first: `worktree add` registers the path and checks the branch out before it
+	// writes tracked files, so a kill mid-checkout leaves the branch checked out at
+	// path, and `branch -D` refuses a checked-out branch. Best-effort — an add that
+	// failed before registering anything makes the remove a harmless no-op. Then
+	// roll back a ref THIS call minted — never one that predates it (that branch
+	// may hold the only copy of a crashed run's commits).
+	undoAdd := func() {
 		_, _ = m.Git.Run(repoRoot, "worktree", "remove", "--force", path)
-		// Roll back a ref this failed add just minted — never one that predates it
-		// (that branch may hold the only copy of a crashed run's commits).
 		if !branchExisted && branchProbeErr == nil {
 			if minted, probeErr := m.branchExists(repoRoot, branch); probeErr == nil && minted {
 				_, _ = m.Git.Run(repoRoot, "branch", "-D", branch)
 			}
 		}
+	}
+
+	if out, err := m.Git.Run(repoRoot, addArgs...); err != nil {
+		undoAdd()
 		// Git says "already exists" for two unrelated blockers. Discriminate on the
 		// half of each message that is NOT shared, most specific first.
 		switch {
@@ -432,46 +409,20 @@ func (m *Manager) acquireAt(repoRoot, projectSlug, taskID, startRef string, exis
 		}
 		return Acquired{}, fmt.Errorf("worktree: add %s: %w", path, err)
 	}
+	// An add that exits 0 has nothing on disk worth keeping yet, so a tree it left
+	// incomplete — or one the probe cannot vouch for — is torn down and refused,
+	// never handed out (fail closed).
+	if err := m.CheckComplete(path); err != nil {
+		undoAdd()
+		return Acquired{}, err
+	}
 	// The worktree now has whatever repoRoot had COMMITTED — lend it whatever
 	// repoRoot has UNCOMMITTED too (issue #192), before handing it to a caller:
 	// the untracked .claude/ config, and the gitignored dependency tree without
 	// which the run's own verification command cannot execute.
 	syncUntrackedConfig(repoRoot, path)
 	lendDependencies(repoRoot, path)
-	// Defense in depth: `worktree add` reporting success does not itself prove
-	// every tracked file landed on disk (a partial write that still exits 0 is
-	// unlikely but cheap to guard). Unlike the warm-reuse path above, there is no
-	// safe inline self-heal here — a freshly created checkout that is already
-	// broken signals a deeper filesystem problem, not a stale leftover — so this
-	// refuses rather than recreates.
-	if n, probeErr := m.deletedTrackedCount(path); probeErr != nil {
-		log.Printf("worktree: %s post-checkout status probe failed: %v", path, probeErr)
-	} else if n > 0 {
-		return Acquired{}, fmt.Errorf("worktree: %s checked out incomplete (%d tracked files missing)", path, n)
-	}
 	return Acquired{Path: path, Branch: branch, StartPoint: startSHA}, nil
-}
-
-// deletedTrackedCount reports how many tracked files are missing from path's
-// working tree relative to its own index — the signature of a `worktree add`
-// interrupted mid-checkout (checkoutTimeout, git.go; #571 / card T-tcs71j).
-//
-// Only the WORKTREE-status column (porcelain byte index 1) counts, never the
-// index column: a file an executor genuinely `git rm`'d as part of its own
-// uncommitted work is a real edit git already knows about, and must not be
-// mistaken for a broken checkout.
-func (m *Manager) deletedTrackedCount(path string) (int, error) {
-	out, err := m.Git.Run(path, "status", "--porcelain=v1", "-z", "--untracked-files=no")
-	if err != nil {
-		return 0, fmt.Errorf("worktree: status %s: %w", path, err)
-	}
-	n := 0
-	for _, rec := range strings.Split(out, "\x00") {
-		if len(rec) >= 2 && rec[1] == 'D' {
-			n++
-		}
-	}
-	return n, nil
 }
 
 // orphanSuffix marks a leftover directory freeOrphanPath moved aside. The leaf of
@@ -611,6 +562,13 @@ func (m *Manager) mergeBase(repoRoot, branch, sha string) (string, error) {
 // Remove tears down an acquired worktree. keepBranch preserves swarm/<taskID>
 // (e.g. so its commits remain reachable for merge); otherwise the branch is
 // deleted too.
+//
+// A remove killed part-way (checkoutTimeout in git.go, a daemon restart) leaves
+// exactly the leftover ErrIncompleteCheckout describes: git deletes the working
+// tree file by file in readdir order BEFORE it drops .git/worktrees/<id>, so the
+// checkout stays registered on its branch with an intact index and only some of
+// its tracked files on disk. Every hand-out path (warm reuse, ReattachPath, the
+// verifier) refuses such a tree via CheckComplete rather than reusing it.
 func (m *Manager) Remove(repoRoot string, a Acquired, keepBranch bool) error {
 	if _, err := m.Git.Run(repoRoot, "worktree", "remove", "--force", a.Path); err != nil {
 		// A teardown that leaves the directory behind is what makes the NEXT Acquire
