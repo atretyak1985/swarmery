@@ -65,6 +65,9 @@ func (m *Manager) ReattachPath(repoRoot, path string) (Acquired, error) {
 	// Already there and on the right branch: idempotent success, so a caller may
 	// call this unconditionally before every resume.
 	if reg, ok := entries.byPath(path); ok && reg.branch == branch && dirExists(path) {
+		if err := m.CheckComplete(path); err != nil {
+			return Acquired{}, err
+		}
 		syncUntrackedConfig(repoRoot, path)
 		lendDependencies(repoRoot, path)
 		return m.acquiredFor(repoRoot, path, branch)

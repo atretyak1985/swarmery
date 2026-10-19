@@ -69,6 +69,14 @@ var (
 	// default-branch tip — that substitution is exactly the "phase started on a tree
 	// without its dependency's work" failure an explicit start ref exists to prevent.
 	ErrStartRefUnresolved = errors.New("worktree: start ref does not resolve to a commit")
+	// ErrIncompleteCheckout: a checkout about to be handed out again has tracked
+	// files missing against its own HEAD. `git worktree remove` deletes the working
+	// tree BEFORE it drops .git/worktrees/<id>, so a remove killed part-way (the git
+	// timeout, a daemon restart) leaves a half-deleted checkout still registered on
+	// its run branch — exactly what warm reuse looks for. Handing it out ran a phase
+	// on a tree without its go.mod (2026-10-19, 222 files). Refused, never repaired
+	// or removed here: whether what is left holds work is the operator's call.
+	ErrIncompleteCheckout = errors.New("worktree: checkout is missing tracked files")
 )
 
 // staleLockAge is how old a .git/worktrees/*/index.lock must be before the
@@ -302,6 +310,11 @@ func (m *Manager) acquireAt(repoRoot, projectSlug, taskID, startRef string, exis
 	// Invariant 4: our path already registered?
 	if reg, ok := entries.byPath(path); ok {
 		if reg.branch == branch {
+			// As-is — but never half-deleted: a killed teardown leaves exactly this
+			// registration behind (see ErrIncompleteCheckout).
+			if err := m.CheckComplete(path); err != nil {
+				return Acquired{}, err
+			}
 			// Branch-matched → warm reuse as-is. Still worth a sync pass: the
 			// project's untracked .claude/ files may have changed (or been added)
 			// since this worktree was first acquired.
@@ -361,14 +374,24 @@ func (m *Manager) acquireAt(repoRoot, projectSlug, taskID, startRef string, exis
 		addArgs = []string{"worktree", "add", "-b", branch, path, startSHA}
 	}
 
-	if out, err := m.Git.Run(repoRoot, addArgs...); err != nil {
-		// Roll back a ref this failed add just minted — never one that predates it
-		// (that branch may hold the only copy of a crashed run's commits).
+	// undoAdd tears down whatever this call's add left behind. The worktree goes
+	// first: `worktree add` registers the path and checks the branch out before it
+	// writes tracked files, so a kill mid-checkout leaves the branch checked out at
+	// path, and `branch -D` refuses a checked-out branch. Best-effort — an add that
+	// failed before registering anything makes the remove a harmless no-op. Then
+	// roll back a ref THIS call minted — never one that predates it (that branch
+	// may hold the only copy of a crashed run's commits).
+	undoAdd := func() {
+		_, _ = m.Git.Run(repoRoot, "worktree", "remove", "--force", path)
 		if !branchExisted && branchProbeErr == nil {
 			if minted, probeErr := m.branchExists(repoRoot, branch); probeErr == nil && minted {
 				_, _ = m.Git.Run(repoRoot, "branch", "-D", branch)
 			}
 		}
+	}
+
+	if out, err := m.Git.Run(repoRoot, addArgs...); err != nil {
+		undoAdd()
 		// Git says "already exists" for two unrelated blockers. Discriminate on the
 		// half of each message that is NOT shared, most specific first.
 		switch {
@@ -385,6 +408,13 @@ func (m *Manager) acquireAt(repoRoot, projectSlug, taskID, startRef string, exis
 			return Acquired{}, fmt.Errorf("%w: %s", ErrPathOccupied, path)
 		}
 		return Acquired{}, fmt.Errorf("worktree: add %s: %w", path, err)
+	}
+	// An add that exits 0 has nothing on disk worth keeping yet, so a tree it left
+	// incomplete — or one the probe cannot vouch for — is torn down and refused,
+	// never handed out (fail closed).
+	if err := m.CheckComplete(path); err != nil {
+		undoAdd()
+		return Acquired{}, err
 	}
 	// The worktree now has whatever repoRoot had COMMITTED — lend it whatever
 	// repoRoot has UNCOMMITTED too (issue #192), before handing it to a caller:
@@ -532,6 +562,13 @@ func (m *Manager) mergeBase(repoRoot, branch, sha string) (string, error) {
 // Remove tears down an acquired worktree. keepBranch preserves swarm/<taskID>
 // (e.g. so its commits remain reachable for merge); otherwise the branch is
 // deleted too.
+//
+// A remove killed part-way (checkoutTimeout in git.go, a daemon restart) leaves
+// exactly the leftover ErrIncompleteCheckout describes: git deletes the working
+// tree file by file in readdir order BEFORE it drops .git/worktrees/<id>, so the
+// checkout stays registered on its branch with an intact index and only some of
+// its tracked files on disk. Every hand-out path (warm reuse, ReattachPath, the
+// verifier) refuses such a tree via CheckComplete rather than reusing it.
 func (m *Manager) Remove(repoRoot string, a Acquired, keepBranch bool) error {
 	if _, err := m.Git.Run(repoRoot, "worktree", "remove", "--force", a.Path); err != nil {
 		// A teardown that leaves the directory behind is what makes the NEXT Acquire
