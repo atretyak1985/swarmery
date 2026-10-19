@@ -1148,6 +1148,10 @@ msgstr "n/a"
 msgid "Name"
 msgstr "Name"
 
+#: src/pages/plans/CriterionLint.tsx
+msgid "Names a settings file — cite where Claude Code reads it (config-channels)"
+msgstr "Names a settings file — cite where Claude Code reads it (config-channels)"
+
 #: src/pages/Routines.tsx
 #: src/pages/Routines.tsx
 msgid "never run"
