@@ -151,21 +151,9 @@ func (l *Labeler) Run(ctx context.Context) (int, error) {
 			enabled = append(enabled, q)
 		}
 	}
-	ph := strings.TrimSuffix(strings.Repeat("?,", len(enabled)), ",")
 	args := append([]any{cutoff}, enabled...)
 	args = append(args, len(enabled), QD2TaskType, QD2Outcome, QD2Failure, d2MaxFailures, batch)
-	rows, err := e.DB.QueryContext(ctx, `
-		SELECT s.session_uuid, COALESCE(s.custom_title, s.title, ''), COALESCE(s.started_at, ''),
-		       COALESCE(s.ended_at, ''), COALESCE(s.outcome, '')
-		  FROM sessions s
-		 WHERE s.ended_at IS NOT NULL AND s.ended_at <= ? AND s.hidden = 0
-		   AND EXISTS (SELECT 1 FROM turns t WHERE t.session_id = s.id)
-		   AND (SELECT COUNT(DISTINCT d.question_id) FROM decisions d
-		         WHERE d.subject = s.session_uuid AND d.error = '' AND d.question_id IN (`+ph+`)) < ?
-		   AND (SELECT COUNT(*) FROM decisions d
-		         WHERE d.subject = s.session_uuid AND d.error <> '' AND d.question_id IN (?, ?, ?)) < ?
-		 ORDER BY s.ended_at DESC
-		 LIMIT ?`, args...)
+	rows, err := e.DB.QueryContext(ctx, d2CandidatesQuery(len(enabled)), args...)
 	if err != nil {
 		return 0, err
 	}
@@ -196,6 +184,34 @@ func (l *Labeler) Run(ctx context.Context) (int, error) {
 		}
 	}
 	return n, nil
+}
+
+// d2CandidatesQuery selects the finished, unlabelled sessions Run asks about,
+// for `enabled` D2 questions (one placeholder each in the first count).
+//
+// The unary + on both d.question_id terms is load-bearing: it keeps them out of
+// index selection, so each per-session count reads only that session's rows
+// through idx_decisions_subject. The store has no ANALYZE statistics, and
+// without them SQLite planned the error-free count through
+// idx_decisions_question — every decision for those questions, once per
+// session. Measured 2026-10-19 on a 4.5k-session, 14k-decision store: 15.2 s
+// per pass against 0.025 s, holding the single store connection so /api/*
+// timed out while the labeler ran. TestD2CandidatesQueryUsesSubjectIndex pins
+// the plan.
+func d2CandidatesQuery(enabled int) string {
+	ph := strings.TrimSuffix(strings.Repeat("?,", enabled), ",")
+	return `
+		SELECT s.session_uuid, COALESCE(s.custom_title, s.title, ''), COALESCE(s.started_at, ''),
+		       COALESCE(s.ended_at, ''), COALESCE(s.outcome, '')
+		  FROM sessions s
+		 WHERE s.ended_at IS NOT NULL AND s.ended_at <= ? AND s.hidden = 0
+		   AND EXISTS (SELECT 1 FROM turns t WHERE t.session_id = s.id)
+		   AND (SELECT COUNT(DISTINCT d.question_id) FROM decisions d
+		         WHERE d.subject = s.session_uuid AND d.error = '' AND +d.question_id IN (` + ph + `)) < ?
+		   AND (SELECT COUNT(*) FROM decisions d
+		         WHERE d.subject = s.session_uuid AND d.error <> '' AND +d.question_id IN (?, ?, ?)) < ?
+		 ORDER BY s.ended_at DESC
+		 LIMIT ?`
 }
 
 // d2MaxFailures is how many errored D2 calls a session may collect before the

@@ -156,9 +156,11 @@ func TestShipEvidence(t *testing.T) {
 // The labeler runs gitActivity per session over the single store connection; a
 // plan that scans by status or type instead of by session froze the daemon's
 // API for minutes on a real store (see gitActivityQuery).
-func TestGitActivityQueryUsesSessionIndex(t *testing.T) {
-	db := openDB(t)
-	rows, err := db.Query("EXPLAIN QUERY PLAN "+gitActivityQuery, "s", d2EvidenceBashRows)
+// explainPlan returns the detail column of EXPLAIN QUERY PLAN for q, one entry
+// per plan step, against a migrated store (so the real indexes exist).
+func explainPlan(t *testing.T, db *sql.DB, q string, args ...any) []string {
+	t.Helper()
+	rows, err := db.Query("EXPLAIN QUERY PLAN "+q, args...)
 	if err != nil {
 		t.Fatalf("explain: %v", err)
 	}
@@ -175,6 +177,12 @@ func TestGitActivityQueryUsesSessionIndex(t *testing.T) {
 	if err := rows.Err(); err != nil {
 		t.Fatalf("rows: %v", err)
 	}
+	return plan
+}
+
+func TestGitActivityQueryUsesSessionIndex(t *testing.T) {
+	db := openDB(t)
+	plan := explainPlan(t, db, gitActivityQuery, "s", d2EvidenceBashRows)
 	var events string
 	for _, d := range plan {
 		if strings.Contains(d, " events ") {

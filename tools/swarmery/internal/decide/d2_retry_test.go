@@ -3,9 +3,34 @@ package decide
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 )
+
+// Run's candidate query held the single store connection for the whole pass
+// when its per-session decision counts were planned through
+// idx_decisions_question (see d2CandidatesQuery).
+func TestD2CandidatesQueryUsesSubjectIndex(t *testing.T) {
+	db := openDB(t)
+	plan := explainPlan(t, db, d2CandidatesQuery(3),
+		"2026-01-01T00:00:00.000Z", QD2TaskType, QD2Outcome, QD2Failure, 3,
+		QD2TaskType, QD2Outcome, QD2Failure, d2MaxFailures, 20)
+	var decisions []string
+	for _, d := range plan {
+		if strings.Contains(d, " d ") {
+			decisions = append(decisions, d)
+		}
+	}
+	if len(decisions) != 2 {
+		t.Fatalf("want 2 decisions steps, got %q (plan: %q)", decisions, plan)
+	}
+	for _, d := range decisions {
+		if !strings.Contains(d, "idx_decisions_subject") {
+			t.Errorf("decisions step = %q, want a search through idx_decisions_subject (plan: %q)", d, plan)
+		}
+	}
+}
 
 // failOn errors only on the listed questions, answering the rest.
 type failOn struct {
