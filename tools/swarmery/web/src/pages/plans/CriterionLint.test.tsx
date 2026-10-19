@@ -2,13 +2,20 @@
 //
 // CriterionLint (phase-run outcomes plan, phase 3): the Criteria tab's hint on
 // an UNMARKED, UNTICKED criterion that reads like landing work or a hand check,
-// with "Mark [LAND]" / "Mark [MANUAL]" calling PATCH …/docs {line, class}.
+// with "Mark [LAND]" / "Mark [MANUAL]" calling PATCH …/docs {line, class};
+// and (mods-link follow-ups, phase 6) a button-less hint on an unticked
+// criterion that names a settings file while the doc cites no config channel.
 // web/tsconfig.json EXCLUDES *.test.tsx — treat the casts as documentation.
 
 import { cleanup, fireEvent, render, screen, waitFor } from '../../test/render';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as api from '../../api';
-import { CriterionLint, criterionClassOf, looksLikeLandOrManual } from './CriterionLint';
+import {
+  CriterionLint,
+  criterionClassOf,
+  looksLikeLandOrManual,
+  looksLikeUncitedSettingsCriterion,
+} from './CriterionLint';
 
 vi.mock('../../api', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../../api')>()),
@@ -62,6 +69,7 @@ describe('CriterionLint', () => {
     line: 12,
     text: 'push the branch and open the PR',
     done: false,
+    docText: '# Phase 2\n',
   };
 
   it('renders nothing for a ticked, a marked or an ordinary criterion', () => {
@@ -94,5 +102,75 @@ describe('CriterionLint', () => {
     expect((await screen.findByRole('alert')).textContent).toBe('line is not an acceptance criterion');
     expect(api.markPlanCriterion).toHaveBeenCalledWith(7, 'phase-2-rollout.md', 12, 'MANUAL');
     expect(onMarked).not.toHaveBeenCalled();
+  });
+});
+
+describe('looksLikeUncitedSettingsCriterion', () => {
+  it.each([
+    'the option lands in settings.local.json',
+    '`~/.claude/settings.json` carries the hook',
+    'written to ~/.claude.json',
+    'managed-settings.json pins the model',
+    'pluginConfigs holds the token',
+    'run claude -p --settings scratch.json',
+  ])('flags %j in an uncited doc', (label) => {
+    expect(looksLikeUncitedSettingsCriterion(label, '# Phase\n')).toBe(true);
+  });
+
+  it.each([
+    'the settings page renders', // `settings` alone is not a file
+    'foo.settings.json is parsed', // some other file ending in settings.json
+    'pluginConfigsCache is warm', // only as a whole token
+  ])('leaves %j alone', (label) => {
+    expect(looksLikeUncitedSettingsCriterion(label, '# Phase\n')).toBe(false);
+  });
+
+  it('is silenced by either citation anywhere in the doc', () => {
+    const label = 'the option lands in settings.local.json';
+    expect(looksLikeUncitedSettingsCriterion(label, 'see resources/config-channels.md')).toBe(false);
+    expect(looksLikeUncitedSettingsCriterion(label, 'see docs/claude-cli-config-channels.md')).toBe(false);
+  });
+});
+
+describe('CriterionLint settings-file hint', () => {
+  const props = {
+    taskId: 7,
+    path: 'phase-6-settings.md',
+    line: 20,
+    text: 'the token lands in settings.local.json',
+    done: false,
+    docText: '# Phase 6\n\n## Acceptance Criteria\n',
+    onMarked: vi.fn(),
+  };
+  const hint = /Names a settings file — cite where Claude Code reads it/;
+
+  it('shows the hint, with no button, for an unticked match in an uncited doc', () => {
+    render(<CriterionLint {...props} />);
+    expect(screen.getByTestId('criterion-lint-settings').textContent).toMatch(hint);
+    expect(screen.queryByRole('button')).toBeNull();
+    expect(screen.queryByTestId('criterion-lint')).toBeNull();
+  });
+
+  it('shows no hint when the doc cites the config channels', () => {
+    const { container } = render(
+      <CriterionLint {...props} docText={`${props.docText}See resources/config-channels.md.\n`} />,
+    );
+    expect(container.innerHTML).toBe('');
+  });
+
+  it('shows no hint for a ticked criterion', () => {
+    const { container } = render(<CriterionLint {...props} done />);
+    expect(container.innerHTML).toBe('');
+  });
+
+  it('shows no hint when the criterion names no settings file', () => {
+    const { container } = render(<CriterionLint {...props} text="the handler validates input" />);
+    expect(container.innerHTML).toBe('');
+  });
+
+  it('shows both hints when a criterion is landing work and names a settings file', () => {
+    render(<CriterionLint {...props} text="merge the settings.json change" />);
+    expect(screen.getByTestId('criterion-lint')).toBeTruthy();
+    expect(screen.getByTestId('criterion-lint-settings')).toBeTruthy();
   });
 });
