@@ -123,6 +123,56 @@ re-validates a mod when its module files change, and shows its hooks, calls and
 env reads with risk badges. CI runs `bash scripts/tests/mods-ci.test.sh`: strict
 validate plus `claude plugin test` for every mod in this repo.
 
+## Live-check a mod on a dev daemon
+
+`claude plugin test` runs a mod against a test kit. To see it work in a real
+session against a real daemon, without touching the daemon you use every day,
+run a second daemon from a checkout with its own database and workspace:
+
+```bash
+make -C tools/swarmery build
+SWARMERY_WTJANITOR=0 tools/swarmery/swarmery serve -port 7788 \
+  -db <scratch>/dev.db -workspace-root <scratch>/workspace \
+  -plugin-drift-interval 0
+```
+
+- `SWARMERY_WTJANITOR=0` turns off the worktree janitor, which would otherwise
+  remove agent worktrees on the machine.
+- `-plugin-drift-interval 0` turns off the plugin drift scanner.
+- The dev daemon reuses `~/.swarmery/link-token`, so the mod authenticates to it
+  with no extra step.
+
+Point the mod at it with a scratch settings file. It turns off the installed
+copies, so only the checkout's mod runs, and sets the options under the
+`@inline` key a `--plugin-dir` plugin gets:
+
+```json
+{
+  "enabledPlugins": {
+    "swarmery-link@swarmery": false,
+    "guard-pack@swarmery": false
+  },
+  "pluginConfigs": {
+    "swarmery-link@inline": {
+      "options": { "daemonUrl": "http://127.0.0.1:7788", "control": true }
+    }
+  }
+}
+```
+
+Then run each check as a headless session in a scratch git repository, never in a
+checkout:
+
+```bash
+cd <scratch>/repo
+claude -p --model haiku --plugin-dir <swarmery-repo>/plugins/swarmery-link \
+  --settings <scratch>/settings.json "<prompt>"
+```
+
+Record what each check showed (the API response, the dashboard state, the log
+line) in the plan's phase doc as soon as it finishes, before you start the next
+one. When you are done, stop the dev daemon and every session you started.
+
 ## Where it degrades
 
 A mod is optional everywhere. The daemon still records every session from its
@@ -143,6 +193,28 @@ dashboard through it.
   ([`mods-format.md`](../tools/swarmery/docs/mods-format.md), M5).
 - **Claude Code older than 2.1.287** predates function hooks. The mods were not
   tried on such a build; upgrade before enabling one.
+- **Auto-mode classifier.** A `$.session.send` (with `swarm` on, a message to
+  another session) from a session whose permission mode runs the auto-mode
+  classifier can fail with "classifier gave no verdict". Relay the message from a
+  session in another permission mode.
+
+## Update a mod
+
+Pull the new version into your user-level install:
+
+```bash
+claude plugin marketplace update swarmery
+claude plugin update swarmery-link@swarmery --scope user
+claude plugin update guard-pack@swarmery --scope user
+```
+
+Pass `--scope user`. Without it the CLI may update a project-scoped install that
+belongs to some other checkout and leave yours as it was (observed 2026-10-19).
+The new version loads in the next session.
+
+If `claude plugin marketplace update swarmery` fails with
+`Failed to clone … swarmery..clone/.git`, the marketplace was not refreshed. A
+workaround is pending the operator's confirmation and is not documented yet.
 
 ## Disable
 
