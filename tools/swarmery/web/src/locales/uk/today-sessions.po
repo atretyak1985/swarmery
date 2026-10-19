@@ -1720,6 +1720,10 @@ msgstr "Цикл цього тижня"
 msgid "the OS process is alive (procwatch, 30s resolution); nothing written to the transcript during this stretch — typical for long builds/tests"
 msgstr "процес ОС живий (procwatch, крок 30 с); за цей час у транскрипт нічого не записано — типово для довгих збірок і тестів"
 
+#: src/pages/sessions/SwarmPanel.tsx
+msgid "The sending session's permission mode let the engine's classifier refuse the send. Relay from a session in another mode (e.g. acceptEdits or bypassPermissions)."
+msgstr "Через режим дозволів сесії-відправника класифікатор рушія відмовив у надсиланні. Надішліть із сесії в іншому режимі (напр., acceptEdits або bypassPermissions)."
+
 #: src/pages/SessionDetail.tsx
 msgid "the session ended its turn and waits for your typed reply"
 msgstr "сесія завершила хід і чекає на вашу відповідь"

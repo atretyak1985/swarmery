@@ -1720,6 +1720,10 @@ msgstr "The loop, this week"
 msgid "the OS process is alive (procwatch, 30s resolution); nothing written to the transcript during this stretch — typical for long builds/tests"
 msgstr "the OS process is alive (procwatch, 30s resolution); nothing written to the transcript during this stretch — typical for long builds/tests"
 
+#: src/pages/sessions/SwarmPanel.tsx
+msgid "The sending session's permission mode let the engine's classifier refuse the send. Relay from a session in another mode (e.g. acceptEdits or bypassPermissions)."
+msgstr "The sending session's permission mode let the engine's classifier refuse the send. Relay from a session in another mode (e.g. acceptEdits or bypassPermissions)."
+
 #: src/pages/SessionDetail.tsx
 msgid "the session ended its turn and waits for your typed reply"
 msgstr "the session ended its turn and waits for your typed reply"

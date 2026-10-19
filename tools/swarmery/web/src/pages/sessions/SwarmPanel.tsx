@@ -44,6 +44,24 @@ const shortUuid = (uuid: string): string => uuid.slice(0, 8);
 
 type SessionLabels = ReadonlyMap<number, string>;
 
+/**
+ * The engine refused the relay because the sending session's auto-mode
+ * classifier gave no verdict ("undeliverable: The server-side auto mode
+ * classifier gave no verdict…"). Not ours to fix; the hint says what to do.
+ */
+const isClassifierRefusal = (reason: string | null | undefined): boolean =>
+  /auto mode classifier/i.test(reason ?? '');
+
+function ClassifierHint({ reason }: { reason: string | null | undefined }): JSX.Element | null {
+  const { t } = useLingui();
+  if (!isClassifierRefusal(reason)) return null;
+  return (
+    <span data-testid="swarm-classifier-hint" className="block font-mono text-[10.5px] text-ink-dim">
+      {t`The sending session's permission mode let the engine's classifier refuse the send. Relay from a session in another mode (e.g. acceptEdits or bypassPermissions).`}
+    </span>
+  );
+}
+
 // --- feed ------------------------------------------------------------------
 
 function SessionLink({ ref_, labels }: { ref_: SwarmSessionRef | null; labels: SessionLabels }): JSX.Element | null {
@@ -103,6 +121,7 @@ function MessageRow({ m, labels }: { m: SwarmMessage; labels: SessionLabels }): 
         <span className="ml-auto shrink-0 text-ink-faint">{fmtAgo(m.at)}</span>
         <Delivery m={m} />
       </div>
+      {m.kind !== 'receive' && m.delivered === false && <ClassifierHint reason={m.reason} />}
       <p className="break-words whitespace-pre-wrap text-[12.5px] text-ink">
         {m.body}
         {m.truncated && (
@@ -195,12 +214,16 @@ const isPending = (s: Sent | null): boolean =>
  * A pending command whose feed row already settled (delivered set): the state
  * that row says it ended in. A lost link_command frame then cannot keep the
  * form locked — the swarm_message hint (or the bus's convergence refetch)
- * brings the row. Unchanged otherwise.
+ * brings the row. A failed command whose row later turns delivered (a late
+ * delivery the daemon kept) becomes done. Unchanged otherwise — a rejected
+ * send never reached the mod, so no row can settle it.
  */
 function reconcileSent(sent: Sent | null, messages: readonly SwarmMessage[] | null): Sent | null {
-  if (!isPending(sent) || sent === null || sent.messageId === undefined || messages === null) return sent;
+  if (sent === null || sent.messageId === undefined || messages === null) return sent;
   const row = messages.find((m) => m.id === sent.messageId);
   if (row === undefined || row.delivered === null) return sent;
+  if (sent.state === 'failed') return row.delivered ? { ...sent, state: 'done', message: undefined } : sent;
+  if (!isPending(sent)) return sent;
   if (row.delivered) return { ...sent, state: 'done', message: undefined };
   if (row.reason === 'expired') return { ...sent, state: 'expired', message: undefined };
   return { ...sent, state: 'failed', message: row.reason ?? undefined };
@@ -371,6 +394,7 @@ function SendForm({
           {stateLabel(sent)}
         </span>
       )}
+      {sent !== null && sent.state === 'failed' && <ClassifierHint reason={sent.message} />}
     </form>
   );
 }

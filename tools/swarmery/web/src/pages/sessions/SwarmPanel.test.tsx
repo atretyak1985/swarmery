@@ -13,6 +13,8 @@
 //      older overlapping refetch is dropped.
 //   7. An unpaired receive names an "unknown sender"; a lost link_command
 //      frame cannot lock the send form — the refetched feed settles it.
+//   8. A failed send whose row later turns delivered shows done; a rejected
+//      send stays rejected. An auto-mode-classifier refusal carries a hint.
 //
 // `npx vitest run src/pages/sessions/SwarmPanel.test.tsx`.
 
@@ -138,6 +140,17 @@ describe('feed', () => {
     expect(within(rows[3]!).getByTestId('truncated')).toBeTruthy();
     // Sessions are links into the session detail.
     expect(within(rows[2]!).getByRole('link', { name: 'Alpha' }).getAttribute('href')).toBe('/sessions/1');
+  });
+
+  it('shows the classifier hint only under an undelivered row refused by the classifier', async () => {
+    api.fetchSwarmMessages.mockResolvedValue([
+      msg({ id: 2, kind: 'send', fromSession: ref(A), toSession: ref(B), delivered: false, reason: 'undeliverable: The server-side AUTO MODE CLASSIFIER gave no verdict' }),
+      msg({ id: 1, kind: 'send', fromSession: ref(A), toSession: ref(B), delivered: false, reason: 'undeliverable: no such session' }),
+    ]);
+    renderPanel();
+    const rows = await screen.findAllByTestId('swarm-message');
+    expect(within(rows[0]!).getByTestId('swarm-classifier-hint').textContent).toContain("sending session's permission mode");
+    expect(within(rows[1]!).queryByTestId('swarm-classifier-hint')).toBeNull();
   });
 
   it('names an unpaired receive "unknown sender", never "dashboard"', async () => {
@@ -284,6 +297,83 @@ describe('send form', () => {
     fireEvent.change(screen.getByLabelText('Message'), { target: { value: 'next one' } });
     expect(screen.getByTestId('swarm-command-state').textContent).toContain('queued');
     expect((screen.getByRole('button', { name: 'Send' }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  /** Renders the panel for sender A and sends "hi" to B; resolves once the form shows a state. */
+  async function sendHi(): Promise<void> {
+    renderPanel({ id: 1, link: LINK });
+    const select = (await screen.findByLabelText('Recipient')) as HTMLSelectElement;
+    await waitFor(() => expect(select.options.length).toBe(2));
+    fireEvent.change(select, { target: { value: '2' } });
+    fireEvent.change(screen.getByLabelText('Message'), { target: { value: 'hi' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    await screen.findByTestId('swarm-command-state');
+  }
+
+  const failedNote = (message: string): WSMessage => ({
+    type: 'link_command',
+    payload: { sessionId: 1, commandId: 11, kind: 'message', state: 'failed', message },
+  });
+
+  const CLASSIFIER_REASON = 'undeliverable: The server-side auto mode classifier gave no verdict for this action';
+
+  it('failed then late delivered shows delivered', async () => {
+    api.sendSwarmMessage.mockResolvedValue({ commandId: 11, messageId: 5 });
+    await sendHi();
+    emit(failedNote('undeliverable: session is not running'));
+    expect(screen.getByTestId('swarm-command-state').textContent).toContain('failed: undeliverable: session is not running');
+
+    // The daemon kept the late send's verdict: the row turns delivered and a swarm_message frame refetches it.
+    api.fetchSwarmMessages.mockResolvedValue([
+      msg({ id: 5, kind: 'dashboard', fromSession: ref(A), toSession: ref(B), body: 'hi', delivered: true }),
+    ]);
+    emit({ type: 'swarm_message', payload: { sessionId: 1, projectId: 7 } });
+    await waitFor(() => expect(screen.getByTestId('swarm-command-state').textContent).toBe('sent'));
+    expect(screen.getByTestId('swarm-command-state').className).toContain('text-green');
+    const [row] = await screen.findAllByTestId('swarm-message');
+    expect(within(row!).getByTestId('delivery').textContent).toBe('✓ delivered');
+  });
+
+  it('keeps a failed command failed while its row stays undelivered', async () => {
+    api.sendSwarmMessage.mockResolvedValue({ commandId: 11, messageId: 5 });
+    await sendHi();
+    emit(failedNote('undeliverable: session is not running'));
+    api.fetchSwarmMessages.mockResolvedValue([
+      msg({ id: 5, kind: 'dashboard', fromSession: ref(A), body: 'hi', delivered: false, reason: 'undeliverable: session is not running' }),
+    ]);
+    emit({ type: 'swarm_message', payload: { sessionId: 1, projectId: 7 } });
+    await waitFor(() => expect(api.fetchSwarmMessages).toHaveBeenCalledTimes(2));
+    await screen.findAllByTestId('swarm-message');
+    expect(screen.getByTestId('swarm-command-state').textContent).toContain('failed: undeliverable: session is not running');
+  });
+
+  it('keeps a rejected send rejected when a delivered row arrives', async () => {
+    api.sendSwarmMessage.mockRejectedValue(new Error('session has no link'));
+    await sendHi();
+    expect(screen.getByTestId('swarm-command-state').textContent).toContain('not sent: session has no link');
+    api.fetchSwarmMessages.mockResolvedValue([
+      msg({ id: 5, kind: 'dashboard', fromSession: ref(A), toSession: ref(B), body: 'hi', delivered: true }),
+    ]);
+    emit({ type: 'swarm_message', payload: { sessionId: 1, projectId: 7 } });
+    await screen.findAllByTestId('swarm-message');
+    expect(screen.getByTestId('swarm-command-state').textContent).toContain('not sent: session has no link');
+  });
+
+  it('shows the classifier hint under a classifier refusal', async () => {
+    api.sendSwarmMessage.mockResolvedValue({ commandId: 11, messageId: 5 });
+    await sendHi();
+    expect(screen.queryByTestId('swarm-classifier-hint')).toBeNull();
+    emit(failedNote(CLASSIFIER_REASON));
+    expect(screen.getByTestId('swarm-command-state').textContent).toContain(`failed: ${CLASSIFIER_REASON}`);
+    expect(screen.getByTestId('swarm-classifier-hint').textContent).toContain('acceptEdits or bypassPermissions');
+  });
+
+  it('shows no classifier hint for another failure reason', async () => {
+    api.sendSwarmMessage.mockResolvedValue({ commandId: 11, messageId: 5 });
+    await sendHi();
+    emit(failedNote('undeliverable: no such session'));
+    expect(screen.getByTestId('swarm-command-state').textContent).toContain('failed: undeliverable: no such session');
+    expect(screen.queryByTestId('swarm-classifier-hint')).toBeNull();
   });
 
   it('shows a refused POST (409) inline', async () => {
