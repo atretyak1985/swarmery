@@ -43,6 +43,19 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # Full history: the migration-number check needs the merge-base of
+          # the PR and main.
+          fetch-depth: 0
+
+      - name: Migration numbers above main's
+        if: github.event_name == 'pull_request'
+        run: |
+          set -euo pipefail
+          # Against main even for a PR into feat/**: a stacked branch lands on
+          # main, so main's numbering is the one a new migration must clear.
+          git fetch --no-tags origin +refs/heads/main:refs/remotes/origin/main
+          bash scripts/check-migration-numbers.sh --base origin/main
 
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
