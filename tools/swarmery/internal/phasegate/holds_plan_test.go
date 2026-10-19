@@ -20,8 +20,13 @@ func TestHoldsPlanBack(t *testing.T) {
 		},
 		{
 			name: "no criteria, but it asked to be verified and was not — still holds",
-			in:   Input{CriteriaTotal: 0, VerifyMode: "strict"},
+			in:   Input{CriteriaTotal: 0, VerifyMode: "strict", Dispatched: true},
 			want: true,
+		},
+		{
+			name: "every criterion ticked by hand, verify asked, never dispatched — holds nothing",
+			in:   Input{CriteriaDone: 7, CriteriaTotal: 7, VerifyMode: "strict"},
+			want: false,
 		},
 		{
 			name: "criteria half done holds the plan",

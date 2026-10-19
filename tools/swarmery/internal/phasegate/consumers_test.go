@@ -165,3 +165,23 @@ func funcBody(src, symbol string) string {
 	}
 	return src[loc[0]:]
 }
+
+// Every gated consumer must hand the gate Dispatched. Its zero value silently
+// drops the verdict condition (Input.VerificationOwed), so a path that forgot it
+// would read a dispatched, ungraded phase as complete — and unblock its
+// dependents — with nothing to say so.
+func TestGatedConsumersFeedDispatched(t *testing.T) {
+	root := repoRoot(t)
+	for _, c := range Consumers {
+		if !c.Gated || c.Via != "" {
+			continue // forwarding consumers are covered by their producer
+		}
+		src, err := os.ReadFile(filepath.Join(root, c.Path))
+		if err != nil {
+			t.Fatalf("%s: %v", c.Path, err)
+		}
+		if !strings.Contains(funcBody(string(src), c.Symbol), "Dispatched:") {
+			t.Errorf("%s:%s calls the gate without Dispatched — a verdict it is owed would be waived", c.Path, c.Symbol)
+		}
+	}
+}

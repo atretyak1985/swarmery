@@ -16,6 +16,10 @@ package phasegate
 //
 // If this file stops compiling, the gate's contract changed: update the pin in the
 // same change, and say in its review why completion now depends on something new.
+//
+// Dispatched (2026-10-19) narrows the gate rather than widening it: a missing
+// verdict is held against a phase only when the daemon started it, the one path
+// on which a verifier can run. See Input.Dispatched.
 
 var _ = Input{
 	CriteriaDone:     0,
@@ -25,6 +29,7 @@ var _ = Input{
 	LegacyDone:       false,
 	CompletionReport: "",
 	Ran:              false,
+	Dispatched:       false,
 	ClosureRequired:  false,
 }
 
@@ -41,6 +46,7 @@ var _ = struct {
 	LegacyDone       bool
 	CompletionReport string
 	Ran              bool
+	Dispatched       bool
 	ClosureRequired  bool
 }(Input{})
 

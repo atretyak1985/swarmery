@@ -871,6 +871,7 @@ func (h *Handler) epicPhases(taskID int64, planDir string) ([]epicPhaseDTO, epic
 			LegacyDone:       boardCol.String == "done" || (p.BoardTaskID != nil && p.ActivatedAt != nil && boardCol.String == "archived"),
 			CompletionReport: completion.String,
 			Ran:              runEndedAt.Valid,
+			Dispatched:       runStartedAt.Valid,
 			ClosureRequired:  closureRequired,
 		}
 		gate := phasegate.Check(gateIn)
