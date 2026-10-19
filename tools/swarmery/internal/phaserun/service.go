@@ -220,6 +220,12 @@ type Service struct {
 	// share its throwaway worktree.
 	planReviewMu        sync.Mutex
 	planReviewsInFlight map[int64]*planReviewFlight
+	// reverifyMu guards reverifyBranches: the run branches a re-verification
+	// (reverify.go) is grading right now. The run slot is keyed on the row id, and a
+	// re-key mid-grading moves the row to a new id whose slot is free — this set is
+	// what still sees the branch as taken. Lazily initialised; the zero value works.
+	reverifyMu       sync.Mutex
+	reverifyBranches map[string]struct{}
 	// Actuals records what a finished run actually did — files, lines, cost,
 	// outcome, verdict (internal/actuals, learning-loop phase 12). Called from the
 	// run's exit path AFTER stamp and verifyRun, so the row it reads carries this
