@@ -1,0 +1,14 @@
+-- 0118: an index for the date-window reads over turns.
+--
+-- /api/stats/overview's cost_by_model and 14-day series, and windowAggregates,
+-- all filter `turns WHERE started_at >= ? AND started_at < ?`. No index leads on
+-- started_at, so without planner statistics each was a FULL SCAN of turns
+-- (1.5–2.4 s cold on the operator store, 141k turns). Once the daemon runs
+-- PRAGMA optimize (store.Optimize) the planner instead walks every project's
+-- sessions and looks each turn up by rowid for `model` — 3.6–5.1 s cold, 2.4×
+-- warm. With this index the same queries are a range seek over the window:
+-- cost_by_model 0.002 s, measured 2026-10-19 on a copy of that store.
+--
+-- Index-only; no data changes. Building it took 4.1 s on that store. Rollback
+-- is `DROP INDEX IF EXISTS idx_turns_started_at;`.
+CREATE INDEX IF NOT EXISTS idx_turns_started_at ON turns(started_at);
