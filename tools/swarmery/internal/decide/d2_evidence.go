@@ -73,19 +73,32 @@ func (t gitTally) landed() bool {
 	return t.commits+t.pushes+t.prsOpened+t.prsMerged > 0
 }
 
+// gitActivityQuery reads one session's ok Bash commands that mention git/gh.
+//
+// The unary + on type and status is load-bearing: it keeps those columns out
+// of index selection, so the session's own rows are read through
+// idx_events_session. The store has no ANALYZE statistics, and without them
+// SQLite took idx_events_status_ts (or idx_events_type once status was
+// excluded) — a walk over every ok event in the database with a json_extract
+// per row. Measured 2026-10-19 on a 208k-event store: 14.7 s per call against
+// 0.02 s, and the labeler's batch of 20 held the single store connection for
+// minutes, freezing the API and every permission hook behind it.
+// TestGitActivityQueryUsesSessionIndex pins the plan.
+const gitActivityQuery = `
+		SELECT cmd FROM (
+		  SELECT COALESCE(json_extract(payload, '$.input.command'), '') AS cmd
+		    FROM events
+		   WHERE session_id = (SELECT id FROM sessions WHERE session_uuid = ?)
+		     AND +type = 'tool_call' AND tool_name = 'Bash' AND +status = 'ok'
+		) WHERE cmd LIKE '%git%' OR cmd LIKE '%gh%'
+		LIMIT ?`
+
 // gitActivity tallies git commit/push and gh pr create/merge across the
 // session's Bash calls that exited ok. An errored call (nothing to commit, a
 // rejected push, a failed merge) landed nothing and is not counted.
 func gitActivity(db *sql.DB, uuid string) (gitTally, error) {
 	var t gitTally
-	rows, err := db.Query(`
-		SELECT cmd FROM (
-		  SELECT COALESCE(json_extract(payload, '$.input.command'), '') AS cmd
-		    FROM events
-		   WHERE session_id = (SELECT id FROM sessions WHERE session_uuid = ?)
-		     AND type = 'tool_call' AND tool_name = 'Bash' AND status = 'ok'
-		) WHERE cmd LIKE '%git%' OR cmd LIKE '%gh%'
-		LIMIT ?`, uuid, d2EvidenceBashRows)
+	rows, err := db.Query(gitActivityQuery, uuid, d2EvidenceBashRows)
 	if err != nil {
 		return t, err
 	}

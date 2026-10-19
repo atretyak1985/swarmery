@@ -153,6 +153,39 @@ func TestShipEvidence(t *testing.T) {
 }
 
 // A broken DB drops the evidence lines, never the block or the verdict.
+// The labeler runs gitActivity per session over the single store connection; a
+// plan that scans by status or type instead of by session froze the daemon's
+// API for minutes on a real store (see gitActivityQuery).
+func TestGitActivityQueryUsesSessionIndex(t *testing.T) {
+	db := openDB(t)
+	rows, err := db.Query("EXPLAIN QUERY PLAN "+gitActivityQuery, "s", d2EvidenceBashRows)
+	if err != nil {
+		t.Fatalf("explain: %v", err)
+	}
+	defer rows.Close()
+	var plan []string
+	for rows.Next() {
+		var id, parent, unused int
+		var detail string
+		if err := rows.Scan(&id, &parent, &unused, &detail); err != nil {
+			t.Fatalf("scan: %v", err)
+		}
+		plan = append(plan, detail)
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatalf("rows: %v", err)
+	}
+	var events string
+	for _, d := range plan {
+		if strings.Contains(d, " events ") {
+			events = d
+		}
+	}
+	if !strings.Contains(events, "idx_events_session") {
+		t.Fatalf("events step = %q, want a search through idx_events_session (plan: %q)", events, plan)
+	}
+}
+
 func TestShipEvidence_DBErrorKeepsWhatItHas(t *testing.T) {
 	db := openDB(t)
 	db.Close()
