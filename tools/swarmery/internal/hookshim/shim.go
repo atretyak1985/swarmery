@@ -51,6 +51,10 @@ const (
 // has reloaded. A var so tests can shorten it.
 var authRetryDelay = 1100 * time.Millisecond
 
+// maxTokenFile caps the token file read. A token is 64 hex characters and a
+// newline; anything larger is not a token the daemon minted.
+const maxTokenFile = 256
+
 // Config wires the shim; zero values fall back to the frozen defaults.
 type Config struct {
 	BaseURL        string        // daemon origin, e.g. http://127.0.0.1:7777
@@ -280,15 +284,31 @@ func discard(resp *http.Response) {
 	resp.Body.Close()
 }
 
-// readLinkToken returns the trimmed token file content, "" when path is empty
-// or the file is missing or unreadable. The shim never mints or chmods it —
-// that is the daemon's job (link.EnsureToken).
+// readLinkToken returns the trimmed token file content, or "" — no token, so
+// no header — when path is empty, the file is missing or unreadable, is a
+// symlink or any other non-regular file, or holds more than maxTokenFile
+// bytes. The file is Lstat-ed before the open and the opened file must be that
+// same file, so a swap to a symlink in between is refused too. The shim never
+// mints or chmods the file: that is the daemon's job (link.EnsureToken).
 func readLinkToken(path string) string {
 	if path == "" {
 		return ""
 	}
-	b, err := os.ReadFile(path)
+	before, err := os.Lstat(path)
+	if err != nil || !before.Mode().IsRegular() {
+		return ""
+	}
+	f, err := os.Open(path)
 	if err != nil {
+		return ""
+	}
+	defer f.Close()
+	opened, err := f.Stat()
+	if err != nil || !os.SameFile(before, opened) {
+		return ""
+	}
+	b, err := io.ReadAll(io.LimitReader(f, maxTokenFile+1))
+	if err != nil || len(b) > maxTokenFile {
 		return ""
 	}
 	return strings.TrimSpace(string(b))

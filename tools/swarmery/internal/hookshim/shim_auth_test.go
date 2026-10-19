@@ -207,3 +207,89 @@ func TestUnauthorizedRetryPicksUpRotatedToken(t *testing.T) {
 		t.Errorf("a token leaked into the log: %q", logged)
 	}
 }
+
+// TestRefusedTokenFileSendsNoHeader: a symlink to a valid token, a directory
+// and an oversized file all count as no token — no Authorization header, the
+// 401 is logged as auth-missing, the shim fails open.
+func TestRefusedTokenFileSendsNoHeader(t *testing.T) {
+	fastAuthRetry(t)
+	dir := t.TempDir()
+	target := filepath.Join(dir, "real-token")
+	writeToken(t, target, tokenA)
+
+	symlink := filepath.Join(dir, "symlink-token")
+	if err := os.Symlink(target, symlink); err != nil {
+		t.Fatal(err)
+	}
+	oversized := filepath.Join(dir, "oversized-token")
+	writeToken(t, oversized, strings.Repeat("a", maxTokenFile+1))
+	directory := filepath.Join(dir, "dir-token")
+	if err := os.Mkdir(directory, 0o700); err != nil {
+		t.Fatal(err)
+	}
+
+	for name, path := range map[string]string{"symlink": symlink, "oversized": oversized, "directory": directory} {
+		logPath := filepath.Join(dir, name+".log")
+		stub := newAuthStub(t, [2]string{"401", `{"error":"link token required"}`})
+		stdout, logged := runAuthShim(t, EventPermissionRequest, stub.srv.URL, path, logPath, stdinFixture)
+		if stdout != "" {
+			t.Errorf("%s: stdout = %q, want silent fail-open", name, stdout)
+		}
+		if got := stub.headers(); len(got) != 1 || got[0] != "" {
+			t.Errorf("%s: Authorization headers = %q, want one request with none", name, got)
+		}
+		if !strings.Contains(logged, "outcome=auth-missing") {
+			t.Errorf("%s: log = %q, want outcome=auth-missing", name, logged)
+		}
+		if strings.Contains(logged, tokenA) {
+			t.Errorf("%s: the token leaked into the log: %q", name, logged)
+		}
+	}
+}
+
+// TestTokenAtTheCapIsAccepted: a file of exactly maxTokenFile bytes is still
+// read (the cap refuses only what exceeds it).
+func TestTokenAtTheCapIsAccepted(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "link-token")
+	tok := strings.Repeat("c", maxTokenFile-1) // + "\n" = maxTokenFile bytes
+	writeToken(t, path, tok)
+	stub := newAuthStub(t, [2]string{"202", ""})
+	runAuthShim(t, EventStop, stub.srv.URL, path, filepath.Join(dir, "hook.log"), `{}`)
+	if got := stub.headers(); len(got) != 1 || got[0] != "Bearer "+tok {
+		t.Errorf("Authorization headers = %d entries, want the at-cap token sent once", len(got))
+	}
+}
+
+// TestNoTokenThenTokenAppearsRetries: with no file the first request carries
+// no header; on its 401 the shim re-reads at once and, the file having
+// appeared, retries once with it.
+func TestNoTokenThenTokenAppearsRetries(t *testing.T) {
+	prev := authRetryDelay
+	authRetryDelay = time.Hour // must not be waited on when no token was sent
+	t.Cleanup(func() { authRetryDelay = prev })
+
+	dir := t.TempDir()
+	tokenPath, logPath := filepath.Join(dir, "link-token"), filepath.Join(dir, "hook.log")
+	stub := newAuthStub(t,
+		[2]string{"401", `{"error":"link token required"}`},
+		[2]string{"202", ""})
+	stub.onRequest = func(i int) {
+		if i == 0 {
+			writeToken(t, tokenPath, tokenA) // minted while the first attempt was in flight
+		}
+	}
+
+	start := time.Now()
+	_, logged := runAuthShim(t, EventStop, stub.srv.URL, tokenPath, logPath, `{}`)
+	if elapsed := time.Since(start); elapsed > 5*time.Second {
+		t.Errorf("took %s: the no-token re-read must not wait", elapsed)
+	}
+	got := stub.headers()
+	if len(got) != 2 || got[0] != "" || got[1] != "Bearer "+tokenA {
+		t.Errorf("Authorization headers = %q, want none then the new token", got)
+	}
+	if !strings.Contains(logged, "outcome=http-202") {
+		t.Errorf("log = %q, want outcome=http-202", logged)
+	}
+}
