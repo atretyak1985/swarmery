@@ -3417,6 +3417,8 @@ function PhaseDetailPanel({
                     line={c.line}
                     text={c.text}
                     done={c.done}
+                    // `checks` is derived from `doc`, so it is never null here.
+                    docText={doc ?? ''}
                     onMarked={(d) => {
                       setDoc(d.content);
                       onDocChanged();

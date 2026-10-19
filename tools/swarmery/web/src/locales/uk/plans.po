@@ -1148,6 +1148,10 @@ msgstr "н/д"
 msgid "Name"
 msgstr "Назва"
 
+#: src/pages/plans/CriterionLint.tsx
+msgid "Names a settings file — cite where Claude Code reads it (config-channels)"
+msgstr "Називає файл налаштувань — вкажіть, звідки Claude Code його читає (config-channels)"
+
 #: src/pages/Routines.tsx
 #: src/pages/Routines.tsx
 msgid "never run"
