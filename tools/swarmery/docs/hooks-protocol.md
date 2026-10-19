@@ -19,9 +19,9 @@ Every behavior below is grounded in the live spike
 ## Transport
 
 - Base URL: the daemon's REST origin (default `http://127.0.0.1:7777`).
-- Both endpoints are localhost-trust like the rest of the API (D4): no auth in v1;
-  state-changing endpoints reject cross-origin browser `Origin` headers. The shim
-  sends no `Origin`.
+- The shim routes (`/api/hooks/permission-request`, `/stop`, `/session-start`)
+  require the link token — see [Auth](#auth) below. Like every write endpoint they
+  also reject cross-origin browser `Origin` headers (D4). The shim sends no `Origin`.
 - Only the daemon's **own** origin is trusted by default: `localhost`, `127.0.0.1` and `::1`
   on the port it is actually serving, over its own scheme. `localhost` on another port — a
   second dev server, an SSH port-forward — is a different process and is rejected like any
@@ -37,6 +37,36 @@ Every behavior below is grounded in the live spike
   address on the daemon's port, so it passes by construction.
 - Errors follow the existing API convention: non-2xx with `{"error": string}`.
   The shim treats **any** transport or non-contract response as fail-open (below).
+
+## Auth
+
+As of mods-link follow-up 1 (2026-10-19) the three shim routes carry the same
+credential as `/api/link/*` ([`mods-link-protocol.md`](mods-link-protocol.md) §Auth):
+before it, any local process that sent no `Origin` could open and answer approvals.
+
+| | |
+|---|---|
+| Routes | `POST /api/hooks/permission-request`, `POST /api/hooks/stop`, `POST /api/hooks/session-start`. **Not** `POST /api/hooks/routine/{id}/{token}`: the routine webhook keeps its own per-routine token in the path |
+| Token file | `~/.swarmery/link-token` (`internal/link.TokenPath`), `0600`, minted by the daemon at start. One token per installation, shared with the swarmery-link mod |
+| Header | `Authorization: Bearer <token>`. The scheme is case-insensitive, the comparison constant-time (`crypto/subtle`) |
+| Order | The `Origin` fence runs first (`403` for a foreign browser origin), then the token check |
+| `401` | No header, another scheme, an empty or a wrong token: `{"error":"link token required"}`, the same exact body and `WWW-Authenticate` challenge as `/api/link/*` |
+| `503` | The link is not attached (the daemon could not load or mint its token): `{"error":"link disabled"}` |
+| Logged | Never the value: not by the daemon, not in the shim's `~/.swarmery/hook.log`, not in an error string |
+
+**Shim side** (`internal/hookshim`, `post`). The shim reads the token file on
+every call and sends it in the header. On a `401` it waits 1.1 s — just past the
+daemon's one-read-per-second token reload throttle, so a call that raced a
+`swarmery link token --rotate` lands on a daemon that has reloaded — re-reads the
+file once and retries once. A missing or unreadable file sends no header; the
+`401` is then logged as `outcome=auth-missing` with no retry. A second `401` is
+logged as `outcome=http-401`. Every one of these fails open exactly like any other
+non-contract answer: exit `0`, no stdout, Claude Code shows its native dialog.
+
+**Upgrade.** The shim and the daemon ship in one binary (`swarmery hook`), so one
+`make install` / `swarmery install` upgrades both. A shim from an older binary
+sends no header, gets `401` and fails open to the native dialog: no approval is
+lost, it is only answered in the terminal until the binary is upgraded.
 
 ## POST /api/hooks/permission-request
 
