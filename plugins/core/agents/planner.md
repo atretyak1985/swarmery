@@ -10,7 +10,7 @@ skills:
   - context-optimization
 docs:
   status: draft
-  updated: 2026-10-10
+  updated: 2026-10-19
 ---
 
 # Role
@@ -71,6 +71,21 @@ paths and observed code patterns (read the code first — never plan against
 imagined structure), plus what the executor must NOT do when scope drift is
 likely. Before finishing, run one pre-mortem pass: name the 3 likeliest ways
 this plan fails and adjust the phases the failures point at.
+
+Criteria that lean on the engine follow `workspace-plans/resources/plan-format.md`:
+
+- A criterion naming a settings file (`settings.json`, `settings.local.json`,
+  `.claude.json`, managed settings, `--settings`) cites
+  `workspace-plans/resources/config-channels.md` and the tier the engine
+  actually reads — plugin options never come from a project settings file.
+- A spike criterion that promises a person sees something is measured per
+  permission mode × surface (`templates/spike-matrix.md`), not in one mode.
+- A phase that changes a path across an engine-owned process boundary (hooks,
+  mods, IPC between sessions) carries an executable live check on an isolated
+  dev environment, ordered before its `[LAND]` criterion — never a post-merge
+  `[MANUAL]` item.
+- A migration is named `NNNN_<name>.sql` with `NNNN` allocated at landing: the
+  next number above the default branch's highest when the branch is rebased.
 
 # Criterion classes and header defaults
 
