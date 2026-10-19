@@ -7,7 +7,8 @@
 // and timer cleanup. The API is mocked at the three sign-in calls; the real
 // VcsLoginError class is kept.
 
-import { act, cleanup, fireEvent, render, screen } from '../test/render';
+import { Profiler } from 'react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '../test/render';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { VcsLoginError } from '../api';
 import type { VcsInfo, VcsLoginStart } from '../api/types';
@@ -226,6 +227,32 @@ describe('VcsSignInDialog — token', () => {
     expect(await screen.findByText('Signed in as octocat.')).toBeTruthy();
     expect(screen.queryByLabelText('Personal access token')).toBeNull();
     fireEvent.keyDown(window, { key: 'Escape' });
+    expect(onClose).toHaveBeenCalledWith(true);
+  });
+
+  // The load flake from dispatch-race-load-flakes phase 6, reproduced without load:
+  // Escape lands in the commit that first shows the sign-in, before React has
+  // flushed that commit's passive effects. The probe is a Profiler onRender
+  // callback, so it runs in the commit's layout phase.
+  it('an Escape in the commit that first shows the sign-in reports signed in', async () => {
+    api.submitVcsToken.mockResolvedValue({ status: 'ok', login: 'octocat' });
+    const onClose = vi.fn();
+    let fired = false;
+    const probe = (): void => {
+      if (fired || screen.queryByText('Signed in as octocat.') === null) return;
+      fired = true;
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+    };
+    render(
+      <Profiler id="vcs-sign-in" onRender={probe}>
+        <VcsSignInDialog projectId={3} vcs={vcs()} onClose={onClose} />
+      </Profiler>,
+    );
+    fireEvent.click(screen.getByRole('tab', { name: 'Token' }));
+    fireEvent.change(screen.getByLabelText('Personal access token'), { target: { value: 'tok-123' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save token' }));
+    await waitFor(() => expect(fired).toBe(true));
+    expect(onClose).toHaveBeenCalledTimes(1);
     expect(onClose).toHaveBeenCalledWith(true);
   });
 });
