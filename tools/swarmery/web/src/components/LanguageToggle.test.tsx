@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { i18n } from '../i18n';
 import { LOCALE_KEY, setLocale } from '../i18n/locale';
-import { cleanup, fireEvent, render, screen } from '../test/render';
+import { cleanup, fireEvent, render, screen, waitFor } from '../test/render';
 import { LanguageToggle } from './LanguageToggle';
 
 describe('LanguageToggle', () => {
@@ -16,8 +16,9 @@ describe('LanguageToggle', () => {
     const button = screen.getByRole('button');
     expect(button.textContent).toBe('UK');
     fireEvent.click(button);
-    await new Promise((r) => setTimeout(r, 50));
-    expect(i18n.locale).toBe('uk');
+    // setLocale awaits activate(), which loads the uk catalogs: wait for the
+    // switch itself, not a fixed sleep that a loaded machine outruns.
+    await waitFor(() => expect(i18n.locale).toBe('uk'), { timeout: 5000 });
     expect(localStorage.getItem(LOCALE_KEY)).toBe('uk');
     expect(screen.getByRole('button').textContent).toBe('EN');
   });
