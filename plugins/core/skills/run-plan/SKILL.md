@@ -1,7 +1,7 @@
 ---
 name: run-plan
 description: "EXECUTES an existing @planner plan -- parses the phase DAG, dispatches per-phase implement+review loops, preserving ASK gates. NOT for creating plans; NOT usable from inside a subagent."
-version: "1.2.0"
+version: "1.3.0"
 owner: "swarmery-core"
 docs:
   status: reviewed
@@ -48,7 +48,9 @@ never be delegated.
   parsing the plan, the pre-flight review, the route triage table and hand-off
   alternative, worktree isolation and reconciliation, and the S / P / W routes.
 - Read `resources/progress-contracts.md` before accepting a phase: ledger format,
-  the progress and summary hard gates, invariants, and failure modes.
+  the progress and summary hard gates, invariants, landing a stack of PRs
+  (bottom-up, sequence printed by `${CLAUDE_PLUGIN_ROOT}/bin/land-stack.sh`), and
+  failure modes.
 
 # How to use
 

@@ -80,6 +80,33 @@ block's format is in `workspace-plans/resources/plan-format.md`.
   diff), then `SUMMARY.md` at the task root (via the `session-closeout` skill or
   inline), then worktree cleanup. Only then report done.
 
+## Landing a stack
+
+A stack is a chain of pull requests where each one is based on the branch of the
+one before it. GitHub keeps a stacked PR's base until that base merges and the
+retarget lands, so merging the chain in parallel — or top-down — merges a PR into
+its feature base and the work never reaches the default branch.
+
+- Merge bottom-up, one at a time. The next merge starts only after GitHub reports
+  the previous PR merged (`gh api repos/<owner/name>/pulls/<n> --jq .merged`
+  prints `true`).
+- Never merge a PR whose base is not the default branch. Check it
+  (`gh api repos/<owner/name>/pulls/<n> --jq .base.ref`) and retarget it
+  (`gh pr edit <n> --base <default>`) first — or retarget every stacked PR before
+  the first merge.
+- Generate the sequence; do not hand-write it:
+
+  ```
+  ${CLAUDE_PLUGIN_ROOT}/bin/land-stack.sh --repo <owner/name> [--base main] [--retarget] [--merge-flags "<flags>"] <pr> <pr> …
+  ```
+
+  PRs go bottom-up. The script only prints: per PR a base check, the merge line
+  and a wait-until-merged line; with `--retarget`, a `gh pr edit` for every
+  stacked PR before the first merge. `--repo -` asks `gh repo view` for the
+  repository; nothing else touches the network.
+- Hand the printed sequence to the operator. Merges stay ASK-gated (rule 4 in
+  `SKILL.md`); the controller never runs them on its own.
+
 ## Failure modes
 
 | Failure | Detection | Recovery |
@@ -90,4 +117,5 @@ block's format is in `workspace-plans/resources/plan-format.md`.
 | Merge conflict on route P integration | `git merge` fails | Dedicated fix dispatch in the integration worktree; re-run phase verification |
 | Context compacted mid-run | ledger has entries you do not remember | Resume from ledger + `git log`; never restart at phase 1 |
 | Plan cites files that no longer exist | executor reports drift | Halt the phase; send the plan back for revision (planner or user) |
+| Stacked PR merged into its feature base | the PR shows merged but its commits are not on the default branch; its `.base.ref` was a feature branch | Do not force-push. Carry the feature base (now holding the stranded commits) to the default branch through the next open PR of the stack, or a fresh PR from that base; verify per file that nothing was lost; then land the rest with `land-stack.sh` |
 | Phase shipped but its Summary tab is empty | dashboard shows "no summary of the work written" | The doc has no `## Completion Report`; write it now from `reports/phase-<N>-report.md` plus the phase's commits — do not leave it for the end of the run |
