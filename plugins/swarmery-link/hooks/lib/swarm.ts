@@ -197,17 +197,75 @@ const originKind = (origin: unknown): string => {
   return typeof kind === 'string' ? kind : 'unclassified'
 }
 
-/** The `session.receive` payload. */
+// The engine hands the receiver a peer's message wrapped in an envelope that
+// names the sender, while the sender's send hook sees the bare text:
+//   <cross-session-message from="uds:/tmp/cc-socks/41881.sock" from-name="proj-10" from-mode="bypass">
+//   ping-from-A
+//   </cross-session-message>
+const ENVELOPE_OPEN = /^\s*<cross-session-message((?:\s+[^\s=>"']+\s*=\s*(?:"[^"]*"|'[^']*'))*)\s*>/
+const ENVELOPE_CLOSE = /<\/cross-session-message\s*>\s*$/
+const ENVELOPE_ATTR = /([^\s=>"']+)\s*=\s*(?:"([^"]*)"|'([^']*)')/g
+/** The engine names a session's messaging socket after its process id. */
+const SOCKET_PID = /^uds:.*\/([0-9]+)\.sock$/
+
+export type Unwrapped = { readonly body: string; readonly from: string | undefined }
+
+/**
+ * `text` without the engine's cross-session envelope: the body between the
+ * tags with the whitespace around it trimmed, and the envelope's `from`.
+ * Attributes may come in any order, with others among them. Undefined when
+ * `text` is not one whole envelope.
+ */
+export const unwrapEnvelope = (text: string): Unwrapped | undefined => {
+  const open = ENVELOPE_OPEN.exec(text)
+  if (open === null) return undefined
+  const rest = text.slice(open[0].length)
+  const close = ENVELOPE_CLOSE.exec(rest)
+  if (close === null) return undefined
+  let from: string | undefined
+  for (const attr of (open[1] ?? '').matchAll(ENVELOPE_ATTR)) {
+    if (attr[1] === 'from') from = attr[2] ?? attr[3]
+  }
+  return { body: rest.slice(0, close.index).trim(), from }
+}
+
+/**
+ * The sending process's id: the delivery's `verifiedPeerPid` (the engine
+ * checked it), else the one its `from` socket (the origin's or the
+ * envelope's) is named after. Undefined when neither names one.
+ */
+export const senderPid = (origin: unknown, envelopeFrom: string | undefined): number | undefined => {
+  const verified = isRecord(origin) ? origin.verifiedPeerPid : undefined
+  if (typeof verified === 'number' && Number.isSafeInteger(verified) && verified > 0) return verified
+  const originFrom = isRecord(origin) && typeof origin.from === 'string' ? origin.from : undefined
+  const digits = SOCKET_PID.exec(originFrom ?? envelopeFrom ?? '')?.[1]
+  const pid = digits === undefined ? 0 : Number(digits)
+  return Number.isSafeInteger(pid) && pid > 0 ? pid : undefined
+}
+
+/**
+ * The `session.receive` payload: the text as the sender wrote it (the
+ * envelope taken off) and, when the engine names it, the sender's `fromPid`.
+ */
 export const receivePayload = (text: string, origin: unknown): Readonly<Record<string, unknown>> => {
-  const clipped = clip(text)
+  const unwrapped = unwrapEnvelope(text)
+  const clipped = clip(unwrapped?.body ?? text)
   const plugin = originPlugin(origin)
-  return { text: clipped.text, truncated: clipped.truncated, originKind: originKind(origin), ...(plugin !== undefined ? { fromPlugin: plugin } : {}) }
+  const pid = senderPid(origin, unwrapped?.from)
+  return {
+    text: clipped.text,
+    truncated: clipped.truncated,
+    originKind: originKind(origin),
+    ...(plugin !== undefined ? { fromPlugin: plugin } : {}),
+    ...(pid !== undefined ? { fromPid: pid } : {}),
+  }
 }
 
 /** The one log line for a received delivery: `from <kind>[ <plugin>]: <first 80 chars, on one line>`. */
 export const receiveLine = (text: string, origin: unknown): string => {
   const plugin = originPlugin(origin)
-  const preview = clip(text.replace(/\s+/g, ' ').trim(), RECEIVE_PREVIEW).text
+  const body = unwrapEnvelope(text)?.body ?? text
+  const preview = clip(body.replace(/\s+/g, ' ').trim(), RECEIVE_PREVIEW).text
   return `from ${originKind(origin)}${plugin !== undefined ? ` ${plugin}` : ''}: ${preview}`
 }
 

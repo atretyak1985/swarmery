@@ -12,6 +12,8 @@ import {
   conflictLines,
   releasePayload,
   sendPayload,
+  senderPid,
+  unwrapEnvelope,
   wireCommandId,
   withBeneath,
 } from './lib/swarm'
@@ -103,6 +105,42 @@ test('session.receive: logged with origin kind and plugin, one line on screen; a
   expect(w.shown).toContain('swarmery-link: from peer other-mod: please rebase onto main')
   expect(w.shown).toContain(`swarmery-link: from task-notification: ${'y'.repeat(80)}`)
   expect(w.shown.some(l => l.includes('for the agent'))).toBe(false)
+})
+
+/** A peer message as the engine (Claude Code 2.1.303) hands it to the receiver. */
+const ENVELOPED = '<cross-session-message from="uds:/tmp/cc-socks/41881.sock" from-name="proj-10" from-mode="bypass">\nping-from-A\n</cross-session-message>'
+
+test('session.receive: the engine\'s cross-session envelope is taken off; the sender\'s pid goes as fromPid', ON, async ($, on) => {
+  const w = await begin($, on)
+  const peer = { kind: 'peer', from: 'uds:/tmp/cc-socks/41881.sock', verifiedPeerPid: 41881, name: 'proj-10', fromMode: 'bypass', body: 'ping-from-A' }
+  const r = await $.session.receive({ origin: peer, text: ENVELOPED })
+  await $.session.receive({ origin: { kind: 'peer' }, text: ENVELOPED.replace('41881', '41882') })
+  await $.session.end(END)
+  expect(r).toEqual({ text: ENVELOPED })
+  expect(payloads(sent(w.requests), 'session.receive')).toEqual([
+    { text: 'ping-from-A', truncated: false, originKind: 'peer', fromPid: 41881 },
+    { text: 'ping-from-A', truncated: false, originKind: 'peer', fromPid: 41882 },
+  ])
+  expect(w.shown).toContain('swarmery-link: from peer: ping-from-A')
+  expect(w.shown.some(l => l.includes('cross-session-message'))).toBe(false)
+})
+
+test('unwrapEnvelope: any attribute order, extra attributes, whitespace; anything else is not an envelope', () => {
+  expect(unwrapEnvelope(ENVELOPED)).toEqual({ body: 'ping-from-A', from: 'uds:/tmp/cc-socks/41881.sock' })
+  expect(unwrapEnvelope(" \r\n<cross-session-message from-mode='x' x-new=\"1\"  from='uds:/s/7.sock' >\r\n\t multi\nline \n</cross-session-message >\n")).toEqual({
+    body: 'multi\nline',
+    from: 'uds:/s/7.sock',
+  })
+  expect(unwrapEnvelope('<cross-session-message>x</cross-session-message>')).toEqual({ body: 'x', from: undefined })
+  expect(unwrapEnvelope('please rebase')).toBeUndefined()
+  expect(unwrapEnvelope(`fwd: ${ENVELOPED}`)).toBeUndefined()
+  expect(unwrapEnvelope('<cross-session-message from="a">no close')).toBeUndefined()
+  expect(unwrapEnvelope('<cross-session-messages from="a">x</cross-session-messages>')).toBeUndefined()
+  expect(senderPid({ verifiedPeerPid: 7, from: 'uds:/s/8.sock' }, 'uds:/s/9.sock')).toBe(7)
+  expect(senderPid({ from: 'uds:/s/8.sock' }, 'uds:/s/9.sock')).toBe(8)
+  expect(senderPid({ verifiedPeerPid: -1 }, 'uds:/s/9.sock')).toBe(9)
+  expect(senderPid({ kind: 'peer' }, 'tcp://127.0.0.1:9')).toBeUndefined()
+  expect(senderPid(undefined, undefined)).toBeUndefined()
 })
 
 test('an Edit claims its path under swarmery-link/claims/<sid> and queues one claim; a second Edit of it adds none', ON, async ($, on) => {

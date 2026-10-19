@@ -776,7 +776,7 @@ stored event writes the side tables below.
 | `kind` | The event's `sessionId` is | `payload` |
 |---|---|---|
 | `session.send` | the **sender** | `{ "to": string, "text": string, "truncated"?: bool, "isDelivered"?: bool, "reason"?: string, "origin"?: "model" \| "plugin", "commandId"?: int }` |
-| `session.receive` | the **receiver** | `{ "text": string, "truncated"?: bool, "originKind"?: string, "fromPlugin"?: string }` |
+| `session.receive` | the **receiver** | `{ "text": string, "truncated"?: bool, "originKind"?: string, "fromPlugin"?: string, "fromPid"?: int }` |
 | `claim` | the session that started editing | `{ "path": string }` |
 | `release` | the session whose turn (or session) ended | `{ "paths": [string] }` or `{ "all": true }` |
 | `conflict` | the session that saw the clash | `{ "path": string, "otherSession": string }` |
@@ -791,6 +791,7 @@ stored event writes the side tables below.
 | `commandId` | a positive integer, set when the send ran a dashboard `message` command (below). Send it as a JSON number (the swarmery-link mod does). A string of decimal digits (`"30"`, what mods before the phase-6 fix sent) is accepted as the same id; zero, a negative, a fraction, an exponent or any other text rejects the event |
 | `originKind` | the receive's `e.origin.kind` (`peer`, `coordinator`, `bridge`, …), at most 64 characters. Stored as the row's `origin` |
 | `fromPlugin` | accepted and kept in `link_events` only; there is no column for it |
+| `fromPid` | the sending process's id, a positive integer (else the event is rejected): the delivery's `verifiedPeerPid`, which the swarmery-link mod sends from 0.6.2. Used to find the sender (Correlation, below); not stored |
 | `path`, `paths[]` | absolute (else the event is rejected), cleaned (`/repo/./a.go` → `/repo/a.go`). At most 500 paths per release: a turn that claimed more ends in `{ "all": true }` instead (the swarmery-link mod does) |
 | `otherSession` | required. A `conflict` is an advisory record kept in `link_events` only; the daemon's own conflict detection (below) is what the dashboard shows |
 
@@ -803,24 +804,52 @@ transcripts hold anyway. The mod cuts it at 4096 characters; the daemon cuts aga
 
 ### Correlation
 
-The engine does not tell the receiver who sent a message, so the daemon pairs the two
-sides. On a stored `session.receive` it looks for the most recent unpaired `send` (or
+The engine does not tell the receiver which *session* sent a message, so the daemon
+pairs the two sides.
+
+**The envelope.** The engine (Claude Code 2.1.303) hands the receiver a peer's message
+wrapped in an envelope, while the sender's `session.send` carries the bare text:
+
+```
+<cross-session-message from="uds:/tmp/cc-socks/41881.sock" from-name="proj-10" from-mode="bypass">
+ping-from-A
+</cross-session-message>
+```
+
+A receive whose `text` is one whole such envelope (attributes in any order, others
+among them, whitespace around the tags) is stored as its body with the whitespace
+around it trimmed — a mod before 0.6.2 sends the envelope as delivered, 0.6.2 sends
+the body. A truncated text that lost its closing tag is unwrapped too. Anything else is
+stored unchanged. The sender's process id is the event's `fromPid`, else the one the
+envelope's `from` names when it is `uds:…/<pid>.sock` (the engine names a session's
+socket after its pid). `from-name` is a name the engine gives the sender's session;
+no session reports its own, so the daemon does not resolve it.
+
+On a stored `session.receive` the daemon looks for the most recent unpaired `send` (or
 dashboard) row:
 
 1. addressed to the receiver: `to` equals the receiver's session uuid;
-2. with the same text (sha-256 of the stored body);
+2. with the same text: the sha-256 of each body without an envelope (a receive stored
+   before 0.6.2's daemon may still carry one) and without the whitespace around it;
 3. whose `at` is within **120 s** of the receive's `at`, either side;
-4. not sent by the receiver itself.
+4. not sent by the receiver itself;
+5. when the receive names the sending process: not sent from a session whose
+   `sessions.pid` is another process. A send from the session running as that pid is
+   taken ahead of the order above.
 
 The match sets the send's `delivered = 1` and the receive's `from_session` to the
-sender. No match leaves `from_session` NULL. When no uuid-addressed send matches, a
+sender. With no match, a sending pid that names a session (the newest with that `pid`
+that procwatch has not marked `dead`, other than the receiver) still sets
+`from_session`, with `matched_id` left NULL; otherwise `from_session` stays NULL. When
+no uuid-addressed send matches, a
 send whose address resolved to no session (a name or an agent id) with the same text
 in the window is taken instead — only one sent from a session in the **receiver's
 project**: a name never pairs across projects. Batches from different sessions arrive
 in any order, so a `send` stored after its `receive` pairs the same way (a
 name-addressed send then pairs only with a receive in the sender's project, or one
-whose session uuid is the address itself). Each row pairs at most once (`matched_id`
-names the other side).
+whose session uuid is the address itself), never with a receive whose `from_session`
+the sending pid already set to another session, and ahead of the others with one it
+set to this sender. Each row pairs at most once (`matched_id` names the other side).
 
 ### Claims
 
@@ -881,7 +910,7 @@ command itself stays `failed`.
 type SessionRef = { id: number; uuid: string; title: string | null }; // title as the sessions list shows it
 type Message = {
   id: number; kind: 'send' | 'receive' | 'dashboard';
-  fromSession: SessionRef | null;   // null: receive not correlated, or the session row is gone
+  fromSession: SessionRef | null;   // null: receive's sender unknown (not correlated, no pid naming a session), or the session row is gone
   toSession: SessionRef | null;     // null: the address is no session of ours
   toAddress: string | null;         // as the engine spelled it; null on a receive
   body: string; truncated: boolean; origin: string | null;

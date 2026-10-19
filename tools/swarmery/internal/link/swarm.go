@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -76,6 +77,10 @@ type MessageRecord struct {
 	Delivered   *bool
 	Reason      string
 	CommandID   int64
+	// FromPID: a receive's sender process id, when the engine named it (the
+	// mod's fromPid, else the envelope's uds socket). Used to find the
+	// sender; not stored.
+	FromPID int64
 }
 
 // swarmEvent is a validated swarm event, ready to apply.
@@ -143,6 +148,7 @@ func validateSwarm(kind, sessionUUID, at string, raw []byte) (*swarmEvent, error
 			Truncated  bool    `json:"truncated"`
 			OriginKind string  `json:"originKind"`
 			FromPlugin string  `json:"fromPlugin"`
+			FromPID    *int64  `json:"fromPid"`
 		}
 		if err := json.Unmarshal(raw, &p); err != nil {
 			return nil, bad("%v", err)
@@ -152,10 +158,20 @@ func validateSwarm(kind, sessionUUID, at string, raw []byte) (*swarmEvent, error
 			return nil, bad("text is required")
 		case utf8.RuneCountInString(p.OriginKind) > maxOriginKind:
 			return nil, bad("originKind exceeds %d characters", maxOriginKind)
+		case p.FromPID != nil && *p.FromPID <= 0:
+			return nil, bad("fromPid must be a positive integer")
+		}
+		// Stored without the engine's envelope, so it compares with the send
+		// and reads as the sender wrote it (a mod before 0.6.2 sends it as
+		// the engine delivered it).
+		body, from, _ := unwrapEnvelope(*p.Text, p.Truncated)
+		pid := socketPID(from)
+		if p.FromPID != nil {
+			pid = *p.FromPID
 		}
 		return &swarmEvent{msg: &MessageRecord{
-			Kind: MsgReceive, ToSession: sessionUUID, Body: *p.Text,
-			Truncated: p.Truncated, Origin: p.OriginKind, At: at,
+			Kind: MsgReceive, ToSession: sessionUUID, Body: body,
+			Truncated: p.Truncated, Origin: p.OriginKind, At: at, FromPID: pid,
 		}}, nil
 	case KindClaim:
 		var p struct {
@@ -292,6 +308,68 @@ func clipBody(body string) (string, bool) {
 	return body, false
 }
 
+// The engine (Claude Code 2.1.303) hands the receiver a peer's message wrapped
+// in an envelope naming the sender, while the sender's session.send reports
+// the bare text:
+//
+//	<cross-session-message from="uds:/tmp/cc-socks/41881.sock" from-name="proj-10" from-mode="bypass">
+//	ping-from-A
+//	</cross-session-message>
+var (
+	envelopeOpen  = regexp.MustCompile(`^\s*<cross-session-message((?:\s+[^\s=>"']+\s*=\s*(?:"[^"]*"|'[^']*'))*)\s*>`)
+	envelopeClose = regexp.MustCompile(`</cross-session-message\s*>\s*$`)
+	envelopeAttr  = regexp.MustCompile(`([^\s=>"']+)\s*=\s*(?:"([^"]*)"|'([^']*)')`)
+	// socketName: the engine names a session's messaging socket after its
+	// process id (the envelope's from and the delivery's verifiedPeerPid
+	// agree on it).
+	socketName = regexp.MustCompile(`^uds:.*/([0-9]+)\.sock$`)
+)
+
+// unwrapEnvelope returns text without the engine's cross-session envelope:
+// the body between the tags with the whitespace around it trimmed, and the
+// envelope's from attribute. Attributes may come in any order, with others
+// among them. A text that is not one whole envelope comes back unchanged with
+// ok false — except a truncated one, which may have lost its closing tag.
+func unwrapEnvelope(text string, truncated bool) (body, from string, ok bool) {
+	open := envelopeOpen.FindStringSubmatchIndex(text)
+	if open == nil {
+		return text, "", false
+	}
+	rest := text[open[1]:]
+	if end := envelopeClose.FindStringIndex(rest); end != nil {
+		rest = rest[:end[0]]
+	} else if !truncated {
+		return text, "", false
+	}
+	for _, a := range envelopeAttr.FindAllStringSubmatch(text[open[2]:open[3]], -1) {
+		if a[1] == "from" {
+			from = a[2] + a[3] // one of the two quote forms matched
+		}
+	}
+	return strings.TrimSpace(rest), from, true
+}
+
+// socketPID is the process id an envelope's from address names, or 0.
+func socketPID(from string) int64 {
+	m := socketName.FindStringSubmatch(from)
+	if m == nil {
+		return 0
+	}
+	n, err := strconv.ParseInt(m[1], 10, 64)
+	if err != nil || n <= 0 {
+		return 0
+	}
+	return n
+}
+
+// matchKey is what correlation compares: the sha-256 of a body without an
+// envelope (rows stored before receives were unwrapped still carry one) and
+// without the whitespace around it.
+func matchKey(body string) [32]byte {
+	b, _, _ := unwrapEnvelope(body, false)
+	return sha256.Sum256([]byte(strings.TrimSpace(b)))
+}
+
 // RecordMessage stores one message and correlates it with the other side of
 // its pair, returning the link_messages id it landed on.
 //
@@ -307,10 +385,13 @@ func clipBody(body string) (string, bool) {
 //   - A receive is paired with the most recent unpaired send / dashboard row
 //     addressed to the receiver (by session uuid; failing that, one whose
 //     address resolved to no session — a name or an agent id — sent from a
-//     session in the receiver's project) with the same text (sha256) within
-//     CorrelateWindow: the send becomes delivered, the receive gets the sender
-//     as from_session. No match leaves from_session NULL. A send arriving
-//     after its receive pairs the same way.
+//     session in the receiver's project) with the same text (matchKey) within
+//     CorrelateWindow, preferring one sent from the session whose pid is the
+//     receive's FromPID: the send becomes delivered, the receive gets the
+//     sender as from_session. With no match, a FromPID that names a session
+//     still sets from_session (matched_id stays NULL); otherwise it stays
+//     NULL. A send arriving after its receive pairs the same way, never with
+//     a receive whose from_session names another session.
 func RecordMessage(ctx context.Context, ex dbtx, rec MessageRecord) (int64, error) {
 	body, cut := clipBody(rec.Body)
 	rec.Body, rec.Truncated = body, rec.Truncated || cut
@@ -418,6 +499,7 @@ type candidate struct {
 	body string
 	from sql.NullString
 	to   sql.NullString
+	pid  sql.NullInt64 // a send's: its sender's sessions.pid
 }
 
 // correlateReceive pairs a just-stored receive with its send (see
@@ -432,7 +514,9 @@ func correlateReceive(ctx context.Context, ex dbtx, recvID int64, rec MessageRec
 	// only takes a send from a session in the receiver's own project: a name
 	// says nothing about which project's session it reached.
 	cands, err := candidates(ctx, ex,
-		`SELECT m.id, m.body, m.from_session, m.to_session FROM link_messages m
+		`SELECT m.id, m.body, m.from_session, m.to_session,
+		        (SELECT s.pid FROM sessions s WHERE s.session_uuid = m.from_session)
+		   FROM link_messages m
 		  WHERE m.kind IN ('send', 'dashboard') AND m.matched_id IS NULL
 		    AND (m.to_session = ? OR m.to_address = ?
 		         OR (m.to_session IS NULL AND EXISTS (
@@ -445,11 +529,55 @@ func correlateReceive(ctx context.Context, ex dbtx, recvID int64, rec MessageRec
 	if err != nil {
 		return err
 	}
-	sum := sha256.Sum256([]byte(rec.Body))
-	for _, c := range cands {
-		if sha256.Sum256([]byte(c.body)) == sum {
-			return pair(ctx, ex, c.id, recvID, c.from.String, receiver)
+	// The engine names the sending process: a send from a session known to
+	// run as another process is not this message, and one from that very
+	// process wins over the order above.
+	key := matchKey(rec.Body)
+	var match *candidate
+	for i := range cands {
+		c := &cands[i]
+		if matchKey(c.body) != key {
+			continue
 		}
+		if rec.FromPID > 0 && c.pid.Valid {
+			if c.pid.Int64 != rec.FromPID {
+				continue
+			}
+			match = c
+			break
+		}
+		if match == nil {
+			match = c
+		}
+	}
+	if match != nil {
+		return pair(ctx, ex, match.id, recvID, match.from.String, receiver)
+	}
+	return attributeByPID(ctx, ex, recvID, rec.FromPID, receiver)
+}
+
+// attributeByPID sets an unpaired receive's from_session to the session whose
+// process sent it, when one is known: the newest session with that pid that
+// procwatch has not seen die. matched_id stays NULL — a send arriving later
+// from that session still pairs (correlateSend).
+func attributeByPID(ctx context.Context, ex dbtx, recvID, pid int64, receiver string) error {
+	if pid <= 0 {
+		return nil
+	}
+	var sender string
+	err := ex.QueryRowContext(ctx,
+		`SELECT session_uuid FROM sessions
+		  WHERE pid = ? AND session_uuid <> ? AND COALESCE(proc_state, '') <> 'dead'
+		  ORDER BY started_at DESC, id DESC LIMIT 1`, pid, receiver).Scan(&sender)
+	switch {
+	case errors.Is(err, sql.ErrNoRows):
+		return nil
+	case err != nil:
+		return fmt.Errorf("link swarm: sender by pid: %w", err)
+	}
+	if _, err := ex.ExecContext(ctx,
+		`UPDATE link_messages SET from_session = ? WHERE id = ?`, sender, recvID); err != nil {
+		return fmt.Errorf("link swarm: sender by pid: %w", err)
 	}
 	return nil
 }
@@ -467,24 +595,29 @@ func correlateSend(ctx context.Context, ex dbtx, sendID int64, rec MessageRecord
 	// A send addressed to a session pairs with that session's receive alone.
 	// One whose address resolved to no session (a name, an agent id) pairs
 	// with a receive whose session the address spells, else with one in the
-	// sender's own project — never across projects.
+	// sender's own project — never across projects. A receive already
+	// attributed to a sender by its pid (attributeByPID) is that sender's
+	// alone, and comes first.
 	cands, err := candidates(ctx, ex,
-		`SELECT r.id, r.body, r.from_session, r.to_session FROM link_messages r
-		  WHERE r.kind = 'receive' AND r.matched_id IS NULL AND r.from_session IS NULL
+		`SELECT r.id, r.body, r.from_session, r.to_session, NULL FROM link_messages r
+		  WHERE r.kind = 'receive' AND r.matched_id IS NULL
+		    AND (r.from_session IS NULL OR r.from_session = ?)
 		    AND r.to_session <> ?
 		    AND CASE WHEN ? <> '' THEN r.to_session = ?
 		             ELSE r.to_session = ? OR EXISTS (
 		                  SELECT 1 FROM sessions rs JOIN sessions ss ON ss.project_id = rs.project_id
 		                   WHERE rs.session_uuid = r.to_session AND ss.session_uuid = ?) END
 		    AND r.at >= ? AND r.at <= ?
-		  ORDER BY CASE WHEN r.to_session = ? THEN 0 ELSE 1 END, r.at, r.id`,
-		rec.FromSession, rec.ToSession, rec.ToSession, rec.ToAddress, rec.FromSession, lo, hi, rec.ToAddress)
+		  ORDER BY CASE WHEN r.from_session = ? THEN 0 ELSE 1 END,
+		           CASE WHEN r.to_session = ? THEN 0 ELSE 1 END, r.at, r.id`,
+		rec.FromSession, rec.FromSession, rec.ToSession, rec.ToSession, rec.ToAddress, rec.FromSession, lo, hi,
+		rec.FromSession, rec.ToAddress)
 	if err != nil {
 		return err
 	}
-	sum := sha256.Sum256([]byte(rec.Body))
+	key := matchKey(rec.Body)
 	for _, c := range cands {
-		if sha256.Sum256([]byte(c.body)) == sum {
+		if matchKey(c.body) == key {
 			return pair(ctx, ex, sendID, c.id, rec.FromSession, c.to.String)
 		}
 	}
@@ -502,7 +635,7 @@ func candidates(ctx context.Context, ex dbtx, q string, args ...any) ([]candidat
 	var out []candidate
 	for rows.Next() {
 		var c candidate
-		if err := rows.Scan(&c.id, &c.body, &c.from, &c.to); err != nil {
+		if err := rows.Scan(&c.id, &c.body, &c.from, &c.to, &c.pid); err != nil {
 			return nil, fmt.Errorf("link swarm: correlate: %w", err)
 		}
 		out = append(out, c)
