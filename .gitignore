@@ -45,6 +45,9 @@ articles/**/build/
 # Staged by the pages workflow from docs/video/ (never committed twice)
 site/video/
 
+# 1080p episode originals and raw footage — local only; the 720p cuts ship in docs/video/
+/video/
+
 # Python bytecode caches (scripts/site/build.py imports data.py)
 __pycache__/
 *.pyc
