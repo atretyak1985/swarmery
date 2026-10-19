@@ -11,7 +11,7 @@ import type { Register } from 'claude-code'
 import { judgeToolCall } from './isolation'
 import { type PackPolicy, isHeavyMcpTool, isOffered, packPolicy } from './offer'
 import { type ProdPattern, type SecretRule, compileProd, compileSecrets, parseJson } from './patterns'
-import { matchProd, projectProdPatterns, prodReason } from './prodguard'
+import { type ModeBook, matchProd, modeOf, noteMode, prodVerdict, projectProdPatterns } from './prodguard'
 import { hasToolResult, redactBlocks, statusLine } from './redaction'
 import { type GuardContext, type ProjectConfig, buildContext, parseOptions, parseProject } from './roots'
 
@@ -110,6 +110,33 @@ export const register: Register = (on, rawOptions) => {
   }
 
   if (options.prodGuard) {
+    // tool.check carries no permission mode; these classic events do. Each
+    // only records it and hands the event on unchanged.
+    const modes: ModeBook = new Map()
+    const record = (e: unknown): void => {
+      try {
+        noteMode(modes, e)
+      } catch {
+        // an unread mode keeps the ask
+      }
+    }
+    on('classic.SessionStart', async ($, e, next) => {
+      record(e)
+      return next(e)
+    }).catch(($, e, next) => next(e))
+    on('classic.UserPromptSubmit', async ($, e, next) => {
+      record(e)
+      return next(e)
+    }).catch(($, e, next) => next(e))
+    on('classic.PostToolUse', async ($, e, next) => {
+      record(e)
+      return next(e)
+    }).catch(($, e, next) => next(e))
+    on('classic.PostToolUseFailure', async ($, e, next) => {
+      record(e)
+      return next(e)
+    }).catch(($, e, next) => next(e))
+
     on('tool.check', async ($, e, next) => {
       const below = await next(e)
       if (below.decision === 'deny') return below
@@ -120,16 +147,16 @@ export const register: Register = (on, rawOptions) => {
         hit = undefined
       }
       if (hit === undefined) return below
-      const reason = prodReason(hit)
+      const verdict = prodVerdict(hit, modeOf(modes, e.agentId))
       const id = e.tool_use_id
-      if (id !== undefined) {
+      if (verdict.decision === 'ask' && id !== undefined) {
         try {
-          ignore($.ui.notice(id, reason))
+          ignore($.ui.notice(id, verdict.reason))
         } catch {
           // no open dialog to annotate yet; the ask stands
         }
       }
-      return { decision: 'ask', reason }
+      return verdict
     }).catch(($, e, next) => next(e))
   }
 

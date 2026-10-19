@@ -13,7 +13,7 @@ Swarmery ships two, both opt-in and both off until you enable them:
 | Plugin | What it is | Needs |
 |---|---|---|
 | [`swarmery-link`](../plugins/swarmery-link/README.md) | Reports the session's live state to the local swarmery daemon. Opt-in options add Stop / Send prompt from the dashboard, approvals in Swarmery, swarm coordination between sessions, the plan band in the terminal and a per-turn forecast. | the swarmery daemon and its token file |
-| [`guard-pack`](../plugins/guard-pack/README.md) | Keeps file tools inside the project's roots, redacts secret-shaped values in tool results before Claude sees them, puts production-deploy commands to the native ask dialog, and can hide agents of packs the project has not enabled. | nothing: no daemon, no `core` |
+| [`guard-pack`](../plugins/guard-pack/README.md) | Keeps file tools inside the project's roots, redacts secret-shaped values in tool results before Claude sees them, puts production-deploy commands to the native ask dialog (and refuses them in `auto` mode, where no dialog would show), and can hide agents of packs the project has not enabled. | nothing: no daemon, no `core` |
 
 The wire contract between `swarmery-link` and the daemon is
 [`tools/swarmery/docs/mods-link-protocol.md`](../tools/swarmery/docs/mods-link-protocol.md).
@@ -95,7 +95,7 @@ is the same block as a file.
 |---|---|---|
 | `isolation` | `true` | Deny file tools, and `rm`/`mv`/`cp`/redirect/`cd` in Bash, on paths outside the project's roots. |
 | `redaction` | `true` | Replace secret-shaped values in tool results with `[REDACTED:<rule>]` before Claude sees them. The raw output may still be kept in the local transcript. |
-| `prodGuard` | `true` | Send production-deploy commands to the native ask dialog, whatever the permission rules say. |
+| `prodGuard` | `true` | Send production-deploy commands to the native ask dialog, whatever the permission rules say. In `auto`, `dontAsk` and `bypassPermissions` mode, where no dialog would reach a person, refuse them instead. The mode is read from the classic hook events' `permission_mode`. |
 | `agentOffer` | `false` | Hide `<pack>:<agent>` agents of packs this project has not enabled. |
 | `deferHeavyTools` | `false` | Put MCP tools with a description over 2048 characters behind ToolSearch. |
 | `extraRoots` | `""` | Comma-separated extra directories the isolation guard treats as inside the project. |
@@ -111,7 +111,7 @@ registers fewer hooks and makes fewer calls than the table shows.
 | Plugin | Hooks | `$` calls | Env reads |
 |---|---|---|---|
 | `swarmery-link` | `session.start`, `turn.start`, `tool.call`, `tool.check`, `tool.call{tool=AskUserQuestion}`, `session.measure`, `turn.complete`, `session.end`, `session.send`, `session.receive`, `ui.render{component=AbovePrompt}`, `ui.render{component=Pane, requestId=?}`, `ui.render{component=AskUserQuestion}`, `command.run{command=plan}` | `$.clock`, `$.command.register`, `$.env.get`, `$.fs.read`, `$.http.fetch`, `$.model.classify`, `$.model.complete`, `$.prompt.submit`, `$.session` (`cwd`, `id`, `send`, `usage`), `$.store`, `$.turn.abort`, `$.ui` | `HOME` |
-| `guard-pack` | `session.start`, `tool.call`, `session.append`, `tool.check`, `agent.offer`, `tool.describe` | `$.env.get`, `$.fs.read`, `$.session.cwd`, `$.session.root`, `$.settings.read`, `$.ui.notice`, `$.ui.status` | `AGENT_PROJECT`, `AGENT_WORKSPACE_ROOT`, `HOME`, `TMPDIR` |
+| `guard-pack` | `session.start`, `tool.call`, `session.append`, `classic.SessionStart`, `classic.UserPromptSubmit`, `classic.PostToolUse`, `classic.PostToolUseFailure`, `tool.check`, `agent.offer`, `tool.describe` | `$.env.get`, `$.fs.read`, `$.session.cwd`, `$.session.root`, `$.settings.read`, `$.ui.notice`, `$.ui.status` | `AGENT_PROJECT`, `AGENT_WORKSPACE_ROOT`, `HOME`, `TMPDIR` |
 
 Neither writes an environment variable. Every gating hook of both carries a
 `.catch` that hands the event on unchanged, so a failing hook never blocks a
