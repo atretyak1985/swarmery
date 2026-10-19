@@ -375,11 +375,11 @@ func matchKey(body string) [32]byte {
 //
 //   - A send that ran a dashboard 'message' command (CommandID set) folds into
 //     that command's dashboard row instead of adding a second row for the same
-//     message: the row takes the engine's address, truncation and origin. Its
-//     delivered is the ack's to set (Commands.Ack) — unless the ack came
-//     first, when the send's isDelivered overrides it (a late send the mod
-//     timed out on). Without such a row it is stored as a plain send carrying
-//     the command id.
+//     message: the row takes the engine's address, truncation and origin, and
+//     the send's isDelivered as its delivered, before or after the ack
+//     (Commands.Ack): the engine's verdict wins over a failed ack, first or
+//     re-delivered (a late send the mod timed out on). Without such a row it
+//     is stored as a plain send carrying the command id.
 //   - ToSession is resolved from ToAddress when the address is one of our
 //     session uuids.
 //   - A receive is paired with the most recent unpaired send / dashboard row
@@ -445,15 +445,14 @@ func RecordMessage(ctx context.Context, ex dbtx, rec MessageRecord) (int64, erro
 // that command's dashboard row; 0 when there is no such row.
 func foldDashboardSend(ctx context.Context, ex dbtx, rec MessageRecord) (int64, error) {
 	var (
-		id        int64
-		matched   sql.NullInt64
-		delivered sql.NullInt64
-		toSess    sql.NullString
+		id      int64
+		matched sql.NullInt64
+		toSess  sql.NullString
 	)
 	err := ex.QueryRowContext(ctx,
-		`SELECT id, matched_id, delivered, to_session FROM link_messages
+		`SELECT id, matched_id, to_session FROM link_messages
 		  WHERE kind = 'dashboard' AND command_id = ? AND from_session = ?
-		  ORDER BY id LIMIT 1`, rec.CommandID, rec.FromSession).Scan(&id, &matched, &delivered, &toSess)
+		  ORDER BY id LIMIT 1`, rec.CommandID, rec.FromSession).Scan(&id, &matched, &toSess)
 	if errors.Is(err, sql.ErrNoRows) {
 		return 0, nil
 	}
@@ -466,12 +465,15 @@ func foldDashboardSend(ctx context.Context, ex dbtx, rec MessageRecord) (int64, 
 		  WHERE id = ?`, rec.ToAddress, boolInt(rec.Truncated), nullable(rec.Origin), id); err != nil {
 		return 0, fmt.Errorf("link swarm: fold dashboard message: %w", err)
 	}
-	// The ack already settled the row, and the send reports how it really
-	// ended: the engine's verdict wins. That is the mod's message timeout — it
-	// acks failed after 10 s, and the send it gave up on may settle later.
-	// Delivered clears the reason; not delivered takes the engine's reason in
-	// the ack's spelling, or keeps the ack's when the engine gave none.
-	if delivered.Valid && rec.Delivered != nil {
+	// The send reports how it really ended: the engine's verdict wins over
+	// the ack's, whichever reaches the daemon first. That is the mod's message
+	// timeout — it acks failed after 10 s, the send it gave up on may settle
+	// later, and that failed ack may itself be lost and answered again on a
+	// re-delivery after the send came in (settleMessage leaves a row the send
+	// marked delivered alone). Delivered clears the reason; not delivered takes the
+	// engine's reason in the ack's spelling, or keeps the ack's when the engine
+	// gave none.
+	if rec.Delivered != nil {
 		var reason any
 		if rec.Reason != "" {
 			reason = "undeliverable: " + rec.Reason
@@ -553,28 +555,54 @@ func correlateReceive(ctx context.Context, ex dbtx, recvID int64, rec MessageRec
 	if match != nil {
 		return pair(ctx, ex, match.id, recvID, match.from.String, receiver)
 	}
-	return attributeByPID(ctx, ex, recvID, rec.FromPID, receiver)
+	return attributeByPID(ctx, ex, recvID, rec.FromPID, receiver, rec.At)
 }
 
 // attributeByPID sets an unpaired receive's from_session to the session whose
-// process sent it, when one is known: the newest session with that pid that
-// procwatch has not seen die. matched_id stays NULL — a send arriving later
-// from that session still pairs (correlateSend).
-func attributeByPID(ctx context.Context, ex dbtx, recvID, pid int64, receiver string) error {
+// process sent it, when exactly one session can be: one with that pid that
+// procwatch has not seen die, started at or before the receive, and active —
+// a link event or a transcript event — within CorrelateWindow of it. The
+// engine reuses pids, and procwatch marks a session dead only on its next
+// check: a session that ran under that pid earlier and went quiet is not the
+// sender. Two or more such sessions name no one. matched_id stays NULL — a
+// send arriving later from that session still pairs (correlateSend).
+func attributeByPID(ctx context.Context, ex dbtx, recvID, pid int64, receiver, at string) error {
 	if pid <= 0 {
 		return nil
 	}
-	var sender string
-	err := ex.QueryRowContext(ctx,
-		`SELECT session_uuid FROM sessions
-		  WHERE pid = ? AND session_uuid <> ? AND COALESCE(proc_state, '') <> 'dead'
-		  ORDER BY started_at DESC, id DESC LIMIT 1`, pid, receiver).Scan(&sender)
-	switch {
-	case errors.Is(err, sql.ErrNoRows):
-		return nil
-	case err != nil:
+	lo, hi, err := window(at)
+	if err != nil {
+		return err
+	}
+	rows, err := ex.QueryContext(ctx,
+		`SELECT s.session_uuid FROM sessions s
+		  WHERE s.pid = ? AND s.session_uuid <> ? AND COALESCE(s.proc_state, '') <> 'dead'
+		    AND s.started_at <= ?
+		    AND (EXISTS (SELECT 1 FROM link_events le
+		                  WHERE le.session_id = s.id AND le.at >= ? AND le.at <= ?)
+		         OR EXISTS (SELECT 1 FROM events je
+		                     WHERE je.session_id = s.id AND je.ts >= ? AND je.ts <= ?))
+		  LIMIT 2`, pid, receiver, at, lo, hi, lo, hi)
+	if err != nil {
 		return fmt.Errorf("link swarm: sender by pid: %w", err)
 	}
+	var senders []string
+	for rows.Next() {
+		var uuid string
+		if err := rows.Scan(&uuid); err != nil {
+			rows.Close()
+			return fmt.Errorf("link swarm: sender by pid: %w", err)
+		}
+		senders = append(senders, uuid)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("link swarm: sender by pid: %w", err)
+	}
+	if len(senders) != 1 {
+		return nil
+	}
+	sender := senders[0]
 	if _, err := ex.ExecContext(ctx,
 		`UPDATE link_messages SET from_session = ? WHERE id = ?`, sender, recvID); err != nil {
 		return fmt.Errorf("link swarm: sender by pid: %w", err)
@@ -647,7 +675,8 @@ func candidates(ctx context.Context, ex dbtx, q string, args ...any) ([]candidat
 }
 
 // pair links a send / dashboard row and a receive row. A send becomes
-// delivered; a dashboard row's delivered is the ack's (Commands.Ack).
+// delivered; a dashboard row's delivered is its send's or its ack's
+// (foldDashboardSend, Commands.Ack).
 func pair(ctx context.Context, ex dbtx, sendID, recvID int64, sender, receiver string) error {
 	if _, err := ex.ExecContext(ctx,
 		`UPDATE link_messages

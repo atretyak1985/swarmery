@@ -186,6 +186,33 @@ export const sendPayload = (facts: SendFacts): Readonly<Record<string, unknown>>
   }
 }
 
+/** A dashboard message whose `$.session.send` has not settled yet. */
+export type PendingSend = { readonly commandId: string; readonly to: string; readonly text: string; isLogged: boolean }
+
+/** The unreported pending dashboard messages with this text, oldest first. */
+const openWith = (pending: ReadonlyMap<string, PendingSend>, text: string): readonly PendingSend[] =>
+  [...pending.values()].filter(p => !p.isLogged && p.text === text)
+
+/**
+ * The pending dashboard message a plugin send of `to`/`text` is, if any: the
+ * oldest unreported one with that text addressed as the engine spelled `to`,
+ * else the only unreported one with that text. Two or more with that text and
+ * none addressed as `to` cannot be told apart: undefined, never a guess that
+ * could swap their command ids.
+ */
+export const pendingFor = (pending: ReadonlyMap<string, PendingSend>, to: string, text: string): PendingSend | undefined => {
+  const open = openWith(pending, text)
+  return open.find(p => p.to === to) ?? (open.length === 1 ? open[0] : undefined)
+}
+
+/**
+ * Whether a plugin send of `to`/`text` is one of several pending dashboard
+ * messages that `pendingFor` cannot tell apart. The send hook then leaves the
+ * report to each message's own path, which knows its command id.
+ */
+export const isAmbiguousSend = (pending: ReadonlyMap<string, PendingSend>, to: string, text: string): boolean =>
+  pendingFor(pending, to, text) === undefined && openWith(pending, text).length > 1
+
 /** The plugin named on a delivery's origin, when it names one. */
 export const originPlugin = (origin: unknown): string | undefined => {
   const plugin = isRecord(origin) ? origin.plugin : undefined

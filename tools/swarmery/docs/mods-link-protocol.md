@@ -838,9 +838,14 @@ dashboard) row:
    taken ahead of the order above.
 
 The match sets the send's `delivered = 1` and the receive's `from_session` to the
-sender. With no match, a sending pid that names a session (the newest with that `pid`
-that procwatch has not marked `dead`, other than the receiver) still sets
-`from_session`, with `matched_id` left NULL; otherwise `from_session` stays NULL. When
+sender. With no match, a sending pid still sets `from_session` (with `matched_id` left
+NULL) when exactly one session, other than the receiver, can be its sender: one whose
+`sessions.pid` is that pid, that procwatch has not marked `dead`, whose `started_at`
+is at or before the receive's `at`, and that shows activity — a `link_events` row or a
+transcript event — within **120 s** of the receive, either side. The engine reuses
+pids and procwatch marks a session dead only on its next check, so a session that ran
+under that pid earlier and went quiet is never named. None, or two or more, leave
+`from_session` NULL. When
 no uuid-addressed send matches, a
 send whose address resolved to no session (a name or an agent id) with the same text
 in the window is taken instead — only one sent from a session in the **receiver's
@@ -885,18 +890,26 @@ every `failed` ack is final. The mod acks with the usual body:
 
 The mod also reports the send as a `session.send` event with `commandId`; it folds into
 the command's dashboard row (address, truncation, origin) instead of adding a second
-row. The row's `delivered` is the ack's to set: `done` → `1`, `failed` → `0` with the
-ack message as `reason`, expired → `0` with reason `expired`. The command's final
-state and its row's `delivered` are written in one transaction: an ack (or expiry)
-that fails leaves both as they were, and the mod's re-delivered ack settles both.
+row. The ack settles the row: `done` → `1`, `failed` → `0` with the ack message as
+`reason`, expired → `0` with reason `expired`. The command's final state and its row's
+`delivered` are written in one transaction: an ack (or expiry) that fails leaves both
+as they were, and the mod's re-delivered ack settles both.
 
-One exception: a send that settles **after** the ack. The mod gives a send 10 s; past
-that it acks `failed` with `undeliverable: no answer in 10s`, but keeps the send's
-command id and reports the send, with that `commandId`, once it settles. A
-`session.send` folding into a row the ack already settled overrides it with the
-engine's verdict: `isDelivered: true` → `delivered = 1`, reason cleared;
-`isDelivered: false` → `delivered = 0`, reason `undeliverable: <engine reason>`. The
-command itself stays `failed`.
+**The send's verdict wins over a failed ack.** The mod gives a send 10 s; past that it
+acks `failed` with `undeliverable: no answer in 10s`, but keeps the send's command id
+and reports the send, with that `commandId`, once it settles. The folding
+`session.send` writes the engine's verdict on the row whenever it arrives, before or
+after the ack: `isDelivered: true` → `delivered = 1`, reason cleared;
+`isDelivered: false` → `delivered = 0`, reason `undeliverable: <engine reason>`. A
+`failed` ack (or expiry) of a command whose row the send already marked `delivered = 1`
+is recorded on the command (`failed`) but leaves the row's `delivered` and `reason`
+alone — also the same failed ack answered again on a re-delivery, when the first one
+was lost before the late send came in.
+
+The mod matches a send its send hook sees to the pending dashboard message by text, and
+by the recipient as the engine spelled it. When two or more pending messages carry the
+same text and none is addressed as spelled, the hook does not guess (a guess could swap
+their command ids): each message's own path reports its send with its own `commandId`.
 
 ### Routes
 

@@ -122,9 +122,12 @@ import { inputHash, toolInput } from './lib/hash'
 import { type LinkEvent, type LinkKind, type Stamps, drop, enqueue, stamp, takeBatch } from './lib/queue'
 import {
   EMPTY_TURN,
+  type PendingSend,
   type SwarmTurn,
   claimPath,
   conflictLines,
+  isAmbiguousSend,
+  pendingFor,
   receiveLine,
   receivePayload,
   releasePayload,
@@ -346,9 +349,6 @@ async function resync($: EngineInterface, link: Link): Promise<void> {
   await push($, link, 'session.start', link.start)
 }
 
-/** A dashboard message whose `$.session.send` has not settled yet. */
-type PendingSend = { readonly commandId: string; readonly to: string; readonly text: string; isLogged: boolean }
-
 /** The swarm's state for one load of the module. Exists only with `swarm` on. */
 type Swarm = {
   turn: SwarmTurn
@@ -360,16 +360,6 @@ type Swarm = {
    * carries the command's id.
    */
   readonly pending: Map<string, PendingSend>
-}
-
-/**
- * The pending dashboard message a plugin send of `to`/`text` is, if any: the
- * oldest unreported one with that text, one addressed as the engine spelled
- * `to` first.
- */
-const pendingFor = (pending: ReadonlyMap<string, PendingSend>, to: string, text: string): PendingSend | undefined => {
-  const open = [...pending.values()].filter(p => !p.isLogged && p.text === text)
-  return open.find(p => p.to === to) ?? open[0]
 }
 
 /** Runs `work` after every claim or release queued before it. Rejects as `work` does. */
@@ -428,10 +418,17 @@ async function endSwarmSession($: EngineInterface, link: Link, swarm: Swarm): Pr
   })
 }
 
-/** A message this conversation's main loop sent: `session.send`, with the command's id when the dashboard asked for it. */
+/**
+ * A message this conversation's main loop sent: `session.send`, with the
+ * command's id when the dashboard asked for it. One of this plugin's sends that
+ * matches several pending dashboard messages is not reported here: each
+ * message's own path (deliverMessage) reports it with its own id.
+ */
 async function noteSend($: EngineInterface, link: Link, swarm: Swarm, e: SessionSendInput, result: SessionSendResult): Promise<void> {
   const name = e.origin.kind === 'plugin' ? e.origin.name : undefined
-  const pending = name === NAME || name?.startsWith(`${NAME}@`) === true ? pendingFor(swarm.pending, e.to, e.text) : undefined
+  const isOwn = name === NAME || name?.startsWith(`${NAME}@`) === true
+  if (isOwn && isAmbiguousSend(swarm.pending, e.to, e.text)) return
+  const pending = isOwn ? pendingFor(swarm.pending, e.to, e.text) : undefined
   if (pending !== undefined) pending.isLogged = true
   await push(
     $,

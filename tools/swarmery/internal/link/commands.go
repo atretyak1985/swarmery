@@ -293,6 +293,11 @@ func (c *Commands) EnqueueMessage(ctx context.Context, senderID int64, toUUID, t
 // reason. ex is the transaction that moves the command to that final state,
 // so the two never part: a failed settle leaves the command where it was and a
 // retried ack (or the next sweep) settles both.
+//
+// A failed or expired outcome leaves a row already marked delivered alone:
+// before the command's final state only the sender's session.send marks it
+// (foldDashboardSend), and the engine's "delivered" wins over the mod's
+// timeout — also when that failed ack is answered again on a re-delivery.
 func settleMessage(ctx context.Context, ex dbtx, commandID int64, delivered bool, reason string) error {
 	var why any
 	if !delivered {
@@ -302,8 +307,9 @@ func settleMessage(ctx context.Context, ex dbtx, commandID int64, delivered bool
 		why = reason
 	}
 	if _, err := ex.ExecContext(ctx,
-		`UPDATE link_messages SET delivered = ?, reason = ? WHERE kind = 'dashboard' AND command_id = ?`,
-		boolInt(delivered), why, commandID); err != nil {
+		`UPDATE link_messages SET delivered = ?, reason = ?
+		  WHERE kind = 'dashboard' AND command_id = ? AND (? = 1 OR COALESCE(delivered, 0) <> 1)`,
+		boolInt(delivered), why, commandID, boolInt(delivered)); err != nil {
 		return fmt.Errorf("link commands: settle message: %w", err)
 	}
 	return nil
