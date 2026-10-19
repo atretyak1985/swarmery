@@ -29,6 +29,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"os/exec"
 	"regexp"
 	"strconv"
@@ -262,6 +263,9 @@ func runGit(ctx context.Context, repo string, args ...string) (string, error) {
 	defer cancel()
 	cmd := exec.CommandContext(ctx, "git", args...)
 	cmd.Dir = repo
+	// Optional locks off: this runs on a settle-poll under a 5 s deadline, and
+	// a killed read must not leave an index.lock behind in the operator's repo.
+	cmd.Env = append(os.Environ(), "GIT_OPTIONAL_LOCKS=0")
 	var stderr strings.Builder
 	cmd.Stderr = &stderr
 	out, err := cmd.Output()
