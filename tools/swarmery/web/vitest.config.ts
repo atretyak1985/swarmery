@@ -13,6 +13,9 @@ export default mergeConfig(
       include: ['src/**/*.test.{ts,tsx}'],
       // Activates the i18n source locale for every test (src/test/setup.ts).
       setupFiles: ['src/test/setup.ts'],
+      // Above setup.ts's 5 s asyncUtilTimeout, so a findBy that needs its whole
+      // budget under load fails as a findBy, not as vitest's 5 s test timeout.
+      testTimeout: 15000,
     },
   }),
 );
