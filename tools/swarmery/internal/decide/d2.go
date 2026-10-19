@@ -153,7 +153,7 @@ func (l *Labeler) Run(ctx context.Context) (int, error) {
 	}
 	args := append([]any{cutoff}, enabled...)
 	args = append(args, len(enabled), QD2TaskType, QD2Outcome, QD2Failure, d2MaxFailures, batch)
-	rows, err := e.DB.QueryContext(ctx, d2CandidatesQuery(len(enabled)), args...)
+	rows, err := e.readDB().QueryContext(ctx, d2CandidatesQuery(len(enabled)), args...)
 	if err != nil {
 		return 0, err
 	}
@@ -355,9 +355,12 @@ func d2Questions(db *sql.DB, s d2Session, phaseRunFeature bool) []Question {
 // answers it already has a second and a third time.
 func (l *Labeler) label(ctx context.Context, s d2Session) (failed bool) {
 	e := l.E
-	prior := answeredD2(e.DB, s.uuid)
+	// Every read of the session's evidence goes through the read pool; the
+	// answers (Decide) and the label row are written through the writer. A
+	// later read starts a fresh WAL snapshot, so it sees those writes.
+	prior := answeredD2(e.readDB(), s.uuid)
 	labels := map[string]string{}
-	for _, q := range d2Questions(e.DB, s, e.R5PhaseRunFeature) {
+	for _, q := range d2Questions(e.readDB(), s, e.R5PhaseRunFeature) {
 		labels[q.ID] = LabelUnknown
 		if e.Mode(q.ID) == ModeOff {
 			continue

@@ -2680,6 +2680,7 @@ func cmdServe(args []string) error {
 		log.Printf("warn: %s", w)
 	}
 	decideEng := decide.New(db, decideCfg)
+	decideEng.ReadDB = ro // the labeler's evidence reads; nil ⇒ the writer
 	decideEng.OnNeedsOperator = func(n decide.NeedsOperator) {
 		notifier.Emit(notify.Event{
 			Type:  notify.EventRunNeedsOperator,
