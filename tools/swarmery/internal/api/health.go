@@ -284,14 +284,14 @@ func (h *Handler) autoModeHealth(now time.Time) healthAutoMode {
 		return c.val
 	}
 	var out healthAutoMode
-	if n, err := automode.Count(h.DB, now.Add(-automode.HealthWindow)); err == nil {
+	if n, err := automode.Count(h.rdb(), now.Add(-automode.HealthWindow)); err == nil {
 		out.NoVerdictLastHour, out.SessionsLastHour = n.Events, n.Sessions
 		if n.LastAt != "" {
 			last := n.LastAt
 			out.LastAt = &last
 		}
 	}
-	if alerting, err := automode.Alerting(h.DB); err == nil {
+	if alerting, err := automode.Alerting(h.rdb()); err == nil {
 		out.Alerting = alerting
 	}
 	c.at, c.val = now, out
