@@ -64,6 +64,10 @@ type Handler struct {
 	// computed, so the sidebar's health poll does not scan events on every
 	// request (health.go).
 	autoMode autoModeCache
+	// healthSlow holds GET /api/health's database-backed fields, refreshed in
+	// the background so a health probe never queues for the store's one
+	// connection (health.go).
+	healthSlow healthSlowCache
 	// bindings caches GET /api/accounts' binding discovery for a few seconds,
 	// single-flighted, and is invalidated by this API's own binding writes
 	// (accounts.go bindingCache).

@@ -25,6 +25,7 @@ package api
 // someone else — the first thing to read when health itself is slow.
 
 import (
+	"context"
 	"database/sql"
 	"net/http"
 	"sync"
@@ -147,28 +148,35 @@ type healthDispatch struct {
 // true when the ingest pipeline is attached (serve without --no-ingest). The
 // fusion-phase-9 operational fields are best-effort: a failed sub-query leaves
 // its field at the zero value rather than failing the whole endpoint.
+//
+// The request path itself runs no query once the first snapshot exists: the
+// database-backed fields (size, migrationVersion, the newest event behind
+// ingestLagSec, dispatch, pluginDrift, autoModeClassifier) come from
+// healthSlowCache, refreshed in the background at most every healthSlowTTL.
+// Phase 1 of the link-ingest stall measured health's ~6 sequential acquires of
+// the store's one connection at 3–40 s per probe, and its MAX(ts) alone at
+// 10.7% of all connection time (reports/link-ingest-stall.md).
 func (h *Handler) health(w http.ResponseWriter, r *http.Request) {
-	// Read the pool counters before any query below queues for the connection:
-	// this snapshot is what the pool looked like when the probe arrived.
+	// Read the pool counters first: this is what the pool looked like when the
+	// probe arrived, and it stays live whatever the snapshot's age.
 	pool := dbPoolStats(h.DB.Stats())
-	var size int64
-	err := h.rdb().QueryRow(
-		`SELECT page_count * page_size FROM pragma_page_count(), pragma_page_size()`).Scan(&size)
+	now := time.Now()
+	slow, _ := h.healthSnapshot(now)
 
 	dto := healthDTO{
 		Status:           "ok",
 		Version:          version.Version,
 		Build:            version.String(),
-		DBSizeBytes:      size,
-		DBSizeBytesCamel: size,
+		DBSizeBytes:      slow.sizeBytes,
+		DBSizeBytesCamel: slow.sizeBytes,
 		Watching:         h.Watching,
-		MigrationVersion: h.migrationVersion(),
+		MigrationVersion: slow.migrationVersion,
 		WSClients:        wsClientCount(),
-		IngestLagSec:     h.ingestLagSec(),
-		Dispatch:         dispatchHealth(),
-		PluginDrift:      h.pluginDriftCounts(),
+		IngestLagSec:     lagSince(slow.newestEvent, now),
+		Dispatch:         slow.dispatch,
+		PluginDrift:      slow.pluginDrift,
 
-		AutoModeClassifier: h.autoModeHealth(time.Now()),
+		AutoModeClassifier: slow.autoMode,
 		DB:                 pool,
 	}
 	if !processStart.IsZero() {
@@ -180,14 +188,118 @@ func (h *Handler) health(w http.ResponseWriter, r *http.Request) {
 			dto.HooksLastSeen = &iso
 		}
 	}
-	writeJSON(w, dto, err)
+	writeJSON(w, dto, slow.sizeErr)
+}
+
+// healthSlowTTL is how old a snapshot may be before a probe starts a
+// background refresh. The probe still answers from the old one, so the fields
+// can lag by this much plus one refresh; ingestLagSec is computed from the
+// cached newest event at answer time, so it can read high by up to that, never
+// low.
+const healthSlowTTL = 5 * time.Second
+
+// healthFirstFillWait bounds how long a probe waits for the very first
+// snapshot. Past it the probe answers with zero values (ingestLagSec null)
+// while the fill finishes in the background — health never queues behind the
+// pool for longer than this, even on a cold, starved daemon.
+const healthFirstFillWait = 2 * time.Second
+
+// healthQueryTimeout caps one whole refresh: computeHealthSlow shares a single
+// context of this length across all of its queries, so a wedged connection
+// cannot hold the single-flight refresh forever.
+const healthQueryTimeout = 30 * time.Second
+
+// healthSlow is the database-backed part of the health answer.
+type healthSlow struct {
+	sizeBytes int64
+	// sizeErr is the size query's error: the frozen contract answers 500 when
+	// the store cannot report its own size.
+	sizeErr          error
+	migrationVersion int
+	newestEvent      *time.Time // nil when no event was ingested yet
+	dispatch         healthDispatch
+	pluginDrift      healthPluginDrift
+	autoMode         healthAutoMode
+}
+
+// healthSlowCache is the last snapshot and the single-flight refresh. A
+// refresh in flight is shared by every probe that finds the snapshot stale (or
+// absent): there is never more than one.
+type healthSlowCache struct {
+	mu         sync.Mutex
+	at         time.Time // zero until the first fill lands
+	val        healthSlow
+	refreshing chan struct{} // non-nil while a refresh runs; closed when it lands
+}
+
+// healthSnapshot returns the current snapshot and whether one exists. A stale
+// snapshot is returned as is and refreshed in the background; with none yet,
+// the call waits up to healthFirstFillWait for the first fill.
+func (h *Handler) healthSnapshot(now time.Time) (healthSlow, bool) {
+	c := &h.healthSlow
+	c.mu.Lock()
+	if !c.at.IsZero() {
+		val := c.val
+		if age := now.Sub(c.at); age < 0 || age >= healthSlowTTL {
+			h.refreshHealthLocked()
+		}
+		c.mu.Unlock()
+		return val, true
+	}
+	done := h.refreshHealthLocked()
+	c.mu.Unlock()
+
+	timer := time.NewTimer(healthFirstFillWait)
+	defer timer.Stop()
+	select {
+	case <-done:
+	case <-timer.C:
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.val, !c.at.IsZero()
+}
+
+// refreshHealthLocked starts a background refresh unless one is running, and
+// returns the channel that closes when the running one lands. c.mu is held.
+func (h *Handler) refreshHealthLocked() <-chan struct{} {
+	c := &h.healthSlow
+	if c.refreshing != nil {
+		return c.refreshing
+	}
+	done := make(chan struct{})
+	c.refreshing = done
+	go func() {
+		val := h.computeHealthSlow()
+		c.mu.Lock()
+		c.val, c.at, c.refreshing = val, time.Now(), nil
+		c.mu.Unlock()
+		close(done)
+	}()
+	return done
+}
+
+// computeHealthSlow runs every database-backed health read. Each field is best
+// effort, as before the cache: a failed read leaves its zero value.
+func (h *Handler) computeHealthSlow() healthSlow {
+	ctx, cancel := context.WithTimeout(context.Background(), healthQueryTimeout)
+	defer cancel()
+	var out healthSlow
+	out.sizeErr = h.rdb().QueryRowContext(ctx,
+		`SELECT page_count * page_size FROM pragma_page_count(), pragma_page_size()`).Scan(&out.sizeBytes)
+	out.migrationVersion = h.migrationVersion(ctx)
+	out.newestEvent = h.newestEvent(ctx)
+	out.dispatch = dispatchHealth()
+	out.pluginDrift = h.pluginDriftCounts(ctx)
+	out.autoMode = h.autoModeHealth(time.Now())
+	return out
 }
 
 // migrationVersion reads the highest applied schema-migration version. Best
 // effort: 0 on any error (a health probe must never 500 over this).
-func (h *Handler) migrationVersion() int {
+func (h *Handler) migrationVersion(ctx context.Context) int {
 	var v sql.NullInt64
-	if err := h.rdb().QueryRow(`SELECT MAX(version) FROM schema_migrations`).Scan(&v); err != nil {
+	if err := h.rdb().QueryRowContext(ctx, `SELECT MAX(version) FROM schema_migrations`).Scan(&v); err != nil {
 		return 0
 	}
 	if !v.Valid {
@@ -196,12 +308,11 @@ func (h *Handler) migrationVersion() int {
 	return int(v.Int64)
 }
 
-// ingestLagSec is (now − newest ingested event ts) in whole seconds, or nil
-// when no events have been ingested yet (fresh DB) so the client can render
-// "—" instead of a misleading 0. Negative skew is clamped to 0.
-func (h *Handler) ingestLagSec() *int64 {
+// newestEvent reads the newest ingested event's ts, or nil when no events have
+// been ingested yet (fresh DB) or the read fails.
+func (h *Handler) newestEvent(ctx context.Context) *time.Time {
 	var newest sql.NullString
-	if err := h.rdb().QueryRow(`SELECT MAX(ts) FROM events`).Scan(&newest); err != nil {
+	if err := h.rdb().QueryRowContext(ctx, `SELECT MAX(ts) FROM events`).Scan(&newest); err != nil {
 		return nil
 	}
 	if !newest.Valid || newest.String == "" {
@@ -211,7 +322,17 @@ func (h *Handler) ingestLagSec() *int64 {
 	if err != nil {
 		return nil
 	}
-	lag := int64(time.Since(t).Seconds())
+	return &t
+}
+
+// lagSince is ingestLagSec: (now − newest ingested event ts) in whole
+// seconds, or nil when no events have been ingested yet so the client can
+// render "—" instead of a misleading 0. Negative skew is clamped to 0.
+func lagSince(newest *time.Time, now time.Time) *int64 {
+	if newest == nil {
+		return nil
+	}
+	lag := int64(now.Sub(*newest).Seconds())
 	if lag < 0 {
 		lag = 0
 	}
@@ -244,9 +365,9 @@ func dispatchHealth() healthDispatch {
 // pluginDriftCounts counts unresolved plugin_* findings by severity. Best
 // effort: health must never 500 over this. info-severity rows (plugin_note)
 // are deliberately counted in neither bucket — they are not a problem.
-func (h *Handler) pluginDriftCounts() healthPluginDrift {
+func (h *Handler) pluginDriftCounts(ctx context.Context) healthPluginDrift {
 	var out healthPluginDrift
-	rows, err := h.rdb().Query(
+	rows, err := h.rdb().QueryContext(ctx,
 		`SELECT severity, COUNT(*) FROM config_lint_findings
 		  WHERE resolved_at IS NULL AND rule LIKE 'plugin\_%' ESCAPE '\'
 		  GROUP BY severity`)
