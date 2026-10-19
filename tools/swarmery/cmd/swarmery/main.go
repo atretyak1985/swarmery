@@ -1837,17 +1837,6 @@ func cmdServe(args []string) error {
 	defer db.Close()
 	bootLog.Info(logbuf.Phasef("store.migrate", time.Since(migrateStart)))
 
-	// Planner statistics (store.Optimize): without sqlite_stat1 SQLite guesses
-	// between indexes and has picked ones that held the single connection for
-	// seconds per query. Best-effort — a failure leaves the planner guessing,
-	// never the daemon down. Refreshed every storeOptimizeEvery below.
-	optimizeStart := time.Now()
-	if err := store.Optimize(context.Background(), db, true); err != nil {
-		log.Printf("warning: store: optimize (startup): %v", err)
-	} else {
-		log.Printf("store: optimize (startup) %s", time.Since(optimizeStart).Round(time.Millisecond))
-	}
-
 	// swarmery link (docs/mods-link-protocol.md): mint or read the bearer token
 	// the mod presents on /api/link/*. Logged by PATH only — the value never
 	// reaches a log. A failure leaves the link disabled (503), never the daemon
@@ -2810,9 +2799,13 @@ func cmdServe(args []string) error {
 		go runLandpoll(ctx, landPoller.RunOnce, landpollFirstPass, landpollEvery, log.Printf)
 	}
 
-	go runStoreOptimize(ctx, func(ctx context.Context) error {
-		return store.Optimize(ctx, db, false)
-	}, storeOptimizeEvery, log.Printf)
+	// Planner statistics (store.Optimize): without sqlite_stat1 SQLite guesses
+	// between indexes and has picked ones that held the single connection for
+	// seconds per query. Best-effort, and off the boot path — see
+	// storeOptimizeFirstDelay.
+	go runStoreOptimize(ctx, func(ctx context.Context, startup bool) error {
+		return store.Optimize(ctx, db, startup)
+	}, storeOptimizeFirstDelay, storeOptimizeEvery, log.Printf)
 
 	// fusion phase 3: run the dispatcher poll-fallback ticker under the shutdown
 	// context. It runs an initial Schedule immediately (drains any Todo backlog
