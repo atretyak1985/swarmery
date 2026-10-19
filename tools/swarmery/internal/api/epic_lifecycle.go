@@ -295,6 +295,7 @@ func (h *Handler) phasesAllComplete(taskID int64) (bool, error) {
 		SELECT e.checkboxes_done, e.checkboxes_total,
 		       COALESCE(e.verify_mode,''), COALESCE(e.verify_verdict,''),
 		       COALESCE(e.completion_report,''), e.run_ended_at IS NOT NULL,
+		       e.run_started_at IS NOT NULL,
 		       COALESCE(bt.board_column,''), bt.archived_at IS NOT NULL
 		  FROM epic_phases e
 		  LEFT JOIN tasks bt ON bt.id = e.activated_board_task_id
@@ -309,11 +310,11 @@ func (h *Handler) phasesAllComplete(taskID int64) (bool, error) {
 			done, total         int
 			verifyMode, verdict string
 			report              string
-			ran                 bool
+			ran, dispatched     bool
 			boardCol            string
 			archived            bool
 		)
-		if err := rows.Scan(&done, &total, &verifyMode, &verdict, &report, &ran, &boardCol, &archived); err != nil {
+		if err := rows.Scan(&done, &total, &verifyMode, &verdict, &report, &ran, &dispatched, &boardCol, &archived); err != nil {
 			return false, err
 		}
 		in := phasegate.Input{
@@ -324,6 +325,7 @@ func (h *Handler) phasesAllComplete(taskID int64) (bool, error) {
 			LegacyDone:       boardCol == "done" || archived,
 			CompletionReport: report,
 			Ran:              ran,
+			Dispatched:       dispatched,
 			ClosureRequired:  closureRequired,
 		}
 		if phasegate.Check(in).HoldsPlanBack(in) {

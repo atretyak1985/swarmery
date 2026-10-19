@@ -650,8 +650,8 @@ func TestListEpics_CompletionGate(t *testing.T) {
 	t.Setenv("SWARMERY_CLOSURE_GATE", "0")
 	srv, db, taskID, _ := epicFixture(t)
 
-	// Tick both phases fully. Phase 1 opted into verification and was never graded;
-	// phase 2 never asked, so it must be unaffected.
+	// Tick both phases fully. Phase 1 opted into verification, was dispatched, and
+	// was never graded; phase 2 never asked, so it must be unaffected.
 	mustExec := func(q string, args ...any) {
 		t.Helper()
 		if _, err := db.Exec(q, args...); err != nil {
@@ -659,7 +659,8 @@ func TestListEpics_CompletionGate(t *testing.T) {
 		}
 	}
 	mustExec(`UPDATE epic_phases SET checkboxes_done = checkboxes_total`)
-	mustExec(`UPDATE epic_phases SET verify_mode='normal', verify_verdict=NULL WHERE seq=1 AND workspace_task_id=?`, taskID)
+	mustExec(`UPDATE epic_phases SET verify_mode='normal', verify_verdict=NULL,
+		run_started_at='2026-10-19T10:00:00Z' WHERE seq=1 AND workspace_task_id=?`, taskID)
 	mustExec(`UPDATE epic_phases SET verify_mode='off' WHERE seq=2 AND workspace_task_id=?`, taskID)
 
 	var epics []epicDTO
@@ -688,6 +689,20 @@ func TestListEpics_CompletionGate(t *testing.T) {
 	if e.Status != "active" {
 		t.Errorf("plan status = %q, want active — a plan with an unverified phase is not done", e.Status)
 	}
+
+	// The same phase worked through outside the phase runner (by hand, a session,
+	// a plan run) can never be graded, so a missing verdict does not hold it.
+	mustExec(`UPDATE epic_phases SET run_started_at=NULL WHERE seq=1 AND workspace_task_id=?`, taskID)
+	getJSON(t, srv.URL+"/api/epics", &epics)
+	for _, p := range epics[0].Phases {
+		if p.Seq == 1 && p.CompletionState != "complete" {
+			t.Errorf("never-dispatched phase 1 completionState = %q, want complete", p.CompletionState)
+		}
+	}
+	if epics[0].Status != "done" {
+		t.Errorf("plan status with a never-dispatched ungraded phase = %q, want done", epics[0].Status)
+	}
+	mustExec(`UPDATE epic_phases SET run_started_at='2026-10-19T10:00:00Z' WHERE seq=1 AND workspace_task_id=?`, taskID)
 
 	// Grading it closes the gate and the plan reads done.
 	mustExec(`UPDATE epic_phases SET verify_verdict='pass' WHERE seq=1 AND workspace_task_id=?`, taskID)

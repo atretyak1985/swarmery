@@ -109,6 +109,23 @@ type Input struct {
 	// it, the gate bites on the three dispatched phases that genuinely shipped
 	// without a report, which is the case SC-11 exists for.
 	Ran bool
+	// Dispatched reports whether the daemon's phase runner ever STARTED this
+	// phase — epic_phases.run_started_at is set. It is what makes a missing
+	// verdict a debt rather than an impossibility.
+	//
+	// The verifier runs only behind a phaserun run (and Verify again needs that
+	// run's branch), so a phase worked through by hand, by an interactive
+	// session or by a plan run can never be graded, whatever its doc's
+	// **Verify:** line asks for. Holding such a phase to a verdict left it
+	// `unverified` forever — every criterion ticked, the code merged, no action
+	// that could clear it (2026-10-19: all six phases of the phase-reverify and
+	// reverify-rekeyed-phases plans).
+	//
+	// It is deliberately NOT Ran: during a run the executor ticks the last
+	// criterion before the verifier grades, and run_ended_at is not yet set —
+	// keying on Ran would let that phase read complete, and unblock its
+	// dependents, before its grade landed.
+	Dispatched bool
 	// ClosureRequired is the closure gate's own opt-in, resolved by the caller
 	// from ClosureGateEnabled(). Off ⇒ the report is not required, which is the
 	// migration path for plans already in flight when the gate shipped.
@@ -141,7 +158,7 @@ func (r Result) Complete() bool { return r.State == StateComplete }
 // stricter rule (a 0/0 dependency cannot unblock a dependent), because there the
 // question is "may work START on top of this", where unprovable must mean no.
 func (r Result) HoldsPlanBack(in Input) bool {
-	if in.CriteriaTotal == 0 && !in.VerificationRequired() {
+	if in.CriteriaTotal == 0 && !in.VerificationOwed() {
 		return false
 	}
 	return !r.Complete()
@@ -150,6 +167,13 @@ func (r Result) HoldsPlanBack(in Input) bool {
 // VerificationRequired reports whether this phase opted into being graded.
 func (in Input) VerificationRequired() bool {
 	return in.VerifyMode != "" && in.VerifyMode != VerifyOff
+}
+
+// VerificationOwed reports whether the gate holds this phase to a verdict: it
+// asked to be graded AND the daemon dispatched it, so a grade can land. See
+// Input.Dispatched.
+func (in Input) VerificationOwed() bool {
+	return in.VerificationRequired() && in.Dispatched
 }
 
 // criteriaMet is the pre-existing derivation, inlined here so this package stays
@@ -186,7 +210,7 @@ func Check(in Input) Result {
 	// operator sees everything standing between this phase and done in one
 	// answer instead of fixing one thing and being refused for the next.
 	verificationUnmet := false
-	if in.VerificationRequired() {
+	if in.VerificationOwed() {
 		switch in.VerifyVerdict {
 		case "":
 			verificationUnmet = true

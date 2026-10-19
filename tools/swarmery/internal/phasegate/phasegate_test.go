@@ -31,13 +31,30 @@ func TestCheck(t *testing.T) {
 			// THE case this package exists for: the doc asked to be graded, the grade
 			// never landed, and the phase used to read as done anyway.
 			name:      "criteria met, verification asked for, no verdict",
-			in:        Input{CriteriaDone: 5, CriteriaTotal: 5, VerifyMode: "normal"},
+			in:        Input{CriteriaDone: 5, CriteriaTotal: 5, VerifyMode: "normal", Dispatched: true},
 			want:      StateUnverified,
 			wantWords: "no verdict",
 		},
 		{
+			// Mid-run: the executor ticked the last criterion, the verifier has not
+			// graded yet and run_ended_at is unset. Dispatched, not Ran, is what
+			// holds it — the phase must not unblock its dependents here.
+			name:      "dispatched, not yet ended, no verdict",
+			in:        Input{CriteriaDone: 5, CriteriaTotal: 5, VerifyMode: "strict", Dispatched: true, Ran: false},
+			want:      StateUnverified,
+			wantWords: "no verdict",
+		},
+		{
+			// Worked through by hand, an interactive session or a plan run: no
+			// verifier can ever grade it and Verify again has no run branch, so a
+			// missing verdict is not a debt the operator could pay.
+			name: "never dispatched, verification asked for, no verdict",
+			in:   Input{CriteriaDone: 5, CriteriaTotal: 5, VerifyMode: "strict"},
+			want: StateComplete,
+		},
+		{
 			name:      "criteria met, verification could not conclude",
-			in:        Input{CriteriaDone: 5, CriteriaTotal: 5, VerifyMode: "strict", VerifyVerdict: VerdictInconclusive},
+			in:        Input{CriteriaDone: 5, CriteriaTotal: 5, VerifyMode: "strict", VerifyVerdict: VerdictInconclusive, Dispatched: true},
 			want:      StateUnverified,
 			wantWords: "could not conclude",
 		},
@@ -100,8 +117,8 @@ func TestCheck(t *testing.T) {
 // and an infra hiccup reads as a real test failure, which is the distinction
 // verify.ParseVerdict's bias-to-reject exists to protect.
 func TestUnverifiedIsDistinctFromCompleteAndIncomplete(t *testing.T) {
-	unverified := Check(Input{CriteriaDone: 3, CriteriaTotal: 3, VerifyMode: "normal"})
-	complete := Check(Input{CriteriaDone: 3, CriteriaTotal: 3, VerifyMode: "normal", VerifyVerdict: VerdictPass})
+	unverified := Check(Input{CriteriaDone: 3, CriteriaTotal: 3, VerifyMode: "normal", Dispatched: true})
+	complete := Check(Input{CriteriaDone: 3, CriteriaTotal: 3, VerifyMode: "normal", VerifyVerdict: VerdictPass, Dispatched: true})
 	incomplete := Check(Input{CriteriaDone: 1, CriteriaTotal: 3, VerifyMode: "normal"})
 
 	if unverified.State == complete.State {
@@ -121,6 +138,13 @@ func TestVerificationRequired(t *testing.T) {
 	for mode, want := range map[string]bool{"": false, "off": false, "normal": true, "strict": true} {
 		if got := (Input{VerifyMode: mode}).VerificationRequired(); got != want {
 			t.Errorf("VerificationRequired(%q) = %v, want %v", mode, got, want)
+		}
+		// Asking is not owing: only a dispatched phase can be graded.
+		if (Input{VerifyMode: mode}).VerificationOwed() {
+			t.Errorf("VerificationOwed(%q) without Dispatched = true", mode)
+		}
+		if got := (Input{VerifyMode: mode, Dispatched: true}).VerificationOwed(); got != want {
+			t.Errorf("VerificationOwed(%q, dispatched) = %v, want %v", mode, got, want)
 		}
 	}
 }
@@ -224,6 +248,7 @@ func TestCheck_OneGateManyReasons(t *testing.T) {
 		VerifyMode:       "strict", // asked to be graded, never was
 		CompletionReport: "",       // and, having run, never reported
 		Ran:              true,
+		Dispatched:       true,
 		ClosureRequired:  true,
 	})
 	if got.Complete() {
@@ -243,7 +268,7 @@ func TestCheck_OneGateManyReasons(t *testing.T) {
 func TestUnreportedIsDistinctFromUnverified(t *testing.T) {
 	report := "Shipped the retry budget in internal/dispatch/service.go; make test green."
 	unverified := Check(Input{CriteriaDone: 1, CriteriaTotal: 1, VerifyMode: "normal",
-		CompletionReport: report, Ran: true, ClosureRequired: true})
+		CompletionReport: report, Ran: true, Dispatched: true, ClosureRequired: true})
 	unreported := Check(Input{CriteriaDone: 1, CriteriaTotal: 1, VerifyMode: "off",
 		CompletionReport: "", Ran: true, ClosureRequired: true})
 	if unverified.State == unreported.State {

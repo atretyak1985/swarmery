@@ -389,6 +389,7 @@ func Diagnose(db *sql.DB, git worktree.Git, own OwnCheckout, phaseID int64) (Dia
 		VerifyVerdict:    verdict.String,
 		CompletionReport: completionReport.String,
 		Ran:              endedAt.Valid,
+		Dispatched:       startedAt.Valid,
 		ClosureRequired:  phasegate.ClosureGateEnabled(),
 	})
 	switch gate.State {

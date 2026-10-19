@@ -1911,7 +1911,7 @@ func (s *Service) depSatisfied(taskID int64, seq int) (bool, error) {
 	rows, err := s.DB.Query(`
 		SELECT e.checkboxes_done, e.checkboxes_total,
 		       COALESCE(e.verify_mode,''), COALESCE(e.verify_verdict,''),
-		       COALESCE(e.completion_report,''),
+		       COALESCE(e.completion_report,''), e.run_started_at IS NOT NULL,
 		       COALESCE(bt.board_column,''), bt.archived_at IS NOT NULL,
 		       EXISTS (SELECT 1 FROM retro_lessons l
 		                 JOIN task_retros r ON r.id = l.retro_id
@@ -1929,9 +1929,10 @@ func (s *Service) depSatisfied(taskID int64, seq int) (bool, error) {
 			verifyMode, verdict string
 			report              string
 			done, total         int
+			dispatched          bool
 			archived, lesson    bool
 		)
-		if err := rows.Scan(&done, &total, &verifyMode, &verdict, &report,
+		if err := rows.Scan(&done, &total, &verifyMode, &verdict, &report, &dispatched,
 			&boardCol, &archived, &lesson); err != nil {
 			return false, err
 		}
@@ -1955,6 +1956,7 @@ func (s *Service) depSatisfied(taskID int64, seq int) (bool, error) {
 			CriteriaTotal:   total,
 			VerifyMode:      verifyMode,
 			VerifyVerdict:   verdict,
+			Dispatched:      dispatched,
 			LegacyDone:      boardCol == "done" || archived,
 			ClosureRequired: false,
 		})
