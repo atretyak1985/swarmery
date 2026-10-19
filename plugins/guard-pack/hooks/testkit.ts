@@ -97,6 +97,12 @@ export const world = (on: On, w: World = {}) => {
     const command = typeof input?.command === 'string' ? input.command : ''
     return { decision: w.verdict?.(command) ?? 'allow' }
   })
+  // The classic events the production guard reads the permission mode from;
+  // no settings hook is configured beneath, so each answers nothing.
+  on('classic.SessionStart', () => ({}))
+  on('classic.UserPromptSubmit', () => ({}))
+  on('classic.PostToolUse', () => ({}))
+  on('classic.PostToolUseFailure', () => ({}))
   on('agent.offer', () => ({ isOffered: true }))
   on('tool.describe', ($, e) => ({ description: e.description }))
 

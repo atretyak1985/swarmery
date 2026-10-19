@@ -11,7 +11,7 @@ blocks a session.
 |---|---|---|
 | Isolation | `tool.call` | Denies `Read`, `Edit`, `Write`, `MultiEdit`, `NotebookEdit`, `Glob` and `Grep` on a path outside the project's roots. In `Bash` it denies `rm`/`mv`/`cp` of an absolute path outside the roots, an output redirect (`>`, `>>`, `&>`) to one, and `cd` into one. The deny reason is one line naming the path, the first roots, and the `extraRoots` option. |
 | Redaction | `session.append` | Before Claude sees a tool result, replaces every secret-shaped value inside its `tool_result` block with `[REDACTED:<rule>]`. The raw output may still be kept in the local transcript (see Limits). Prompt rows, assistant rows and the row's other blocks are never touched. The status line counts redactions (`guard: 3 secrets redacted`). |
-| Production guard | `tool.check` | Sends a call that matches a production-deploy pattern to the native ask dialog, even where the permission rules would have allowed it. A deny from beneath stays a deny. In `auto` mode the ask is settled without a dialog (see Limits). |
+| Production guard | `tool.check` | Sends a call that matches a production-deploy pattern to the native ask dialog, even where the permission rules would have allowed it. In `auto`, `dontAsk` and `bypassPermissions` mode, where no dialog would reach a person, it refuses the call instead, and the reason tells the operator to run it from a session in `default` mode. A deny from beneath stays a deny. See "Permission mode" below. |
 | Agent offer | `agent.offer` | Hides `<name>-pack` agents of packs this project has not enabled from the model. Off by default. |
 | Heavy-tool deferral | `tool.describe` | Puts an MCP tool whose description is longer than 2048 characters behind ToolSearch. Off by default. |
 
@@ -53,13 +53,35 @@ markers. The daemon's parity tests (`go test ./internal/approvals
 the Go lists and fail when a testkit copy differs from its file, so a pattern
 edit means editing the Go list, the JSON file and the testkit copy together.
 
+## Permission mode
+
+`tool.check` does not say which permission mode the session is in, but every
+classic (settings) hook event except `PreToolUse` does, as `permission_mode`.
+With `prodGuard` on, guard-pack hooks `classic.SessionStart`,
+`classic.UserPromptSubmit`, `classic.PostToolUse` and
+`classic.PostToolUseFailure`. These hooks only record the mode and pass the
+event on unchanged. The mode is kept per loop: inside a subagent the event
+carries `agent_id`, and a subagent that has not reported a mode yet gets the
+main loop's.
+
+| Mode | A production-deploy call |
+|---|---|
+| `default`, `acceptEdits`, `plan` | `ask`: the native dialog in a terminal; `-p` refuses it ("Bash needs approval") |
+| `auto`, `dontAsk`, `bypassPermissions` | `deny`, with a reason that sends the operator to a `default`-mode session |
+| not seen yet | `ask` (as before 0.1.2) |
+
+Observed on Claude Code 2.1.303 with `claude -p --plugin-dir plugins/guard-pack`
+and core disabled: in `--permission-mode auto`, `echo deploy-to-prod-dry-run`
+was refused ("Permission to use Bash denied by plugin guard-pack: … refused in
+auto permission mode …"). In `default` mode it was put to approval as before.
+
 ## Options (`userConfig`)
 
 | Key | Type | Default | Effect |
 |---|---|---|---|
 | `isolation` | boolean | `true` | The isolation guard. Off registers no `tool.call` hook. |
 | `redaction` | boolean | `true` | The redaction guard. Off registers no `session.append` hook. |
-| `prodGuard` | boolean | `true` | The production guard. Off registers no `tool.check` hook. |
+| `prodGuard` | boolean | `true` | The production guard. Off registers no `tool.check` hook and none of the four `classic.*` hooks that record the permission mode. |
 | `agentOffer` | boolean | `false` | Hide agents of packs this project has not enabled. A pack counts as enabled when it appears in project.json `enabledPacks` (or an `enabledPlugins` there), or in the project or local settings' `enabledPlugins`. User-level settings do not count. |
 | `deferHeavyTools` | boolean | `false` | Defer MCP tools with a description over 2048 characters. |
 | `extraRoots` | string | `""` | Comma-separated extra roots: absolute paths, `~/…`, or paths relative to the project directory. |
@@ -128,14 +150,18 @@ Everything here is additive, and nothing depends on core or on the daemon:
   `mv`, `cp`, output redirects and `cd` are judged. Reading from outside with
   `cat` or `ls` is not blocked. A false deny costs more than a miss.
 - Hooks that run before `session.start` has been read let every call through.
-- **`auto` mode settles the production ask itself.** Observed on Claude Code
-  2.1.296: with `decision: 'ask'` from `tool.check`, `default` mode draws the
-  native dialog ("Hook tool.check requires confirmation for this command: …
-  [plugin:guard-pack]"), and `-p` in `default` mode refuses the call ("Bash
-  needs approval (asked by plugin guard-pack: …)"). In `auto` mode, interactive
-  or `-p`, no dialog appeared and the matching command ran. Where production
-  calls must stop in `auto` mode, add a permission deny rule for them; whether
-  core's `prod-deploy-guard.sh` ask survives `auto` mode was not checked.
+- **The production guard knows the mode only after a classic event.** An
+  `ask` in `auto` mode is settled by the classifier with no dialog (observed
+  on Claude Code 2.1.296, interactive and `-p`), so guard-pack refuses there
+  instead. Before the first `SessionStart` or `UserPromptSubmit` has been
+  seen, the mode is unknown and the guard asks. A mode switched (shift+tab)
+  in the middle of a turn is picked up at the next tool result, so the call
+  right after the switch is judged by the previous mode. Where an
+  organization manages Claude Code, the `classic.*` hooks of a plugin a
+  person installed do not run (`claude plugin validate` says so). The mode
+  then stays unknown and the guard asks in every mode, as 0.1.1 did. If
+  production calls must stop in `auto` mode in that setup, add a permission
+  deny rule for them.
 - **Redaction hides secrets from Claude, not from disk.** It rewrites the
   `tool_result` blocks Claude sees. The raw output may still be kept in the
   local transcript: observed on Claude Code 2.1.296, the row's structured
