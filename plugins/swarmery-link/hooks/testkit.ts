@@ -473,6 +473,11 @@ export const world = (on: On, w: World = {}): Recorded => {
   })
   // the engine's own drawing of a component, beneath the plugin's render hooks
   on('ui.render', () => ENGINE_DRAWING)
+  // the classic events `claimConflicts: ask` reads the permission mode from; nothing beneath decides
+  on('classic.SessionStart', () => ({}))
+  on('classic.UserPromptSubmit', () => ({}))
+  on('classic.PostToolUse', () => ({}))
+  on('classic.PostToolUseFailure', () => ({}))
 
   const moveTo = (id: string, dir: string = cwd): void => {
     sessionId = id

@@ -5,13 +5,18 @@ import {
   MAX_ENTRY_BYTES,
   MAX_RELEASE_PATHS,
   type PendingSend,
+  type ModeBook,
   absolutePath,
   addClaim,
+  claimConflictsOf,
   claimPath,
   claimsKey,
   clip,
   conflictLines,
+  conflictVerdict,
   isAmbiguousSend,
+  modeOf,
+  noteMode,
   pendingFor,
   releasePayload,
   sendPayload,
@@ -416,4 +421,161 @@ test('the beneath line: none without a conflict; a text another hook put beneath
   expect(withBeneath(result, 'the answer', ['⚠ one'])).toEqual({ text: '⚠ one' })
   expect(withBeneath({ text: 'TL;DR: done' }, 'the answer', ['⚠ one', 'drift'])).toEqual({ text: 'TL;DR: done\n⚠ one\ndrift' })
   expect(clip(`${'a'.repeat(4095)}😀`).text).toHaveLength(4095)
+})
+
+// ── claimConflicts: a write another live session holds is asked or refused ──
+
+const held = (setting: 'off' | 'ask' | 'deny', approvals = false) => ({ options: { swarm: true, claimConflicts: setting, approvals } }) as const
+const write = (filePath: string, agentId?: string) =>
+  ({ tool: 'Write', input: { file_path: filePath, content: 'x' }, tool_use_id: 'toolu_c1', ...(agentId !== undefined ? { agentId } : {}) }) as const
+const HELD_REASON = `swarmery-link: ${FILE} is being edited by session ${OTHER.slice(0, 8)}`
+
+for (const setting of ['off', 'ask', 'deny'] as const) {
+  for (const mode of ['default', 'auto', undefined] as const) {
+    const expected = setting === 'off' ? 'allow' : setting === 'deny' || mode === 'auto' ? 'deny' : 'ask'
+    test(`claimConflicts ${setting} × mode ${mode ?? 'unknown'}: ${expected}`, held(setting), async ($, on) => {
+      const w = await begin($, on, { store: foreign(OTHER, 60_000, [FILE]) })
+      if (mode !== undefined) await $.classic.UserPromptSubmit({ prompt: 'go', permission_mode: mode })
+      const r = await $.tool.check(write(FILE))
+      expect(r.decision).toBe(expected)
+      if (expected === 'allow') expect(r.reason).toBeUndefined()
+      else expect(r.reason).toBe(HELD_REASON)
+      // the check only reads: nothing is claimed or written ahead of the call
+      expect(w.storeOps.filter(op => !op.startsWith('get') && op !== 'keys')).toEqual([])
+      await $.session.end(END)
+    })
+  }
+}
+
+test('claimConflicts deny: a claim older than 30 min never blocks', held('deny'), async ($, on) => {
+  await begin($, on, { store: foreign(OTHER, 30 * 60_000 + 1, [FILE]) })
+  expect((await $.tool.check(write(FILE))).decision).toBe('allow')
+})
+
+test("claimConflicts deny: the session's own claim never blocks, nor another session's claim on another path", held('deny'), async ($, on) => {
+  await begin($, on, { store: { ...foreign(SESSION_ID, 1_000, [FILE]), ...foreign(OTHER, 1_000, [`${CWD}/src/other.ts`]) } })
+  expect((await $.tool.check(write(FILE))).decision).toBe('allow')
+  expect((await $.tool.check(write('src/a.ts'))).decision).toBe('allow')
+  expect((await $.tool.check(write(`${CWD}/src/other.ts`))).decision).toBe('deny')
+})
+
+test('claimConflicts deny: Bash and reads are never checked; a relative path resolves against the cwd', held('deny'), async ($, on) => {
+  const w = await begin($, on, { store: foreign(OTHER, 1_000, [FILE]) })
+  expect((await $.tool.check({ tool: 'Bash', input: { command: `echo x > ${FILE}` }, tool_use_id: 'toolu_b' })).decision).toBe('allow')
+  expect((await $.tool.check({ tool: 'Read', input: { file_path: FILE }, tool_use_id: 'toolu_r' })).decision).toBe('allow')
+  expect(w.storeOps).toEqual([])
+  expect(await $.tool.check({ tool: 'Edit', input: { file_path: 'src/./a.ts', old_string: 'a', new_string: 'b' }, tool_use_id: 'toolu_e' })).toMatchObject({
+    decision: 'deny',
+    reason: HELD_REASON,
+  })
+})
+
+test('claimConflicts ask: dontAsk and bypassPermissions refuse; acceptEdits, plan and default ask', held('ask'), async ($, on) => {
+  await begin($, on, { store: foreign(OTHER, 1_000, [FILE]) })
+  for (const [mode, decision] of [
+    ['dontAsk', 'deny'],
+    ['bypassPermissions', 'deny'],
+    ['acceptEdits', 'ask'],
+    ['plan', 'ask'],
+    ['default', 'ask'],
+  ] as const) {
+    await $.classic.UserPromptSubmit({ prompt: 'go', permission_mode: mode })
+    expect((await $.tool.check(write(FILE))).decision, mode).toBe(decision)
+  }
+})
+
+test('claimConflicts deny: a deny beneath is returned untouched, with its own reason', held('deny'), async ($, on) => {
+  await begin($, on, { store: foreign(OTHER, 1_000, [FILE]), verdict: { decision: 'deny', reason: 'Write(src/**) is denied' } })
+  expect(await $.tool.check(write(FILE))).toMatchObject({ decision: 'deny', reason: 'Write(src/**) is denied' })
+})
+
+test("claimConflicts ask: a subagent's own mode decides its call; the mode follows the session", held('ask'), async ($, on) => {
+  await begin($, on, { store: foreign(OTHER, 1_000, [FILE]) })
+  await $.classic.SessionStart({ source: 'startup', permission_mode: 'default' })
+  await $.classic.PostToolUse({
+    tool_name: 'Read',
+    tool_input: { file_path: FILE },
+    tool_response: 'ok',
+    tool_use_id: 'toolu_p',
+    permission_mode: 'auto',
+    agent_id: 'agent-7',
+  })
+  expect((await $.tool.check(write(FILE, 'agent-7'))).decision).toBe('deny')
+  expect((await $.tool.check(write(FILE))).decision).toBe('ask')
+  // an agent not yet heard from takes the main loop's mode
+  expect((await $.tool.check(write(FILE, 'agent-8'))).decision).toBe('ask')
+  await $.classic.UserPromptSubmit({ prompt: 'go', permission_mode: 'bypassPermissions' })
+  expect((await $.tool.check(write(FILE))).decision).toBe('deny')
+})
+
+test('claimConflicts deny with approvals on: the refused write never reaches the dashboard; an ask still does', held('deny', true), async ($, on) => {
+  const w = await begin($, on, { store: foreign(OTHER, 1_000, [FILE]), verdict: { decision: 'ask' } })
+  expect(await $.tool.check(write(FILE))).toMatchObject({ decision: 'deny', reason: HELD_REASON })
+  expect(w.permissionPosts).toEqual([])
+  // a call nobody holds: the engine's ask goes to the dashboard as before
+  await $.tool.check(write(`${CWD}/src/free.ts`))
+  expect(w.permissionPosts).toHaveLength(1)
+})
+
+test('claimConflicts ask: the claim is made after the call ran, and the conflict line still shows', held('ask'), async ($, on) => {
+  const w = await begin($, on, { store: foreign(OTHER, 1_000, [FILE]) })
+  await $.turn.start(TURN)
+  await $.tool.call(edit(FILE))
+  expect(w.calls).toEqual(['Edit'])
+  expect(w.store.get(claimsKey(SESSION_ID))).toMatchObject({ paths: [{ path: FILE, at: NOW }] })
+  const r = await $.turn.complete(COMPLETE)
+  await $.session.end(END)
+  expect(r.text).toBe(`⚠ ${FILE} is also being edited by session ${OTHER.slice(0, 8)}`)
+  expect(payloads(sent(w.requests), 'conflict')).toEqual([{ path: FILE, otherSession: OTHER }])
+})
+
+test('claimConflicts deny: a refused or failed write leaves no claim behind', held('deny'), async ($, on) => {
+  const w = await begin($, on, { tools: ['deny', 'error'] })
+  await $.turn.start(TURN)
+  await $.tool.call(edit(FILE))
+  await $.tool.call(edit(`${CWD}/src/b.ts`))
+  expect(w.store.has(claimsKey(SESSION_ID))).toBe(false)
+  await $.session.end(END)
+  expect(payloads(sent(w.requests), 'claim')).toEqual([])
+})
+
+test("claimConflicts off: a refused write is still claimed ahead of the call (today's advisory registry)", held('off'), async ($, on) => {
+  const w = await begin($, on, { tools: ['deny'] })
+  await $.turn.start(TURN)
+  await $.tool.call(edit(FILE))
+  expect(w.store.has(claimsKey(SESSION_ID))).toBe(true)
+  await $.session.end(END)
+  expect(payloads(sent(w.requests), 'claim')).toEqual([{ path: FILE }])
+})
+
+test('claimConflicts without swarm: one log line, no verdict changed, no store access', { options: { claimConflicts: 'deny' } }, async ($, on) => {
+  const w = await begin($, on, { store: foreign(OTHER, 1_000, [FILE]) })
+  expect((await $.tool.check(write(FILE))).decision).toBe('allow')
+  expect(w.shown).toContain('swarmery-link: claimConflicts needs swarm on: no write is held')
+  expect(w.storeOps).toEqual([])
+})
+
+test('claimConflicts: the option, the verdict and the mode book', () => {
+  expect(claimConflictsOf('ask')).toBe('ask')
+  expect(claimConflictsOf('deny')).toBe('deny')
+  expect(claimConflictsOf('off')).toBe('off')
+  expect(claimConflictsOf('DENY')).toBe('off')
+  expect(claimConflictsOf(true)).toBe('off')
+  expect(claimConflictsOf(undefined)).toBe('off')
+  const two = [
+    { path: FILE, otherSession: OTHER },
+    { path: FILE, otherSession: THIRD },
+  ]
+  expect(conflictVerdict('ask', undefined, two)).toEqual({ decision: 'ask', reason: `${HELD_REASON} (+1 more)` })
+  expect(conflictVerdict('ask', 'auto', [])).toBeUndefined()
+  expect(conflictVerdict('off', 'default', two)).toBeUndefined()
+  const book: ModeBook = new Map()
+  noteMode(book, { permission_mode: 'auto' })
+  noteMode(book, { permission_mode: 'default', agent_id: 'a1' })
+  noteMode(book, { permission_mode: 7, agent_id: 'a2' })
+  noteMode(book, 'not an event')
+  expect(modeOf(book, undefined)).toBe('auto')
+  expect(modeOf(book, 'a1')).toBe('default')
+  expect(modeOf(book, 'a2')).toBe('auto')
+  expect(modeOf(new Map(), 'a1')).toBeUndefined()
 })

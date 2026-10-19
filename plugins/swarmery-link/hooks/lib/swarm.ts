@@ -1,8 +1,9 @@
 // The swarm's decisions. Pure: reads the path a file tool writes, keeps this
 // session's claims entry for the shared `$.store` registry, finds another
 // session's live claim on the same path, builds the `session.send`,
-// `session.receive`, `claim`, `release` and `conflict` payloads, and the line
-// shown beneath the answer. Every `$` call is made in ../swarm.ts and
+// `session.receive`, `claim`, `release` and `conflict` payloads, the line
+// shown beneath the answer, and the `claimConflicts` verdict on a write
+// another session holds. Every `$` call is made in ../swarm.ts and
 // ../register.ts. Contract: tools/swarmery/docs/mods-link-protocol.md.
 
 import { FILE_TOOLS } from './forecast'
@@ -294,6 +295,64 @@ export const receiveLine = (text: string, origin: unknown): string => {
   const body = unwrapEnvelope(text)?.body ?? text
   const preview = clip(body.replace(/\s+/g, ' ').trim(), RECEIVE_PREVIEW).text
   return `from ${originKind(origin)}${plugin !== undefined ? ` ${plugin}` : ''}: ${preview}`
+}
+
+/**
+ * The `claimConflicts` option: `off` reports a conflict only (the line beneath
+ * the answer), `ask` puts the write to the person, `deny` refuses it.
+ */
+export type ClaimConflicts = 'off' | 'ask' | 'deny'
+
+/** The option's value as set; anything but `ask` or `deny` is `off`. */
+export const claimConflictsOf = (value: unknown): ClaimConflicts => (value === 'ask' || value === 'deny' ? value : 'off')
+
+// Permission modes in which an `ask` reaches nobody: `auto` hands it to the
+// classifier, `dontAsk` refuses it unasked, `bypassPermissions` is a mode where
+// nobody expects a prompt. guard-pack's prodGuard reads them the same way.
+const UNATTENDED_MODES: ReadonlySet<string> = new Set(['auto', 'dontAsk', 'bypassPermissions'])
+
+/** Whether an ask in `mode` reaches a person; a mode not seen yet keeps the ask. */
+export const asksReachPerson = (mode: string | undefined): boolean => mode === undefined || !UNATTENDED_MODES.has(mode)
+
+// The session's permission mode is not on `tool.check`'s input. Every classic
+// (settings) hook event but PreToolUse carries it as `permission_mode`, with
+// `agent_id` inside a subagent's loop, so the last one seen is kept per loop.
+// A subagent not yet heard from takes the main loop's.
+const MAIN_LOOP = ''
+
+export type ModeBook = Map<string, string>
+
+/** Records `e.permission_mode` under its loop; ignores anything else. */
+export const noteMode = (book: ModeBook, e: unknown): void => {
+  if (!isRecord(e)) return
+  const mode = e.permission_mode
+  if (typeof mode !== 'string' || mode === '') return
+  book.set(typeof e.agent_id === 'string' && e.agent_id !== '' ? e.agent_id : MAIN_LOOP, mode)
+}
+
+/** The mode a call in loop `agentId` (absent on the main loop) is decided under; undefined when none was seen. */
+export const modeOf = (book: ReadonlyMap<string, string>, agentId: string | undefined): string | undefined =>
+  (agentId !== undefined ? book.get(agentId) : undefined) ?? book.get(MAIN_LOOP)
+
+/** Why a write is held: `swarmery-link: <path> is being edited by session <short id>`, `(+N more)` with several. */
+export const conflictReason = (conflicts: readonly Conflict[]): string | undefined => {
+  const first = conflicts[0]
+  if (first === undefined) return undefined
+  const more = conflicts.length > 1 ? ` (+${conflicts.length - 1} more)` : ''
+  return `swarmery-link: ${first.path} is being edited by session ${first.otherSession.slice(0, SHORT_ID)}${more}`
+}
+
+export type ConflictVerdict = { readonly decision: 'ask' | 'deny'; readonly reason: string }
+
+/**
+ * The `tool.check` verdict for a write another live session holds the path
+ * of: none with `off` or no conflict; `deny` with `deny`; with `ask`, `ask`
+ * where a person sees the dialog and `deny` in a mode where nobody would.
+ */
+export const conflictVerdict = (setting: ClaimConflicts, mode: string | undefined, conflicts: readonly Conflict[]): ConflictVerdict | undefined => {
+  const reason = conflictReason(conflicts)
+  if (setting === 'off' || reason === undefined) return undefined
+  return setting === 'ask' && asksReachPerson(mode) ? { decision: 'ask', reason } : { decision: 'deny', reason }
 }
 
 /** The line shown beneath the answer for this turn's conflicts; none without one. */

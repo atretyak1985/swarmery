@@ -30,7 +30,11 @@
 // same path, shown as a line beneath the answer), claims are released at each
 // turn's end, and with `control` on too the dashboard's `message` command is
 // sent through `$.session.send`. With `swarm` off none of it runs and the
-// send/receive hooks are not registered.
+// send/receive hooks are not registered. With `claimConflicts` set (`ask` or
+// `deny`, `swarm` on), a tool.check beneath the approvals channel's asks or
+// refuses a write whose path another live session holds (`ask` turns into a
+// refusal in a permission mode where no person sees the ask, read off the
+// classic events), and the edit is claimed after the call instead of ahead of it.
 //
 // With `planBand` on, the session's running plan phase is drawn in a band
 // above the prompt from a cache the daemon fills (GET /api/link/plan), `/plan`
@@ -121,12 +125,19 @@ import {
 import { inputHash, toolInput } from './lib/hash'
 import { type LinkEvent, type LinkKind, type Stamps, drop, enqueue, stamp, takeBatch } from './lib/queue'
 import {
+  type ClaimConflicts,
+  type ConflictVerdict,
   EMPTY_TURN,
+  type ModeBook,
   type PendingSend,
   type SwarmTurn,
+  claimConflictsOf,
   claimPath,
   conflictLines,
+  conflictVerdict,
   isAmbiguousSend,
+  modeOf,
+  noteMode,
   pendingFor,
   receiveLine,
   receivePayload,
@@ -135,7 +146,7 @@ import {
   withBeneath,
 } from './lib/swarm'
 import { measurePayload } from './lib/usage'
-import { claimFile, releaseClaims, sendToSession } from './swarm'
+import { claimFile, heldElsewhere, releaseClaims, sendToSession } from './swarm'
 
 const NAME = 'swarmery-link'
 
@@ -386,6 +397,24 @@ async function claimEdit($: EngineInterface, link: Link, swarm: Swarm, tool: str
     await push($, link, 'claim', { path })
     for (const conflict of outcome.conflicts) await push($, link, 'conflict', { path: conflict.path, otherSession: conflict.otherSession })
   })
+}
+
+/**
+ * tool.check with `claimConflicts` set: the verdict for a write whose path
+ * another live session holds (ask, or deny where no person would see the
+ * ask); undefined for any other call, which keeps the verdict beneath.
+ */
+async function checkClaims(
+  $: EngineInterface,
+  link: Link,
+  setting: ClaimConflicts,
+  modes: ModeBook,
+  call: { readonly tool: string; readonly input: unknown; readonly agentId?: string | undefined },
+): Promise<ConflictVerdict | undefined> {
+  if (typeof call.input !== 'object' || call.input === null) return undefined
+  const path = claimPath(call.tool, call.input as Readonly<Record<string, unknown>>, link.cwd)
+  if (path === undefined) return undefined
+  return conflictVerdict(setting, modeOf(modes, call.agentId), await heldElsewhere($, link.sessionId, path))
 }
 
 /** The main loop's turn ended: its claims are released; returns the lines to show beneath the answer. */
@@ -818,6 +847,12 @@ export const register: Register = (on, options) => {
   const forecaster: Forecaster | undefined = options.forecast === true ? { state: INITIAL_FORECAST, isResumed: false } : undefined
   /** The swarm; undefined with `swarm` off, so no store access, no swarm event and no send/receive hook. */
   const swarm: Swarm | undefined = options.swarm === true ? { turn: EMPTY_TURN, lock: Promise.resolve(), pending: new Map() } : undefined
+  /** How a write another live session holds is met; the registry exists with `swarm` on alone, so `off` without it. */
+  const claimConflicts: ClaimConflicts = swarm !== undefined ? claimConflictsOf(options.claimConflicts) : 'off'
+  /** `claimConflicts` set without `swarm`: said once, at the first session.start. */
+  const isClaimConflictsIdle = swarm === undefined && claimConflictsOf(options.claimConflicts) !== 'off'
+  /** The permission mode per loop, read off the classic events; kept with `claimConflicts: ask` alone. */
+  const modes: ModeBook = new Map()
   /** The plan band; undefined with `planBand` off, so no band hook, command, timer or plan request exists. */
   const planner: Planner | undefined = options.planBand === true ? newPlanner(endpoint.origin) : undefined
   const noted = new Set<string>()
@@ -850,6 +885,10 @@ export const register: Register = (on, options) => {
       if (noted.has(feature)) continue
       noted.add(feature)
       log($, `${feature}: not implemented yet`)
+    }
+    if (isClaimConflictsIdle && !noted.has('claimConflicts')) {
+      noted.add('claimConflicts')
+      log($, 'claimConflicts needs swarm on: no write is held')
     }
     // the command answers with or without a token: it says what is missing
     if (planner !== undefined) await registerPlanCommand($)
@@ -929,7 +968,11 @@ export const register: Register = (on, options) => {
         // the call goes on unreported
       }
     }
-    if (swarm !== undefined && isActive(link) && !link.isClearing) {
+    // With claimConflicts off the edit is claimed ahead of the call, as ever. On,
+    // it is claimed once the call ran: a write the check held back (refused, or
+    // declined at the dialog) must not leave a claim that holds the other session back.
+    const claimsAfter = swarm !== undefined && claimConflicts !== 'off'
+    if (swarm !== undefined && !claimsAfter && isActive(link) && !link.isClearing) {
       try {
         await claimEdit($, link, swarm, String(e.tool), e as unknown as Readonly<Record<string, unknown>>)
       } catch {
@@ -940,9 +983,16 @@ export const register: Register = (on, options) => {
     const isForecastTurn = forecaster !== undefined && isMainLoop && forecaster.state.turnId !== undefined
     // the drift check counts the main loop's edits alone
     const isPlanEdit = planner?.turn !== undefined && isMainLoop && isEditTool(String(e.tool))
-    if (!isForecastTurn && !isPlanEdit) return next(e)
+    if (!isForecastTurn && !isPlanEdit && !claimsAfter) return next(e)
     const result = await next(e)
     const fields = e as unknown as Readonly<Record<string, unknown>>
+    if (swarm !== undefined && claimsAfter && toolOutcome(result) === 'ok' && isActive(link) && !link.isClearing) {
+      try {
+        await claimEdit($, link, swarm, String(e.tool), fields)
+      } catch {
+        // the edit stands unclaimed
+      }
+    }
     try {
       if (forecaster !== undefined && isForecastTurn) {
         const facts = { tool: String(e.tool), agentId: e.agentId, fields }
@@ -956,20 +1006,65 @@ export const register: Register = (on, options) => {
     return result
   }).catch(($, e, next) => next(e))
 
+  // One tool.check (the engine takes one unmatched hook per event) serves the
+  // approvals channel and `claimConflicts`: the conflict verdict is reached
+  // first, then the approvals channel sees it, so a write the conflict check
+  // refuses never opens a dashboard approval (only an `ask` goes there).
+  // Registered with either option on.
+  if (isApprovalsOn || claimConflicts !== 'off') {
+    on('tool.check', async ($, e, next) => {
+      const below = await next(e)
+      if (!isActive(link) || link.isClearing) return below
+      let verdict = below
+      if (claimConflicts !== 'off' && below.decision !== 'deny') {
+        try {
+          verdict = (await checkClaims($, link, claimConflicts, modes, { tool: String(e.tool), input: e.input, agentId: e.agentId })) ?? below
+        } catch {
+          // the registry could not be read: the verdict beneath stands
+        }
+      }
+      if (!isApprovalsOn) return verdict
+      return checkWithSwarmery($, gateOf($, link, endpoint.origin, waiting), e, verdict, next.signal)
+    }).catch(($, e, next) => next(e))
+  }
+
   // Registered after the sensor's tool.call, so the sensor sits above it and
   // still reports (and journals) an AskUserQuestion answered from the dashboard.
   if (isApprovalsOn) {
-    on('tool.check', async ($, e, next) => {
-      const verdict = await next(e)
-      if (!isActive(link) || link.isClearing) return verdict
-      return checkWithSwarmery($, gateOf($, link, endpoint.origin, waiting), e, verdict, next.signal)
-    }).catch(($, e, next) => next(e))
-
     on('tool.call', { tool: 'AskUserQuestion' }, async ($, e, next) => {
       if (!isActive(link) || link.isClearing) return next(e)
       const fields = e as unknown as Readonly<Record<string, unknown>>
       const answer = await answerFromSwarmery($, gateOf($, link, endpoint.origin, waiting), fields, next.signal)
       return answer === undefined ? next(e) : { result: answer }
+    }).catch(($, e, next) => next(e))
+  }
+
+  // tool.check carries no permission mode; these classic events do. Each only
+  // records it and hands the event on unchanged. With `ask` alone: `deny`
+  // refuses in every mode.
+  if (swarm !== undefined && claimConflicts === 'ask') {
+    const record = (e: unknown): void => {
+      try {
+        noteMode(modes, e)
+      } catch {
+        // an unread mode keeps the ask
+      }
+    }
+    on('classic.SessionStart', async ($, e, next) => {
+      record(e)
+      return next(e)
+    }).catch(($, e, next) => next(e))
+    on('classic.UserPromptSubmit', async ($, e, next) => {
+      record(e)
+      return next(e)
+    }).catch(($, e, next) => next(e))
+    on('classic.PostToolUse', async ($, e, next) => {
+      record(e)
+      return next(e)
+    }).catch(($, e, next) => next(e))
+    on('classic.PostToolUseFailure', async ($, e, next) => {
+      record(e)
+      return next(e)
     }).catch(($, e, next) => next(e))
   }
 

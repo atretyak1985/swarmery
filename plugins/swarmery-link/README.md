@@ -7,8 +7,10 @@ the transcript tail.
 
 By default it is a **sensor only**. It never blocks, rewrites or answers anything:
 every hook passes its event on unchanged, and a failure on the link is logged and
-swallowed. Only the opt-in `approvals` option ever answers an event, and only
-with a decision a person made in the dashboard (see [Approvals](#approvals)).
+swallowed. Only the opt-in `approvals` option ever answers an event, with a
+decision a person made in the dashboard (see [Approvals](#approvals)), and the
+opt-in `claimConflicts` option, which asks or refuses a write to a file another
+live session holds (see [Holding a conflicting write](#holding-a-conflicting-write)).
 
 Version 0.2 adds an opt-in **command channel** (`control`, off by default): the
 dashboard's Stop and Send-prompt buttons reach the session through the daemon.
@@ -34,6 +36,11 @@ Version 0.6 adds an opt-in **plan band** (`planBand`, off by default): the
 session's running plan phase above the prompt, `/plan` for its checklist, a card
 for interview-style questions, and a line beneath an answer that drifted off the
 phase. See [Plan band](#plan-band).
+
+Version 0.7 adds opt-in **conflict holding** (`claimConflicts`, `off` by default,
+needs `swarm`): a write to a file another live session holds is put to the
+native dialog where a person can answer, and refused where nobody can. See
+[Holding a conflicting write](#holding-a-conflicting-write).
 
 ## Opt-in
 
@@ -97,14 +104,18 @@ The wire format is the daemon's link protocol:
 As `claude plugin validate --strict --json plugins/swarmery-link` reports it:
 
 ```
-./register.ts hooks: session.start, turn.start, tool.call, tool.check, tool.call{tool=AskUserQuestion}, session.measure, turn.complete, session.end, session.send, session.receive, ui.render{component=AbovePrompt}, ui.render{component=Pane, requestId=?}, ui.render{component=AskUserQuestion}, command.run{command=plan}
+./register.ts hooks: session.start, turn.start, tool.call, tool.check, tool.call{tool=AskUserQuestion}, classic.SessionStart, classic.UserPromptSubmit, classic.PostToolUse, classic.PostToolUseFailure, session.measure, turn.complete, session.end, session.send, session.receive, ui.render{component=AbovePrompt}, ui.render{component=Pane, requestId=?}, ui.render{component=AskUserQuestion}, command.run{command=plan}
 ./register.ts gating hook with .catch: tool.call
 ./register.ts gating hook with .catch: tool.check
 ./register.ts gating hook with .catch: tool.call{tool=AskUserQuestion}
+./register.ts gating hook with .catch: classic.SessionStart
+./register.ts gating hook with .catch: classic.UserPromptSubmit
+./register.ts gating hook with .catch: classic.PostToolUse
+./register.ts gating hook with .catch: classic.PostToolUseFailure
 ./register.ts gating hook with .catch: session.send
 ./register.ts gating hook with .catch: session.receive
 ./register.ts gating hook with .catch: command.run{command=plan}
-./register.ts calls: $.clock.after (via arm, beginForecast, bounded, pause, send, startControl, within), $.clock.every (via startPlanTimer), $.clock.now (via askSwarmery, claimFile, newRun, poll, pollDecision, push), $.command.register (via registerPlanCommand), $.env.get (via readToken), $.fs.read (via readToken), $.http.fetch (via cancelRequest, fetchCommand, planFetch, post, request, sendAck), $.model.classify (via checkDrift), $.model.complete (via runForecast), $.prompt.submit (via submitPrompt), $.session.cwd, $.session.id, $.session.send (via sendToSession), $.session.usage, $.store.delete (via releaseClaims), $.store.get (via claimFile), $.store.keys (via claimFile), $.store.set (via claimFile), $.turn.abort (via abortTurn), $.ui.ask (via pressNext, pressTick), $.ui.copy (via pressOpen), $.ui.invalidate (via setView), $.ui.log (via log), $.ui.notice (via showNotice), $.ui.open (via runPlanCommand), $.ui.resolve (via drawBand, drawInterview, drawPane), $.ui.status (via showStatu… [+26 chars]
+./register.ts calls: $.clock.after (via arm, beginForecast, bounded, pause, send, startControl, within), $.clock.every (via startPlanTimer), $.clock.now (via askSwarmery, claimFile, heldElsewhere, newRun, poll, pollDecision, push), $.command.register (via registerPlanCommand), $.env.get (via readToken), $.fs.read (via readToken), $.http.fetch (via cancelRequest, fetchCommand, planFetch, post, request, sendAck), $.model.classify (via checkDrift), $.model.complete (via runForecast), $.prompt.submit (via submitPrompt), $.session.cwd, $.session.id, $.session.send (via sendToSession), $.session.usage, $.store.delete (via releaseClaims), $.store.get (via readOthers), $.store.keys (via readOthers), $.store.set (via claimFile), $.turn.abort (via abortTurn), $.ui.ask (via pressNext, pressTick), $.ui.copy (via pressOpen), $.ui.invalidate (via setView), $.ui.log (via log), $.ui.notice (via showNotice), $.ui.open (via runPlanCommand), $.ui.resolve (via drawBand, drawInterview, drawPane), $.ui.status (via showStatu… [+26 chars]
 ./register.ts env writes: nothing
 ./register.ts env reads: HOME
 ```
@@ -117,10 +128,15 @@ waits for the call's result to note how a main-loop call ended, and returns
 that result unchanged. `command.run{command=plan}` answers `/plan` itself; its
 `.catch` answers with one line if it fails.
 
-`tool.check` and `tool.call{tool=AskUserQuestion}` are the approvals channel's
-and are registered only with `approvals` on; validate lists them whatever the
-options say (it reads the source, not the options). Their `.catch` hands the
-event on (`next(e)`), never refuses.
+`tool.check` is registered with `approvals` or `claimConflicts` on (one hook
+serves both: the conflict verdict first, then the approvals channel), and
+`tool.call{tool=AskUserQuestion}` with `approvals` on; validate lists them
+whatever the options say (it reads the source, not the options). Their `.catch`
+hands the event on (`next(e)`), never refuses. The four `classic.*` hooks are
+registered with `claimConflicts: ask` alone: each records the event's
+`permission_mode` and hands it on unchanged (validate notes that where an
+organization manages Claude Code they do not run in a plugin a person installs;
+the mode then stays unknown and a held write is asked).
 
 `$.turn.abort` and `$.prompt.submit` are the command channel's. Validate lists
 them whatever the options say; with `control` off they are never called and no
@@ -157,6 +173,7 @@ registered and none of those calls is made.
 | `forecast` | `false` | the turn forecast: one haiku call per user turn, a `turn.forecast` and a `turn.actual` per forecast turn ([Forecast](#forecast)) |
 | `approvals` | `false` | routes each permission ask to the Swarmery approvals queue first, ahead of the dialog or auto mode's classifier; the shim/dialog takes over if the daemon is down or does not decide in time. An `AskUserQuestion` can be answered from the dashboard ([Approvals](#approvals)) |
 | `swarm` | `false` | swarm coordination: message events, the file-claims registry, the conflict line, and the dashboard's `message` command with `control` on ([Swarm](#swarm)) |
+| `claimConflicts` | `off` | with `swarm` on, a write to a file another live session holds: `off` only the conflict line; `ask` the native dialog asks, naming the other session, in `default`/`acceptEdits`/`plan` mode, and the write is refused in `auto`/`dontAsk`/`bypassPermissions`, where no person would see the ask; `deny` refused in every mode. Bash is never checked ([Holding a conflicting write](#holding-a-conflicting-write)) |
 | `planBand` | `false` | the plan band, `/plan`, the interview card and the drift line ([Plan band](#plan-band)) |
 
 Set them in the plugin's config menu (`/plugin` → swarmery-link → configure),
@@ -412,7 +429,8 @@ had there.
 
 With `swarm` on, sessions working side by side see each other: the messages
 they exchange reach the daemon, and two sessions editing the same file hear
-about it. It is advisory: nothing is blocked, rewritten or refused.
+about it. It is advisory: nothing is blocked, rewritten or refused, unless
+[`claimConflicts`](#holding-a-conflicting-write) is set.
 
 ### Enable it
 
@@ -478,6 +496,39 @@ With several, the first path and `(+N more)`. The line is returned as the
 `turn.complete` result's `text`: the engine shows a text other than the main
 loop's answer beneath it and never rewrites the answer itself. A text another
 hook already put there is kept, the line after it.
+
+### Holding a conflicting write
+
+`claimConflicts` (`off` by default; needs `swarm` on, else one log line says so
+and nothing is held) makes the registry hold a write back instead of only
+reporting it. Before an `Edit`, `Write`, `MultiEdit` or `NotebookEdit` runs, the
+mod's `tool.check` reads the other sessions' entries for a live claim (at most
+30 min old) on the call's path. The session's own claim never counts.
+
+| `claimConflicts` | Permission mode | The write |
+|---|---|---|
+| `off` | any | runs; the conflict line shows beneath the answer, as above |
+| `ask` | `default`, `acceptEdits`, `plan`, or not seen yet | goes to the native permission dialog, which shows `swarmery-link: <path> is being edited by session <short id>` |
+| `ask` | `auto`, `dontAsk`, `bypassPermissions` | refused with that reason: an ask there would reach no person (`auto` hands it to the classifier) |
+| `deny` | any | refused with that reason |
+
+- **The mode** is not on `tool.check`'s input: the mod reads `permission_mode`
+  off the classic `SessionStart`, `UserPromptSubmit`, `PostToolUse` and
+  `PostToolUseFailure` events, per loop (a subagent not heard from yet takes the
+  main loop's), as guard-pack's `prodGuard` does. Until one arrives the mode is
+  unknown and the write is asked.
+- **Only the file tools are guarded.** A Bash command's target path cannot be
+  read, so Bash is never checked or held.
+- **A deny beneath stays a deny**, with its own reason. With `approvals` on too,
+  the conflict verdict is reached first: a refused write never opens a dashboard
+  approval, and an `ask` goes to the approvals queue first, as any ask does (the
+  native dialog, with the reason, takes over when the dashboard does not decide).
+- **The claim follows the call.** With `claimConflicts` set the path is claimed
+  once the call ran without error, not ahead of it, so a refused or declined
+  write leaves no claim that would hold the other session back. A write that ran
+  after an `ask` still sends its `claim` and `conflict` and shows the line.
+- **Best effort.** Two sessions whose checks pass at the same instant both run;
+  the registry is a coordination aid, not a lock.
 
 ### The `message` command
 
