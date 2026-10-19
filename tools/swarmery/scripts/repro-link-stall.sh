@@ -40,7 +40,8 @@
 # (never `swarmery backup`: it migrates the source database).
 #
 # Output (key=value lines): health_samples, health_p50_ms, health_p95_ms,
-# health_max_ms, posts, post_timeouts, post_p95_ms, events_accepted (events the
+# health_max_ms, posts, post_timeouts, post_busy (504 "database busy" answers),
+# post_p95_ms, events_accepted (events the
 # daemon stored — 0 means the link load never reached the database), canceled
 # (count of "link ingest: begin:
 # context canceled" in the dev log), waitCount and waitDurationMs (final
@@ -266,6 +267,9 @@ p95=$(pct 95)
 pmax=$(pct 100)
 posts=$(wc -l <"$posts_tsv" | tr -d ' ')
 post_timeouts=$(awk '$3=="000"' "$posts_tsv" | wc -l | tr -d ' ')
+# 504 = the daemon's "database busy, retry" answer (link.ErrBusy): nothing
+# stored, the mod resends. Not a failure of the verdict, but the number to watch.
+post_busy=$(awk '$3=="504"' "$posts_tsv" | wc -l | tr -d ' ')
 post_p95=$(awk '{printf "%d\n", $4*1000}' "$posts_tsv" | sort -n | awk '{v[NR]=$1} END{if(NR==0){print 0;exit} i=int((95*NR+99)/100); print v[i]}')
 events_accepted=$(awk '{s+=$5} END{print s+0}' "$posts_tsv")
 canceled=$(grep -c 'link ingest: begin: context canceled' "$log")
@@ -282,6 +286,7 @@ echo "health_p95_ms=$p95"
 echo "health_max_ms=$pmax"
 echo "posts=$posts"
 echo "post_timeouts=$post_timeouts"
+echo "post_busy=$post_busy"
 echo "post_p95_ms=$post_p95"
 echo "events_accepted=$events_accepted"
 echo "canceled=$canceled"

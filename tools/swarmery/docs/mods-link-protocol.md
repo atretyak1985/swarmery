@@ -224,6 +224,14 @@ final. Resending it gets the same answer, so the mod drops it.
 | `413` | body > 1 MiB or > 200 events | split and resend. Nothing from this request was stored |
 | `500` | database error. The **whole batch** was rolled back | retry later with the same batch. Dedup makes that safe |
 | `503 {"error":"link disabled"}` | the daemon could not load a token at start, so the link is off | treat the link as off. The JSONL tail still records the session |
+| `504 {"error":"database busy"}` + `Retry-After: 2` | no store connection came free within 4 s (`link.AcquireTimeout`). Nothing from this request was stored | retry later with the same batch (the next flush, about 2 s). Never read it as `503`: the link stays on |
+
+The daemon finishes a batch on its own budget, not the request's: once a batch
+is queued for the store, a mod that gives up at its 5 s timeout does not
+discard it, so the batch can be stored even though the mod saw no answer. The
+mod's resend of it then comes back as `duplicates` (see Dedup). The busy
+answer is deliberately a `504`, not a `503`: a `503` means "link off for this
+session" to every mod already deployed.
 
 ## GET /api/link/health
 
@@ -545,7 +553,7 @@ normalized ms-UTC string. Normalization runs first, so `2026-10-13T12:00:00+02:0
 
 Consequences for the mod:
 
-- **Resend freely.** A retry after a timeout or a `500` counts already-stored events
+- **Resend freely.** A retry after a timeout, a `500` or a `504` counts already-stored events
   as `duplicates`, so nothing is stored twice and state is never applied twice.
 - **Keep `at` unique per session and kind.** Two distinct events of the same kind in
   the same millisecond (two parallel `tool.call`s, say) collide, and the second is
@@ -620,6 +628,9 @@ The link is an **optional sensor**. Nothing else depends on it:
   is still recorded from its JSONL transcript once the daemon is back.
 - **Token missing or unreadable**: the mod treats the link as off for that session.
 - **Daemon without a token** (`503 link disabled`): same.
+- **Daemon busy** (`504 database busy`): the store's connection stayed taken for the
+  daemon's 4 s bound. The mod keeps the batch and sends it on the next flush, like a
+  timeout; the link stays on.
 - **No mod installed**: every `sessions.link_*` column stays NULL, `link_events` stays
   empty, and statuses come from the timer exactly as before this feature.
 - **The shim and the JSONL tail never need `/api/link/*`.** `/api/hooks/*`, the
