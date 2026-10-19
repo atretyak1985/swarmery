@@ -149,9 +149,15 @@ dev: copy-docs copy-probe
 	cd web && npm run dev; \
 	kill %1 2>/dev/null
 
+# test: an explicit -timeout, because go test's 10 m default is a per-package
+# bound and internal/api (1223 serial tests) outgrows it under contention.
+# Measured 2026-10-19 with go test -json + scripts/tests/go-test-durations.sh:
+# 435 s with no burners (shared box, load avg 49-148 on 16 CPUs) and 719 s
+# under scripts/tests/under-load.sh (load avg 135-239). 30 m leaves 2.5x
+# headroom over the loaded figure; swarmery-ci.yml passes the same bound.
 test:
 	go vet ./...
-	go test ./...
+	go test -timeout 30m ./...
 
 # clean: the docs prune is `-type f` because content/uk/ keeps its own .gitkeep,
 # and find cannot -delete a directory that is not empty.
