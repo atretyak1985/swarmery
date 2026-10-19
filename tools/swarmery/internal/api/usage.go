@@ -326,7 +326,7 @@ func storeUsage(body usageResp, at time.Time) {
 // free bound form used elsewhere.
 func (h *Handler) usedTokensSince(startUTC string) (int64, error) {
 	var n int64
-	err := h.DB.QueryRow(`
+	err := h.rdb().QueryRow(`
 		SELECT COALESCE(SUM(COALESCE(tokens_in,0) + COALESCE(tokens_out,0)), 0)
 		FROM turns
 		WHERE started_at >= ?`, startUTC).Scan(&n)

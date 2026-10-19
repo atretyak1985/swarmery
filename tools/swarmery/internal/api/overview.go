@@ -121,7 +121,7 @@ func (h *Handler) statsOverview(w http.ResponseWriter, r *http.Request) {
 	o.Series = series
 
 	// errors_by_project: that day, descending, max 8.
-	rows, err := h.DB.Query(`
+	rows, err := h.rdb().Query(`
 		SELECT p.slug, p.name, COUNT(*) AS n
 		FROM events e
 		JOIN sessions s ON s.id = e.session_id
@@ -149,7 +149,7 @@ func (h *Handler) statsOverview(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// cost_by_model: that day, descending, priced turns only.
-	rows, err = h.DB.Query(`
+	rows, err = h.rdb().Query(`
 		SELECT COALESCE(t.model, 'unknown') AS mdl, SUM(t.cost_usd) AS c
 		FROM turns t
 		JOIN sessions s ON s.id = t.session_id
@@ -177,7 +177,7 @@ func (h *Handler) statsOverview(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// projects: sessions started that day, descending.
-	rows, err = h.DB.Query(`
+	rows, err = h.rdb().Query(`
 		SELECT p.slug, p.name, COUNT(*) AS n
 		FROM sessions s
 		JOIN projects p ON p.id = s.project_id
@@ -238,7 +238,7 @@ func (h *Handler) seriesAggregates(lastDay time.Time, projFilter string, projArg
 		args := append([]any{}, bounds[1:seriesDays]...)
 		args = append(args, bounds[0], bounds[seriesDays])
 		args = append(args, projArgs...)
-		rows, err := h.DB.Query(`SELECT `+day.String()+` AS d, `+aggCols+` FROM `+from+
+		rows, err := h.rdb().Query(`SELECT `+day.String()+` AS d, `+aggCols+` FROM `+from+
 			` WHERE `+where+col+` >= ? AND `+col+` < ? AND p.archived = 0`+projFilter+
 			` GROUP BY d`, args...)
 		if err != nil {

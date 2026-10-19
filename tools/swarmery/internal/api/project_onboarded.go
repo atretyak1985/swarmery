@@ -99,7 +99,7 @@ func markOnboarded(projects []projectDTO, roots []string) {
 // a bare id/path query plus a settings read each, not the aggregate
 // projectSelect.
 func (h *Handler) markOnboardedOne(p *projectDTO, roots []string) error {
-	rows, err := h.DB.Query(
+	rows, err := h.rdb().Query(
 		`SELECT id, path FROM projects WHERE ? LIKE path || '/%' AND archived = 0`, p.Path)
 	if err != nil {
 		return err
