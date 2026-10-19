@@ -19,6 +19,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/ingest"
@@ -44,6 +45,12 @@ const (
 	maxStdin            = 4 << 20
 )
 
+// authRetryDelay is how long the shim waits after a 401 before it re-reads the
+// token file and retries once: just past the daemon's 1 s token re-read
+// throttle (link.Holder), so a retry after a rotation lands on a daemon that
+// has reloaded. A var so tests can shorten it.
+var authRetryDelay = 1100 * time.Millisecond
+
 // Config wires the shim; zero values fall back to the frozen defaults.
 type Config struct {
 	BaseURL        string        // daemon origin, e.g. http://127.0.0.1:7777
@@ -52,6 +59,11 @@ type Config struct {
 	Stdout         io.Writer     // hook stdout (the decision channel to Claude)
 	Stderr         io.Writer     // operator notices (spinner hint)
 	LogPath        string        // one-line-per-call audit log; "" disables
+	// TokenPath is the link token file (link.TokenPath(home)), read on every
+	// call and sent as the Authorization header the /api/hooks/* routes
+	// require. "" or a missing/unreadable file sends no header: the daemon
+	// then answers 401 and the shim fails open like on any non-200.
+	TokenPath string
 }
 
 // hookSpecificOutput is the verified decision contract (E2/E3): stdout shape
@@ -205,6 +217,12 @@ type hookDecisionBody struct {
 
 // post sends the hook stdin to the daemon. onResp (may be nil) classifies a
 // received response; transport failures return their own outcome strings.
+//
+// The link token is read from cfg.TokenPath on every call. A 401 gets one
+// retry: after authRetryDelay (only when a token was sent — the daemon's
+// re-read throttle) the file is re-read and the request sent again. With no
+// token on disk the outcome is "auth-missing"; a second 401 is "http-401".
+// Either way the shim fails open. The token never reaches an outcome string.
 func post(cfg Config, event string, body []byte, timeout time.Duration, onResp func(*http.Response) string) string {
 	client := &http.Client{
 		Timeout: timeout,
@@ -213,14 +231,23 @@ func post(cfg Config, event string, body []byte, timeout time.Duration, onResp f
 			DisableKeepAlives: true,
 		},
 	}
-	req, err := http.NewRequest(http.MethodPost, cfg.BaseURL+"/api/hooks/"+event, bytes.NewReader(body))
-	if err != nil {
-		return "request-error"
+	url := cfg.BaseURL + "/api/hooks/" + event
+	tok := readLinkToken(cfg.TokenPath)
+	resp, outcome := send(client, url, body, tok)
+	if resp == nil {
+		return outcome
 	}
-	req.Header.Set("Content-Type", "application/json")
-	resp, err := client.Do(req)
-	if err != nil {
-		return "unreachable" // connect refused / timeout / poll deadline
+	if resp.StatusCode == http.StatusUnauthorized {
+		discard(resp)
+		if tok != "" {
+			time.Sleep(authRetryDelay)
+		}
+		if tok = readLinkToken(cfg.TokenPath); tok == "" {
+			return "auth-missing"
+		}
+		if resp, outcome = send(client, url, body, tok); resp == nil {
+			return outcome
+		}
 	}
 	defer resp.Body.Close()
 	if onResp == nil {
@@ -228,6 +255,43 @@ func post(cfg Config, event string, body []byte, timeout time.Duration, onResp f
 		return fmt.Sprintf("http-%d", resp.StatusCode)
 	}
 	return onResp(resp)
+}
+
+// send POSTs one attempt. A nil response comes with its transport outcome.
+func send(client *http.Client, url string, body []byte, tok string) (*http.Response, string) {
+	req, err := http.NewRequest(http.MethodPost, url, bytes.NewReader(body))
+	if err != nil {
+		return nil, "request-error"
+	}
+	req.Header.Set("Content-Type", "application/json")
+	if tok != "" {
+		req.Header.Set("Authorization", "Bearer "+tok)
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, "unreachable" // connect refused / timeout / poll deadline
+	}
+	return resp, ""
+}
+
+// discard drains and closes a response the shim does not classify.
+func discard(resp *http.Response) {
+	io.Copy(io.Discard, io.LimitReader(resp.Body, 1<<20))
+	resp.Body.Close()
+}
+
+// readLinkToken returns the trimmed token file content, "" when path is empty
+// or the file is missing or unreadable. The shim never mints or chmods it —
+// that is the daemon's job (link.EnsureToken).
+func readLinkToken(path string) string {
+	if path == "" {
+		return ""
+	}
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(b))
 }
 
 func toolNameOf(body []byte) string {
