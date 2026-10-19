@@ -150,7 +150,12 @@ func Ingest(ctx context.Context, db *sql.DB, publish func(ingest.Notification), 
 		return res, nil
 	}
 
-	tx, err := db.BeginTx(ctx, nil)
+	conn, err := acquire(ctx, db)
+	if err != nil {
+		return Result{}, err
+	}
+	defer conn.Close()
+	tx, err := conn.BeginTx(ctx, nil)
 	if err != nil {
 		return Result{}, fmt.Errorf("link ingest: begin: %w", err)
 	}
@@ -248,6 +253,35 @@ func Ingest(ctx context.Context, db *sql.DB, publish func(ingest.Notification), 
 		}
 	}
 	return res, nil
+}
+
+// AcquireTimeout bounds how long Ingest queues for a store connection. The
+// store runs on one connection (internal/store.Open: SetMaxOpenConns(1)) and
+// database/sql hands a freed connection to a random waiter, so under load a
+// single acquire can wait far longer than the mod's 5 s request budget
+// (reports/link-ingest-stall.md). The bound sits under that budget, so the mod
+// hears "busy, retry" before it gives up on its own.
+const AcquireTimeout = 4 * time.Second
+
+// ErrBusy is Ingest's answer when no store connection came free within
+// AcquireTimeout. Nothing of the batch was stored; the caller may resend it
+// as is (dedup makes that safe).
+var ErrBusy = errors.New("link ingest: database busy")
+
+// acquire checks out one store connection, waiting at most AcquireTimeout.
+// Only the wait is bounded: once Ingest holds the connection its transaction
+// runs on ctx alone. A caller whose own ctx ended gets that error, not ErrBusy.
+func acquire(ctx context.Context, db *sql.DB) (*sql.Conn, error) {
+	wait, cancel := context.WithTimeout(ctx, AcquireTimeout)
+	defer cancel()
+	conn, err := db.Conn(wait)
+	if err == nil {
+		return conn, nil
+	}
+	if ctx.Err() == nil && errors.Is(err, context.DeadlineExceeded) {
+		return nil, fmt.Errorf("%w: no connection within %s", ErrBusy, AcquireTimeout)
+	}
+	return nil, fmt.Errorf("link ingest: begin: %w", err)
 }
 
 // sessionProject returns the session's project_id.

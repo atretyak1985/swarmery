@@ -13,9 +13,12 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
+	"log"
 	"net/http"
+	"time"
 
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/ingest"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/link"
@@ -33,6 +36,13 @@ const (
 	// daemon's exclude list (the same list the JSONL ingest and the approvals
 	// hook honour).
 	rejectExcluded = "excluded project"
+	// linkWriteBudget caps one batch's whole write once detached from the
+	// request: the connection wait (link.AcquireTimeout) plus the
+	// transaction.
+	linkWriteBudget = 30 * time.Second
+	// linkBusyRetryAfter is the Retry-After of the busy answer, in seconds:
+	// the mod's flush cadence (client.ts FLUSH_EVERY_MS).
+	linkBusyRetryAfter = "2"
 )
 
 var (
@@ -78,7 +88,10 @@ type linkEventsRequest struct {
 //	400               body is not JSON, not the envelope, or has no "events"
 //	401               missing / wrong bearer token
 //	413               body > 1 MiB, or more than 200 events
+//	500               database error; the whole batch was rolled back
 //	503               link not attached
+//	504 + Retry-After no store connection within link.AcquireTimeout; nothing
+//	                  stored, resend the same batch
 func (h *Handler) linkEvents(w http.ResponseWriter, r *http.Request) {
 	r.Body = http.MaxBytesReader(w, r.Body, maxLinkBody)
 	var req linkEventsRequest
@@ -102,6 +115,14 @@ func (h *Handler) linkEvents(w http.ResponseWriter, r *http.Request) {
 	}
 
 	res, err := ingestLinkBatch(r, h, batch)
+	if errors.Is(err, link.ErrBusy) {
+		// Not 503: the mod reads 503 as "link disabled" and turns the link
+		// off for the session (client.ts outcome). Any other 5xx is "retry".
+		log.Printf("warning: api: %v", err)
+		w.Header().Set("Retry-After", linkBusyRetryAfter)
+		writeJSONStatus(w, http.StatusGatewayTimeout, map[string]string{"error": "database busy"})
+		return
+	}
 	if err != nil {
 		writeErr(w, err)
 		return
@@ -128,7 +149,14 @@ func ingestLinkBatch(r *http.Request, h *Handler, batch []link.Event) (link.Resu
 	if len(kept) == 0 {
 		return res, nil
 	}
-	in, err := link.Ingest(r.Context(), h.DB, publishLink, kept)
+	// The write runs on the daemon's budget, not the client's: a mod that gives
+	// up at 5 s must not discard a batch already queued for the connection
+	// (the live "link ingest: begin: context canceled"). link.Ingest bounds
+	// its own wait for the connection (ErrBusy); linkWriteBudget only caps a
+	// transaction that has the connection and still never ends.
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(r.Context()), linkWriteBudget)
+	defer cancel()
+	in, err := link.Ingest(ctx, h.DB, publishLink, kept)
 	if err != nil {
 		return link.Result{}, err
 	}
