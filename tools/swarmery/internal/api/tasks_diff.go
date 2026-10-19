@@ -27,7 +27,9 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -179,6 +181,12 @@ func (execReview) Run(dir string, timeout time.Duration, name string, args ...st
 	defer cancel()
 	cmd := exec.CommandContext(ctx, name, args...)
 	cmd.Dir = dir
+	if filepath.Base(name) == reviewGitBinary {
+		// Optional locks off: these are reads of the project repo root, and a
+		// `diff`/`log` killed at its deadline must not strand an index.lock in
+		// the operator's checkout.
+		cmd.Env = append(os.Environ(), "GIT_OPTIONAL_LOCKS=0")
+	}
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
