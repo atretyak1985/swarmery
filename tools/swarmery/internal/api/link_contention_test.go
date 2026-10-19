@@ -52,9 +52,10 @@ func (e *linkTestEnv) postLink(t *testing.T, body string, timeout time.Duration)
 // TestLinkEventsDoNotHangBehindLongHolder is the regression test for the
 // link-ingest stall (reports/link-ingest-stall.md, H1): with the store's
 // connection held for 6 s, POST /api/link/events answers inside the mod's 5 s
-// budget — 202 if it got the connection, or the busy answer (504 +
-// Retry-After) the mod retries. Never 503: the mod reads 503 as "link
-// disabled" and turns the link off for the whole session.
+// budget with the busy answer (504 + Retry-After) the mod retries. The hold
+// outlasts link.AcquireTimeout (4 s) and nothing else frees the connection, so
+// 202 is unreachable here. Never 503: the mod reads 503 as "link disabled" and
+// turns the link off for the whole session.
 func TestLinkEventsDoNotHangBehindLongHolder(t *testing.T) {
 	e := newLinkTestEnv(t)
 	holdStoreConn(t, e.db, 6*time.Second)
@@ -63,14 +64,11 @@ func TestLinkEventsDoNotHangBehindLongHolder(t *testing.T) {
 	if elapsed >= 5*time.Second {
 		t.Fatalf("POST took %s with the connection held (status %d), want < 5s — the mod gives up at 5s", elapsed, code)
 	}
-	switch code {
-	case http.StatusAccepted:
-	case http.StatusGatewayTimeout:
-		if retryAfter != "2" {
-			t.Errorf("busy answer Retry-After = %q, want \"2\"", retryAfter)
-		}
-	default:
-		t.Fatalf("status = %d, want 202 or 504 (never 503: the mod turns the link off on 503)", code)
+	if code != http.StatusGatewayTimeout {
+		t.Fatalf("status = %d, want 504 (busy; never 503: the mod turns the link off on 503)", code)
+	}
+	if retryAfter != "2" {
+		t.Errorf("busy answer Retry-After = %q, want \"2\"", retryAfter)
 	}
 }
 
