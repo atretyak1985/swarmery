@@ -490,6 +490,9 @@ returns the cached verdict for free; fix the branch first. Open `[LAND]` and
 `[MANUAL]` criteria do not hold the button back: the verifier grades the executor's
 work, so a phase whose only unticked criteria are the merge or a manual check is
 offered as soon as every other criterion is ticked.
+A phase whose plan was archived or whose doc was renamed keeps its run branch, so it
+can still be verified again. A verdict that arrives after such a move follows the
+phase to its new row.
 
 ### Review lane: three real exits
 

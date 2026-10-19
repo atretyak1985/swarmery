@@ -3,6 +3,7 @@ package runcore
 import (
 	"database/sql"
 	"strconv"
+	"strings"
 )
 
 // Branch minting. These three functions own the `swarm/…` literals for the whole
@@ -51,6 +52,23 @@ func PlanBranch(workspaceTaskID int64) string {
 // Acquire that these branch helpers name.
 func PhaseTaskName(phaseID int64) string { return "phase-" + strconv.FormatInt(phaseID, 10) }
 func PlanTaskName(taskID int64) string   { return "plan-" + strconv.FormatInt(taskID, 10) }
+
+// PhaseTaskNameFromBranch inverts PhaseBranch: "swarm/phase-<digits>" → "phase-<digits>".
+// ok=false for anything else, so a hand-made or foreign branch is never guessed at.
+// It is how a STAMPED run_branch (which may name a previous row id — see PhaseBranch)
+// is turned back into the taskName worktree.Manager needs to reach that branch.
+func PhaseTaskNameFromBranch(branch string) (taskName string, ok bool) {
+	digits, found := strings.CutPrefix(branch, PhaseBranchPrefix)
+	if !found || digits == "" {
+		return "", false
+	}
+	for _, r := range digits {
+		if r < '0' || r > '9' {
+			return "", false
+		}
+	}
+	return strings.TrimPrefix(branch, branchPrefix), true
+}
 
 // WorktreeKey identifies the CHECKOUT a run will land in, which is not the same
 // thing as the run. worktree.Manager derives both the path and the branch from
