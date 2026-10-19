@@ -186,8 +186,9 @@ func TestCommandsMessageExpires(t *testing.T) {
 }
 
 // The sender's mod reports the send it ran for a dashboard command (commandId):
-// it folds into the dashboard row instead of adding a second message, and the
-// recipient's receive pairs with it without touching the ack-owned delivered.
+// it folds into the dashboard row instead of adding a second message and gives
+// the row the engine's verdict, and the recipient's receive pairs with it
+// without touching that delivered.
 func TestCommandsMessageSendEventFolds(t *testing.T) {
 	e := newMsgEnv(t)
 	e.poll(t)
@@ -214,7 +215,7 @@ func TestCommandsMessageSendEventFolds(t *testing.T) {
 	if err := e.db.QueryRow(`SELECT origin, delivered, matched_id FROM link_messages WHERE id = ?`, msgID).Scan(&origin, &delivered, &matched); err != nil {
 		t.Fatal(err)
 	}
-	if origin.String != "plugin" || delivered.Valid || !matched.Valid {
+	if origin.String != "plugin" || !delivered.Valid || delivered.Int64 != 1 || !matched.Valid {
 		t.Errorf("folded row origin=%v delivered=%v matched=%v", origin, delivered, matched)
 	}
 	if err := e.db.QueryRow(`SELECT from_session FROM link_messages WHERE kind = 'receive'`).Scan(&from); err != nil || from.String != e.uuid {
@@ -316,8 +317,7 @@ func TestCommandsMessagePluginSendShapeFolds(t *testing.T) {
 // The mod acks failed after its 10 s message timeout, then the send it gave
 // up on settles and is reported with the command id: the engine's verdict
 // overrides the ack's on the dashboard row — delivered clears the reason, not
-// delivered takes the engine's reason. Before any ack, the send leaves
-// delivered to the ack (TestCommandsMessageSendEventFolds).
+// delivered takes the engine's reason.
 func TestCommandsMessageLateSendOverridesFailedAck(t *testing.T) {
 	for _, tc := range []struct {
 		isDelivered string
@@ -350,6 +350,53 @@ func TestCommandsMessageLateSendOverridesFailedAck(t *testing.T) {
 			var n int
 			if err := e.db.QueryRow(`SELECT COUNT(*) FROM link_messages`).Scan(&n); err != nil || n != 1 {
 				t.Errorf("rows = %d (%v), want 1", n, err)
+			}
+		})
+	}
+}
+
+// The mod's 10 s timeout acks failed; the send it gave up on then settles
+// delivered and is reported; then that same failed ack reaches the daemon again
+// — the mod answers a re-delivered command from its executed set when the
+// first ack was lost, and a retried ack of a settled command is a no-op. The
+// command ends failed either way, and the dashboard row stays delivered.
+func TestRetriedFailedAckKeepsLateSendVerdict(t *testing.T) {
+	const timeout = "undeliverable: no answer in 10s"
+	for _, firstAckTaken := range []bool{false, true} {
+		t.Run(fmt.Sprintf("first ack taken %t", firstAckTaken), func(t *testing.T) {
+			e := newMsgEnv(t)
+			e.poll(t)
+			id, _, err := e.c.EnqueueMessage(context.Background(), e.sid, msgRecipient, "status?")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if cmd := e.poll(t); cmd == nil || cmd.ID != id {
+				t.Fatalf("not delivered: %+v", cmd)
+			}
+			if firstAckTaken {
+				if err := e.c.Ack(context.Background(), id, ResultFailed, timeout); err != nil {
+					t.Fatal(err)
+				}
+			} // else the timeout's ack was lost on its way
+			at := e.clk.Now().Add(12 * time.Second).Format(time.RFC3339Nano)
+			mustIngest(t, e.db, nil, []Event{pluginSend(e.uuid, msgRecipient, "status?", at, "true", fmt.Sprint(id))})
+			if r := e.dashboardRow(t, id); !r.delivered.Valid || r.delivered.Int64 != 1 || r.reason.Valid {
+				t.Fatalf("after the late send: %+v, want delivered 1, no reason", r)
+			}
+			if !firstAckTaken {
+				e.clk.Add(RedeliverAfter + time.Second)
+				if cmd := e.poll(t); cmd == nil || cmd.ID != id {
+					t.Fatalf("not re-delivered: %+v", cmd)
+				}
+			}
+			if err := e.c.Ack(context.Background(), id, ResultFailed, timeout); err != nil {
+				t.Fatal(err)
+			}
+			if got := e.row(t, id); got.state != StateFailed {
+				t.Errorf("command state = %s, want failed (the ack is recorded on the command)", got.state)
+			}
+			if r := e.dashboardRow(t, id); !r.delivered.Valid || r.delivered.Int64 != 1 || r.reason.Valid {
+				t.Errorf("after the retried failed ack: %+v, want still delivered 1, no reason", r)
 			}
 		})
 	}

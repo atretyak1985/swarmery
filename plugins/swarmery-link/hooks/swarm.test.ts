@@ -4,12 +4,15 @@ import { decide, parseCommand } from './lib/control'
 import {
   MAX_ENTRY_BYTES,
   MAX_RELEASE_PATHS,
+  type PendingSend,
   absolutePath,
   addClaim,
   claimPath,
   claimsKey,
   clip,
   conflictLines,
+  isAmbiguousSend,
+  pendingFor,
   releasePayload,
   sendPayload,
   senderPid,
@@ -316,6 +319,33 @@ test('two dashboard messages, the first one late: each send is reported once, wi
     { to: THIRD, text: 'second', truncated: false, isDelivered: true, origin: 'plugin', commandId: 34 },
     { to: OTHER, text: 'first', truncated: false, isDelivered: false, reason: 'session is not running', origin: 'plugin', commandId: 33 },
   ])
+})
+
+test('identical-text dashboard messages to different addressees: a send the engine spells differently is never guessed, so their ids never swap', () => {
+  const first: PendingSend = { commandId: '33', to: OTHER, text: 'same', isLogged: false }
+  const second: PendingSend = { commandId: '34', to: THIRD, text: 'same', isLogged: false }
+  const both = new Map([
+    ['33', first],
+    ['34', second],
+  ])
+  // the engine spells the recipient as given: each send finds its own message
+  expect(pendingFor(both, THIRD, 'same')).toBe(second)
+  expect(pendingFor(both, OTHER, 'same')).toBe(first)
+  // spelled otherwise (a name, an address): two candidates, no guess — and the send hook leaves the report to each message's own path
+  expect(pendingFor(both, 'proj-68', 'same')).toBeUndefined()
+  expect(isAmbiguousSend(both, 'proj-68', 'same')).toBe(true)
+  expect(isAmbiguousSend(both, THIRD, 'same')).toBe(false)
+  // one candidate left (the other already reported): it is that one, however the engine spelled it
+  const reported = new Map([
+    ['33', { ...first, isLogged: true }],
+    ['34', second],
+  ])
+  expect(pendingFor(reported, 'proj-68', 'same')).toBe(second)
+  expect(isAmbiguousSend(reported, 'proj-68', 'same')).toBe(false)
+  // another text, or nothing pending: not a dashboard message
+  expect(pendingFor(both, 'proj-68', 'other text')).toBeUndefined()
+  expect(isAmbiguousSend(both, 'proj-68', 'other text')).toBe(false)
+  expect(isAmbiguousSend(new Map(), 'proj-68', 'same')).toBe(false)
 })
 
 test('commandId goes out as a JSON number when the id is a safe integer, else as given', () => {

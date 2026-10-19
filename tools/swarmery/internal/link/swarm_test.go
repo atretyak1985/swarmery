@@ -664,6 +664,12 @@ func setPID(t *testing.T, db *sql.DB, uuid string, pid int64) {
 	}
 }
 
+// activeAt gives the session a link event at at (a turn starting).
+func activeAt(t *testing.T, db *sql.DB, uuid, at string) {
+	t.Helper()
+	mustIngest(t, db, nil, []Event{{SessionID: uuid, Kind: KindTurnStart, At: at}})
+}
+
 // The envelope names the sending process: a receive no send matches still
 // learns its sender from a session running as that pid, and a send from that
 // session arriving later pairs with it — one from another session does not.
@@ -672,6 +678,8 @@ func TestSwarmReceiveSenderByPID(t *testing.T) {
 	addSessionD(t, db)
 	setPID(t, db, swA, 41881)
 	setPID(t, db, swD, 50000)
+	activeAt(t, db, swA, "2026-10-19T06:59:30Z")
+	activeAt(t, db, swD, "2026-10-19T07:09:30Z")
 	mustIngest(t, db, nil, []Event{recvEv(swB, envelope(41881, "proj-10", "bypass", "hi"), "2026-10-19T07:00:00Z")})
 	r := messages(t, db)[0]
 	if r.from.String != swA || r.matchedID.Valid {
@@ -734,4 +742,76 @@ func TestSwarmReceivePrefersSenderPID(t *testing.T) {
 	if ms[4].from.String != swD || ms[1].matchedID.Int64 != ms[4].id || ms[4].body != "same" {
 		t.Errorf("fromPid should name D: %+v", ms)
 	}
+}
+
+// The engine reuses pids, and procwatch marks a session dead only on its next
+// check. A session that ran as pid 4242 two hours ago and went quiet (still
+// "running" per proc_state) is not the sender of a receive naming 4242 now: the
+// session active now under that pid is. With only the quiet one, with two
+// active ones, or with one that started after the receive, no one is named.
+func TestAttributeByPIDSkipsRecycledPid(t *testing.T) {
+	const (
+		pid     = 4242
+		recvAt  = "2026-10-14T11:00:00.000Z"
+		swNew   = "5a000000-0000-4000-8000-0000000000ee"
+		swLater = "5a000000-0000-4000-8000-0000000000ff"
+	)
+	running := func(t *testing.T, db *sql.DB, uuid string) {
+		t.Helper()
+		setPID(t, db, uuid, pid)
+		if _, err := db.Exec(`UPDATE sessions SET proc_state = 'running' WHERE session_uuid = ?`, uuid); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// old: A, started 09:00 and last active then — two hours before the receive.
+	old := func(t *testing.T, db *sql.DB) { running(t, db, swA) }
+	// fresh: a session in A's project whose session.start is its activity.
+	fresh := func(t *testing.T, db *sql.DB, uuid, at string) {
+		t.Helper()
+		mustIngest(t, db, nil, []Event{{SessionID: uuid, Cwd: "/work/p1", Kind: KindSessionStart, At: at}})
+		running(t, db, uuid)
+	}
+	receive := func(t *testing.T, db *sql.DB) msgRow {
+		t.Helper()
+		mustIngest(t, db, nil, []Event{recvEv(swB, envelope(pid, "proj-x", "bypass", "who sent this?"), recvAt)})
+		for _, m := range messages(t, db) {
+			if m.kind == MsgReceive {
+				return m
+			}
+		}
+		t.Fatal("no receive row")
+		return msgRow{}
+	}
+
+	t.Run("old and new: the new one", func(t *testing.T) {
+		db := swarmEnv(t)
+		old(t, db)
+		fresh(t, db, swNew, "2026-10-14T10:59:30.000Z")
+		if r := receive(t, db); r.from.String != swNew || r.matchedID.Valid {
+			t.Errorf("receive = %+v, want from_session %s unpaired", r, swNew)
+		}
+	})
+	t.Run("only the old one: NULL", func(t *testing.T) {
+		db := swarmEnv(t)
+		old(t, db)
+		if r := receive(t, db); r.from.Valid {
+			t.Errorf("receive from_session = %v, want NULL (a recycled pid)", r.from)
+		}
+	})
+	t.Run("two active ones: NULL", func(t *testing.T) {
+		db := swarmEnv(t)
+		old(t, db)
+		activeAt(t, db, swA, "2026-10-14T10:59:50.000Z")
+		fresh(t, db, swNew, "2026-10-14T10:59:30.000Z")
+		if r := receive(t, db); r.from.Valid {
+			t.Errorf("receive from_session = %v, want NULL (ambiguous)", r.from)
+		}
+	})
+	t.Run("started after the receive: NULL", func(t *testing.T) {
+		db := swarmEnv(t)
+		fresh(t, db, swLater, "2026-10-14T11:00:05.000Z")
+		if r := receive(t, db); r.from.Valid {
+			t.Errorf("receive from_session = %v, want NULL (started after it)", r.from)
+		}
+	})
 }
