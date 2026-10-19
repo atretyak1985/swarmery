@@ -43,6 +43,8 @@ func approvalsTestServerWithBus(t *testing.T, opt approvals.Options) (*httptest.
 	svc := approvals.New(db, bus, opt)
 	AttachApprovals(svc)
 	t.Cleanup(func() { AttachBus(nil); AttachApprovals(nil) })
+	// The /api/hooks/* shim routes require the link token (hookAuth).
+	attachHookToken(t)
 
 	h, err := NewServer(db, false)
 	if err != nil {
@@ -98,10 +100,12 @@ func hookCtx(t *testing.T) context.Context {
 
 func postHook(srv *httptest.Server, ctx context.Context, body string) <-chan hookResult {
 	out := make(chan hookResult, 1)
+	tok := hookToken() // read here, not in the goroutine (AttachLink is package state)
 	go func() {
 		req, _ := http.NewRequestWithContext(ctx, http.MethodPost,
 			srv.URL+"/api/hooks/permission-request", strings.NewReader(body))
 		req.Header.Set("Content-Type", "application/json")
+		setHookAuth(req, tok)
 		resp, err := http.DefaultClient.Do(req)
 		if err != nil {
 			out <- hookResult{err: err}
@@ -343,6 +347,7 @@ func TestOriginMiddleware(t *testing.T) {
 	for _, origin := range []string{srv.URL, "http://localhost:" + port, "http://[::1]:" + port} {
 		req, _ := http.NewRequest(http.MethodPost, srv.URL+"/api/hooks/stop", strings.NewReader(`{}`))
 		req.Header.Set("Origin", origin)
+		setHookAuth(req, hookToken())
 		resp, err := http.DefaultClient.Do(req)
 		if err != nil {
 			t.Fatal(err)
@@ -357,6 +362,7 @@ func TestOriginMiddleware(t *testing.T) {
 	for _, origin := range []string{"http://localhost:" + other, "http://127.0.0.1:" + other} {
 		req, _ := http.NewRequest(http.MethodPost, srv.URL+"/api/hooks/stop", strings.NewReader(`{}`))
 		req.Header.Set("Origin", origin)
+		setHookAuth(req, hookToken())
 		resp, err := http.DefaultClient.Do(req)
 		if err != nil {
 			t.Fatal(err)
@@ -366,14 +372,9 @@ func TestOriginMiddleware(t *testing.T) {
 			t.Errorf("stop with Origin %s: status = %d, want 403 (localhost on a foreign port)", origin, resp.StatusCode)
 		}
 	}
-	// No Origin (the shim, curl) passes.
-	resp, err := http.Post(srv.URL+"/api/hooks/stop", "application/json", strings.NewReader(`{}`))
-	if err != nil {
-		t.Fatal(err)
-	}
-	resp.Body.Close()
-	if resp.StatusCode != http.StatusAccepted {
-		t.Errorf("stop without Origin: status = %d, want 202", resp.StatusCode)
+	// No Origin (the shim, curl) passes — with the link token (hookAuth).
+	if code, body := hookPost(t, srv.URL, "/api/hooks/stop", hookToken(), `{}`); code != http.StatusAccepted {
+		t.Errorf("stop without Origin: status = %d %s, want 202", code, body)
 	}
 }
 
@@ -388,14 +389,9 @@ func TestStopHeartbeatAndHealth(t *testing.T) {
 		t.Error("hooks_last_seen must be absent before any hook call")
 	}
 
-	resp, err := http.Post(srv.URL+"/api/hooks/stop", "application/json",
-		strings.NewReader(`{"session_id":"x","hook_event_name":"Stop"}`))
-	if err != nil {
-		t.Fatal(err)
-	}
-	resp.Body.Close()
-	if resp.StatusCode != http.StatusAccepted {
-		t.Fatalf("stop status = %d, want 202", resp.StatusCode)
+	if code, body := hookPost(t, srv.URL, "/api/hooks/stop", hookToken(),
+		`{"session_id":"x","hook_event_name":"Stop"}`); code != http.StatusAccepted {
+		t.Fatalf("stop status = %d %s, want 202", code, body)
 	}
 
 	var after map[string]any
@@ -464,28 +460,19 @@ func TestListApprovals(t *testing.T) {
 func TestHookEndpointsWithoutService(t *testing.T) {
 	AttachApprovals(nil)
 	srv := testServer(t)
-	resp, err := http.Post(srv.URL+"/api/hooks/permission-request", "application/json",
-		strings.NewReader(hookBody("x", "Bash", "ls")))
-	if err != nil {
-		t.Fatal(err)
-	}
-	resp.Body.Close()
-	if resp.StatusCode != http.StatusServiceUnavailable {
-		t.Errorf("status = %d, want 503", resp.StatusCode)
+	tok := attachHookToken(t) // past hookAuth, so the 503 is the approvals one
+	code, body := hookPost(t, srv.URL, "/api/hooks/permission-request", tok, hookBody("x", "Bash", "ls"))
+	if code != http.StatusServiceUnavailable || !strings.Contains(body, "approvals unavailable") {
+		t.Errorf("status = %d %s, want 503 approvals unavailable", code, body)
 	}
 }
 
 // TestHookBadPayload: malformed stdin → 400 (the shim fails open on it).
 func TestHookBadPayload(t *testing.T) {
 	srv, _, _ := approvalsTestServer(t, approvals.Options{})
-	resp, err := http.Post(srv.URL+"/api/hooks/permission-request", "application/json",
-		strings.NewReader(`this is not json`))
-	if err != nil {
-		t.Fatal(err)
-	}
-	resp.Body.Close()
-	if resp.StatusCode != http.StatusBadRequest {
-		t.Errorf("status = %d, want 400", resp.StatusCode)
+	if code, _ := hookPost(t, srv.URL, "/api/hooks/permission-request", hookToken(),
+		`this is not json`); code != http.StatusBadRequest {
+		t.Errorf("status = %d, want 400", code)
 	}
 }
 
