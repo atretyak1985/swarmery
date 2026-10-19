@@ -178,11 +178,11 @@ var openTailPhraseRe = regexp.MustCompile(`\b\d+\s+[A-Za-z][\w-]*\s+open\b`)
 // wikiLinkRe matches a `[[memory-name]]` cross-reference inside a memory file.
 var wikiLinkRe = regexp.MustCompile(`\[\[([^\[\]]+)\]\]`)
 
-// frontmatterNameRe matches a top-level `name:` key in YAML frontmatter. The
-// `(?m)^` anchor requires column 0, so an indented `name:` under some other
+// frontmatterNameRe matches a top-level `name:` key on one frontmatter line.
+// The `^` anchor requires column 0, so an indented `name:` under some other
 // top-level key (there is none today, but the guard against it is free) is
 // not mistaken for the memory's own slug.
-var frontmatterNameRe = regexp.MustCompile(`(?m)^name:\s*(.+?)\s*$`)
+var frontmatterNameRe = regexp.MustCompile(`^name:\s*(.+?)\s*$`)
 
 // Entry is one parsed line of the index.
 type Entry struct {
@@ -498,13 +498,24 @@ func frontmatterName(content string) string {
 	return ""
 }
 
-// memoryNameIndex maps every memory file's `name:` frontmatter slug
-// (normalized) to the filename(s) that declare it. A link spelled in the
-// `name:` form resolves through this index to the file(s) it actually names.
-// The value is a slice, not a single filename, because two files can declare
-// the same slug (Claude Code writes `name:` freely with no uniqueness check);
-// linkedFromOpen treats that collision conservatively by holding back every
-// file the ambiguous slug could mean, rather than guessing one.
+// memoryNameIndex maps every memory file's normalized spellings to the
+// filename(s) they name. Two spellings are indexed per file:
+//
+//   - the `name:` frontmatter slug, so `[[b-name-slug]]` resolves to the file
+//     that declares `name: b-name-slug`;
+//   - the filename stem itself, normalized, so `[[project-mission-state-machine]]`
+//     resolves to project_mission_state_machine.md even when that file's `name:`
+//     is free text ("Mission state machine + bee status"). This is the commoner
+//     real-world form: an author kebab-cases the filename they see, not the
+//     frontmatter they don't. Measured on a live 88-link index, the slug alone
+//     resolved 77 links and slug + stem resolved 86; the remaining 2 named no
+//     memory at all.
+//
+// The value is a slice, not a single filename, because two files can share a
+// spelling (Claude Code writes `name:` freely with no uniqueness check, and one
+// file's slug can equal another's stem); linkedFromOpen treats that collision
+// conservatively by holding back every file the ambiguous spelling could mean,
+// rather than guessing one.
 //
 // This is built once per BuildPlan call and reused across every
 // linkedFromOpenFixpoint pass: frontmatter does not change between passes, only
@@ -522,6 +533,7 @@ func memoryNameIndex(dir string) (map[string][]string, error) {
 		if en.Name() == indexName || en.Name() == closedIndexName {
 			continue
 		}
+		addMemoryName(idx, memoryName(en.Name()), en.Name())
 		data, err := os.ReadFile(filepath.Join(dir, en.Name()))
 		if err != nil {
 			if os.IsNotExist(err) {
@@ -529,14 +541,23 @@ func memoryNameIndex(dir string) (map[string][]string, error) {
 			}
 			return nil, err
 		}
-		slug := frontmatterName(string(data))
-		if slug == "" {
-			continue
+		if slug := frontmatterName(string(data)); slug != "" {
+			addMemoryName(idx, slug, en.Name())
 		}
-		norm := normalizeMemoryName(slug)
-		idx[norm] = append(idx[norm], en.Name())
 	}
 	return idx, nil
+}
+
+// addMemoryName records file under the normalized spelling, once: a file whose
+// `name:` slug normalizes to its own stem must not appear twice under one key.
+func addMemoryName(idx map[string][]string, spelling, file string) {
+	key := normalizeMemoryName(spelling)
+	for _, f := range idx[key] {
+		if f == file {
+			return
+		}
+	}
+	idx[key] = append(idx[key], file)
 }
 
 // linkedFromOpen collects every `[[name]]` target referenced from a memory file
@@ -544,9 +565,9 @@ func memoryNameIndex(dir string) (map[string][]string, error) {
 // non-indexed *.md files too is deliberate: a file with no index line is still
 // loaded on demand, and its links are still live.
 //
-// A link target is resolved in BOTH forms it may be spelled in: as a filename
-// stem (memoryName) and, via nameIdx, as the target's own `name:` frontmatter
-// slug. Recording both keeps every downstream lookup — which all key on
+// A link target is resolved in every form it may be spelled in: as the exact
+// filename stem (memoryName) and, via nameIdx, as the target's normalized stem
+// or its own `name:` frontmatter slug. Recording both keeps every downstream lookup — which all key on
 // memoryName(file) — working unchanged regardless of which form the author used.
 func linkedFromOpen(dir string, candidates map[string]bool, nameIdx map[string][]string) (map[string]bool, error) {
 	entries, err := os.ReadDir(dir)

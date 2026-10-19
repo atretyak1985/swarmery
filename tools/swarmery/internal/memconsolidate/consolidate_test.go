@@ -297,6 +297,98 @@ func TestBuildPlanLinkGuardMatchesNameSlug(t *testing.T) {
 	}
 }
 
+// TestBuildPlanLinkGuardMatchesKebabFilenameStem: the commoner real-world shape.
+// The author kebab-cases the FILENAME (`[[b-file]]` for b_file.md) while the
+// target's `name:` is free text, so neither the exact stem nor the slug matches.
+// The guard must still hold b_file.md back.
+func TestBuildPlanLinkGuardMatchesKebabFilenameStem(t *testing.T) {
+	index := strings.Join([]string{
+		"- [Open memory](a_file.md) — 7-phase plan; impl open.",
+		"- [Closed memory](b_file.md) — DONE 2026-01-01.",
+		"",
+	}, "\n")
+	dir := memoryDir(t, index, map[string]string{
+		"a_file.md": "---\nname: a-file\n---\n\nDepends on [[b-file]] for the schema.\n",
+		"b_file.md": "---\nname: Something Else Entirely (free text)\n---\n\nThe thing a_file.md depends on.\n",
+	})
+	plan, err := BuildPlan(dir)
+	if err != nil {
+		t.Fatalf("BuildPlan: %v", err)
+	}
+	if len(plan.Move) != 0 {
+		t.Fatalf("Move = %+v, want nothing moved (b_file.md is linked by its kebab-cased stem)", plan.Move)
+	}
+	if len(plan.Keep) != 1 || plan.Keep[0].File != "b_file.md" || plan.Keep[0].Reason != ReasonLinked {
+		t.Fatalf("Keep = %+v, want b_file.md held back with %q", plan.Keep, ReasonLinked)
+	}
+}
+
+// TestBuildPlanLinkGuardHoldsEveryFileOfAnAmbiguousName: two closed memories
+// declare the same `name:`. A link by that name could mean either, so both are
+// held back rather than one guessed.
+func TestBuildPlanLinkGuardHoldsEveryFileOfAnAmbiguousName(t *testing.T) {
+	index := strings.Join([]string{
+		"- [Open memory](a_file.md) — impl open.",
+		"- [First twin](twin_one.md) — DONE 2026-01-01.",
+		"- [Second twin](twin_two.md) — DONE 2026-01-02.",
+		"",
+	}, "\n")
+	dir := memoryDir(t, index, map[string]string{
+		"a_file.md":   "Depends on [[shared-slug]].\n",
+		"twin_one.md": "---\nname: shared-slug\n---\n\none\n",
+		"twin_two.md": "---\nname: Shared Slug\n---\n\ntwo\n",
+	})
+	plan, err := BuildPlan(dir)
+	if err != nil {
+		t.Fatalf("BuildPlan: %v", err)
+	}
+	if len(plan.Move) != 0 {
+		t.Fatalf("Move = %+v, want nothing moved (the ambiguous name could mean either twin)", plan.Move)
+	}
+	held := map[string]string{}
+	for _, a := range plan.Keep {
+		held[a.File] = a.Reason
+	}
+	for _, f := range []string{"twin_one.md", "twin_two.md"} {
+		if held[f] != ReasonLinked {
+			t.Errorf("%s reason = %q, want %q", f, held[f], ReasonLinked)
+		}
+	}
+}
+
+// TestBuildPlanLinkGuardFollowsAChainOfNameLinks: open -> b -> c, every hop
+// spelled with the target's `name:` slug. The fixpoint must reach c through a
+// name-form link exactly as it does through filename-form links.
+func TestBuildPlanLinkGuardFollowsAChainOfNameLinks(t *testing.T) {
+	index := strings.Join([]string{
+		"- [Still open](a_file.md) — impl open.",
+		"- [Hop one](b_file.md) — DONE 2026-01-01.",
+		"- [Hop two](c_file.md) — DONE 2026-01-02.",
+		"",
+	}, "\n")
+	dir := memoryDir(t, index, map[string]string{
+		"a_file.md": "depends on [[hop-one-slug]]\n",
+		"b_file.md": "---\nname: hop-one-slug\n---\n\nwhich in turn depends on [[hop-two-slug]]\n",
+		"c_file.md": "---\nname: \"hop-two-slug\"\n---\n\nthe leaf\n",
+	})
+	plan, err := BuildPlan(dir)
+	if err != nil {
+		t.Fatalf("BuildPlan: %v", err)
+	}
+	if len(plan.Move) != 0 {
+		t.Fatalf("Move = %+v, want nothing: b_file is held open, so c_file is reachable from an open memory", plan.Move)
+	}
+	held := map[string]string{}
+	for _, a := range plan.Keep {
+		held[a.File] = a.Reason
+	}
+	for _, f := range []string{"b_file.md", "c_file.md"} {
+		if held[f] != ReasonLinked {
+			t.Errorf("%s reason = %q, want %q", f, held[f], ReasonLinked)
+		}
+	}
+}
+
 // TestBuildPlanIgnoresLinksBetweenClosedEntries: two closed memories that link
 // to each other must both consolidate — only an OPEN memory's link holds one back.
 func TestBuildPlanIgnoresLinksBetweenClosedEntries(t *testing.T) {
