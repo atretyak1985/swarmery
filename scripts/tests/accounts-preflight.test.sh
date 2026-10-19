@@ -68,6 +68,7 @@ chmod +x "$STUB_BIN/swarmery"
 # report <file> <account> <estate> <credentials> <expected> <present> <missing> [findings] [dups]
 # writes the authoritative Report shape; list args are JSON arrays.
 report() {
+  # shellcheck disable=SC2016  # $a, $e, … are jq variables, not shell ones
   "$JQ_BIN" -n --arg a "$2" --arg e "$3" --argjson c "$4" \
     --argjson x "$5" --argjson p "$6" --argjson m "$7" \
     --argjson f "${8:-[]}" --argjson s "${9:-[]}" '{
@@ -185,8 +186,13 @@ else bad "(i4) SWARMERY_SKIP_PREFLIGHT=1 -> silent" "'' exit 0" "'$HOOK_OUT' exi
 SECONDS=0
 run_hook "$R_GAP" "$PROJ" STUB_MODE=hang
 elapsed=$SECONDS
-if [ -z "$HOOK_OUT" ] && [ "$HOOK_EXIT" -eq 0 ] && [ "$elapsed" -lt 4 ]; then ok
-else bad "(i5) swarmery sleeps 30 -> returns under 4 s, silent" "<4s '' exit 0" "${elapsed}s '$HOOK_OUT' exit $HOOK_EXIT"; fi
+# The hook's watchdog is 3 s (sleep 3; kill -9), so every run takes >= 3 s by
+# design, and $SECONDS has 1 s granularity: a 3.2 s run that starts at x.9
+# reads as 4. The bound only has to separate the watchdog (3 s) from the stub's
+# 30 s hang. Do not tighten it back toward 3 s — that margin is process startup
+# under load, and it made this case flaky.
+if [ -z "$HOOK_OUT" ] && [ "$HOOK_EXIT" -eq 0 ] && [ "$elapsed" -lt 10 ]; then ok
+else bad "(i5) swarmery sleeps 30 -> returns under 10 s, silent" "<10s '' exit 0" "${elapsed}s '$HOOK_OUT' exit $HOOK_EXIT"; fi
 
 # ── (j) the character gate stays stricter than claudeacct.ValidKey ────────────
 # A key outside the gate never reaches the context — and never silences the
@@ -203,7 +209,9 @@ for key in "${gate_vectors[@]}"; do
     ! printf '%s' "$ctx" | grep -qF "account '" && ! printf '%s' "$ctx" | grep -qF -- "$key"; then ok
   else bad "(j$gv) account key '$key' -> the gap without the key" "ONE_NAME, no key" "'$HOOK_OUT' exit $HOOK_EXIT"; fi
 done
-R_BADVAR="$WORK/badvar.json"; report "$R_BADVAR" default "" 0 '["*","a b","$(x)"]' '[]' '["*","a b","$(x)"]'
+R_BADVAR="$WORK/badvar.json"
+# shellcheck disable=SC2016  # a literal $(x) is the invalid name under test
+report "$R_BADVAR" default "" 0 '["*","a b","$(x)"]' '[]' '["*","a b","$(x)"]'
 run_hook "$R_BADVAR" "$PROJ"
 if [ -z "$HOOK_OUT" ] && [ "$HOOK_EXIT" -eq 0 ]; then ok
 else bad "(j) variable names outside [A-Za-z_][A-Za-z0-9_]* never reach the context" "'' exit 0" "'$HOOK_OUT'"; fi
