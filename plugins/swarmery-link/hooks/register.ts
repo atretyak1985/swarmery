@@ -1034,8 +1034,9 @@ export const register: Register = (on, options) => {
     on('tool.call', { tool: 'AskUserQuestion' }, async ($, e, next) => {
       if (!isActive(link) || link.isClearing) return next(e)
       const fields = e as unknown as Readonly<Record<string, unknown>>
-      const answer = await answerFromSwarmery($, gateOf($, link, endpoint.origin, waiting), fields, next.signal)
-      return answer === undefined ? next(e) : { result: answer }
+      // an answer as the call's result, a dashboard deny as its refusal; anything else opens the native dialog
+      const outcome = await answerFromSwarmery($, gateOf($, link, endpoint.origin, waiting), fields, next.signal)
+      return outcome ?? next(e)
     }).catch(($, e, next) => next(e))
   }
 

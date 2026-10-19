@@ -243,3 +243,19 @@ export const questionAnswer = (answer: Answer, asked: unknown): QuestionAnswer |
   const joined = Object.fromEntries(Object.entries(answers).map(([question, value]) => [question, answerText(value)]))
   return { questions: shown, answers: joined }
 }
+
+/** What the AskUserQuestion tool.call hook returns instead of running the call. */
+export type QuestionOutcome = { readonly result: QuestionAnswer } | { readonly deny: string }
+
+/**
+ * The AskUserQuestion tool.call's answer for what the daemon decided: the
+ * person's answer as `{ result }`, a dashboard deny as the call's refusal (its
+ * message, or "denied in Swarmery"), so the operator's deny is not lost to the
+ * native dialog. Undefined on anything else (an allow without answers, a pass,
+ * a failure), so the native dialog takes over.
+ */
+export const questionOutcome = (answer: Answer, asked: unknown): QuestionOutcome | undefined => {
+  if (answer.kind === 'deny') return { deny: answer.message === '' ? DENIED_REASON : answer.message }
+  const result = questionAnswer(answer, asked)
+  return result === undefined ? undefined : { result }
+}

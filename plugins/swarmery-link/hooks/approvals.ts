@@ -3,7 +3,7 @@
 // call goes to the daemon's queue, and the mod waits for the dashboard's
 // decision inside server-held long polls (time inside `$.http.fetch` does not
 // count against a hook's 10 s budget; mods-format.md §M3). An AskUserQuestion
-// is put to the dashboard the same way and answered from it (§M4).
+// is put to the dashboard the same way and answered (or refused) from it (§M4).
 //
 // Every failure falls back to the engine's verdict (tool.check) or to the
 // question's own dialog (tool.call): no answer, a timeout, a 5xx, a second
@@ -25,7 +25,7 @@ import {
   PERMISSION_CANCEL_TIMEOUT_MS,
   PERMISSION_POST_TIMEOUT_MS,
   type PermissionRequest,
-  type QuestionAnswer,
+  type QuestionOutcome,
   WAITING_STATUS,
   checkResult,
   permissionBody,
@@ -38,7 +38,7 @@ import {
   pollBound,
   pollGap,
   postAnswer,
-  questionAnswer,
+  questionOutcome,
   shouldAsk,
 } from './lib/approvals'
 import { linkRequest } from './lib/client'
@@ -285,16 +285,19 @@ export async function checkWithSwarmery(
 
 /**
  * tool.call of AskUserQuestion: the question goes to the dashboard first. The
- * person's answer there is returned as `{ questions, answers }`; undefined on
- * anything else (a deny included: a question has nothing to refuse), so the
- * caller hands the call on to the native dialog.
+ * person's answer there is returned as `{ result: { questions, answers } }`, a
+ * dashboard deny as the call's refusal `{ deny }` (handing the call on would
+ * open the native dialog and fire the shim, and the deny would be lost);
+ * undefined on anything else (an allow without answers, a pass, a failure, the
+ * deadline, an interrupt), so the caller hands the call on to the native
+ * dialog.
  */
 export async function answerFromSwarmery(
   $: EngineInterface,
   gate: Gate,
   fields: Readonly<Record<string, unknown>>,
   signal: AbortSignal,
-): Promise<QuestionAnswer | undefined> {
+): Promise<QuestionOutcome | undefined> {
   const toolUseId = fields.tool_use_id
   if (typeof toolUseId !== 'string' || toolUseId === '') return undefined
   const agentId = fields.agentId
@@ -311,5 +314,5 @@ export async function answerFromSwarmery(
     },
     signal,
   )
-  return questionAnswer(answer, fields.questions)
+  return questionOutcome(answer, fields.questions)
 }
