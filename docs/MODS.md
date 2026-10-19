@@ -193,10 +193,10 @@ dashboard through it.
   ([`mods-format.md`](../tools/swarmery/docs/mods-format.md), M5).
 - **Claude Code older than 2.1.287** predates function hooks. The mods were not
   tried on such a build; upgrade before enabling one.
-- **Auto-mode classifier.** A `$.session.send` (with `swarm` on, a message to
-  another session) from a session whose permission mode runs the auto-mode
-  classifier can fail with "classifier gave no verdict". Relay the message from a
-  session in another permission mode.
+- **Auto-mode classifier.** A `$.session.send` (a message to another session)
+  from a session whose permission mode runs the auto-mode classifier can fail
+  with "classifier gave no verdict". Relay the message from a session in another
+  permission mode.
 
 ## Update a mod
 
@@ -209,7 +209,7 @@ claude plugin update guard-pack@swarmery --scope user
 ```
 
 Pass `--scope user`. Without it the CLI may update a project-scoped install that
-belongs to some other checkout and leave yours as it was (observed 2026-10-19).
+belongs to some other checkout instead (observed 2026-10-19).
 The new version loads in the next session.
 
 If `claude plugin marketplace update swarmery` fails with

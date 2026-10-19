@@ -154,9 +154,9 @@ endif
 # first so DELETING a stale translation really takes it off the dashboard — the
 # page then falls back to English with a note.
 DOCS_UK_DST := $(DOCS_DST)/uk
-DOCS_UK_SRC := $(DOCS_SRC)/uk/ONBOARDING.md $(DOCS_SRC)/uk/WORKFLOW.md $(DOCS_SRC)/uk/EXTENDING.md $(DOCS_SRC)/uk/NEUTRALITY.md $(DOCS_SRC)/uk/PLUGINS.md docs/uk/concepts.md docs/uk/retro.md docs/uk/usage.md docs/uk/api-project-config.md
+DOCS_UK_SRC := $(DOCS_SRC)/uk/ONBOARDING.md $(DOCS_SRC)/uk/WORKFLOW.md $(DOCS_SRC)/uk/EXTENDING.md $(DOCS_SRC)/uk/NEUTRALITY.md $(DOCS_SRC)/uk/PLUGINS.md $(DOCS_SRC)/uk/MODS.md docs/uk/concepts.md docs/uk/retro.md docs/uk/usage.md docs/uk/api-project-config.md
 copy-docs:
-	cp $(DOCS_SRC)/ONBOARDING.md $(DOCS_SRC)/WORKFLOW.md $(DOCS_SRC)/EXTENDING.md $(DOCS_SRC)/NEUTRALITY.md $(DOCS_SRC)/PLUGINS.md docs/concepts.md docs/retro.md docs/usage.md docs/api-project-config.md $(DOCS_DST)/
+	cp $(DOCS_SRC)/ONBOARDING.md $(DOCS_SRC)/WORKFLOW.md $(DOCS_SRC)/EXTENDING.md $(DOCS_SRC)/NEUTRALITY.md $(DOCS_SRC)/PLUGINS.md $(DOCS_SRC)/MODS.md docs/concepts.md docs/retro.md docs/usage.md docs/api-project-config.md $(DOCS_DST)/
 	find docs/guides -maxdepth 1 -name 'guide-*.md' -exec cp {} $(DOCS_DST)/ \;
 	mkdir -p $(DOCS_UK_DST)
 	find $(DOCS_UK_DST) -maxdepth 1 -name '*.md' -delete
