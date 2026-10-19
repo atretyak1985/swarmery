@@ -885,7 +885,8 @@ func TestStart_DepsGate(t *testing.T) {
 	t.Run("fully ticked but unverified dep does not satisfy", func(t *testing.T) {
 		db, _, p1, p2 := fixture(t)
 		mustExec(t, db, `UPDATE epic_phases
-			SET checkboxes_done=2, verify_mode='normal', verify_verdict=NULL WHERE id=?`, p1)
+			SET checkboxes_done=2, verify_mode='normal', verify_verdict=NULL,
+			    run_started_at='2026-10-19T10:00:00Z' WHERE id=?`, p1)
 		s := newTestService(db, &stubRunner{}, &stubWt{})
 		_, err := s.Start(p2, "", "")
 		if !errors.Is(err, ErrDepsUnmet) {
@@ -893,10 +894,24 @@ func TestStart_DepsGate(t *testing.T) {
 		}
 	})
 
+	// A dependency worked through outside the phase runner can never be graded —
+	// no verifier runs behind it and Verify again has no run branch — so its
+	// missing verdict must not block the DAG forever.
+	t.Run("fully ticked, never dispatched, ungraded dep satisfies", func(t *testing.T) {
+		db, _, p1, p2 := fixture(t)
+		mustExec(t, db, `UPDATE epic_phases
+			SET checkboxes_done=2, verify_mode='normal', verify_verdict=NULL, run_started_at=NULL WHERE id=?`, p1)
+		s := newTestService(db, &stubRunner{}, &stubWt{})
+		if _, err := s.Start(p2, "", ""); errors.Is(err, ErrDepsUnmet) {
+			t.Fatalf("err = %v, want the never-dispatched dep to satisfy", err)
+		}
+	})
+
 	t.Run("fully ticked but inconclusive dep does not satisfy", func(t *testing.T) {
 		db, _, p1, p2 := fixture(t)
 		mustExec(t, db, `UPDATE epic_phases
-			SET checkboxes_done=2, verify_mode='strict', verify_verdict='inconclusive' WHERE id=?`, p1)
+			SET checkboxes_done=2, verify_mode='strict', verify_verdict='inconclusive',
+			    run_started_at='2026-10-19T10:00:00Z' WHERE id=?`, p1)
 		s := newTestService(db, &stubRunner{}, &stubWt{})
 		if _, err := s.Start(p2, "", ""); !errors.Is(err, ErrDepsUnmet) {
 			t.Fatalf("err = %v, want ErrDepsUnmet", err)
