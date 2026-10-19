@@ -33,8 +33,10 @@ func Open(path string) (*sql.DB, error) {
 	if err != nil {
 		return nil, fmt.Errorf("open sqlite: %w", err)
 	}
-	// modernc.org/sqlite is not safe for concurrent writers on one connection pool
-	// with WAL from multiple conns in-process; a single conn keeps the skeleton simple.
+	// The WRITER stays a single connection, deliberately: SQLite serializes
+	// writers anyway, and code across the daemon relies on one connection (the
+	// "collect, then write" cursors in wsingest, the bounded prune transaction).
+	// The daemon's reads that must not queue behind it go through OpenReader.
 	db.SetMaxOpenConns(1)
 	if err := Migrate(db); err != nil {
 		db.Close()
@@ -71,6 +73,39 @@ func OpenNoMigrate(path string) (*sql.DB, error) {
 	if err := db.Ping(); err != nil {
 		db.Close()
 		return nil, fmt.Errorf("open sqlite: %w", err)
+	}
+	return db, nil
+}
+
+// ReaderConns bounds the read pool. WAL lets these read concurrently with the
+// single writer from Open; four covers the dashboard's parallel page loads
+// without multiplying page caches (each connection keeps its own).
+const ReaderConns = 4
+
+// OpenReader opens a read-only pool on an existing database: Open's DSN plus
+// query_only, so a write through it fails with SQLITE_READONLY instead of
+// competing with the writer. Under WAL a reader sees every committed write and
+// never waits on the writer, which is the point: the API's hot reads used to
+// queue behind whatever held the single connection (a labeler pass, an ingest
+// rescan, a prune) and time out.
+//
+// Not a mode=ro URI, for the -shm reason on OpenNoMigrate. It applies no
+// migration; the daemon opens it after Open has migrated. Like OpenNoMigrate it
+// refuses a missing file rather than creating an empty database.
+func OpenReader(path string) (*sql.DB, error) {
+	if _, err := os.Stat(path); err != nil {
+		return nil, fmt.Errorf("open sqlite reader: %w", err)
+	}
+	dsn := "file:" + path + "?_pragma=journal_mode(WAL)&_pragma=foreign_keys(1)&_pragma=busy_timeout(5000)&_pragma=query_only(1)"
+	db, err := sql.Open("sqlite", dsn)
+	if err != nil {
+		return nil, fmt.Errorf("open sqlite reader: %w", err)
+	}
+	db.SetMaxOpenConns(ReaderConns)
+	db.SetMaxIdleConns(ReaderConns)
+	if err := db.Ping(); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("open sqlite reader: %w", err)
 	}
 	return db, nil
 }

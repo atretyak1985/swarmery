@@ -152,7 +152,7 @@ func (h *Handler) health(w http.ResponseWriter, r *http.Request) {
 	// this snapshot is what the pool looked like when the probe arrived.
 	pool := dbPoolStats(h.DB.Stats())
 	var size int64
-	err := h.DB.QueryRow(
+	err := h.rdb().QueryRow(
 		`SELECT page_count * page_size FROM pragma_page_count(), pragma_page_size()`).Scan(&size)
 
 	dto := healthDTO{
@@ -187,7 +187,7 @@ func (h *Handler) health(w http.ResponseWriter, r *http.Request) {
 // effort: 0 on any error (a health probe must never 500 over this).
 func (h *Handler) migrationVersion() int {
 	var v sql.NullInt64
-	if err := h.DB.QueryRow(`SELECT MAX(version) FROM schema_migrations`).Scan(&v); err != nil {
+	if err := h.rdb().QueryRow(`SELECT MAX(version) FROM schema_migrations`).Scan(&v); err != nil {
 		return 0
 	}
 	if !v.Valid {
@@ -201,7 +201,7 @@ func (h *Handler) migrationVersion() int {
 // "—" instead of a misleading 0. Negative skew is clamped to 0.
 func (h *Handler) ingestLagSec() *int64 {
 	var newest sql.NullString
-	if err := h.DB.QueryRow(`SELECT MAX(ts) FROM events`).Scan(&newest); err != nil {
+	if err := h.rdb().QueryRow(`SELECT MAX(ts) FROM events`).Scan(&newest); err != nil {
 		return nil
 	}
 	if !newest.Valid || newest.String == "" {
@@ -246,7 +246,7 @@ func dispatchHealth() healthDispatch {
 // are deliberately counted in neither bucket — they are not a problem.
 func (h *Handler) pluginDriftCounts() healthPluginDrift {
 	var out healthPluginDrift
-	rows, err := h.DB.Query(
+	rows, err := h.rdb().Query(
 		`SELECT severity, COUNT(*) FROM config_lint_findings
 		  WHERE resolved_at IS NULL AND rule LIKE 'plugin\_%' ESCAPE '\'
 		  GROUP BY severity`)
@@ -284,14 +284,14 @@ func (h *Handler) autoModeHealth(now time.Time) healthAutoMode {
 		return c.val
 	}
 	var out healthAutoMode
-	if n, err := automode.Count(h.DB, now.Add(-automode.HealthWindow)); err == nil {
+	if n, err := automode.Count(h.rdb(), now.Add(-automode.HealthWindow)); err == nil {
 		out.NoVerdictLastHour, out.SessionsLastHour = n.Events, n.Sessions
 		if n.LastAt != "" {
 			last := n.LastAt
 			out.LastAt = &last
 		}
 	}
-	if alerting, err := automode.Alerting(h.DB); err == nil {
+	if alerting, err := automode.Alerting(h.rdb()); err == nil {
 		out.Alerting = alerting
 	}
 	c.at, c.val = now, out

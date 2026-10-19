@@ -92,7 +92,7 @@ func (h *Handler) windowAggregates(start, end, projFilter string, projArgs []any
 	// Sessions started inside the window. Archived projects are excluded from
 	// every aggregate here (p.archived = 0) so archiving a project drops it out
 	// of stats/today, the overview totals, and the 14-day series at once.
-	err := h.DB.QueryRow(`
+	err := h.rdb().QueryRow(`
 		SELECT COUNT(*) FROM sessions s JOIN projects p ON p.id = s.project_id
 		WHERE s.started_at >= ? AND s.started_at < ? AND p.archived = 0`+projFilter, args...).Scan(&a.Sessions)
 	if err != nil {
@@ -101,7 +101,7 @@ func (h *Handler) windowAggregates(start, end, projFilter string, projArgs []any
 
 	// Token and cost aggregates over the window's turns.
 	var costSum sql.NullFloat64
-	err = h.DB.QueryRow(`
+	err = h.rdb().QueryRow(`
 		SELECT COALESCE(SUM(t.tokens_in), 0),
 		       COALESCE(SUM(t.tokens_out), 0),
 		       SUM(t.cost_usd),
@@ -120,7 +120,7 @@ func (h *Handler) windowAggregates(start, end, projFilter string, projArgs []any
 	a.CostUSD = windowCost(costSum, a.PricedTurns, a.UsageTurns)
 
 	// Errors: api_error events and failed tool calls both carry status='error'.
-	err = h.DB.QueryRow(`
+	err = h.rdb().QueryRow(`
 		SELECT COUNT(*) FROM events e
 		JOIN sessions s ON s.id = e.session_id
 		JOIN projects p ON p.id = s.project_id
@@ -131,7 +131,7 @@ func (h *Handler) windowAggregates(start, end, projFilter string, projArgs []any
 
 	// Test runs: sum passed/failed/skipped from test_run event payloads (emitted
 	// at ingest for recognised test-runner Bash calls). TestRuns==0 → no signal.
-	err = h.DB.QueryRow(`
+	err = h.rdb().QueryRow(`
 		SELECT COUNT(*),
 		       COALESCE(SUM(json_extract(e.payload, '$.passed')), 0),
 		       COALESCE(SUM(json_extract(e.payload, '$.failed')), 0),
@@ -163,7 +163,7 @@ func windowCost(costSum sql.NullFloat64, pricedTurns, usageTurns int64) *float64
 // started yesterday that is still running counts here).
 func (h *Handler) activeSessions(projFilter string, projArgs []any) (int64, error) {
 	var n int64
-	err := h.DB.QueryRow(`
+	err := h.rdb().QueryRow(`
 		SELECT COUNT(*) FROM sessions s JOIN projects p ON p.id = s.project_id
 		WHERE s.status = 'active' AND p.archived = 0`+projFilter, projArgs...).Scan(&n)
 	return n, err

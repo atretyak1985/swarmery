@@ -24,6 +24,9 @@ import (
 // Handler bundles the API dependencies.
 type Handler struct {
 	DB *sql.DB
+	// RO is the daemon's read-only pool (store.OpenReader), nil in tests and
+	// when it failed to open. Read it through rdb(), never directly.
+	RO *sql.DB
 	// Watching reports whether the live ingest pipeline is attached
 	// (serve without --no-ingest); surfaced by GET /api/health.
 	Watching bool
@@ -384,7 +387,7 @@ func (h *Handler) listProjects(w http.ResponseWriter, r *http.Request) {
 	query := strings.Replace(projectSelect, "{{WHERE}}", where, 1) +
 		" ORDER BY p.pinned DESC, p.last_activity DESC"
 
-	rows, err := h.DB.Query(query)
+	rows, err := h.rdb().Query(query)
 	if err != nil {
 		writeErr(w, err)
 		return
@@ -417,7 +420,7 @@ func (h *Handler) getProject(w http.ResponseWriter, r *http.Request) {
 	// The row: reuse projectSelect with an id predicate. archived rows are
 	// reachable by direct id (the list hides them, detail still resolves them).
 	query := strings.Replace(projectSelect, "{{WHERE}}", "WHERE p.id = ?", 1)
-	rows, err := h.DB.Query(query, id)
+	rows, err := h.rdb().Query(query, id)
 	if err != nil {
 		writeErr(w, err)
 		return
@@ -469,7 +472,7 @@ const recentProjectSessionsLimit = 10
 // recentSessions returns the project's most recent non-hidden sessions with
 // their per-session token/cost totals (one grouped pass, no N+1).
 func (h *Handler) recentSessions(projectID int64) ([]projectRecentSessionDTO, error) {
-	rows, err := h.DB.Query(`
+	rows, err := h.rdb().Query(`
 		SELECT s.id, s.session_uuid, COALESCE(s.custom_title, s.title), s.status, s.started_at, s.model,
 		       SUM(CASE WHEN t.id IS NOT NULL
 		                THEN COALESCE(t.tokens_in, 0) + COALESCE(t.tokens_out, 0) END) AS tokens,
@@ -724,7 +727,7 @@ func (h *Handler) listSessions(w http.ResponseWriter, r *http.Request) {
 		SELECT ` + sessionCols + sessionFrom + ` WHERE s.id IN (SELECT sid FROM page)` + orderBy
 	args = append(args, limit+1)
 
-	rows, err := h.DB.Query(query, args...)
+	rows, err := h.rdb().Query(query, args...)
 	if err != nil {
 		writeErr(w, err)
 		return
@@ -764,14 +767,14 @@ func (h *Handler) getSession(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var d sessionDetailDTO
-	err := scanSession(h.DB.QueryRow(sessionSelect+` WHERE `+where, idArg).Scan, &d.sessionDTO)
+	err := scanSession(h.rdb().QueryRow(sessionSelect+` WHERE `+where, idArg).Scan, &d.sessionDTO)
 	if errors.Is(err, sql.ErrNoRows) {
 		// A uuid the daemon minted for a run whose transcript is not ingested yet
 		// is a session that has not started writing — 202 with the run's context
 		// (session_pending.go), not a 404 indistinguishable from a pruned session.
 		// Only uuids: an integer id can only come from an ingested row.
 		if where != `s.id = ?` {
-			if p, ok, perr := pendingSession(h.DB, idArg); perr != nil {
+			if p, ok, perr := pendingSession(h.rdb(), idArg); perr != nil {
 				writeErr(w, perr)
 				return
 			} else if ok {
@@ -793,7 +796,7 @@ func (h *Handler) getSession(w http.ResponseWriter, r *http.Request) {
 	// (agent_name set, no prose — phase 2) exist for aggregate analytics and
 	// the session's total cost, but would render as empty rows here. Subagent
 	// activity is surfaced via the subagent_start/stop events in the timeline.
-	rows, err := h.DB.Query(`
+	rows, err := h.rdb().Query(`
 		SELECT id, seq, role, message_id, model, started_at, ended_at,
 		       tokens_in, tokens_out, tokens_cache_read, tokens_cache_write, cost_usd, text,
 		       stop_reason
@@ -820,7 +823,7 @@ func (h *Handler) getSession(w http.ResponseWriter, r *http.Request) {
 	}
 
 	d.Events = []eventDTO{}
-	rows, err = h.DB.Query(`
+	rows, err = h.rdb().Query(`
 		SELECT id, turn_id, ts, type, tool_name, parent_event_id, status, duration_ms, payload
 		FROM events WHERE session_id = ? ORDER BY ts, id`, d.ID)
 	if err != nil {
@@ -848,7 +851,7 @@ func (h *Handler) getSession(w http.ResponseWriter, r *http.Request) {
 	}
 
 	d.FileChanges = []fileChangeDTO{}
-	rows, err = h.DB.Query(`
+	rows, err = h.rdb().Query(`
 		SELECT id, event_id, file_path, change_type, additions, deletions, diff, out_of_scope
 		FROM file_changes WHERE session_id = ? ORDER BY id`, d.ID)
 	if err != nil {
@@ -876,7 +879,7 @@ func (h *Handler) getSession(w http.ResponseWriter, r *http.Request) {
 	// recovered: tool errors this session later cleared with a same-tool
 	// success (the "auto-recovered" header stat). A best-effort heuristic —
 	// each errored tool that has any later ok call on the same tool counts once.
-	if err := h.DB.QueryRow(`
+	if err := h.rdb().QueryRow(`
 		SELECT COUNT(*) FROM events e
 		WHERE e.session_id = ? AND e.status = 'error' AND e.tool_name IS NOT NULL
 		  AND EXISTS (

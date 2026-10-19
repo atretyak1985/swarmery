@@ -150,7 +150,12 @@ var ErrNotConfigured = errors.New("decide: no backend configured")
 
 // Engine asks questions and records every call.
 type Engine struct {
-	DB     *sql.DB
+	DB *sql.DB
+	// ReadDB is the daemon's read-only pool (store.OpenReader) the D2
+	// labeler's evidence reads go through, so a pass stops holding the single
+	// writer every HTTP handler and ingest write queues on. nil ⇒ DB (tests,
+	// `swarmery decide`). Read it through readDB().
+	ReadDB *sql.DB
 	Local  Backend // nil ⇒ SWARMERY_DECIDE_URL unset
 	Claude Backend // nil ⇒ nothing ever leaves the machine
 	// DefaultModes maps a question FAMILY ("d1", "d2") to its env mode. A
@@ -188,6 +193,16 @@ type NeedsOperator struct {
 // stays inert instead of writing a "no backend" error row on every pass.
 func (e *Engine) Configured() bool {
 	return e != nil && e.Local != nil
+}
+
+// readDB is the handle the labeler's reads go through: the read pool when the
+// daemon attached one, the writer otherwise. Only for reads — a write through
+// the pool fails with SQLITE_READONLY.
+func (e *Engine) readDB() *sql.DB {
+	if e.ReadDB != nil {
+		return e.ReadDB
+	}
+	return e.DB
 }
 
 func (e *Engine) now() time.Time {

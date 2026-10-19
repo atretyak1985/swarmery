@@ -1852,6 +1852,18 @@ func cmdServe(args []string) error {
 	defer db.Close()
 	bootLog.Info(logbuf.Phasef("store.migrate", time.Since(migrateStart)))
 
+	// The read-only pool the API's hot GETs read through, so they stop queueing
+	// behind the single writer (store.OpenReader). Opened after Open has
+	// migrated. A failure leaves every read on the writer, as before — slower
+	// under load, never down.
+	ro, err := store.OpenReader(*dbPath)
+	if err != nil {
+		log.Printf("warning: store: read pool unavailable, reads share the writer: %v", err)
+	} else {
+		defer ro.Close()
+	}
+	api.AttachReader(ro)
+
 	// swarmery link (docs/mods-link-protocol.md): mint or read the bearer token
 	// the mod presents on /api/link/*. Logged by PATH only — the value never
 	// reaches a log. A failure leaves the link disabled (503), never the daemon
@@ -2668,6 +2680,7 @@ func cmdServe(args []string) error {
 		log.Printf("warn: %s", w)
 	}
 	decideEng := decide.New(db, decideCfg)
+	decideEng.ReadDB = ro // the labeler's evidence reads; nil ⇒ the writer
 	decideEng.OnNeedsOperator = func(n decide.NeedsOperator) {
 		notifier.Emit(notify.Event{
 			Type:  notify.EventRunNeedsOperator,

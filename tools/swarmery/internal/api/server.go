@@ -40,6 +40,25 @@ var inboxTTL = taskcap.DefaultInboxTTL
 // every card reads null. Call before NewServer.
 func AttachInboxTTL(d time.Duration) { inboxTTL = d }
 
+// readPool is the read-only pool NewServer hands the Handler; nil means every
+// read goes through the writer, as before. Set by AttachReader.
+var readPool *sql.DB
+
+// AttachReader records the daemon's read-only pool (store.OpenReader) so the
+// hot GET handlers stop queueing behind the single writer connection. Call
+// before NewServer.
+func AttachReader(ro *sql.DB) { readPool = ro }
+
+// rdb is the handle a read-only request reads through: the read pool when the
+// daemon attached one, the writer otherwise (tests, a pool that failed to
+// open). Only for reads — a write through the pool fails with SQLITE_READONLY.
+func (h *Handler) rdb() *sql.DB {
+	if h.RO != nil {
+		return h.RO
+	}
+	return h.DB
+}
+
 // NewServer builds the full HTTP handler: API routes + embedded SPA fallback.
 // watching reports whether the live ingest pipeline is attached (serve
 // without --no-ingest); /api/health surfaces it to the dashboard.
@@ -49,7 +68,7 @@ func NewServer(db *sql.DB, watching bool) (http.Handler, error) {
 		return nil, fmt.Errorf("embedded docs: %w", err)
 	}
 	mux := http.NewServeMux()
-	h := &Handler{DB: db, Watching: watching, Docs: docs, InboxTTL: inboxTTL,
+	h := &Handler{DB: db, RO: readPool, Watching: watching, Docs: docs, InboxTTL: inboxTTL,
 		Improve: &improve.Service{
 			DB:     db,
 			Runner: improve.ClaudeRunner{},

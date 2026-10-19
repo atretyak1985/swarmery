@@ -350,7 +350,7 @@ func (h *Handler) listApprovals(w http.ResponseWriter, r *http.Request) {
 		args = append(args, n)
 	}
 
-	rows, err := h.DB.Query(query, args...)
+	rows, err := h.rdb().Query(query, args...)
 	if err != nil {
 		writeErr(w, err)
 		return
