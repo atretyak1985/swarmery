@@ -4,10 +4,12 @@
 // queue; the decisions are pure in ./lib/swarm.ts. Nothing here is called
 // with `swarm` off.
 //
-// The registry is advisory: it blocks nothing. This session writes only its
-// own key, `swarmery-link/claims/<sessionId>`, whole with one `$.store.set`,
-// holding paths and ms timestamps alone (never text or tool input); other
-// sessions' keys are read, never written.
+// The registry is advisory unless `claimConflicts` is set: then register.ts's
+// tool.check reads it (heldElsewhere) to ask or refuse a write another live
+// session holds. This session writes only its own key,
+// `swarmery-link/claims/<sessionId>`, whole with one `$.store.set`, holding
+// paths and ms timestamps alone (never text or tool input); other sessions'
+// keys are read, never written.
 
 import type { EngineInterface, SessionSendResult } from 'claude-code'
 import {
@@ -32,6 +34,16 @@ export type ClaimOutcome = {
   readonly storeError?: unknown
 }
 
+/** The other sessions' claims entries, as the store holds them (stale ones included). */
+async function readOthers($: EngineInterface, sessionId: string): Promise<readonly ClaimEntry[]> {
+  const others: ClaimEntry[] = []
+  for (const key of foreignKeys(await $.store.keys(), sessionId)) {
+    const other = parseEntry(await $.store.get(key))
+    if (other !== undefined) others.push(other)
+  }
+  return others
+}
+
 /**
  * Claims `path` for this session: the first claim of it this turn writes the
  * session's entry, then reads the other sessions' entries for a live claim on
@@ -45,16 +57,21 @@ export async function claimFile($: EngineInterface, turn: SwarmTurn, sessionId: 
     const entry = addClaim(noted.turn.entry, sessionId, cwd, path, now)
     await $.store.set(claimsKey(sessionId), entry)
     const written: SwarmTurn = { ...noted.turn, entry }
-    const others: ClaimEntry[] = []
-    for (const key of foreignKeys(await $.store.keys(), sessionId)) {
-      const other = parseEntry(await $.store.get(key))
-      if (other !== undefined) others.push(other)
-    }
-    const conflicts = conflictsFor(path, sessionId, others, now)
+    const conflicts = conflictsFor(path, sessionId, await readOthers($, sessionId), now)
     return { turn: { ...written, conflicts: [...written.conflicts, ...conflicts] }, isNew: true, conflicts }
   } catch (storeError) {
     return { turn: noted.turn, isNew: true, conflicts: [], storeError }
   }
+}
+
+/**
+ * The other live sessions holding `path` right now, read without writing
+ * anything (the `claimConflicts` check, ahead of the call). Rejects when the
+ * store refuses; the caller then leaves the verdict beneath.
+ */
+export async function heldElsewhere($: EngineInterface, sessionId: string, path: string): Promise<readonly Conflict[]> {
+  const now = await $.clock.now()
+  return conflictsFor(path, sessionId, await readOthers($, sessionId), now)
 }
 
 /** Removes this session's claims entry (a turn's end, the session's end). */

@@ -867,8 +867,14 @@ reordered event) changes nothing, so the mod does not need to sort.
 A claim is **live** while `released_at` is NULL and `claimed_at` is younger than
 **30 min**; an older unreleased claim is treated as left behind by a crashed session.
 A **conflict** is a path two or more sessions hold a live claim on. Conflicts are
-**advisory**: nothing is blocked, and the mod's own `conflict` events are only a
-record.
+**advisory unless `claimConflicts` is set**: the daemon blocks nothing, and the mod's
+own `conflict` events are only a record. With the mod's `claimConflicts` option on
+(`ask` or `deny`, `swarm` on), the mod itself holds a file-tool write whose path
+another live session claims in its `$.store` registry: `ask` puts it to the native
+dialog (refused in `auto`/`dontAsk`/`bypassPermissions`), `deny` refuses it. It then
+claims the path after the call ran rather than ahead of it, so a held write sends no
+`claim`. The wire is unchanged (`plugins/swarmery-link/README.md`, "Holding a
+conflicting write").
 
 ### The `message` command
 
