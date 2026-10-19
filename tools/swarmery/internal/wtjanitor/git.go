@@ -31,6 +31,9 @@ func run(dir string, args ...string) (string, error) {
 func runRaw(dir string, args ...string) (string, error) {
 	cmd := exec.Command("git", args...)
 	cmd.Dir = dir
+	// Optional locks off: the sweep runs `status` in worktrees every tick, and
+	// that read must never take (or strand) an index.lock under a live session.
+	cmd.Env = append(os.Environ(), "GIT_OPTIONAL_LOCKS=0")
 	out, err := cmd.Output()
 	return string(out), err
 }

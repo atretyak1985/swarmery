@@ -18,6 +18,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"os"
 	"os/exec"
 	"strings"
 	"time"
@@ -62,6 +63,11 @@ func (g ExecGit) Run(dir string, args ...string) (string, error) {
 
 	full := append([]string{"-C", dir}, args...)
 	cmd := exec.CommandContext(ctx, "git", full...)
+	// Optional locks off: a read like `status` otherwise takes index.lock to
+	// write back its refreshed stat cache, and a run killed at its deadline
+	// leaves that 0-byte lock behind with no holder. Commands that must write
+	// the index (add, commit, worktree add) still take their lock.
+	cmd.Env = append(os.Environ(), "GIT_OPTIONAL_LOCKS=0")
 	var out bytes.Buffer
 	cmd.Stdout = &out
 	cmd.Stderr = &out

@@ -1,12 +1,12 @@
 ---
 name: workspace-plans
-version: "1.0.0"
+version: "1.1.0"
 owner: "swarmery-core"
 description: "Use this skill when writing, revising, or executing a workspace plan — the plan/README.md + phase-N-<slug>.md format the dashboard ingests. Don't use it for ad-hoc todo lists or in-repo design docs."
 color: cyan
 docs:
   status: draft
-  updated: 2026-10-10
+  updated: 2026-10-19
 ---
 
 # Purpose
@@ -47,6 +47,21 @@ Review tab. The header rows `**Verify:**` (off | normal | strict) and
 `**Review:**` (on | off) sit directly after `**Repo:** …`; L/XL phases default
 to `normal` / `on`. Details: `resources/plan-format.md` → "Criterion classes"
 and "Header rows".
+
+Criteria that lean on the engine follow five rules in `resources/plan-format.md`:
+spike a guarantee under every permission mode, live-check engine-boundary phases
+before `[LAND]`, append live-check evidence immediately, cite
+`resources/config-channels.md` for any settings-file criterion, and number
+migrations at landing.
+
+# Resources
+
+- `resources/plan-format.md` — the full field-by-field format, examples, the
+  manifest schema, and the engine-facing criterion rules.
+- `resources/config-channels.md` — which settings tier Claude Code reads for
+  `pluginConfigs`, plugin `env` and `${VAR}`, with the CLI version measured.
+- `templates/spike-matrix.md` (plugin root) — the permission mode × surface
+  matrix for a spike.
 
 # Executor duties
 

@@ -24,7 +24,9 @@ package worktree
 //   - The tree is SHARED with the source checkout, so a run that reinstalls
 //     (`npm ci`, `pip install`) mutates the developer's working copy. The run
 //     prompts say so and tell executors not to reinstall — this file is the
-//     reason that sentence exists.
+//     reason that sentence exists. The lender side is guarded too:
+//     tools/swarmery's `make build-web` refuses to `npm ci` while any worktree
+//     still borrows its web/node_modules.
 //   - The link is only ever created when the worktree has nothing at that path,
 //     so a project that genuinely commits its vendor directory keeps git's copy.
 //
