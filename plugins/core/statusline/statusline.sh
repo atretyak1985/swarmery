@@ -311,6 +311,11 @@ SESS=$(find "$PROJECT_DIR/.swarmery/sessions" -name "*.json" 2>/dev/null | wc -l
 [ "$SESS" = "0" ] && SESS=$(ls /tmp/claude-session-*.jsonl 2>/dev/null | wc -l | tr -d ' ')
 
 # ----- git (against cwd) ---------------------------------------------------
+# Optional locks off: `git status` otherwise takes index.lock to write back its
+# refreshed stat cache, and a statusline killed mid-render (it is re-run on
+# every prompt) strands that 0-byte lock in the operator's checkout. Reads only
+# here, so nothing needs the lock.
+export GIT_OPTIONAL_LOCKS=0
 GIT_BRANCH=""; GIT_AGE=""; GIT_MOD="0"; GIT_SYNC=""
 if git -C "$CWD" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
   GIT_BRANCH="$(git -C "$CWD" rev-parse --abbrev-ref HEAD 2>/dev/null)"
