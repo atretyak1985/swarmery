@@ -68,10 +68,14 @@ func linkAuth(next http.HandlerFunc) http.HandlerFunc {
 // hookAuth guards the `swarmery hook` shim routes (POST /api/hooks/
 // permission-request, /stop, /session-start) with the same link token, sent
 // in the Authorization header, as /api/link/*: before it, any local process
-// that sent no Origin could open and answer approvals there. Same answers as linkAuth — 503 {"error":"link
-// disabled"} while no holder is attached, 401 {"error":"link token required"}
-// on a missing or wrong token. The routine webhook (/api/hooks/routine/…)
-// carries its own per-routine token and is NOT behind this.
+// that sent no Origin could open an approval there. Same answers as
+// linkAuth: 503 {"error":"link disabled"} while no holder is attached, 401
+// {"error":"link token required"} on a missing or wrong token.
+//
+// Not behind it: answering an approval (POST /api/approvals/{id}), still
+// gated only by the Host/Origin fence (a known gap, tracked separately), and
+// the routine webhook (/api/hooks/routine/…), which carries its own
+// per-routine token.
 func hookAuth(next http.HandlerFunc) http.HandlerFunc {
 	return linkAuth(next)
 }

@@ -264,8 +264,10 @@ func Routes(root *http.ServeMux, h *Handler) {
 
 	// phase 2: approvals (frozen contract — docs/hooks-protocol.md).
 	// All write endpoints reject foreign browser Origins (D4). The shim's
-	// routes additionally require the link token (hookAuth, link.go):
-	// a missing Origin alone no longer opens or answers an approval.
+	// routes additionally require the link token (hookAuth, link.go), so
+	// opening an approval needs it. Answering one (POST /api/approvals/{id})
+	// is still gated only by the local Host/Origin fence, which passes a
+	// request that sends no Origin: a known gap, tracked separately.
 	mux.HandleFunc("POST /api/hooks/permission-request", requireLocalOrigin(hookAuth(h.hookPermissionRequest)))
 	mux.HandleFunc("POST /api/hooks/stop", requireLocalOrigin(hookAuth(h.hookStop)))
 	mux.HandleFunc("POST /api/approvals/{id}", requireLocalOrigin(h.resolveApproval))

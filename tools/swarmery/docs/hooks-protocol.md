@@ -42,7 +42,15 @@ Every behavior below is grounded in the live spike
 
 As of mods-link follow-up 1 (2026-10-19) the three shim routes carry the same
 credential as `/api/link/*` ([`mods-link-protocol.md`](mods-link-protocol.md) §Auth):
-before it, any local process that sent no `Origin` could open and answer approvals.
+before it, any local process that sent no `Origin` could open an approval and post
+the Stop and SessionStart hooks. Opening an approval now needs the token.
+
+> **Known gap.** Answering an approval, `POST /api/approvals/{id}`, is **not**
+> behind the token. It is still gated only by the local fences (`requireLocalHost`
+> and `requireLocalOrigin`), and the `Origin` fence passes a request that sends no
+> `Origin`. A local process without the token can therefore still answer a pending
+> approval. Closing that needs a credential design for the dashboard's browser
+> requests; it is tracked separately.
 
 | | |
 |---|---|
@@ -55,18 +63,34 @@ before it, any local process that sent no `Origin` could open and answer approva
 | Logged | Never the value: not by the daemon, not in the shim's `~/.swarmery/hook.log`, not in an error string |
 
 **Shim side** (`internal/hookshim`, `post`). The shim reads the token file on
-every call and sends it in the header. On a `401` it waits 1.1 s — just past the
-daemon's one-read-per-second token reload throttle, so a call that raced a
-`swarmery link token --rotate` lands on a daemon that has reloaded — re-reads the
-file once and retries once. A missing or unreadable file sends no header; the
-`401` is then logged as `outcome=auth-missing` with no retry. A second `401` is
-logged as `outcome=http-401`. Every one of these fails open exactly like any other
-non-contract answer: exit `0`, no stdout, Claude Code shows its native dialog.
+every call and sends it in the header. It refuses a symlink, any other non-regular
+file and content over 256 bytes (a token is 64 hex characters): each counts as no
+token, like a missing or unreadable file, and the request goes out with no header.
+
+On a `401` the shim re-reads the file once and retries once:
+
+- **A token was sent.** It first waits 1.1 s, just past the daemon's
+  one-read-per-second token reload throttle, so a call that raced a
+  `swarmery link token --rotate` lands on a daemon that has reloaded.
+- **No token was sent.** It re-reads at once, with no delay, and retries only if a
+  token has appeared in the meantime.
+
+If the re-read finds no token, the call is logged as `outcome=auth-missing`; a
+`401` on the retry is logged as `outcome=http-401`. Every one of these fails open
+exactly like any other non-contract answer: exit `0`, no stdout, Claude Code shows
+its native dialog.
 
 **Upgrade.** The shim and the daemon ship in one binary (`swarmery hook`), so one
 `make install` / `swarmery install` upgrades both. A shim from an older binary
-sends no header, gets `401` and fails open to the native dialog: no approval is
-lost, it is only answered in the terminal until the binary is upgraded.
+sends no header and gets `401` on all three routes until the binary is upgraded.
+It fails open, so no approval is lost: approvals are answered in the terminal. It
+also loses, until the upgrade, the Stop heartbeat (`hooks_last_seen` in
+`GET /api/health`) and, at SessionStart, the PID registration and the plugin-drift
+warning.
+
+The same loss applies while the daemon runs with the link disabled, that is when
+`link.EnsureToken` failed at `swarmery serve` start: all three routes answer
+`503 {"error":"link disabled"}`, and the shim fails open the same way.
 
 ## POST /api/hooks/permission-request
 
