@@ -343,7 +343,12 @@ func TestRunSkipsModsPassWhileRescanRuns(t *testing.T) {
 	db, cfg, _ := setup(t)
 	_, logPath := modFixture(t, &cfg, "sleep")
 	prev := modscan.ValidateTimeout
-	modscan.ValidateTimeout = 4 * time.Second // bounds the pre-fix stall, not the assertion
+	// How long the manual rescan holds the mods lock: the stall a queued Run
+	// pass would suffer. Kept below the fake's `sleep 30`, so the stub, not
+	// this timeout, is what holds the lock, and well above the progress
+	// deadline below, so a slow cold Scan cannot outlast the lock and let
+	// Run's mods pass take it (no skip line).
+	modscan.ValidateTimeout = 25 * time.Second
 	t.Cleanup(func() { modscan.ValidateTimeout = prev })
 	cfg.RescanInterval = 100 * time.Millisecond
 
@@ -375,9 +380,13 @@ func TestRunSkipsModsPassWhileRescanRuns(t *testing.T) {
 		_ = s.Run(ctx)
 	}()
 
-	// Three registry passes well inside the 4 s the held lock would stall a
-	// queued mods pass for.
-	deadline = time.Now().Add(2 * time.Second)
+	// Invariant: progress deadline < ValidateTimeout. A Run that queued behind
+	// the lock logs exactly one lint line before it blocks, and stays blocked
+	// until the lock is released (≥ ValidateTimeout), so it cannot reach three
+	// before this deadline. A Run that skips reaches three within a few ticks
+	// (~100 ms each when idle); the slack absorbs a cold first Scan, seen
+	// taking ~6 s on a loaded machine.
+	deadline = time.Now().Add(15 * time.Second)
 	for strings.Count(logs.String(), "sysscan lint: ") < 3 {
 		if time.Now().After(deadline) {
 			t.Fatalf("Run stalled behind the manual rescan; registry passes logged so far:\n%s", logs.String())
