@@ -172,6 +172,59 @@ blocks nothing.
 The manifest sets `manual_legs: true` for any phase whose doc carries a
 `[MANUAL]` marker.
 
+### Engine guarantees: spike every mode
+
+A spike criterion that promises a person sees something — a permission dialog,
+a prompt, a notice — is measured on a matrix, not in one run. Its axes are the
+permission mode (default / acceptEdits / plan / auto / dontAsk /
+bypassPermissions) × the surface (`-p` / interactive). A guarantee observed in
+default mode says nothing about auto mode, where the engine can settle an `ask`
+without showing anything. Copy `templates/spike-matrix.md` (project
+`.claude/templates/` first, then the plugin's), fill one row per cell with an
+observed verdict and an evidence file, and let the plan promise only what the
+matrix shows. A cell left `not measured` is named in the plan as a gap.
+
+### Engine-boundary phases: live check before [LAND]
+
+A phase that changes a path crossing a process boundary the engine owns — hooks,
+mods, IPC between sessions — carries an **executable** live-check criterion,
+ordered before its `[LAND]` criterion. The check runs on an isolated dev
+environment (its own port, scratch database and workspace root, plugins loaded
+with `--plugin-dir`, options passed with `--settings`), never on the live control
+plane or the operator's settings. It is not a post-merge `[MANUAL]` item: unit
+tests and review do not see what the engine does to a message between two
+sessions, and a bug found after the merge costs a second PR.
+
+```markdown
+- [ ] live check on the dev environment: session A sends, session B receives, the pair correlates (evidence under `### Live check <date>`)
+- [ ] [LAND] PR for feat/orders-line-items merged into main
+```
+
+### Live-check evidence: tick + append immediately
+
+After each live check, tick its criterion and append the evidence — commands,
+observed output, verdict — under `### Live check <date>` in the phase doc,
+before starting the next check. Scratch files are a backup, not the record: an
+executor that dies between checks leaves evidence only where it already wrote
+it. A live-check prompt carries this rule next to its TICK CONTRACT.
+
+### Settings-file criteria cite the read channel
+
+Any criterion that names a settings file — `settings.json`,
+`settings.local.json`, `.claude.json`, managed settings, a `--settings` file —
+cites `resources/config-channels.md` and the fact it relies on (G1 for
+`pluginConfigs`, G2 for `${VAR}` substitution, G3 for an `env` block). The engine
+reads plugin options only from user settings and `--settings`; a criterion that
+puts them in a project's `settings.json` or `settings.local.json` cannot pass.
+
+### Migrations: number at landing
+
+A plan names a migration `NNNN_<name>.sql` but does not fix `NNNN`. The number is
+allocated when the branch is rebased for landing: the next number above the
+highest on the default branch at that moment. A number picked at write time
+collides with whatever lands first while the branch is open, and every collision
+costs a renumber commit.
+
 ## plan/manifest.json
 
 Machine-readable DAG the run-plan skill executes without parsing markdown.
