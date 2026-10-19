@@ -21,7 +21,7 @@
 
 import { t } from '@lingui/core/macro';
 import { Trans, useLingui } from '@lingui/react/macro';
-import { type FormEvent, useEffect, useId, useRef, useState } from 'react';
+import { type FormEvent, useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import { pollVcsLogin, startVcsLogin, submitVcsToken, VcsLoginError } from '../api';
 import type { VcsInfo, VcsLoginStart } from '../api/types';
 import { containTab } from './ui';
@@ -85,9 +85,11 @@ export function VcsSignInDialog({ projectId, vcs, onClose }: VcsSignInDialogProp
   const tokenInputId = useId();
 
   const signedIn = device.kind === 'ok' || tokenState.kind === 'ok';
-  // Latest values for the mount-once keyboard effect.
+  // Latest values for the mount-once keyboard effect. Synced in the layout
+  // phase: a passive effect leaves the commit that first shows "Signed in"
+  // with the previous closure, so an Escape in that gap closed as not signed in.
   const closeRef = useRef<() => void>(() => onClose(false));
-  useEffect(() => {
+  useLayoutEffect(() => {
     closeRef.current = () => onClose(signedIn);
   });
 
