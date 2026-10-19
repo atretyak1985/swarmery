@@ -178,6 +178,12 @@ var openTailPhraseRe = regexp.MustCompile(`\b\d+\s+[A-Za-z][\w-]*\s+open\b`)
 // wikiLinkRe matches a `[[memory-name]]` cross-reference inside a memory file.
 var wikiLinkRe = regexp.MustCompile(`\[\[([^\[\]]+)\]\]`)
 
+// frontmatterNameRe matches a top-level `name:` key in YAML frontmatter. The
+// `(?m)^` anchor requires column 0, so an indented `name:` under some other
+// top-level key (there is none today, but the guard against it is free) is
+// not mistaken for the memory's own slug.
+var frontmatterNameRe = regexp.MustCompile(`(?m)^name:\s*(.+?)\s*$`)
+
 // Entry is one parsed line of the index.
 type Entry struct {
 	LineNo int    `json:"lineNo"` // 1-based line number in MEMORY.md
@@ -345,7 +351,11 @@ func BuildPlan(dir string) (Plan, error) {
 		}
 	}
 
-	linked, err := linkedFromOpenFixpoint(dir, candidates)
+	nameIdx, err := memoryNameIndex(dir)
+	if err != nil {
+		return Plan{}, err
+	}
+	linked, err := linkedFromOpenFixpoint(dir, candidates, nameIdx)
 	if err != nil {
 		return Plan{}, err
 	}
@@ -379,13 +389,13 @@ func BuildPlan(dir string) (Plan, error) {
 // the candidate set, so the loop terminates in at most len(candidates) passes;
 // the returned set is the one computed from the surviving candidates, so it is
 // consistent with the classification that follows.
-func linkedFromOpenFixpoint(dir string, candidates map[string]bool) (map[string]bool, error) {
+func linkedFromOpenFixpoint(dir string, candidates map[string]bool, nameIdx map[string][]string) (map[string]bool, error) {
 	live := make(map[string]bool, len(candidates))
 	for name := range candidates {
 		live[name] = true
 	}
 	for {
-		linked, err := linkedFromOpen(dir, live)
+		linked, err := linkedFromOpen(dir, live, nameIdx)
 		if err != nil {
 			return nil, err
 		}
@@ -444,16 +454,101 @@ func pathExists(path string) bool {
 	return err == nil
 }
 
-// memoryName is the `name:` slug a `[[link]]` addresses: the basename minus .md.
+// memoryName is the FILENAME form a `[[link]]` can address: the basename minus
+// .md, lowercased. This is one of two forms a link may spell — the other is the
+// target's own `name:` frontmatter slug, resolved separately via
+// memoryNameIndex. A link written in the second form never equals this one
+// (e.g. `[[project-mission-state-machine]]` for `project_mission_state_machine.md`
+// has memoryName `project_mission_state_machine`, not the slug), which is why
+// linkedFromOpen cannot rely on this function alone.
 func memoryName(file string) string {
 	return strings.ToLower(strings.TrimSuffix(filepath.Base(file), ".md"))
+}
+
+// normalizeMemoryName normalizes a link target or a `name:` slug for
+// comparison between the two spellings: lowercased, with `_` and spaces folded
+// to `-` so `b-name-slug`, `b_name_slug` and `B Name Slug` all compare equal.
+func normalizeMemoryName(s string) string {
+	s = strings.ToLower(strings.TrimSpace(s))
+	return strings.Map(func(r rune) rune {
+		if r == '_' || r == ' ' {
+			return '-'
+		}
+		return r
+	}, s)
+}
+
+// frontmatterName extracts a memory file's top-level `name:` frontmatter
+// value, or "" if the file has no frontmatter or no such key. Quotes around
+// the value (`name: "b-name-slug"`) are stripped.
+func frontmatterName(content string) string {
+	lines := strings.Split(content, "\n")
+	if len(lines) == 0 || strings.TrimRight(lines[0], "\r") != "---" {
+		return ""
+	}
+	for i := 1; i < len(lines); i++ {
+		trimmed := strings.TrimRight(lines[i], "\r")
+		if trimmed == "---" || trimmed == "..." {
+			return ""
+		}
+		if m := frontmatterNameRe.FindStringSubmatch(trimmed); m != nil {
+			return strings.Trim(m[1], `"'`)
+		}
+	}
+	return ""
+}
+
+// memoryNameIndex maps every memory file's `name:` frontmatter slug
+// (normalized) to the filename(s) that declare it. A link spelled in the
+// `name:` form resolves through this index to the file(s) it actually names.
+// The value is a slice, not a single filename, because two files can declare
+// the same slug (Claude Code writes `name:` freely with no uniqueness check);
+// linkedFromOpen treats that collision conservatively by holding back every
+// file the ambiguous slug could mean, rather than guessing one.
+//
+// This is built once per BuildPlan call and reused across every
+// linkedFromOpenFixpoint pass: frontmatter does not change between passes, only
+// which files count as "open" does.
+func memoryNameIndex(dir string) (map[string][]string, error) {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return nil, err
+	}
+	idx := map[string][]string{}
+	for _, en := range entries {
+		if en.IsDir() || !strings.HasSuffix(en.Name(), ".md") {
+			continue
+		}
+		if en.Name() == indexName || en.Name() == closedIndexName {
+			continue
+		}
+		data, err := os.ReadFile(filepath.Join(dir, en.Name()))
+		if err != nil {
+			if os.IsNotExist(err) {
+				continue // vanished mid-scan
+			}
+			return nil, err
+		}
+		slug := frontmatterName(string(data))
+		if slug == "" {
+			continue
+		}
+		norm := normalizeMemoryName(slug)
+		idx[norm] = append(idx[norm], en.Name())
+	}
+	return idx, nil
 }
 
 // linkedFromOpen collects every `[[name]]` target referenced from a memory file
 // that is NOT itself a consolidation candidate — the dependency guard. Scanning
 // non-indexed *.md files too is deliberate: a file with no index line is still
 // loaded on demand, and its links are still live.
-func linkedFromOpen(dir string, candidates map[string]bool) (map[string]bool, error) {
+//
+// A link target is resolved in BOTH forms it may be spelled in: as a filename
+// stem (memoryName) and, via nameIdx, as the target's own `name:` frontmatter
+// slug. Recording both keeps every downstream lookup — which all key on
+// memoryName(file) — working unchanged regardless of which form the author used.
+func linkedFromOpen(dir string, candidates map[string]bool, nameIdx map[string][]string) (map[string]bool, error) {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		return nil, err
@@ -474,7 +569,11 @@ func linkedFromOpen(dir string, candidates map[string]bool) (map[string]bool, er
 			return nil, err
 		}
 		for _, m := range wikiLinkRe.FindAllStringSubmatch(string(data), -1) {
-			linked[memoryName(strings.TrimSpace(m[1]))] = true
+			target := strings.TrimSpace(m[1])
+			linked[memoryName(target)] = true
+			for _, file := range nameIdx[normalizeMemoryName(target)] {
+				linked[memoryName(file)] = true
+			}
 		}
 	}
 	return linked, nil

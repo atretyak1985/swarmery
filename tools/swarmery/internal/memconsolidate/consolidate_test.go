@@ -270,6 +270,33 @@ func TestBuildPlanLinkGuardAndReasons(t *testing.T) {
 	}
 }
 
+// TestBuildPlanLinkGuardMatchesNameSlug: a `[[link]]` spelled with the target's
+// `name:` frontmatter slug (kebab-case) must hold the same guard as a link
+// spelled with the target's filename (snake_case). Before the fix, memoryName
+// keyed purely off the filename, so a slug-form link was invisible to the
+// guard and b_file.md would have moved despite the open link to it.
+func TestBuildPlanLinkGuardMatchesNameSlug(t *testing.T) {
+	index := strings.Join([]string{
+		"- [Open memory](a_file.md) — 7-phase plan; impl open.",
+		"- [Closed memory](b_file.md) — DONE 2026-01-01.",
+		"",
+	}, "\n")
+	dir := memoryDir(t, index, map[string]string{
+		"a_file.md": "---\nname: a-file\n---\n\nDepends on [[b-name-slug]] for the schema.\n",
+		"b_file.md": "---\nname: b-name-slug\n---\n\nThe thing a_file.md depends on.\n",
+	})
+	plan, err := BuildPlan(dir)
+	if err != nil {
+		t.Fatalf("BuildPlan: %v", err)
+	}
+	if len(plan.Move) != 0 {
+		t.Fatalf("Move = %+v, want nothing moved (b_file.md is still linked by name: slug)", plan.Move)
+	}
+	if len(plan.Keep) != 1 || plan.Keep[0].File != "b_file.md" || plan.Keep[0].Reason != ReasonLinked {
+		t.Fatalf("Keep = %+v, want b_file.md held back with %q", plan.Keep, ReasonLinked)
+	}
+}
+
 // TestBuildPlanIgnoresLinksBetweenClosedEntries: two closed memories that link
 // to each other must both consolidate — only an OPEN memory's link holds one back.
 func TestBuildPlanIgnoresLinksBetweenClosedEntries(t *testing.T) {
