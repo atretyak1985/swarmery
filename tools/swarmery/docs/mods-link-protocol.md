@@ -391,12 +391,13 @@ fence, the Host fence applies, `401 {"error":"link token required"}` without a v
 token, `503 {"error":"link disabled"}` with the link off and
 `503 {"error":"approvals unavailable"}` with the approvals service off.
 
-**Layered on the shim, not beside it.** The shim protocol
-([`hooks-protocol.md`](hooks-protocol.md), frozen) is **unchanged**:
-`POST /api/hooks/permission-request` keeps its body, statuses and behaviour byte for
-byte. This channel writes the **same** `permission_requests` rows through the same
-approvals service: the same D6 dedup hash (`session + tool + canonical tool_input`,
-no agent id, so a shim request for the same call hashes equal), the same
+**Layered on the shim, not beside it.** This channel leaves the shim protocol
+([`hooks-protocol.md`](hooks-protocol.md)) as it is. The shim routes have since
+gained one change of their own: they require this same link token
+([`hooks-protocol.md` §Auth](hooks-protocol.md#auth)). This channel writes the
+**same** `permission_requests` rows through the same approvals service: the same
+D6 dedup hash (`session + tool + canonical tool_input`, no agent id, so a shim
+request for the same call hashes equal), the same
 production-deploy guard, the same auto-approve rules, the same per-session cap, the
 same dashboard actions (`POST /api/approvals/{id}`), WS frames and needs-you items.
 Only the delivery differs: the shim holds one long-poll for the whole window, the mod

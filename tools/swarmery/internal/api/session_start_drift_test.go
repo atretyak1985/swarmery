@@ -9,10 +9,17 @@ import (
 )
 
 // postRaw POSTs an unparsed body and asserts the status — the session-start
-// hook takes non-JSON on its 204 path, which doJSON cannot express.
+// hook takes non-JSON on its 204 path, which doJSON cannot express. It sends
+// the attached link token, as the shim does (hookAuth).
 func postRaw(t *testing.T, url, body string, wantStatus int) {
 	t.Helper()
-	resp, err := http.Post(url, "application/json", strings.NewReader(body))
+	req, err := http.NewRequest(http.MethodPost, url, strings.NewReader(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	setHookAuth(req, hookToken())
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatalf("POST %s: %v", url, err)
 	}
@@ -163,6 +170,7 @@ func TestDriftContextKicksRefreshOnlyWhenItSpeaks(t *testing.T) {
 
 func TestSessionStartUndecodableBodyStill204(t *testing.T) {
 	srv, db := projectsTestServer(t)
+	attachHookToken(t)
 	path := projectPath(t, srv.URL, "1")
 	// An active finding exists, so a leaked drift lookup would answer 200.
 	seedFinding(t, db, pluginTarget("core@swarmery", path), "plugin_enabled_not_installed",
@@ -173,6 +181,7 @@ func TestSessionStartUndecodableBodyStill204(t *testing.T) {
 
 func TestSessionStartNonClaudePIDStill204(t *testing.T) {
 	srv, db := projectsTestServer(t)
+	attachHookToken(t)
 	path := projectPath(t, srv.URL, "1")
 	seedFinding(t, db, pluginTarget("core@swarmery", path), "plugin_enabled_not_installed",
 		"error", "missing", "")

@@ -2985,15 +2985,18 @@ func cmdHook(args []string) int {
 		fmt.Fprintln(os.Stderr, "usage: swarmery hook <permission-request|stop>")
 		return 0
 	}
-	logPath := ""
+	logPath, tokenPath := "", ""
 	if home, err := os.UserHomeDir(); err == nil {
 		logPath = filepath.Join(home, ".swarmery", "hook.log")
+		// The /api/hooks/* routes require the link token (docs/hooks-protocol.md §Auth).
+		tokenPath = link.TokenPath(home)
 	}
 	return hookshim.Run(args[0], os.Stdin, hookshim.Config{
-		BaseURL: fmt.Sprintf("http://127.0.0.1:%d", envPort()),
-		Stdout:  os.Stdout,
-		Stderr:  os.Stderr,
-		LogPath: logPath,
+		BaseURL:   fmt.Sprintf("http://127.0.0.1:%d", envPort()),
+		Stdout:    os.Stdout,
+		Stderr:    os.Stderr,
+		LogPath:   logPath,
+		TokenPath: tokenPath,
 		// Keep the shim's long-poll in sync with the daemon's approval window
 		// (both read SWARMERY_APPROVAL_TIMEOUT, else the shared baked default).
 		PollTimeout: envApprovalTimeout(),

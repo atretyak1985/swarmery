@@ -263,10 +263,13 @@ func Routes(root *http.ServeMux, h *Handler) {
 	mux.HandleFunc("POST /api/projects/{id}/planning/proceed", requireLocalOrigin(h.proceedPlanning))
 
 	// phase 2: approvals (frozen contract — docs/hooks-protocol.md).
-	// All write endpoints reject foreign browser Origins (D4); requests
-	// without an Origin (the swarmery hook shim, curl) pass.
-	mux.HandleFunc("POST /api/hooks/permission-request", requireLocalOrigin(h.hookPermissionRequest))
-	mux.HandleFunc("POST /api/hooks/stop", requireLocalOrigin(h.hookStop))
+	// All write endpoints reject foreign browser Origins (D4). The shim's
+	// routes additionally require the link token (hookAuth, link.go), so
+	// opening an approval needs it. Answering one (POST /api/approvals/{id})
+	// is still gated only by the local Host/Origin fence, which passes a
+	// request that sends no Origin: a known gap, tracked separately.
+	mux.HandleFunc("POST /api/hooks/permission-request", requireLocalOrigin(hookAuth(h.hookPermissionRequest)))
+	mux.HandleFunc("POST /api/hooks/stop", requireLocalOrigin(hookAuth(h.hookStop)))
 	mux.HandleFunc("POST /api/approvals/{id}", requireLocalOrigin(h.resolveApproval))
 	mux.HandleFunc("GET /api/approvals", h.listApprovals)
 	// needs-you queue (phase 3): read-only list of every blocker on the
@@ -310,7 +313,7 @@ func Routes(root *http.ServeMux, h *Handler) {
 	mux.HandleFunc("POST /api/link/plan/drift", linkAuth(h.linkPlanDrift))
 
 	// process liveness + kill (phase 4 step-07+)
-	mux.HandleFunc("POST /api/hooks/session-start", requireLocalOrigin(h.hookSessionStart))
+	mux.HandleFunc("POST /api/hooks/session-start", requireLocalOrigin(hookAuth(h.hookSessionStart)))
 	mux.HandleFunc("POST /api/sessions/{id}/kill", requireLocalOrigin(h.KillSession))
 	// graceful stop — ends the session as 'completed', not 'killed'; also the
 	// only way to close a zombie row with no known PID.
