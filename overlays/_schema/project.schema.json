@@ -34,8 +34,16 @@
     "commitScopes": { "type": "array", "items": { "type": "string" } },
     "enabledPacks": {
       "type": "array",
-      "items": { "enum": ["uav-pack", "iot-pack", "web-pack", "lsp-pack", "infra-pack"] },
-      "description": "domain packs this project enables (mirrors .claude/settings.json enabledPlugins)"
+      "items": {
+        "enum": [
+          "uav-pack", "iot-pack", "web-pack", "lsp-pack", "infra-pack",
+          "claude-eng-pack", "graft-pack", "graphify-pack", "architecture-pack",
+          "jira-pack", "accounts-pack", "design-pack", "review-pack",
+          "swarmery-link",
+          "guard-pack"
+        ]
+      },
+      "description": "packs and mods this project enables, every plugin in plugins/ except core (mirrors .claude/settings.json enabledPlugins; scripts/tests/init-packs.test.sh keeps it in step with plugins/, scripts/init.sh and internal/onboard KnownPacks)"
     },
     "jira": {
       "type": "object",

@@ -61,7 +61,8 @@ type docDetailDTO struct {
 
 // docOrder pins the dashboard nav order: the illustrated guides first, in
 // reading order, then the reference docs (onboarding → concepts → workflow →
-// extending → neutrality); anything else sorts alphabetically after both.
+// extending → neutrality → plugins → mods); anything else sorts alphabetically
+// after both.
 //
 // The guides follow the sidebar: one per place, in sidebar order (Docs itself
 // needs none), which fills the 0–9 band exactly. Reference docs start at 10.
@@ -85,6 +86,8 @@ var docOrder = map[string]int{
 	"workflow":   12,
 	"extending":  13,
 	"neutrality": 14,
+	"plugins":    15,
+	"mods":       16,
 }
 
 // GET /api/docs
@@ -179,7 +182,7 @@ func docRank(slug string) int {
 	}
 	// Unpinned docs sort after every pinned one, then alphabetically among
 	// themselves. This MUST NOT be len(docOrder): the pins are banded (guides
-	// 0–4, reference 10–14) with gaps for future entries, so a count is not an
+	// 0–9, reference 10–16) with gaps for future entries, so a count is not an
 	// upper bound — at 9 entries it would have sorted unpinned docs ahead of
 	// the whole reference band.
 	return math.MaxInt
