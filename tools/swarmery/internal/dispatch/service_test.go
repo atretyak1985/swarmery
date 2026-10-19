@@ -10,9 +10,11 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/claudeacct"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/store"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/worktree"
 )
@@ -790,19 +792,100 @@ func TestDisjointScopesRunConcurrentlyToLimit(t *testing.T) {
 		t.Fatalf("third task should wait for a free slot")
 	}
 	close(blockCh)
-	// A freed slot admits the waiting task. In the daemon that happens on a run's
-	// completion re-poke or, failing that, on the next poll tick (StartScheduler).
-	// The re-poke alone is not guaranteed: each run pokes BEFORE its deferred
-	// clearActive releases its slot, and Schedule's re-entrance guard drops a poke
-	// that overlaps another pass, so two runs finishing together can both see a
-	// full board. Calling Schedule in the wait stands in for the poll tick. The
-	// third run must then complete — a start counter that cannot absorb a run it
-	// did not expect (the old WaitGroup's negative-counter panic, recovered by
-	// spawn) would leave it wedged in_progress.
-	waitForWithin(t, 30*time.Second, func() bool {
-		s.Schedule()
-		return column(t, db, third) == "in_review"
+	// Completion alone must admit the third task: no Schedule call, no poll tick.
+	waitForWithin(t, 30*time.Second, func() bool { return column(t, db, third) == "in_review" })
+}
+
+// TestCompletionAloneAdmitsWaitingTask pins that a finished run admits the next
+// waiting task by itself. PollInterval is an hour and nothing calls Schedule
+// after the first pass, so the run's own exit is the only thing that can admit
+// T-2 — and it can only do that if the exit frees the slot BEFORE it pokes.
+func TestCompletionAloneAdmitsWaitingTask(t *testing.T) {
+	db := testDB(t)
+	release := make(chan struct{})
+	started := make(chan string, 8)
+	var calls atomic.Int32
+	r := &stubRunner{run: func(spec RunSpec) (*Run, error) {
+		noteStart(started, spec)
+		if calls.Add(1) == 1 {
+			<-release // only the FIRST run holds its slot
+		}
+		return &Run{SessionUUID: spec.SessionUUID, ExitCode: 0}, nil
+	}}
+	s := newTestService(t, db, r, &stubWt{})
+	s.Go = func(fn func()) { go fn() }
+	s.Cfg.MaxConcurrent = 1
+
+	insertTask(t, db, "T-1", taskOpts{fileScope: `["a"]`, createdAt: "2026-07-24T00:00:00.000Z"})
+	t2 := insertTask(t, db, "T-2", taskOpts{fileScope: `["b"]`, createdAt: "2026-07-24T00:00:01.000Z"})
+
+	s.Schedule()
+	awaitStarts(t, started, 1)
+	if got := column(t, db, t2); got != "todo" {
+		close(release)
+		t.Fatalf("T-2 column = %q while T-1 holds the only slot, want todo", got)
+	}
+
+	close(release)
+	waitForWithin(t, 30*time.Second, func() bool { return column(t, db, t2) == "in_review" })
+}
+
+// TestOverlappingPokeIsNotDropped pins that a poke arriving while another pass
+// holds the scheduling guard is not thrown away. Pass A is parked inside admit
+// (the QuotaCheck seam) with a candidate list that holds only T-1; T-2 is
+// inserted and poked during that window. A pass that has already loaded its
+// candidates cannot see T-2, so only a follow-up pass can admit it — and that
+// follow-up must run before A's Schedule returns, so no polling is needed.
+func TestOverlappingPokeIsNotDropped(t *testing.T) {
+	db := testDB(t)
+	hold := make(chan struct{})
+	r := &stubRunner{run: func(spec RunSpec) (*Run, error) {
+		<-hold // every run holds its slot until cleanup
+		return &Run{SessionUUID: spec.SessionUUID, ExitCode: 0}, nil
+	}}
+	s := newTestService(t, db, r, &stubWt{})
+	s.Go = func(fn func()) { go fn() }
+	s.Cfg.MaxConcurrent = 10
+	// Registered after testDB's db.Close, so it runs first (LIFO): the held runs
+	// finish against a live database.
+	t.Cleanup(func() {
+		close(hold)
+		waitForWithin(t, 30*time.Second, func() bool { return s.activeCount() == 0 })
 	})
+
+	entered := make(chan struct{})
+	gate := make(chan struct{})
+	var quotaCalls atomic.Int32
+	s.QuotaCheck = func(*sql.DB, claudeacct.Resolution, time.Time) error {
+		if quotaCalls.Add(1) == 1 {
+			close(entered)
+			<-gate
+		}
+		return nil
+	}
+
+	insertTask(t, db, "T-1", taskOpts{fileScope: `["a"]`, createdAt: "2026-07-24T00:00:00.000Z"})
+	doneA := make(chan struct{})
+	go func() { s.Schedule(); close(doneA) }()
+	select {
+	case <-entered: // pass A holds the guard; its candidate list is only T-1
+	case <-time.After(30 * time.Second):
+		close(gate)
+		t.Fatal("pass A never reached the quota gate")
+	}
+
+	t2 := insertTask(t, db, "T-2", taskOpts{fileScope: `["b"]`, createdAt: "2026-07-24T00:00:01.000Z"})
+	s.Poke()
+	close(gate)
+	select {
+	case <-doneA:
+	case <-time.After(30 * time.Second):
+		t.Fatal("pass A did not return within 30s")
+	}
+
+	if got := column(t, db, t2); got == "todo" {
+		t.Fatalf("T-2 column = %q: the poke that overlapped pass A was dropped", got)
+	}
 }
 
 func TestMaxWorktreesCap(t *testing.T) {
@@ -1587,45 +1670,57 @@ func TestDepGateEmptyDepsPass(t *testing.T) {
 // (PATCH /api/board/tasks/{id}). Disjoint scopes here reproduce exactly that,
 // and without a worktree-identity gate both rows admit and two headless agents
 // get the same checkout on the same branch.
+//
+// The first run HOLDS its checkout (real goroutines, a blocking runner) while the
+// single-flight assertion is made, so "concurrently" is literal. With an inline
+// run the checkout is already free again by the time the pass ends, and the
+// run's exit poke legitimately admits the second row in the same Schedule call.
 func TestScheduleWorktreeSingleFlight(t *testing.T) {
 	db := testDB(t)
-	r := &stubRunner{}
+	release := make(chan struct{})
+	started := make(chan string, 8)
+	var calls atomic.Int32
+	r := &stubRunner{run: func(spec RunSpec) (*Run, error) {
+		noteStart(started, spec)
+		if calls.Add(1) == 1 {
+			<-release // the first row holds the worktree until released
+		}
+		return &Run{SessionUUID: spec.SessionUUID, ExitCode: 0}, nil
+	}}
 	wt := &stubWt{}
 	s := newTestService(t, db, r, wt)
+	s.Go = func(fn func()) { go fn() }
 
 	// Same external id (⇒ same worktree + branch), deliberately DISJOINT scopes
 	// so the file-scope gate cannot be what saves us.
 	insertTask(t, db, "T-root1", taskOpts{fileScope: `["a/"]`})
 	insertTask(t, db, "T-root1", taskOpts{fileScope: `["b/"]`, priority: 3})
 
-	s.Schedule()
-
-	var n int
-	for _, id := range wt.acquiredIDs() {
-		if id == "T-root1" {
-			n++
+	acquired := func() int {
+		var n int
+		for _, id := range wt.acquiredIDs() {
+			if id == "T-root1" {
+				n++
+			}
 		}
+		return n
 	}
-	if n != 1 {
+
+	s.Schedule()
+	awaitStarts(t, started, 1)
+	s.Schedule() // a second pass while the checkout is held must skip the row too
+	if n := acquired(); n != 1 {
+		close(release)
 		t.Fatalf("Acquire(T-root1) called %d time(s), want 1 — two board rows sharing an "+
 			"external id must never hold the same worktree/branch concurrently", n)
 	}
 
-	// The gate DEFERS, it does not drop: the run above finished inline and left
-	// in_review, so the checkout is free and the loser admits on the next pass.
-	// Without this half, a gate that silently stranded the second row forever
-	// would pass the assertion above.
-	s.Schedule()
-	n = 0
-	for _, id := range wt.acquiredIDs() {
-		if id == "T-root1" {
-			n++
-		}
-	}
-	if n != 2 {
-		t.Fatalf("Acquire(T-root1) called %d time(s) across two passes, want 2 — the "+
-			"deferred row must be admitted once the checkout is free", n)
-	}
+	// The gate DEFERS, it does not drop: once the first run leaves in_review the
+	// checkout is free, and that run's exit admits the loser. Without this half, a
+	// gate that silently stranded the second row forever would pass the assertion
+	// above.
+	close(release)
+	waitForWithin(t, 30*time.Second, func() bool { return acquired() == 2 && s.activeCount() == 0 })
 }
 
 // ── dispatched-prompt assembly (board redesign v2 phase 3) ──
