@@ -605,6 +605,85 @@ func TestReverifyVerdictFollowsAReKeyDuringGrading(t *testing.T) {
 	}
 }
 
+// TestReverifyRefusesTheSuccessorOfARowReKeyedDuringGrading — the slot is keyed
+// on the row id, so a re-key mid-grading leaves the successor's slot free. A
+// second «Verify again» on the successor would then warm-reuse the checkout the
+// first one removes when it finishes. The branch claim refuses it (409
+// already-running) without holding the successor's slot; once the first
+// re-verification has finished, the successor is admitted again.
+func TestReverifyRefusesTheSuccessorOfARowReKeyedDuringGrading(t *testing.T) {
+	e := newRekeyedEnv(t)
+	doc, err := os.ReadFile(phaseDocPath(t, e.db, e.phaseID))
+	if err != nil {
+		t.Fatal(err)
+	}
+	successorDoc := filepath.Join(t.TempDir(), "phase-1-schema.md")
+	mustWriteDoc(t, successorDoc, string(doc))
+
+	var (
+		successor            int64
+		concurrentStart      func()
+		concurrentErr        error
+		successorHeldAfter   bool
+		originalHeldDuringIt bool
+	)
+	svc, r := passVerifier(e, func(verify.RunSpec) {
+		if successor != 0 {
+			return // only the first grading re-keys and races
+		}
+		successor = rekeyRow(t, e.db, e.phaseID, successorDoc)
+		concurrentStart, concurrentErr = e.s.AdmitReverify(successor)
+		successorHeldAfter = e.s.InFlight(successor)
+		originalHeldDuringIt = e.s.InFlight(e.phaseID)
+	})
+	e.s.Verify = svc
+
+	start, err := e.s.AdmitReverify(e.phaseID)
+	if err != nil {
+		t.Fatalf("AdmitReverify: %v", err)
+	}
+	start()
+
+	if successor == 0 {
+		t.Fatal("the re-key never ran")
+	}
+	if concurrentStart != nil {
+		concurrentStart() // do not leak the slot / worktree of a wrongly admitted run
+		t.Fatal("a re-verification of the re-keyed successor was admitted while the first one still graded its branch")
+	}
+	ref := asRefusal(t, concurrentErr)
+	if ref.Code != ReverifyCodeAlreadyRunning || ref.Status != http.StatusConflict {
+		t.Errorf("refusal = %+v, want 409 %s", ref, ReverifyCodeAlreadyRunning)
+	}
+	if !strings.Contains(ref.Msg, e.branch) {
+		t.Errorf("message %q does not name the run branch %s", ref.Msg, e.branch)
+	}
+	if successorHeldAfter {
+		t.Error("the refusal left the successor's run slot held")
+	}
+	if !originalHeldDuringIt {
+		t.Error("the first re-verification's slot was not held while it graded")
+	}
+
+	// The first re-verification is done: its claim is gone, so the successor —
+	// its verdict reset to a re-gradable fail — is admitted and graded.
+	mustExec(t, e.db, `UPDATE epic_phases SET verify_verdict='fail' WHERE id=?`, successor)
+	again, err := e.s.AdmitReverify(successor)
+	if err != nil {
+		t.Fatalf("AdmitReverify(successor) after the first finished: %v", err)
+	}
+	again()
+	if n := len(r.calls()); n != 2 {
+		t.Errorf("verifier sessions = %d, want 2 (first grading + the re-admitted successor)", n)
+	}
+	if got := phaseVerdictOf(t, e.db, successor); got != "pass" {
+		t.Errorf("successor row %d verify_verdict = %q, want pass", successor, got)
+	}
+	if e.s.InFlight(successor) || e.s.InFlight(e.phaseID) {
+		t.Error("a run slot is still held after both re-verifications finished")
+	}
+}
+
 // rekeyRow is the SQL equivalent of wsingest's rename handling in one transaction
 // (the same emulation internal/verify's phase-stamp tests use): insert the row for
 // the new doc path, carry the daemon-owned columns 1:1 the way carryAcrossRenames

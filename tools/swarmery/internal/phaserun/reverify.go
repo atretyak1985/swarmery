@@ -208,7 +208,20 @@ func (s *Service) AdmitReverify(phaseID int64) (start func(), err error) {
 		}
 		return nil, err // runcore.ErrNoSlot travels as itself
 	}
+	// The slot alone cannot exclude a second re-verification of the same branch: a
+	// re-key while this one grades (wsingest moves the row to a new id) leaves the
+	// successor's id slot free, and its admission would warm-reuse the checkout this
+	// one is about to remove. So the branch itself is claimed too, for exactly as
+	// long as the slot is held.
+	if !s.claimReverifyBranch(info.RunBranch) {
+		cancel()
+		releaseSlot()
+		return nil, refuseReverify(http.StatusConflict, ReverifyCodeAlreadyRunning,
+			fmt.Sprintf("a re-verification of run branch %s is already active — the phase was re-keyed while it ran; wait for it to finish",
+				info.RunBranch))
+	}
 	release := func() {
+		s.releaseReverifyBranch(info.RunBranch)
 		cancel()
 		releaseSlot()
 	}
@@ -263,6 +276,27 @@ func (s *Service) AdmitReverify(phaseID int64) (start func(), err error) {
 		}
 		s.reverifyBody(phaseID, info, acq)
 	}, nil
+}
+
+// claimReverifyBranch marks branch as being re-verified; false when it already is.
+func (s *Service) claimReverifyBranch(branch string) bool {
+	s.reverifyMu.Lock()
+	defer s.reverifyMu.Unlock()
+	if _, busy := s.reverifyBranches[branch]; busy {
+		return false
+	}
+	if s.reverifyBranches == nil {
+		s.reverifyBranches = map[string]struct{}{}
+	}
+	s.reverifyBranches[branch] = struct{}{}
+	return true
+}
+
+// releaseReverifyBranch drops the claim claimReverifyBranch took.
+func (s *Service) releaseReverifyBranch(branch string) {
+	s.reverifyMu.Lock()
+	defer s.reverifyMu.Unlock()
+	delete(s.reverifyBranches, branch)
 }
 
 // otherBranchOwner returns the id of another epic_phases row that claims branch,
