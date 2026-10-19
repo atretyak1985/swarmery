@@ -411,10 +411,13 @@ When the dashboard answers (`200 {"decision":"allow","answer":{questions,answers
 the mod returns `{ result: { questions, answers } }` without running the tool:
 the engine shows it as the person's answer, no dialog is drawn, and the model
 acts on it (`mods-format.md`, M4). `answers` maps each question's text to the
-chosen label (a multi-select's labels comma-joined). Anything else (a pass, a
-deny, a failure, the deadline, an interrupt) hands the call on, and the
-question's own dialog opens. The sensor still reports the call, and the
-forecast still counts it.
+chosen label (a multi-select's labels comma-joined). A dashboard deny
+(`200 {"decision":"deny","message":m}`, on the POST or a poll) refuses the call
+with `{ deny: m }` (or `denied in Swarmery`) without running it, so no dialog
+opens, the shim never fires and the model reads the refusal. Anything else (a
+pass, an allow without answers, a failure, the deadline, an interrupt) hands
+the call on, and the question's own dialog opens. The sensor still reports the
+call, and the forecast still counts it.
 
 ### Auto mode
 

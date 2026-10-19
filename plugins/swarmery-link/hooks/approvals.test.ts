@@ -11,6 +11,7 @@ import {
   pollAnswer,
   postAnswer,
   questionAnswer,
+  questionOutcome,
   shouldAsk,
 } from './lib/approvals'
 import { COMPLETE, CWD, END, SESSION_ID, START, TOKEN, TURN, type PermissionReply, type World, sent, track, world } from './testkit'
@@ -428,10 +429,28 @@ test('AskUserQuestion multi-select answered in Swarmery: the labels the dashboar
   expect(r.result).toEqual({ questions: multi, answers: { 'Which colors?': 'Red, Blue' } })
 })
 
+test('AskUserQuestion + deny: the call is refused with the dashboard\'s message, next(e) never runs (no native dialog, no shim)', ON, async ($, on) => {
+  const w = await begin($, on, {
+    permissionReplies: [pending(6, 600_000), decided({ decision: 'deny' })],
+    permissionPollReplies: [decided({ decision: 'deny', message: 'ask me later' })],
+  })
+  const r = await $.tool.call(QUESTION_CALL)
+  expect(r.deny).toBe('ask me later')
+  expect(r.result).toBeUndefined()
+  // without a message: "denied in Swarmery"
+  const again = await $.tool.call(QUESTION_CALL)
+  expect(again.deny).toBe(DENIED_REASON)
+  expect(again.result).toBeUndefined()
+  expect(w.calls).toEqual([])
+  expect(w.permissionPosts).toHaveLength(2)
+  expect(w.permissionCancels).toHaveLength(0)
+  expect(w.statuses).toEqual([WAITING_STATUS, undefined])
+})
+
 const fallbacks: ReadonlyArray<readonly [string, Partial<World>, number]> = [
   ['pass', { permissionReplies: [decided({ decision: 'pass' })] }, 0],
-  ['deny', { permissionReplies: [decided({ decision: 'deny', message: 'no' })] }, 0],
   ['an allow with no answer', { permissionReplies: [decided({ decision: 'allow' })] }, 0],
+  ['an allow with no answer after polling', { permissionReplies: [pending(4, 600_000)], permissionPollReplies: [decided({ decision: 'allow' })] }, 0],
   ['local', { permissionReplies: [decided({ decision: 'local' })] }, 0],
   ['204 (excluded)', { permissionReplies: [204] }, 0],
   ['the daemon down', { permissionReplies: ['throw'] }, 0],
@@ -513,4 +532,15 @@ test('checkResult never invents an ask or a deny of its own', () => {
     questions: [],
     answers: { a: 'x, y', b: 'z' },
   })
+})
+
+test('questionOutcome: an answer is the result, a deny the refusal, anything else no outcome', () => {
+  const answers = { 'Which color do you prefer?': 'Red' }
+  expect(questionOutcome({ kind: 'allow', answer: { questions: QUESTIONS, answers } }, QUESTIONS)).toEqual({ result: { questions: QUESTIONS, answers } })
+  expect(questionOutcome({ kind: 'deny', message: 'no' }, QUESTIONS)).toEqual({ deny: 'no' })
+  expect(questionOutcome({ kind: 'deny', message: '' }, QUESTIONS)).toEqual({ deny: DENIED_REASON })
+  for (const kind of ['pass', 'local', 'skip', 'wait', 'auth', 'fail'] as const) {
+    expect(questionOutcome({ kind }, QUESTIONS)).toBeUndefined()
+  }
+  expect(questionOutcome({ kind: 'allow' }, QUESTIONS)).toBeUndefined()
 })
