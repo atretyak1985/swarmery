@@ -30,6 +30,31 @@ func TestBranchMinting(t *testing.T) {
 	}
 }
 
+// TestPhaseTaskNameFromBranch: the inverse of PhaseBranch accepts exactly
+// swarm/phase-<digits> and refuses everything else rather than guess.
+func TestPhaseTaskNameFromBranch(t *testing.T) {
+	for _, tc := range []struct {
+		branch, want string
+		ok           bool
+	}{
+		{"swarm/phase-40368", "phase-40368", true},
+		{"swarm/phase-", "", false},
+		{"swarm/phase-12a", "", false},
+		{"feat/x", "", false},
+		{"swarm/plan-657", "", false},
+		{"", "", false},
+	} {
+		got, ok := PhaseTaskNameFromBranch(tc.branch)
+		if got != tc.want || ok != tc.ok {
+			t.Errorf("PhaseTaskNameFromBranch(%q) = (%q, %v), want (%q, %v)", tc.branch, got, ok, tc.want, tc.ok)
+		}
+	}
+	// Round trip: what PhaseBranch mints, the inverse reads back as PhaseTaskName.
+	if got, ok := PhaseTaskNameFromBranch(PhaseBranch(7)); !ok || got != PhaseTaskName(7) {
+		t.Errorf("round trip of PhaseBranch(7) = (%q, %v), want (%q, true)", got, ok, PhaseTaskName(7))
+	}
+}
+
 // wtFixture builds a store with one project and returns the db.
 func wtFixture(t *testing.T) *sql.DB {
 	t.Helper()

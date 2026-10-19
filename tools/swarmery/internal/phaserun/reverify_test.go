@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/runcore"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/verify"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/worktree"
 )
 
@@ -308,9 +309,19 @@ func TestReverifyRefusals(t *testing.T) {
 		{"missing branch", func(_ *testing.T, _ *sql.DB, s *Service, _ *existingStubWt, _ int64, _ int64) {
 			s.Git = &stubGit{err: errors.New("fatal: Needed a single revision")}
 		}, ReverifyCodeNoRunBranch, http.StatusUnprocessableEntity},
-		{"branch under a previous id", func(t *testing.T, db *sql.DB, _ *Service, _ *existingStubWt, p1 int64, _ int64) {
-			mustExec(t, db, `UPDATE epic_phases SET run_branch='swarm/phase-424242' WHERE id=?`, p1)
+		// A branch that is not of the swarm/phase-<digits> shape names no checkout the
+		// manager can reach: refused, never guessed at. (A swarm/phase-<other id>
+		// branch — a re-keyed row — is admitted: TestReverifyReKeyedRow*.)
+		{"foreign branch", func(t *testing.T, db *sql.DB, _ *Service, _ *existingStubWt, p1 int64, _ int64) {
+			mustExec(t, db, `UPDATE epic_phases SET run_branch='feat/foo' WHERE id=?`, p1)
 		}, ReverifyCodeNoRunBranch, http.StatusUnprocessableEntity},
+		{"phase-shaped branch with a non-numeric id", func(t *testing.T, db *sql.DB, _ *Service, _ *existingStubWt, p1 int64, _ int64) {
+			mustExec(t, db, `UPDATE epic_phases SET run_branch='swarm/phase-12a' WHERE id=?`, p1)
+		}, ReverifyCodeNoRunBranch, http.StatusUnprocessableEntity},
+		// D5: one owner per branch — a second row claiming the same run branch.
+		{"branch claimed by another row", func(t *testing.T, db *sql.DB, _ *Service, _ *existingStubWt, p1 int64, _ int64) {
+			mustExec(t, db, `UPDATE epic_phases SET run_branch=? WHERE id<>?`, runcore.PhaseBranch(p1), p1)
+		}, ReverifyCodeBranchBusy, http.StatusConflict},
 		{"verifier not wired", func(_ *testing.T, _ *sql.DB, s *Service, _ *existingStubWt, _ int64, _ int64) {
 			s.Verify = nil
 		}, ReverifyCodeNotWired, http.StatusServiceUnavailable},
@@ -342,6 +353,294 @@ func TestReverifyRefusals(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestReverifyBranchBusyNamesTheOtherOwner — D5: when another row claims the
+// run branch, the refusal names that row, no checkout is attempted, and no slot
+// is held afterwards. The same holds for a re-keyed row whose carried branch is
+// still claimed elsewhere.
+func TestReverifyBranchBusyNamesTheOtherOwner(t *testing.T) {
+	for _, rekeyed := range []bool{false, true} {
+		t.Run(fmt.Sprintf("rekeyed=%v", rekeyed), func(t *testing.T) {
+			db, _, p1, p2 := fixture(t)
+			readyForReverify(t, db, p1, "start0ffee")
+			branch := runcore.PhaseBranch(p1)
+			if rekeyed {
+				branch = runcore.PhaseBranch(p1 + 40000)
+				mustExec(t, db, `UPDATE epic_phases SET run_branch=? WHERE id=?`, branch, p1)
+			}
+			mustExec(t, db, `UPDATE epic_phases SET run_branch=? WHERE id=?`, branch, p2)
+			s, ew, v := newReverifyService(t, db)
+
+			start, err := s.AdmitReverify(p1)
+			if start != nil {
+				t.Fatal("refused admission returned a start body")
+			}
+			ref := asRefusal(t, err)
+			if ref.Code != ReverifyCodeBranchBusy || ref.Status != http.StatusConflict {
+				t.Errorf("refusal = %+v, want 409 %s", ref, ReverifyCodeBranchBusy)
+			}
+			if !strings.Contains(ref.Msg, branch) || !strings.Contains(ref.Msg, fmt.Sprintf("phase %d", p2)) {
+				t.Errorf("message %q does not name the branch %s and the other owner %d", ref.Msg, branch, p2)
+			}
+			if s.InFlight(p1) {
+				t.Error("refusal left the run slot held")
+			}
+			if len(ew.existing) != 0 || len(v.calls()) != 0 {
+				t.Errorf("checkouts = %v, verifier calls = %d, want neither", ew.existing, len(v.calls()))
+			}
+		})
+	}
+}
+
+// rekeyedEnv is a re-keyed row in a real repository: the row's id is phaseID, but
+// its run_branch is swarm/phase-<oldID> — what carryAcrossRenames leaves on the
+// successor of an archived plan or a renamed phase doc. That branch exists with
+// two commits of its own; swarm/phase-<phaseID> does not exist at all.
+type rekeyedEnv struct {
+	repo                                 *tempRepo
+	db                                   *sql.DB
+	s                                    *Service
+	mgr                                  *worktree.Manager
+	wtRoot                               string
+	phaseID, taskID                      int64
+	branch, taskName, mainTip, branchTip string
+}
+
+func newRekeyedEnv(t *testing.T) *rekeyedEnv {
+	t.Helper()
+	e := &rekeyedEnv{repo: newTempRepo(t)}
+	e.db, e.taskID, e.phaseID, _ = fixture(t)
+	mustExec(t, e.db, `UPDATE projects SET path=? WHERE id=1`, e.repo.dir)
+	e.mainTip = e.repo.tip("main")
+	readyForReverify(t, e.db, e.phaseID, e.mainTip)
+	oldID := e.phaseID + 40000
+	e.taskName, e.branch = runcore.PhaseTaskName(oldID), runcore.PhaseBranch(oldID)
+	e.branchTip = e.repo.branch(e.branch, "main", 2)
+	mustExec(t, e.db, `UPDATE epic_phases SET run_branch=? WHERE id=?`, e.branch, e.phaseID)
+
+	e.s = newTestService(e.db, &stubRunner{}, &stubWt{})
+	e.wtRoot = filepath.Join(t.TempDir(), "wts")
+	e.mgr = &worktree.Manager{Git: e.repo.git, Root: e.wtRoot}
+	e.s.Wt = e.mgr
+	e.s.Git = e.repo.git
+	return e
+}
+
+// TestReverifyReKeyedRowGradesTheCarriedBranch — D4 / SC-4 / SC-6, real git and
+// a real worktree.Manager. The row is admitted, the verifier is called once on a
+// checkout of the CARRIED branch (the task name derived from run_branch, not from
+// the current id) with the recorded run_start_point as its diff base, and the run
+// slot keyed on the CURRENT id is held meanwhile. Afterwards the worktree is gone,
+// the branch is kept at its tip, the slot is free, and no swarm/phase-<current id>
+// branch was cut.
+func TestReverifyReKeyedRowGradesTheCarriedBranch(t *testing.T) {
+	e := newRekeyedEnv(t)
+	var headAtVerify string
+	var heldDuringVerify bool
+	v := &stubVerifier{}
+	v.onVerify = func() {
+		req := v.reqs[len(v.reqs)-1]
+		headAtVerify = strings.TrimSpace(e.repo.runIn(req.WorktreePath, "rev-parse", "HEAD"))
+		heldDuringVerify = e.s.InFlight(e.phaseID)
+	}
+	e.s.Verify = v
+
+	start, err := e.s.AdmitReverify(e.phaseID)
+	if err != nil {
+		t.Fatalf("AdmitReverify on a re-keyed row: %v", err)
+	}
+	start()
+
+	calls := v.calls()
+	if len(calls) != 1 {
+		t.Fatalf("VerifyPhase calls = %d, want 1", len(calls))
+	}
+	req := calls[0]
+	if req.Branch != e.branch || req.PhaseID != e.phaseID || req.WorkspaceTaskID != e.taskID {
+		t.Errorf("request = %+v, want branch %s for the current phase %d of task %d", req, e.branch, e.phaseID, e.taskID)
+	}
+	if req.StartPoint != e.mainTip {
+		t.Errorf("StartPoint = %q, want run_start_point %s", req.StartPoint, e.mainTip)
+	}
+	if !strings.HasPrefix(req.WorktreePath, e.wtRoot) || filepath.Base(req.WorktreePath) != e.taskName {
+		t.Errorf("WorktreePath = %q, want <%s>/<slug>/%s (the derived task name)", req.WorktreePath, e.wtRoot, e.taskName)
+	}
+	if headAtVerify != e.branchTip {
+		t.Errorf("worktree HEAD at verify = %s, want the carried branch tip %s", headAtVerify, e.branchTip)
+	}
+	if !heldDuringVerify {
+		t.Error("the current phase id's run slot was not held while the verifier ran")
+	}
+
+	if _, err := os.Stat(req.WorktreePath); !os.IsNotExist(err) {
+		t.Errorf("worktree %s still on disk (stat err %v), want it removed", req.WorktreePath, err)
+	}
+	if got := e.repo.tip("refs/heads/" + e.branch); got != e.branchTip {
+		t.Errorf("carried branch tip = %s, want %s unchanged (and the branch kept)", got, e.branchTip)
+	}
+	if out := strings.TrimSpace(e.repo.run("branch", "--list", runcore.PhaseBranch(e.phaseID))); out != "" {
+		t.Errorf("a branch for the current id was cut: %q", out)
+	}
+	if got := runBranchOf(t, e.db, e.phaseID); got.String != e.branch {
+		t.Errorf("run_branch = %q, want %q unchanged", got.String, e.branch)
+	}
+	if e.s.InFlight(e.phaseID) {
+		t.Error("run slot still held after the re-verification finished")
+	}
+}
+
+// TestReverifyReKeyedRowInspectsTheDerivedLeftover — SC-6: the leftover-worktree
+// check looks at the checkout of the DERIVED task name, the one AcquireExisting
+// would warm-reuse. A dirty leftover there is refused and left untouched.
+func TestReverifyReKeyedRowInspectsTheDerivedLeftover(t *testing.T) {
+	e := newRekeyedEnv(t)
+	v := &stubVerifier{}
+	e.s.Verify = v
+	info, err := e.s.loadPhase(e.phaseID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	acq, err := e.mgr.AcquireExisting(e.repo.dir, info.ProjectSlug, e.taskName)
+	if err != nil {
+		t.Fatalf("leftover acquire: %v", err)
+	}
+	wip := filepath.Join(acq.Path, "uncommitted.txt")
+	mustWriteDoc(t, wip, "the only copy of a crashed run's work\n")
+
+	start, err := e.s.AdmitReverify(e.phaseID)
+	if start != nil {
+		t.Fatal("refused admission returned a start body")
+	}
+	ref := asRefusal(t, err)
+	if ref.Code != ReverifyCodeWorktreeDirty || !strings.Contains(ref.Msg, acq.Path) {
+		t.Errorf("refusal = %+v, want %s naming the derived leftover %s", ref, ReverifyCodeWorktreeDirty, acq.Path)
+	}
+	if _, err := os.Stat(wip); err != nil {
+		t.Errorf("the uncommitted file is gone (stat err %v)", err)
+	}
+	if len(v.calls()) != 0 || e.s.InFlight(e.phaseID) {
+		t.Errorf("verifier calls = %d, slot held = %v, want neither", len(v.calls()), e.s.InFlight(e.phaseID))
+	}
+}
+
+// passVerifier is the REAL verify.Service with only the claude session stubbed:
+// it answers VERDICT: PASS, and the real worktree.Manager reads the tree hash and
+// the diff. Its Stamp is verify's own stampPhaseVerdict — nothing here writes the
+// verdict by hand.
+func passVerifier(e *rekeyedEnv, onRun func(verify.RunSpec)) (*verify.Service, *fakeReviewer) {
+	r := &fakeReviewer{onRun: onRun, answer: func(verify.RunSpec) string { return "all criteria met\nVERDICT: PASS" }}
+	return verify.NewService(e.db, verify.Config{}, r, e.mgr), r
+}
+
+func phaseVerdictOf(t *testing.T, db *sql.DB, phaseID int64) string {
+	t.Helper()
+	var v sql.NullString
+	if err := db.QueryRow(`SELECT verify_verdict FROM epic_phases WHERE id=?`, phaseID).Scan(&v); err != nil {
+		t.Fatalf("read verify_verdict of %d: %v", phaseID, err)
+	}
+	return v.String
+}
+
+// TestReverifyReKeyedRowStampsTheVerdictOnTheCurrentRow — end-to-end (SC-4): a
+// re-keyed row graded through the real verify.Service. The verdict lands on the
+// CURRENT row id, and verification_runs records it under that id's key.
+func TestReverifyReKeyedRowStampsTheVerdictOnTheCurrentRow(t *testing.T) {
+	e := newRekeyedEnv(t)
+	svc, r := passVerifier(e, nil)
+	e.s.Verify = svc
+
+	start, err := e.s.AdmitReverify(e.phaseID)
+	if err != nil {
+		t.Fatalf("AdmitReverify: %v", err)
+	}
+	start()
+
+	if n := len(r.calls()); n != 1 {
+		t.Fatalf("verifier sessions = %d, want 1", n)
+	}
+	if got := phaseVerdictOf(t, e.db, e.phaseID); got != "pass" {
+		t.Errorf("current row %d verify_verdict = %q, want pass", e.phaseID, got)
+	}
+	var status string
+	if err := e.db.QueryRow(`SELECT status FROM verification_runs WHERE target_key=? ORDER BY id DESC LIMIT 1`,
+		verify.PhaseKey(e.phaseID)).Scan(&status); err != nil {
+		t.Fatalf("verification_runs for %s: %v", verify.PhaseKey(e.phaseID), err)
+	}
+	if status != "pass" {
+		t.Errorf("verification_runs status = %q, want pass", status)
+	}
+	if e.s.InFlight(e.phaseID) {
+		t.Error("run slot still held after the re-verification finished")
+	}
+}
+
+// TestReverifyVerdictFollowsAReKeyDuringGrading — end-to-end with phase 1's stamp:
+// the plan is archived AGAIN while the verifier grades, so the row the grading
+// started under is pruned and a successor carries its run branch. The verdict
+// lands on that successor, the row that is current when the stamp runs.
+func TestReverifyVerdictFollowsAReKeyDuringGrading(t *testing.T) {
+	e := newRekeyedEnv(t)
+	var successor int64
+	svc, _ := passVerifier(e, func(verify.RunSpec) {
+		successor = rekeyRow(t, e.db, e.phaseID, filepath.Join(t.TempDir(), "archive", "phase-1-schema.md"))
+	})
+	e.s.Verify = svc
+
+	start, err := e.s.AdmitReverify(e.phaseID)
+	if err != nil {
+		t.Fatalf("AdmitReverify: %v", err)
+	}
+	start()
+
+	if successor == 0 {
+		t.Fatal("the re-key never ran")
+	}
+	if got := phaseVerdictOf(t, e.db, successor); got != "pass" {
+		t.Errorf("successor row %d verify_verdict = %q, want pass", successor, got)
+	}
+	var n int
+	if err := e.db.QueryRow(`SELECT COUNT(*) FROM epic_phases WHERE id=?`, e.phaseID).Scan(&n); err != nil || n != 0 {
+		t.Errorf("the pre-archive row %d is still there (n=%d, err=%v)", e.phaseID, n, err)
+	}
+}
+
+// rekeyRow is the SQL equivalent of wsingest's rename handling in one transaction
+// (the same emulation internal/verify's phase-stamp tests use): insert the row for
+// the new doc path, carry the daemon-owned columns 1:1 the way carryAcrossRenames
+// does, then prune the vanished row. Returns the successor's id.
+func rekeyRow(t *testing.T, db *sql.DB, oldID int64, newDocPath string) int64 {
+	t.Helper()
+	tx, err := db.Begin()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tx.Rollback() //nolint:errcheck // a no-op after Commit
+	res, err := tx.Exec(`
+		INSERT INTO epic_phases(workspace_task_id, seq, name, doc_path, depends_on,
+		                        checkboxes_done, checkboxes_total, verify_mode)
+		SELECT workspace_task_id, seq, name, ?, depends_on,
+		       checkboxes_done, checkboxes_total, verify_mode
+		  FROM epic_phases WHERE id=?`, newDocPath, oldID)
+	if err != nil {
+		t.Fatalf("re-key: insert successor: %v", err)
+	}
+	newID, _ := res.LastInsertId()
+	if _, err := tx.Exec(`
+		UPDATE epic_phases
+		   SET (run_state, run_branch, run_start_point, verify_verdict, verify_detail) =
+		       (SELECT run_state, run_branch, run_start_point, verify_verdict, verify_detail
+		          FROM epic_phases WHERE id=?)
+		 WHERE id=?`, oldID, newID); err != nil {
+		t.Fatalf("re-key: carry: %v", err)
+	}
+	if _, err := tx.Exec(`DELETE FROM epic_phases WHERE id=?`, oldID); err != nil {
+		t.Fatalf("re-key: prune: %v", err)
+	}
+	if err := tx.Commit(); err != nil {
+		t.Fatal(err)
+	}
+	return newID
 }
 
 // TestReverifyUnknownPhase: a missing row travels as ErrPhaseNotFound (404).

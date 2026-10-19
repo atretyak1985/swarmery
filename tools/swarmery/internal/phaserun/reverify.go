@@ -153,13 +153,27 @@ func (s *Service) AdmitReverify(phaseID int64) (start func(), err error) {
 		return nil, refuseReverify(http.StatusServiceUnavailable, ReverifyCodeNotWired,
 			"phase verification is not attached")
 	}
-	// The worktree manager checks out swarm/<taskName>, i.e. the DERIVED name. A row
-	// whose stamped branch differs (renamed doc, older row id) holds its work on a
-	// branch that name does not reach — refuse rather than guess.
-	if want := runcore.PhaseBranch(phaseID); info.RunBranch != want {
+	// The task name — and with it the worktree path and the swarm/<taskName> branch
+	// the manager checks out — is derived from the STAMPED run_branch, not from the
+	// current row id: a re-keyed row (archived plan, renamed doc) carries the branch
+	// it ran on under its previous id, and that branch is where its work lives. Only
+	// the exact swarm/phase-<digits> shape is accepted, so a hand-made or foreign
+	// branch is never guessed at. The run slot stays keyed on the current id.
+	taskName, ok := runcore.PhaseTaskNameFromBranch(info.RunBranch)
+	if !ok {
 		return nil, refuseReverify(http.StatusUnprocessableEntity, ReverifyCodeNoRunBranch,
-			fmt.Sprintf("the phase's run branch is %s, not %s — it ran under a previous phase id, so it cannot be re-verified here",
-				info.RunBranch, want))
+			fmt.Sprintf("the phase's run branch %s is not a phase run branch (swarm/phase-<id>) — it cannot be re-verified",
+				info.RunBranch))
+	}
+	// One owner per branch: two rows grading one branch would race their verdicts,
+	// and the stamp's lineage fallback (verify.stampPhaseVerdict) relies on a branch
+	// naming exactly one row.
+	if other, err := s.otherBranchOwner(phaseID, info.RunBranch); err != nil {
+		return nil, err
+	} else if other != 0 {
+		return nil, refuseReverify(http.StatusConflict, ReverifyCodeBranchBusy,
+			fmt.Sprintf("run branch %s is also claimed by phase %d — resolve the duplicate before re-verifying",
+				info.RunBranch, other))
 	}
 	if info.ProjectPath == "" {
 		return nil, ErrNoPath
@@ -204,8 +218,8 @@ func (s *Service) AdmitReverify(phaseID int64) (start func(), err error) {
 	// the only copy of uncommitted work: grading it would stamp a verdict on edits
 	// the branch does not contain, and the removal below would then destroy them.
 	// So look first, under the slot, and refuse rather than touch a dirty one — the
-	// same posture StartWith takes towards a leftover it did not create.
-	taskName := runcore.PhaseTaskName(phaseID)
+	// same posture StartWith takes towards a leftover it did not create. The path
+	// inspected is the derived task name's, i.e. the checkout AcquireExisting reaches.
 	left, err := s.leftoverWorktree(info.RepoRoot, info.ProjectSlug, taskName)
 	if err != nil {
 		release()
@@ -249,6 +263,21 @@ func (s *Service) AdmitReverify(phaseID int64) (start func(), err error) {
 		}
 		s.reverifyBody(phaseID, info, acq)
 	}, nil
+}
+
+// otherBranchOwner returns the id of another epic_phases row that claims branch,
+// or 0 when phaseID is its only owner.
+func (s *Service) otherBranchOwner(phaseID int64, branch string) (int64, error) {
+	var other int64
+	err := s.DB.QueryRow(`SELECT id FROM epic_phases WHERE run_branch = ? AND id <> ? LIMIT 1`,
+		branch, phaseID).Scan(&other)
+	if errors.Is(err, sql.ErrNoRows) {
+		return 0, nil
+	}
+	if err != nil {
+		return 0, fmt.Errorf("run branch owner lookup: %w", err)
+	}
+	return other, nil
 }
 
 // leftoverCheckout is what leftoverWorktree saw at the phase's worktree path.

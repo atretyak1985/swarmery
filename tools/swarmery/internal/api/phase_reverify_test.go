@@ -101,6 +101,62 @@ func TestPhaseReverify_Accepted_202(t *testing.T) {
 	}
 }
 
+// TestPhaseReverify_ReKeyedRow_202 (D4/D6): a row whose carried run_branch names a
+// previous phase id — an archived plan or a renamed doc — is offered (canReverify)
+// and admitted, and the verifier grades the carried branch for the current row.
+func TestPhaseReverify_ReKeyedRow_202(t *testing.T) {
+	srv, db, taskID, _ := epicFixture(t)
+	p1, _ := fixturePhaseIDs(t, db, taskID)
+	makeReverifiable(t, db, p1)
+	carried := runcore.PhaseBranch(p1 + 40000)
+	if _, err := db.Exec(`UPDATE epic_phases SET run_branch=? WHERE id=?`, carried, p1); err != nil {
+		t.Fatal(err)
+	}
+	svc, v := attachReverify(t, db)
+
+	resp, err := http.Get(srv.URL + "/api/epics?projectId=1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var epics []epicDTO
+	err = json.NewDecoder(resp.Body).Decode(&epics)
+	resp.Body.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	offered := false
+	for _, e := range epics {
+		for _, p := range e.Phases {
+			if p.ID == p1 {
+				offered = p.CanReverify
+			}
+		}
+	}
+	if !offered {
+		t.Error("canReverify = false for a re-keyed row, want true")
+	}
+
+	resp = postPhase(t, phaseReverifyURL(srv, taskID, p1))
+	if resp.StatusCode != http.StatusAccepted {
+		t.Fatalf("status = %d, want 202", resp.StatusCode)
+	}
+	select {
+	case req := <-v.got:
+		if req.PhaseID != p1 || req.Branch != carried || req.StartPoint != "start-sha" {
+			t.Errorf("request = %+v, want phase %d on the carried branch %s from start-sha", req, p1, carried)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("the verifier was never called")
+	}
+	deadline := time.Now().Add(5 * time.Second)
+	for svc.InFlight(p1) {
+		if time.Now().After(deadline) {
+			t.Fatal("run slot still held after the re-verification finished")
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+}
+
 func TestPhaseReverify_PhaseOfAnotherTask_404(t *testing.T) {
 	srv, db, taskID, _ := epicFixture(t)
 	p1, _ := fixturePhaseIDs(t, db, taskID)
@@ -133,6 +189,10 @@ func TestPhaseReverify_CodedRefusals(t *testing.T) {
 		{"criteria open", `UPDATE epic_phases SET checkboxes_done=0 WHERE id=?`, phaserun.ReverifyCodeCriteriaOpen, http.StatusUnprocessableEntity},
 		{"already passed", `UPDATE epic_phases SET verify_verdict='pass' WHERE id=?`, phaserun.ReverifyCodeAlreadyPassed, http.StatusConflict},
 		{"already running", `UPDATE epic_phases SET run_state='running' WHERE id=?`, phaserun.ReverifyCodeAlreadyRunning, http.StatusConflict},
+		{"foreign run branch", `UPDATE epic_phases SET run_branch='feat/foo' WHERE id=?`, phaserun.ReverifyCodeNoRunBranch, http.StatusUnprocessableEntity},
+		// The fixture's phase 2 never ran (NULL run_branch): hand it phase 1's branch.
+		{"run branch claimed by another row", `UPDATE epic_phases SET run_branch=(SELECT o.run_branch FROM epic_phases AS o WHERE o.id=?) WHERE run_branch IS NULL`,
+			phaserun.ReverifyCodeBranchBusy, http.StatusConflict},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
