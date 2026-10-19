@@ -295,6 +295,10 @@ func TestSwarmValidation(t *testing.T) {
 		{SessionID: swA, Kind: KindSessionSend, At: at, Payload: json.RawMessage(`{"to":"b","text":"x","commandId":true}`)},
 		{SessionID: swA, Kind: KindSessionSend, At: at, Payload: json.RawMessage(`{"to":"b","text":"x","isDelivered":"yes"}`)},
 		{SessionID: swA, Kind: KindSessionReceive, At: at, Payload: json.RawMessage(`{"originKind":"peer"}`)},
+		{SessionID: swA, Kind: KindSessionReceive, At: at, Payload: json.RawMessage(`{"text":"x","fromPid":0}`)},
+		{SessionID: swA, Kind: KindSessionReceive, At: at, Payload: json.RawMessage(`{"text":"x","fromPid":-4}`)},
+		{SessionID: swA, Kind: KindSessionReceive, At: at, Payload: json.RawMessage(`{"text":"x","fromPid":"41881"}`)},
+		{SessionID: swA, Kind: KindSessionReceive, At: at, Payload: json.RawMessage(`{"text":"x","fromPid":1.5}`)},
 		{SessionID: swA, Kind: KindClaim, At: at, Payload: json.RawMessage(`{"path":"rel/file.go"}`)},
 		{SessionID: swA, Kind: KindClaim, At: at, Payload: json.RawMessage(`{}`)},
 		{SessionID: swA, Kind: KindRelease, At: at, Payload: json.RawMessage(`{}`)},
@@ -539,5 +543,195 @@ func TestClipBody(t *testing.T) {
 	s, cut = clipBody(strings.Repeat("ж", MaxMessageBody+1))
 	if !cut || len([]rune(s)) != MaxMessageBody {
 		t.Errorf("over the limit: cut=%t runes=%d", cut, len([]rune(s)))
+	}
+}
+
+// envelope wraps body the way the engine (Claude Code 2.1.303) hands a peer's
+// message to the receiver, byte for byte as the phase-6 live check stored it.
+func envelope(pid int, name, mode, body string) string {
+	return fmt.Sprintf("<cross-session-message from=\"uds:/tmp/cc-socks/%d.sock\" from-name=%q from-mode=%q>\n%s\n</cross-session-message>",
+		pid, name, mode, body)
+}
+
+func TestUnwrapEnvelope(t *testing.T) {
+	for name, tc := range map[string]struct {
+		text      string
+		truncated bool
+		body      string
+		from      string
+		ok        bool
+	}{
+		"live shape": {text: envelope(41881, "proj-10", "bypass", "ping-from-A"), body: "ping-from-A",
+			from: "uds:/tmp/cc-socks/41881.sock", ok: true},
+		"attributes reordered, extra ones, single quotes": {
+			text: "<cross-session-message from-mode='prompting' x-new=\"1\" from-name=\"proj-a3\"  from='uds:/tmp/cc-socks/98092.sock'>hi</cross-session-message>",
+			body: "hi", from: "uds:/tmp/cc-socks/98092.sock", ok: true},
+		"whitespace around the body and the tags": {
+			text: "  \r\n<cross-session-message from=\"uds:/s/7.sock\" >\r\n\t multi\nline \r\n</cross-session-message >\n",
+			body: "multi\nline", from: "uds:/s/7.sock", ok: true},
+		"no attributes": {text: "<cross-session-message>x</cross-session-message>", body: "x", ok: true},
+		"plain text":    {text: "  please rebase\n", body: "  please rebase\n"},
+		"text before the envelope": {text: "fwd: " + envelope(1, "n", "m", "x"),
+			body: "fwd: " + envelope(1, "n", "m", "x")},
+		"another tag": {text: "<cross-session-messages from=\"a\">x</cross-session-messages>",
+			body: "<cross-session-messages from=\"a\">x</cross-session-messages>"},
+		"no closing tag": {text: "<cross-session-message from=\"a\">x", body: "<cross-session-message from=\"a\">x"},
+		"no closing tag, truncated": {text: "<cross-session-message from=\"uds:/s/9.sock\">\nlong bo",
+			truncated: true, body: "long bo", from: "uds:/s/9.sock", ok: true},
+	} {
+		body, from, ok := unwrapEnvelope(tc.text, tc.truncated)
+		if body != tc.body || from != tc.from || ok != tc.ok {
+			t.Errorf("%s: unwrapEnvelope = (%q, %q, %t), want (%q, %q, %t)", name, body, from, ok, tc.body, tc.from, tc.ok)
+		}
+	}
+	for from, want := range map[string]int64{
+		"uds:/tmp/cc-socks/41881.sock": 41881,
+		"uds:/tmp/cc-socks/abc.sock":   0,
+		"tcp://127.0.0.1:41881":        0,
+		"uds:/tmp/cc-socks/0.sock":     0,
+		"":                             0,
+	} {
+		if got := socketPID(from); got != want {
+			t.Errorf("socketPID(%q) = %d, want %d", from, got, want)
+		}
+	}
+}
+
+// The phase-6 live check: the receive arrives wrapped in the engine's
+// envelope, the send carries the bare text. They pair in either ingest order,
+// by uuid and by peer name, and the receive is stored without the envelope.
+func TestSwarmEnvelopedReceiveCorrelates(t *testing.T) {
+	for _, tc := range []struct {
+		name, to     string
+		receiveFirst bool
+	}{
+		{"by uuid, send first", swB, false},
+		{"by uuid, receive first", swB, true},
+		{"by name, send first", "proj-68", false},
+		{"by name, receive first", "proj-68", true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			db := swarmEnv(t)
+			send := sendEv(swA, tc.to, "ping-from-A", "2026-10-19T06:55:19.639Z", "")
+			recv := recvEv(swB, envelope(41881, "proj-10", "bypass", "ping-from-A"), "2026-10-19T06:55:19.488Z")
+			first, second := send, recv
+			if tc.receiveFirst {
+				first, second = recv, send
+			}
+			mustIngest(t, db, nil, []Event{first})
+			mustIngest(t, db, nil, []Event{second})
+			var s, r msgRow
+			for _, m := range messages(t, db) {
+				if m.kind == MsgSend {
+					s = m
+				} else {
+					r = m
+				}
+			}
+			if r.body != "ping-from-A" {
+				t.Errorf("receive body = %q, want the envelope stripped", r.body)
+			}
+			if s.from.String != swA || s.to.String != swB || s.addr.String != tc.to || s.delivered.Int64 != 1 || s.matchedID.Int64 != r.id {
+				t.Errorf("send row = %+v", s)
+			}
+			if r.from.String != swA || r.to.String != swB || r.matchedID.Int64 != s.id {
+				t.Errorf("receive row = %+v", r)
+			}
+		})
+	}
+}
+
+// A receive stored with its envelope (before receives were unwrapped) still
+// pairs with a send arriving later.
+func TestSwarmLegacyEnvelopedRowPairs(t *testing.T) {
+	db := swarmEnv(t)
+	at := "2026-10-19T06:55:19.488Z"
+	if _, err := db.Exec(`INSERT INTO link_messages (kind, to_session, body, truncated, origin, at) VALUES ('receive', ?, ?, 0, 'peer', ?)`,
+		swB, envelope(41881, "proj-10", "bypass", "ping-from-A"), at); err != nil {
+		t.Fatal(err)
+	}
+	mustIngest(t, db, nil, []Event{sendEv(swA, "proj-68", "ping-from-A", "2026-10-19T06:55:19.639Z", "")})
+	ms := messages(t, db)
+	if ms[0].from.String != swA || ms[0].matchedID.Int64 != ms[1].id || ms[1].to.String != swB {
+		t.Errorf("rows = %+v", ms)
+	}
+}
+
+func setPID(t *testing.T, db *sql.DB, uuid string, pid int64) {
+	t.Helper()
+	if _, err := db.Exec(`UPDATE sessions SET pid = ?, pid_source = 'hook' WHERE session_uuid = ?`, pid, uuid); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// The envelope names the sending process: a receive no send matches still
+// learns its sender from a session running as that pid, and a send from that
+// session arriving later pairs with it — one from another session does not.
+func TestSwarmReceiveSenderByPID(t *testing.T) {
+	db := swarmEnv(t)
+	addSessionD(t, db)
+	setPID(t, db, swA, 41881)
+	setPID(t, db, swD, 50000)
+	mustIngest(t, db, nil, []Event{recvEv(swB, envelope(41881, "proj-10", "bypass", "hi"), "2026-10-19T07:00:00Z")})
+	r := messages(t, db)[0]
+	if r.from.String != swA || r.matchedID.Valid {
+		t.Fatalf("receive = %+v, want from_session A unpaired", r)
+	}
+	mustIngest(t, db, nil, []Event{sendEv(swD, "proj-68", "hi", "2026-10-19T07:00:01Z", "")})
+	if ms := messages(t, db); ms[0].matchedID.Valid || ms[0].from.String != swA || ms[1].matchedID.Valid {
+		t.Fatalf("D's send paired with A's receive: %+v", ms)
+	}
+	mustIngest(t, db, nil, []Event{sendEv(swA, "proj-68", "hi", "2026-10-19T07:00:02Z", "")})
+	ms := messages(t, db)
+	if ms[0].from.String != swA || ms[0].matchedID.Int64 != ms[2].id || ms[2].to.String != swB || ms[2].delivered.Int64 != 1 {
+		t.Errorf("A's send should pair: %+v", ms)
+	}
+
+	// A dead process's session, or an unknown pid, names no sender.
+	if _, err := db.Exec(`UPDATE sessions SET proc_state = 'dead' WHERE session_uuid = ?`, swD); err != nil {
+		t.Fatal(err)
+	}
+	mustIngest(t, db, nil, []Event{
+		recvEv(swB, envelope(50000, "proj-d", "bypass", "x"), "2026-10-19T07:10:00Z"),
+		recvEv(swB, envelope(77777, "proj-z", "bypass", "y"), "2026-10-19T07:10:01Z"),
+	})
+	ms = messages(t, db)
+	for _, m := range ms[len(ms)-2:] {
+		if m.from.Valid {
+			t.Errorf("receive %q from_session = %v, want NULL", m.body, m.from)
+		}
+	}
+}
+
+// Two sends of the same text could be the receive's: the one from the
+// process the envelope names wins over the more recent one, and a send from a
+// session known to run as another process is never taken. The mod's fromPid
+// (the engine's verifiedPeerPid) wins over the envelope's socket.
+func TestSwarmReceivePrefersSenderPID(t *testing.T) {
+	db := swarmEnv(t)
+	addSessionD(t, db)
+	setPID(t, db, swA, 41881)
+	setPID(t, db, swD, 50000)
+	mustIngest(t, db, nil, []Event{
+		sendEv(swA, "proj-68", "same", "2026-10-19T07:00:00Z", ""),
+		sendEv(swD, "proj-68", "same", "2026-10-19T07:00:01Z", ""),
+	})
+	mustIngest(t, db, nil, []Event{recvEv(swB, envelope(41881, "proj-10", "bypass", "same"), "2026-10-19T07:00:02Z")})
+	ms := messages(t, db)
+	if ms[2].from.String != swA || ms[0].matchedID.Int64 != ms[2].id || ms[1].matchedID.Valid {
+		t.Errorf("want A's older send paired: %+v", ms)
+	}
+	// Only D's send is left: a receive from pid 41881 does not take it.
+	mustIngest(t, db, nil, []Event{recvEv(swB, envelope(41881, "proj-10", "bypass", "same"), "2026-10-19T07:00:03Z")})
+	ms = messages(t, db)
+	if ms[1].matchedID.Valid || ms[3].from.String != swA || ms[3].matchedID.Valid {
+		t.Errorf("D's send taken by a receive from A's process: %+v", ms)
+	}
+	// fromPid 50000 overrides the envelope's 41881: D's send pairs.
+	p := fmt.Sprintf(`{"text":%q,"originKind":"peer","fromPid":50000}`, envelope(41881, "proj-10", "bypass", "same"))
+	mustIngest(t, db, nil, []Event{{SessionID: swB, Kind: KindSessionReceive, At: "2026-10-19T07:00:04Z", Payload: json.RawMessage(p)}})
+	ms = messages(t, db)
+	if ms[4].from.String != swD || ms[1].matchedID.Int64 != ms[4].id || ms[4].body != "same" {
+		t.Errorf("fromPid should name D: %+v", ms)
 	}
 }

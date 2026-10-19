@@ -231,6 +231,35 @@ func TestCommandsMessageSendEventFolds(t *testing.T) {
 	}
 }
 
+// The phase-6 live check's dashboard relay: the recipient's receive arrives in
+// the engine's cross-session envelope and still pairs with the dashboard row.
+func TestCommandsMessageEnvelopedReceivePairs(t *testing.T) {
+	e := newMsgEnv(t)
+	e.poll(t)
+	_, msgID, err := e.c.EnqueueMessage(context.Background(), e.sid, msgRecipient, "hello from the dashboard via A")
+	if err != nil {
+		t.Fatal(err)
+	}
+	at := e.clk.Now().Add(time.Second).Format(time.RFC3339Nano)
+	recv := Event{SessionID: msgRecipient, Kind: KindSessionReceive, At: at, Payload: json.RawMessage(fmt.Sprintf(`{"text":%q,"originKind":"peer"}`,
+		envelope(98092, "proj-a3", "prompting", "hello from the dashboard via A")))}
+	mustIngest(t, e.db, nil, []Event{recv})
+	var (
+		matched, recvMatched sql.NullInt64
+		from                 sql.NullString
+		body                 string
+	)
+	if err := e.db.QueryRow(`SELECT matched_id FROM link_messages WHERE id = ?`, msgID).Scan(&matched); err != nil {
+		t.Fatal(err)
+	}
+	if err := e.db.QueryRow(`SELECT from_session, matched_id, body FROM link_messages WHERE kind = 'receive'`).Scan(&from, &recvMatched, &body); err != nil {
+		t.Fatal(err)
+	}
+	if !matched.Valid || from.String != e.uuid || recvMatched.Int64 != msgID || body != "hello from the dashboard via A" {
+		t.Errorf("dashboard matched=%v; receive from=%v matched=%v body=%q", matched, from, recvMatched, body)
+	}
+}
+
 // pluginSend is the session.send event the swarmery-link mod queues for a
 // dashboard message, byte for byte as plugins/swarmery-link/hooks/swarm.test.ts
 // expects it (sendPayload); commandID is spliced in raw, so a test can send
