@@ -40,7 +40,9 @@
 # (never `swarmery backup`: it migrates the source database).
 #
 # Output (key=value lines): health_samples, health_p50_ms, health_p95_ms,
-# health_max_ms, posts, post_timeouts, canceled (count of "link ingest: begin:
+# health_max_ms, posts, post_timeouts, post_p95_ms, events_accepted (events the
+# daemon stored — 0 means the link load never reached the database), canceled
+# (count of "link ingest: begin:
 # context canceled" in the dev log), waitCount and waitDurationMs (final
 # /api/health db pool counters), verdict.
 #
@@ -106,7 +108,7 @@ if curl -s -o /dev/null --max-time 2 "$base/api/health"; then
 fi
 
 [ -n "$scratch" ] || scratch="$(cd "$(dirname "$db")" && pwd)/repro-link-stall-$port"
-mkdir -p "$scratch/home" "$scratch/wsroot" "$scratch/projects" "$scratch/cwd" "$scratch/dumps" || die2 "cannot create $scratch"
+mkdir -p "$scratch/home" "$scratch/wsroot" "$scratch/projects" "$scratch/dumps" || die2 "cannot create $scratch"
 log="$scratch/dev.log"
 health_tsv="$scratch/health.tsv"
 posts_tsv="$scratch/posts.tsv"
@@ -180,7 +182,11 @@ end=$(($(date +%s) + seconds))
 # One link worker: a fixed session per worker, batches of turn.start /
 # turn.complete with distinct timestamps, at the mod's flush cadence or faster.
 link_worker() {
-	local w=$1 sid seq=0 body i at code kind
+	local w=$1 sid seq=0 body i at resp meta accepted kind
+	# The cwd must NOT sit under /tmp or /private/tmp: the daemon's default
+	# exclude list drops such events before link.Ingest, so they would never
+	# touch the database. It need not exist.
+	local cwd="/repro-link-stall/w$w"
 	sid=$(uuidgen | tr '[:upper:]' '[:lower:]')
 	while [ "$(date +%s)" -lt "$end" ]; do
 		body='{"events":['
@@ -189,13 +195,15 @@ link_worker() {
 			at="$(date -u +%Y-%m-%dT%H:%M:%S).$(printf '%03d' $((seq % 1000)))Z"
 			[ "$i" -gt 1 ] && body+=','
 			if [ $((i % 2)) -eq 1 ]; then kind=turn.start; else kind=turn.complete; fi
-			body+="{\"sessionId\":\"$sid\",\"cwd\":\"$scratch/cwd\",\"kind\":\"$kind\",\"at\":\"$at\"}"
+			body+="{\"sessionId\":\"$sid\",\"cwd\":\"$cwd\",\"kind\":\"$kind\",\"at\":\"$at\"}"
 		done
 		body+=']}'
-		code=$(curl -s -o /dev/null -w '%{http_code} %{time_total}' --max-time 5 \
+		resp=$(curl -s -w '\n%{http_code} %{time_total}' --max-time 5 \
 			-H "authorization: Bearer $token" -H 'content-type: application/json' \
 			--data-binary "$body" "$base/api/link/events")
-		echo "$(date +%s) w$w $code" >>"$posts_tsv"
+		meta=${resp##*$'\n'}
+		accepted=$(printf '%s' "${resp%$'\n'*}" | sed -n 's/.*"accepted":\([0-9]*\).*/\1/p')
+		echo "$(date +%s) w$w $meta ${accepted:-0}" >>"$posts_tsv"
 		sleep 1
 	done
 }
@@ -258,6 +266,8 @@ p95=$(pct 95)
 pmax=$(pct 100)
 posts=$(wc -l <"$posts_tsv" | tr -d ' ')
 post_timeouts=$(awk '$3=="000"' "$posts_tsv" | wc -l | tr -d ' ')
+post_p95=$(awk '{printf "%d\n", $4*1000}' "$posts_tsv" | sort -n | awk '{v[NR]=$1} END{if(NR==0){print 0;exit} i=int((95*NR+99)/100); print v[i]}')
+events_accepted=$(awk '{s+=$5} END{print s+0}' "$posts_tsv")
 canceled=$(grep -c 'link ingest: begin: context canceled' "$log")
 wait_count=$(printf '%s' "$last_health" | sed -n 's/.*"waitCount":\([0-9]*\).*/\1/p')
 wait_ms=$(printf '%s' "$last_health" | sed -n 's/.*"waitDurationMs":\([0-9]*\).*/\1/p')
@@ -272,6 +282,8 @@ echo "health_p95_ms=$p95"
 echo "health_max_ms=$pmax"
 echo "posts=$posts"
 echo "post_timeouts=$post_timeouts"
+echo "post_p95_ms=$post_p95"
+echo "events_accepted=$events_accepted"
 echo "canceled=$canceled"
 echo "waitCount=${wait_count:-unknown}"
 echo "waitDurationMs=${wait_ms:-unknown}"
