@@ -211,9 +211,22 @@ claude plugin update guard-pack@swarmery --scope user
 проєкту, що належить якомусь іншому клону (помічено 2026-10-19). Нова версія завантажиться
 в наступній сесії.
 
-Якщо `claude plugin marketplace update swarmery` падає з
-`Failed to clone … swarmery..clone/.git`, маркетплейс не оновився. Обхідний шлях чекає
-на підтвердження оператора й поки не описаний.
+Якщо `claude plugin marketplace update swarmery` не спрацював, маркетплейс не оновився.
+Команда наново клонує весь репозиторій у
+`~/.claude/plugins/marketplaces/swarmery..clone` і може впасти з
+`Failed to clone … swarmery..clone/.git`, з `Could not resolve host: github.com`
+або зависнути. Код виходу при цьому буває 0, тож дивіться на повідомлення, а не на код.
+Наявний клон — звичайний git-репозиторій, тож оновіть його самим git:
+
+```bash
+git -C ~/.claude/plugins/marketplaces/swarmery fetch --depth 1 origin main
+git -C ~/.claude/plugins/marketplaces/swarmery reset --hard origin/main
+claude plugin update swarmery-link@swarmery --scope user
+claude plugin update guard-pack@swarmery --scope user
+```
+
+Ваших локальних змін у клоні немає, тож `reset` нічого не втратить. Якщо завислий
+повторний клон досі працює (`pgrep -fl 'swarmery\.\.clone'`), спершу зупиніть його.
 
 ## Вимкнення
 
