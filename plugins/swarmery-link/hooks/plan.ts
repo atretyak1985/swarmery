@@ -1,11 +1,11 @@
 // The plan band (option `planBand`): the session's running plan phase above
-// the prompt, `/plan`, and the requests behind them. Every function here that
+// the prompt, `/phase`, and the requests behind them. Every function here that
 // takes `$` is a top-level declaration, as the engine requires; register.ts
 // wires them to its hooks and nothing here registers a hook.
 //
 // A render never fetches: the band and the pane draw from `planner.view`,
 // which only the refreshes (session.start, each main-loop turn.complete,
-// /plan, a button's request, the 60 s timer) write. A write that changed what
+// /phase, a button's request, the 60 s timer) write. A write that changed what
 // is drawn redraws with `$.ui.invalidate('ui.render')`.
 
 import type { CommandRunResult, EngineInterface, RenderElement, RenderInput, Timer, UiPressArgument } from 'claude-code'
@@ -149,12 +149,12 @@ export const stopPlanTimer = (planner: Planner): void => {
   planner.timer = undefined
 }
 
-/** Declares `/plan [task-id]` for the session. */
+/** Declares `/phase [task-id]` for the session. */
 export async function registerPlanCommand($: EngineInterface): Promise<void> {
   try {
     await $.command.register({
-      name: 'plan',
-      description: 'Show this session\'s swarmery plan phase and its checklist; /plan <task-id> picks the plan',
+      name: 'phase',
+      description: 'Show this session\'s swarmery plan phase and its checklist; /phase <task-id> picks the plan',
       argumentHint: '[task-id]',
     })
   } catch {
@@ -171,13 +171,13 @@ function toast($: EngineInterface, text: string): void {
 }
 
 /**
- * `/plan [task-id]`, answered without a model turn: with an argument the
+ * `/phase [task-id]`, answered without a model turn: with an argument the
  * daemon selects that plan for the session first; then the cache is read
  * again and the checklist opens in a pane, or is the command's output where
  * no pane is placed.
  */
 export async function runPlanCommand($: EngineInterface, planner: Planner, access: PlanAccess, args: string | undefined): Promise<CommandRunResult> {
-  if (access.token === undefined) return { text: 'swarmery-link: no daemon token (~/.swarmery/link-token); /plan needs the swarmery daemon' }
+  if (access.token === undefined) return { text: 'swarmery-link: no daemon token (~/.swarmery/link-token); /phase needs the swarmery daemon' }
   const taskId = (args ?? '').trim().split(/\s+/)[0] ?? ''
   if (taskId !== '') {
     const reply = await postPlan($, planner, access, 'select', { session: access.sessionId, cwd: access.cwd, taskId })
@@ -310,7 +310,7 @@ export function drawBand($: EngineInterface, planner: Planner, access: PlanAcces
   })
 }
 
-/** The Plan pane /plan opens: the whole checklist, from the cache alone. */
+/** The Plan pane /phase opens: the whole checklist, from the cache alone. */
 export function drawPane($: EngineInterface, planner: Planner, e: RenderInput<'Pane'>): RenderElement {
   const { Box, Text, Link } = $.ui.resolve(e)
   const view = planner.view

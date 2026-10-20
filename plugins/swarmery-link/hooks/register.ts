@@ -37,7 +37,7 @@
 // classic events), and the edit is claimed after the call instead of ahead of it.
 //
 // With `planBand` on, the session's running plan phase is drawn in a band
-// above the prompt from a cache the daemon fills (GET /api/link/plan), `/plan`
+// above the prompt from a cache the daemon fills (GET /api/link/plan), `/phase`
 // shows its checklist, an interview-style AskUserQuestion gets a card above
 // the dialog, and a main-loop turn that edited files while a phase runs is
 // classified once; an `off-phase` turn gets a line beneath its answer. With
@@ -1179,8 +1179,8 @@ export const register: Register = (on, options) => {
     return drawInterview($, e, interviews, await next(e))
   })
 
-  // `/plan [task-id]`: answered here, so no model turn runs.
-  on('command.run', { command: 'plan' }, async ($, e) => runPlanCommand($, planner, link, e.args)).catch(() => ({
-    text: 'swarmery-link: /plan failed; the band shows the cached phase',
+  // `/phase [task-id]`: answered here, so no model turn runs.
+  on('command.run', { command: 'phase' }, async ($, e) => runPlanCommand($, planner, link, e.args)).catch(() => ({
+    text: 'swarmery-link: /phase failed; the band shows the cached phase',
   }))
 }

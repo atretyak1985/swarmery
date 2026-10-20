@@ -33,7 +33,7 @@ file another live session is editing, and the dashboard can message a session.
 See [Swarm](#swarm).
 
 Version 0.6 adds an opt-in **plan band** (`planBand`, off by default): the
-session's running plan phase above the prompt, `/plan` for its checklist, a card
+session's running plan phase above the prompt, `/phase` for its checklist, a card
 for interview-style questions, and a line beneath an answer that drifted off the
 phase. See [Plan band](#plan-band).
 
@@ -104,7 +104,7 @@ The wire format is the daemon's link protocol:
 As `claude plugin validate --strict --json plugins/swarmery-link` reports it:
 
 ```
-./register.ts hooks: session.start, turn.start, tool.call, tool.check, tool.call{tool=AskUserQuestion}, classic.SessionStart, classic.UserPromptSubmit, classic.PostToolUse, classic.PostToolUseFailure, session.measure, turn.complete, session.end, session.send, session.receive, ui.render{component=AbovePrompt}, ui.render{component=Pane, requestId=?}, ui.render{component=AskUserQuestion}, command.run{command=plan}
+./register.ts hooks: session.start, turn.start, tool.call, tool.check, tool.call{tool=AskUserQuestion}, classic.SessionStart, classic.UserPromptSubmit, classic.PostToolUse, classic.PostToolUseFailure, session.measure, turn.complete, session.end, session.send, session.receive, ui.render{component=AbovePrompt}, ui.render{component=Pane, requestId=?}, ui.render{component=AskUserQuestion}, command.run{command=phase}
 ./register.ts gating hook with .catch: tool.call
 ./register.ts gating hook with .catch: tool.check
 ./register.ts gating hook with .catch: tool.call{tool=AskUserQuestion}
@@ -114,7 +114,7 @@ As `claude plugin validate --strict --json plugins/swarmery-link` reports it:
 ./register.ts gating hook with .catch: classic.PostToolUseFailure
 ./register.ts gating hook with .catch: session.send
 ./register.ts gating hook with .catch: session.receive
-./register.ts gating hook with .catch: command.run{command=plan}
+./register.ts gating hook with .catch: command.run{command=phase}
 ./register.ts calls: $.clock.after (via arm, beginForecast, bounded, pause, send, startControl, within), $.clock.every (via startPlanTimer), $.clock.now (via askSwarmery, claimFile, heldElsewhere, newRun, poll, pollDecision, push), $.command.register (via registerPlanCommand), $.env.get (via readToken), $.fs.read (via readToken), $.http.fetch (via cancelRequest, fetchCommand, planFetch, post, request, sendAck), $.model.classify (via checkDrift), $.model.complete (via runForecast), $.prompt.submit (via submitPrompt), $.session.cwd, $.session.id, $.session.send (via sendToSession), $.session.usage, $.store.delete (via releaseClaims), $.store.get (via readOthers), $.store.keys (via readOthers), $.store.set (via claimFile), $.turn.abort (via abortTurn), $.ui.ask (via pressNext, pressTick), $.ui.copy (via pressOpen), $.ui.invalidate (via setView), $.ui.log (via log), $.ui.notice (via showNotice), $.ui.open (via runPlanCommand), $.ui.resolve (via drawBand, drawInterview, drawPane), $.ui.status (via showStatu… [+26 chars]
 ./register.ts env writes: nothing
 ./register.ts env reads: HOME
@@ -125,7 +125,7 @@ gating hooks because of where they sit, not what they do: each always calls
 `next(e)` with the event unchanged, and its `.catch` does the same (replay-safe:
 a send is never made twice). With `forecast` or `planBand` on `tool.call`
 waits for the call's result to note how a main-loop call ended, and returns
-that result unchanged. `command.run{command=plan}` answers `/plan` itself; its
+that result unchanged. `command.run{command=phase}` answers `/phase` itself; its
 `.catch` answers with one line if it fails.
 
 `tool.check` is registered with `approvals` or `claimConflicts` on (one hook
@@ -174,7 +174,7 @@ registered and none of those calls is made.
 | `approvals` | `false` | routes each permission ask to the Swarmery approvals queue first, ahead of the dialog or auto mode's classifier; the shim/dialog takes over if the daemon is down or does not decide in time. An `AskUserQuestion` can be answered from the dashboard ([Approvals](#approvals)) |
 | `swarm` | `false` | swarm coordination: message events, the file-claims registry, the conflict line, and the dashboard's `message` command with `control` on ([Swarm](#swarm)) |
 | `claimConflicts` | `off` | with `swarm` on, a write to a file another live session holds: `off` only the conflict line; `ask` the native dialog asks, naming the other session, in `default`/`acceptEdits`/`plan` mode, and the write is refused in `auto`/`dontAsk`/`bypassPermissions`, where no person would see the ask; `deny` refused in every mode. Bash is never checked ([Holding a conflicting write](#holding-a-conflicting-write)) |
-| `planBand` | `false` | the plan band, `/plan`, the interview card and the drift line ([Plan band](#plan-band)) |
+| `planBand` | `false` | the plan band, `/phase`, the interview card and the drift line ([Plan band](#plan-band)) |
 
 Set them in the plugin's config menu (`/plugin` → swarmery-link → configure),
 which writes your user settings, or under `pluginConfigs` in your **user**
@@ -591,20 +591,24 @@ Phase 2 — Line-item CRUD · 1/4
   the session has no plan.
 
 **The cache.** `GET /api/link/plan?session=<id>&cwd=<cwd>` fills it at
-`session.start`, after each main-loop `turn.complete`, on `/plan`, after a
+`session.start`, after each main-loop `turn.complete`, on `/phase`, after a
 button's request, and every 60 s. `200` is the plan; `204`, no token, a daemon
 that does not answer in 5 s or any other status empties it, and the band draws
 nothing. After a `/clear` the plan is read again under the new session id.
 
-### `/plan [task-id]`
+### `/phase [task-id]`
 
-Runs without a model turn. `/plan` reads the plan again and opens the **Plan**
+Runs without a model turn. `/phase` reads the plan again and opens the **Plan**
 pane with the whole checklist (every criterion `☐`/`☑`, its `[LAND]`/`[MANUAL]`
 class, the phase status, the next phase, a link to the dashboard). Where no pane
 is placed (a narrow terminal), the checklist is the command's output instead.
-`/plan <task-id>` first has the daemon bind that plan to the session
+`/phase <task-id>` first has the daemon bind that plan to the session
 (`POST /api/link/plan/select`). With no plan it answers
-`no active plan for this session (pick one with /plan <task-id>)`.
+`no active plan for this session (pick one with /phase <task-id>)`.
+
+The command was `/plan` until 0.7.2. Claude Code ships its own `/plan` since
+2.1.304, and `$.command.register` refuses a name Claude Code ships, so `/plan`
+now reaches the built-in and this command is `/phase`.
 
 ### Interview questions
 
@@ -624,7 +628,7 @@ answer.
 
 At the end of a main-loop turn that edited files (`Edit`, `Write`, `MultiEdit`,
 `NotebookEdit`; a subagent's edits are left out) while the session's plan phase
-is `In progress`, or was picked in the terminal with `/plan <task-id>`, one
+is `In progress`, or was picked in the terminal with `/phase <task-id>`, one
 `$.model.classify` labels the turn `on-phase`, `adjacent` or
 `off-phase`. Its text is the phase title and its open criteria, the files the
 turn edited and the last 2048 characters of the answer. On `off-phase` the daemon
@@ -650,7 +654,7 @@ edits, never on a subagent's turn, never twice for one turn. It is bounded by a
 The band is the terminal's: `AbovePrompt` is raised on the terminal (and the
 desktop), never under `-p`, and the VS Code panel was not observed live (the test
 kit validates the tree on `vscode` and `mobile` too). Where there is no band,
-`/plan` and the drift line still work: `/plan` is a command's output or a pane,
+`/phase` and the drift line still work: `/phase` is a command's output or a pane,
 and the drift line is part of the turn's answer.
 
 ## Degradation
@@ -686,7 +690,7 @@ npx -p typescript@5.6.3 tsc -p plugins/swarmery-link   # once .claude-plugin/typ
 handed only to top-level function declarations: its own, `hooks/approvals.ts`'s
 (the approvals channel's waits), `hooks/swarm.ts`'s (the registry's `$.store`
 calls and the message's `$.session.send`), and the plan band's in
-`hooks/plan.ts` (cache, requests, band, pane, `/plan`, the buttons),
+`hooks/plan.ts` (cache, requests, band, pane, `/phase`, the buttons),
 `hooks/drift.ts` (the classification) and `hooks/ask-render.ts` (the interview
 card). `hooks/lib/*` is pure (`lib/control.ts` holds the command channel's
 decisions: parsing a command, choosing the action, the executed-id set, the
@@ -700,7 +704,7 @@ checklist, the drift input and line; `lib/interview.ts` reads interview
 questions). Tests: `hooks/link.test.ts` (sensor), `hooks/control.test.ts`
 (command channel), `hooks/forecast.test.ts` (forecast),
 `hooks/approvals.test.ts` (approvals), `hooks/swarm.test.ts` (swarm),
-`hooks/plan.test.ts` (band and `/plan`), `hooks/drift.test.ts` (drift line)
+`hooks/plan.test.ts` (band and `/phase`), `hooks/drift.test.ts` (drift line)
 and `hooks/ask-render.test.ts` (interview card), all on the shared world in
 `hooks/testkit.ts`. `.claude-plugin/types/` is written by the engine and is
 not committed.
