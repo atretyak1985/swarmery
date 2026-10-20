@@ -87,7 +87,7 @@ G1). Проєкт у маєтку `accounts-pack` отримує `pluginConfigs`
 | `approvals` | `false` | Запит дозволу спершу йде в чергу погоджень Swarmery; на `AskUserQuestion` можна відповісти з дашборду. Shim хука `PermissionRequest` і нативний діалог перебирають справу на себе, щойно демон недоступний або не вирішує вчасно. |
 | `swarm` | `false` | Повідомлення між сесіями потрапляють у звіт, кожен файл, який сесія починає редагувати, заявляється в реєстрі, спільному для її сесій, а рядок під відповіддю позначає файл, який тримає інша жива сесія. З увімкненим `control` дашборд може написати сесії. |
 | `claimConflicts` | `off` | З увімкненим `swarm` визначає, що стається з `Edit`/`Write`/`MultiEdit`/`NotebookEdit` файлу, який тримає інша жива сесія. `off`: лише рядок під відповіддю. `ask`: нативний діалог питає, називаючи іншу сесію, у режимах `default`, `acceptEdits` і `plan`; у `auto`, `dontAsk` і `bypassPermissions`, де діалог не дійде до людини, запис відхиляється. `deny`: відхиляється в будь-якому режимі. Bash ніколи не перевіряється. Режим читається з `permission_mode` класичних подій хуків; доки жодна не надійшла, запис запитується. |
-| `planBand` | `false` | Смуга над промптом показує фазу плану сесії та її відкриті критерії, `/plan` відкриває чекліст, питання в стилі інтерв’ю малюються карткою, а рядок під відповіддю позначає хід із правками, що схоже виходить за межі поточної фази. |
+| `planBand` | `false` | Смуга над промптом показує фазу плану сесії та її відкриті критерії, `/phase` відкриває чекліст, питання в стилі інтерв’ю малюються карткою, а рядок під відповіддю позначає хід із правками, що схоже виходить за межі поточної фази. |
 | `forecast` | `false` | Один виклик haiku на кожен набраний хід передбачає, чого торкнеться хід; демон порівнює прогноз із тим, що хід зробив (лише шляхи й числа). |
 
 ### guard-pack
@@ -111,7 +111,7 @@ G1). Проєкт у маєтку `accounts-pack` отримує `pluginConfigs`
 
 | Плагін | Хуки | Виклики `$` | Читання env |
 |---|---|---|---|
-| `swarmery-link` | `session.start`, `turn.start`, `tool.call`, `tool.check`, `tool.call{tool=AskUserQuestion}`, `classic.SessionStart`, `classic.UserPromptSubmit`, `classic.PostToolUse`, `classic.PostToolUseFailure`, `session.measure`, `turn.complete`, `session.end`, `session.send`, `session.receive`, `ui.render{component=AbovePrompt}`, `ui.render{component=Pane, requestId=?}`, `ui.render{component=AskUserQuestion}`, `command.run{command=plan}` | `$.clock`, `$.command.register`, `$.env.get`, `$.fs.read`, `$.http.fetch`, `$.model.classify`, `$.model.complete`, `$.prompt.submit`, `$.session` (`cwd`, `id`, `send`, `usage`), `$.store`, `$.turn.abort`, `$.ui` | `HOME` |
+| `swarmery-link` | `session.start`, `turn.start`, `tool.call`, `tool.check`, `tool.call{tool=AskUserQuestion}`, `classic.SessionStart`, `classic.UserPromptSubmit`, `classic.PostToolUse`, `classic.PostToolUseFailure`, `session.measure`, `turn.complete`, `session.end`, `session.send`, `session.receive`, `ui.render{component=AbovePrompt}`, `ui.render{component=Pane, requestId=?}`, `ui.render{component=AskUserQuestion}`, `command.run{command=phase}` | `$.clock`, `$.command.register`, `$.env.get`, `$.fs.read`, `$.http.fetch`, `$.model.classify`, `$.model.complete`, `$.prompt.submit`, `$.session` (`cwd`, `id`, `send`, `usage`), `$.store`, `$.turn.abort`, `$.ui` | `HOME` |
 | `guard-pack` | `session.start`, `tool.call`, `session.append`, `classic.SessionStart`, `classic.UserPromptSubmit`, `classic.PostToolUse`, `classic.PostToolUseFailure`, `tool.check`, `agent.offer`, `tool.describe` | `$.env.get`, `$.fs.read`, `$.session.cwd`, `$.session.root`, `$.settings.read`, `$.ui.notice`, `$.ui.status` | `AGENT_PROJECT`, `AGENT_WORKSPACE_ROOT`, `HOME`, `TMPDIR` |
 
 Жоден не пише змінних середовища. Кожен блокувальний хук обох модів має `.catch`, який
@@ -187,7 +187,7 @@ dashboard»), погодження й далі доходять до дашбо�
   рушія, shim або нативний діалог. `guard-pack` демона не використовує.
 - **Headless (`claude -p`).** Спрацьовує кожен хук, який нічого не малює, тож сенсор,
   командний канал і погодження працюють і в headless-запуску. Нічого не малюється: немає
-  смуги плану й картки інтерв’ю. `/plan` і рядок про відхилення працюють.
+  смуги плану й картки інтерв’ю. `/phase` і рядок про відхилення працюють.
 - **Панель чату VS Code.** Наживо не перевірено. Тестовий набір валідує дерево смуги для
   поверхні `vscode`, але чи завантажує панель мод — це перевірка для оператора
   ([`mods-format.md`](../../tools/swarmery/docs/mods-format.md), M5).

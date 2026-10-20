@@ -1,6 +1,6 @@
 // The drift line (option `planBand`): once per main-loop turn that edited a
 // file while the session's plan phase is In progress (or was picked in the
-// terminal with /plan), one `$.model.classify` asks whether
+// terminal with /phase), one `$.model.classify` asks whether
 // the turn stayed on the phase. `off-phase` is reported to the daemon and
 // drawn as one line beneath the answer. register.ts calls it from its one
 // turn.complete hook; a subagent's turn never reaches it.

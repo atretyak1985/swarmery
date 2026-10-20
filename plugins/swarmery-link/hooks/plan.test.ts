@@ -17,9 +17,9 @@ const begin = async ($: Engine, on: On, w: World = {}): Promise<ReturnType<typeo
 const band = ($: Engine, surface: (typeof SURFACES)[number] = 'terminal', props: Partial<RenderPropsOf['AbovePrompt']> = {}) =>
   $.ui.mount({ plugin: PLUGIN, surface, component: 'AbovePrompt', props: { ...BAND_PROPS, ...props } })
 
-/** `/plan <args>` as the person types it at the prompt. */
+/** `/phase <args>` as the person types it at the prompt. */
 const slash = (args = ''): CommandRunInput => ({
-  command: 'plan',
+  command: 'phase',
   args,
   origin: { kind: 'composer' },
   presentation: { isFullscreen: false, columns: 80 },
@@ -28,7 +28,7 @@ const slash = (args = ''): CommandRunInput => ({
 const gets = (w: ReturnType<typeof world>) => w.planCalls.filter(c => c.method === 'GET')
 const posts = (w: ReturnType<typeof world>, action: string) => w.planCalls.filter(c => c.url.endsWith(`${PLAN}/${action}`))
 
-test('planBand off: no band, no /plan, no timer, no plan request', async ($, on) => {
+test('planBand off: no band, no /phase, no timer, no plan request', async ($, on) => {
   const w = world(on, { tokens: [TOKEN], plans: [{ view: PLAN_VIEW }] })
   await $.session.start(START)
   await $.turn.start({ text: 'go', turnId: 'turn-1' })
@@ -44,9 +44,9 @@ test('planBand off: no band, no /plan, no timer, no plan request', async ($, on)
   expect(w.logs.some(l => l.includes('planBand'))).toBe(false)
 })
 
-test('session.start registers /plan and reads the plan with the bearer token, session and cwd', ON, async ($, on) => {
+test('session.start registers /phase and reads the plan with the bearer token, session and cwd', ON, async ($, on) => {
   const w = await begin($, on)
-  expect(w.commands).toEqual([{ name: 'plan', argumentHint: '[task-id]' }])
+  expect(w.commands).toEqual([{ name: 'phase', argumentHint: '[task-id]' }])
   expect(gets(w)).toHaveLength(1)
   const [get] = gets(w)
   expect(get?.url).toBe(`http://127.0.0.1:7777${PLAN}?session=${SESSION_ID}&cwd=${encodeURIComponent(CWD)}`)
@@ -151,13 +151,13 @@ test('a main-loop turn.complete refreshes the cache and redraws the band', ON, a
   expect(await ui.find({ text: /· 2\/4$/ })).toBeDefined()
 })
 
-test('/plan runs no model turn and opens the Plan pane with the whole checklist', ON, async ($, on) => {
+test('/phase runs no model turn and opens the Plan pane with the whole checklist', ON, async ($, on) => {
   const w = await begin($, on)
   const result = await $.command.run(slash())
   expect(w.submits).toHaveLength(0)
   expect(result.text).toBe('Phase 2 — Line-item CRUD · 1/4 (checklist in the Plan pane)')
   expect(w.panes).toEqual([{ id: PLAN_PANE_ID, title: 'Plan' }])
-  // /plan read the plan again
+  // /phase read the plan again
   expect(gets(w)).toHaveLength(2)
   const pane = await $.ui.mount({
     plugin: PLUGIN,
@@ -179,7 +179,7 @@ test('/plan runs no model turn and opens the Plan pane with the whole checklist'
   expect((await pane.find({ type: 'Link' }))?.props.href).toBe(PLAN_VIEW.url)
 })
 
-test('/plan where no pane is placed: the checklist is the command\'s output', ON, async ($, on) => {
+test('/phase where no pane is placed: the checklist is the command\'s output', ON, async ($, on) => {
   await begin($, on, { isPanePlaced: false })
   const result = await $.command.run(slash())
   expect(result.text?.split('\n')).toEqual([
@@ -194,7 +194,7 @@ test('/plan where no pane is placed: the checklist is the command\'s output', ON
   ])
 })
 
-test('/plan without a token says what is missing and makes no request', ON, async ($, on) => {
+test('/phase without a token says what is missing and makes no request', ON, async ($, on) => {
   const w = world(on, { plans: [{ view: PLAN_VIEW }] })
   await $.session.start(START)
   const result = await $.command.run(slash())
@@ -203,7 +203,7 @@ test('/plan without a token says what is missing and makes no request', ON, asyn
   expect(w.commands).toHaveLength(1)
 })
 
-test('/plan with no plan says so in one line', ON, async ($, on) => {
+test('/phase with no plan says so in one line', ON, async ($, on) => {
   const w = await begin($, on, { plans: [204] })
   const result = await $.command.run(slash())
   expect(result.text).toBe(NO_PLAN_TEXT)
@@ -211,7 +211,7 @@ test('/plan with no plan says so in one line', ON, async ($, on) => {
   expect(w.submits).toHaveLength(0)
 })
 
-test('/plan <task-id> POSTs select, then shows the plan the daemon answered', ON, async ($, on) => {
+test('/phase <task-id> POSTs select, then shows the plan the daemon answered', ON, async ($, on) => {
   const w = await begin($, on, { plans: [204], planPosts: { select: [{ status: 200, body: PLAN_VIEW }] } })
   const result = await $.command.run(slash('2026-10-13-order-line-items'))
   expect(posts(w, 'select').map(c => c.body)).toEqual([{ session: SESSION_ID, cwd: CWD, taskId: '2026-10-13-order-line-items' }])
@@ -221,7 +221,7 @@ test('/plan <task-id> POSTs select, then shows the plan the daemon answered', ON
   expect(await ui.find({ text: /^Phase 2 — / })).toBeDefined()
 })
 
-test('/plan <task-id> that the daemon refuses shows its error', ON, async ($, on) => {
+test('/phase <task-id> that the daemon refuses shows its error', ON, async ($, on) => {
   await begin($, on, { plans: [204], planPosts: { select: [404] } })
   const result = await $.command.run(slash('nope'))
   expect(result.text).toBe('swarmery-link: could not select nope: refused (404)')

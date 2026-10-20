@@ -340,7 +340,7 @@ validates the same `AbovePrompt` tree under the `vscode` element table (and `des
 `mobile`), and `AbovePrompt` is a render site the types declare without a per-surface
 exception. Whether the VS Code chat panel *loads a `--plugin-dir`/`CLAUDE_CODE_PLUGIN_DIRS`
 mod and draws the band* still needs an operator run (see M5). Phase 7 must therefore keep
-its degrade path: `/plan` command plus the drift line when no `ui.render{AbovePrompt}` with
+its degrade path: `/plan` command (`/phase` since swarmery-link 0.7.2) plus the drift line when no `ui.render{AbovePrompt}` with
 `surface: "vscode"` reaches the daemon. It should key the decision on the `surface` value it
 observes, never on an assumption.
 

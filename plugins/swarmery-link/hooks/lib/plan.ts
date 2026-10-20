@@ -1,5 +1,5 @@
 // The plan band's decisions. Pure: parses the daemon's plan view, builds the
-// plan requests, lays the band and the /plan checklist out, picks what a tick
+// plan requests, lays the band and the /phase checklist out, picks what a tick
 // offers, and builds the drift classification's input and its line. The `$`
 // calls are made in ../plan.ts.
 // Contract: GET/POST /api/link/plan* (tools/swarmery, phase 7).
@@ -26,7 +26,7 @@ export const DRIFT_LABELS = ['on-phase', 'adjacent', 'off-phase'] as const
 export const BAND_CRITERIA_ROWS = 3
 /** The width the band is laid out in when the surface measured none. */
 export const DEFAULT_COLUMNS = 80
-/** The id of the pane /plan opens. */
+/** The id of the pane /phase opens. */
 export const PLAN_PANE_ID = 'swarmery-plan'
 /** `$.ui.ask` takes 2-4 option labels. */
 const ASK_OPTIONS_MAX = 4
@@ -203,7 +203,7 @@ export const criterionLine = (c: PlanCriterion): string => `${mark(c)} ${c.text}
 export const nextLine = (view: PlanView): string =>
   view.next === null ? 'next: none (last phase)' : `next: Phase ${view.next.n} — ${view.next.title}`
 
-/** The /plan checklist as text: the command's output where no pane is placed. */
+/** The /phase checklist as text: the command's output where no pane is placed. */
 export const checklistLines = (view: PlanView, origin: string): readonly string[] => [
   titleLine(view),
   statusLine(view.phase),
@@ -212,7 +212,7 @@ export const checklistLines = (view: PlanView, origin: string): readonly string[
   ...(view.url === '' ? [] : [absoluteUrl(view.url, origin)]),
 ]
 
-export const NO_PLAN_TEXT = 'no active plan for this session (pick one with /plan <task-id>)'
+export const NO_PLAN_TEXT = 'no active plan for this session (pick one with /phase <task-id>)'
 
 /** What a tick offers: the open criteria, each under a label unique within the ask. */
 export type TickChoice = { readonly label: string; readonly idx: number }
