@@ -213,9 +213,22 @@ Pass `--scope user`. Without it the CLI may update a project-scoped install that
 belongs to some other checkout instead (observed 2026-10-19).
 The new version loads in the next session.
 
-If `claude plugin marketplace update swarmery` fails with
-`Failed to clone … swarmery..clone/.git`, the marketplace was not refreshed. A
-workaround is pending the operator's confirmation and is not documented yet.
+If `claude plugin marketplace update swarmery` fails, the marketplace was not
+refreshed. The command re-clones the whole repository into
+`~/.claude/plugins/marketplaces/swarmery..clone` and can fail with
+`Failed to clone … swarmery..clone/.git`, with `Could not resolve host: github.com`,
+or hang. It may still exit 0, so check the message, not the exit code. The
+existing clone is an ordinary git checkout, so move it forward with git instead:
+
+```bash
+git -C ~/.claude/plugins/marketplaces/swarmery fetch --depth 1 origin main
+git -C ~/.claude/plugins/marketplaces/swarmery reset --hard origin/main
+claude plugin update swarmery-link@swarmery --scope user
+claude plugin update guard-pack@swarmery --scope user
+```
+
+The clone holds no local changes of yours, so the reset loses nothing. If a stuck
+re-clone is still running (`pgrep -fl 'swarmery\.\.clone'`), stop it first.
 
 ## Disable
 
