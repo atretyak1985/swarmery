@@ -138,6 +138,64 @@ func TestRoutinesCRUDLifecycle(t *testing.T) {
 	}
 }
 
+// A PATCH that leaves cronExpr out keeps the schedule; only an explicit
+// "cronExpr": "" clears it. Before the fix every PATCH set cronExpr, so a
+// steps-only or {enabled:false} edit silently wiped the cron.
+func TestPatchRoutineKeepsCronWhenOmitted(t *testing.T) {
+	srv, _, _ := serverWithRoutines(t)
+
+	resp, data := doRoutineReq(t, http.MethodPost, srv.URL+"/api/routines", map[string]any{
+		"name":     "daily",
+		"cronExpr": "0 14 * * *",
+		"steps":    []map[string]any{{"type": "command", "name": "echo", "command": "echo hi"}},
+	})
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("create: status %d body %s", resp.StatusCode, data)
+	}
+	var made map[string]any
+	json.Unmarshal(data, &made)
+	id, _ := made["id"].(string)
+
+	patch := func(body map[string]any) map[string]any {
+		t.Helper()
+		resp, data := doRoutineReq(t, http.MethodPatch, srv.URL+"/api/routines/"+id, body)
+		if resp.StatusCode != 200 {
+			t.Fatalf("patch %v: %d body %s", body, resp.StatusCode, data)
+		}
+		var out map[string]any
+		json.Unmarshal(data, &out)
+		return out
+	}
+
+	got := patch(map[string]any{
+		"steps": []map[string]any{{"type": "command", "name": "echo", "command": "echo bye"}},
+	})
+	if got["cronExpr"] != "0 14 * * *" {
+		t.Errorf("steps-only patch: cronExpr = %q, want %q", got["cronExpr"], "0 14 * * *")
+	}
+	if got["nextRunAt"] == nil {
+		t.Error("steps-only patch: nextRunAt cleared, want the schedule kept")
+	}
+
+	got = patch(map[string]any{"enabled": false})
+	if got["cronExpr"] != "0 14 * * *" {
+		t.Errorf("enabled-only patch: cronExpr = %q, want %q", got["cronExpr"], "0 14 * * *")
+	}
+
+	got = patch(map[string]any{"enabled": true})
+	if got["nextRunAt"] == nil {
+		t.Error("re-enable without cronExpr: nextRunAt is null, want the kept cron scheduled")
+	}
+
+	got = patch(map[string]any{"cronExpr": ""})
+	if got["cronExpr"] != "" {
+		t.Errorf("explicit empty cronExpr: cronExpr = %q, want cleared", got["cronExpr"])
+	}
+	if got["nextRunAt"] != nil {
+		t.Errorf("explicit empty cronExpr: nextRunAt = %v, want null", got["nextRunAt"])
+	}
+}
+
 func TestRoutineCreateValidation(t *testing.T) {
 	srv, _, _ := serverWithRoutines(t)
 	cases := []struct {

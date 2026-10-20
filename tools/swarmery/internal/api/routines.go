@@ -245,11 +245,24 @@ func (h *Handler) patchRoutine(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var body routineBody
-	if err := json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&body); err != nil {
+	raw, err := io.ReadAll(io.LimitReader(r.Body, 1<<20))
+	if err != nil {
 		writeClientErr(w, http.StatusBadRequest, "invalid JSON body")
 		return
 	}
+	var body routineBody
+	if err := json.Unmarshal(raw, &body); err != nil {
+		writeClientErr(w, http.StatusBadRequest, "invalid JSON body")
+		return
+	}
+	// cronExpr's zero value "" is meaningful (it clears the schedule), so whether
+	// the key was sent at all is read from the raw object.
+	var keys map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &keys); err != nil {
+		writeClientErr(w, http.StatusBadRequest, "invalid JSON body")
+		return
+	}
+	_, cronSent := keys["cronExpr"]
 	// Validate only the provided fields. Name defaults to the current when blank
 	// so a metadata-only PATCH (e.g. {enabled:false}) is not forced to resend it.
 	name := body.Name
@@ -265,14 +278,12 @@ func (h *Handler) patchRoutine(w http.ResponseWriter, r *http.Request) {
 	if body.Name != "" {
 		up.Name = &body.Name
 	}
-	// cronExpr is set-through even to "" (clearing the schedule), so we cannot use
-	// the zero value as "absent". A dedicated marker keeps the contract simple:
-	// the field is applied whenever the key is present in the body — detected via
-	// a second raw decode below is overkill, so instead we treat cronExpr as
-	// always-settable (its validation already ran) and let the client send the
-	// current value when it does not intend to change it. This matches the web
-	// editor, which always submits the full form.
-	up.CronExpr = &body.CronExpr
+	// cronExpr is applied only when the key is in the body: "cronExpr": "" clears
+	// the schedule, an omitted key keeps it. (It used to be applied always, so a
+	// steps-only or {enabled:false} PATCH silently wiped the cron.)
+	if cronSent {
+		up.CronExpr = &body.CronExpr
+	}
 	if body.Enabled != nil {
 		up.Enabled = body.Enabled
 	}
