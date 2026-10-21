@@ -3,7 +3,9 @@
 # human can perform must carry `[MANUAL]`, and an L phase's header must default
 # to `**Verify:** normal` and `**Review:** on`. Without the markers a phase run
 # either stalls on criteria it cannot close or fakes them; without the header
-# rows an L phase is never graded or reviewed.
+# rows an L phase is never graded or reviewed. A `[LAND]` criterion names no
+# branch (land-criteria UX plan, phase 5): the daemon lands `swarm/phase-<id>`,
+# never the header's `**Branch:**`.
 
 - description: planner marks landing and manual criteria and sets the L-phase header defaults
   providers: [opus-tier]
@@ -26,3 +28,5 @@
       value: "\\*\\*Verify:\\*\\* normal"
     - type: regex                           # hard: L phases default to review
       value: "\\*\\*Review:\\*\\* on"
+    - type: not-regex                       # hard: [LAND] criteria name no branch
+      value: "\\[LAND\\][^\\n]*\\b(feat|fix|chore|docs|refactor|swarm)/"

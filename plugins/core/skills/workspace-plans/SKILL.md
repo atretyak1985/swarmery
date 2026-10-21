@@ -6,7 +6,7 @@ description: "Use this skill when writing, revising, or executing a workspace pl
 color: cyan
 docs:
   status: draft
-  updated: 2026-10-19
+  updated: 2026-10-21
 ---
 
 # Purpose
@@ -38,13 +38,18 @@ deviates from the format ships work the operator cannot see.
   every phase doc carries a `**Covers:** SC-…` header line (coverage is
   linted).
 
-Criteria closed by a push, PR or merge start with `[LAND]`; criteria only a
-human can perform (production, a console, a manual check) start with
-`[MANUAL]`. Neither is the executor's to tick or perform: the daemon settles a
-run against the rest, refuses to start a `[MANUAL]`-only phase, lists it in
-Needs you, and ticks `[LAND]` itself only for a phase landed through the
-Review tab. The header rows `**Verify:**` (off | normal | strict) and
-`**Review:**` (on | off) sit directly after `**Repo:** …`; L/XL phases default
+Criteria closed by a push, PR or merge start with `[LAND]` and name no branch
+(`- [ ] [LAND] phase PR merged into main`) — the header's `**Branch:**` is
+informational and the daemon lands only the run branch `swarm/phase-<id>`.
+Criteria only a human can perform (production, a console, a manual check)
+start with `[MANUAL]`. Neither is the executor's to tick or perform: the
+daemon settles a run against the rest, refuses to start a `[MANUAL]`-only
+phase and lists it in Needs you, lists a phase with only `[LAND]` left as
+awaiting merge, and ticks `[LAND]` itself when the pull request for the run
+branch merges — whether landed through the Review tab or opened outside the
+platform and found by the landing poll or "Find PR". When the PR comes from
+any other branch, its `[LAND]` criteria are ticked by hand. The header rows
+`**Verify:**` (off | normal | strict) and `**Review:**` (on | off) sit directly after `**Repo:** …`; L/XL phases default
 to `normal` / `on`. Details: `resources/plan-format.md` → "Criterion classes"
 and "Header rows".
 

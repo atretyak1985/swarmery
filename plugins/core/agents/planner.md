@@ -93,7 +93,11 @@ Some criteria are not the phase run's to close, and the doc must say so, or
 the run either stalls on them or fakes them:
 
 - Every criterion closed by a push, a pull request or a merge starts with
-  `[LAND]`: `- [ ] [LAND] PR for feat/orders-line-items merged into main`.
+  `[LAND]` and names no branch: `- [ ] [LAND] phase PR merged into main`
+  (in a Ukrainian plan: `- [ ] [LAND] PR фази злито в main`). The daemon lands
+  a phase from its run branch `swarm/phase-<id>`, never from the header's
+  `**Branch:**`, so a branch name in the criterion is wrong the moment the
+  phase runs under the daemon.
 - Every criterion only a human can perform — a production check, a console
   action, a manual look — starts with `[MANUAL]`:
   `- [ ] [MANUAL] line-item totals checked by hand in the production console`.
