@@ -543,6 +543,10 @@ msgstr "CI пройшов"
 msgid "CI running"
 msgstr "CI виконується"
 
+#: src/pages/plans/PlainSummary.tsx
+msgid "Claude is writing a plain-language explanation…"
+msgstr "Claude пише пояснення простими словами…"
+
 #: src/pages/Board.tsx
 #: src/pages/Board.tsx
 msgid "clear label filter"
@@ -1000,6 +1004,16 @@ msgid "in a failure"
 msgstr "невдачею"
 
 #: src/pages/Plans.tsx
+#: src/pages/Plans.tsx
+msgid "in plain words"
+msgstr "простими словами"
+
+#: src/pages/Plans.tsx
+#: src/pages/plans/PhasePanel.tsx
+msgid "In plain words"
+msgstr "Простими словами"
+
+#: src/pages/Plans.tsx
 msgid "inferred"
 msgstr "виведено"
 
@@ -1073,6 +1087,7 @@ msgstr "завантажуємо критерії…"
 
 #: src/pages/Board.tsx
 #: src/pages/Plans.tsx
+#: src/pages/plans/PlainSummary.tsx
 msgid "loading…"
 msgstr "завантаження…"
 
@@ -1325,6 +1340,10 @@ msgstr "нотатка (необов’язково)"
 #: src/pages/plans/forecastStoryModel.ts
 msgid "Nothing follows: the run landed on plan."
 msgstr "Нічого не випливає: запуск пройшов за планом."
+
+#: src/pages/plans/PlainSummary.tsx
+msgid "nothing to explain yet — the doc has no text for this"
+msgstr "поки нічого пояснювати — у документі ще немає тексту для цього"
 
 #: src/pages/plans/PhaseReview.tsx
 msgid "nothing to land in this state"

@@ -2771,6 +2771,10 @@ msgstr "Фази без ребра між ними виконуються пар
 msgid "pinned"
 msgstr "закріплено"
 
+#: src/api.ts
+msgid "plain-language summary failed: {status}"
+msgstr "не вдалося підготувати пояснення: {status}"
+
 #: src/workspace/TaskModal.tsx
 msgid "plan"
 msgstr "план"
@@ -4030,6 +4034,10 @@ msgstr "Це дає агентам більше автономії в цьому
 #: src/components/VcsSignInDialog.tsx
 msgid "this host"
 msgstr "цей хост"
+
+#: src/api.ts
+msgid "This is a mock plain-language explanation. In the real dashboard Claude writes it from the plan doc."
+msgstr "Це тестове пояснення простими словами. У справжньому дашборді його пише Claude з документа плану."
 
 #: src/components/PluginConfigModal.tsx
 msgid "this pack's config schema is missing or malformed"

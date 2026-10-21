@@ -2808,6 +2808,56 @@ export function fetchPlanDoc(taskId: number, path: string): Promise<PlanDoc> {
   return get(`/api/epics/${String(taskId)}/docs?path=${encodeURIComponent(path)}`);
 }
 
+/** What a plain-language retelling covers: one phase doc, its Completion
+ * Report, the plan README (+ spec), or the finished plan's reports. */
+export type PlainKind = 'phase' | 'phase-report' | 'plan' | 'plan-report';
+
+/** A retelling: `ready` with text, `missing` (not generated yet) or `empty`
+ * (the source has nothing to retell). */
+export interface PlainSummary {
+  status: 'ready' | 'missing' | 'empty';
+  text?: string;
+}
+
+function plainUrl(taskId: number, kind: PlainKind, path: string | null, lang: string): string {
+  const q = new URLSearchParams({ kind, lang });
+  if (path !== null) q.set('path', path);
+  return `/api/epics/${String(taskId)}/plain?${q.toString()}`;
+}
+
+/** GET /api/epics/{taskId}/plain — the cached retelling; never starts a run. */
+export function fetchPlainSummary(
+  taskId: number,
+  kind: PlainKind,
+  path: string | null,
+  lang: string,
+): Promise<PlainSummary> {
+  if (MOCK) return Promise.resolve({ status: 'missing' });
+  return get(plainUrl(taskId, kind, path, lang));
+}
+
+/** POST /api/epics/{taskId}/plain — the retelling, generated first when it is
+ * not cached (resolves once the headless run finishes). */
+export async function generatePlainSummary(
+  taskId: number,
+  kind: PlainKind,
+  path: string | null,
+  lang: string,
+): Promise<PlainSummary> {
+  if (MOCK) {
+    return {
+      status: 'ready',
+      text: t`This is a mock plain-language explanation. In the real dashboard Claude writes it from the plan doc.`,
+    };
+  }
+  const res = await fetch(plainUrl(taskId, kind, path, lang), { method: 'POST' });
+  if (!res.ok) {
+    const data = (await res.json().catch(() => ({}))) as { error?: string };
+    throw new Error(data.error ?? t`plain-language summary failed: ${{ status: res.status }}`);
+  }
+  return (await res.json()) as PlainSummary;
+}
+
 /** PUT /api/epics/{taskId}/docs?path= {content} — overwrite a plan doc (backup). */
 export async function savePlanDoc(taskId: number, path: string, content: string): Promise<PlanDoc> {
   if (MOCK) return { path, content, backup: '.backups/mock/doc.md' };

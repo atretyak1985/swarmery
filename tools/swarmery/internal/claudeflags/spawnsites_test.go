@@ -37,6 +37,7 @@ var readOnlySites = map[string]string{
 	"internal/improve/runner.go:Run":                    "the model returns a unified diff on stdout; internal/improve/apply.go applies it",
 	"internal/retroanalysis/runner.go:Run":              "the model returns the analysis on stdout; internal/retroanalysis persists the row",
 	"internal/handoff/runner.go:Run":                    "the model returns handoff prose on stdout; internal/handoff/handoff.go does the os.WriteFile",
+	"internal/plainsum/runner.go:Run":                   "the model returns the plain-language retelling on stdout; internal/plainsum/plainsum.go stores it in plain_summaries",
 	"internal/extract/runner.go:Run":                    "classification pass — stdout JSON only, the caller persists the rows",
 	"internal/trajjudge/trajjudge.go:Run":               "advisory judge — stdout verdict only, persisted by the daemon",
 	"internal/decide/claude.go:spawnClaude":             "decision classifier (phase 9) — stdout JSON answer only, internal/decide persists the decisions row",

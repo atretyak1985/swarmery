@@ -543,6 +543,10 @@ msgstr "CI passed"
 msgid "CI running"
 msgstr "CI running"
 
+#: src/pages/plans/PlainSummary.tsx
+msgid "Claude is writing a plain-language explanation…"
+msgstr "Claude is writing a plain-language explanation…"
+
 #: src/pages/Board.tsx
 #: src/pages/Board.tsx
 msgid "clear label filter"
@@ -1000,6 +1004,16 @@ msgid "in a failure"
 msgstr "in a failure"
 
 #: src/pages/Plans.tsx
+#: src/pages/Plans.tsx
+msgid "in plain words"
+msgstr "in plain words"
+
+#: src/pages/Plans.tsx
+#: src/pages/plans/PhasePanel.tsx
+msgid "In plain words"
+msgstr "In plain words"
+
+#: src/pages/Plans.tsx
 msgid "inferred"
 msgstr "inferred"
 
@@ -1073,6 +1087,7 @@ msgstr "loading criteria…"
 
 #: src/pages/Board.tsx
 #: src/pages/Plans.tsx
+#: src/pages/plans/PlainSummary.tsx
 msgid "loading…"
 msgstr "loading…"
 
@@ -1325,6 +1340,10 @@ msgstr "note (optional)"
 #: src/pages/plans/forecastStoryModel.ts
 msgid "Nothing follows: the run landed on plan."
 msgstr "Nothing follows: the run landed on plan."
+
+#: src/pages/plans/PlainSummary.tsx
+msgid "nothing to explain yet — the doc has no text for this"
+msgstr "nothing to explain yet — the doc has no text for this"
 
 #: src/pages/plans/PhaseReview.tsx
 msgid "nothing to land in this state"
