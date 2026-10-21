@@ -1374,6 +1374,10 @@ msgstr "Відкрити {changeShort} для {branch}"
 msgid "Open a {change} for each unmerged branch"
 msgstr "Відкрити {change} для кожної незлитої гілки"
 
+#: src/pages/plans/LandCriterionAction.tsx
+msgid "Open in Review →"
+msgstr "Відкрити в Рев’ю →"
+
 #: src/pages/plans/TerminalBadge.tsx
 msgid "open in terminal"
 msgstr "відкрито в терміналі"
@@ -1397,6 +1401,7 @@ msgstr "відкрити Плани →"
 msgid "open session →"
 msgstr "відкрити сесію →"
 
+#: src/pages/plans/LandCriterionAction.tsx
 #: src/pages/plans/PhaseReview.tsx
 msgid "Opening…"
 msgstr "Відкриття…"
@@ -1669,6 +1674,14 @@ msgstr "Запушити"
 #: src/pages/plans/PhaseReview.tsx
 msgid "Push + open {change}"
 msgstr "Запушити + відкрити {change}"
+
+#: src/pages/plans/LandCriterionAction.tsx
+msgid "Push + open {changeShort}"
+msgstr "Запушити + відкрити {changeShort}"
+
+#: src/pages/plans/LandCriterionAction.tsx
+msgid "push the run branch {runBranch} and open a {changeShort}"
+msgstr "запушити гілку запуску {runBranch} й відкрити {changeShort}"
 
 #: src/pages/plans/PhaseReview.tsx
 msgid "push the run branch and open a {change}"
@@ -2395,6 +2408,10 @@ msgstr "запуск відмітив частину критеріїв, але 
 msgid "the run’s diff was not measured"
 msgstr "дифф запуску не виміряно"
 
+#: src/pages/plans/LandCriterionAction.tsx
+msgid "the run's diff, verdict and landing controls"
+msgstr "дифф запуску, вердикт і керування посадкою"
+
 #: src/pages/plans/VerifyVerdictChip.tsx
 msgid "the verifier could not conclude (env or timeout) — this is not a failing grade"
 msgstr "перевіряльник не дійшов висновку (середовище або тайм-аут) — це не провальна оцінка"
@@ -2430,6 +2447,10 @@ msgstr "У цієї фази ще немає гілки запуску — сп�
 #: src/pages/Plans.tsx
 msgid "this phase has no sessions of its own — showing the whole plan; click to narrow anyway"
 msgstr "у цієї фази немає власних сесій — показано весь план; клікніть, щоб усе ж звузити"
+
+#: src/pages/plans/LandCriterionAction.tsx
+msgid "This phase was not run by the daemon — there is no branch to land. Tick the criterion by hand after the merge."
+msgstr "Фаза не запускалась демоном — гілки для посадки немає. Познач критерій вручну після злиття."
 
 #: src/pages/plans/TerminalBadge.tsx
 msgid "this plan"

@@ -3939,6 +3939,9 @@ export interface EpicPhase {
   /** Unticked `[LAND]` criteria (migration 0105): closed by landing — the daemon
    *  ticks them when the change request merges. Still inside checkboxesTotal. */
   landOpen: number;
+  /** The branch the phase's last run committed on (`epic_phases.run_branch`) —
+   *  the only branch landing pushes. `''` when the daemon never ran the phase. */
+  runBranch: string;
   /** Unticked `[MANUAL]` criteria: only a human closes them. A phase whose open
    *  criteria are ALL manual is refused a run (409 `manual-only`) and listed in
    *  Needs you. Still inside checkboxesTotal. */

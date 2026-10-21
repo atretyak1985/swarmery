@@ -1722,6 +1722,8 @@ const mockEpicPhase = (
   reopens: [],
   landOpen: 0,
   manualOpen: 0,
+  // A phase the daemon ran has its branch; one that never ran has none.
+  runBranch: run?.runState !== undefined && run.runState !== 'idle' ? `swarm/phase-${String(id)}` : '',
   reviews: [],
   id,
   seq,

@@ -71,11 +71,12 @@ export function canReturn(phase: LandingPhase): boolean {
 }
 
 /**
- * Whether the phase panel shows a Review tab. The phase DTO does not carry its
- * run branch, so "has a branch" is approximated by "has ever run": a run
- * state other than idle, a run session, or any landing progress. A phase that
- * never ran has nothing to review; the review endpoint's 409 `no-run-branch`
- * covers the rest.
+ * Whether the phase panel shows a Review tab: the phase has ever run — a run
+ * state other than idle, a run session, or any landing progress. This reads
+ * only LandingPhase, so a caller (or fixture) without `runBranch` still gets an
+ * answer; the phase DTO does carry `runBranch` now, and the push decision keys
+ * on it (`landCriterionAction`). A phase that never ran has nothing to review;
+ * the review endpoint's 409 `no-run-branch` covers the rest.
  */
 export function hasReviewTab(phase: LandingPhase): boolean {
   // `?? null`: like `landing`, a fixture may omit runSessionUuid entirely.
@@ -88,6 +89,40 @@ export function hasReviewTab(phase: LandingPhase): boolean {
 export function prLinkText(landing: Pick<PhaseLanding, 'prUrl' | 'prNumber'>, terms: ProviderTerms): string | null {
   if (landing.prUrl === null || landing.prUrl === '') return null;
   return landing.prNumber !== null ? `${terms.changeShort} #${String(landing.prNumber)}` : terms.changeShort;
+}
+
+/** What an open `[LAND]` criterion on the Criteria tab offers. */
+export type LandCriterionAction =
+  /** A change request is open: link to it ("PR #12"). */
+  | { kind: 'pr-link'; href: string; text: string }
+  /** The run branch can be pushed and a change request opened. */
+  | { kind: 'land' }
+  /** The phase has a run branch, but not in a landable state (running, merged…). */
+  | { kind: 'review-only' }
+  /** The daemon never ran the phase — there is no branch to land. */
+  | { kind: 'no-run-branch' };
+
+/** The phase fields `landCriterionAction` reads. */
+export type LandCriterionPhase = LandingPhase & {
+  runBranch: string;
+  landing?: Pick<PhaseLanding, 'state' | 'prUrl' | 'prNumber'> | null;
+};
+
+/**
+ * The action under an open `[LAND]` criterion — the same rules the Review tab
+ * applies (plan D1), in this order: an open change request with a URL is a
+ * link; no run branch means nothing to push; `canLand` offers Push + open
+ * <change>; anything else only points at the Review tab.
+ */
+export function landCriterionAction(phase: LandCriterionPhase, terms: ProviderTerms): LandCriterionAction {
+  const landing = phase.landing ?? null;
+  if (landing !== null && landing.state === 'pr_open') {
+    const text = prLinkText(landing, terms);
+    if (text !== null && landing.prUrl !== null) return { kind: 'pr-link', href: landing.prUrl, text };
+  }
+  if (phase.runBranch === '') return { kind: 'no-run-branch' };
+  if (canLand(phase)) return { kind: 'land' };
+  return { kind: 'review-only' };
 }
 
 /** The phase id a phase-run branch names (`swarm/phase-123` → 123), or null for

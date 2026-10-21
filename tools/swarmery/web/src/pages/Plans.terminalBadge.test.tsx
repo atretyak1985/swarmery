@@ -79,6 +79,7 @@ const phase = (over: Partial<EpicPhase> = {}): EpicPhase => ({
   checkboxesDone: 0,
   checkboxesTotal: 3,
   landOpen: 0,
+  runBranch: '',
   manualOpen: 0,
   docStatus: null,
   docUpdatedAt: null,

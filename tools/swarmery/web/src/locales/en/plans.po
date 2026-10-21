@@ -1374,6 +1374,10 @@ msgstr "Open {changeShort} for {branch}"
 msgid "Open a {change} for each unmerged branch"
 msgstr "Open a {change} for each unmerged branch"
 
+#: src/pages/plans/LandCriterionAction.tsx
+msgid "Open in Review →"
+msgstr "Open in Review →"
+
 #: src/pages/plans/TerminalBadge.tsx
 msgid "open in terminal"
 msgstr "open in terminal"
@@ -1397,6 +1401,7 @@ msgstr "open Plans →"
 msgid "open session →"
 msgstr "open session →"
 
+#: src/pages/plans/LandCriterionAction.tsx
 #: src/pages/plans/PhaseReview.tsx
 msgid "Opening…"
 msgstr "Opening…"
@@ -1669,6 +1674,14 @@ msgstr "Push"
 #: src/pages/plans/PhaseReview.tsx
 msgid "Push + open {change}"
 msgstr "Push + open {change}"
+
+#: src/pages/plans/LandCriterionAction.tsx
+msgid "Push + open {changeShort}"
+msgstr "Push + open {changeShort}"
+
+#: src/pages/plans/LandCriterionAction.tsx
+msgid "push the run branch {runBranch} and open a {changeShort}"
+msgstr "push the run branch {runBranch} and open a {changeShort}"
 
 #: src/pages/plans/PhaseReview.tsx
 msgid "push the run branch and open a {change}"
@@ -2395,6 +2408,10 @@ msgstr "the run ticked some criteria but did not finish the phase — click for 
 msgid "the run’s diff was not measured"
 msgstr "the run’s diff was not measured"
 
+#: src/pages/plans/LandCriterionAction.tsx
+msgid "the run's diff, verdict and landing controls"
+msgstr "the run's diff, verdict and landing controls"
+
 #: src/pages/plans/VerifyVerdictChip.tsx
 msgid "the verifier could not conclude (env or timeout) — this is not a failing grade"
 msgstr "the verifier could not conclude (env or timeout) — this is not a failing grade"
@@ -2430,6 +2447,10 @@ msgstr "This phase has no run branch yet — run it first; there is nothing to p
 #: src/pages/Plans.tsx
 msgid "this phase has no sessions of its own — showing the whole plan; click to narrow anyway"
 msgstr "this phase has no sessions of its own — showing the whole plan; click to narrow anyway"
+
+#: src/pages/plans/LandCriterionAction.tsx
+msgid "This phase was not run by the daemon — there is no branch to land. Tick the criterion by hand after the merge."
+msgstr "This phase was not run by the daemon — there is no branch to land. Tick the criterion by hand after the merge."
 
 #: src/pages/plans/TerminalBadge.tsx
 msgid "this plan"

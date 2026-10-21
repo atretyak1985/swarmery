@@ -63,6 +63,11 @@ type epicPhaseDTO struct {
 	// when the operator ticks it.
 	LandOpen   int `json:"landOpen"`
 	ManualOpen int `json:"manualOpen"`
+	// RunBranch is the branch the phase's last run committed on
+	// (epic_phases.run_branch, migration 0043) — the only branch landing ever
+	// pushes. "" when the phase was never run by the daemon: the Criteria tab
+	// then explains a [LAND] criterion instead of offering Push.
+	RunBranch string `json:"runBranch"`
 	// Normalized `Status:` header marker from the phase doc itself
 	// (pending|in_progress|done); null when the doc carries none. Lets an
 	// executor flag "working on this now" before the first checkbox tick.
@@ -785,7 +790,8 @@ func (h *Handler) epicPhases(taskID int64, planDir string) ([]epicPhaseDTO, epic
 			// every phase whose doc carries no `**Model:**` header, which is all of
 			// them until an author opts in.
 			docModel sql.NullString
-			// epic_phases.run_branch (0043), read for one decision: canReverify.
+			// epic_phases.run_branch (0043): served as p.RunBranch and read
+			// for canReverify.
 			runBranch string
 			// The landing columns (0103), daemon-owned.
 			landing landingRow
@@ -801,6 +807,7 @@ func (h *Handler) epicPhases(taskID int64, planDir string) ([]epicPhaseDTO, epic
 			return nil, epicRollupDTO{}, nil, err
 		}
 		p.Landing = landing.dto(p.RunState)
+		p.RunBranch = runBranch
 		p.DependsOn = decodeIntList(depsJSON)
 		covers = append(covers, phaseCovers{seq: p.Seq, cids: decodeStrList(coversJSON)})
 		p.DocRelPath = relToPlan(planDir, p.DocPath)
