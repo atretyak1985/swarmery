@@ -3060,6 +3060,7 @@ export const mockApi = {
     return {
       base: 'a1b2c3d4e5f60718',
       branch: `swarm/phase-${String(phaseId)}`,
+      headerBranch: '',
       commits: [{ sha: '4f2e9c1a7b3d5e6f', subject: `feat: ${phase.name.toLowerCase()}` }],
       files: [{ path, additions: 3, deletions: 1 }],
       patch: `diff --git a/${path} b/${path}\n--- a/${path}\n+++ b/${path}\n@@ -1,2 +1,4 @@\n package phase\n-// TODO\n+\n+// Handler serves the phase.\n+func Handler() {}\n`,

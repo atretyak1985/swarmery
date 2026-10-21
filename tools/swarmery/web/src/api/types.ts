@@ -4164,6 +4164,9 @@ export interface ProviderTerms {
  *  run's start point, or the checked-out branch for a phase that predates it),
  *  plus the verdict, the landing lifecycle and the provider vocabulary. */
 export interface PhaseReview extends TaskDiff {
+  /** The branch the phase doc's `**Branch:**` header names; '' when it names
+   *  none (or prose). Informational only — land pushes `branch`, never this. */
+  headerBranch: string;
   verifyVerdict: PhaseVerifyVerdict | null;
   verifyDetail: string | null;
   landing: PhaseLanding;

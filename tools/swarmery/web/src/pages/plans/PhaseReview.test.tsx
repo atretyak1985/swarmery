@@ -63,6 +63,7 @@ const EPIC = { taskId: 9, phases: [] } as unknown as Epic;
 const review = (over: Partial<PhaseReviewData> = {}): PhaseReviewData => ({
   base: '0123456789abcdef',
   branch: 'swarm/phase-207',
+  headerBranch: '',
   commits: [{ sha: 'deadbeefcafe', subject: 'add line items' }],
   files: [{ path: 'orders/line_items.go', additions: 12, deletions: 1 }],
   patch: 'diff --git a/orders/line_items.go b/orders/line_items.go\n+x',
@@ -311,6 +312,32 @@ describe('PhaseReview', () => {
     renderReview(phase({ landing: landing({ state: 'none' }), runState: 'failed' }));
     expect(await screen.findByText(/no run branch yet/)).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Push' })).toBeNull();
+  });
+
+  describe('header branch vs run branch', () => {
+    it('warns when the plan header names a different branch than the run', async () => {
+      api.getPhaseReview.mockResolvedValue(review({ headerBranch: 'feat/x' }));
+      renderReview();
+      const note = await screen.findByRole('note');
+      expect(note.textContent).toContain('feat/x');
+      expect(note.textContent).toContain('swarm/phase-207');
+      // The banner only informs: Push still pushes the run branch.
+      expect(button('Push').disabled).toBe(false);
+    });
+
+    it('stays silent when the header names the run branch', async () => {
+      api.getPhaseReview.mockResolvedValue(review({ headerBranch: 'swarm/phase-207' }));
+      renderReview();
+      expect(await screen.findByText('add line items')).toBeTruthy();
+      expect(screen.queryByRole('note')).toBeNull();
+    });
+
+    it('stays silent when the header names no branch', async () => {
+      api.getPhaseReview.mockResolvedValue(review({ headerBranch: '' }));
+      renderReview();
+      expect(await screen.findByText('add line items')).toBeTruthy();
+      expect(screen.queryByRole('note')).toBeNull();
+    });
   });
 });
 

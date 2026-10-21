@@ -2352,6 +2352,10 @@ msgstr "the plan"
 msgid "the plan directory is being picked up by the workspace scan…"
 msgstr "the plan directory is being picked up by the workspace scan…"
 
+#: src/pages/plans/PhaseReview.tsx
+msgid "The plan names the branch <0>{headerBranch}</0>, but the daemon will land <1>{runBranch}</1>. Push and the change request always use the run's branch; the header's branch is a reference only."
+msgstr "The plan names the branch <0>{headerBranch}</0>, but the daemon will land <1>{runBranch}</1>. Push and the change request always use the run's branch; the header's branch is a reference only."
+
 #: src/pages/planning/RunningPlanPanel.tsx
 msgid "The plan takes shape here as you answer — each reply rebuilds it."
 msgstr "The plan takes shape here as you answer — each reply rebuilds it."
