@@ -131,3 +131,19 @@ func TestGenerateErrorsAreNotCached(t *testing.T) {
 		t.Fatalf("empty source err = %v", err)
 	}
 }
+
+func TestAuthored(t *testing.T) {
+	for name, tc := range map[string]struct{ doc, want string }{
+		"canonical":  {"# Phase 1\n**Repo:** x\n## In plain words\n\nAdds login.\n\n## Goal\nstuff\n", "Adds login."},
+		"ukrainian":  {"# План\n## Простими словами\nДодає вхід.\n## Objective\n", "Додає вхід."},
+		"case":       {"## in PLAIN words\ntext\n", "text"},
+		"at eof":     {"# P\n## In plain words\nlast section\n", "last section"},
+		"absent":     {"# P\n## Goal\nx\n", ""},
+		"empty":      {"# P\n## In plain words\n\n## Goal\n", ""},
+		"h3 ignored": {"### In plain words\ntext\n", ""},
+	} {
+		if got := Authored(tc.doc); got != tc.want {
+			t.Errorf("%s: Authored = %q, want %q", name, got, tc.want)
+		}
+	}
+}

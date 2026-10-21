@@ -1,6 +1,6 @@
 ---
 name: workspace-plans
-version: "1.1.0"
+version: "1.2.0"
 owner: "swarmery-core"
 description: "Use this skill when writing, revising, or executing a workspace plan — the plan/README.md + phase-N-<slug>.md format the dashboard ingests. Don't use it for ad-hoc todo lists or in-repo design docs."
 color: cyan
@@ -20,11 +20,13 @@ deviates from the format ships work the operator cannot see.
 - Plans live at `<workspace>/<project>/workspace/working/{YYYY}/{MM}/{DD}/{slug}/plan/`;
   task-id `yyyy-mm-dd-slug` is derived from the path — never encode the date
   in the folder name.
-- `plan/README.md` — objective, architecture decisions with real file paths,
-  the sequencing table with exactly these header cells:
-  `| # | Phase | Doc | Depends on |`, risks, Definition of Done.
+- `plan/README.md` — an `## In plain words` section under the H1, objective,
+  architecture decisions with real file paths, the sequencing table with
+  exactly these header cells: `| # | Phase | Doc | Depends on |`, risks,
+  Definition of Done.
 - `plan/phase-N-<slug>.md` per phase (flat; `step-NN-*.md` is legacy
-  read-compat only) — each with a self-contained copy-paste executor prompt
+  read-compat only) — each opening with an `## In plain words` section (after
+  the header rows, before `## Goal`), with a self-contained copy-paste executor prompt
   whose Verify block is file-backed (a repo script or test by absolute path;
   no heredoc, `python3 -` or `node -e` — see `resources/plan-format.md`),
   `- [ ]` acceptance criteria checkable by command or boolean inspection, and

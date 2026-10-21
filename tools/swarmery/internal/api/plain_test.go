@@ -158,3 +158,30 @@ func TestPlainUnavailableWithoutService(t *testing.T) {
 		t.Fatalf("status = %d, want 503", code)
 	}
 }
+
+// A phase doc or README carrying the planner's `## In plain words` section is
+// served as written: ready on GET, and POST never runs the model.
+func TestPlainAuthoredSectionWins(t *testing.T) {
+	srv, runner, taskID, planDir := plainServer(t)
+	write := func(name, body string) {
+		if err := os.WriteFile(filepath.Join(planDir, name), []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write("phase-1-schema.md", "# Phase 1 — Schema\n**Repo:** x\n## In plain words\n\nStores orders.\n\n## Goal\ng\n")
+	write("README.md", "# Plan\n\n## In plain words\nFaster exports.\n\n## Objective\no\n")
+	base := srv.URL + "/api/epics/" + itoa(taskID) + "/plain"
+	for query, want := range map[string]string{
+		"?kind=phase&path=phase-1-schema.md": "Stores orders.",
+		"?kind=plan":                         "Faster exports.",
+	} {
+		for _, method := range []string{http.MethodGet, http.MethodPost} {
+			if code, dto := plainCall(t, method, base+query); code != 200 || dto.Status != "ready" || dto.Text != want {
+				t.Errorf("%s %s = %d %+v, want ready %q", method, query, code, dto, want)
+			}
+		}
+	}
+	if len(runner.prompts) != 0 {
+		t.Fatalf("an authored section ran the model %d times", len(runner.prompts))
+	}
+}

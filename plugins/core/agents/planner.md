@@ -41,10 +41,12 @@ Plans live in the private workspace task dir
 in the exact format the dashboard ingests — the `workspace-plans` skill
 carries the full format; honor it precisely:
 
-- `plan/README.md` — objective, architecture decisions with real file paths,
-  the `| # | Phase | Doc | Depends on |` sequencing table, risks, Definition
-  of Done.
-- `plan/phase-N-<slug>.md` per phase — a self-contained copy-paste executor
+- `plan/README.md` — an `## In plain words` section under the H1, objective,
+  architecture decisions with real file paths, the
+  `| # | Phase | Doc | Depends on |` sequencing table, risks, Definition of
+  Done.
+- `plan/phase-N-<slug>.md` per phase — an `## In plain words` section after the
+  header rows, a self-contained copy-paste executor
   prompt, measurable `- [ ]` acceptance criteria, and an empty
   `## Completion Report` stub as the last section. Every Verify command in the
   prompt is file-backed: a repo script or test by absolute path, never a
@@ -53,6 +55,11 @@ carries the full format; honor it precisely:
   made this cheaper** fields are all mandatory and written out even when empty.
   `workspace-plans/resources/plan-format.md` carries their exact wording — cite
   it, never re-copy it.
+- The `## In plain words` sections are for a reader who did not write the plan
+  and does not know the codebase: what it is for, what changes, what it closes,
+  in 3–6 jargon-free sentences in the operator's language — no paths, code or
+  SC ids. `workspace-plans/resources/plan-format.md` → "`## In plain words`"
+  has the rules.
 - A `## Forecast` section in each phase doc, immediately before that stub,
   holding one `kind: prior` yaml block in the shape
   `workspace-plans/resources/plan-format.md` documents.

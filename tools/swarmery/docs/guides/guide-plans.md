@@ -135,7 +135,7 @@ Opening a plan shows its detail with up to six tabs:
 | Tab | Shows |
 |---|---|
 | **Plan** | The README and the phase list, with each phase's progress and run state |
-| **In plain words** | What the plan is about and why, retold without jargon by Claude from the README (and spec) — generated on first open, cached until the README changes |
+| **In plain words** | What the plan is about and why, without jargon — the README's own `## In plain words` section (the planner writes one), or, when it has none, a retelling Claude generates on first open and caches until the README changes |
 | **Spec** | `spec.md` and its criteria — only when the plan has one |
 | **Summary** | The plan's closing summary, opening with a plain-words retelling of what the plan delivered — only once every phase is complete |
 | **Revisions** | Staged proposals to change the plan; the count shows how many wait |
@@ -147,7 +147,7 @@ to the neighbouring phase. The drawer has its own tabs:
 | Tab | Shows |
 |---|---|
 | **Story** | The phase at a glance, and its forecast against what actually happened — expected, happened, why, what follows |
-| **In plain words** | What the phase is for, what it changes and what it closes — retold without jargon by Claude from the phase doc, generated on first open and cached until the doc changes |
+| **In plain words** | What the phase is for, what it changes and what it closes, without jargon — the doc's own `## In plain words` section (the planner writes one), or, when it has none, a retelling Claude generates on first open and caches until the doc changes |
 | **Criteria** | The document with its live checkboxes |
 | **Runs** | Run state, the model used, the verification verdict, and the run history |
 | **Report** | A plain-words retelling of what was done, then the `## Completion Report` section. It always exists, even before anything has shipped — an empty note is a better answer than a missing tab |

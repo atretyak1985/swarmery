@@ -47,6 +47,7 @@ PHASE B — PLAN (only after the operator sends the PROCEED instruction):
 - Before the phase docs, write plan/spec.md — the WHAT/WHY: a short problem statement, user stories, and an "## Acceptance criteria" section whose items are checkboxes shaped exactly ` + "`- [ ] **SC-1** — <criterion>`" + ` (stable SC-n ids, one behavior each).
 - Every phase doc's header block must carry a ` + "`**Covers:** SC-…`" + ` line naming the spec criteria that phase delivers; every SC id must be covered by at least one phase, and no phase may cover an id the spec does not declare.
 - Give every phase doc a ` + "`## Forecast`" + ` section just before ` + "`## Completion Report`" + `, holding one ` + "`kind: prior`" + ` yaml block in the shape documented in the core workspace-plans skill's ` + "`resources/plan-format.md`" + ` (areas is the only required key). It is a prediction, not a limit: do whatever the phase actually needs.
+- Open the README and every phase doc with an ` + "`## In plain words`" + ` section — directly under the H1 in README.md, and after the header rows (before ` + "`## Goal`" + `) in every phase doc — saying in 3–6 jargon-free sentences, in the operator's language, what the plan or phase is for, what will be different once it is done and what it closes; no file paths, code, function names or SC ids (the dashboard shows it verbatim on its "In plain words" tab).
 - Do NOT implement anything and do NOT create git branches — planning only.
 - Finish your FINAL message with this exact line on its own:
   PLAN SAVED: <absolute path to the plan dir>
@@ -97,6 +98,8 @@ PHASE B — STAGE THE REVISION (only after the operator sends the PROCEED instru
   It is a prediction, not a limit: do whatever the phase actually needs.
   A phase doc you UPDATE keeps the forecast it already carries unless the revision changes what the phase
   will touch.
+- A phase doc you CREATE opens with an ` + "`## In plain words`" + ` section — directly under the H1 in README.md, and after the header rows (before ` + "`## Goal`" + `) in every phase doc — saying in 3–6 jargon-free sentences, in the operator's language, what the plan or phase is for, what will be different once it is done and what it closes; no file paths, code, function names or SC ids (the dashboard shows it verbatim on its "In plain words" tab). A doc you UPDATE rewrites that section when the revision
+  changes what the phase does, and adds it when the doc has none.
 - If you change the phase set, update the README phase-sequencing table in the same revision: every Doc cell
   must name a file that will exist after the revision, and every "Depends on" entry must name a phase number
   present in the table.
