@@ -131,8 +131,8 @@ after the `**Repo:** …` line.
 
 `**Branch:**` in the phase header is a note for people — the branch a person
 would use running the phase by hand. Land never pushes the header branch: a
-daemon run commits on its run branch `swarm/phase-<id>`, and landing pushes,
-opens the pull request for and merges only that branch. Three reasons:
+daemon run commits on its run branch `swarm/phase-<id>`, and landing pushes
+and opens the pull request for only that branch; the merge happens on the host. Three reasons:
 
 - The header branch may not exist, or may belong to other work — pushing to it
   would write into someone else's branch.
