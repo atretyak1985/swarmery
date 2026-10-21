@@ -165,6 +165,46 @@ type ChangeStatus struct {
 	CheckedAt time.Time `json:"checkedAt"` // when it was read (UTC)
 }
 
+// FoundChange is one change request a provider listed for a source branch:
+// its reference, its neutral State and, for a merged one, when it merged
+// (zero when unknown).
+type FoundChange struct {
+	Ref      ChangeRef
+	State    string
+	MergedAt time.Time
+}
+
+// PickChangeRequest is FindChangeRequest's choice among the change requests
+// listed for one branch: an open one first (the highest number when several
+// are open), else the most recently merged (by MergedAt, then number); closed
+// without merging never counts. ok=false when nothing qualifies. Pure, so both
+// providers choose identically.
+func PickChangeRequest(cands []FoundChange) (ChangeRef, bool) {
+	var open, merged *FoundChange
+	for i := range cands {
+		c := &cands[i]
+		switch c.State {
+		case StateOpen:
+			if open == nil || c.Ref.Number > open.Ref.Number {
+				open = c
+			}
+		case StateMerged:
+			if merged == nil || c.MergedAt.After(merged.MergedAt) ||
+				(c.MergedAt.Equal(merged.MergedAt) && c.Ref.Number > merged.Ref.Number) {
+				merged = c
+			}
+		}
+	}
+	switch {
+	case open != nil:
+		return open.Ref, true
+	case merged != nil:
+		return merged.Ref, true
+	default:
+		return ChangeRef{}, false
+	}
+}
+
 // Provider is one code host's implementation.
 type Provider interface {
 	Kind() Kind
@@ -177,4 +217,9 @@ type Provider interface {
 	OpenChangeRequest(ctx context.Context, t Target, req ChangeRequest) (ChangeRef, error)
 	// Status reads a change request's current state.
 	Status(ctx context.Context, t Target, ref ChangeRef) (ChangeStatus, error)
+	// FindChangeRequest returns the change request whose source branch is head:
+	// an open one first, else the most recently merged; closed-unmerged ones are
+	// ignored. found=false with a nil error when the host has none. Read-only:
+	// it never opens anything.
+	FindChangeRequest(ctx context.Context, t Target, head string) (ref ChangeRef, found bool, err error)
 }

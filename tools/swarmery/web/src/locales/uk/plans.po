@@ -520,6 +520,7 @@ msgid "caught by nobody"
 msgstr "ніхто не впіймав"
 
 #: src/pages/plans/PhaseReview.tsx
+#: src/pages/plans/PhaseReview.tsx
 msgid "change request"
 msgstr "пул-реквест"
 
@@ -874,6 +875,10 @@ msgstr "фільтр за міткою"
 msgid "filter by state"
 msgstr "фільтр за станом"
 
+#: src/pages/plans/PhaseReview.tsx
+msgid "Find {changeShort}"
+msgstr "Знайти {changeShort}"
+
 #: src/pages/plans/RunsReviewBlock.tsx
 msgid "findings ({count})"
 msgstr "знахідки ({count})"
@@ -1076,6 +1081,14 @@ msgstr "завантажуємо критерії…"
 msgid "loading…"
 msgstr "завантаження…"
 
+#: src/pages/plans/PhaseReview.tsx
+msgid "look up a {change} already opened for this phase's run branch"
+msgstr "знайти {change}, уже відкритий для гілки запуску цієї фази"
+
+#: src/pages/plans/PhaseReview.tsx
+msgid "Looking…"
+msgstr "Пошук…"
+
 #: src/pages/plans/CriterionLint.tsx
 msgid "looks like a landing/manual criterion — a run cannot close it"
 msgstr "схоже на критерій здачі або ручний — запуск його не закриє"
@@ -1229,6 +1242,14 @@ msgstr "Урок не пропонується: у звіті немає абз�
 #: src/pages/Routines.tsx
 msgid "no next run"
 msgstr "наступного запуску немає"
+
+#: src/pages/plans/PhaseReview.tsx
+msgid "No open or merged {changeShort} found for {branch} — push and open one here, or open it on the host and look again."
+msgstr "Для {branch} не знайдено відкритого чи злитого {changeShort} — запуште й відкрийте його тут або відкрийте на хості й пошукайте знову."
+
+#: src/pages/plans/PhaseReview.tsx
+msgid "No open or merged {changeShort} found for this phase's run branch — push and open one here, or open it on the host and look again."
+msgstr "Для гілки запуску цієї фази не знайдено відкритого чи злитого {changeShort} — запуште й відкрийте його тут або відкрийте на хості й пошукайте знову."
 
 #: src/pages/Plans.tsx
 msgid "no phase declares it covers this criterion"

@@ -18,6 +18,15 @@
 // status state "closed": the operator may reopen it, and only they decide
 // what a closed PR means for the phase. The poller never deletes a branch.
 //
+// A change request opened outside the dashboard is discovered (land-criteria UX
+// plan, phase 4, D7/D8): each tick also asks the host, through
+// Provider.FindChangeRequest, about up to DiscoverMax ready/pushed phases that
+// have a run branch and no change request recorded, each at most once per
+// DiscoverMinAge (pr_checked_at doubles as "last asked"). A found one is
+// recorded — landing_state pr_open, pr_url/pr_number/pr_provider — by a guarded
+// UPDATE and read at once, so a merged one reaches merged in the same tick. The
+// poller only reads the host: it never opens a change request.
+//
 // The one criterion it does tick is the class landing closes (phase-run
 // outcomes plan, phase 3, D3): the moment a phase flips to merged, every
 // unticked `[LAND]` criterion in its doc is ticked (wsingest.TickCriteriaByClass,
@@ -56,9 +65,20 @@ import (
 // unset: one `gh pr view` / `glab mr view` each, well under any host's rate limit.
 const DefaultMax = 20
 
+// DefaultDiscoverMax is how many phases one RunOnce asks the host about when
+// Poller.DiscoverMax is unset (one `gh pr list` / `glab mr list` each), and
+// DiscoverMinAge how long a phase that was asked about waits before it is asked
+// again (land-criteria UX plan, D8). pr_checked_at doubles as "last asked".
+const (
+	DefaultDiscoverMax = 5
+	DiscoverMinAge     = time.Hour
+)
+
 // Landing states the poller reads and writes (epic_phases.landing_state; the
 // same wire values as internal/api's landing constants).
 const (
+	StateNone   = "none"
+	StatePushed = "pushed"
 	StatePROpen = "pr_open"
 	StateMerged = "merged"
 )
@@ -81,6 +101,10 @@ var (
 	// landing_state is neither pr_open nor merged, or it carries neither a URL
 	// nor a number.
 	ErrNoChangeRequest = errors.New("phase has no change request")
+	// ErrNoChangeRequestFound: the phase could have a change request (ready or
+	// pushed, with a run branch), the host was asked, and it has no open or
+	// merged one for the run branch.
+	ErrNoChangeRequestFound = errors.New("no open or merged change request for the run branch")
 )
 
 // PlanReviewHook starts the plan branch review of a phase's plan when the plan
@@ -119,6 +143,9 @@ type Poller struct {
 	PlanReview PlanReviewHook
 	// Max caps the change requests one RunOnce reads. ≤0 ⇒ DefaultMax.
 	Max int
+	// DiscoverMax caps the phases one RunOnce asks the host to find a change
+	// request for. ≤0 ⇒ DefaultDiscoverMax.
+	DiscoverMax int
 }
 
 // phaseRow is what one poll needs to know about a phase.
@@ -130,6 +157,7 @@ type phaseRow struct {
 	provider, url              string
 	number                     int
 	status, landingError       sql.NullString
+	runBranch, runState        string
 }
 
 // selectColumns is the SELECT list scanRow reads, over epic_phases e → tasks t
@@ -137,7 +165,7 @@ type phaseRow struct {
 const selectColumns = `
 	SELECT e.id, e.workspace_task_id, p.id, COALESCE(p.path, ''), COALESCE(e.doc_path, ''), e.landing_state,
 	       COALESCE(e.pr_provider, ''), COALESCE(e.pr_url, ''), COALESCE(e.pr_number, 0),
-	       e.pr_status, e.landing_error
+	       e.pr_status, e.landing_error, COALESCE(e.run_branch, ''), COALESCE(e.run_state, '')
 	  FROM epic_phases e
 	  JOIN tasks t ON t.id = e.workspace_task_id
 	  JOIN projects p ON p.id = t.project_id`
@@ -147,45 +175,52 @@ type scanner interface{ Scan(dest ...any) error }
 func scanRow(s scanner) (phaseRow, error) {
 	var r phaseRow
 	err := s.Scan(&r.phaseID, &r.taskID, &r.projectID, &r.projectPath, &r.docPath, &r.landingState,
-		&r.provider, &r.url, &r.number, &r.status, &r.landingError)
+		&r.provider, &r.url, &r.number, &r.status, &r.landingError, &r.runBranch, &r.runState)
 	r.projectPath = strings.TrimSpace(r.projectPath)
 	return r, err
 }
 
 // RunOnce reads the status of up to Max open change requests, the ones read
-// longest ago first (never-read first), and stores what it learns. checked is
-// how many it asked about; changed is how many phases' landing changed (and
-// were published). A per-PR failure is stamped on that phase and logged, and
-// the rest are still read; err is non-nil only when the tick itself failed (the
-// store, or ctx ending).
+// longest ago first (never-read first), then asks the host for a change request
+// on up to DiscoverMax ready/pushed phases that have none recorded (discover),
+// and stores what it learns. checked is how many host reads it made (status and
+// discovery); changed is how many phases' landing changed (and were published).
+// A per-phase failure is stamped on that phase and logged, and the rest are
+// still read; err is non-nil only when the tick itself failed (the store, or
+// ctx ending).
 func (p *Poller) RunOnce(ctx context.Context) (checked, changed int, err error) {
 	limit := p.Max
 	if limit <= 0 {
 		limit = DefaultMax
 	}
-	// Read every row before writing any: the store runs on one connection, so
-	// an UPDATE issued while the cursor is open would wait on itself.
-	rows, err := p.DB.QueryContext(ctx, selectColumns+`
+	discoverLimit := p.DiscoverMax
+	if discoverLimit <= 0 {
+		discoverLimit = DefaultDiscoverMax
+	}
+	// Read every row of both passes before writing any: the store runs on one
+	// connection, so an UPDATE issued while a cursor is open would wait on itself.
+	batch, err := p.selectRows(ctx, "open change requests", selectColumns+`
 		 WHERE e.landing_state = ?
 		 ORDER BY e.pr_checked_at IS NOT NULL, e.pr_checked_at, e.id
 		 LIMIT ?`, StatePROpen, limit)
 	if err != nil {
-		return 0, 0, fmt.Errorf("landpoll: select open change requests: %w", err)
+		return 0, 0, err
 	}
-	var batch []phaseRow
-	for rows.Next() {
-		r, err := scanRow(rows)
-		if err != nil {
-			rows.Close()
-			return 0, 0, fmt.Errorf("landpoll: scan: %w", err)
-		}
-		batch = append(batch, r)
-	}
-	if err := rows.Close(); err != nil {
-		return 0, 0, fmt.Errorf("landpoll: select open change requests: %w", err)
-	}
-	if err := rows.Err(); err != nil {
-		return 0, 0, fmt.Errorf("landpoll: select open change requests: %w", err)
+	// Discovery candidates (D8): a run branch, no change request recorded, ready
+	// (none + run done) or pushed, a [LAND] criterion still open or already
+	// pushed, a live plan, and not asked within DiscoverMinAge.
+	staleBefore := p.now().Add(-DiscoverMinAge).UTC().Format(time.RFC3339)
+	candidates, err := p.selectRows(ctx, "discovery candidates", selectColumns+`
+		 WHERE COALESCE(e.run_branch, '') <> ''
+		   AND COALESCE(e.pr_url, '') = '' AND COALESCE(e.pr_number, 0) = 0
+		   AND (e.landing_state = ? OR (COALESCE(e.landing_state, ?) = ? AND e.run_state = 'done'))
+		   AND (e.criteria_land_open > 0 OR e.landing_state = ?)
+		   AND t.archived_at IS NULL
+		   AND (e.pr_checked_at IS NULL OR e.pr_checked_at < ?)
+		 ORDER BY e.pr_checked_at IS NOT NULL, e.pr_checked_at, e.id
+		 LIMIT ?`, StatePushed, StateNone, StateNone, StatePushed, staleBefore, discoverLimit)
+	if err != nil {
+		return 0, 0, err
 	}
 
 	dets := map[string]detection{}
@@ -202,7 +237,106 @@ func (p *Poller) RunOnce(ctx context.Context) (checked, changed int, err error) 
 			changed++
 		}
 	}
+	for _, r := range candidates {
+		if err := ctx.Err(); err != nil {
+			return checked, changed, err
+		}
+		checked++
+		res, _, err := p.discover(ctx, r, dets)
+		if err != nil {
+			return checked, changed, err
+		}
+		if res.changed {
+			changed++
+		}
+	}
 	return checked, changed, nil
+}
+
+// selectRows runs q and reads every row before returning, so the caller's
+// writes never run while its cursor is open. what names the query in errors.
+func (p *Poller) selectRows(ctx context.Context, what, q string, args ...any) ([]phaseRow, error) {
+	rows, err := p.DB.QueryContext(ctx, q, args...)
+	if err != nil {
+		return nil, fmt.Errorf("landpoll: select %s: %w", what, err)
+	}
+	var out []phaseRow
+	for rows.Next() {
+		r, err := scanRow(rows)
+		if err != nil {
+			rows.Close()
+			return nil, fmt.Errorf("landpoll: scan: %w", err)
+		}
+		out = append(out, r)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, fmt.Errorf("landpoll: select %s: %w", what, err)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("landpoll: select %s: %w", what, err)
+	}
+	return out, nil
+}
+
+// discoverable reports whether RefreshOne may ask the host to find r's change
+// request: a run branch, none recorded, and ready (none + run done) or pushed.
+// Unlike RunOnce's candidates it needs no open [LAND] criterion and ignores
+// DiscoverMinAge — the operator asked.
+func discoverable(r phaseRow) bool {
+	if r.runBranch == "" || r.url != "" || r.number > 0 {
+		return false
+	}
+	switch r.landingState {
+	case StatePushed:
+		return true
+	case StateNone, "":
+		return r.runState == "done"
+	default:
+		return false
+	}
+}
+
+// discover asks the host for the change request whose source branch is r's run
+// branch. Not found ⇒ only pr_checked_at is stamped (the throttle). Found ⇒ the
+// phase is moved to pr_open with the reference by a guarded UPDATE (a land or a
+// second tick that recorded one first wins, and nothing is written), then read
+// at once through poll, so a merged change request reaches merged — and its
+// [LAND] tick — in the same pass. A failed host call is stamped like a failed
+// status read. found reports whether the host has one.
+func (p *Poller) discover(ctx context.Context, r phaseRow, dets map[string]detection) (res pollResult, found bool, err error) {
+	now := p.now()
+	ref, found, readErr := p.find(ctx, r, dets)
+	if readErr != nil {
+		changed, err := p.stampFailure(r, readErr, now)
+		return pollResult{state: r.landingState, changed: changed, readErr: readErr}, false, err
+	}
+	ts := now.UTC().Format(time.RFC3339)
+	if !found || (ref.URL == "" && ref.Number <= 0) {
+		if _, err := p.DB.Exec(`UPDATE epic_phases SET pr_checked_at = ? WHERE id = ?`, ts, r.phaseID); err != nil {
+			return pollResult{}, false, fmt.Errorf("landpoll: stamp discovery of phase %d: %w", r.phaseID, err)
+		}
+		return pollResult{state: r.landingState}, false, nil
+	}
+	var number any
+	if ref.Number > 0 {
+		number = ref.Number
+	}
+	out, err := p.DB.Exec(`UPDATE epic_phases
+		    SET landing_state = ?, pr_url = ?, pr_number = ?, pr_provider = ?, pr_checked_at = ?, landing_error = NULL
+		  WHERE id = ? AND COALESCE(landing_state, ?) IN (?, ?) AND COALESCE(pr_url, '') = ''`,
+		StatePROpen, ref.URL, number, string(ref.Provider), ts, r.phaseID, StateNone, StateNone, StatePushed)
+	if err != nil {
+		return pollResult{}, true, fmt.Errorf("landpoll: record discovery on phase %d: %w", r.phaseID, err)
+	}
+	if n, _ := out.RowsAffected(); n == 0 {
+		return pollResult{state: r.landingState}, true, nil // recorded elsewhere first
+	}
+	p.logf("landpoll: phase %d discovered %s for %s", r.phaseID, ref.URL, r.runBranch)
+	r.landingState, r.url, r.number, r.provider = StatePROpen, ref.URL, ref.Number, string(ref.Provider)
+	r.status, r.landingError = sql.NullString{}, sql.NullString{}
+	res, err = p.poll(ctx, r, dets)
+	res.changed = true // poll published the never-read status (or its failure)
+	return res, true, err
 }
 
 // RefreshOne reads one phase's change request now, for the manual refresh
@@ -212,6 +346,12 @@ func (p *Poller) RunOnce(ctx context.Context) (checked, changed int, err error) 
 // returned, wrapping the classified repoprovider error (errors.Is works on
 // repoprovider.ErrNotAuthenticated etc.). A merged phase is re-read but never
 // leaves merged.
+//
+// A ready or pushed phase with a run branch and no change request recorded is
+// discovered instead (discover, without the DiscoverMinAge throttle): the host
+// having none is ErrNoChangeRequestFound; a found one is recorded and read, and
+// a failure of that first status read is stamped on the phase, not returned —
+// the change request IS recorded.
 func (p *Poller) RefreshOne(ctx context.Context, phaseID int64) (repoprovider.ChangeStatus, string, error) {
 	r, err := scanRow(p.DB.QueryRowContext(ctx, selectColumns+` WHERE e.id = ?`, phaseID))
 	if errors.Is(err, sql.ErrNoRows) {
@@ -219,6 +359,18 @@ func (p *Poller) RefreshOne(ctx context.Context, phaseID int64) (repoprovider.Ch
 	}
 	if err != nil {
 		return repoprovider.ChangeStatus{}, "", fmt.Errorf("landpoll: load phase %d: %w", phaseID, err)
+	}
+	if discoverable(r) {
+		res, found, err := p.discover(ctx, r, map[string]detection{})
+		switch {
+		case err != nil:
+			return repoprovider.ChangeStatus{}, r.landingState, err
+		case !found && res.readErr != nil:
+			return repoprovider.ChangeStatus{}, r.landingState, res.readErr
+		case !found:
+			return repoprovider.ChangeStatus{}, r.landingState, ErrNoChangeRequestFound
+		}
+		return res.status, res.state, nil
 	}
 	if r.landingState != StatePROpen && r.landingState != StateMerged {
 		return repoprovider.ChangeStatus{}, r.landingState, ErrNoChangeRequest
@@ -268,27 +420,51 @@ func (p *Poller) read(ctx context.Context, r phaseRow, dets map[string]detection
 	if r.url == "" && r.number <= 0 {
 		return repoprovider.ChangeStatus{}, ErrNoChangeRequest
 	}
+	prov, target, kind, err := p.resolve(ctx, r, dets)
+	if err != nil {
+		return repoprovider.ChangeStatus{}, err
+	}
+	return prov.Status(ctx, target, repoprovider.ChangeRef{URL: r.url, Number: r.number, Provider: kind})
+}
+
+// find resolves the phase's target and provider and asks for the change
+// request whose source branch is the phase's run branch.
+func (p *Poller) find(ctx context.Context, r phaseRow, dets map[string]detection) (repoprovider.ChangeRef, bool, error) {
+	prov, target, _, err := p.resolve(ctx, r, dets)
+	if err != nil {
+		return repoprovider.ChangeRef{}, false, err
+	}
+	return prov.FindChangeRequest(ctx, target, r.runBranch)
+}
+
+// resolve finds the repo the phase ran in, its origin remote (Detect, cached per
+// repo dir for one tick) and the provider for the phase's stored kind — or, with
+// none stored, the detected one.
+func (p *Poller) resolve(ctx context.Context, r phaseRow, dets map[string]detection) (repoprovider.Provider, repoprovider.Target, repoprovider.Kind, error) {
+	var none repoprovider.Target
 	repoDir := r.projectPath
 	if p.RepoDir != nil {
 		dir, err := p.RepoDir(r.phaseID)
 		if err != nil {
-			return repoprovider.ChangeStatus{}, fmt.Errorf("resolve the phase's repo: %w", err)
+			return nil, none, "", fmt.Errorf("resolve the phase's repo: %w", err)
 		}
 		repoDir = dir
 	}
 	if repoDir == "" {
-		return repoprovider.ChangeStatus{}, errors.New("the project has no known path")
+		return nil, none, "", errors.New("the project has no known path")
 	}
 	d, ok := dets[repoDir]
 	if !ok {
 		// cfg is the PROJECT's vcs config, never repoDir's (a multi-repo phase
 		// runs in a sub-repo whose own .claude/ is not where vcs.provider lives).
-		// No prober: the kind the change request was opened with is stored.
+		// No prober: the kind the change request was opened with is stored, and
+		// discovery on a self-hosted host relies on vcs.provider (or the host
+		// name) the way the land handler's own detection does.
 		d.det, d.err = repoprovider.Detect(ctx, p.exec(), repoDir, repoprovider.LoadConfig(r.projectPath), nil)
 		dets[repoDir] = d
 	}
 	if d.err != nil {
-		return repoprovider.ChangeStatus{}, d.err
+		return nil, none, "", d.err
 	}
 	kind := repoprovider.Kind(r.provider)
 	if kind != repoprovider.KindGitHub && kind != repoprovider.KindGitLab {
@@ -296,10 +472,9 @@ func (p *Poller) read(ctx context.Context, r phaseRow, dets map[string]detection
 	}
 	prov, err := p.Factory(kind)
 	if err != nil {
-		return repoprovider.ChangeStatus{}, err
+		return nil, none, "", err
 	}
-	target := repoprovider.Target{RepoDir: repoDir, RemoteName: repoprovider.DefaultRemote, Remote: d.det.Remote}
-	return prov.Status(ctx, target, repoprovider.ChangeRef{URL: r.url, Number: r.number, Provider: kind})
+	return prov, repoprovider.Target{RepoDir: repoDir, RemoteName: repoprovider.DefaultRemote, Remote: d.det.Remote}, kind, nil
 }
 
 // store writes a successful read: always the status and its time, the merged

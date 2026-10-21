@@ -12,9 +12,17 @@ package api
 // read also marks the project's VCS auth expired (MarkVcsAuthExpired), so the
 // project banner says so without waiting for its cache TTL.
 //
+// A ready or pushed phase with a run branch and no change request recorded is
+// a "Find PR" click (land-criteria UX plan, phase 4): the poller asks the host
+// for a change request whose source branch is the run branch (landpoll's
+// discover) and, when there is one, records it (pr_open) and reads it.
+//
 //	200 landingDTO                     the phase's landing after the read
 //	404                                unknown phase, or a phase of another epic
-//	409 {code:"no-change-request"}     landing_state is not pr_open|merged
+//	409 {code:"no-change-request"}     landing_state is not pr_open|merged and
+//	                                   the phase cannot be discovered, or the
+//	                                   host has no open or merged change request
+//	                                   for the run branch (+ `branch`)
 //	422 {error, code, hint, detail}    the host could not be asked; `detail` is
 //	                                   redacted, `code` is the landing_error code
 //	                                   (not-authenticated, binary-missing,
@@ -78,11 +86,11 @@ func (h *Handler) refreshPhaseLanding(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var (
-		wsTaskID        int64
-		provider, prURL sql.NullString
+		wsTaskID                   int64
+		provider, prURL, runBranch sql.NullString
 	)
-	err := h.DB.QueryRow(`SELECT workspace_task_id, pr_provider, pr_url FROM epic_phases WHERE id = ?`,
-		phaseID).Scan(&wsTaskID, &provider, &prURL)
+	err := h.DB.QueryRow(`SELECT workspace_task_id, pr_provider, pr_url, run_branch FROM epic_phases WHERE id = ?`,
+		phaseID).Scan(&wsTaskID, &provider, &prURL, &runBranch)
 	if errors.Is(err, sql.ErrNoRows) || (err == nil && wsTaskID != taskID) {
 		writeClientErr(w, http.StatusNotFound, "phase not found")
 		return
@@ -101,6 +109,11 @@ func (h *Handler) refreshPhaseLanding(w http.ResponseWriter, r *http.Request) {
 	case err == nil:
 	case errors.Is(err, landpoll.ErrPhaseNotFound):
 		writeClientErr(w, http.StatusNotFound, "phase not found")
+		return
+	case errors.Is(err, landpoll.ErrNoChangeRequestFound):
+		writeConflictFields(w, codeNoChangeRequest,
+			"no open or merged change request for "+runBranch.String+" — push and open one from the Review tab",
+			map[string]any{"branch": runBranch.String})
 		return
 	case errors.Is(err, landpoll.ErrNoChangeRequest):
 		writeConflict(w, codeNoChangeRequest,
