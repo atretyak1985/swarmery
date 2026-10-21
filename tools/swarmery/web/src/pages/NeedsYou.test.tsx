@@ -277,6 +277,55 @@ describe('NeedsYou page', () => {
     expect(within(row).queryByRole('button', { name: /copy reply|dismiss/i })).toBeNull();
   });
 
+  it('renders awaiting_merge rows that link to the phase Review tab, and to the PR once one is open', async () => {
+    const mergeItem = (seq: number, landingState: 'ready' | 'pushed' | 'pr_open', prUrl?: string): NeedsYouItem =>
+      item({
+        kind: 'awaiting_merge',
+        sessionId: 0,
+        sessionUuid: '',
+        sessionName: `Line items · Phase ${String(seq)}: Land ${String(seq)}`,
+        question: '',
+        asksQuestion: false,
+        preview: `1 [LAND] criterion left — ${landingState}`,
+        blockingSince: iso(-90 + seq),
+        phase: {
+          taskId: 7,
+          planExternalId: '2026-10-01-line-items',
+          planTitle: 'Line items',
+          phaseId: 40 + seq,
+          seq,
+          name: `Land ${String(seq)}`,
+          manualOpen: 0,
+          landOpen: 1,
+          landingState,
+          ...(prUrl !== undefined ? { prUrl } : {}),
+        },
+      });
+    serve([AWAITING, mergeItem(1, 'ready'), mergeItem(2, 'pr_open', 'https://example.test/pr/2')]);
+    await renderPage();
+    expect(rows().map((r) => r.dataset.kind)).toEqual(['awaiting_merge', 'awaiting_merge', 'awaiting_reply']);
+
+    const ready = rowOf('Line items · Phase 1: Land 1');
+    expect(within(ready).getByText('Awaiting merge')).toBeTruthy();
+    expect(within(ready).getByText('1 [LAND] criterion left — ready')).toBeTruthy();
+    const reviewHref = '/p/shop/plans/2026-10-01-line-items/phase/1/review';
+    expect(within(ready).getByRole('link', { name: 'open review →' }).getAttribute('href')).toBe(reviewHref);
+    expect(within(ready).getByRole('link', { name: 'Line items · Phase 1: Land 1' }).getAttribute('href')).toBe(
+      reviewHref,
+    );
+    expect(within(ready).queryByRole('link', { name: 'open PR ↗' })).toBeNull();
+
+    const prOpen = rowOf('Line items · Phase 2: Land 2');
+    expect(within(prOpen).getByRole('link', { name: 'open review →' }).getAttribute('href')).toBe(
+      '/p/shop/plans/2026-10-01-line-items/phase/2/review',
+    );
+    const pr = within(prOpen).getByRole('link', { name: 'open PR ↗' });
+    expect(pr.getAttribute('href')).toBe('https://example.test/pr/2');
+    expect(pr.getAttribute('target')).toBe('_blank');
+    expect(pr.getAttribute('rel')).toBe('noopener noreferrer');
+    expect(within(prOpen).queryByRole('button', { name: /copy reply|dismiss/i })).toBeNull();
+  });
+
   it('ignores frames that cannot change the queue', async () => {
     serve([AWAITING]);
     await renderPage();

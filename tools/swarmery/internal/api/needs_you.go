@@ -38,6 +38,7 @@ var needsYouKindRank = map[string]int{
 	needsYouAwaitingReply:   3,
 	needsYouFailed:          4,
 	needsYouManualPhase:     5,
+	needsYouAwaitingMerge:   6,
 }
 
 const (
@@ -64,13 +65,13 @@ type replySuggestion struct {
 
 // needsYouItem is one blocker. Mirrors NeedsYouItem in web/src/api/types.ts.
 type needsYouItem struct {
-	Kind string `json:"kind"` // approval | question | prod_deploy_local | awaiting_reply | failed | manual_phase
-	// SessionID / SessionUUID are 0 / "" for a manual_phase item: a plan
-	// phase blocks, not a session.
+	Kind string `json:"kind"` // approval | question | prod_deploy_local | awaiting_reply | failed | manual_phase | awaiting_merge
+	// SessionID / SessionUUID are 0 / "" for a phase item (manual_phase,
+	// awaiting_merge): a plan phase blocks, not a session.
 	SessionID   int64  `json:"sessionId"`
 	SessionUUID string `json:"sessionUuid"`
 	// SessionName is COALESCE(custom_title, title, session_uuid[:8]); for a
-	// manual_phase item, "<plan> · Phase <seq>: <name>".
+	// phase item, "<plan> · Phase <seq>: <name>".
 	SessionName string `json:"sessionName"`
 	ProjectSlug string `json:"projectSlug"`
 	// RequestID is the permission_requests.id (approval/question/prod_deploy_local).
@@ -92,7 +93,7 @@ type needsYouItem struct {
 	BlockingSeconds int64            `json:"blockingSeconds"`
 	TermFocusURL    *string          `json:"termFocusUrl"`
 	Suggestion      *replySuggestion `json:"suggestion"`
-	// Phase names the plan phase of a manual_phase item; absent otherwise.
+	// Phase names the plan phase of a phase item; absent otherwise.
 	Phase *needsYouPhase `json:"phase,omitempty"`
 
 	at time.Time // parsed BlockingSince; zero when unparseable
@@ -166,13 +167,18 @@ func collectNeedsYou(db *sql.DB, r *http.Request, now time.Time) ([]needsYouItem
 	if err != nil {
 		return nil, err
 	}
+	merge, err := queryNeedsYouAwaitingMerge(db, scope, projArgs)
+	if err != nil {
+		return nil, err
+	}
 
-	all := make([]needsYouItem, 0, len(pending)+len(local)+len(awaiting)+len(failed)+len(manual))
+	all := make([]needsYouItem, 0, len(pending)+len(local)+len(awaiting)+len(failed)+len(manual)+len(merge))
 	all = append(all, pending...)
 	all = append(all, local...)
 	all = append(all, awaiting...)
 	all = append(all, failed...)
 	all = append(all, manual...)
+	all = append(all, merge...)
 	items := dedupeNeedsYou(all)
 	for i := range items {
 		items[i].BlockingSeconds = blockingSeconds(items[i].at, now)
@@ -380,8 +386,8 @@ func dedupeNeedsYou(items []needsYouItem) []needsYouItem {
 
 // sortNeedsYou orders items oldest blocker first; ties break on kind
 // (approval < question < prod_deploy_local < awaiting_reply < failed <
-// manual_phase), then on the item id (request id, else phase id, else
-// session id).
+// manual_phase < awaiting_merge), then on the item id (request id, else phase
+// id, else session id).
 func sortNeedsYou(items []needsYouItem) {
 	sort.SliceStable(items, func(i, j int) bool {
 		a, b := items[i], items[j]
@@ -396,7 +402,7 @@ func sortNeedsYou(items []needsYouItem) {
 }
 
 // needsYouItemID is the tie-break id: the request id when there is one, the
-// phase id for a manual_phase item.
+// phase id for a phase item.
 func needsYouItemID(it needsYouItem) int64 {
 	if it.RequestID != nil {
 		return *it.RequestID

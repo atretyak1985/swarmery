@@ -1230,6 +1230,14 @@ msgstr "open criteria →"
 msgid "open in System"
 msgstr "open in System"
 
+#: src/pages/NeedsYou.tsx
+msgid "open PR ↗"
+msgstr "open PR ↗"
+
+#: src/pages/NeedsYou.tsx
+msgid "open review →"
+msgstr "open review →"
+
 #: src/pages/Approvals.tsx
 #: src/pages/NeedsYou.tsx
 #: src/pages/NeedsYou.tsx

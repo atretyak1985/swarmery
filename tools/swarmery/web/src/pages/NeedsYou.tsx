@@ -14,6 +14,10 @@
 //   manual_phase         a plan phase whose every open criterion is [MANUAL]:
 //                        a link to that phase's Criteria tab, where the
 //                        operator ticks what they checked by hand
+//   awaiting_merge       a plan phase whose every open criterion is [LAND] and
+//                        whose run branch is ready, pushed or under an open
+//                        PR: a link to the phase's Review tab (push / open PR)
+//                        and, once a PR is open, a link to that PR
 //
 // Nothing here delivers a reply to a session: the operator pastes it.
 
@@ -44,6 +48,7 @@ const KIND_BADGE: Record<NeedsYouKind, string> = {
   awaiting_reply: 'border-amber/40 text-amber',
   failed: 'border-red/40 text-red',
   manual_phase: 'border-brand/40 text-brand',
+  awaiting_merge: 'border-green/40 text-green',
 };
 
 const FOCUS = 'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand';
@@ -186,15 +191,26 @@ function ConfirmLocally({ item, sessionTo }: { item: NeedsYouItem; sessionTo: st
   );
 }
 
-/* ----- manual_phase: a plan phase only the operator can finish ----- */
+/* ----- manual_phase / awaiting_merge: a plan phase only the operator can finish ----- */
 
-/** The phase's Criteria tab — where the [MANUAL] criteria are ticked by hand. */
-function manualPhaseHref(item: NeedsYouItem): string | null {
+/**
+ * A phase tab of the item's plan: Criteria for a manual_phase item (where the
+ * [MANUAL] criteria are ticked by hand), Review for an awaiting_merge one
+ * (where the run branch is pushed and its PR opened).
+ */
+function phaseHref(item: NeedsYouItem, tab: 'criteria' | 'review'): string | null {
   if (item.phase === undefined || item.phase.planExternalId === '') return null;
   return plansPath(item.projectSlug, {
     plan: item.phase.planExternalId,
-    detail: { kind: 'phase', seq: item.phase.seq, tab: 'criteria' },
+    detail: { kind: 'phase', seq: item.phase.seq, tab },
   });
+}
+
+/** The phase link a phase item's title and body open; null for a session item. */
+function phaseItemHref(item: NeedsYouItem): string | null {
+  if (item.kind === 'manual_phase') return phaseHref(item, 'criteria');
+  if (item.kind === 'awaiting_merge') return phaseHref(item, 'review');
+  return null;
 }
 
 function ManualPhase({ item, phaseTo }: { item: NeedsYouItem; phaseTo: string | null }): JSX.Element {
@@ -204,6 +220,26 @@ function ManualPhase({ item, phaseTo }: { item: NeedsYouItem; phaseTo: string | 
       {phaseTo !== null && (
         <Link to={phaseTo} className={`ml-auto ${LINK}`}>
           <Trans>open criteria →</Trans>
+        </Link>
+      )}
+    </div>
+  );
+}
+
+/** Only the merge is left: Review pushes and opens the PR; an open PR merges on the host. */
+function AwaitingMerge({ item, reviewTo }: { item: NeedsYouItem; reviewTo: string | null }): JSX.Element {
+  const prUrl = item.phase?.landingState === 'pr_open' ? (item.phase.prUrl ?? '') : '';
+  return (
+    <div className="mt-2 flex flex-wrap items-center gap-3">
+      <span className="min-w-0 flex-1 text-[12.5px] text-ink-3">{item.preview}</span>
+      {prUrl !== '' && (
+        <a href={prUrl} target="_blank" rel="noopener noreferrer" className={`ml-auto ${LINK}`}>
+          <Trans>open PR ↗</Trans>
+        </a>
+      )}
+      {reviewTo !== null && (
+        <Link to={reviewTo} className={`${prUrl === '' ? 'ml-auto ' : ''}${LINK}`}>
+          <Trans>open review →</Trans>
         </Link>
       )}
     </div>
@@ -276,11 +312,14 @@ function Row({
       );
       break;
     case 'manual_phase':
-      body = <ManualPhase item={item} phaseTo={manualPhaseHref(item)} />;
+      body = <ManualPhase item={item} phaseTo={phaseItemHref(item)} />;
+      break;
+    case 'awaiting_merge':
+      body = <AwaitingMerge item={item} reviewTo={phaseItemHref(item)} />;
       break;
   }
-  // A manual_phase row names a plan phase, not a session: its title opens the phase.
-  const titleTo = item.kind === 'manual_phase' ? (manualPhaseHref(item) ?? sessionTo) : sessionTo;
+  // A phase row names a plan phase, not a session: its title opens the phase.
+  const titleTo = phaseItemHref(item) ?? sessionTo;
 
   return (
     <li

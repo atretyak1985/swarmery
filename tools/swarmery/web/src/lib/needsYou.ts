@@ -30,6 +30,7 @@ const KIND_LABELS: Record<NeedsYouKind, MessageDescriptor> = {
   awaiting_reply: msg`Awaiting your reply`,
   failed: msg`Failed`,
   manual_phase: msg`Manual check`,
+  awaiting_merge: msg`Awaiting merge`,
 };
 
 /** The kind's label in the active locale (looked up at call time). */

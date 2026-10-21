@@ -1776,8 +1776,10 @@ export type ApprovalChannel = 'shim' | 'mod';
 /**
  * What blocks on the operator: a pending approval, a pending AskUserQuestion,
  * a production deploy handed to the session's own terminal, a session that
- * ended its turn waiting for a typed reply, a recently failed session, or a
- * plan phase whose every open criterion is `[MANUAL]` (only a human closes it).
+ * ended its turn waiting for a typed reply, a recently failed session, a
+ * plan phase whose every open criterion is `[MANUAL]` (only a human closes it),
+ * or one whose every open criterion is `[LAND]` with its run branch ready,
+ * pushed or under an open PR (only the merge is left).
  */
 export type NeedsYouKind =
   | 'approval'
@@ -1785,9 +1787,13 @@ export type NeedsYouKind =
   | 'prod_deploy_local'
   | 'awaiting_reply'
   | 'failed'
-  | 'manual_phase';
+  | 'manual_phase'
+  | 'awaiting_merge';
 
-/** The plan phase behind a `manual_phase` item (Go needsYouPhase). */
+/** Where an `awaiting_merge` phase's landing stands (`ready` is derived). */
+export type NeedsYouLandingState = 'ready' | 'pushed' | 'pr_open';
+
+/** The plan phase behind a `manual_phase` / `awaiting_merge` item (Go needsYouPhase). */
 export interface NeedsYouPhase {
   taskId: number;
   /** tasks.external_id — what the Plans deep link addresses. */
@@ -1796,8 +1802,14 @@ export interface NeedsYouPhase {
   phaseId: number;
   seq: number;
   name: string;
-  /** Unticked [MANUAL] criteria — every open criterion of the phase. */
+  /** Unticked [MANUAL] criteria — every open criterion of a `manual_phase` item. */
   manualOpen: number;
+  /** `awaiting_merge` only: unticked [LAND] criteria — every open criterion of the phase. */
+  landOpen?: number;
+  /** `awaiting_merge` only. */
+  landingState?: NeedsYouLandingState;
+  /** `awaiting_merge` only, once a PR is open. */
+  prUrl?: string;
 }
 
 /** Haiku-extracted reply card for an awaiting_reply item (always null until phase 4). */
@@ -1810,11 +1822,11 @@ export interface ReplySuggestion {
 /** One blocker in the needs-you queue. */
 export interface NeedsYouItem {
   kind: NeedsYouKind;
-  /** 0 for a `manual_phase` item (a plan phase blocks, not a session). */
+  /** 0 for a phase item — `manual_phase`, `awaiting_merge` (a plan phase blocks, not a session). */
   sessionId: number;
   sessionUuid: string;
   /** COALESCE(custom_title, title, first 8 chars of the session uuid); for a
-   * `manual_phase` item, "<plan> · Phase <seq>: <name>". */
+   * phase item, "<plan> · Phase <seq>: <name>". */
   sessionName: string;
   projectSlug: string;
   /** permission_requests.id — approval, question and prod_deploy_local only. */
@@ -1831,7 +1843,7 @@ export interface NeedsYouItem {
   /** The session's terminal deep link (WARP_FOCUS_URL), when known. */
   termFocusUrl: string | null;
   suggestion: ReplySuggestion | null;
-  /** `manual_phase` only: the phase to open. Absent on every session item. */
+  /** `manual_phase` / `awaiting_merge` only: the phase to open. Absent on every session item. */
   phase?: NeedsYouPhase;
   /** approval items only: the transport of the permission request. Absent on an older daemon. */
   channel?: ApprovalChannel;
