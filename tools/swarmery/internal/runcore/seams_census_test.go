@@ -36,6 +36,10 @@ package runcore
 //
 // Set A went 10 -> 11, so A ∪ B went 13 -> 14.
 //
+// 2026-10-21: plainsum/runner.go joined set A — the Plans page's "In plain
+// words" retelling, a stdout-only twin of handoff/runner.go. Set A went
+// 11 -> 12, so A ∪ B went 14 -> 15.
+//
 // It pins TWO sets, not one, because "files containing the flag" is measurably
 // the wrong census — it counts fifteen files, three of which are not seams:
 //
@@ -79,6 +83,7 @@ var censusRawArgv = []string{
 	"internal/handoff/runner.go",
 	"internal/improve/runner.go",
 	"internal/lessons/runner.go",
+	"internal/plainsum/runner.go",
 	"internal/replyextract/replyextract.go",
 	"internal/retroanalysis/runner.go",
 	"internal/routines/runner.go",
@@ -155,8 +160,8 @@ func TestSettingSourceSeamCensus(t *testing.T) {
 	all = append(all, censusMentionOnly...)
 	censusAssert(t, "of files mentioning "+censusFlag+" at all", mentions, all)
 
-	if n := len(censusRawArgv) + len(censusSpecField); n != 14 {
-		t.Fatalf("G7 is fourteen seams (twelve, plus replyextract and the triage judge); the census lists %d", n)
+	if n := len(censusRawArgv) + len(censusSpecField); n != 15 {
+		t.Fatalf("G7 is fifteen seams (twelve, plus replyextract, the triage judge and plainsum); the census lists %d", n)
 	}
 }
 

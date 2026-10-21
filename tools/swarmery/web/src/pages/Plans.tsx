@@ -111,6 +111,7 @@ import { PHASE_TABS, PhasePanel, type PhaseTab } from './plans/PhasePanel';
 import { PhaseReopens } from './plans/PhaseReopens';
 import { TerminalBadge, useTerminalSessions } from './plans/TerminalBadge';
 import { PhaseReview } from './plans/PhaseReview';
+import { PlainSummary } from './plans/PlainSummary';
 import { RunsReviewBlock } from './plans/RunsReviewBlock';
 import { VerifyVerdictChip } from './plans/VerifyVerdictChip';
 import { reverifyAction, useReverify, type Reverify } from './plans/useReverify';
@@ -829,6 +830,7 @@ function isPlainClick(e: { button: number; metaKey: boolean; ctrlKey: boolean; s
 /** Plan-details tab labels, as PlanDetailPanel shows them (Revisions without its count). */
 const PLAN_DETAIL_TAB_LABEL: Record<PlanDetailTab, MessageDescriptor> = {
   plan: msg`Plan`,
+  plain: msg`In plain words`,
   spec: msg`Spec`,
   summary: msg`Summary`,
   revisions: msg`Revisions`,
@@ -3301,7 +3303,9 @@ function PhaseDetailPanel({
           onSaved={onDocChanged}
         />
       ) : activeTab === 'report' ? (
-        <PhaseSummary phase={phase} doc={doc} />
+        <PhaseSummary taskId={epic.taskId} phase={phase} doc={doc} />
+      ) : activeTab === 'plain' ? (
+        <PlainSummary taskId={epic.taskId} kind="phase" path={phase.docRelPath} version={phase.docUpdatedAt} />
       ) : activeTab === 'story' ? (
         <div className="space-y-5">
           <PhaseCard
@@ -3460,7 +3464,15 @@ function PhaseDetailPanel({
  * the Phase tab. All this tab keeps of them is the one-line score, as context
  * for the narrative. A phase whose executor wrote no report says so plainly
  * instead of padding the tab with a re-run of the checklist. */
-function PhaseSummary({ phase, doc }: { phase: EpicPhase; doc: string | null }): JSX.Element {
+function PhaseSummary({
+  taskId,
+  phase,
+  doc,
+}: {
+  taskId: number;
+  phase: EpicPhase;
+  doc: string | null;
+}): JSX.Element {
   const { t } = useLingui();
   const checks = useMemo(() => (doc !== null ? extractChecks(doc) : []), [doc]);
   const execRecord = useMemo(
@@ -3498,6 +3510,11 @@ function PhaseSummary({ phase, doc }: { phase: EpicPhase; doc: string | null }):
 
   return (
     <>
+      {phase.completionReport !== null && (
+        <RailSection label={t`in plain words`}>
+          <PlainSummary taskId={taskId} kind="phase-report" path={phase.docRelPath} version={phase.docUpdatedAt} />
+        </RailSection>
+      )}
       {checks.length > 0 && score}
       {phase.completionReport !== null && (
         <RailSection label={t`what was done`}>
@@ -3557,6 +3574,7 @@ function PlanDetailPanel({
   const staged = String(stagedCount);
   const tabs: { id: PlanDetailTab; label: string }[] = [
     { id: 'plan', label: i18n._(PLAN_DETAIL_TAB_LABEL.plan) },
+    { id: 'plain', label: i18n._(PLAN_DETAIL_TAB_LABEL.plain) },
     ...(epic.hasSpec ? [{ id: 'spec' as const, label: i18n._(PLAN_DETAIL_TAB_LABEL.spec) }] : []),
     ...(complete ? [{ id: 'summary' as const, label: i18n._(PLAN_DETAIL_TAB_LABEL.summary) }] : []),
     { id: 'revisions', label: stagedCount > 0 ? t`Revisions (${staged})` : i18n._(PLAN_DETAIL_TAB_LABEL.revisions) },
@@ -3591,6 +3609,8 @@ function PlanDetailPanel({
         <DocEditor taskId={epic.taskId} path="README.md" version={null} onSaved={onDocChanged} />
       ) : activeTab === 'plan' ? (
         <PlanReadme epic={epic} />
+      ) : activeTab === 'plain' ? (
+        <PlainSummary taskId={epic.taskId} kind="plan" />
       ) : activeTab === 'spec' ? (
         <PlanSpec epic={epic} />
       ) : activeTab === 'revisions' ? (
@@ -3904,6 +3924,9 @@ function PlanSummary({
 
   return (
     <div className="space-y-4">
+      <RailSection label={t`in plain words`}>
+        <PlainSummary taskId={epic.taskId} kind="plan-report" />
+      </RailSection>
       {summaryMd !== null && (
         <RailSection label={t`plan summary`}>
           <Markdown text={summaryMd} />
