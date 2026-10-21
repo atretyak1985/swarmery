@@ -249,7 +249,8 @@ func TestStatusParsing(t *testing.T) {
 		{"failing context", `{"state":"OPEN","statusCheckRollup":[{"__typename":"StatusContext","state":"ERROR"}]}`,
 			repoprovider.ChangeStatus{State: "open", CI: "failure", Review: "none"}},
 		{"merged", `{"state":"MERGED","mergedAt":"2026-10-09T10:00:00Z","statusCheckRollup":null}`,
-			repoprovider.ChangeStatus{State: "merged", CI: "none", Review: "none"}},
+			repoprovider.ChangeStatus{State: "merged", CI: "none", Review: "none",
+				MergedAt: time.Date(2026, 10, 9, 10, 0, 0, 0, time.UTC)}},
 		{"merged by state", `{"state":"MERGED"}`, repoprovider.ChangeStatus{State: "merged", CI: "none", Review: "none"}},
 		{"closed", `{"state":"CLOSED"}`, repoprovider.ChangeStatus{State: "closed", CI: "none", Review: "none"}},
 	}

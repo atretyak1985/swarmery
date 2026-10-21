@@ -255,13 +255,19 @@ func (p *Provider) Status(ctx context.Context, t repoprovider.Target, ref repopr
 		return repoprovider.ChangeStatus{}, fmt.Errorf("github: unreadable gh pr view output: %s",
 			repoprovider.RedactedTail(stdout, err))
 	}
-	return repoprovider.ChangeStatus{
+	st := repoprovider.ChangeStatus{
 		State:     prState(v),
 		Draft:     v.IsDraft,
 		CI:        ciSummary(v.StatusCheckRollup),
 		Review:    reviewSummary(v.ReviewDecision),
 		CheckedAt: p.now().UTC(),
-	}, nil
+	}
+	if st.State == repoprovider.StateMerged {
+		if at, err := time.Parse(time.RFC3339, v.MergedAt); err == nil {
+			st.MergedAt = at.UTC()
+		}
+	}
+	return st, nil
 }
 
 // findLimit bounds how many PRs `gh pr list --head` returns for one branch.

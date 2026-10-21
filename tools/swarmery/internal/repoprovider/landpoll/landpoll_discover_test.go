@@ -181,8 +181,8 @@ func TestDiscoverMergedPRReachesMergedAndTicksLand(t *testing.T) {
 	d.reply(22, reply{out: prJSON("MERGED", "2026-10-09T11:00:00Z", "APPROVED", runOK)})
 
 	d.runOnce()
-	if l := d.landing(id); l.state != StateMerged || !l.landedAt.Valid {
-		t.Fatalf("landing = %+v, want merged with landed_at", l)
+	if l := d.landing(id); l.state != StateMerged || l.landedAt.String != "2026-10-09T11:00:00Z" {
+		t.Fatalf("landing = %+v, want merged with landed_at at the merge time", l)
 	}
 	if got := readDoc(t, path); got != landDocMerged {
 		t.Fatalf("doc after a discovered merge:\n%s\nwant:\n%s", got, landDocMerged)
@@ -313,23 +313,72 @@ func TestDiscoverGuardedUpdateLosesToARacingWriter(t *testing.T) {
 	}
 }
 
-func TestDiscoverFailureIsStamped(t *testing.T) {
+// A failed background lookup advances the throttle and is logged, but writes no
+// landing_error: a ready phase has no landing to fail, and a not-authenticated
+// stamp would keep the project's auth banner up (internal/api/vcs.go, rule 3)
+// until a land cleared it.
+func TestDiscoverBackgroundFailureOnlyThrottles(t *testing.T) {
 	d := newDiscoverHarness(t)
 	id, branch := d.ready(1)
 	d.list(branch, reply{stderr: "HTTP 401: Bad credentials " + ghToken})
 
-	if checked, changed := d.runOnce(); checked != 1 || changed != 1 {
-		t.Fatalf("checked/changed = %d/%d, want 1/1", checked, changed)
+	if checked, changed := d.runOnce(); checked != 1 || changed != 0 {
+		t.Fatalf("checked/changed = %d/%d, want 1/0", checked, changed)
 	}
 	r := d.ref(id)
-	if !strings.HasPrefix(r.landingError.String, CodeNotAuthenticated+": ") || strings.Contains(r.landingError.String, ghToken) {
-		t.Errorf("landing_error = %q, want a redacted not-authenticated stamp", r.landingError.String)
+	if r.landingError.Valid {
+		t.Errorf("landing_error = %q, want NULL after a background discovery failure", r.landingError.String)
 	}
 	if r.state != StateNone || r.checkedAt.String != t0.Format(time.RFC3339) {
 		t.Errorf("stored = %+v, want state none and pr_checked_at stamped", r)
 	}
+	if d.publishedCount() != 0 {
+		t.Errorf("a background discovery failure published: %v", d.published)
+	}
 	if len(d.expired) != 1 || d.expired[0] != d.projectID {
 		t.Errorf("expired = %v, want the project", d.expired)
+	}
+	logs := strings.Join(d.logs, "\n")
+	if !strings.Contains(logs, "discovery failed: "+CodeNotAuthenticated+": ") || strings.Contains(logs, ghToken) {
+		t.Errorf("logs = %q, want a redacted not-authenticated discovery failure", d.logs)
+	}
+
+	// The throttle advanced: not asked again within DiscoverMinAge.
+	d.now = t0.Add(time.Minute)
+	if checked, _ := d.runOnce(); checked != 0 {
+		t.Errorf("a failed phase was asked again within DiscoverMinAge: checked = %d", checked)
+	}
+}
+
+// The land handler's own error on a pushed phase (the push went through, the
+// PR did not open) is the operator's to read; a later not-found or failed
+// discovery tick must not clear or overwrite it.
+func TestDiscoverKeepsTheLandHandlersError(t *testing.T) {
+	const landErr = "open-failed: gh pr create: GraphQL: base branch not found"
+	for _, c := range []struct {
+		name string
+		r    reply
+	}{
+		{"not found", reply{out: "[]"}},
+		{"host failure", reply{stderr: "HTTP 502: Bad gateway"}},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			d := newDiscoverHarness(t)
+			id := d.cand(d.taskID, 1, StatePushed, "done", "swarm/phase-1", 1, "")
+			d.exec(`UPDATE epic_phases SET landing_error = ? WHERE id = ?`, landErr, id)
+			d.list("swarm/phase-1", c.r)
+
+			if checked, _ := d.runOnce(); checked != 1 {
+				t.Fatalf("checked = %d, want the pushed phase asked", checked)
+			}
+			r := d.ref(id)
+			if r.landingError.String != landErr {
+				t.Errorf("landing_error = %v, want the land handler's %q kept", r.landingError, landErr)
+			}
+			if r.state != StatePushed || r.checkedAt.String != t0.Format(time.RFC3339) {
+				t.Errorf("stored = %+v, want pushed with pr_checked_at stamped", r)
+			}
+		})
 	}
 }
 
@@ -365,6 +414,11 @@ func TestRefreshOneDiscovers(t *testing.T) {
 		d.list(branch, reply{stderr: "HTTP 401: Bad credentials"})
 		if _, _, err := d.poller.RefreshOne(ctx, id); err == nil || errors.Is(err, ErrNoChangeRequestFound) {
 			t.Fatalf("RefreshOne err = %v, want the classified host failure", err)
+		}
+		// The click is answered with the failure and, unlike a background tick,
+		// stamps it on the phase.
+		if r := d.ref(id); !strings.HasPrefix(r.landingError.String, CodeNotAuthenticated+": ") {
+			t.Errorf("landing_error = %v, want the click's not-authenticated stamp", r.landingError)
 		}
 	})
 

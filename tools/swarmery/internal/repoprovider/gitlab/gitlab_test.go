@@ -325,7 +325,8 @@ func TestStatusNormalization(t *testing.T) {
 		{"mr_opened_head_pipeline_running.json", repoprovider.ChangeStatus{
 			State: repoprovider.StateOpen, Draft: true, CI: repoprovider.CIPending, Review: repoprovider.ReviewNone}},
 		{"mr_merged_pipeline_success.json", repoprovider.ChangeStatus{
-			State: repoprovider.StateMerged, CI: repoprovider.CISuccess, Review: repoprovider.ReviewApproved}},
+			State: repoprovider.StateMerged, CI: repoprovider.CISuccess, Review: repoprovider.ReviewApproved,
+			MergedAt: time.Date(2026, 10, 9, 10, 30, 0, 0, time.UTC)}},
 		{"mr_closed_no_pipeline.json", repoprovider.ChangeStatus{
 			State: repoprovider.StateClosed, CI: repoprovider.CINone, Review: repoprovider.ReviewNone}},
 		{"mr_opened_pipeline_failed_unapproved.json", repoprovider.ChangeStatus{

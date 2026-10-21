@@ -24,7 +24,9 @@
 // have a run branch and no change request recorded, each at most once per
 // DiscoverMinAge (pr_checked_at doubles as "last asked"). A found one is
 // recorded — landing_state pr_open, pr_url/pr_number/pr_provider — by a guarded
-// UPDATE and read at once, so a merged one reaches merged in the same tick. The
+// UPDATE and read at once, so a merged one reaches merged in the same tick. A
+// failed lookup on the tick stamps only pr_checked_at and is logged — never
+// landing_error, which belongs to a landing the phase does not have yet. The
 // poller only reads the host: it never opens a change request.
 //
 // The one criterion it does tick is the class landing closes (phase-run
@@ -185,8 +187,8 @@ func scanRow(s scanner) (phaseRow, error) {
 // on up to DiscoverMax ready/pushed phases that have none recorded (discover),
 // and stores what it learns. checked is how many host reads it made (status and
 // discovery); changed is how many phases' landing changed (and were published).
-// A per-phase failure is stamped on that phase and logged, and the rest are
-// still read; err is non-nil only when the tick itself failed (the store, or
+// A per-phase failure is stamped on that phase (a discovery failure only as
+// pr_checked_at) and logged, and the rest are still read; err is non-nil only when the tick itself failed (the store, or
 // ctx ending).
 func (p *Poller) RunOnce(ctx context.Context) (checked, changed int, err error) {
 	limit := p.Max
@@ -242,7 +244,7 @@ func (p *Poller) RunOnce(ctx context.Context) (checked, changed int, err error) 
 			return checked, changed, err
 		}
 		checked++
-		res, _, err := p.discover(ctx, r, dets)
+		res, _, err := p.discover(ctx, r, dets, true)
 		if err != nil {
 			return checked, changed, err
 		}
@@ -301,16 +303,38 @@ func discoverable(r phaseRow) bool {
 // phase is moved to pr_open with the reference by a guarded UPDATE (a land or a
 // second tick that recorded one first wins, and nothing is written), then read
 // at once through poll, so a merged change request reaches merged — and its
-// [LAND] tick — in the same pass. A failed host call is stamped like a failed
-// status read. found reports whether the host has one.
-func (p *Poller) discover(ctx context.Context, r phaseRow, dets map[string]detection) (res pollResult, found bool, err error) {
+// [LAND] tick — in the same pass. found reports whether the host has one.
+//
+// A failed host call depends on who asked. The operator's click (background
+// false) stamps it like a failed status read — landing_error and pr_checked_at —
+// and RefreshOne returns it. The background tick (background true) stamps only
+// pr_checked_at, so the throttle still advances, and logs it: a phase with no
+// change request has no landing to fail, and a transient gh failure or an
+// expired token written to landing_error would stay on the ready phase (and
+// keep the project's auth banner up through it) until a land clears it. A
+// rejected credential still tells OnAuthExpired, which the next probe answers.
+// Not found never touches landing_error either: the land handler's own error on
+// a pushed phase ("pushed but the PR was not opened") stays until a land or a
+// discovery clears it.
+func (p *Poller) discover(ctx context.Context, r phaseRow, dets map[string]detection, background bool) (res pollResult, found bool, err error) {
 	now := p.now()
+	ts := now.UTC().Format(time.RFC3339)
 	ref, found, readErr := p.find(ctx, r, dets)
-	if readErr != nil {
+	if readErr != nil && !background {
 		changed, err := p.stampFailure(r, readErr, now)
 		return pollResult{state: r.landingState, changed: changed, readErr: readErr}, false, err
 	}
-	ts := now.UTC().Format(time.RFC3339)
+	if readErr != nil {
+		code, detail := Classify(readErr)
+		p.logf("landpoll: phase %d (task %d): discovery failed: %s: %s", r.phaseID, r.taskID, code, detail)
+		if code == CodeNotAuthenticated && p.OnAuthExpired != nil {
+			p.OnAuthExpired(r.projectID)
+		}
+		if _, err := p.DB.Exec(`UPDATE epic_phases SET pr_checked_at = ? WHERE id = ?`, ts, r.phaseID); err != nil {
+			return pollResult{}, false, fmt.Errorf("landpoll: stamp discovery of phase %d: %w", r.phaseID, err)
+		}
+		return pollResult{state: r.landingState, readErr: readErr}, false, nil
+	}
 	if !found || (ref.URL == "" && ref.Number <= 0) {
 		if _, err := p.DB.Exec(`UPDATE epic_phases SET pr_checked_at = ? WHERE id = ?`, ts, r.phaseID); err != nil {
 			return pollResult{}, false, fmt.Errorf("landpoll: stamp discovery of phase %d: %w", r.phaseID, err)
@@ -361,7 +385,7 @@ func (p *Poller) RefreshOne(ctx context.Context, phaseID int64) (repoprovider.Ch
 		return repoprovider.ChangeStatus{}, "", fmt.Errorf("landpoll: load phase %d: %w", phaseID, err)
 	}
 	if discoverable(r) {
-		res, found, err := p.discover(ctx, r, map[string]detection{})
+		res, found, err := p.discover(ctx, r, map[string]detection{}, false)
 		switch {
 		case err != nil:
 			return repoprovider.ChangeStatus{}, r.landingState, err
@@ -478,7 +502,8 @@ func (p *Poller) resolve(ctx context.Context, r phaseRow, dets map[string]detect
 }
 
 // store writes a successful read: always the status and its time, the merged
-// flip when the change landed, and a cleared landing_error. The phase is
+// flip when the change landed (landed_at = the host's merge time, or now when
+// it reports none), and a cleared landing_error. The phase is
 // published when anything the UI shows changed — not for a re-read that only
 // moved checkedAt, which would refetch every open plan on every tick.
 func (p *Poller) store(r phaseRow, st repoprovider.ChangeStatus, now time.Time) (pollResult, error) {
@@ -498,7 +523,11 @@ func (p *Poller) store(r phaseRow, st repoprovider.ChangeStatus, now time.Time) 
 		        SET pr_status = ?, pr_checked_at = ?, landing_error = NULL,
 		            landing_state = ?, landed_at = ?
 		      WHERE id = ? AND landing_state = ?`
-		args = append(args, StateMerged, ts, r.phaseID, StatePROpen)
+		landedAt := ts
+		if !st.MergedAt.IsZero() {
+			landedAt = st.MergedAt.UTC().Format(time.RFC3339)
+		}
+		args = append(args, StateMerged, landedAt, r.phaseID, StatePROpen)
 	} else {
 		q = `UPDATE epic_phases SET pr_status = ?, pr_checked_at = ?, landing_error = NULL WHERE id = ?`
 		args = append(args, r.phaseID)
@@ -559,7 +588,8 @@ func (p *Poller) planReviewIfClosed(r phaseRow) {
 }
 
 // statusChanged reports whether st differs from the stored status in anything
-// but checkedAt. No (or an unreadable) stored status counts as changed.
+// but checkedAt (and mergedAt, which pr_status does not store). No (or an
+// unreadable) stored status counts as changed.
 func statusChanged(stored sql.NullString, st repoprovider.ChangeStatus) bool {
 	if !stored.Valid {
 		return true
@@ -569,6 +599,7 @@ func statusChanged(stored sql.NullString, st repoprovider.ChangeStatus) bool {
 		return true
 	}
 	prev.CheckedAt, st.CheckedAt = time.Time{}, time.Time{}
+	prev.MergedAt, st.MergedAt = time.Time{}, time.Time{}
 	return prev != st
 }
 

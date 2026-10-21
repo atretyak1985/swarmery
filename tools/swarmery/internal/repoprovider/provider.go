@@ -163,6 +163,10 @@ type ChangeStatus struct {
 	CI        string    `json:"ci"`        // success | failure | pending | none
 	Review    string    `json:"review"`    // approved | changes_requested | review_required | none
 	CheckedAt time.Time `json:"checkedAt"` // when it was read (UTC)
+	// MergedAt is when a merged change request merged, as the host reports it
+	// (zero when unknown or not merged). Not part of the stored pr_status: the
+	// poller writes it to landed_at on the merged flip.
+	MergedAt time.Time `json:"-"`
 }
 
 // FoundChange is one change request a provider listed for a source branch:

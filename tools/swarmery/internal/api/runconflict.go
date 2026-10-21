@@ -153,9 +153,13 @@ const (
 	// merged. Its work is in the base branch; sending it back would continue a
 	// branch nothing will land again — the follow-up belongs in a new phase.
 	codePhaseMerged = "phase-merged"
-	// codeNoChangeRequest: a landing refresh (phase_landing_refresh.go) for a
-	// phase that has no change request to read — its landing_state is neither
-	// pr_open nor merged, or it carries neither a URL nor a number.
+	// codeNoChangeRequest: a landing refresh (phase_landing_refresh.go) that
+	// ends with no change request to read. A ready (none + run done) or pushed
+	// phase with a run branch reaches the host first — discovery
+	// (landpoll.ErrNoChangeRequestFound) — and gets this code when the host has
+	// no open or merged one for the branch; any other phase gets it without a
+	// host call when its landing_state is neither pr_open nor merged, or it
+	// carries neither a URL nor a number (landpoll.ErrNoChangeRequest).
 	codeNoChangeRequest = "no-change-request"
 )
 

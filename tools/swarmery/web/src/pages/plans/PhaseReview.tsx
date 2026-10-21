@@ -267,7 +267,9 @@ export function PhaseReview({ epic, phase, terms, onLanded }: PhaseReviewProps):
       ? t`nothing to land in this state`
       : undefined;
   const change = vocab?.change ?? '';
-  const changeShort = vocab?.changeShort ?? '';
+  // No (or an empty) short term: the same neutral word findMissSentence uses,
+  // never a bare "Find ".
+  const changeShort = vocab?.changeShort || t`change request`;
   const findMiss = findMissSentence(findError, vocab);
   const landingError = landing?.error ?? '';
   const verdict = review?.verifyVerdict ?? phase.verifyVerdict;

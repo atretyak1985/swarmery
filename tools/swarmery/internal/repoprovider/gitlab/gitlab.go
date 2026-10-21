@@ -261,6 +261,7 @@ type mrView struct {
 	Pipeline            *pipelineRef `json:"pipeline"`
 	Approved            *bool        `json:"approved"`
 	WebURL              string       `json:"web_url"`
+	MergedAt            string       `json:"merged_at"`
 }
 
 // Status implements repoprovider.Provider: `glab mr view <iid> -R
@@ -294,13 +295,19 @@ func (p *Provider) Status(ctx context.Context, t repoprovider.Target, ref repopr
 		return repoprovider.ChangeStatus{}, fmt.Errorf("gitlab: unreadable glab mr view output: %s",
 			repoprovider.RedactedTail(stdout, err))
 	}
-	return repoprovider.ChangeStatus{
+	st := repoprovider.ChangeStatus{
 		State:     mrState(v.State),
 		Draft:     v.Draft || v.WorkInProgress,
 		CI:        ciSummary(v),
 		Review:    reviewSummary(v),
 		CheckedAt: p.now().UTC(),
-	}, nil
+	}
+	if st.State == repoprovider.StateMerged {
+		if at, err := time.Parse(time.RFC3339, v.MergedAt); err == nil {
+			st.MergedAt = at.UTC()
+		}
+	}
+	return st, nil
 }
 
 // mrListItem is one `glab mr list --output json` entry (the GitLab MR API

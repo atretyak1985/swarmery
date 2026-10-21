@@ -521,6 +521,7 @@ msgstr "ніхто не впіймав"
 
 #: src/pages/plans/PhaseReview.tsx
 #: src/pages/plans/PhaseReview.tsx
+#: src/pages/plans/PhaseReview.tsx
 msgid "change request"
 msgstr "пул-реквест"
 

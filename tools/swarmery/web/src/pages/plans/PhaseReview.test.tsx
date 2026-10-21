@@ -419,6 +419,13 @@ describe('PhaseReview — Find <change> (land-criteria UX, phase 4)', () => {
     expect(await screen.findByRole('button', { name: 'Find MR' })).toBeTruthy();
   });
 
+  it('falls back to the neutral word when the terms carry no short name', async () => {
+    const bare: ProviderTerms = { ...PR_TERMS, changeShort: '' };
+    api.getPhaseReview.mockResolvedValue(review({ terms: bare }));
+    renderReview(phase(), bare);
+    expect(await screen.findByRole('button', { name: 'Find change request' })).toBeTruthy();
+  });
+
   it.each([
     ['pr_open', landing({ state: 'pr_open', prUrl: 'https://host.example/acme/w/pull/77', prNumber: 77 })],
     ['merged', landing({ state: 'merged', prUrl: 'https://host.example/acme/w/pull/77', prNumber: 77 })],
