@@ -94,8 +94,11 @@ func queryNeedsYouManualPhases(db *sql.DB, scope string, projArgs []any) ([]need
 // merge: open criteria = [LAND] open criteria, a run branch to land, and a
 // landing state the operator can move — ready (stored none + run done),
 // pushed or pr_open. merged / returned are excluded, and so is a phase never
-// run by the daemon (no run_branch): there is nothing to push. blockingSince
-// is when the run ended — when landing became possible — else the doc's mtime.
+// run by the daemon (no run_branch): there is nothing to push. A doc marked
+// done stays listed: executors set Status: Done once their own criteria are
+// ticked, and the [LAND] they leave open is exactly what this item is for.
+// blockingSince is when the run ended — when landing became possible — else
+// the doc's mtime.
 func queryNeedsYouAwaitingMerge(db *sql.DB, scope string, projArgs []any) ([]needsYouItem, error) {
 	q := `SELECT e.id, e.seq, e.name, e.criteria_land_open, e.landing_state, COALESCE(e.pr_url, ''),
 		       t.id, COALESCE(t.external_id, ''), COALESCE(t.title, ''), p.slug,
@@ -108,7 +111,6 @@ func queryNeedsYouAwaitingMerge(db *sql.DB, scope string, projArgs []any) ([]nee
 		  AND COALESCE(e.run_branch, '') <> ''
 		  AND (e.landing_state IN (?, ?)
 		       OR (COALESCE(e.landing_state, ?) = ? AND e.run_state = 'done'))
-		  AND COALESCE(e.doc_status, '') <> 'done'
 		  AND t.archived_at IS NULL` + scope
 	args := append([]any{landingPushed, landingPROpen, landingNone, landingNone}, projArgs...)
 	rows, err := db.Query(q, args...)
