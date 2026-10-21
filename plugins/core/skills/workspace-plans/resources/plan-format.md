@@ -34,7 +34,7 @@ Section order:
 # Phase N — {Title}
 Status: Pending
 **Covers:** SC-…            ← only when plan/spec.md exists
-**Repo:** `<repo>` · **Branch:** `<branch>` · **Depends on:** … · **Estimate:** …
+**Repo:** `<repo>` · **Branch:** `<branch>` · **Depends on:** … · **Estimate:** …   ← Branch is informational; the daemon lands swarm/phase-<id>
 **Verify:** off             ← off | normal | strict (see "Header rows" below)
 **Review:** off             ← on | off
 ## Goal
@@ -127,6 +127,24 @@ after the `**Repo:** …` line.
 | `**Verify:**` | `off` \| `normal` \| `strict` | After a run ends `done` or `partial`, a read-only verifier grades the ticked criteria at the given strictness. Any value but `off` also makes the phase gate require a passing verdict before the phase counts as complete. A missing or unrecognized value means `off`. | L/XL: `normal`. S/M: `off`, or `normal` when the phase touches data, schemas or migrations. |
 | `**Review:**` | `on` \| `off` | The phase asks for a read-only code-review pass over its diff before the verifier runs; a failed review returns the phase once with the findings appended to the doc. A missing value means `off`, and a daemon without the review stage ignores the row. | L/XL: `on`. S/M: `off`. |
 
+### The header's `**Branch:**` is informational
+
+`**Branch:**` in the phase header is a note for people — the branch a person
+would use running the phase by hand. Land never pushes the header branch: a
+daemon run commits on its run branch `swarm/phase-<id>`, and landing pushes,
+opens the pull request for and merges only that branch. Three reasons:
+
+- The header branch may not exist, or may belong to other work — pushing to it
+  would write into someone else's branch.
+- The run's commits live on `swarm/phase-<id>`; landing them under another name
+  would mean a rename or a force-push, and landing never forces or renames.
+- The landing poll, pull-request discovery and the dashboard's branch-to-phase
+  mapping are all keyed on the run branch.
+
+When the two differ, the Review tab shows a warning; nothing else changes. So
+no criterion names a branch — a `[LAND]` criterion says "the phase's PR is
+merged into main", never which branch the PR comes from.
+
 ### Criterion classes
 
 An acceptance criterion may start with a class marker that says who closes it.
@@ -136,7 +154,7 @@ Unmarked criteria belong to the executor.
 
 | Marker | Who closes it | Example |
 |---|---|---|
-| `[LAND]` | Landing the work: a push, a pull request, a merge. | `- [ ] [LAND] PR for feat/orders-line-items merged into main` |
+| `[LAND]` | Landing the work: a push, a pull request, a merge. Names no branch (see "The header's `**Branch:**` is informational"). | `- [ ] [LAND] phase PR merged into main` (Ukrainian plan: `- [ ] [LAND] PR фази злито в main`) |
 | `[MANUAL]` | A human only: a production check, a console action, a manual look. | `- [ ] [MANUAL] line-item totals checked by hand in the production console` |
 
 How the daemon treats them:
@@ -153,11 +171,19 @@ How the daemon treats them:
   run to do.
 - **Needs you `manual_phase`.** The same phase is listed in Needs you as a
   "Manual check" item that links to its Criteria tab.
+- **Needs you `awaiting_merge`.** A phase whose only open criteria are `[LAND]`
+  and whose landing is ready, pushed or has a pull request open is listed in
+  Needs you as an "awaiting merge" item that links to its Review tab (and to the
+  pull request once one is open).
 - **Who ticks `[LAND]`.** When a phase is landed through the Review tab, the
   daemon ticks its `[LAND]` criteria the moment the pull request turns merged. A
-  pull request merged outside the platform is never polled, so its `[LAND]`
-  criteria stay for the operator to tick by hand. `[MANUAL]` criteria are always
-  ticked by hand.
+  pull request for the phase's run branch `swarm/phase-<id>` opened outside the
+  platform is found too — by the background landing poll (at most 5 phases per
+  10-minute tick, each asked about at most once an hour) or at once by the
+  Review tab's "Find PR" / "Find MR" button — and from then on is tracked and
+  ticked the same way. A pull request from any other branch is not tracked:
+  its `[LAND]` criteria stay for the operator to tick by hand. `[MANUAL]`
+  criteria are always ticked by hand.
 - **The phase gate is unchanged.** Classed criteria stay in the phase's total,
   so the phase becomes complete only after the merge and the manual check are
   ticked.
@@ -197,7 +223,7 @@ sessions, and a bug found after the merge costs a second PR.
 
 ```markdown
 - [ ] live check on the dev environment: session A sends, session B receives, the pair correlates (evidence under `### Live check <date>`)
-- [ ] [LAND] PR for feat/orders-line-items merged into main
+- [ ] [LAND] phase PR merged into main
 ```
 
 ### Live-check evidence: tick + append immediately
