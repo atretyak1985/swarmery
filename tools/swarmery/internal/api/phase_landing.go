@@ -154,6 +154,7 @@ func nullStrPtr(v sql.NullString) *string {
 type phaseReviewDTO struct {
 	Base           string             `json:"base"`
 	Branch         string             `json:"branch"`
+	HeaderBranch   string             `json:"headerBranch"`
 	Commits        []reviewCommitDTO  `json:"commits"`
 	Files          []reviewFileDTO    `json:"files"`
 	Patch          string             `json:"patch"`
@@ -346,9 +347,17 @@ func (h *Handler) getPhaseReview(w http.ResponseWriter, r *http.Request) {
 			terms = p.Terms()
 		}
 	}
+	// The branch the phase doc's header names — informational only (D5: land
+	// pushes the run branch, never this), so the Review tab can warn when the two
+	// differ. An unreadable doc reads as "no header branch", not a failed review.
+	var headerBranch string
+	if doc, err := os.ReadFile(t.DocPath); err == nil {
+		headerBranch = wsingest.ParseDocBranch(string(doc))
+	}
 	writeJSON(w, phaseReviewDTO{
 		Base:           diff.Base,
 		Branch:         diff.Branch,
+		HeaderBranch:   headerBranch,
 		Commits:        diff.Commits,
 		Files:          diff.Files,
 		Patch:          diff.Patch,

@@ -123,6 +123,21 @@ function LandingStrip({ landing, terms }: { landing: PhaseLanding; terms: Provid
   );
 }
 
+/** The plan's header names a branch the run did not use. Land always pushes the
+ *  run branch (the header's is a reference only), so this says so before Push. */
+function BranchMismatchNote({ headerBranch, runBranch }: { headerBranch: string; runBranch: string }): JSX.Element | null {
+  if (headerBranch === '' || headerBranch === runBranch) return null;
+  return (
+    <div role="note" className="rounded-lg border border-amber/40 bg-amber/5 px-2.5 py-2 text-[11.5px] text-amber">
+      <Trans>
+        The plan names the branch <code className="font-mono">{headerBranch}</code>, but the daemon will land{' '}
+        <code className="font-mono">{runBranch}</code>. Push and the change request always use the run's branch; the
+        header's branch is a reference only.
+      </Trans>
+    </div>
+  );
+}
+
 export function PhaseReview({ epic, phase, terms, onLanded }: PhaseReviewProps): JSX.Element {
   const { t } = useLingui();
   const [review, setReview] = useState<PhaseReviewData | null>(null);
@@ -253,6 +268,8 @@ export function PhaseReview({ epic, phase, terms, onLanded }: PhaseReviewProps):
           <Trans>last landing failure: {landingError}</Trans>
         </div>
       )}
+
+      {review !== null && <BranchMismatchNote headerBranch={review.headerBranch} runBranch={review.branch} />}
 
       <div className="rounded-lg border border-line bg-surface/40 px-2.5 py-2">
         {loading && review === null ? (
