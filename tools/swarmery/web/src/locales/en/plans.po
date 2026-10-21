@@ -520,6 +520,8 @@ msgid "caught by nobody"
 msgstr "caught by nobody"
 
 #: src/pages/plans/PhaseReview.tsx
+#: src/pages/plans/PhaseReview.tsx
+#: src/pages/plans/PhaseReview.tsx
 msgid "change request"
 msgstr "change request"
 
@@ -878,6 +880,10 @@ msgstr "filter by label"
 msgid "filter by state"
 msgstr "filter by state"
 
+#: src/pages/plans/PhaseReview.tsx
+msgid "Find {changeShort}"
+msgstr "Find {changeShort}"
+
 #: src/pages/plans/RunsReviewBlock.tsx
 msgid "findings ({count})"
 msgstr "findings ({count})"
@@ -1091,6 +1097,14 @@ msgstr "loading criteria…"
 msgid "loading…"
 msgstr "loading…"
 
+#: src/pages/plans/PhaseReview.tsx
+msgid "look up a {change} already opened for this phase's run branch"
+msgstr "look up a {change} already opened for this phase's run branch"
+
+#: src/pages/plans/PhaseReview.tsx
+msgid "Looking…"
+msgstr "Looking…"
+
 #: src/pages/plans/CriterionLint.tsx
 msgid "looks like a landing/manual criterion — a run cannot close it"
 msgstr "looks like a landing/manual criterion — a run cannot close it"
@@ -1244,6 +1258,14 @@ msgstr "No lesson was proposed: the report has no Where reality diverged paragra
 #: src/pages/Routines.tsx
 msgid "no next run"
 msgstr "no next run"
+
+#: src/pages/plans/PhaseReview.tsx
+msgid "No open or merged {changeShort} found for {branch} — push and open one here, or open it on the host and look again."
+msgstr "No open or merged {changeShort} found for {branch} — push and open one here, or open it on the host and look again."
+
+#: src/pages/plans/PhaseReview.tsx
+msgid "No open or merged {changeShort} found for this phase's run branch — push and open one here, or open it on the host and look again."
+msgstr "No open or merged {changeShort} found for this phase's run branch — push and open one here, or open it on the host and look again."
 
 #: src/pages/Plans.tsx
 msgid "no phase declares it covers this criterion"

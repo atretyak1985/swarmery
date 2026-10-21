@@ -261,6 +261,7 @@ type mrView struct {
 	Pipeline            *pipelineRef `json:"pipeline"`
 	Approved            *bool        `json:"approved"`
 	WebURL              string       `json:"web_url"`
+	MergedAt            string       `json:"merged_at"`
 }
 
 // Status implements repoprovider.Provider: `glab mr view <iid> -R
@@ -294,13 +295,74 @@ func (p *Provider) Status(ctx context.Context, t repoprovider.Target, ref repopr
 		return repoprovider.ChangeStatus{}, fmt.Errorf("gitlab: unreadable glab mr view output: %s",
 			repoprovider.RedactedTail(stdout, err))
 	}
-	return repoprovider.ChangeStatus{
+	st := repoprovider.ChangeStatus{
 		State:     mrState(v.State),
 		Draft:     v.Draft || v.WorkInProgress,
 		CI:        ciSummary(v),
 		Review:    reviewSummary(v),
 		CheckedAt: p.now().UTC(),
-	}, nil
+	}
+	if st.State == repoprovider.StateMerged {
+		if at, err := time.Parse(time.RFC3339, v.MergedAt); err == nil {
+			st.MergedAt = at.UTC()
+		}
+	}
+	return st, nil
+}
+
+// mrListItem is one `glab mr list --output json` entry (the GitLab MR API
+// object; only what FindChangeRequest reads).
+type mrListItem struct {
+	IID      int    `json:"iid"`
+	WebURL   string `json:"web_url"`
+	State    string `json:"state"`
+	MergedAt string `json:"merged_at"`
+}
+
+// FindChangeRequest implements repoprovider.Provider: `glab mr list
+// --source-branch <head> --all --output json [-R host/owner/repo]` with
+// GITLAB_HOST=<host>, chosen by repoprovider.PickChangeRequest. `--all` is
+// glab's "open, closed and merged" switch (checked against glab 1.99's
+// `mr list --help`). An empty list is found=false, not an error.
+func (p *Provider) FindChangeRequest(ctx context.Context, t repoprovider.Target, head string) (repoprovider.ChangeRef, bool, error) {
+	if err := p.exec.Look(glabBinary); err != nil {
+		return repoprovider.ChangeRef{}, false, repoprovider.Classify("", err)
+	}
+	if !repoprovider.ValidRef(head) {
+		return repoprovider.ChangeRef{}, false, fmt.Errorf("%w: head %q", repoprovider.ErrInvalidRef, head)
+	}
+	args := []string{"mr", "list", "--source-branch", head, "--all", "--output", "json"}
+	if r := repoArg(t.Remote); r != "" {
+		args = append(args, "-R", r)
+	}
+	ctx, cancel := repoprovider.NetCtx(ctx)
+	defer cancel()
+	stdout, stderr, err := p.exec.Run(ctx, t.RepoDir, p.glabEnv(t.Remote.Host), glabBinary, args...)
+	if err != nil {
+		return repoprovider.ChangeRef{}, false, repoprovider.Classify(stderr, err)
+	}
+	var items []mrListItem
+	if s := strings.TrimSpace(stdout); s != "" && s != "null" {
+		if err := json.Unmarshal([]byte(s), &items); err != nil {
+			return repoprovider.ChangeRef{}, false, fmt.Errorf("gitlab: unreadable glab mr list output: %s",
+				repoprovider.RedactedTail(stdout, err))
+		}
+	}
+	cands := make([]repoprovider.FoundChange, 0, len(items))
+	for _, it := range items {
+		n := it.IID
+		if n <= 0 {
+			n = mrIID(it.WebURL)
+		}
+		merged, _ := time.Parse(time.RFC3339, it.MergedAt)
+		cands = append(cands, repoprovider.FoundChange{
+			Ref:      repoprovider.ChangeRef{URL: it.WebURL, Number: n, Provider: repoprovider.KindGitLab},
+			State:    mrState(it.State),
+			MergedAt: merged,
+		})
+	}
+	ref, found := repoprovider.PickChangeRequest(cands)
+	return ref, found, nil
 }
 
 // mrState maps GitLab's opened|merged|closed (and the transient locked) onto
