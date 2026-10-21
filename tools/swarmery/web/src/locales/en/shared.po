@@ -2771,6 +2771,10 @@ msgstr "Phases with no edge between them run in parallel; each phase document ca
 msgid "pinned"
 msgstr "pinned"
 
+#: src/api.ts
+msgid "plain-language summary failed: {status}"
+msgstr "plain-language summary failed: {status}"
+
 #: src/workspace/TaskModal.tsx
 msgid "plan"
 msgstr "plan"
@@ -4030,6 +4034,10 @@ msgstr "This grants agents more autonomy for this project:"
 #: src/components/VcsSignInDialog.tsx
 msgid "this host"
 msgstr "this host"
+
+#: src/api.ts
+msgid "This is a mock plain-language explanation. In the real dashboard Claude writes it from the plan doc."
+msgstr "This is a mock plain-language explanation. In the real dashboard Claude writes it from the plan doc."
 
 #: src/components/PluginConfigModal.tsx
 msgid "this pack's config schema is missing or malformed"

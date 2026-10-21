@@ -17,6 +17,7 @@ import (
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/ingest"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/projectscan"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/provision"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/plainsum"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/retroanalysis"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/worktree"
 )
@@ -91,6 +92,9 @@ type Handler struct {
 	// sets it to the attached phase-run service; nil (tests, a daemon without
 	// phase runs) disables the trigger.
 	PlanReview PlanReviewHook
+	// Plain retells plan docs in plain words for the Plans page's "In plain
+	// words" tabs (plain.go). Nil disables the endpoints with a 503.
+	Plain *plainsum.Service
 }
 
 // PlanReviewHook starts the plan branch review of a phase's plan when the plan
