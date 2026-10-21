@@ -121,6 +121,44 @@ func TestListEpics(t *testing.T) {
 	}
 }
 
+// TestListEpics_PhaseCarriesRunBranch (land-criteria-ux SC-5): every phase in
+// the epic list answers runBranch — the branch its run committed on, which the
+// Criteria tab's [LAND] action pushes — and "" (never null, never absent) for a
+// phase the daemon never ran.
+func TestListEpics_PhaseCarriesRunBranch(t *testing.T) {
+	srv, db, taskID, _ := epicFixture(t)
+	p1, p2 := fixturePhaseIDs(t, db, taskID)
+	stampRunBranch(t, db, p1, "swarm/phase-7")
+
+	resp, err := http.Get(srv.URL + "/api/epics?projectId=1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	var raw []map[string]any
+	if err := json.NewDecoder(resp.Body).Decode(&raw); err != nil {
+		t.Fatal(err)
+	}
+	if len(raw) != 1 {
+		t.Fatalf("epics = %d, want 1", len(raw))
+	}
+	got := map[int64]any{}
+	for _, ph := range raw[0]["phases"].([]any) {
+		m := ph.(map[string]any)
+		v, ok := m["runBranch"]
+		if !ok {
+			t.Fatalf("phase %v JSON has no runBranch key", m["id"])
+		}
+		got[int64(m["id"].(float64))] = v
+	}
+	if got[p1] != "swarm/phase-7" {
+		t.Errorf("phase 1 runBranch = %#v, want %q", got[p1], "swarm/phase-7")
+	}
+	if got[p2] != "" {
+		t.Errorf("phase 2 runBranch = %#v, want \"\" (never run)", got[p2])
+	}
+}
+
 // epicRoutesServer builds a routes-only httptest.Server for the epics fixture
 // DB — no SPA fallback. This is the preferred harness for negative-routing
 // assertions: an unregistered API path returns a genuine 404 from the mux
