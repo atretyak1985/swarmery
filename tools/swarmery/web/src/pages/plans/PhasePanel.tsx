@@ -2,7 +2,7 @@
 // of the phase list (the plan-level panel does the same), so the Story, the
 // criteria and the doc get the whole column rather than a 640px drawer at the
 // edge. The shell only: subtitle ("Phase 3 of 4 · 6/8 criteria · opus"),
-// title, the Story · Criteria · Runs · Review · Report · Edit tab bar (Review
+// title, the Story · In plain words · Criteria · Runs · Review · Report · Edit tab bar (Review
 // only once the phase has run) and ↑/↓ stepping.
 // The body stays Plans.tsx's PhaseDetailPanel, which owns the doc, the checkbox
 // writes and the run handlers. The way out — "← all phases" and Escape — lives
@@ -17,12 +17,13 @@ import { type TabItem, Tabs } from '../../components/Tabs';
 import { modelShortName } from '../../lib/sessionModelChip';
 import { hasReviewTab } from './landingModel';
 
-export type PhaseTab = 'story' | 'criteria' | 'runs' | 'review' | 'report' | 'edit';
+export type PhaseTab = 'story' | 'plain' | 'criteria' | 'runs' | 'review' | 'report' | 'edit';
 
 /** The phase panel's tabs; labels are message descriptors, resolved with
  * `i18n._()` where they render. */
 export const PHASE_TABS: readonly { id: PhaseTab; label: MessageDescriptor }[] = [
   { id: 'story', label: msg`Story` },
+  { id: 'plain', label: msg`In plain words` },
   { id: 'criteria', label: msg`Criteria` },
   { id: 'runs', label: msg`Runs` },
   { id: 'review', label: msg`Review` },

@@ -463,6 +463,10 @@ func Routes(root *http.ServeMux, h *Handler) {
 	mux.HandleFunc("GET /api/epics/{taskId}/docs", h.getPlanDoc)
 	mux.HandleFunc("PUT /api/epics/{taskId}/docs", requireLocalOrigin(h.putPlanDoc))
 	mux.HandleFunc("PATCH /api/epics/{taskId}/docs", requireLocalOrigin(h.patchPlanDoc))
+	// The "In plain words" tabs (plain.go): GET serves a cached retelling, POST
+	// generates one with a headless run when it is missing.
+	mux.HandleFunc("GET /api/epics/{taskId}/plain", h.getPlain)
+	mux.HandleFunc("POST /api/epics/{taskId}/plain", requireLocalOrigin(h.postPlain))
 	// Which terminal sessions have this plan open (link_plan.go) — a plain read.
 	mux.HandleFunc("GET /api/epics/{taskId}/terminal-sessions", h.terminalSessions)
 	// interactive planning v2 phase 5: run ONE plan phase headlessly in an

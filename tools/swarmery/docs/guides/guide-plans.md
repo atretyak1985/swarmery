@@ -130,13 +130,14 @@ archived.)
 
 ## Reading a plan
 
-Opening a plan shows its detail with up to five tabs:
+Opening a plan shows its detail with up to six tabs:
 
 | Tab | Shows |
 |---|---|
 | **Plan** | The README and the phase list, with each phase's progress and run state |
+| **In plain words** | What the plan is about and why, retold without jargon by Claude from the README (and spec) — generated on first open, cached until the README changes |
 | **Spec** | `spec.md` and its criteria — only when the plan has one |
-| **Summary** | The plan's closing summary — only once every phase is complete |
+| **Summary** | The plan's closing summary, opening with a plain-words retelling of what the plan delivered — only once every phase is complete |
 | **Revisions** | Staged proposals to change the plan; the count shows how many wait |
 | **Edit** | The raw README markdown |
 
@@ -146,9 +147,10 @@ to the neighbouring phase. The drawer has its own tabs:
 | Tab | Shows |
 |---|---|
 | **Story** | The phase at a glance, and its forecast against what actually happened — expected, happened, why, what follows |
+| **In plain words** | What the phase is for, what it changes and what it closes — retold without jargon by Claude from the phase doc, generated on first open and cached until the doc changes |
 | **Criteria** | The document with its live checkboxes |
 | **Runs** | Run state, the model used, the verification verdict, and the run history |
-| **Report** | The `## Completion Report` section. It always exists, even before anything has shipped — an empty note is a better answer than a missing tab |
+| **Report** | A plain-words retelling of what was done, then the `## Completion Report` section. It always exists, even before anything has shipped — an empty note is a better answer than a missing tab |
 | **Edit** | The raw phase markdown |
 
 A plan is revised the same way it is written — in markdown. A revision is a staged
@@ -167,7 +169,7 @@ browser's Back button retraces what you clicked.
 | A filter with nothing selected | `/p/<slug>/plans?status=done` · `?status=archived` |
 | One plan | `/p/<slug>/plans/<externalId>` |
 | A phase, on Story | `/p/<slug>/plans/<externalId>/phase/<seq>` |
-| A phase, on another tab | `/p/<slug>/plans/<externalId>/phase/<seq>/{criteria,runs,report,edit}` |
+| A phase, on another tab | `/p/<slug>/plans/<externalId>/phase/<seq>/{plain,criteria,runs,report,edit}` |
 | A plan-details tab | `/p/<slug>/plans/<externalId>/details/{plan,spec,summary,revisions,edit}` |
 | One revision | `/p/<slug>/plans/<externalId>/details/revisions/<revId>` |
 | A plan by numeric id | `/p/<slug>/plans?task=<id>` or `?plan=<id>`, optionally `&phase=<seq>` and `&tab=revisions` |

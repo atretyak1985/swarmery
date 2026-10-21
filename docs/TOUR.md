@@ -207,7 +207,7 @@ archive / restore) are real file operations on the daemon side, not database fla
 
 A plan opens into **Plan · Spec · Summary · Revisions · Edit** tabs (Spec only when the
 plan has a `spec.md`, Summary only once it is complete); a phase opens inline, in place of the
-list, with **Story · Criteria · Runs · Report · Edit**. Ticking a criterion in the UI
+list, with **Story · In plain words · Criteria · Runs · Report · Edit**. Ticking a criterion in the UI
 patches that exact `- [ ]` ↔ `- [x]` line in the file. Revisions are staged proposals —
 nothing changes on disk until you apply one.
 

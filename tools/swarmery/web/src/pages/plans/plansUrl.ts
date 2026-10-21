@@ -23,11 +23,11 @@ export type PlansStatus = 'active' | 'done' | 'archived';
 
 /** Plan-details tab ids. Spec exists only on plans with a spec.md; Summary
  * only on complete plans. */
-export type PlanDetailTab = 'plan' | 'spec' | 'summary' | 'revisions' | 'edit';
+export type PlanDetailTab = 'plan' | 'plain' | 'spec' | 'summary' | 'revisions' | 'edit';
 
 export const PLANS_STATUSES: readonly PlansStatus[] = ['active', 'done', 'archived'];
-export const PHASE_TAB_IDS: readonly PhaseTab[] = ['story', 'criteria', 'runs', 'review', 'report', 'edit'];
-export const PLAN_DETAIL_TAB_IDS: readonly PlanDetailTab[] = ['plan', 'spec', 'summary', 'revisions', 'edit'];
+export const PHASE_TAB_IDS: readonly PhaseTab[] = ['story', 'plain', 'criteria', 'runs', 'review', 'report', 'edit'];
+export const PLAN_DETAIL_TAB_IDS: readonly PlanDetailTab[] = ['plan', 'plain', 'spec', 'summary', 'revisions', 'edit'];
 
 export type PlansDetail =
   | { kind: 'phase'; seq: number; tab: PhaseTab }

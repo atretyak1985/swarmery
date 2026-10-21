@@ -129,7 +129,7 @@ describe('PhasePanel', () => {
   it('shows Story · Criteria · Runs · Report · Edit and switches tabs', () => {
     const p = renderPanel();
     const tabs = screen.getAllByRole('tab').map((t) => t.textContent);
-    expect(tabs).toEqual(['Story', 'Criteria0/8', 'Runs', 'Report', 'Edit']);
+    expect(tabs).toEqual(['Story', 'In plain words', 'Criteria0/8', 'Runs', 'Report', 'Edit']);
     expect(screen.getByRole('tab', { name: 'Story' }).getAttribute('aria-selected')).toBe('true');
     fireEvent.click(screen.getByRole('tab', { name: /Criteria/ }));
     expect(p.onTab).toHaveBeenCalledWith('criteria');
