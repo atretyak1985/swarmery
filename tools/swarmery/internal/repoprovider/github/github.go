@@ -255,13 +255,79 @@ func (p *Provider) Status(ctx context.Context, t repoprovider.Target, ref repopr
 		return repoprovider.ChangeStatus{}, fmt.Errorf("github: unreadable gh pr view output: %s",
 			repoprovider.RedactedTail(stdout, err))
 	}
-	return repoprovider.ChangeStatus{
+	st := repoprovider.ChangeStatus{
 		State:     prState(v),
 		Draft:     v.IsDraft,
 		CI:        ciSummary(v.StatusCheckRollup),
 		Review:    reviewSummary(v.ReviewDecision),
 		CheckedAt: p.now().UTC(),
-	}, nil
+	}
+	if st.State == repoprovider.StateMerged {
+		if at, err := time.Parse(time.RFC3339, v.MergedAt); err == nil {
+			st.MergedAt = at.UTC()
+		}
+	}
+	return st, nil
+}
+
+// findLimit bounds how many PRs `gh pr list --head` returns for one branch.
+const findLimit = "20"
+
+// prListItem is one `gh pr list --json number,url,state,mergedAt` entry.
+type prListItem struct {
+	Number   int    `json:"number"`
+	URL      string `json:"url"`
+	State    string `json:"state"`
+	MergedAt string `json:"mergedAt"`
+}
+
+// FindChangeRequest implements repoprovider.Provider: `gh pr list --head <head>
+// --state all --json number,url,state,mergedAt --limit 20 [--repo …]`, chosen by
+// repoprovider.PickChangeRequest. An empty list is found=false, not an error.
+func (p *Provider) FindChangeRequest(ctx context.Context, t repoprovider.Target, head string) (repoprovider.ChangeRef, bool, error) {
+	if err := p.exec.Look(ghBinary); err != nil {
+		return repoprovider.ChangeRef{}, false, repoprovider.Classify("", err)
+	}
+	if !repoprovider.ValidRef(head) {
+		return repoprovider.ChangeRef{}, false, fmt.Errorf("%w: head %q", ErrInvalidRef, head)
+	}
+	args := []string{"pr", "list", "--head", head, "--state", "all", "--json", "number,url,state,mergedAt", "--limit", findLimit}
+	if r := repoArg(t.Remote); r != "" {
+		args = append(args, "--repo", r)
+	}
+	ctx, cancel := netCtx(ctx)
+	defer cancel()
+	stdout, stderr, err := p.exec.Run(ctx, t.RepoDir, p.callEnv(t.Remote.Host), ghBinary, args...)
+	if err != nil {
+		return repoprovider.ChangeRef{}, false, repoprovider.Classify(stderr, err)
+	}
+	var items []prListItem
+	if strings.TrimSpace(stdout) != "" {
+		if err := json.Unmarshal([]byte(stdout), &items); err != nil {
+			return repoprovider.ChangeRef{}, false, fmt.Errorf("github: unreadable gh pr list output: %s",
+				repoprovider.RedactedTail(stdout, err))
+		}
+	}
+	cands := make([]repoprovider.FoundChange, 0, len(items))
+	for _, it := range items {
+		n := it.Number
+		if n <= 0 {
+			n = prNumber(it.URL)
+		}
+		// A zero or unparseable mergedAt is no merge evidence; State still is.
+		merged, _ := time.Parse(time.RFC3339, it.MergedAt)
+		mergedAt := it.MergedAt
+		if merged.IsZero() {
+			mergedAt = ""
+		}
+		cands = append(cands, repoprovider.FoundChange{
+			Ref:      repoprovider.ChangeRef{URL: it.URL, Number: n, Provider: repoprovider.KindGitHub},
+			State:    prState(prView{State: it.State, MergedAt: mergedAt}),
+			MergedAt: merged,
+		})
+	}
+	ref, found := repoprovider.PickChangeRequest(cands)
+	return ref, found, nil
 }
 
 func prState(v prView) string {

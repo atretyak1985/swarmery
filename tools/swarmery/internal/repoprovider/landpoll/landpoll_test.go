@@ -242,6 +242,17 @@ func TestRunOnceStillOpenUpdatesStatusOnly(t *testing.T) {
 	}
 }
 
+func TestRunOnceMergedWithoutAMergeTimeLandsNow(t *testing.T) {
+	h := newHarness(t)
+	id := h.phase(1, StatePROpen, "github", 13, "2026-10-09T11:00:00Z")
+	h.reply(13, reply{out: prJSON("MERGED", "", "APPROVED", runOK)})
+
+	h.runOnce()
+	if l := h.landing(id); l.state != StateMerged || l.landedAt.String != t0.Format(time.RFC3339) {
+		t.Fatalf("after merge: state=%q landed_at=%q, want merged at the tick's time", l.state, l.landedAt.String)
+	}
+}
+
 func TestRunOnceMergedFlipsStateAndPublishesOnce(t *testing.T) {
 	h := newHarness(t)
 	id := h.phase(1, StatePROpen, "github", 12, "2026-10-09T11:00:00Z")
@@ -251,7 +262,8 @@ func TestRunOnceMergedFlipsStateAndPublishesOnce(t *testing.T) {
 		t.Fatalf("checked=%d changed=%d", checked, changed)
 	}
 	l := h.landing(id)
-	if l.state != StateMerged || l.landedAt.String != "2026-10-09T12:00:00Z" {
+	// landed_at is the host's merge time, not the tick's (SC-13).
+	if l.state != StateMerged || l.landedAt.String != "2026-10-09T11:30:00Z" {
 		t.Fatalf("after merge: state=%q landed_at=%q", l.state, l.landedAt.String)
 	}
 	if !strings.Contains(l.status.String, `"state":"merged"`) {

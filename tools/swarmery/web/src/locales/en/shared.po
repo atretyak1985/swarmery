@@ -877,6 +877,10 @@ msgstr "Auto-approve file writes, safe git, and shell by default (never pushing)
 msgid "auto-approve presets are configured per project — open a project's Settings to set them"
 msgstr "auto-approve presets are configured per project — open a project's Settings to set them"
 
+#: src/lib/needsYou.ts
+msgid "Awaiting merge"
+msgstr "Awaiting merge"
+
 #: src/lib/sessionsView.ts
 msgid "awaiting reply"
 msgstr "awaiting reply"

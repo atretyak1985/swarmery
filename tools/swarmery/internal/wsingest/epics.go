@@ -221,6 +221,52 @@ func ParseDocVerify(text string) string {
 	return VerifyOff
 }
 
+var (
+	// docBranchRe: `**Branch:**` then an optional backticked token, up to `·` or end
+	// of line — the header form is `**Repo:** `…` · **Branch:** `feat/x` · …`, so the
+	// branch sits inside a longer line.
+	docBranchRe = regexp.MustCompile("\\*\\*Branch:\\*\\*\\s*`?([^`·\\s]+)`?")
+	// docBranchRefRe is what a branch name looks like; a token outside it is prose.
+	docBranchRefRe = regexp.MustCompile(`^[A-Za-z0-9._/-]+$`)
+)
+
+// ParseDocBranch returns the branch the phase doc's header names, "" when absent.
+//
+// Informational only (plan decision D5): landing always pushes the phase's run
+// branch, never this one; the Review tab compares the two to warn the operator.
+// Only the header counts — the first docStatusHeaderLines lines, before the first
+// `## ` — for the reason ParseDocVerify gives: a `**Branch:**` inside a quoted
+// prompt describes someone else's phase. A token that does not look like a git ref
+// (prose such as "assigned by the daemon", or a `<id>` placeholder) reads as "",
+// so a header that does not name a real branch never raises a mismatch.
+func ParseDocBranch(text string) string {
+	lines := strings.Split(text, "\n")
+	if len(lines) > docStatusHeaderLines {
+		lines = lines[:docStatusHeaderLines]
+	}
+	for _, line := range lines {
+		if strings.HasPrefix(line, "## ") {
+			break
+		}
+		m := docBranchRe.FindStringSubmatch(line)
+		if m == nil {
+			continue
+		}
+		ref := m[1]
+		if !docBranchRefRe.MatchString(ref) || !strings.ContainsFunc(ref, isBranchMarker) {
+			return ""
+		}
+		return ref
+	}
+	return ""
+}
+
+// isBranchMarker reports a letter or `/` — a ref of only digits, dots and dashes
+// ("1", "—") is not a branch someone named.
+func isBranchMarker(r rune) bool {
+	return r == '/' || (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z')
+}
+
 // parseDocRepo extracts the phase doc's own declared repo cell from its header
 // block. Bounded by docStatusHeaderLines and stopping at the first `## ` section
 // for the same reason parseDocStatus is: phase docs quote agent prompts and

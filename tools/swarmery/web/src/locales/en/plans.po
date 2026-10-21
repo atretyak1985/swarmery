@@ -520,6 +520,8 @@ msgid "caught by nobody"
 msgstr "caught by nobody"
 
 #: src/pages/plans/PhaseReview.tsx
+#: src/pages/plans/PhaseReview.tsx
+#: src/pages/plans/PhaseReview.tsx
 msgid "change request"
 msgstr "change request"
 
@@ -878,6 +880,10 @@ msgstr "filter by label"
 msgid "filter by state"
 msgstr "filter by state"
 
+#: src/pages/plans/PhaseReview.tsx
+msgid "Find {changeShort}"
+msgstr "Find {changeShort}"
+
 #: src/pages/plans/RunsReviewBlock.tsx
 msgid "findings ({count})"
 msgstr "findings ({count})"
@@ -1091,6 +1097,14 @@ msgstr "loading criteria…"
 msgid "loading…"
 msgstr "loading…"
 
+#: src/pages/plans/PhaseReview.tsx
+msgid "look up a {change} already opened for this phase's run branch"
+msgstr "look up a {change} already opened for this phase's run branch"
+
+#: src/pages/plans/PhaseReview.tsx
+msgid "Looking…"
+msgstr "Looking…"
+
 #: src/pages/plans/CriterionLint.tsx
 msgid "looks like a landing/manual criterion — a run cannot close it"
 msgstr "looks like a landing/manual criterion — a run cannot close it"
@@ -1245,6 +1259,14 @@ msgstr "No lesson was proposed: the report has no Where reality diverged paragra
 msgid "no next run"
 msgstr "no next run"
 
+#: src/pages/plans/PhaseReview.tsx
+msgid "No open or merged {changeShort} found for {branch} — push and open one here, or open it on the host and look again."
+msgstr "No open or merged {changeShort} found for {branch} — push and open one here, or open it on the host and look again."
+
+#: src/pages/plans/PhaseReview.tsx
+msgid "No open or merged {changeShort} found for this phase's run branch — push and open one here, or open it on the host and look again."
+msgstr "No open or merged {changeShort} found for this phase's run branch — push and open one here, or open it on the host and look again."
+
 #: src/pages/Plans.tsx
 msgid "no phase declares it covers this criterion"
 msgstr "no phase declares it covers this criterion"
@@ -1393,6 +1415,10 @@ msgstr "Open {changeShort} for {branch}"
 msgid "Open a {change} for each unmerged branch"
 msgstr "Open a {change} for each unmerged branch"
 
+#: src/pages/plans/LandCriterionAction.tsx
+msgid "Open in Review →"
+msgstr "Open in Review →"
+
 #: src/pages/plans/TerminalBadge.tsx
 msgid "open in terminal"
 msgstr "open in terminal"
@@ -1416,6 +1442,7 @@ msgstr "open Plans →"
 msgid "open session →"
 msgstr "open session →"
 
+#: src/pages/plans/LandCriterionAction.tsx
 #: src/pages/plans/PhaseReview.tsx
 msgid "Opening…"
 msgstr "Opening…"
@@ -1688,6 +1715,14 @@ msgstr "Push"
 #: src/pages/plans/PhaseReview.tsx
 msgid "Push + open {change}"
 msgstr "Push + open {change}"
+
+#: src/pages/plans/LandCriterionAction.tsx
+msgid "Push + open {changeShort}"
+msgstr "Push + open {changeShort}"
+
+#: src/pages/plans/LandCriterionAction.tsx
+msgid "push the run branch {runBranch} and open a {changeShort}"
+msgstr "push the run branch {runBranch} and open a {changeShort}"
 
 #: src/pages/plans/PhaseReview.tsx
 msgid "push the run branch and open a {change}"
@@ -2358,6 +2393,10 @@ msgstr "the plan"
 msgid "the plan directory is being picked up by the workspace scan…"
 msgstr "the plan directory is being picked up by the workspace scan…"
 
+#: src/pages/plans/PhaseReview.tsx
+msgid "The plan names the branch <0>{headerBranch}</0>, but the daemon will land <1>{runBranch}</1>. Push and the change request always use the run's branch; the header's branch is a reference only."
+msgstr "The plan names the branch <0>{headerBranch}</0>, but the daemon will land <1>{runBranch}</1>. Push and the change request always use the run's branch; the header's branch is a reference only."
+
 #: src/pages/planning/RunningPlanPanel.tsx
 msgid "The plan takes shape here as you answer — each reply rebuilds it."
 msgstr "The plan takes shape here as you answer — each reply rebuilds it."
@@ -2414,6 +2453,10 @@ msgstr "the run ticked some criteria but did not finish the phase — click for 
 msgid "the run’s diff was not measured"
 msgstr "the run’s diff was not measured"
 
+#: src/pages/plans/LandCriterionAction.tsx
+msgid "the run's diff, verdict and landing controls"
+msgstr "the run's diff, verdict and landing controls"
+
 #: src/pages/plans/VerifyVerdictChip.tsx
 msgid "the verifier could not conclude (env or timeout) — this is not a failing grade"
 msgstr "the verifier could not conclude (env or timeout) — this is not a failing grade"
@@ -2449,6 +2492,10 @@ msgstr "This phase has no run branch yet — run it first; there is nothing to p
 #: src/pages/Plans.tsx
 msgid "this phase has no sessions of its own — showing the whole plan; click to narrow anyway"
 msgstr "this phase has no sessions of its own — showing the whole plan; click to narrow anyway"
+
+#: src/pages/plans/LandCriterionAction.tsx
+msgid "This phase was not run by the daemon — there is no branch to land. Tick the criterion by hand after the merge."
+msgstr "This phase was not run by the daemon — there is no branch to land. Tick the criterion by hand after the merge."
 
 #: src/pages/plans/TerminalBadge.tsx
 msgid "this plan"

@@ -120,19 +120,94 @@ func TestLandingRefreshMergedFlipsState(t *testing.T) {
 }
 
 func TestLandingRefreshNoChangeRequestIs409(t *testing.T) {
-	f := newPhaseLandingFixture(t, "done")
-	fake := useFakeLandStatus(t, &repoprovider.FakeExec{})
-	for _, state := range []string{landingNone, landingPushed, landingReturned} {
-		if _, err := f.db.Exec(`UPDATE epic_phases SET landing_state = ? WHERE id = ?`, state, f.phaseID); err != nil {
+	// Neither discoverable (returned; a run that did not finish) nor carrying
+	// a change request: refused before the host is asked.
+	for _, c := range []struct{ state, runState string }{
+		{landingReturned, "done"},
+		{landingNone, "partial"},
+	} {
+		f := newPhaseLandingFixture(t, c.runState)
+		fake := useFakeLandStatus(t, &repoprovider.FakeExec{})
+		if _, err := f.db.Exec(`UPDATE epic_phases SET landing_state = ? WHERE id = ?`, c.state, f.phaseID); err != nil {
 			t.Fatal(err)
 		}
 		resp, body := f.refresh(t, f.phaseID)
 		if resp.StatusCode != http.StatusConflict || body["code"] != codeNoChangeRequest {
-			t.Errorf("%s: status = %d code = %v, want 409 %s", state, resp.StatusCode, body["code"], codeNoChangeRequest)
+			t.Errorf("%+v: status = %d code = %v, want 409 %s", c, resp.StatusCode, body["code"], codeNoChangeRequest)
+		}
+		if len(fake.Calls) != 0 {
+			t.Errorf("%+v: a refusal reached the host: %v", c, fake.Calls)
 		}
 	}
-	if len(fake.Calls) != 0 {
-		t.Errorf("a refusal reached the host: %v", fake.Calls)
+}
+
+// discoverFake answers `gh pr list` with list and `gh pr view` with view.
+func discoverFake(list, view string) *repoprovider.FakeExec {
+	return &repoprovider.FakeExec{
+		Out: map[string]string{"git remote": "git@github.com:acme/widgets.git\n"},
+		Fn: func(_ string, _ []string, name string, args []string) (string, string, error, bool) {
+			if name != "gh" || len(args) < 2 || args[0] != "pr" {
+				return "", "", nil, false
+			}
+			switch args[1] {
+			case "list":
+				return list, "", nil, true
+			case "view":
+				return view, "", nil, true
+			}
+			return "", "", nil, false
+		},
+	}
+}
+
+func TestLandingRefreshDiscoversChangeRequest(t *testing.T) {
+	for _, state := range []string{landingNone, landingPushed} { // ready, pushed
+		f := newPhaseLandingFixture(t, "done")
+		if _, err := f.db.Exec(`UPDATE epic_phases SET landing_state = ? WHERE id = ?`, state, f.phaseID); err != nil {
+			t.Fatal(err)
+		}
+		fake := useFakeLandStatus(t, discoverFake(
+			`[{"number":77,"url":"`+landTestPRURL+`","state":"OPEN","mergedAt":null}]`,
+			ghPRView("OPEN", "", "REVIEW_REQUIRED", ghCheckOK)))
+
+		resp, body := f.refresh(t, f.phaseID)
+		if resp.StatusCode != http.StatusOK {
+			t.Fatalf("%s: status = %d, want 200 (body %v)", state, resp.StatusCode, body)
+		}
+		if body["state"] != landingPROpen || body["prUrl"] != landTestPRURL || body["prNumber"] != float64(77) ||
+			body["prProvider"] != "github" {
+			t.Errorf("%s: landing = %v, want pr_open #77 on github", state, body)
+		}
+		if st, _ := body["prStatus"].(map[string]any); st["state"] != "open" {
+			t.Errorf("%s: prStatus = %v, want the discovered PR read at once", state, body["prStatus"])
+		}
+		if !fake.Ran("gh pr list --head " + landTestBranch + " --state all") {
+			t.Errorf("%s: the run branch was not listed; calls = %v", state, fake.Calls)
+		}
+	}
+}
+
+func TestLandingRefreshNothingFoundIs409WithBranch(t *testing.T) {
+	for _, state := range []string{landingNone, landingPushed} {
+		f := newPhaseLandingFixture(t, "done")
+		if _, err := f.db.Exec(`UPDATE epic_phases SET landing_state = ? WHERE id = ?`, state, f.phaseID); err != nil {
+			t.Fatal(err)
+		}
+		useFakeLandStatus(t, discoverFake(`[{"number":5,"url":"https://github.com/acme/widgets/pull/5","state":"CLOSED"}]`, ""))
+
+		resp, body := f.refresh(t, f.phaseID)
+		if resp.StatusCode != http.StatusConflict || body["code"] != codeNoChangeRequest {
+			t.Fatalf("%s: status = %d body = %v, want 409 %s", state, resp.StatusCode, body, codeNoChangeRequest)
+		}
+		if msg, _ := body["error"].(string); !strings.Contains(msg, landTestBranch) || body["branch"] != landTestBranch {
+			t.Errorf("%s: body = %v, want the run branch named", state, body)
+		}
+		if got := phaseCol(t, f.db, f.phaseID, "landing_state"); got != state {
+			t.Errorf("%s: landing_state = %q, want it unchanged", state, got)
+		}
+		if phaseCol(t, f.db, f.phaseID, "pr_checked_at") == "" {
+			t.Errorf("%s: the ask was not stamped", state)
+		}
 	}
 }
 

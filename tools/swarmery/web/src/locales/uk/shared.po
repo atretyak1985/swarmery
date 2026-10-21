@@ -877,6 +877,10 @@ msgstr "Автопогодження записів у файли, безпеч�
 msgid "auto-approve presets are configured per project — open a project's Settings to set them"
 msgstr "пресети автопогодження задаються для кожного проєкту окремо — відкрийте Налаштування проєкту, щоб їх налаштувати"
 
+#: src/lib/needsYou.ts
+msgid "Awaiting merge"
+msgstr "Очікує злиття"
+
 #: src/lib/sessionsView.ts
 msgid "awaiting reply"
 msgstr "чекає відповіді"

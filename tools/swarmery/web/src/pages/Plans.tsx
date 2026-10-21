@@ -105,6 +105,7 @@ import { ForecastSection, RailSection, SurpriseChip } from './plans/ForecastVsAc
 import { ForecastStory } from './plans/ForecastStory';
 import { DepsUnmergedActions } from './plans/DepsUnmergedActions';
 import { CriterionLint } from './plans/CriterionLint';
+import { LandCriterionAction } from './plans/LandCriterionAction';
 import { PhaseCard, type PhaseCardAction } from './plans/PhaseCard';
 import { PHASE_TABS, PhasePanel, type PhaseTab } from './plans/PhasePanel';
 import { PhaseReopens } from './plans/PhaseReopens';
@@ -2935,17 +2936,21 @@ function DetailTabs<T extends string>({
 /** Acceptance-criteria list with tick state (✓ done / ○ open). With `onToggle`
  * the rows become buttons that flip the criterion in the doc (the affordance
  * the retired doc modal owned); without it the list is read-only. `lint`
- * renders under a toggleable row (the Criteria tab's class-marker hint). */
+ * renders under a toggleable row (the Criteria tab's class-marker hint), and
+ * `action` under it (the Criteria tab's [LAND] action) — beside the toggle,
+ * never instead of it. */
 function ChecksList({
   checks,
   onToggle,
   busyLine,
   lint,
+  action,
 }: {
   checks: Check[];
   onToggle?: (c: Check) => void;
   busyLine?: number | null;
   lint?: (c: Check) => ReactNode;
+  action?: (c: Check) => ReactNode;
 }): JSX.Element {
   const { t } = useLingui();
   return (
@@ -2983,6 +2988,7 @@ function ChecksList({
               <span className={c.done ? 'text-ink-dim line-through' : 'text-ink'}>{c.text}</span>
             </button>
             {lint?.(c)}
+            {action?.(c)}
           </li>
         );
       })}
@@ -3427,6 +3433,17 @@ function PhaseDetailPanel({
                       setDoc(d.content);
                       onDocChanged();
                     }}
+                  />
+                )}
+                action={(c) => (
+                  <LandCriterionAction
+                    epic={epic}
+                    phase={phase}
+                    text={c.text}
+                    done={c.done}
+                    terms={terms}
+                    onOpenReview={() => onTab('review')}
+                    onDocChanged={onDocChanged}
                   />
                 )}
               />

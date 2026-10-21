@@ -252,6 +252,55 @@ func TestPhaseReviewReturnsDiffVerdictLandingTerms(t *testing.T) {
 	}
 }
 
+// The review carries the branch the phase doc's header names, so the tab can
+// warn when the daemon's run branch differs; land itself still pushes the run
+// branch (D5). A doc without the line reads as "".
+func TestPhaseReviewCarriesHeaderBranch(t *testing.T) {
+	f := newPhaseLandingFixture(t, "done")
+	useFakePhaseLand(t, phaseLandOK())
+
+	resp, body := f.review(t)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want 200 (body %v)", resp.StatusCode, body)
+	}
+	if hb, ok := body["headerBranch"]; !ok || hb != "" {
+		t.Errorf("doc without **Branch:** headerBranch = %v (present %v), want \"\"", hb, ok)
+	}
+
+	doc := "# Phase 2 — Line-item CRUD\nStatus: Done\n" +
+		"**Repo:** `/abs/widgets` · **Branch:** `feat/x` · **Depends on:** —\n\n" + landTestDoc
+	if err := os.WriteFile(f.docPath, []byte(doc), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	resp, body = f.review(t)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want 200 (body %v)", resp.StatusCode, body)
+	}
+	if body["headerBranch"] != "feat/x" {
+		t.Errorf("headerBranch = %v, want feat/x", body["headerBranch"])
+	}
+	if body["branch"] != landTestBranch {
+		t.Errorf("branch = %v, want the run branch %s", body["branch"], landTestBranch)
+	}
+}
+
+// A phase doc that is gone does not fail the review: headerBranch is "".
+func TestPhaseReviewMissingDocHeaderBranchEmpty(t *testing.T) {
+	f := newPhaseLandingFixture(t, "done")
+	useFakePhaseLand(t, phaseLandOK())
+	if err := os.Remove(f.docPath); err != nil {
+		t.Fatal(err)
+	}
+
+	resp, body := f.review(t)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want 200 (body %v)", resp.StatusCode, body)
+	}
+	if hb, ok := body["headerBranch"]; !ok || hb != "" {
+		t.Errorf("missing doc: headerBranch = %v (present %v), want \"\"", hb, ok)
+	}
+}
+
 func TestPhaseReviewUnknownPhaseIs404(t *testing.T) {
 	f := newPhaseLandingFixture(t, "done")
 	useFakePhaseLand(t, phaseLandOK())

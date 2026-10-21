@@ -14,7 +14,7 @@
 import { t } from '@lingui/core/macro';
 import { Trans, useLingui } from '@lingui/react/macro';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { getPhaseReview, LandError, landPhase } from '../../api';
+import { getPhaseReview, LandError, landPhase, refreshPhaseLanding } from '../../api';
 import type {
   Epic,
   EpicPhase,
@@ -66,6 +66,20 @@ export function conflictSentence(err: LandError, terms: ProviderTerms | null): s
     default:
       return null;
   }
+}
+
+/** The sentence for a "Find <change>" that came back empty (409
+ *  `no-change-request` from the landing refresh), or null for any other
+ *  failure — those render as a LandFailure. */
+export function findMissSentence(err: unknown, terms: ProviderTerms | null): string | null {
+  // The refresh's codes (PhaseLandingRefreshErrorCode) are not the land
+  // action's, so the discriminator is compared as a plain string.
+  if (!(err instanceof LandError) || err.status !== 409 || String(err.code) !== 'no-change-request') return null;
+  const changeShort = terms?.changeShort ?? t`change request`;
+  const branch = err.branch ?? '';
+  return branch !== ''
+    ? t`No open or merged ${changeShort} found for ${branch} — push and open one here, or open it on the host and look again.`
+    : t`No open or merged ${changeShort} found for this phase's run branch — push and open one here, or open it on the host and look again.`;
 }
 
 /** One land/return failure, rendered by kind (also the deps-unmerged refusal's
@@ -123,6 +137,21 @@ function LandingStrip({ landing, terms }: { landing: PhaseLanding; terms: Provid
   );
 }
 
+/** The plan's header names a branch the run did not use. Land always pushes the
+ *  run branch (the header's is a reference only), so this says so before Push. */
+function BranchMismatchNote({ headerBranch, runBranch }: { headerBranch: string; runBranch: string }): JSX.Element | null {
+  if (headerBranch === '' || headerBranch === runBranch) return null;
+  return (
+    <div role="note" className="rounded-lg border border-amber/40 bg-amber/5 px-2.5 py-2 text-[11.5px] text-amber">
+      <Trans>
+        The plan names the branch <code className="font-mono">{headerBranch}</code>, but the daemon will land{' '}
+        <code className="font-mono">{runBranch}</code>. Push and the change request always use the run's branch; the
+        header's branch is a reference only.
+      </Trans>
+    </div>
+  );
+}
+
 export function PhaseReview({ epic, phase, terms, onLanded }: PhaseReviewProps): JSX.Element {
   const { t } = useLingui();
   const [review, setReview] = useState<PhaseReviewData | null>(null);
@@ -136,6 +165,10 @@ export function PhaseReview({ epic, phase, terms, onLanded }: PhaseReviewProps):
   const [draft, setDraft] = useState(false);
   const [returnOpen, setReturnOpen] = useState(false);
   const [feedback, setFeedback] = useState('');
+  // "Find <change>": a change request opened outside the dashboard for the
+  // run branch, looked up through the landing refresh.
+  const [finding, setFinding] = useState(false);
+  const [findError, setFindError] = useState<unknown>(null);
 
   // The phase this instance currently shows. The panel keeps the instance
   // (and the tab) on ↑/↓ step navigation, so a response that comes back after
@@ -184,6 +217,8 @@ export function PhaseReview({ epic, phase, terms, onLanded }: PhaseReviewProps):
     setDraft(false);
     setReturnOpen(false);
     setFeedback('');
+    setFinding(false);
+    setFindError(null);
   }, [phase.id]);
 
   const vocab: ProviderTerms | null = terms ?? review?.terms ?? null;
@@ -193,7 +228,28 @@ export function PhaseReview({ epic, phase, terms, onLanded }: PhaseReviewProps):
   const noBranch = loadError instanceof LandError && loadError.code === 'no-run-branch';
   const landable = !noBranch && canLand(gate);
   const returnable = !noBranch && canReturn(gate);
-  const busy = inFlight !== null;
+  const findable = !noBranch && (landing?.state === 'ready' || landing?.state === 'pushed');
+  const busy = inFlight !== null || finding;
+
+  const find = (): void => {
+    const forPhase = phase.id;
+    const current = (): boolean => shownPhase.current === forPhase;
+    setFinding(true);
+    setFindError(null);
+    setActionError(null);
+    refreshPhaseLanding(epic.taskId, forPhase)
+      .then((next) => {
+        // Found and recorded: the page refetches so the phase list follows.
+        onLanded?.();
+        if (current()) setLanded(next);
+      })
+      .catch((e: unknown) => {
+        if (current()) setFindError(e);
+      })
+      .finally(() => {
+        if (current()) setFinding(false);
+      });
+  };
 
   const act = (body: PhaseLandRequest): void => {
     const forPhase = phase.id;
@@ -202,6 +258,7 @@ export function PhaseReview({ epic, phase, terms, onLanded }: PhaseReviewProps):
     const current = (): boolean => shownPhase.current === forPhase;
     setInFlight(body.action);
     setActionError(null);
+    setFindError(null);
     landPhase(epic.taskId, forPhase, body)
       .then((res) => {
         // The land did happen: the page still refetches so the phase list follows.
@@ -225,6 +282,10 @@ export function PhaseReview({ epic, phase, terms, onLanded }: PhaseReviewProps):
       ? t`nothing to land in this state`
       : undefined;
   const change = vocab?.change ?? '';
+  // No (or an empty) short term: the same neutral word findMissSentence uses,
+  // never a bare "Find ".
+  const changeShort = vocab?.changeShort || t`change request`;
+  const findMiss = findMissSentence(findError, vocab);
   const landingError = landing?.error ?? '';
   const verdict = review?.verifyVerdict ?? phase.verifyVerdict;
   const verdictDetail = review?.verifyDetail ?? phase.verifyDetail;
@@ -253,6 +314,8 @@ export function PhaseReview({ epic, phase, terms, onLanded }: PhaseReviewProps):
           <Trans>last landing failure: {landingError}</Trans>
         </div>
       )}
+
+      {review !== null && <BranchMismatchNote headerBranch={review.headerBranch} runBranch={review.branch} />}
 
       <div className="rounded-lg border border-line bg-surface/40 px-2.5 py-2">
         {loading && review === null ? (
@@ -299,6 +362,18 @@ export function PhaseReview({ epic, phase, terms, onLanded }: PhaseReviewProps):
             />
             <Trans>Draft</Trans>
           </label>
+          {findable && (
+            <button
+              type="button"
+              className={PLAIN}
+              disabled={busy || running}
+              aria-busy={finding}
+              title={t`look up a ${change} already opened for this phase's run branch`}
+              onClick={find}
+            >
+              {finding ? t`Looking…` : t`Find ${changeShort}`}
+            </button>
+          )}
           <button
             type="button"
             className={`${PLAIN} ml-auto`}
@@ -316,6 +391,13 @@ export function PhaseReview({ epic, phase, terms, onLanded }: PhaseReviewProps):
       )}
 
       {actionError !== null && !returnOpen && <LandFailure err={actionError} terms={vocab} />}
+      {findMiss !== null ? (
+        <div role="status" className="font-mono text-[10.5px] break-words text-amber">
+          {findMiss}
+        </div>
+      ) : (
+        findError !== null && <LandFailure err={findError} terms={vocab} />
+      )}
 
       <ConfirmDialog
         open={returnOpen}

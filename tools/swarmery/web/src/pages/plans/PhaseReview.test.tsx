@@ -63,6 +63,7 @@ const EPIC = { taskId: 9, phases: [] } as unknown as Epic;
 const review = (over: Partial<PhaseReviewData> = {}): PhaseReviewData => ({
   base: '0123456789abcdef',
   branch: 'swarm/phase-207',
+  headerBranch: '',
   commits: [{ sha: 'deadbeefcafe', subject: 'add line items' }],
   files: [{ path: 'orders/line_items.go', additions: 12, deletions: 1 }],
   patch: 'diff --git a/orders/line_items.go b/orders/line_items.go\n+x',
@@ -312,6 +313,32 @@ describe('PhaseReview', () => {
     expect(await screen.findByText(/no run branch yet/)).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Push' })).toBeNull();
   });
+
+  describe('header branch vs run branch', () => {
+    it('warns when the plan header names a different branch than the run', async () => {
+      api.getPhaseReview.mockResolvedValue(review({ headerBranch: 'feat/x' }));
+      renderReview();
+      const note = await screen.findByRole('note');
+      expect(note.textContent).toContain('feat/x');
+      expect(note.textContent).toContain('swarm/phase-207');
+      // The banner only informs: Push still pushes the run branch.
+      expect(button('Push').disabled).toBe(false);
+    });
+
+    it('stays silent when the header names the run branch', async () => {
+      api.getPhaseReview.mockResolvedValue(review({ headerBranch: 'swarm/phase-207' }));
+      renderReview();
+      expect(await screen.findByText('add line items')).toBeTruthy();
+      expect(screen.queryByRole('note')).toBeNull();
+    });
+
+    it('stays silent when the header names no branch', async () => {
+      api.getPhaseReview.mockResolvedValue(review({ headerBranch: '' }));
+      renderReview();
+      expect(await screen.findByText('add line items')).toBeTruthy();
+      expect(screen.queryByRole('note')).toBeNull();
+    });
+  });
 });
 
 // ↑/↓ step navigation keeps the tab and re-renders the SAME instance with
@@ -401,5 +428,89 @@ describe('PhaseReview — a late response for another phase', () => {
     });
     expect(screen.getByText('add totals')).toBeTruthy();
     expect(screen.queryByText('add line items')).toBeNull();
+  });
+});
+
+describe('PhaseReview — Find <change> (land-criteria UX, phase 4)', () => {
+  it.each(['ready', 'pushed'] as const)('%s: offers Find PR, labelled from terms', async (state) => {
+    const l = landing({ state });
+    api.getPhaseReview.mockResolvedValue(review({ landing: l }));
+    renderReview(phase({ landing: l }));
+    await screen.findByText('add line items');
+    expect(button('Find PR').disabled).toBe(false);
+  });
+
+  it('labels Find from the other vocabulary', async () => {
+    api.getPhaseReview.mockResolvedValue(review({ terms: MR_TERMS }));
+    renderReview(phase(), MR_TERMS);
+    expect(await screen.findByRole('button', { name: 'Find MR' })).toBeTruthy();
+  });
+
+  it('falls back to the neutral word when the terms carry no short name', async () => {
+    const bare: ProviderTerms = { ...PR_TERMS, changeShort: '' };
+    api.getPhaseReview.mockResolvedValue(review({ terms: bare }));
+    renderReview(phase(), bare);
+    expect(await screen.findByRole('button', { name: 'Find change request' })).toBeTruthy();
+  });
+
+  it.each([
+    ['pr_open', landing({ state: 'pr_open', prUrl: 'https://host.example/acme/w/pull/77', prNumber: 77 })],
+    ['merged', landing({ state: 'merged', prUrl: 'https://host.example/acme/w/pull/77', prNumber: 77 })],
+    ['returned', landing({ state: 'returned' })],
+  ])('%s: no Find button', async (_state, l) => {
+    api.getPhaseReview.mockResolvedValue(review({ landing: l }));
+    renderReview(phase({ landing: l }));
+    await screen.findByText('add line items');
+    expect(screen.queryByRole('button', { name: /^Find / })).toBeNull();
+  });
+
+  it('a found change request replaces the strip and fires onLanded', async () => {
+    const found = landing({ state: 'pr_open', prUrl: 'https://host.example/acme/w/pull/88', prNumber: 88 });
+    api.refreshPhaseLanding.mockResolvedValue(found);
+    const { onLanded } = renderReview();
+    await screen.findByText('add line items');
+    fireEvent.click(button('Find PR'));
+    expect(await screen.findByRole('link', { name: 'PR #88' })).toBeTruthy();
+    expect(api.refreshPhaseLanding).toHaveBeenCalledWith(9, 207);
+    expect(onLanded).toHaveBeenCalledTimes(1);
+    expect(screen.getByText('PR open')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /^Find / })).toBeNull();
+  });
+
+  it('marks Find busy and disables the other actions meanwhile', async () => {
+    api.refreshPhaseLanding.mockReturnValue(new Promise(() => {}));
+    renderReview();
+    await screen.findByText('add line items');
+    fireEvent.click(button('Find PR'));
+    const looking = button('Looking…');
+    expect(looking.getAttribute('aria-busy')).toBe('true');
+    expect(looking.disabled).toBe(true);
+    expect(button('Push').disabled).toBe(true);
+    expect(button('Return to agent…').disabled).toBe(true);
+  });
+
+  it('a 409 no-change-request names the run branch', async () => {
+    api.refreshPhaseLanding.mockRejectedValue(
+      new LandError(409, { error: 'no open or merged change request', code: 'no-change-request' as never, branch: 'swarm/phase-207' }, 'x'),
+    );
+    const { onLanded } = renderReview();
+    await screen.findByText('add line items');
+    fireEvent.click(button('Find PR'));
+    const status = await screen.findByRole('status');
+    expect(status.textContent).toContain('No open or merged PR found for swarm/phase-207');
+    expect(onLanded).not.toHaveBeenCalled();
+    expect(button('Find PR').disabled).toBe(false);
+  });
+
+  it('any other failure renders as a land failure', async () => {
+    api.refreshPhaseLanding.mockRejectedValue(
+      new LandError(422, { error: 'not authenticated', code: 'not-authenticated', hint: 'log in', detail: '' }, 'x'),
+    );
+    renderReview();
+    await screen.findByText('add line items');
+    fireEvent.click(button('Find PR'));
+    const alert = await screen.findByRole('alert');
+    expect(alert.textContent).toContain('not authenticated');
+    expect(alert.textContent).toContain('log in');
   });
 });

@@ -5,6 +5,8 @@ import {
   canLand,
   canReturn,
   hasReviewTab,
+  landCriterionAction,
+  type LandCriterionPhase,
   type LandingPhase,
   landingChip,
   landingLabel,
@@ -127,5 +129,52 @@ describe('landingChip', () => {
 
   it('falls back to the state label when the change request has no URL', () => {
     expect(landingChip({ ...base, state: 'pr_open' }, MR)).toEqual({ state: 'pr_open', text: 'MR open', href: null });
+  });
+});
+
+describe('landCriterionAction', () => {
+  const lp = (over: Partial<LandCriterionPhase> = {}): LandCriterionPhase => ({
+    runState: 'done',
+    runSessionUuid: 'sess-1',
+    runBranch: 'swarm/phase-7',
+    landing: { state: 'ready', prUrl: null, prNumber: null },
+    ...over,
+  });
+  const prOpen = { state: 'pr_open' as const, prUrl: 'https://host.example/acme/w/12', prNumber: 12 };
+
+  it('pr-link: an open change request with a URL links to it, labelled from terms', () => {
+    expect(landCriterionAction(lp({ landing: prOpen }), PR)).toEqual({
+      kind: 'pr-link',
+      href: prOpen.prUrl,
+      text: 'PR #12',
+    });
+    expect(landCriterionAction(lp({ landing: prOpen }), MR)).toMatchObject({ text: 'MR #12' });
+  });
+
+  it('no-run-branch: a phase the daemon never ran has nothing to push', () => {
+    expect(landCriterionAction(lp({ runBranch: '' }), PR)).toEqual({ kind: 'no-run-branch' });
+    expect(landCriterionAction(lp({ runBranch: '', runState: 'idle', landing: null }), PR)).toEqual({
+      kind: 'no-run-branch',
+    });
+  });
+
+  it('land: a run branch in a landable state offers Push + open <change>', () => {
+    for (const state of ['none', 'ready', 'pushed', 'returned'] as const) {
+      expect(landCriterionAction(lp({ landing: { state, prUrl: null, prNumber: null } }), PR)).toEqual({
+        kind: 'land',
+      });
+    }
+    expect(landCriterionAction(lp({ landing: undefined }), PR)).toEqual({ kind: 'land' });
+  });
+
+  it('review-only: a run branch that is live or past the push only points at Review', () => {
+    expect(landCriterionAction(lp({ runState: 'running' }), PR)).toEqual({ kind: 'review-only' });
+    expect(landCriterionAction(lp({ landing: { state: 'merged', prUrl: prOpen.prUrl, prNumber: 12 } }), PR)).toEqual({
+      kind: 'review-only',
+    });
+    // pr_open without a URL has nothing to link — and nothing to push either.
+    expect(landCriterionAction(lp({ landing: { state: 'pr_open', prUrl: null, prNumber: null } }), PR)).toEqual({
+      kind: 'review-only',
+    });
   });
 });

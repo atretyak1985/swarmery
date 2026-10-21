@@ -8,6 +8,7 @@
   "source_branch": "swarm/phase-5",
   "target_branch": "main",
   "detailed_merge_status": "not_open",
+  "merged_at": "2026-10-09T10:30:00.000Z",
   "pipeline": {
     "id": 556,
     "status": "success",
