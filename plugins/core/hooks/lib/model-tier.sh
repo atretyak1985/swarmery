@@ -11,11 +11,19 @@
 # model they asked for. A signal that fires on the happy path is not a signal.
 #
 # THE RULE. A fallback is a move to a WEAKER model, and weaker has two axes:
-#   - a lower family tier (opus → sonnet → haiku), and
+#   - a lower family tier (fable/mythos → opus → sonnet → haiku), and
 #   - within one family, an OLDER generation (opus 5.5 → opus 4.1).
 # Anything else — the same tier, a newer generation, a rename, an unrecognised
 # name on either side — is silence. Unknown is not evidence of a downgrade, and
 # this file's entire purpose is to stop claiming it is.
+#
+# GENERATIONS ARE NOT COMPARABLE ACROSS FAMILIES. Each family numbers its own
+# releases, so `fable 5.1` against `opus 5.5` says nothing about which is
+# stronger. This file used to compare them anyway whenever two families shared a
+# tier, which made fable → opus an "upgrade" — and pre-model-switch.sh blocked a
+# move DOWN from the strongest family. Two different families are ordered by
+# tier alone; two families on one tier (fable, mythos) are silence. That is what
+# internal/modelid's IsFallback has always done.
 #
 # bash 3.2 ONLY (/bin/bash on macOS): no ${v,,}, no declare -A, no mapfile.
 # scripts/tests/portable-shell.test.sh enforces that.
@@ -77,10 +85,12 @@ model_rank() {
   m="${m##*/}"      # drop a vendor path prefix
   m="${m#claude-}"
 
+  # fable and mythos rank ABOVE opus — internal/modelid's FamilyTier explains
+  # why, and the two tables must stay equal.
   case "$m" in
     *opus*)   MODEL_FAMILY="opus";   MODEL_TIER=3 ;;
-    *fable*)  MODEL_FAMILY="fable";  MODEL_TIER=3 ;;
-    *mythos*) MODEL_FAMILY="mythos"; MODEL_TIER=3 ;;
+    *fable*)  MODEL_FAMILY="fable";  MODEL_TIER=4 ;;
+    *mythos*) MODEL_FAMILY="mythos"; MODEL_TIER=4 ;;
     *sonnet*) MODEL_FAMILY="sonnet"; MODEL_TIER=2 ;;
     *haiku*)  MODEL_FAMILY="haiku";  MODEL_TIER=1 ;;
     *) return 0 ;;
@@ -128,13 +138,14 @@ model_rank() {
 # to ignore it, and the one downstream consumer (the routing report) counts these
 # events as if each were a real fallback.
 model_is_downgrade() {
-  local req_tier req_gen obs_tier obs_gen
-  model_rank "$1"; req_tier="$MODEL_TIER"; req_gen="$MODEL_GEN"
-  model_rank "$2"; obs_tier="$MODEL_TIER"; obs_gen="$MODEL_GEN"
+  local req_fam req_tier req_gen obs_fam obs_tier obs_gen
+  model_rank "$1"; req_fam="$MODEL_FAMILY"; req_tier="$MODEL_TIER"; req_gen="$MODEL_GEN"
+  model_rank "$2"; obs_fam="$MODEL_FAMILY"; obs_tier="$MODEL_TIER"; obs_gen="$MODEL_GEN"
 
   [ "$req_tier" -gt 0 ] && [ "$obs_tier" -gt 0 ] || return 1
   [ "$obs_tier" -lt "$req_tier" ] && return 0
   [ "$obs_tier" -gt "$req_tier" ] && return 1
+  [ "$req_fam" = "$obs_fam" ] || return 1
   [ "$req_gen" -gt 0 ] && [ "$obs_gen" -gt 0 ] && [ "$obs_gen" -lt "$req_gen" ] && return 0
   return 1
 }
@@ -155,13 +166,14 @@ model_is_downgrade() {
 # copy of this very file all answered "not a downgrade", and the gate read that
 # as licence to block.
 model_is_upgrade() {
-  local from_tier from_gen to_tier to_gen
-  model_rank "$1"; from_tier="$MODEL_TIER"; from_gen="$MODEL_GEN"
-  model_rank "$2"; to_tier="$MODEL_TIER"; to_gen="$MODEL_GEN"
+  local from_fam from_tier from_gen to_fam to_tier to_gen
+  model_rank "$1"; from_fam="$MODEL_FAMILY"; from_tier="$MODEL_TIER"; from_gen="$MODEL_GEN"
+  model_rank "$2"; to_fam="$MODEL_FAMILY"; to_tier="$MODEL_TIER"; to_gen="$MODEL_GEN"
 
   [ "$from_tier" -gt 0 ] && [ "$to_tier" -gt 0 ] || return 1
   [ "$to_tier" -gt "$from_tier" ] && return 0
   [ "$to_tier" -lt "$from_tier" ] && return 1
+  [ "$from_fam" = "$to_fam" ] || return 1
   [ "$from_gen" -gt 0 ] && [ "$to_gen" -gt 0 ] && [ "$to_gen" -gt "$from_gen" ] && return 0
   return 1
 }

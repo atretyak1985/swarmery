@@ -90,17 +90,42 @@ func TestSameTier(t *testing.T) {
 	}
 }
 
-// fable and mythos sit LEVEL with opus rather than above it, even though they
-// price higher: this rank only decides whether to claim a fallback, and ordering
-// within the frontier tier would report every opus↔fable routing choice as one.
+// fable and mythos rank ABOVE opus and level with each other. The shell half
+// (plugins/core/hooks/lib/model-tier.sh, MODEL_TIER) must hold the same numbers;
+// scripts/tests/model-tier.test.sh pins its side.
 func TestFamilyTier(t *testing.T) {
-	if FamilyTier("opus") != FamilyTier("fable") || FamilyTier("opus") != FamilyTier("mythos") {
-		t.Error("the frontier families must rank equal")
+	if FamilyTier("fable") != FamilyTier("mythos") {
+		t.Error("fable and mythos must rank equal")
 	}
-	if !(FamilyTier("opus") > FamilyTier("sonnet") && FamilyTier("sonnet") > FamilyTier("haiku")) {
-		t.Error("opus > sonnet > haiku")
+	if !(FamilyTier("fable") > FamilyTier("opus") && FamilyTier("opus") > FamilyTier("sonnet") && FamilyTier("sonnet") > FamilyTier("haiku")) {
+		t.Error("fable > opus > sonnet > haiku")
 	}
 	if FamilyTier("") != 0 || FamilyTier("gpt") != 0 {
 		t.Error("an unknown family must rank 0, which every caller reads as no comparison")
+	}
+}
+
+// Generations are compared only WITHIN a family: fable 5.1 against opus 5.5 is
+// a tier question, and the lower generation number on the fable side means
+// nothing. Two families on one tier are never ordered.
+func TestIsFallbackAcrossFamilies(t *testing.T) {
+	cases := []struct {
+		from, to string
+		want     bool
+	}{
+		{"claude-fable-5-1", "claude-opus-5-5", true},
+		{"claude-mythos-5", "claude-opus-5-5", true},
+		{"claude-fable-5-1", "claude-sonnet-5", true},
+		{"claude-opus-5-5", "claude-fable-5-1", false},
+		{"claude-opus-5-5", "claude-mythos-5", false},
+		{"claude-fable-5-1", "claude-mythos-5", false},
+		{"claude-mythos-5", "claude-fable-5-1", false},
+		{"claude-fable-5-1", "claude-fable-5", true},
+		{"claude-fable-5", "claude-fable-5-1", false},
+	}
+	for _, tc := range cases {
+		if got := IsFallback(tc.from, tc.to); got != tc.want {
+			t.Errorf("IsFallback(%q, %q) = %v, want %v", tc.from, tc.to, got, tc.want)
+		}
 	}
 }

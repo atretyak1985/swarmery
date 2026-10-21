@@ -136,14 +136,18 @@ func scale(major string, rest []string) int {
 
 // FamilyTier ranks families by capability: higher is stronger, 0 unknown.
 //
-// fable and mythos sit level with opus rather than above it even though they
-// price higher (config/pricing.json: $10/$50 against opus 5.5's $4/$20). This
-// comparison decides whether to CLAIM A FALLBACK, and "the frontier tier" is the
-// only distinction that claim needs; ordering within that tier would turn every
-// opus↔fable routing choice into a reported downgrade.
+// fable and mythos rank ABOVE opus (config/pricing.json: $10/$50 against opus
+// 5.5's $4/$20). They used to sit level with it, and level was not neutral: the
+// hooks' shell half then fell through to comparing generations ACROSS families,
+// so fable 5.1 → opus 5.5 read as an upgrade and pre-model-switch.sh blocked
+// an operator stepping down from the strongest family. fable and mythos share a
+// tier, which IsFallback reads as silence — different families on one tier are
+// never ordered. plugins/core/hooks/lib/model-tier.sh holds the same table.
 func FamilyTier(family string) int {
 	switch family {
-	case "opus", "fable", "mythos":
+	case "fable", "mythos":
+		return 4
+	case "opus":
 		return 3
 	case "sonnet":
 		return 2

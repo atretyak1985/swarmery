@@ -116,6 +116,16 @@ Two things ship from this repository on separate clocks:
 
 ### Fixed
 
+- **Stepping down from fable to opus is no longer blocked (core 3.14.1).**
+  `lib/model-tier.sh` ranked fable and mythos level with opus and then compared
+  generation numbers across families, so `claude-fable-5-1` → `claude-opus-5-5`
+  read as an upgrade (51 < 55) and `pre-model-switch.sh` refused it with "no
+  recorded validation" in every session that started on fable. fable and mythos
+  now rank above opus in both the hooks and `internal/modelid.FamilyTier`, and
+  generations compare only within one family, as `modelid.IsFallback` already
+  did. A move from opus up to fable is now gated like any other upgrade, and the
+  dashboard's "fell back" chip now lights for a session that went fable → opus.
+
 - **The SessionStart hooks find the active task card again (core 3.9.7).**
   `session-start.sh`, `task-session-log.sh` and `session-context-bridge.sh`
   selected the active task by grepping its README for the substring `Status:`,
