@@ -63,6 +63,36 @@ downgrade "claude-opus-5-5" "claude-opus-5"     yes
 downgrade "claude-opus-5-5" "claude-haiku-4-5"  yes
 downgrade "claude-sonnet-5" "claude-haiku-4-5"  yes
 
+# ── 1a. generations never compare ACROSS families ─────────────────
+# fable and mythos rank above opus. While they shared opus's tier, the lower
+# generation number on the fable side decided the compare: fable 5.1 → opus 5.5
+# was an "upgrade" (51 < 55) and pre-model-switch.sh blocked a step DOWN, and
+# opus 5.5 → fable 5.1 was a "fallback". Both answers came from comparing two
+# version series that have nothing to do with each other.
+upgrade() { # upgrade <from> <to> <want yes|no>
+  local want="$3" got="no"
+  model_is_upgrade "$1" "$2" && got="yes"
+  if [ "$got" = "$want" ]; then ok; else
+    bad "model_is_upgrade($1, $2) = $got, want $want"
+  fi
+}
+downgrade "claude-fable-5-1" "claude-opus-5-5"  yes
+downgrade "fable"            "opus"             yes
+downgrade "claude-mythos-5"  "claude-opus-5-5"  yes
+downgrade "claude-opus-5-5"  "claude-fable-5-1" no
+downgrade "claude-fable-5-1" "claude-fable-5"   yes   # same family: generation decides
+upgrade   "claude-fable-5-1" "claude-opus-5-5"  no
+upgrade   "claude-opus-5-5"  "claude-fable-5-1" yes
+upgrade   "claude-opus-5-5"  "fable"            yes
+upgrade   "claude-fable-5"   "claude-fable-5-1" yes
+upgrade   "claude-sonnet-5"  "claude-opus-5-5"  yes
+upgrade   "claude-opus-5"    "claude-opus-5-5"  yes
+# Two families on ONE tier are not ordered at all — silence both ways.
+downgrade "claude-fable-5-1" "claude-mythos-5"  no
+downgrade "claude-mythos-5"  "claude-fable-5-1" no
+upgrade   "claude-fable-5-1" "claude-mythos-5"  no
+upgrade   "claude-mythos-5"  "claude-fable-5-1" no
+
 # ── 1b. a DATE is not a minor version ─────────────────────────────
 # `claude-opus-4-20250514` parsed as major=4, minor=20250514 and scaled to
 # generation 20250554, so it compared as NEWER than claude-opus-5-5 and a
@@ -245,6 +275,22 @@ if [ "$rc" -eq 0 ]; then ok; else bad "a downgrade to a weaker family was blocke
 # The gate itself must survive: an UPGRADE onto an unvalidated model still blocks.
 rc=0; pre '{"from_model":"claude-opus-5","to_model":"claude-opus-6","session_id":"s"}' || rc=$?
 if [ "$rc" -eq 2 ]; then ok; else bad "an unvalidated UPGRADE exited $rc, want 2 — the gate was disabled, not narrowed"; fi
+
+# Stepping down from the strongest family. This is the switch that was blocked
+# in a session started on fable: 51 < 55 across two families read as an upgrade.
+rc=0; pre '{"from_model":"claude-fable-5-1","to_model":"claude-opus-5-5","session_id":"s"}' || rc=$?
+if [ "$rc" -eq 0 ]; then ok; else bad "fable → opus (a step DOWN a tier) exited $rc, want 0"; fi
+msg=$(printf '%s' '{"from_model":"claude-fable-5-1","to_model":"claude-opus-5-5"}' | PATH="$SHIM:$PATH" "$PRE" 2>&1 >/dev/null)
+if printf '%s' "$msg" | grep -q 'moves DOWN'; then ok
+else bad "fable → opus was allowed, but not as a downgrade: $msg"; fi
+
+# …and the reverse is now a real upgrade onto the top tier, gated like any other.
+rc=0; pre '{"from_model":"claude-opus-5-5","to_model":"claude-fable-5-1","session_id":"s"}' || rc=$?
+if [ "$rc" -eq 2 ]; then ok; else bad "an unvalidated opus → fable UPGRADE exited $rc, want 2"; fi
+
+# Level families are not ordered: no provable upgrade, so the gate stays open.
+rc=0; pre '{"from_model":"claude-fable-5-1","to_model":"claude-mythos-5","session_id":"s"}' || rc=$?
+if [ "$rc" -eq 0 ]; then ok; else bad "fable → mythos (one tier, two families) exited $rc, want 0"; fi
 
 # THE DEFAULT ON DOUBT IS ALLOW. Each of these three was blocked before: none is
 # a provable downgrade, so each fell through to the validation gate and exit 2 —
