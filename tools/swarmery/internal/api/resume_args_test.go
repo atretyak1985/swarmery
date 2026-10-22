@@ -17,7 +17,7 @@ func TestResumeArgs_CarriesPermissionMode(t *testing.T) {
 
 	args := resumeArgs("u-1", "go ahead", resumeOrigin{})
 
-	want := []string{"-r", "u-1", "-p", "go ahead", "--output-format", "json", "--permission-mode", claudeflags.DefaultMode}
+	want := []string{"-r", "u-1", "-p", "go ahead", "--output-format", "json"}
 	if strings.Join(args, "\x00") != strings.Join(want, "\x00") {
 		t.Fatalf("argv = %q, want %q", args, want)
 	}
@@ -50,7 +50,7 @@ func TestResumeArgs_Model(t *testing.T) {
 	t.Setenv(claudeflags.ModeEnv, "")
 
 	got := resumeArgs("u-1", "go ahead", resumeOrigin{Model: "claude-sonnet-5"})
-	want := []string{"-r", "u-1", "-p", "go ahead", "--output-format", "json", "--model", "claude-sonnet-5", "--permission-mode", claudeflags.DefaultMode}
+	want := []string{"-r", "u-1", "-p", "go ahead", "--output-format", "json", "--model", "claude-sonnet-5"}
 	if strings.Join(got, "\x00") != strings.Join(want, "\x00") {
 		t.Fatalf("argv = %q, want %q", got, want)
 	}
@@ -80,7 +80,6 @@ func TestResumeArgs_CarriesOriginFlags(t *testing.T) {
 		"-r", "u-1", "-p", "go ahead", "--output-format", "json",
 		"--model", "claude-opus-5-5", "--effort", "high",
 		"--agent", "tech-lead", "--setting-sources", "project,local",
-		"--permission-mode", claudeflags.DefaultMode,
 	}
 	if strings.Join(got, "\x00") != strings.Join(want, "\x00") {
 		t.Fatalf("argv = %q, want %q", got, want)
@@ -124,7 +123,6 @@ func TestResumeArgs_CarriesSettingsFile(t *testing.T) {
 		"-r", "u-1", "-p", "go ahead", "--output-format", "json",
 		"--model", "claude-opus-5-5", "--effort", "high",
 		"--agent", "tech-lead", "--settings", "/p/.claude/settings.json",
-		"--permission-mode", claudeflags.DefaultMode,
 	}
 	if strings.Join(got, "\x00") != strings.Join(want, "\x00") {
 		t.Fatalf("argv = %q, want %q", got, want)

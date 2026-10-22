@@ -405,6 +405,10 @@ func (s *Service) review(phaseID int64, info phaseInfo, acq worktree.Acquired, r
 		Resolution:      resolution,
 		SettingsFile:    runsettings.Compose("review", resolution, runsettings.Inputs{}),
 		DisallowedTools: s.reviewDenials(),
+		// Least privilege: dontAsk with the read tools only (the reviewer never
+		// runs a command), on the reviewers' own knob.
+		AllowedTools:  verify.ReadOnlyTools(),
+		PermissionEnv: verify.ReviewPermEnv,
 	}
 	log.Printf("phaserun: phase=%d reviewing worktree=%q", phaseID, acq.Path)
 	// context.Background(): the run's own context is already cancelled (the defer's

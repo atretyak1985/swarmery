@@ -294,7 +294,9 @@ func wizardResumeOrigin(db *sql.DB, svc *planning.Service, uuid string) resumeOr
 	o := lookupResumeOrigin(db, uuid)
 	o.Model = svc.Model(uuid)
 	o.Effort = svc.Effort(uuid)
-	return o
+	// The PROCEED turn writes the plan (or stages the revision): it gets the
+	// first turn's least-privilege shape, Edit rule included.
+	return withPlannerWritable(o, svc.WritableDirs(uuid))
 }
 
 func (h *Handler) spawnWizardResume(w http.ResponseWriter, svc *planning.Service, uuid, text, okStatus string) {

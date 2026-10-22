@@ -62,7 +62,15 @@ func resumeArgs(sessionUUID, text string, o resumeOrigin) []string {
 	if f := strings.TrimSpace(o.SettingsFile); f != "" {
 		args = append(args, "--settings", f)
 	}
-	return append(args, claudeflags.PermissionModeArgs(resumePermEnv)...)
+	// The mode and lists of the run being continued (resumeOrigin.Site): an
+	// executor keeps bypass plus its deny list, a reader or the planner gets
+	// dontAsk plus its allow-list, a foreign session gets no flag.
+	// The origin site's knob first, then this site's, then the global; a foreign
+	// session is clamped to no flag / dontAsk / plan whatever a knob says.
+	args = append(args, claudeflags.ModeArgsFor(o.Site, o.PermEnv, resumePermEnv)...)
+	args = append(args, claudeflags.AllowedToolsArgs(o.AllowedTools)...)
+	// The origin's deny list, last: --disallowedTools is variadic.
+	return append(args, o.DenyArgs...)
 }
 
 // resumeSettings resolves the resume spawn ONCE and composes its settings file
