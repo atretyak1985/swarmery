@@ -124,8 +124,9 @@ func BuildPromptRun(docPath, docRelPath, docContent, repoRoot, projectPath, work
 // ReviewFixNote is ReturnedNote's counterpart for the fix re-run the review stage
 // starts (StartOptions.ReviewFix): the previous run was sent back by the
 // independent code review, not by the operator, and what it has to address is
-// the doc's most recent `## Review findings` section (wsingest.AppendReviewFindings).
-const ReviewFixNote = `THIS PHASE WAS RETURNED BY THE INDEPENDENT CODE REVIEW. Read the most recent "## Review findings" section of the document first and fix every blocking finding before anything else.`
+// the latest `kind: review` block under the doc's `## Review` section
+// (wsingest.AppendReviewFindings).
+const ReviewFixNote = `THIS PHASE WAS RETURNED BY THE INDEPENDENT CODE REVIEW. Read the latest ` + "`kind: review`" + ` block (the highest round) in the document's "## Review" section first — a block marked unparsable is followed by the reviewer's own words — and fix every finding it lists before anything else. Re-verify each ticked acceptance criterion a finding touches and untick (` + "`- [x]` → `- [ ]`" + `) any that no longer holds, ticking it again only when it is true. Do not edit the review blocks.`
 
 // runNote is the note a run's prompt opens its contract with: the review stage's
 // for a review-fix run, the operator's for any other returned run, none otherwise.

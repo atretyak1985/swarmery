@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/claudeacct"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/mdfence"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/runsettings"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/verify"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/workaround"
@@ -23,9 +24,11 @@ import (
 // The review stage (decision D4): a phase doc carrying `**Review:** on` gets a
 // second, read-only headless session after its run settles done|partial and before
 // the verifier grades it. The reviewer reads the phase doc and the run's diff and
-// answers with code-reviewer's contract (findings + one VERDICT line). A FAIL is
-// written into the doc as `## Review findings` and starts ONE fix re-run; a second
-// FAIL is recorded and nothing more. Every review is a row in phase_reviews.
+// answers with code-reviewer's contract (findings, a `kind: review` block, one
+// VERDICT line). Every PASS and FAIL is written into the doc as a `kind: review`
+// block under `## Review` (wsingest.AppendReviewFindings, D42); a FAIL also starts
+// ONE fix re-run, and a second FAIL is recorded and nothing more. Every review is
+// a row in phase_reviews.
 //
 // Read-only-ness is established twice, independently, because `claude` may change
 // its tool set between versions: on the argv (Edit, Write, MultiEdit, NotebookEdit
@@ -349,6 +352,19 @@ func (s *Service) restoreTree(dir string) error {
 type reviewOutcome struct {
 	sessionUUID, treeBefore, treeAfter string
 	verdict, detail, findings          string
+	// block is the reviewer's own `kind: review` block (the last one that parses
+	// in its output); nil when it wrote none readable. Phase review only.
+	block *mdfence.Review
+}
+
+// reviewerBlock is the last parsable `kind: review` block of the reviewer's
+// output — the contract asks for it right before the VERDICT line — or nil.
+func reviewerBlock(output string) *mdfence.Review {
+	rs, _ := mdfence.ParseReviews(output)
+	if len(rs) == 0 {
+		return nil
+	}
+	return &rs[len(rs)-1]
 }
 
 // reviewRun is the review stage of a finished phase run. It returns the verdict
@@ -367,13 +383,40 @@ func (s *Service) reviewRun(phaseID int64, info phaseInfo, acq worktree.Acquired
 	started := s.ts()
 	round, runUUID := s.reviewState(phaseID)
 	// review_fix_round counts fix re-runs (0 before the first); the block's round
-	// counts reviews, so the first review is round 1.
-	out := s.recoveredReview(phaseID, info, acq, round+1)
+	// counts reviews, so the first review is round 1 — and never one the doc
+	// already carries.
+	reviewRound := wsingest.NextReviewRound(info.DocPath, round+1)
+	out := s.recoveredReview(phaseID, info, acq, reviewRound)
+
+	// PASS and FAIL alike become a `kind: review` block in the doc; the row keeps
+	// the same block text (or, when the reviewer wrote none, its whole output).
+	var block wsingest.ReviewBlock
+	recorded := out.verdict == string(verify.VerdictPass) || out.verdict == string(verify.VerdictFail)
+	now := s.clock()
+	if recorded {
+		block = wsingest.ReviewBlock{Review: out.block, Verdict: strings.ToUpper(out.verdict), Prose: out.findings}
+		if out.verdict != string(verify.VerdictFail) {
+			block.Prose = "" // a PASS without a block records the round, not the prose
+		}
+		if out.block != nil {
+			if text, err := wsingest.RenderReviewBlock(block, reviewRound, now); err == nil {
+				out.findings = text
+			}
+		}
+	}
 	s.recordReview(phaseID, info, runUUID, round, started, out)
 	// The epic payload carries the phase's reviews: refetch it now, not after the
 	// verifier (which may take minutes) reaches the defer's own notify.
 	s.notify(info.WorkspaceTaskID)
-	log.Printf("phaserun: phase=%d review %s (fix round %d) %s", phaseID, out.verdict, round, out.detail)
+	log.Printf("phaserun: phase=%d review %s (fix round %d, review round %d) %s", phaseID, out.verdict, round, reviewRound, out.detail)
+
+	var appendErr error
+	if recorded {
+		if appendErr = wsingest.AppendReviewFindings(info.DocPath, block, reviewRound, now); appendErr != nil {
+			log.Printf("error: phaserun: phase=%d review %s could not be written into %s: %v",
+				phaseID, out.verdict, info.DocPath, appendErr)
+		}
+	}
 
 	switch out.verdict {
 	case string(verify.VerdictPass):
@@ -385,10 +428,9 @@ func (s *Service) reviewRun(phaseID int64, info phaseInfo, acq worktree.Acquired
 			// nothing more. The verifier still grades the run.
 			return out.verdict, false
 		}
-		if err := wsingest.AppendReviewFindings(info.DocPath, out.findings, s.clock()); err != nil {
+		if appendErr != nil {
 			// No findings in the doc ⇒ a re-run would not know what to fix.
-			log.Printf("error: phaserun: phase=%d review FAIL but the findings could not be written into %s: %v — no fix re-run",
-				phaseID, info.DocPath, err)
+			log.Printf("error: phaserun: phase=%d review FAIL without findings in the doc — no fix re-run", phaseID)
 			return out.verdict, false
 		}
 		s.setReviewFixRound(phaseID, 1)
@@ -477,6 +519,7 @@ func (s *Service) review(phaseID int64, info phaseInfo, acq worktree.Acquired, r
 	}
 	if run != nil {
 		o.findings = capFindings(run.Output)
+		o.block = reviewerBlock(run.Output)
 	}
 	if o.treeAfter != o.treeBefore {
 		detail := o.treeBefore + "→" + o.treeAfter

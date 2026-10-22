@@ -11,6 +11,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/mdfence"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/runcore"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/verify"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/worktree"
@@ -316,11 +317,23 @@ func TestReviewFailStartsExactlyOneFixRerun(t *testing.T) {
 	}
 
 	doc, _, _, _ := phaseDocAndState(t, db, p1)
-	if c := strings.Count(doc, "## Review findings ("); c != 1 {
-		t.Errorf("doc carries %d `## Review findings` sections, want 1:\n%s", c, doc)
+	if c := strings.Count(doc, "\n## Review\n"); c != 1 {
+		t.Errorf("doc carries %d `## Review` sections, want 1:\n%s", c, doc)
 	}
+	// The reviewer wrote prose and no block: each round is the unparsable
+	// fallback block with the prose quoted after it — round 1, then round 2 (the
+	// fix re-run's review, recorded although it starts nothing).
 	if !strings.Contains(doc, "> - P0 internal/x.go:12 — the error is swallowed.") {
 		t.Errorf("the findings are not quoted into the doc:\n%s", doc)
+	}
+	rs, errs := mdfence.ParseReviews(doc)
+	if len(errs) != 0 || len(rs) != 2 || rs[0].Round != "1" || rs[1].Round != "2" {
+		t.Fatalf("doc review blocks = %+v %+v, want rounds 1 and 2", rs, errs)
+	}
+	for _, r := range rs {
+		if r.Verdict != mdfence.ReviewFail || !r.Unparsable || r.Complete || r.Source != "daemon" {
+			t.Errorf("fallback block = %+v, want FAIL, unparsable, incomplete, source daemon", r)
+		}
 	}
 	rows := reviewRows(t, db, p1)
 	if len(rows) != 2 || rows[0].fixRound != 0 || rows[1].fixRound != 1 || rows[0].verdict != "fail" || rows[1].verdict != "fail" {
@@ -348,6 +361,61 @@ func TestReviewFailStartsExactlyOneFixRerun(t *testing.T) {
 	}
 	if spec.Model != verify.DefaultModel {
 		t.Errorf("reviewer model = %q, want %q (the agent's opus, not the account default)", spec.Model, verify.DefaultModel)
+	}
+}
+
+// reviewerOutput is a reviewer answer carrying the contract's block.
+func reviewerOutput(verdict, findings string) string {
+	return "Findings above.\n\n```yaml\nkind: review\nround: 1\nverdict: " + verdict + "\ncomplete: true\nscope_left: []\n" +
+		"findings: " + findings + "\nresolves: []\nids: []\ndrift: []\nchecked_callers: []\n```\nVERDICT: " + verdict
+}
+
+// A PASS with a block is written into the doc too — zero findings, complete — and
+// the phase_reviews row keeps the block text, not the whole output.
+func TestReviewPassWritesBlock(t *testing.T) {
+	_, db, p1, runner, _, _ := startReviewed(t, reviewerOutput("PASS", "[]"))
+	if n := runner.specCount(); n != 1 {
+		t.Fatalf("executor runs = %d, want 1 — a PASS starts no fix", n)
+	}
+	doc, _, _, _ := phaseDocAndState(t, db, p1)
+	rs, errs := mdfence.ParseReviews(doc)
+	if len(errs) != 0 || len(rs) != 1 {
+		t.Fatalf("doc review blocks = %+v %+v\n%s", rs, errs, doc)
+	}
+	if r := rs[0]; r.Round != "1" || r.Verdict != mdfence.ReviewPass || !r.Complete || r.Unparsable ||
+		len(r.Findings) != 0 || r.Source != "daemon" {
+		t.Errorf("block = %+v", r)
+	}
+	rows := reviewRows(t, db, p1)
+	if len(rows) != 1 || !strings.HasPrefix(rows[0].findings, "```yaml\nkind: review\nround: 1\nverdict: PASS") ||
+		strings.Contains(rows[0].findings, "Findings above.") {
+		t.Errorf("phase_reviews = %+v, want one row whose findings are the block text", rows)
+	}
+}
+
+// A FAIL with a block: the doc carries the reviewer's findings as data, and the
+// one fix re-run is started exactly as before.
+func TestReviewFailWithBlockWritesFindings(t *testing.T) {
+	const finding = "[{id: R1-1, type: correctness, file: a.go, line: 3, test_caught: true, evidence: \"TestA fails\"}]"
+	_, db, p1, runner, _, _ := startReviewed(t, reviewerOutput("FAIL", finding), reviewerOutput("PASS", "[]"))
+	if n := runner.specCount(); n != 2 {
+		t.Fatalf("executor runs = %d, want 2", n)
+	}
+	doc, _, _, _ := phaseDocAndState(t, db, p1)
+	rs, errs := mdfence.ParseReviews(doc)
+	if len(errs) != 0 || len(rs) != 2 {
+		t.Fatalf("doc review blocks = %+v %+v\n%s", rs, errs, doc)
+	}
+	if r := rs[0]; r.Round != "1" || r.Verdict != mdfence.ReviewFail || len(r.Findings) != 1 ||
+		r.Findings[0].ID != "R1-1" || !r.Findings[0].TestCaught || r.Findings[0].Evidence != "TestA fails" {
+		t.Errorf("round 1 = %+v", r)
+	}
+	// The reviewer's block said round 1 both times; the daemon numbers the rounds.
+	if r := rs[1]; r.Round != "2" || r.Verdict != mdfence.ReviewPass {
+		t.Errorf("round 2 = %+v", r)
+	}
+	if strings.Contains(doc, "Findings above.") {
+		t.Error("the prose was written although the reviewer produced a block")
 	}
 }
 

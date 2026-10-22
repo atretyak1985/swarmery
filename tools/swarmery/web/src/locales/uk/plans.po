@@ -193,6 +193,10 @@ msgstr "{title} · Плани · {tail}"
 msgid "{title} lane"
 msgstr "колонка {title}"
 
+#: src/pages/plans/ReviewFindings.tsx
+msgid "{title}: {count} findings"
+msgstr "{title}: знахідок — {count}"
+
 #: src/pages/Plans.tsx
 msgid "{turns, plural, one {{model} (# turn)} few {{model} (# turns)} many {{model} (# turns)} other {{model} (# turns)}}"
 msgstr "{turns, plural, one {{model} (# хід)} few {{model} (# ходи)} many {{model} (# ходів)} other {{model} (# ходу)}}"
@@ -449,6 +453,10 @@ msgstr "Назад"
 msgid "back to the phase list (Esc)"
 msgstr "до списку фаз (Esc)"
 
+#: src/pages/plans/ReviewFindings.tsx
+msgid "backfilled"
+msgstr "заповнено заднім числом"
+
 #: src/pages/plans/ForecastVsActual.tsx
 msgid "bands & outcome"
 msgstr "діапазони й результат"
@@ -640,9 +648,17 @@ msgstr "критерії, які зняти"
 msgid "criteria…"
 msgstr "критерії…"
 
+#: src/pages/plans/ReviewFindings.tsx
+msgid "criterion"
+msgstr "критерій"
+
 #: src/pages/Routines.tsx
 msgid "Cron (5-field, blank = manual/webhook only)"
 msgstr "Cron (5 полів, порожньо = лише вручну/вебхук)"
+
+#: src/pages/plans/ReviewFindings.tsx
+msgid "daemon review"
+msgstr "рев’ю демона"
 
 #: src/pages/Routines.tsx
 msgid "daily at {time}"
@@ -850,6 +866,10 @@ msgstr "епіки…"
 msgid "every minute"
 msgstr "щохвилини"
 
+#: src/pages/plans/ReviewFindings.tsx
+msgid "evidence"
+msgstr "докази"
+
 #: src/pages/Plans.tsx
 msgid "execution mode"
 msgstr "режим виконання"
@@ -912,6 +932,10 @@ msgstr "знахідки ({count})"
 #: src/pages/plans/RunsReviewBlock.tsx
 msgid "findings (none blocking)"
 msgstr "знахідки (жодна не блокує)"
+
+#: src/pages/plans/ReviewFindings.tsx
+msgid "finished before review findings were recorded — nothing is missing and nothing is required"
+msgstr "завершено до того, як знахідки рев’ю почали записуватися — нічого не бракує й нічого не вимагається"
 
 #: src/pages/plans/forecastStoryModel.ts
 msgid "finishing part of the work"
@@ -1026,6 +1050,10 @@ msgstr "наскільки глибоко думає кожен «Запусти
 msgid "how hard the planning interview thinks, on every turn of this wizard — the first spawn and each resume. Leave it on the default to let the daemon's knob and the planner's pinned default decide. Note that NO effort is not the cheap end — an unpinned claude run thinks at xhigh, the deepest setting."
 msgstr "наскільки глибоко думає інтерв’ю планування на кожному ході цього майстра — при першому запуску й кожному відновленні. Лишіть типове значення, щоб вирішували налаштування демона й закріплений типовий рівень планувальника. Зауважте: БЕЗ effort — це не найдешевший варіант: незакріплений запуск claude думає на xhigh, найглибшому рівні."
 
+#: src/pages/plans/ReviewFindings.tsx
+msgid "id"
+msgstr "id"
+
 #: src/pages/plans/forecastStoryModel.ts
 msgid "in a failure"
 msgstr "невдачею"
@@ -1040,6 +1068,10 @@ msgstr "простими словами"
 msgid "In plain words"
 msgstr "Простими словами"
 
+#: src/pages/plans/ReviewFindings.tsx
+msgid "incomplete"
+msgstr "неповне"
+
 #: src/pages/Plans.tsx
 msgid "inferred"
 msgstr "виведено"
@@ -1051,6 +1083,10 @@ msgstr "виведено з файлів під plan/, які редагувал
 #: src/pages/Plans.tsx
 msgid "inline"
 msgstr "самостійно"
+
+#: src/pages/plans/ReviewFindings.tsx
+msgid "interactive review"
+msgstr "інтерактивне рев’ю"
 
 #: src/pages/Plans.tsx
 msgid "interview against this plan and stage the changes as a reviewable diff"
@@ -1091,6 +1127,10 @@ msgstr "останній запуск: готово"
 #: src/pages/PlanningMode.tsx
 msgid "latest reasoning"
 msgstr "останні міркування"
+
+#: src/pages/plans/ReviewFindings.tsx
+msgid "legacy review"
+msgstr "рев’ю до запису знахідок"
 
 #: src/pages/Plans.tsx
 msgid "let the run-plan skill triage the route from the phase DAG"
@@ -1252,6 +1292,10 @@ msgstr "наступна ідея"
 msgid "nightly advisor re-run"
 msgstr "нічний перезапуск радника"
 
+#: src/pages/plans/ReviewFindings.tsx
+msgid "no"
+msgstr "ні"
+
 #: src/pages/Plans.tsx
 msgid "no {filterLabel} plans"
 msgstr "немає планів ({filterLabel})"
@@ -1279,6 +1323,10 @@ msgstr "вміст без змін"
 #: src/pages/Plans.tsx
 msgid "no epics yet — a plan under this project's workspace (a <0>plan/</0> dir with a phase table) becomes an epic here"
 msgstr "епіків ще немає — план у робочому просторі цього проєкту (тека <0>plan/</0> із таблицею фаз) стає тут епіком"
+
+#: src/pages/plans/ReviewFindings.tsx
+msgid "No findings."
+msgstr "Знахідок немає."
 
 #: src/pages/plans/ForecastVsActual.tsx
 msgid "no forecast"
@@ -1380,6 +1428,11 @@ msgstr "не здано"
 msgid "not live"
 msgstr "не наживо"
 
+#. placeholder {0}: block.scopeLeft.join(', ')
+#: src/pages/plans/ReviewFindings.tsx
+msgid "not reviewed: {0}"
+msgstr "не переглянуто: {0}"
+
 #: src/pages/plans/ForecastVsActual.tsx
 msgid "not run yet — a score appears once a run of this phase has finished and been measured"
 msgstr "ще не запускалась — оцінка з’явиться, коли запуск цієї фази завершиться й буде виміряний"
@@ -1437,6 +1490,7 @@ msgid "only a human can close it — you tick it after checking by hand"
 msgstr "закрити може лише людина — ви відмічаєте після ручної перевірки"
 
 #: src/pages/plans/LandingStatus.tsx
+#: src/pages/plans/ReviewFindings.tsx
 msgid "open"
 msgstr "відкрито"
 
@@ -1630,6 +1684,10 @@ msgstr "план не активний"
 #: src/pages/PlanningMode.tsx
 msgid "Plan ready"
 msgstr "План готовий"
+
+#: src/pages/plans/ReviewFindings.tsx
+msgid "Plan round"
+msgstr "Раунд плану"
 
 #: src/pages/Plans.tsx
 msgid "plan run failed"
@@ -1911,6 +1969,14 @@ msgstr "відповідь"
 msgid "Report"
 msgstr "Звіт"
 
+#: src/pages/plans/ReviewFindings.tsx
+msgid "resolved in round {resolvedBy}"
+msgstr "виправлено в раунді {resolvedBy}"
+
+#: src/pages/plans/ReviewFindings.tsx
+msgid "resolved in the plan round"
+msgstr "виправлено в раунді плану"
+
 #: src/pages/Plans.tsx
 msgid "Restore"
 msgstr "Відновити"
@@ -1956,6 +2022,11 @@ msgstr "Рев’ю"
 #: src/pages/PlanningMode.tsx
 msgid "Review changes →"
 msgstr "Переглянути зміни →"
+
+#: src/pages/plans/ReviewFindings.tsx
+#: src/pages/plans/ReviewFindings.tsx
+msgid "Review findings"
+msgstr "Знахідки рев’ю"
 
 #: src/pages/PlanningMode.tsx
 msgid "Review it on the <0>Plans page</0> — phases run from there."
@@ -2025,6 +2096,10 @@ msgstr "ревізії…"
 #: src/pages/plans/ForecastVsActual.tsx
 msgid "risks"
 msgstr "ризики"
+
+#: src/pages/plans/ReviewFindings.tsx
+msgid "Round {round}"
+msgstr "Раунд {round}"
 
 #: src/pages/Routines.tsx
 msgid "Routines"
@@ -2300,6 +2375,10 @@ msgstr "почато {startedAgo}"
 msgid "starting…"
 msgstr "запуск…"
 
+#: src/pages/plans/ReviewFindings.tsx
+msgid "status"
+msgstr "статус"
+
 #: src/pages/plans/LandingStatus.tsx
 msgid "status not read yet"
 msgstr "статус ще не зчитано"
@@ -2356,6 +2435,10 @@ msgstr "назва задачі"
 #: src/pages/Plans.tsx
 msgid "tech-lead (default)"
 msgstr "tech-lead (типово)"
+
+#: src/pages/plans/ReviewFindings.tsx
+msgid "test caught"
+msgstr "спіймав тест"
 
 #: src/pages/plans/WorkaroundHits.tsx
 msgid "The agent's own words where it went around something. Read these first; each is a place to check, not a verdict."
@@ -2469,6 +2552,10 @@ msgstr "Запуск планувальника завершився без ві
 #: src/pages/plans/forecastStoryModel.ts
 msgid "The planner was {percent} % sure"
 msgstr "Планувальник був упевнений на {percent} %"
+
+#: src/pages/plans/ReviewFindings.tsx
+msgid "the reviewer wrote no readable kind: review block — its own words are in the doc"
+msgstr "рецензент не написав читабельного блоку kind: review — його власні слова є в документі"
 
 #: src/pages/Plans.tsx
 msgid "the run ended its turn with criteria unticked and was resumed {resumed}× — {tip}"
@@ -2587,6 +2674,10 @@ msgstr "Перетворіть ідею на план"
 msgid "turn {0}"
 msgstr "хід {0}"
 
+#: src/pages/plans/ReviewFindings.tsx
+msgid "type"
+msgstr "тип"
+
 #: src/pages/Plans.tsx
 msgid "un-tick this criterion in the doc"
 msgstr "зняти відмітку з цього критерію в документі"
@@ -2609,6 +2700,10 @@ msgstr "несподівані"
 #: src/pages/Playbooks.tsx
 msgid "unknown project — pick one from the switcher"
 msgstr "невідомий проєкт — оберіть у перемикачі"
+
+#: src/pages/plans/ReviewFindings.tsx
+msgid "unparsable"
+msgstr "нечитабельне"
 
 #: src/pages/Plans.tsx
 msgid "unreported"
@@ -2696,6 +2791,10 @@ msgstr "що доставлено — виконана робота по фаз�
 msgid "when this phase doc was last edited — no run is attached to it"
 msgstr "коли цей документ фази редагували останнього разу — запуску до нього не прив’язано"
 
+#: src/pages/plans/ReviewFindings.tsx
+msgid "where"
+msgstr "де"
+
 #: src/pages/plans/ForecastVsActual.tsx
 #: src/pages/plans/ForecastVsActual.tsx
 msgid "where reality diverged"
@@ -2751,6 +2850,10 @@ msgstr "записано в документ після того, як запу�
 #: src/pages/Plans.tsx
 msgid "xhigh — deepest, slowest"
 msgstr "xhigh — найглибше, найповільніше"
+
+#: src/pages/plans/ReviewFindings.tsx
+msgid "yes"
+msgstr "так"
 
 #: src/pages/Board.tsx
 msgid "Yes, archive {amnestyMatched}"

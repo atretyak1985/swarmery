@@ -161,3 +161,23 @@ export function landingChip(
   const label = landingLabel(state, terms);
   return { state, text: state === 'merged' ? `${label} ✓` : label, href: null };
 }
+
+/** The review-findings fields of a phase (migration 0123); both optional so an
+ *  older daemon's payload, or a fixture, reads as "none". */
+export interface FindingsPhase {
+  reviewBlocks?: readonly unknown[] | undefined;
+  legacyReview?: boolean | undefined;
+}
+
+/** Whether the phase has anything for the Review tab's findings table: a
+ *  `kind: review` round in its doc, or the D21 legacy badge. */
+export function hasReviewFindings(phase: FindingsPhase): boolean {
+  return (phase.reviewBlocks?.length ?? 0) > 0 || phase.legacyReview === true;
+}
+
+/** Whether the phase panel shows a Review tab at all: a run to land
+ *  (hasReviewTab) or review findings to read — an interactive or backfilled
+ *  review of a phase the daemon never ran still belongs on it. */
+export function showsReviewTab(phase: LandingPhase & FindingsPhase): boolean {
+  return hasReviewTab(phase) || hasReviewFindings(phase);
+}
