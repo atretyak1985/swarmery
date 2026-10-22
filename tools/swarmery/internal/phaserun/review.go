@@ -15,6 +15,7 @@ import (
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/claudeacct"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/runsettings"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/verify"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/workaround"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/worktree"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/wsingest"
 )
@@ -129,8 +130,10 @@ FAIL when any P0/P1 stands; INCONCLUSIVE only when you genuinely could not asses
 // reviewPrompt renders the reviewer's prompt: the role and the daemon-API rule for
 // daemonPort, the review round (1 for a phase's first review, 2 for the review
 // after its fix re-run — the `round` of the reviewer's `kind: review` block), the
-// phase doc as it stands now (with the executor's ticks), and the run's diff.
-func reviewPrompt(title, doc, diff string, daemonPort, round int) string {
+// phase doc as it stands now (with the executor's ticks), the places the run's
+// agent said it changed course (lookFirst; the section is absent when there are
+// none), and the run's diff.
+func reviewPrompt(title, doc, diff string, daemonPort, round int, lookFirst workaround.PhaseHits) string {
 	var b strings.Builder
 	b.WriteString(reviewerPreamble(daemonPort))
 	b.WriteString("\n\nREVIEW ROUND: ")
@@ -140,8 +143,56 @@ func reviewPrompt(title, doc, diff string, daemonPort, round int) string {
 	b.WriteString("\n\nPHASE DOCUMENT:\n----------------------------------------\n")
 	b.WriteString(strings.TrimRight(doc, "\n"))
 	b.WriteString("\n----------------------------------------\n\n")
+	b.WriteString(lookFirstSection(lookFirst))
 	b.WriteString(diff)
 	return b.String()
+}
+
+// lookFirstMax bounds the list in the prompt; the phase card shows them all.
+const lookFirstMax = 20
+
+// lookFirstSection lists the run's workaround hits (D23) — where the executor
+// said "instead", "for now", "pre-existing"… — so the reviewer checks those
+// places in the diff first. Advisory: a hit is a pointer, not a finding.
+func lookFirstSection(h workaround.PhaseHits) string {
+	if len(h.Hits) == 0 && h.Total == 0 {
+		return ""
+	}
+	var b strings.Builder
+	b.WriteString("Look first — the agent changed course here:\n")
+	b.WriteString("(the executor's own words, matched against the workaround-words list; each is a place to check in the diff, not a finding by itself)\n")
+	for i, hit := range h.Hits {
+		if i == lookFirstMax {
+			break
+		}
+		fmt.Fprintf(&b, "- %q — %s\n", hit.Word, hit.Sentence)
+		if hit.Before != "" {
+			fmt.Fprintf(&b, "    before: %s\n", hit.Before)
+		}
+		if hit.After != "" {
+			fmt.Fprintf(&b, "    after: %s\n", hit.After)
+		}
+	}
+	if more := h.Total - min(len(h.Hits), lookFirstMax); more > 0 {
+		fmt.Fprintf(&b, "- … and %d more on the phase card.\n", more)
+	}
+	b.WriteString("\n")
+	return b.String()
+}
+
+// lookFirst reads the run session's workaround hits for the review prompt. The
+// ingest tail stores them as the run's transcript lands; a read failure is
+// logged and leaves the section out — it never blocks the review.
+func (s *Service) lookFirst(phaseID int64, runUUID string) workaround.PhaseHits {
+	if s.DB == nil || runUUID == "" {
+		return workaround.PhaseHits{}
+	}
+	h, err := workaround.ForPhase(s.DB, phaseID, runUUID)
+	if err != nil {
+		log.Printf("warning: phaserun: phase=%d workaround hits unreadable: %v", phaseID, err)
+		return workaround.PhaseHits{}
+	}
+	return h
 }
 
 // reviewGit is the git the review stage shells out to in the run's worktree: the
@@ -394,9 +445,14 @@ func (s *Service) review(phaseID int64, info phaseInfo, acq worktree.Acquired, r
 	}
 
 	o.sessionUUID = s.UUID()
+	var runUUID string
+	if s.DB != nil {
+		_, runUUID = s.reviewState(phaseID)
+	}
 	resolution := claudeacct.Resolve(info.ProjectPath)
 	spec := verify.RunSpec{
-		Prompt:      reviewPrompt(info.Name, string(doc), s.reviewDiff(acq.Path, acq.StartPoint), s.DaemonPort, reviewRound),
+		Prompt: reviewPrompt(info.Name, string(doc), s.reviewDiff(acq.Path, acq.StartPoint), s.DaemonPort, reviewRound,
+			s.lookFirst(phaseID, runUUID)),
 		SessionUUID: o.sessionUUID,
 		Cwd:         acq.Path,
 		Model:       reviewModel,
