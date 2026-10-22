@@ -129,6 +129,8 @@ func main() {
 		err = cmdBackfill(os.Args[2:])
 	case "serve":
 		err = cmdServe(os.Args[2:])
+	case "cachecold-backfill":
+		err = cmdCacheColdBackfill(os.Args[2:], os.Stdout)
 	case "recost":
 		err = cmdRecost(os.Args[2:])
 	case "modeleval":
@@ -236,6 +238,10 @@ func usage() {
                     [--notify-telegram-chat <id>]
                     [--reply-extract] [--reply-extract-daily-cap <n>]  (off by default; sends the waiting question to the Claude API)
   swarmery recost   [--db <path>]
+  swarmery cachecold-backfill [--db <path>] [--since 30d]
+                                   re-derive turns.cold_restart (a turn that re-wrote its whole
+                                   context after the prompt cache expired) over the window and
+                                   print what factors 0.7 / 0.8 / 0.9 would mark; idempotent
   swarmery stale [--db <path>] [--project <id>] [--all]
   swarmery actuals backfill [--db <path>] [--force] [--dry-run] [--verbose]
                                    best-effort: record phase_actuals for past phase runs whose
@@ -1324,6 +1330,8 @@ func cmdBackfill(args []string) error {
 	// before the pipeline touches the DB, or a manual backfill could re-merge
 	// projects into an onboard-root row (the exact bug SetOnboardRoots fixes).
 	ingest.SetOnboardRoots(onboardRoots())
+	// New turns get their cold_restart mark at the account's real TTL.
+	ingest.SetCacheCold(cacheColdConfig())
 
 	// Same tolerate-some / refuse-all rule the daemon applies (ingest.Run): a
 	// roots list is shared across machines and may name a config dir this one
@@ -1940,6 +1948,13 @@ func cmdServe(args []string) error {
 	// because the ingest package must not import api.
 	ingest.SetOnboardRoots(onboardRoots())
 
+	// cache-cold (internal/cachecold): the TTLs and the account billing-kind
+	// resolver go to ingest before the pipeline starts, so the cold_restart mark
+	// of the very first tail uses the real API/subscription split — the ingest
+	// package must not import claudeacct (claudeacct imports ingest).
+	ccCfg := cacheColdConfig()
+	ingest.SetCacheCold(ccCfg)
+
 	var bus *ingest.Bus
 	var sys *sysscan.Scanner
 	if !*noIngest {
@@ -2142,6 +2157,9 @@ func cmdServe(args []string) error {
 			// main.go knows is one the defaults table test cannot see.
 			handoffModel = handoff.DefaultModel
 		}
+		// The «continue from handoff» action of a cache-cold session generates
+		// through the same runner and model (api/handoff_generate.go).
+		api.AttachHandoff(handoff.ClaudeRunner{Model: handoffModel})
 		go func() {
 			runHandoff := func() {
 				cands, dropped, err := handoff.Candidates(db, time.Now())
@@ -2175,6 +2193,10 @@ func cmdServe(args []string) error {
 		}()
 		log.Printf("swarmery handoff started (interval 30m, model %s)", handoffModel)
 	}
+
+	// cache-cold prediction: every minute, flag live fat sessions whose prompt
+	// cache expired (session_cache_cold) and clear the ones that moved on.
+	startCacheColdTick(db, bus, ccCfg)
 
 	// board inbox lifecycle: a captured card is a suggestion, not a commitment,
 	// so one that sat untouched in Triage past SWARMERY_INBOX_TTL is archived

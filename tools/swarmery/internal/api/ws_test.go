@@ -33,6 +33,8 @@ var (
 		"tokens", "costUsd",
 		// fat-session wave: last-assistant-turn context occupancy (nullable).
 		"contextTokens",
+		// cache-cold prediction (migration 0127): explicit null while warm.
+		"cacheCold",
 		// phase 3.5: workspaces — additive best-task-link fields (nullable).
 		"taskId", "taskExternalId", "taskLinkSource", "taskConfidence",
 		// phase 4 step-07+: process liveness (nullable).

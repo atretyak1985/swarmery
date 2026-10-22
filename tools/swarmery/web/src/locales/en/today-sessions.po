@@ -370,6 +370,10 @@ msgstr "answer in terminal →"
 msgid "answer required"
 msgstr "answer required"
 
+#: src/pages/sessions/CacheColdBadge.tsx
+msgid "API-key"
+msgstr "API-key"
+
 #: src/pages/today/loopModel.ts
 msgid "Appears after the first finished phase run."
 msgstr "Appears after the first finished phase run."
@@ -407,6 +411,10 @@ msgstr "approximate — sampled"
 #: src/pages/Projects.tsx
 msgid "archived"
 msgstr "archived"
+
+#: src/pages/sessions/CacheColdBadge.tsx
+msgid "Ask the daemon to write a handoff brief for this session"
+msgstr "Ask the daemon to write a handoff brief for this session"
 
 #: src/pages/Approvals.tsx
 msgid "Auto-approve rules"
@@ -451,6 +459,10 @@ msgstr "blocked {age}"
 #: src/pages/Overview.tsx
 msgid "Blocked on you · {count}"
 msgstr "Blocked on you · {count}"
+
+#: src/pages/sessions/CacheColdBadge.tsx
+msgid "cache cold"
+msgstr "cache cold"
 
 #: src/pages/detail/ContextHogsCard.tsx
 msgid "cache-write per turn"
@@ -504,6 +516,14 @@ msgid "Cogitating"
 msgstr "Cogitating"
 
 #: src/pages/detail/Chat.tsx
+msgid "cold restart · {at} · re-wrote {k}k tokens of context · {cost}"
+msgstr "cold restart · {at} · re-wrote {k}k tokens of context · {cost}"
+
+#: src/pages/SessionDetail.tsx
+msgid "cold restarts"
+msgstr "cold restarts"
+
+#: src/pages/detail/Chat.tsx
 msgid "Collapse activity"
 msgstr "Collapse activity"
 
@@ -547,6 +567,10 @@ msgstr "conflict"
 #: src/pages/detail/ContextHogsCard.tsx
 msgid "context hogs"
 msgstr "context hogs"
+
+#: src/pages/sessions/CacheColdBadge.tsx
+msgid "continue from handoff"
+msgstr "continue from handoff"
 
 #: src/pages/Sessions.tsx
 msgid "continue phase…"
@@ -799,6 +823,10 @@ msgstr "handed to the session's mod"
 #: src/pages/detail/HandoffCard.tsx
 msgid "handoff"
 msgstr "handoff"
+
+#: src/pages/sessions/CacheColdBadge.tsx
+msgid "handoff request failed"
+msgstr "handoff request failed"
 
 #: src/pages/Approvals.tsx
 msgid "hangs {hangs}"
@@ -1259,6 +1287,10 @@ msgstr "open review →"
 msgid "open session →"
 msgstr "open session →"
 
+#: src/pages/sessions/CacheColdBadge.tsx
+msgid "Open the handoff brief and its resume command"
+msgstr "Open the handoff brief and its resume command"
+
 #: src/pages/detail/Diffs.tsx
 msgid "out of scope"
 msgstr "out of scope"
@@ -1685,6 +1717,10 @@ msgstr "subagents"
 msgid "submit answers"
 msgstr "submit answers"
 
+#: src/pages/sessions/CacheColdBadge.tsx
+msgid "subscription"
+msgstr "subscription"
+
 #: src/pages/NeedsYou.tsx
 msgid "suggested replies"
 msgstr "suggested replies"
@@ -1724,6 +1760,10 @@ msgstr "telemetry-only — no .claude/settings.json, the swarmery plugin is not 
 msgid "Tests"
 msgstr "Tests"
 
+#: src/pages/sessions/CacheColdBadge.tsx
+msgid "The {channel} prompt cache of this {k}k-token session expired at {at}: the next message re-writes the whole context. Continue from the handoff brief in a fresh session instead."
+msgstr "The {channel} prompt cache of this {k}k-token session expired at {at}: the next message re-writes the whole context. Continue from the handoff brief in a fresh session instead."
+
 #: src/pages/detail/PendingRunNotice.tsx
 msgid "the {kind} “{label}” ended without writing a transcript — the session never started or its transcript is gone"
 msgstr "the {kind} “{label}” ended without writing a transcript — the session never started or its transcript is gone"
@@ -1744,6 +1784,10 @@ msgstr "The loop, this week"
 #: src/pages/detail/LiveActivity.tsx
 msgid "the OS process is alive (procwatch, 30s resolution); nothing written to the transcript during this stretch — typical for long builds/tests"
 msgstr "the OS process is alive (procwatch, 30s resolution); nothing written to the transcript during this stretch — typical for long builds/tests"
+
+#: src/pages/detail/Chat.tsx
+msgid "The prompt cache expired during the pause before this turn, so it re-wrote the whole context instead of reading it from cache."
+msgstr "The prompt cache expired during the pause before this turn, so it re-wrote the whole context instead of reading it from cache."
 
 #: src/pages/sessions/SwarmPanel.tsx
 msgid "The sending session's permission mode let the engine's classifier refuse the send. Relay from a session in another mode (e.g. acceptEdits or bypassPermissions)."
@@ -1941,6 +1985,10 @@ msgstr "working · {lastActive}"
 #: src/pages/ProjectSettings.tsx
 msgid "workspace…"
 msgstr "workspace…"
+
+#: src/pages/sessions/CacheColdBadge.tsx
+msgid "writing handoff…"
+msgstr "writing handoff…"
 
 #: src/pages/detail/CallTree.tsx
 msgid "Σ tokens"
