@@ -399,3 +399,117 @@ func TestStoreOpenDoesNotRescrub(t *testing.T) {
 		t.Errorf("redaction_progress has %d rows after store.Open, want 0", n)
 	}
 }
+
+// Approval requests stored before the approvals path masked them (security
+// audit phase 13) are rescrubbed: permission_requests.request_json and the
+// payload of their permission_request events — the events too when the
+// events pass of an earlier rollout is already done.
+func TestRescrubCoversStoredApprovalRequests(t *testing.T) {
+	db, err := store.Open(filepath.Join(t.TempDir(), "approvals.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	const ts = "2026-10-22T00:00:00.000Z"
+	if _, err := db.Exec(`INSERT INTO projects (path, slug, first_seen) VALUES ('/p', 'p', ?)`, ts); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(`INSERT INTO sessions (project_id, session_uuid, started_at) VALUES (1, 'u', ?)`, ts); err != nil {
+		t.Fatal(err)
+	}
+	hookDoc := func(tool string, input map[string]string) string {
+		b, err := json.Marshal(map[string]any{
+			"session_id": "u", "cwd": "/p", "hook_event_name": "PermissionRequest", "tool_name": tool, "tool_input": input,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return string(b)
+	}
+	requests := []struct{ tool, doc string }{
+		{"Bash", hookDoc("Bash", map[string]string{"command": redacttest.Joined()})},
+		{"Edit", hookDoc("Edit", map[string]string{
+			"file_path": "/p/main.go", "old_string": "x", "new_string": redacttest.SourceAssignment() + redacttest.LiteralJoined()})},
+		{"Bash", hookDoc("Bash", map[string]string{"command": "go test ./..."})},
+	}
+	for _, r := range requests {
+		res, err := db.Exec(`INSERT INTO events (session_id, ts, type, tool_name, payload, dedup_key)
+			VALUES (1, ?, 'permission_request', ?, ?, 'hook:' || hex(randomblob(8)))`, ts, r.tool, r.doc)
+		if err != nil {
+			t.Fatal(err)
+		}
+		eventID, _ := res.LastInsertId()
+		if _, err := db.Exec(`INSERT INTO permission_requests (session_id, event_id, tool_name, request_json, status, requested_at)
+			VALUES (1, ?, ?, ?, 'approved', ?)`, eventID, r.tool, r.doc, ts); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// The events pass of the transcript rescrub already finished under these
+	// rules (it ran before these rows were written).
+	if _, err := db.Exec(`INSERT INTO redaction_progress (table_name, last_rowid, done, rules_version)
+		VALUES ('events', 999999, 1, ?)`, RulesVersion); err != nil {
+		t.Fatal(err)
+	}
+
+	before, err := CountStored(context.Background(), db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if before.Columns["permission_requests.request_json"]["github_token"] != 2 {
+		t.Errorf("count before: permission_requests.request_json = %v, want 2 github_token values", before.Columns["permission_requests.request_json"])
+	}
+
+	stats, err := Rescrub(context.Background(), db, fastCfg)
+	if err != nil {
+		t.Fatalf("Rescrub: %v", err)
+	}
+	for _, l := range leaks(t, db) {
+		t.Error(l)
+	}
+	if stats.Changed["permission_requests"] != 2 {
+		t.Errorf("permission_requests rewritten = %d, want the 2 rows holding secrets", stats.Changed["permission_requests"])
+	}
+	// Code keeps its assignment in both stored copies (D6).
+	for _, q := range []string{
+		`SELECT request_json FROM permission_requests WHERE tool_name = 'Edit'`,
+		`SELECT payload FROM events WHERE tool_name = 'Edit'`,
+	} {
+		var doc string
+		if err := db.QueryRow(q).Scan(&doc); err != nil {
+			t.Fatal(err)
+		}
+		var p struct {
+			ToolInput struct {
+				NewString string `json:"new_string"`
+			} `json:"tool_input"`
+		}
+		if err := json.Unmarshal([]byte(doc), &p); err != nil {
+			t.Fatal(err)
+		}
+		if !strings.HasPrefix(p.ToolInput.NewString, redacttest.SourceAssignment()) {
+			t.Errorf("%s: Edit new_string lost its source line: %q", q, p.ToolInput.NewString)
+		}
+	}
+	// The clean request keeps its exact bytes.
+	var clean string
+	if err := db.QueryRow(`SELECT request_json FROM permission_requests ORDER BY id DESC LIMIT 1`).Scan(&clean); err != nil {
+		t.Fatal(err)
+	}
+	if clean != requests[2].doc {
+		t.Errorf("clean request rewritten: %s", clean)
+	}
+	after, err := CountStored(context.Background(), db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if after.Total() != 0 {
+		t.Errorf("count after the rescrub = %d, want 0: %v", after.Total(), after.Lines())
+	}
+	var notDone int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM redaction_progress WHERE done = 0`).Scan(&notDone); err != nil {
+		t.Fatal(err)
+	}
+	if notDone != 0 {
+		t.Errorf("%d progress rows not done after the run", notDone)
+	}
+}
