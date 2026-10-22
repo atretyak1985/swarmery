@@ -879,6 +879,18 @@ msgstr "увімкнути тригер вебхука ({webhookRoute})"
 msgid "End the interview? The planner will write the full plan to the workspace."
 msgstr "Завершити інтерв’ю? Планувальник запише повний план у робочий простір."
 
+#: src/pages/plans/StalledBadge.tsx
+msgid "ended without record"
+msgstr "завершився без запису"
+
+#: src/pages/plans/StalledBadge.tsx
+msgid "ended without report"
+msgstr "завершився без звіту"
+
+#: src/pages/plans/StalledBadge.tsx
+msgid "ended without verdict"
+msgstr "завершився без вердикту"
+
 #: src/pages/plans/forecastStoryModel.ts
 msgid "ending blocked"
 msgstr "завершено з блоком"
@@ -903,6 +915,10 @@ msgstr "режим виконання"
 #: src/pages/Plans.tsx
 msgid "execution record"
 msgstr "запис виконання"
+
+#: src/pages/plans/StalledBadge.tsx
+msgid "executor"
+msgstr "виконавець"
 
 #: src/pages/plans/ForecastStory.tsx
 msgid "expected"
@@ -1632,6 +1648,10 @@ msgstr "дозволи {permissionMode}"
 msgid "Permanently delete <0>{routineName}</0> and its run history? This cannot be undone."
 msgstr "Назавжди видалити <0>{routineName}</0> та історію її запусків? Це незворотно."
 
+#: src/pages/plans/StalledBadge.tsx
+msgid "permission pending"
+msgstr "чекає дозволу"
+
 #: src/pages/Plans.tsx
 msgid "phase {phase} covers {cid}, which the spec never declares"
 msgstr "фаза {phase} покриває {cid}, якого немає в специфікації"
@@ -2105,6 +2125,10 @@ msgstr "переглянути відкриту ревізію →"
 msgid "review…"
 msgstr "рев’ю…"
 
+#: src/pages/plans/StalledBadge.tsx
+msgid "reviewer"
+msgstr "рев’юер"
+
 #: src/pages/Plans.tsx
 msgid "Revise plan"
 msgstr "Ревізія плану"
@@ -2340,6 +2364,10 @@ msgstr "показано всі сесії плану — клікніть, що
 msgid "showing this phase only — click for every session of the plan"
 msgstr "показано лише цю фазу — клікніть, щоб побачити всі сесії плану"
 
+#: src/pages/plans/StalledBadge.tsx
+msgid "silent"
+msgstr "мовчить"
+
 #: src/pages/plans/ForecastVsActual.tsx
 #: src/pages/plans/ForecastVsActual.tsx
 msgid "size"
@@ -2401,6 +2429,10 @@ msgstr "Не вдалося підготувати ревізію"
 #: src/pages/planning/RevisionReview.tsx
 msgid "stale"
 msgstr "застаріло"
+
+#: src/pages/plans/StalledBadge.tsx
+msgid "stalled: {stage} — {reason} {minutes} min"
+msgstr "застрягла: {stage} — {reason} {minutes} хв"
 
 #: src/pages/PlanningMode.tsx
 msgid "Start again"
@@ -2496,6 +2528,10 @@ msgstr "tech-lead (типово)"
 #: src/pages/plans/ReviewFindings.tsx
 msgid "test caught"
 msgstr "спіймав тест"
+
+#: src/pages/plans/StalledBadge.tsx
+msgid "The {stage} of this phase has stopped working. Notification only — nothing was restarted."
+msgstr "Етап «{stage}» цієї фази перестав працювати. Лише сповіщення — нічого не перезапущено."
 
 #: src/pages/plans/WorkaroundHits.tsx
 msgid "The agent's own words where it went around something. Read these first; each is a place to check, not a verdict."
@@ -2791,6 +2827,7 @@ msgid "verified"
 msgstr "підтверджено"
 
 #: src/pages/plans/PhaseReopens.tsx
+#: src/pages/plans/StalledBadge.tsx
 msgid "verifier"
 msgstr "перевіряльник"
 

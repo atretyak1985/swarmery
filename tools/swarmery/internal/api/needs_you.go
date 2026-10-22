@@ -1,7 +1,7 @@
 // GET /api/needs-you — the one list of everything currently blocked on the
 // operator, oldest blocker first (needs-you queue, phase 3).
 //
-// Read-only. Eight sources, each one query, each honouring ?project= through
+// Read-only. Every source is one query, each honouring ?project= through
 // scopeFilter (scope.go). Archived projects are deliberately NOT filtered —
 // same invariant as listApprovals: a live agent blocked in an archived project
 // must never be invisible.
@@ -33,8 +33,9 @@ const (
 // needsYouKindRank orders items that block since the same instant.
 var needsYouKindRank = map[string]int{
 	needsYouApproval:        0,
-	needsYouQuestion:        1,
-	needsYouPhaseDecision:   2,
+	needsYouStalledPhase:    1,
+	needsYouQuestion:        2,
+	needsYouPhaseDecision:   3,
 	needsYouProdDeployLocal: 3,
 	needsYouAwaitingReply:   4,
 	needsYouFailed:          5,
@@ -66,9 +67,10 @@ type replySuggestion struct {
 
 // needsYouItem is one blocker. Mirrors NeedsYouItem in web/src/api/types.ts.
 type needsYouItem struct {
-	Kind string `json:"kind"` // approval | question | phase_decision | prod_deploy_local | awaiting_reply | failed | manual_phase | awaiting_merge
+	Kind string `json:"kind"` // approval | stalled_phase | question | phase_decision | prod_deploy_local | awaiting_reply | failed | manual_phase | awaiting_merge
 	// SessionID / SessionUUID are 0 / "" for a phase item (manual_phase,
-	// awaiting_merge): a plan phase blocks, not a session.
+	// awaiting_merge): a plan phase blocks, not a session. A stalled_phase item
+	// carries its stalled stage's session once that session is ingested.
 	SessionID   int64  `json:"sessionId"`
 	SessionUUID string `json:"sessionUuid"`
 	// SessionName is COALESCE(custom_title, title, session_uuid[:8]); for a
@@ -94,8 +96,13 @@ type needsYouItem struct {
 	BlockingSeconds int64            `json:"blockingSeconds"`
 	TermFocusURL    *string          `json:"termFocusUrl"`
 	Suggestion      *replySuggestion `json:"suggestion"`
-	// Phase names the plan phase of a phase item; absent otherwise.
+	// Phase names the plan phase of a phase item; absent otherwise. An approval
+	// item carries it too when a permission-pending stall was merged into it
+	// (mergeStallsIntoApprovals): its request is what stalls that phase.
 	Phase *needsYouPhase `json:"phase,omitempty"`
+	// Stall is the stalled_phase diagnosis — on a stalled_phase item, and on the
+	// approval item a permission-pending stall was merged into.
+	Stall *needsYouStall `json:"stall,omitempty"`
 	// Decision is a phase_decision item's question, options and guard check.
 	Decision *needsYouDecision `json:"decision,omitempty"`
 
@@ -124,7 +131,7 @@ func (h *Handler) needsYou(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, needsYouResponse{Items: items, GeneratedAt: time.Now().UTC().Format(needsYouTSFormat)}, nil)
 }
 
-// collectNeedsYou runs the five source queries (sequentially — the store is a
+// collectNeedsYou runs the source queries (sequentially — the store is a
 // single connection), dedupes and sorts. now anchors the 24 h windows and
 // blockingSeconds.
 func collectNeedsYou(db *sql.DB, r *http.Request, now time.Time) ([]needsYouItem, error) {
@@ -174,13 +181,18 @@ func collectNeedsYou(db *sql.DB, r *http.Request, now time.Time) ([]needsYouItem
 	if err != nil {
 		return nil, err
 	}
+	stalled, err := queryNeedsYouStalledPhases(db, scope, projArgs, now)
+	if err != nil {
+		return nil, err
+	}
 	decisions, err := queryNeedsYouPhaseDecisions(db, scope, projArgs)
 	if err != nil {
 		return nil, err
 	}
 
-	all := make([]needsYouItem, 0, len(pending)+len(local)+len(awaiting)+len(failed)+len(manual)+len(merge)+len(decisions))
+	all := make([]needsYouItem, 0, len(pending)+len(local)+len(awaiting)+len(failed)+len(manual)+len(merge)+len(stalled)+len(decisions))
 	all = append(all, pending...)
+	all = append(all, stalled...)
 	all = append(all, local...)
 	all = append(all, awaiting...)
 	all = append(all, failed...)
@@ -373,12 +385,15 @@ func clipTail(s string, max int) string {
 	return "…" + strings.TrimSpace(string(runes[len(runes)-(max-1):]))
 }
 
-// dedupeNeedsYou drops an awaiting_reply item whose session is also listed as
-// failed (one session, one item, the failure wins), and a manual_phase or
+// dedupeNeedsYou keeps one item per blocker: a permission-pending stalled_phase
+// is merged into the approval item of its request (mergeStallsIntoApprovals),
+// an awaiting_reply item whose session is also listed as failed is dropped —
+// one session, one item, the failure wins — and so is a manual_phase or
 // awaiting_merge item whose phase has an open phase_decision (one phase, one
 // item, the decision wins: what the run did to protected paths is settled
 // before the hand check or the merge).
 func dedupeNeedsYou(items []needsYouItem) []needsYouItem {
+	items = mergeStallsIntoApprovals(items)
 	failedSessions := map[int64]bool{}
 	decidingPhases := map[int64]bool{}
 	for _, it := range items {
@@ -402,10 +417,10 @@ func dedupeNeedsYou(items []needsYouItem) []needsYouItem {
 	return out
 }
 
-// sortNeedsYou orders items oldest blocker first; ties break on kind
-// (approval < question < phase_decision < prod_deploy_local < awaiting_reply <
-// failed < manual_phase < awaiting_merge), then on the item id (request id, else phase
-// id, else session id).
+// sortNeedsYou orders items oldest blocker first; ties break on kind (approval <
+// stalled_phase < question < phase_decision < prod_deploy_local < awaiting_reply <
+// failed < manual_phase < awaiting_merge — the order of needsYouKindRank), then
+// on the item id (request id, else phase id, else session id).
 func sortNeedsYou(items []needsYouItem) {
 	sort.SliceStable(items, func(i, j int) bool {
 		a, b := items[i], items[j]

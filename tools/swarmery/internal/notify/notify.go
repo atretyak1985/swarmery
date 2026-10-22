@@ -39,12 +39,20 @@ const (
 	// D1, ACTIVE mode only) stops a phase/plan run from being continued and
 	// hands it to the operator instead. Off unless D1 is switched to active.
 	EventRunNeedsOperator = "run_needs_operator"
+	// EventPhaseStalled fires when the stalled-phase detector (internal/stall,
+	// 60 s tick) first finds a phase whose active stage — executor, reviewer or
+	// verifier — stopped working: no turn for stallMinutes, a session that ended
+	// without its report/verdict/record, or a permission request pending longer
+	// than stallMinutes. Exactly once per (phase, reason): the stall_notices
+	// ledger emits on insert only and clears when the condition clears, so a
+	// recurrence notifies again. Notification only — nothing is restarted.
+	EventPhaseStalled = "phase_stalled"
 )
 
 // KnownEvents lists every valid --notify-events entry.
 var KnownEvents = []string{
 	EventApprovalRequested, EventApprovalExpired, EventSessionCompleted, EventSessionError,
-	EventPluginDrift, EventPhaseSurprise, EventRunNeedsOperator,
+	EventPluginDrift, EventPhaseSurprise, EventRunNeedsOperator, EventPhaseStalled,
 }
 
 // DefaultEvents is the event set sent when neither --notify-events nor
@@ -82,6 +90,52 @@ type Event struct {
 	Tool      string `json:"tool,omitempty"`
 	Title     string `json:"title"`
 	Body      string `json:"body"`
+	// phase_stalled payload (PhaseStalledEvent); absent on every other event.
+	TaskID       int64  `json:"taskId,omitempty"`
+	PhaseID      int64  `json:"phaseId,omitempty"`
+	Stage        string `json:"stage,omitempty"`
+	Reason       string `json:"reason,omitempty"`
+	SinceMinutes int    `json:"sinceMinutes,omitempty"`
+	SessionUUID  string `json:"sessionUuid,omitempty"`
+}
+
+// PhaseStalled is what the stalled-phase detector knows about one stall; the
+// daemon maps internal/stall.Stalled onto it (this package imports neither).
+type PhaseStalled struct {
+	TaskID, PhaseID int64
+	PhaseSeq        int
+	PhaseName       string
+	PlanTitle       string
+	Project         string
+	Stage           string // executor | reviewer | verifier
+	Reason          string // no-turns | ended | permission-pending
+	SinceMinutes    int
+	SessionUUID     string
+	// Detail is the reason in the operator's words (stall.Describe), the body's
+	// second half.
+	Detail string
+}
+
+// PhaseStalledEvent renders one phase_stalled notification: the human title and
+// body every template shows, and the {taskId, phaseId, stage, reason,
+// sinceMinutes, sessionUuid} payload generic JSON receivers read.
+func PhaseStalledEvent(p PhaseStalled) Event {
+	phase := fmt.Sprintf("Phase %d: %s", p.PhaseSeq, p.PhaseName)
+	if p.PlanTitle != "" {
+		phase = p.PlanTitle + " · " + phase
+	}
+	return Event{
+		Type:         EventPhaseStalled,
+		Project:      p.Project,
+		Title:        "Phase stalled: " + phase,
+		Body:         p.Stage + " — " + p.Detail,
+		TaskID:       p.TaskID,
+		PhaseID:      p.PhaseID,
+		Stage:        p.Stage,
+		Reason:       p.Reason,
+		SinceMinutes: p.SinceMinutes,
+		SessionUUID:  p.SessionUUID,
+	}
 }
 
 // Config tunes a Notifier; zero values fall back to defaults.
@@ -238,6 +292,7 @@ var ntfyTags = map[string]string{
 	EventSessionCompleted:  "white_check_mark",
 	EventSessionError:      "rotating_light",
 	EventPhaseSurprise:     "eyes",
+	EventPhaseStalled:      "zzz",
 }
 
 func ntfyPriority(eventType string) string {

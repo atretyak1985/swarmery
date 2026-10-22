@@ -600,6 +600,7 @@ func (s *Service) review(phaseID int64, info phaseInfo, acq worktree.Acquired, r
 	}
 
 	o.sessionUUID = s.UUID()
+	s.parkReviewSession(phaseID, o.sessionUUID)
 	var prompt string
 	if second {
 		brief := s.buildRound2Brief(phaseID, info, acq, reviewRound-1, o.treeBefore)
@@ -713,6 +714,19 @@ func (s *Service) reviewState(phaseID int64) (round int, runUUID string) {
 		log.Printf("warning: phaserun: phase=%d review state unreadable: %v", phaseID, err)
 	}
 	return round, runUUID
+}
+
+// parkReviewSession records the reviewer's session on the phase row at spawn
+// (migration 0128), the way run_session_uuid records the executor's. The
+// phase_reviews row only lands after the reviewer exits, so without this the
+// review stage is invisible while it runs — to the stalled-phase detector
+// (internal/stall) and to GET /api/sessions/{uuid} before the transcript exists.
+// Best-effort: a lost stamp must not stop the review.
+func (s *Service) parkReviewSession(phaseID int64, uuid string) {
+	if _, err := s.DB.Exec(`UPDATE epic_phases SET review_session_uuid = ?, review_started_at = ? WHERE id = ?`,
+		uuid, s.ts(), phaseID); err != nil {
+		log.Printf("warning: phaserun: phase=%d park review session: %v", phaseID, err)
+	}
 }
 
 func (s *Service) setReviewFixRound(phaseID int64, round int) {

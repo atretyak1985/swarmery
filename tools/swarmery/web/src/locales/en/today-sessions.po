@@ -1271,6 +1271,11 @@ msgid "open in System"
 msgstr "open in System"
 
 #: src/pages/NeedsYou.tsx
+#: src/pages/NeedsYou.tsx
+msgid "open phase →"
+msgstr "open phase →"
+
+#: src/pages/NeedsYou.tsx
 msgid "open PR ↗"
 msgstr "open PR ↗"
 
@@ -1309,6 +1314,10 @@ msgstr "Percolating"
 #: src/pages/detail/Timeline.tsx
 msgid "Permission"
 msgstr "Permission"
+
+#: src/pages/detail/PendingRunNotice.tsx
+msgid "phase review"
+msgstr "phase review"
 
 #: src/pages/detail/PendingRunNotice.tsx
 msgid "phase run"
@@ -1659,6 +1668,10 @@ msgstr "some assistant prose is not ingested yet — run <0>swarmery backfill --
 #: src/pages/ProjectOverview.tsx
 msgid "source: {source}"
 msgstr "source: {source}"
+
+#: src/pages/NeedsYou.tsx
+msgid "stalls {planTitle} · Phase {seq}: {name}"
+msgstr "stalls {planTitle} · Phase {seq}: {name}"
 
 #: src/pages/detail/CallTree.tsx
 msgid "started"

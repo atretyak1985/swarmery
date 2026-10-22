@@ -630,3 +630,25 @@ func phaseDocAndState(t *testing.T, db *sql.DB, id int64) (doc, state string, uu
 	}
 	return string(b), state, uuid, runErr
 }
+
+// The reviewer's session is parked on the phase row at spawn (migration 0128), so
+// the review stage is visible while it runs — the stalled-phase detector resolves
+// the reviewer through it — and it is the same uuid the phase_reviews row records.
+func TestReviewParksItsSessionOnThePhase(t *testing.T) {
+	_, db, p1, _, rv, _ := startReviewed(t, "- none\nVERDICT: PASS")
+
+	var parked, started, recorded string
+	if err := db.QueryRow(`SELECT COALESCE(review_session_uuid, ''), COALESCE(review_started_at, '')
+		FROM epic_phases WHERE id=?`, p1).Scan(&parked, &started); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.QueryRow(`SELECT session_uuid FROM phase_reviews WHERE phase_id=?`, p1).Scan(&recorded); err != nil {
+		t.Fatal(err)
+	}
+	if parked == "" || started == "" {
+		t.Fatalf("review_session_uuid=%q review_started_at=%q, want both stamped", parked, started)
+	}
+	if spawned := rv.calls()[0].SessionUUID; parked != spawned || parked != recorded {
+		t.Errorf("parked %q, spawned %q, recorded %q — want one uuid", parked, spawned, recorded)
+	}
+}
