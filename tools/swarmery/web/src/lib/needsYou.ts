@@ -31,6 +31,7 @@ const KIND_LABELS: Record<NeedsYouKind, MessageDescriptor> = {
   failed: msg`Failed`,
   manual_phase: msg`Manual check`,
   awaiting_merge: msg`Awaiting merge`,
+  worktree_cleanup: msg`Worktree cleanup`,
 };
 
 /** The kind's label in the active locale (looked up at call time). */
@@ -41,10 +42,16 @@ export function kindLabel(k: NeedsYouKind): string {
 /**
  * Identity of one blocking episode. A dismissed item comes back when the same
  * session blocks again: a new episode carries a new `blockingSince`. A
- * `manual_phase` item is keyed by its phase (its sessionId is always 0).
+ * `manual_phase` item is keyed by its phase and a `worktree_cleanup` item by
+ * its proposal (the sessionId of both is always 0).
  */
 export function dismissKey(item: NeedsYouItem): string {
-  const who = item.phase !== undefined ? `phase-${String(item.phase.phaseId)}` : String(item.sessionId);
+  const who =
+    item.phase !== undefined
+      ? `phase-${String(item.phase.phaseId)}`
+      : item.cleanup !== undefined
+        ? `cleanup-${String(item.cleanup.id)}`
+        : String(item.sessionId);
   return `${item.kind}:${who}:${item.blockingSince}`;
 }
 

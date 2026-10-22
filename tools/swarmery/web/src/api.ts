@@ -124,6 +124,7 @@ import type {
   LinkMessageQueued,
   SwarmClaims,
   SwarmMessage,
+  WorktreeCleanupApplyResult,
 } from './api/types';
 import { t } from '@lingui/core/macro';
 import { currentLocale } from './i18n/locale';
@@ -1783,6 +1784,32 @@ export function getNeedsYou(project?: string | null): Promise<NeedsYouResponse> 
   if (MOCK) return Promise.resolve({ items: [], generatedAt: new Date().toISOString() });
   if (project === undefined || project === null || project === '') return get('/api/needs-you');
   return get(`/api/needs-you?${new URLSearchParams({ project }).toString()}`);
+}
+
+/**
+ * POST /api/worktree-cleanup/{id}/apply — remove the selected worktrees of a
+ * `worktree_cleanup` card. The daemon writes a salvage branch before each
+ * removal, refuses paths without a proof, and answers an already-decided path
+ * without touching it (idempotent).
+ */
+export async function applyWorktreeCleanup(id: number, paths: string[]): Promise<WorktreeCleanupApplyResult> {
+  if (MOCK) return { id, repoRoot: '', paths: paths.map((path) => ({ path, outcome: 'removed' })) };
+  const res = await fetch(`/api/worktree-cleanup/${String(id)}/apply`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ paths }),
+  });
+  if (!res.ok) {
+    let message = `POST /api/worktree-cleanup/${String(id)}/apply: ${String(res.status)}`;
+    try {
+      const payload = (await res.json()) as { error?: unknown };
+      if (typeof payload.error === 'string' && payload.error !== '') message = payload.error;
+    } catch {
+      // non-JSON body: keep the status line
+    }
+    throw new Error(message);
+  }
+  return (await res.json()) as WorktreeCleanupApplyResult;
 }
 
 /**

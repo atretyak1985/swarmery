@@ -1788,7 +1788,8 @@ export type NeedsYouKind =
   | 'awaiting_reply'
   | 'failed'
   | 'manual_phase'
-  | 'awaiting_merge';
+  | 'awaiting_merge'
+  | 'worktree_cleanup';
 
 /** Where an `awaiting_merge` phase's landing stands (`ready` is derived). */
 export type NeedsYouLandingState = 'ready' | 'pushed' | 'pr_open';
@@ -1810,6 +1811,56 @@ export interface NeedsYouPhase {
   landingState?: NeedsYouLandingState;
   /** `awaiting_merge` only, once a PR is open. */
   prUrl?: string;
+}
+
+/** How a cleanup candidate's content is known to be in main (internal/wtcleanup). */
+export type CleanupProofKind = 'landing' | 'content-diff';
+
+/** One listed worktree of a `worktree_cleanup` item (Go cleanupCandidateDTO). */
+export interface NeedsYouCleanupCandidate {
+  /** worktree_cleanup_proposals.id of this path. */
+  id: number;
+  path: string;
+  branch: string;
+  /** "<plan> · Phase <seq>: <name>" or "<external-id>: <title>". */
+  owner: string;
+  phaseId: number | null;
+  taskId: number | null;
+  /** Plans deep link of a phase's worktree; absent for a board card's. */
+  planExternalId?: string;
+  phaseSeq?: number;
+  /** landing: the phase's PR merged · content-diff: merging the branch into main changes nothing. */
+  proofKind: CleanupProofKind;
+  proofDetail: string;
+  /** The last failed apply of this path — it stays listed for a retry. */
+  error?: string;
+}
+
+/** A `worktree_cleanup` item's payload (Go needsYouCleanup). */
+export interface NeedsYouCleanup {
+  /** The proposal POST /api/worktree-cleanup/{id}/apply addresses. */
+  id: number;
+  repoRoot: string;
+  /** Closed phases/cards whose content is proven in main — the only removable rows. */
+  candidates: NeedsYouCleanupCandidate[];
+  /** Closed owners whose content is NOT proven in main: counted, never listed. */
+  withoutProof: number;
+}
+
+/** One path's outcome of an apply (Go wtcleanup.PathOutcome). */
+export interface WorktreeCleanupPathOutcome {
+  path: string;
+  /** removed | gone | refused | failed | already-decided | not-proposed | no-proof | branch-changed */
+  outcome: string;
+  salvageBranch?: string;
+  reason?: string;
+}
+
+/** POST /api/worktree-cleanup/{id}/apply (Go wtcleanup.ApplyResult). */
+export interface WorktreeCleanupApplyResult {
+  id: number;
+  repoRoot: string;
+  paths: WorktreeCleanupPathOutcome[];
 }
 
 /** Haiku-extracted reply card for an awaiting_reply item (always null until phase 4). */
@@ -1845,6 +1896,8 @@ export interface NeedsYouItem {
   suggestion: ReplySuggestion | null;
   /** `manual_phase` / `awaiting_merge` only: the phase to open. Absent on every session item. */
   phase?: NeedsYouPhase;
+  /** `worktree_cleanup` only: the proposals of one repository (sessionName is its directory name). */
+  cleanup?: NeedsYouCleanup;
   /** approval items only: the transport of the permission request. Absent on an older daemon. */
   channel?: ApprovalChannel;
 }
