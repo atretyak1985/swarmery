@@ -89,9 +89,9 @@ func TestClaudeRunner_Start_FullArgvPin(t *testing.T) {
 	}
 	got := strings.Split(strings.TrimSpace(string(raw)), "\n")
 	want := []string{
-		"-p", "run plan", "--session-id", "u-full",
+		"-p", "--session-id", "u-full",
 		"--permission-mode", claudeflags.DefaultMode, "--agent", "tech-lead",
-		"--model", "claude-opus-5", "--effort", DefaultEffort, "--settings", settings,
+		"--model", "claude-opus-5", "--effort", DefaultEffort, "--settings", settings, "--", "run plan",
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("argv = %q, want %q", got, want)

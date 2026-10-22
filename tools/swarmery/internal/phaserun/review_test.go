@@ -197,7 +197,8 @@ func TestReviewSpawnArgsDenyEditToolsAndBash(t *testing.T) {
 	const wantList = "Edit,Write,MultiEdit,NotebookEdit,Bash," +
 		"Bash(curl *127.0.0.1:8080*),Bash(curl *localhost:8080*)," +
 		"Bash(wget *127.0.0.1:8080*),Bash(wget *localhost:8080*)," +
-		"Bash(http *127.0.0.1:8080*),Bash(http *localhost:8080*)"
+		"Bash(http *127.0.0.1:8080*),Bash(http *localhost:8080*)," +
+		"Bash(swarmery api*),Bash(*/swarmery api*)"
 	if list != wantList {
 		t.Errorf("--disallowedTools %q, want %q", list, wantList)
 	}
@@ -207,6 +208,9 @@ func TestReviewSpawnArgsDenyEditToolsAndBash(t *testing.T) {
 	// The prompt carries the contract and the run's diff.
 	if !strings.Contains(string(raw), "VERDICT: PASS | FAIL | INCONCLUSIVE") || !strings.Contains(string(raw), "func main() {}") {
 		t.Errorf("the review prompt lacks the verdict contract or the run's diff:\n%s", raw)
+	}
+	if !strings.Contains(string(raw), "REVIEW ROUND: 1\n") {
+		t.Errorf("the first review of a phase is not round 1:\n%s", raw)
 	}
 	if !strings.Contains(string(raw), "--model\n"+verify.DefaultModel) {
 		t.Errorf("the reviewer is not pinned to %s:\n%s", verify.DefaultModel, raw)

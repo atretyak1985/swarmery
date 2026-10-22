@@ -1,4 +1,4 @@
--- 0120: decision ids. Every interview question becomes a stable `D-n` the plan,
+-- 0122: decision ids. Every interview question becomes a stable `D-n` the plan,
 -- the phase gate and the dashboard can name.
 --
 -- One row per decision of a plan. `D-n` is the interview question's sequence

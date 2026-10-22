@@ -125,7 +125,11 @@ fi
 # a rebuild on the interactive path is exactly the latency this hook exists to
 # avoid. A stale graph answering slightly out of date is the acceptable trade;
 # the answer carries file:line pointers the agent verifies by opening them.
-result=$(cd "$PROJECT_DIR" && _bounded graft ask "$prompt" --json -n 5 --no-refresh 2>/dev/null)
+#
+# The options come first and `--` ends them: the prompt is the user's text, and a
+# prompt starting with "-" ("--help …", "--no-graph-rank") must reach graft as
+# the query, never as a flag. graft 0.16.0's parser honours `--` (probed).
+result=$(cd "$PROJECT_DIR" && _bounded graft ask --json -n 5 --no-refresh -- "$prompt" 2>/dev/null)
 [ -n "$result" ] || exit 0
 
 # ── the gate ──────────────────────────────────────────────────────────────────

@@ -2,7 +2,7 @@ package phasegate
 
 import "strings"
 
-// Decision is the slice of a phase_decisions row (migration 0120) the decision
+// Decision is the slice of a phase_decisions row (migration 0122) the decision
 // hold judges. Callers load it; this package stays pure (no DB, no clock).
 type Decision struct {
 	ID       string // "D-3"

@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/claudeacct"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/mdfence"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/phasediag"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/runsettings"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/verify"
@@ -462,6 +463,8 @@ func (s *Service) planReview(taskID, phaseID int64, key string, branches []planB
 		Resolution:      resolution,
 		SettingsFile:    runsettings.Compose("review", resolution, runsettings.Inputs{}),
 		DisallowedTools: s.reviewDenials(),
+		AllowedTools:    verify.ReadOnlyTools(), // see review(): dontAsk, read tools only
+		PermissionEnv:   verify.ReviewPermEnv,
 	}
 	log.Printf("phaserun: task=%d plan branch review in worktree=%q (%d files over %d branch(es))",
 		taskID, acq.Path, total, len(branches))
@@ -593,6 +596,7 @@ func planReviewPrompt(title, readme, sections string, daemonPort int) string {
 	b.WriteString(reviewerPreamble(daemonPort))
 	b.WriteString("\n\n")
 	b.WriteString(planSeamFocus)
+	b.WriteString("\n\nREVIEW ROUND: " + mdfence.ReviewRoundPlan)
 	b.WriteString("\n\nPLAN: ")
 	b.WriteString(title)
 	if strings.TrimSpace(readme) != "" {

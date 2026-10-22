@@ -15,6 +15,9 @@ PRE="$ROOT/plugins/core/hooks/pre-model-switch.sh"
 POST="$ROOT/plugins/core/hooks/post-model-switch.sh"
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
+# The post hook's session log goes to the private run dir; keep it in the sandbox.
+export SWARMERY_RUN_DIR="$TMP/run"
+unset SWARMERY_SESSION_FILE
 
 pass=0; fail=0
 ok()  { echo "ok   $1"; pass=$((pass + 1)); }
@@ -32,6 +35,8 @@ stub_curl() {
   cat > "$SHIM/curl" <<'EOS'
 #!/bin/sh
 dir=$(dirname "$0")
+: > "$dir/argv"
+for a in "$@"; do printf '%s\n' "$a" >> "$dir/argv"; done
 [ -s "$dir/body" ] && cat "$dir/body"
 exit "$(cat "$dir/rc")"
 EOS
@@ -107,12 +112,37 @@ rc=0; run_pre '{"from_model":"claude-opus-5","to_model":"claude-opus-5"}' || rc=
 rc=0; printf '%s' "$SWITCH" | bash "$POST" >/dev/null 2>&1 || rc=$?
 [ "$rc" -eq 0 ] && ok "post hook exits 0" || bad "post exit" "exit=$rc"
 
-LOG="/tmp/claude-session-$(date +%Y%m%d).jsonl"
+LOG="$SWARMERY_RUN_DIR/claude-session-$(date +%Y%m%d).jsonl"
+if grep -q 'ModelSwitch' "$LOG" 2>/dev/null; then ok "post hook records a real switch in the run dir"
+else bad "post record" "no ModelSwitch row in $LOG"; fi
 before=$(grep -c 'ModelSwitch' "$LOG" 2>/dev/null || echo 0)
 printf '%s' '{"from_model":"m","to_model":"m","session_id":"s"}' | bash "$POST" >/dev/null 2>&1 || true
 after=$(grep -c 'ModelSwitch' "$LOG" 2>/dev/null || echo 0)
 [ "$before" = "$after" ] && ok "post hook ignores a same-model resume" \
   || bad "post dedupe" "wrote a row for a no-op switch"
+
+# ── 10. the model id is URL-encoded into the daemon path ──────────────
+# A model id is outside data. Reserved characters must be percent-encoded so
+# the id stays one path segment and cannot add query, fragment or path parts.
+stub_curl 0 '{"verdict":"pass"}'
+odd='{"from_model":"claude-opus-5","to_model":"vendor/claude-opus-6[1m]?x=1#y","session_id":"s2"}'
+rc=0; run_pre "$odd" || rc=$?
+url=$(grep -E '^http' "$SHIM/argv" 2>/dev/null | head -1)
+want="http://127.0.0.1:${SWARMERY_PORT:-7777}/api/models/vendor%2Fclaude-opus-6%5B1m%5D%3Fx%3D1%23y/validation"
+if [ "$rc" -eq 0 ] && [ "$url" = "$want" ]; then
+  ok "to_model is percent-encoded into a single path segment"
+else
+  bad "url encoding" "exit=$rc url=$url want=$want"
+fi
+
+# A plain id is unchanged by the encoding.
+stub_curl 0 '{"verdict":"pass"}'
+rc=0; run_pre "$SWITCH" || rc=$?
+url=$(grep -E '^http' "$SHIM/argv" 2>/dev/null | head -1)
+case "$url" in
+  */api/models/claude-opus-6/validation) ok "a plain model id passes through unchanged" ;;
+  *) bad "plain id" "url=$url" ;;
+esac
 
 echo "passed=$pass failed=$fail"
 [ "$fail" -eq 0 ]

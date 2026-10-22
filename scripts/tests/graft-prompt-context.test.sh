@@ -44,8 +44,27 @@ mkdir -p "$BIN"
 # ── stub CLI ─────────────────────────────────────────────────────────────────
 # Prints whatever $TMP/graft-response holds. A missing file means "graft printed
 # nothing", which is how a crashed or timed-out CLI looks to the hook.
+# It parses argv the way graft 0.16.0's option parser does: before a `--`, a
+# word starting with "-" is an option (a known one is consumed, --help prints
+# usage, anything else is "unknown option"); after `--`, everything is data.
+# argv is recorded to $GRAFT_STUB_ARGV, one item per line, when that is set.
 cat > "$BIN/graft" <<'STUB'
 #!/bin/bash
+[ -n "${GRAFT_STUB_ARGV:-}" ] && printf '%s\n' "$@" > "$GRAFT_STUB_ARGV"
+[ "${1:-}" = "ask" ] && shift
+end=0
+while [ $# -gt 0 ]; do
+  if [ "$end" -eq 0 ]; then
+    case "$1" in
+      --) end=1 ;;
+      --json|--no-refresh|--source|--full|--no-graph-rank) ;;
+      -n|--limit|--in) shift ;;
+      -h|--help) echo "Usage: graft ask [options] <query> [dir]"; exit 0 ;;
+      -*) echo "error: unknown option '$1'" >&2; exit 1 ;;
+    esac
+  fi
+  shift
+done
 [ -f "$GRAFT_STUB_RESPONSE" ] && cat "$GRAFT_STUB_RESPONSE"
 exit 0
 STUB
@@ -273,6 +292,35 @@ if [ "$RC" -eq 0 ] && valid_json "$OUT" && [[ "$(ctx "$OUT")" == *"Context graph
   ok_case
 else
   fail_case "case15 federated: expected an injection with only workspace.json at the root (rc=$RC, out=$OUT)"
+fi
+
+# ── Case 16: a prompt that starts with "-" is data, never a CLI option ───────
+# The prompt is the user's text. Handed to graft before `--`, a prompt such as
+# "--help …" or "--no-graph-rank" is parsed as an option: the hook then gets
+# usage text or an error instead of an answer, or a flag the hook never chose.
+ARGV="$TMP/graft-argv"
+printf '%s' "$STRONG_JSON" > "$RESP"
+for P in "--help where is the beta helper defined" "--no-graph-rank"; do
+  rm -f "$ARGV"
+  run_hook "sid-dash" "$P" GRAFT_STUB_ARGV="$ARGV"
+  C=$(ctx "$OUT")
+  # The last two argv items must be `--` and the prompt, verbatim.
+  last2=$(tail -n 2 "$ARGV" 2>/dev/null | tr '\n' '|')
+  if [ "$RC" -eq 0 ] && [[ "$C" == *"Context graph hits"* ]] && [ "$last2" = "--|${P}|" ]; then
+    ok_case
+  else
+    fail_case "case16 dash-prompt '$P': expected the prompt after -- and an injection (rc=$RC, argv=$(tr '\n' ' ' < "$ARGV" 2>/dev/null), out=$OUT)"
+  fi
+done
+
+# ── Case 17: the bare prompt "--help" is below the length gate ───────────────
+# Six characters never reach graft at all, so there is nothing to parse.
+rm -f "$ARGV"
+run_hook "sid-dash-short" "--help" GRAFT_STUB_ARGV="$ARGV"
+if [ "$RC" -eq 0 ] && [ -z "$OUT" ] && [ ! -e "$ARGV" ]; then
+  ok_case
+else
+  fail_case "case17 bare --help: expected silence and no CLI call (rc=$RC, out=$OUT)"
 fi
 
 printf 'graft-prompt-context: %d passed, %d failed\n' "$pass" "$fail"

@@ -8,7 +8,7 @@ import (
 	"strings"
 )
 
-// Decision vocabulary — the closed sets migration 0120 CHECKs.
+// Decision vocabulary — the closed sets migration 0122 CHECKs.
 const (
 	DecisionSourceInterview = "interview"
 	DecisionSourceStop      = "stop"
@@ -22,7 +22,7 @@ const (
 	DecisionRecommended = "recommended"
 )
 
-// Decision is one phase_decisions row (migration 0120): an interview question,
+// Decision is one phase_decisions row (migration 0122): an interview question,
 // a stop trigger or a review outcome, named `D-n` within its plan.
 type Decision struct {
 	ID                int64    `json:"id"`

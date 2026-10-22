@@ -144,5 +144,87 @@ assert 2 "tmp block: lock deep in a temp-dir repo"   "$(jp "$scratch/repo/sub/ya
 assert 2 "tmp block: lock through a temp symlink"    "$(jp "$scratch/link/package-lock.json")"
 assert 2 "tmp block: a symlinked lock file"          "$(jp "$scratch/w/package-lock.json")"
 
+# ── Audit log line stays valid JSON for any file name ─────────────
+# The generated-wiki warning appends a JSON line naming the file. A name with a
+# double quote or a backslash must be encoded, not spliced into the line.
+wiki_proj="$scratch/wiki-proj"
+mkdir -p "$wiki_proj"
+wiki_path='/repo/agents/docs/generated/a"b\c.md'
+wiki_payload=$(jq -nc --arg p "$wiki_path" '{tool_input:{file_path:$p}}')
+printf '%s' "$wiki_payload" | ( unset AGENT_PROJECT; CLAUDE_PROJECT_DIR="$wiki_proj" "$HOOK" ) >/dev/null 2>&1
+record 0 "$?" "generated-wiki warn exits 0"
+wiki_log="$wiki_proj/.claude-workspace/metrics/gate-bypasses.jsonl"
+logged=$(tail -1 "$wiki_log" 2>/dev/null | jq -r '.file // empty' 2>/dev/null)
+if [ "$logged" = "$wiki_path" ]; then record 0 0 "audit line is valid JSON carrying the exact file name"
+else record 0 1 "audit line is valid JSON carrying the exact file name (got: $(tail -1 "$wiki_log" 2>/dev/null))"; fi
+
+# ── Fail closed: a guard that cannot read its input blocks ────────
+# The guard is the last line between an agent and the files above. When it
+# cannot parse what it was handed, "allow" is the wrong default.
+nojq="$scratch/nojq-bin"
+mkdir -p "$nojq"
+ln -s "$(command -v cat)" "$nojq/cat"
+if PATH="$nojq" command -v jq >/dev/null 2>&1; then
+  record 0 1 "fail-closed fixture: jq leaked into the no-jq PATH"
+else
+  printf '%s' "$(jp '/repo/src/app.ts')" | PATH="$nojq" "$HOOK" >/dev/null 2>&1
+  record 2 "$?" "fail closed: jq missing"
+fi
+assert 2 "fail closed: malformed JSON"        'this is not json {{{'
+assert 2 "fail closed: empty stdin"           ''
+assert 2 "fail closed: JSON that is not an object" '"just a string"'
+
+# ── Case-insensitive matching ─────────────────────────────────────
+# Common macOS and Windows file systems are case-insensitive: .GIT/ IS .git/.
+assert 2 "case: .GIT/hooks/pre-commit"       "$(jp '/repo/.GIT/hooks/pre-commit')"
+assert 2 "case: .Git/config"                 "$(jp '/repo/.Git/config')"
+assert 2 "case: .ENV"                        "$(jp '/repo/.ENV')"
+assert 2 "case: .Env.Production"             "$(jp '/repo/.Env.Production')"
+assert 2 "case: Node_Modules/"               "$(jp '/repo/Node_Modules/x/index.js')"
+assert 2 "case: SERVER.PEM"                  "$(jp '/repo/certs/SERVER.PEM')"
+assert 2 "case: ID_RSA"                      "$(jp '/home/u/.ssh/ID_RSA')"
+assert 2 "case: Package-Lock.json"           "$(jp '/repo/Package-Lock.json')"
+assert 2 "case: relative .ENV, cwd /repo"    "$(jpc '.ENV' '/repo')"
+assert 0 "case: mixed-case source stays ok"  "$(jp '/repo/src/App.tsx')"
+assert 0 "case: .ENV.EXAMPLE is a template"  "$(jp '/repo/.ENV.EXAMPLE')"
+# Output dirs (dist, build, .next, coverage) match only as written: a source
+# folder or a volume that merely shares the name in another case stays editable.
+assert 0 "case: components/Coverage/ is source"  "$(jp '/repo/src/components/Coverage/CoverageCard.tsx')"
+assert 0 "case: a volume named Build/ is fine"    "$(jp '/Volumes/Build/app/src/main.ts')"
+assert 0 "case: Dist/ source folder is fine"      "$(jp '/repo/src/Dist/index.ts')"
+assert 2 "case: lower-case coverage/ still blocks" "$(jp '/repo/coverage/lcov.info')"
+assert 2 "case: lower-case dist/ still blocks"     "$(jp '/repo/dist/main.js')"
+
+# ── Symlinks: judged by where the write lands ─────────────────────
+ln -s "$scratch/repo/.git/hooks" "$scratch/hooks-alias"
+ln -s "$scratch/repo/.git/config" "$scratch/notes.txt"
+mkdir -p "$scratch/plain"
+assert 2 "symlink: dir alias to .git/hooks"   "$(jp "$scratch/hooks-alias/pre-commit")"
+assert 2 "symlink: file alias to .git/config" "$(jp "$scratch/notes.txt")"
+assert 0 "symlink: plain dir stays ok"        "$(jp "$scratch/plain/notes.md")"
+
+# ── NotebookEdit and MultiEdit payloads ───────────────────────────
+assert 2 "NotebookEdit: notebook_path in .git/" \
+  '{"tool_name":"NotebookEdit","tool_input":{"notebook_path":"/repo/.git/x.ipynb","new_source":"x"}}'
+assert 2 "NotebookEdit: notebook_path .env" \
+  '{"tool_name":"NotebookEdit","tool_input":{"notebook_path":"/repo/.env"}}'
+assert 0 "NotebookEdit: ordinary notebook ok" \
+  '{"tool_name":"NotebookEdit","tool_input":{"notebook_path":"/repo/nb/a.ipynb"}}'
+assert 2 "MultiEdit: edits[].file_path .env" \
+  '{"tool_name":"MultiEdit","tool_input":{"file_path":"/repo/src/a.ts","edits":[{"file_path":"/repo/.env","old_string":"a","new_string":"b"}]}}'
+assert 2 "MultiEdit: top-level file_path .env" \
+  '{"tool_name":"MultiEdit","tool_input":{"file_path":"/repo/.env","edits":[{"old_string":"a","new_string":"b"}]}}'
+assert 0 "MultiEdit: ordinary edits ok" \
+  '{"tool_name":"MultiEdit","tool_input":{"file_path":"/repo/src/a.ts","edits":[{"old_string":"a","new_string":"b"},{"file_path":"/repo/src/b.ts","old_string":"c","new_string":"d"}]}}'
+
+# ── hooks.json routes every file-writing tool to the guard ────────
+HOOKS_JSON="$(dirname "$HOOK")/hooks.json"
+matcher=$(jq -r '.hooks.PreToolUse[] | select(any(.hooks[]; .command | endswith("/protect-sensitive-files.sh"))) | .matcher' "$HOOKS_JSON" 2>/dev/null)
+if [ "$matcher" = "Edit|Write|MultiEdit|NotebookEdit" ]; then
+  record 0 0 "hooks.json matcher covers MultiEdit and NotebookEdit"
+else
+  record 0 1 "hooks.json matcher covers MultiEdit and NotebookEdit (got '$matcher')"
+fi
+
 printf 'protect-sensitive-files: %d passed, %d failed\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]

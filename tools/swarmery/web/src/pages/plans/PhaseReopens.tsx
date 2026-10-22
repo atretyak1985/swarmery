@@ -12,6 +12,7 @@ import { useEffect, useId, useState } from 'react';
 import { fetchPhaseReopens, reopenPhase } from '../../api/phasereport';
 import type { PhaseReopen, ReopenCaughtBy } from '../../api/types';
 import { fmtAgo } from '../../lib/format';
+import { safeHref } from '../../lib/safeHref';
 
 /** The gates in the form's select. Labels are locale getters, read at render. */
 export const CAUGHT_BY: readonly { value: ReopenCaughtBy; label: string }[] = [
@@ -247,7 +248,7 @@ export function PhaseReopens({ taskId, phaseId, reopens, canReopen, onReopened }
                   </span>
                   <span title={r.createdAt}>{fmtAgo(r.createdAt)}</span>
                   {r.fixUrl !== '' && (
-                    <a href={r.fixUrl} target="_blank" rel="noreferrer" className="text-brand hover:underline">
+                    <a href={safeHref(r.fixUrl) ?? undefined} target="_blank" rel="noreferrer" className="text-brand hover:underline">
                       <Trans>fix →</Trans>
                     </a>
                   )}

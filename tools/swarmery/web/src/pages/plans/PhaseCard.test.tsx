@@ -109,7 +109,7 @@ describe('PhaseCard landing chip', () => {
   });
 });
 
-// Decision ids (migration 0120): a phase whose decision is undecided and
+// Decision ids (migration 0122): a phase whose decision is undecided and
 // expensive shows "waits on D-n" inline, linking to the planning turn.
 describe('PhaseCard decision hold', () => {
   const hold = {

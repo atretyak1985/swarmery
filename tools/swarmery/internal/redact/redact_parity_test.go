@@ -1,4 +1,4 @@
-package api
+package redact
 
 // Parity between the daemon's response-layer redaction (redactRules) and
 // guard-pack's port of it (plugins/guard-pack/hooks/patterns/secrets.json),

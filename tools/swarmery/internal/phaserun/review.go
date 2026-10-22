@@ -15,6 +15,7 @@ import (
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/claudeacct"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/runsettings"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/verify"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/workaround"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/worktree"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/wsingest"
 )
@@ -83,7 +84,9 @@ const (
 // reviewerRole is code-reviewer.md's role and output contract
 // (plugins/core/agents/code-reviewer.md, "Role" + "Output" + "Bounds"), restated
 // for a headless run: the daemon cannot read the plugin cache, and the verdict line
-// is the one verify.ParseVerdict already reads.
+// is the one verify.ParseVerdict already reads. The `kind: review` block contract
+// (mdfence.ParseReviews) is restated verbatim; its fence keeps the block's
+// `verdict:` key out of ParseVerdict's reach, which skips fenced lines.
 const reviewerRole = `You are the fleet's independent code reviewer, running headless and READ-ONLY in the git worktree of a finished plan-phase run (your cwd). You read code and judge it; you never fix it. You have Read, Glob and Grep; every write tool and the shell are denied, and the worktree is fingerprinted before and after you run — any change to it voids your verdict.
 
 Review the change below against the phase document it was meant to implement. Lenses:
@@ -95,23 +98,101 @@ Review the change below against the phase document it was meant to implement. Le
 
 Output: list only problems you would block the merge for — for each, file:line, one sentence on why it is wrong, and how to show it fails. Rank them by severity (P0 blocking / P1 must-fix). Zero findings is a legitimate result; say so plainly. At most one extra line for a non-blocking note, marked as non-blocking. When a verdict would need a build or test run, say so — the verifier runs after you. Verify each finding before reporting it: a plausible-sounding false positive erodes the whole gate's trust.
 
+Immediately before the verdict line, restate the review as one fenced ` + "```yaml" + ` block with kind: review — the machine copy appended to the phase document's ## Review section (one block per round):
+
+` + "```yaml" + `
+kind: review
+round: 1                 # the REVIEW ROUND line below: 1, 2, … or plan
+verdict: FAIL            # the same word as the VERDICT line
+complete: true           # false when you stopped before covering the scope
+scope_left: []           # with complete: false — the files/areas you did not read
+findings:                # the merge-blocking findings above, same order; [] for none
+  - id: R1-1             # R<round>-<n>; RP-<n> on the plan round
+    type: silent-failure # correctness | silent-failure | contract | plan-conformance | quality
+    file: src/lib/export/writer.ts
+    line: 84
+    criterion: "upload failure is reported"   # the acceptance criterion it breaks, if any
+    test_caught: false   # true only when an existing test fails because of it
+    evidence: "catch {} swallows the putObject error"
+    note: "fail the upload in a test: the handler still returns 200"
+resolves: []             # ids of earlier rounds' findings you confirmed fixed
+ids: []                  # - {id: <symbol/key the change relies on>, evidence: <file:line | missing>}
+drift: []                # - {criterion: <ticked but not true>, file: <path>, note: <why>}
+checked_callers: []      # call sites you read for a changed signature (file:line)
+` + "```" + `
+
+round and verdict are required; keep every other key, writing [] when it is empty. Quote any value containing ": ", " #", or starting with *, [ or {. When you stopped early — a turn limit, a scope too large to finish — say complete: false and list what is left in scope_left; never present a partial review as a whole one. The non-blocking line stays out of the block.
+
 End with exactly one final line, nothing after it:
 VERDICT: PASS | FAIL | INCONCLUSIVE
 FAIL when any P0/P1 stands; INCONCLUSIVE only when you genuinely could not assess (missing files, no diff) — name what was missing.`
 
 // reviewPrompt renders the reviewer's prompt: the role and the daemon-API rule for
-// daemonPort, the phase doc as it stands now (with the executor's ticks), and the
-// run's diff.
-func reviewPrompt(title, doc, diff string, daemonPort int) string {
+// daemonPort, the review round (1 for a phase's first review, 2 for the review
+// after its fix re-run — the `round` of the reviewer's `kind: review` block), the
+// phase doc as it stands now (with the executor's ticks), the places the run's
+// agent said it changed course (lookFirst; the section is absent when there are
+// none), and the run's diff.
+func reviewPrompt(title, doc, diff string, daemonPort, round int, lookFirst workaround.PhaseHits) string {
 	var b strings.Builder
 	b.WriteString(reviewerPreamble(daemonPort))
+	b.WriteString("\n\nREVIEW ROUND: ")
+	b.WriteString(strconv.Itoa(round))
 	b.WriteString("\n\nPHASE: ")
 	b.WriteString(title)
 	b.WriteString("\n\nPHASE DOCUMENT:\n----------------------------------------\n")
 	b.WriteString(strings.TrimRight(doc, "\n"))
 	b.WriteString("\n----------------------------------------\n\n")
+	b.WriteString(lookFirstSection(lookFirst))
 	b.WriteString(diff)
 	return b.String()
+}
+
+// lookFirstMax bounds the list in the prompt; the phase card shows them all.
+const lookFirstMax = 20
+
+// lookFirstSection lists the run's workaround hits (D23) — where the executor
+// said "instead", "for now", "pre-existing"… — so the reviewer checks those
+// places in the diff first. Advisory: a hit is a pointer, not a finding.
+func lookFirstSection(h workaround.PhaseHits) string {
+	if len(h.Hits) == 0 && h.Total == 0 {
+		return ""
+	}
+	var b strings.Builder
+	b.WriteString("Look first — the agent changed course here:\n")
+	b.WriteString("(the executor's own words, matched against the workaround-words list; each is a place to check in the diff, not a finding by itself)\n")
+	for i, hit := range h.Hits {
+		if i == lookFirstMax {
+			break
+		}
+		fmt.Fprintf(&b, "- %q — %s\n", hit.Word, hit.Sentence)
+		if hit.Before != "" {
+			fmt.Fprintf(&b, "    before: %s\n", hit.Before)
+		}
+		if hit.After != "" {
+			fmt.Fprintf(&b, "    after: %s\n", hit.After)
+		}
+	}
+	if more := h.Total - min(len(h.Hits), lookFirstMax); more > 0 {
+		fmt.Fprintf(&b, "- … and %d more on the phase card.\n", more)
+	}
+	b.WriteString("\n")
+	return b.String()
+}
+
+// lookFirst reads the run session's workaround hits for the review prompt. The
+// ingest tail stores them as the run's transcript lands; a read failure is
+// logged and leaves the section out — it never blocks the review.
+func (s *Service) lookFirst(phaseID int64, runUUID string) workaround.PhaseHits {
+	if s.DB == nil || runUUID == "" {
+		return workaround.PhaseHits{}
+	}
+	h, err := workaround.ForPhase(s.DB, phaseID, runUUID)
+	if err != nil {
+		log.Printf("warning: phaserun: phase=%d workaround hits unreadable: %v", phaseID, err)
+		return workaround.PhaseHits{}
+	}
+	return h
 }
 
 // reviewGit is the git the review stage shells out to in the run's worktree: the
@@ -285,7 +366,9 @@ func (s *Service) reviewRun(phaseID int64, info phaseInfo, acq worktree.Acquired
 	}
 	started := s.ts()
 	round, runUUID := s.reviewState(phaseID)
-	out := s.recoveredReview(phaseID, info, acq)
+	// review_fix_round counts fix re-runs (0 before the first); the block's round
+	// counts reviews, so the first review is round 1.
+	out := s.recoveredReview(phaseID, info, acq, round+1)
 	s.recordReview(phaseID, info, runUUID, round, started, out)
 	// The epic payload carries the phase's reviews: refetch it now, not after the
 	// verifier (which may take minutes) reaches the defer's own notify.
@@ -331,7 +414,7 @@ func (s *Service) guardedReviewRun(phaseID int64, info phaseInfo, acq worktree.A
 // recoveredReview is review with a panic turned into an inconclusive
 // `reviewer-did-not-start` outcome, so the review is still recorded and the run's
 // exit path carries on.
-func (s *Service) recoveredReview(phaseID int64, info phaseInfo, acq worktree.Acquired) (o reviewOutcome) {
+func (s *Service) recoveredReview(phaseID int64, info phaseInfo, acq worktree.Acquired, reviewRound int) (o reviewOutcome) {
 	defer func() {
 		if r := recover(); r != nil {
 			log.Printf("error: phaserun: phase=%d reviewer panicked: %v", phaseID, r)
@@ -341,12 +424,12 @@ func (s *Service) recoveredReview(phaseID int64, info phaseInfo, acq worktree.Ac
 			}
 		}
 	}()
-	return s.review(phaseID, info, acq)
+	return s.review(phaseID, info, acq, reviewRound)
 }
 
 // review runs the reviewer and classifies what came back. The fingerprint is taken
 // on both sides of the spawn and compared FIRST: a mutated tree voids any verdict.
-func (s *Service) review(phaseID int64, info phaseInfo, acq worktree.Acquired) reviewOutcome {
+func (s *Service) review(phaseID int64, info phaseInfo, acq worktree.Acquired, reviewRound int) reviewOutcome {
 	inconclusive := func(o reviewOutcome, class, detail string) reviewOutcome {
 		o.verdict, o.detail = string(verify.VerdictInconclusive), class+": "+detail
 		return o
@@ -362,9 +445,14 @@ func (s *Service) review(phaseID int64, info phaseInfo, acq worktree.Acquired) r
 	}
 
 	o.sessionUUID = s.UUID()
+	var runUUID string
+	if s.DB != nil {
+		_, runUUID = s.reviewState(phaseID)
+	}
 	resolution := claudeacct.Resolve(info.ProjectPath)
 	spec := verify.RunSpec{
-		Prompt:      reviewPrompt(info.Name, string(doc), s.reviewDiff(acq.Path, acq.StartPoint), s.DaemonPort),
+		Prompt: reviewPrompt(info.Name, string(doc), s.reviewDiff(acq.Path, acq.StartPoint), s.DaemonPort, reviewRound,
+			s.lookFirst(phaseID, runUUID)),
 		SessionUUID: o.sessionUUID,
 		Cwd:         acq.Path,
 		Model:       reviewModel,
@@ -373,6 +461,10 @@ func (s *Service) review(phaseID int64, info phaseInfo, acq worktree.Acquired) r
 		Resolution:      resolution,
 		SettingsFile:    runsettings.Compose("review", resolution, runsettings.Inputs{}),
 		DisallowedTools: s.reviewDenials(),
+		// Least privilege: dontAsk with the read tools only (the reviewer never
+		// runs a command), on the reviewers' own knob.
+		AllowedTools:  verify.ReadOnlyTools(),
+		PermissionEnv: verify.ReviewPermEnv,
 	}
 	log.Printf("phaserun: phase=%d reviewing worktree=%q", phaseID, acq.Path)
 	// context.Background(): the run's own context is already cancelled (the defer's

@@ -54,8 +54,11 @@ run_hook() {
 
 TMP=$(mktemp -d)
 SID="test-$$-$RANDOM"
-MARKER="/tmp/graphify-stale-nudge-$SID"
-cleanup() { rm -rf "$TMP"; rm -f "$MARKER" "/tmp/graphify-stale-nudge-$SID-fresh" "/tmp/graphify-stale-nudge-$SID-mal"; }
+# Markers live in the private run dir; sandbox it so no real session's marker
+# is read or written.
+export SWARMERY_RUN_DIR="$TMP/run"
+MARKER="$SWARMERY_RUN_DIR/graphify-stale-nudge-$SID"
+cleanup() { rm -rf "$TMP"; }
 trap cleanup EXIT
 
 # ── Case 1: stale graph + no marker → nudge emitted + marker created ──────────
@@ -85,7 +88,7 @@ make_repo "$FRESH_REPO" "PLACEHOLDER"
 HEAD_SHA=$(git -C "$FRESH_REPO" rev-parse HEAD)
 printf '{"built_at_commit": "%s", "nodes": []}\n' "$HEAD_SHA" > "$FRESH_REPO/graphify-out/graph.json"
 run_hook "$FRESH_REPO" "$FRESH_SID" "{\"session_id\":\"$FRESH_SID\",\"tool_name\":\"Bash\"}"
-if [ "$RC" -eq 0 ] && valid_json "$OUT" && [[ "$OUT" != *systemMessage* ]] && [ ! -f "/tmp/graphify-stale-nudge-$FRESH_SID" ]; then
+if [ "$RC" -eq 0 ] && valid_json "$OUT" && [[ "$OUT" != *systemMessage* ]] && [ ! -f "$SWARMERY_RUN_DIR/graphify-stale-nudge-$FRESH_SID" ]; then
   ok_case
 else
   fail_case "case3 fresh: expected silent, no marker (rc=$RC, out=$OUT)"
@@ -110,6 +113,18 @@ if [ "$RC" -eq 0 ] && valid_json "$OUT"; then
   ok_case
 else
   fail_case "case5 malformed-stdin: expected valid JSON + exit 0 (rc=$RC, out=$OUT)"
+fi
+
+# ── Case 6: a path-shaped session_id cannot steer where the marker lands ──────
+# The id is reduced to [A-Za-z0-9_-]; the marker stays inside the run dir.
+ODD_REPO="$TMP/odd"
+make_repo "$ODD_REPO" "0000000000000000000000000000000000000000"
+run_hook "$ODD_REPO" "odd" '{"session_id":"../../escape/x","tool_name":"Bash"}'
+if [ "$RC" -eq 0 ] && valid_json "$OUT" && [ -f "$SWARMERY_RUN_DIR/graphify-stale-nudge-escapex" ] \
+   && [ ! -e "$TMP/escape" ]; then
+  ok_case
+else
+  fail_case "case6 odd session id: marker not confined to the run dir (rc=$RC, out=$OUT)"
 fi
 
 printf 'post_bash_index_check: %d passed, %d failed\n' "$pass" "$fail"

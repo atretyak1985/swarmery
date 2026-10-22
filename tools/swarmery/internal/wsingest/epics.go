@@ -100,7 +100,7 @@ type epicPhase struct {
 	// is still the one in the doc. "" when the doc did not resolve.
 	docHash string
 	// decisionDeps are the `D-n` ids the doc's `**Depends on decisions:**` header
-	// declares (ParseDecisionDeps, migration 0120); nil when absent.
+	// declares (ParseDecisionDeps, migration 0122); nil when absent.
 	decisionDeps []string
 }
 

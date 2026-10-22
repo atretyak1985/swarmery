@@ -93,7 +93,7 @@ func TestWizardGET_DTOFieldNames(t *testing.T) {
 	// (mode/reviseTaskId: plan-revision phase 4 does the same; lastError carries
 	// the reason a rolled-back action gives the operator; effort is model's twin,
 	// added with migration 0076 so the wizard's depth survives its resumes;
-	// planningSessionId addresses PATCH …/turns/{seq}/cost, migration 0120).
+	// planningSessionId addresses PATCH …/turns/{seq}/cost, migration 0122).
 	want := []string{"active", "currentQuestion", "effort", "history", "lastError", "mode", "model",
 		"planDir", "planningSessionId", "rawReply", "reviseTaskId", "runningPlan", "sessionId",
 		"sessionUuid", "startedAt", "status"}
