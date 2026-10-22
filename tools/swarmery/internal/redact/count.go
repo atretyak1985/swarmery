@@ -71,6 +71,9 @@ func (c StoredCount) Lines() []string {
 func CountStored(ctx context.Context, db *sql.DB) (StoredCount, error) {
 	out := StoredCount{Columns: map[string]map[string]int{}}
 	for _, t := range targets {
+		if t.name != "" {
+			continue // a subset of another target's rows, counted there
+		}
 		q := "SELECT " + strings.Join(append(append([]string{}, t.cols...), t.ctx...), ", ") + " FROM " + t.table
 		if t.where != "" {
 			q += " WHERE " + t.where
@@ -97,7 +100,7 @@ func CountStored(ctx context.Context, db *sql.DB) (StoredCount, error) {
 				}
 				var c map[string]int
 				switch t.table {
-				case "events":
+				case "events", "permission_requests":
 					c = countPayload(vals[len(t.cols)].String, vals[i].String)
 				case "file_changes":
 					c = CountLiteral(vals[i].String)
@@ -125,7 +128,8 @@ func CountStored(ctx context.Context, db *sql.DB) (StoredCount, error) {
 	return out, nil
 }
 
-// countPayload counts a stored events.payload leaf by leaf, with Literal's
+// countPayload counts a stored events.payload or permission_requests
+// request_json leaf by leaf, with Literal's
 // classes inside the code fields of the file-editing tools — the same choice
 // PayloadJSON makes, so a rescrubbed store counts zero.
 func countPayload(toolName, doc string) map[string]int {

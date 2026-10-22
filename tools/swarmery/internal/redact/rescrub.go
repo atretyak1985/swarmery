@@ -74,6 +74,11 @@ func RescrubConfigFromEnv(getenv func(string) string) (cfg RescrubConfig, warnin
 // target is one table the rescrub walks.
 type target struct {
 	table string
+	// name keys the pass in redaction_progress and in RescrubStats; empty
+	// means table. A pass over a subset of another target's rows has its own
+	// name, so it keeps its own cursor (CountStored skips it: the rows are
+	// counted once, under the table's own pass).
+	name  string
 	cols  []string // text columns it may rewrite
 	ctx   []string // columns read to choose the redactor, never written
 	where string   // extra row filter, ANDed with the cursor
@@ -81,8 +86,16 @@ type target struct {
 	fix func(cols, ctx []sql.NullString) ([]sql.NullString, bool)
 }
 
-// Targets lists the tables and columns the rescrub covers, in walk order —
-// the text the transcript ingest writes.
+// key is the pass's progress key.
+func (t target) key() string {
+	if t.name != "" {
+		return t.name
+	}
+	return t.table
+}
+
+// Targets lists the tables and columns the rescrub covers — the text the
+// transcript ingest and the approvals path write.
 func Targets() map[string][]string {
 	out := map[string][]string{}
 	for _, t := range targets {
@@ -99,7 +112,23 @@ var targets = []target{
 	// Only the cards ingest captured from a session: their text is transcript
 	// text. A card the operator typed is theirs and is left as written.
 	{table: "tasks", cols: []string{"title", "prompt", "origin_quote"}, where: "origin = 'session'", fix: fixWith(All)},
+	// Approval requests (internal/approvals): the stored hook stdin, redacted
+	// per tool like a tool-call payload.
+	{table: "permission_requests", cols: []string{"request_json"}, ctx: []string{"tool_name"}, fix: fixPayload},
+	// Their permission_request events, under a progress key of their own: a
+	// store whose events pass finished before the approvals path masked new
+	// requests still holds raw ones above that pass's cursor, and this
+	// re-arms only them instead of a RulesVersion bump that would rescan
+	// every table. Selected through permission_requests.event_id — a lookup
+	// per request — rather than events.type, which could scan the whole
+	// events table for each batch.
+	{table: "events", name: PermissionEventsProgress, cols: []string{"payload"}, ctx: []string{"tool_name"},
+		where: "rowid IN (SELECT event_id FROM permission_requests WHERE event_id IS NOT NULL)", fix: fixPayload},
 }
+
+// PermissionEventsProgress is the redaction_progress key of the pass over the
+// permission_request events.
+const PermissionEventsProgress = "events:permission_request"
 
 func fixWith(fn func(string) string) func(cols, _ []sql.NullString) ([]sql.NullString, bool) {
 	return func(cols, _ []sql.NullString) ([]sql.NullString, bool) {
@@ -294,12 +323,13 @@ func ftsMergeStep(ctx context.Context, db *sql.DB) (bool, error) {
 }
 
 func rescrubTable(ctx context.Context, db *sql.DB, cfg RescrubConfig, t target, stats *RescrubStats) error {
-	last, done, err := loadProgress(ctx, db, t.table)
+	key := t.key()
+	last, done, err := loadProgress(ctx, db, key)
 	if err != nil {
 		return err
 	}
 	if done {
-		stats.Done[t.table] = true
+		stats.Done[key] = true
 		return nil
 	}
 	sel := "SELECT rowid, " + strings.Join(append(append([]string{}, t.cols...), t.ctx...), ", ") +
@@ -316,17 +346,17 @@ func rescrubTable(ctx context.Context, db *sql.DB, cfg RescrubConfig, t target, 
 		}
 		rows, err := readBatch(ctx, db, sel, last, cfg.Batch, len(t.cols)+len(t.ctx))
 		if err != nil {
-			return fmt.Errorf("rescrub %s: read: %w", t.table, err)
+			return fmt.Errorf("rescrub %s: read: %w", key, err)
 		}
 		if len(rows) == 0 {
 			if _, err := db.ExecContext(ctx,
-				`UPDATE redaction_progress SET done = 1 WHERE table_name = ?`, t.table); err != nil {
-				return fmt.Errorf("rescrub %s: mark done: %w", t.table, err)
+				`UPDATE redaction_progress SET done = 1 WHERE table_name = ?`, key); err != nil {
+				return fmt.Errorf("rescrub %s: mark done: %w", key, err)
 			}
-			stats.Done[t.table] = true
+			stats.Done[key] = true
 			return nil
 		}
-		stats.Scanned[t.table] += len(rows)
+		stats.Scanned[key] += len(rows)
 		next := rows[len(rows)-1].rowid
 
 		tx, err := db.BeginTx(ctx, nil)
@@ -358,9 +388,9 @@ func rescrubTable(ctx context.Context, db *sql.DB, cfg RescrubConfig, t target, 
 			}
 		}
 		if _, err := tx.ExecContext(ctx,
-			`UPDATE redaction_progress SET last_rowid = ? WHERE table_name = ?`, next, t.table); err != nil {
+			`UPDATE redaction_progress SET last_rowid = ? WHERE table_name = ?`, next, key); err != nil {
 			_ = tx.Rollback()
-			return fmt.Errorf("rescrub %s: cursor: %w", t.table, err)
+			return fmt.Errorf("rescrub %s: cursor: %w", key, err)
 		}
 		// A rewritten turn leaves its old terms in the full-text index until
 		// the index is merged: record, with the batch, that a purge is owed.
@@ -374,9 +404,9 @@ func rescrubTable(ctx context.Context, db *sql.DB, cfg RescrubConfig, t target, 
 			return fmt.Errorf("rescrub %s: commit: %w", t.table, err)
 		}
 		last = next
-		stats.Changed[t.table] += changed
+		stats.Changed[key] += changed
 		if cfg.OnBatch != nil {
-			cfg.OnBatch(t.table, last, changed)
+			cfg.OnBatch(key, last, changed)
 		}
 		if cfg.Sleep > 0 {
 			timer := time.NewTimer(cfg.Sleep)
