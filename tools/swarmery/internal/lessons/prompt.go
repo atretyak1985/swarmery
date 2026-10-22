@@ -391,9 +391,10 @@ func oneLine(s string) string { return capRunes(strings.Join(strings.Fields(s), 
 const reviewPromptHead = `You turn a REPEATED code-review finding into one durable lesson. Independent reviewers raised the same kind of finding in the same code area in two or more separate phases; the lesson is what a FUTURE run working there should check first so the reviewer stops finding it.
 
 Rules:
-- Return 0 or 1 lesson. Zero is the right answer when the findings below share only their type and area, not a cause.
-- "guidance": ONE imperative sentence, specific to this codebase (name the file, function, table, flag or convention the findings point at). No generic advice ("write tests", "handle errors").
+- Return 0 or 1 lesson. Return 1 when the findings share a thread a future run could check for — the same kind of mistake, the same invariant broken, the same fragile file or convention — even when the individual bugs differ. Return 0 only when they share nothing beyond their type and directory.
+- "title": a short name for the lesson, at most 120 characters.
+- "guidance": ONE imperative sentence of at most 280 characters, specific to this codebase (name the file, function, table, flag or convention the findings point at). No generic advice ("write tests", "handle errors").
 - "area_globs": return exactly the area_globs listed under "The repeat".
-- "cause": one sentence naming the mistake that keeps recurring, taken from the findings.
+- "cause": one sentence naming the thread that keeps recurring, taken from the findings.
 - "evidence": 2-8 ids copied VERBATIM from the [E:finding:<id>] markers below, without the brackets (e.g. "finding:12"). Never invent an id; a lesson citing an id that is not below is discarded.
 `

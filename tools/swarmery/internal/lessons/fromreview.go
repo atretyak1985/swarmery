@@ -74,6 +74,8 @@ const (
 	reviewTickTimeout = 15 * time.Minute
 	// maxRootGlobs caps the per-file globs of a group at the repo root.
 	maxRootGlobs = maxAreaGlobs
+	// noLessonReason is a draft's DraftErr when the model returned no lesson.
+	noLessonReason = "the model returned no valid lesson"
 )
 
 // ReviewFinding is one review_findings row as grouping and drafting read it.
@@ -396,7 +398,7 @@ func (p *ReviewProposer) draft(ctx context.Context, g Group) (c Candidate, ok bo
 	case err != nil:
 		return c, false, rejected, err.Error()
 	case !ok:
-		return c, false, rejected, "the model returned no valid lesson"
+		return c, false, rejected, noLessonReason
 	}
 	return c, true, rejected, ""
 }
@@ -435,8 +437,13 @@ func (p *ReviewProposer) insert(ctx context.Context, g Group, now time.Time) (Re
 	cause := fmt.Sprintf("Reviewers raised %s findings in %s in %d phases.", g.Type, g.Area, g.Phases())
 	c, ok, rejected, why := p.draft(ctx, g)
 	out.Rejected, out.DraftErr = rejected, why
-	if ok {
+	switch {
+	case ok:
 		title, guidance, cause, model, out.Drafted = c.Title, c.Guidance, c.Cause, p.Model, true
+	case why == noLessonReason && len(rejected) == 0:
+		// The model looked and declined: say so, so the operator knows the
+		// placeholder is a judgement, not a pending job.
+		cause += " The draft found no thread they share: read the findings and write the guidance, or dismiss to mute this area for 30 days."
 	}
 	norm := wsingest.NormalizeLessonTitle(title)
 	key := "review:" + g.Type + ":" + g.Area

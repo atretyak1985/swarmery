@@ -527,3 +527,25 @@ func TestKickCoalescesIntoOneDelayedTick(t *testing.T) {
 		t.Errorf("a kick after the tick ran was swallowed")
 	}
 }
+
+// A model that looks and returns no lesson leaves a placeholder that says so.
+func TestADeclinedDraftSaysSoOnThePlaceholder(t *testing.T) {
+	db := openDB(t)
+	seedReviewGroups(t, db)
+	groups, err := GroupFindings(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	p := newProposer(db, &fakeRunner{out: `{"lessons":[]}`}, reviewNow)
+	pr, err := p.ProposeFromReview(context.Background(), groups[2])
+	if err != nil || pr.Action != ProposalInserted || pr.DraftErr != noLessonReason {
+		t.Fatalf("proposal = %+v, %v", pr, err)
+	}
+	var guidance, cause string
+	if err := db.QueryRow(`SELECT guidance, cause FROM surprise_lessons WHERE id = ?`, pr.LessonID).Scan(&guidance, &cause); err != nil {
+		t.Fatal(err)
+	}
+	if guidance != DraftPendingGuidance || !strings.Contains(cause, "found no thread they share") {
+		t.Errorf("placeholder: guidance %q cause %q", guidance, cause)
+	}
+}
