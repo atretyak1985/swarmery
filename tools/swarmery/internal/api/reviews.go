@@ -49,7 +49,7 @@ type reviewDTO struct {
 	StartedAt    string   `json:"startedAt"`
 	FinishedAt   *string  `json:"finishedAt"`
 	AckedAt      *string  `json:"ackedAt"`
-	// Guard is the run's guard check (migration 0121, phaserun.GuardResult);
+	// Guard is the run's guard check (migration 0124, phaserun.GuardResult);
 	// {} for a review written before it, or for a plan review.
 	Guard json.RawMessage `json:"guard"`
 }

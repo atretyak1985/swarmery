@@ -1,6 +1,6 @@
 // Graphify page (/graphify): static graph.html visualizations for
 // graphify-pack projects, served through the daemon's jailed static route.
-// A project dropdown, a "graph built …" info row, and a same-origin iframe
+// A project dropdown, a "graph built …" info row, and a sandboxed iframe
 // when the viz artifact exists — honest hints otherwise. Artifacts are
 // static files, so a single load with ErrorBox retry is enough (no polling);
 // there is deliberately no rebuild button (the daemon does not run graphify).
@@ -32,8 +32,7 @@ export function Graphify({ scopedSlug }: { scopedSlug?: string } = {}): JSX.Elem
   // (scopedSlug set) the switcher owns project choice, so the in-page dropdown
   // is hidden and the selection is pinned to that slug.
   const [selectedId, setSelectedId] = useState<number | null>(null);
-  // Expanded state only — Esc (including from inside the same-origin viz frame),
-  // the body scroll lock, focus containment and focus restore all belong to
+  // Expanded state only — Esc, the body scroll lock, focus containment and focus restore all belong to
   // <ExpandableSection> (components/ui.tsx), the same primitive pages/Architecture.tsx
   // uses. Nothing about the overlay is re-implemented here.
   const [expanded, setExpanded] = useState(false);
@@ -147,6 +146,9 @@ export function Graphify({ scopedSlug }: { scopedSlug?: string } = {}): JSX.Elem
                   key={project.id}
                   src={project.vizPath}
                   title={t`Graphify visualization`}
+                  // Repository content: scripts run, but with an opaque origin
+                  // and no reach into the dashboard. Never add allow-same-origin.
+                  sandbox="allow-scripts"
                   // One class list for both states — the height comes from the flex
                   // parent, never from the viewport. The previous height was viewport
                   // math minus a hardcoded 180px for the chrome above it; every guess

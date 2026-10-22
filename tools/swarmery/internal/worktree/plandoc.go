@@ -30,6 +30,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"io/fs"
 	"log"
 	"os"
 	"path/filepath"
@@ -56,6 +57,10 @@ const ReportPath = ".swarmery/report.md"
 // board field that renders inline.
 const maxReportBytes = 8192
 
+// maxPlanDocBytes caps what ReturnPlanDoc copies back into the workspace. A
+// phase doc is tens of kilobytes; anything near this is not a plan document.
+const maxPlanDocBytes = 4 << 20
+
 // CollectReport reads the worktree's ReportPath and returns its trimmed
 // contents, or "" when the agent wrote nothing. Missing file, unreadable file
 // and empty file are all "" with no error: this is the docless counterpart of
@@ -65,8 +70,18 @@ func CollectReport(worktreePath string) string {
 	if worktreePath == "" {
 		return ""
 	}
-	data, err := os.ReadFile(filepath.Join(worktreePath, ReportPath))
+	// The worktree is the repository's tree: a report path that resolves through
+	// a symlink (or is not a plain file) is refused, never followed out of it.
+	data, err := func() ([]byte, error) {
+		if err := checkNoSymlink(worktreePath, ReportPath); err != nil {
+			return nil, err
+		}
+		return readRegular(filepath.Join(worktreePath, ReportPath), maxReportBytes)
+	}()
 	if err != nil {
+		if !errors.Is(err, fs.ErrNotExist) {
+			log.Printf("warning: worktree: report.md refused: %v", err)
+		}
 		return ""
 	}
 	if len(data) > maxReportBytes {
@@ -91,10 +106,28 @@ func LendPlanDoc(worktreePath, docPath string) (string, error) {
 	}
 	rel := LentPlanDocRel(docPath)
 	dst := filepath.Join(worktreePath, rel)
+	// Refuse a symlink anywhere on the way BEFORE MkdirAll (which would follow a
+	// symlinked .swarmery and create directories at its target), again after it,
+	// and once more at the open itself (O_NOFOLLOW): a link planted at dst is an
+	// error, never a file to write through.
+	if err := checkNoSymlink(worktreePath, rel); err != nil {
+		return "", fmt.Errorf("lend plan doc into worktree: %w", err)
+	}
 	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
 		return "", fmt.Errorf("create %s in worktree: %w", PlanDocDir, err)
 	}
-	if err := os.WriteFile(dst, data, 0o644); err != nil {
+	if err := checkNoSymlink(worktreePath, rel); err != nil {
+		return "", fmt.Errorf("lend plan doc into worktree: %w", err)
+	}
+	f, err := openNoFollowWrite(dst, 0o644)
+	if err != nil {
+		return "", fmt.Errorf("write plan doc into worktree: %w", err)
+	}
+	if _, err := f.Write(data); err != nil {
+		f.Close()
+		return "", fmt.Errorf("write plan doc into worktree: %w", err)
+	}
+	if err := f.Close(); err != nil {
 		return "", fmt.Errorf("write plan doc into worktree: %w", err)
 	}
 	return rel, nil
@@ -165,14 +198,23 @@ func ReturnPlanDoc(worktreePath, relPath, docPath string) (bool, error) {
 		return false, nil
 	}
 	src := filepath.Join(worktreePath, relPath)
-	updated, err := os.ReadFile(src)
+	// The workspace document is pushed to a remote: a lent copy that resolves
+	// through a symlink, or is not a plain file, must never hand it the bytes of
+	// a file outside the worktree.
+	if err := checkNoSymlink(worktreePath, relPath); err != nil {
+		return false, fmt.Errorf("lent plan doc %s refused: %w", src, err)
+	}
+	updated, err := readRegular(src, maxPlanDocBytes)
 	if err != nil {
-		if os.IsNotExist(err) {
+		if errors.Is(err, fs.ErrNotExist) {
 			// The agent deleted it, or the worktree was already torn down.
 			// Nothing to return, and nothing to complain about.
 			return false, nil
 		}
 		return false, fmt.Errorf("read lent plan doc %s: %w", src, err)
+	}
+	if len(updated) > maxPlanDocBytes {
+		return false, fmt.Errorf("lent plan doc %s exceeds %d bytes; refusing to copy it back", src, maxPlanDocBytes)
 	}
 	current, err := os.ReadFile(docPath)
 	if err != nil && !os.IsNotExist(err) {

@@ -162,7 +162,7 @@ export function landingChip(
   return { state, text: state === 'merged' ? `${label} ✓` : label, href: null };
 }
 
-/** The review-findings fields of a phase (migration 0122); both optional so an
+/** The review-findings fields of a phase (migration 0123); both optional so an
  *  older daemon's payload, or a fixture, reads as "none". */
 export interface FindingsPhase {
   reviewBlocks?: readonly unknown[] | undefined;

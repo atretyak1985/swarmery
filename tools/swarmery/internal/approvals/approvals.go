@@ -29,6 +29,7 @@ import (
 
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/ingest"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/notify"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/redact"
 )
 
 // Request statuses (permission_requests.status, frozen contract).
@@ -160,6 +161,11 @@ type Service struct {
 	// CancelMod can tell the mod's own in-flight polls from a shim's long-poll
 	// on the same row. Every WaitMod removes its own entry on return.
 	modPolls map[chan Decision]struct{}
+	// rawRequests keeps the verbatim hook stdin of every row this process
+	// created and has not resolved yet. The stored request_json is masked
+	// (storedRequestJSON); what goes back to the hook — an Answer's
+	// questions — must be what the hook sent, so it is read from here.
+	rawRequests map[int64]string
 
 	hbMu     sync.Mutex
 	lastSeen time.Time // most recent POST /api/hooks/* (in-memory heartbeat;
@@ -187,6 +193,8 @@ func New(db *sql.DB, bus *ingest.Bus, opt Options) *Service {
 		leases:     map[int64]time.Time{},
 		modDecided: map[int64]modDecision{},
 		modPolls:   map[chan Decision]struct{}{},
+
+		rawRequests: map[int64]string{},
 	}
 }
 
@@ -219,7 +227,8 @@ func (s *Service) publish(n ingest.Notification) {
 // ── hook stdin parsing ───────────────────────────────────────────────────────
 
 // HookInput is the subset of the PermissionRequest hook stdin the daemon
-// acts on (E1 fixture); Raw keeps the verbatim body for request_json.
+// acts on (E1 fixture); Raw keeps the verbatim body (request_json stores it
+// masked, storedRequestJSON).
 type HookInput struct {
 	Raw         []byte
 	SessionUUID string
@@ -276,6 +285,21 @@ func DedupHash(sessionUUID, toolName string, toolInput json.RawMessage) (string,
 	}
 	sum := sha256.Sum256([]byte(sessionUUID + "\n" + toolName + "\n" + canon))
 	return hex.EncodeToString(sum[:]), nil
+}
+
+// storedRequestJSON is the copy of the hook stdin the store keeps — in
+// permission_requests.request_json and the permission_request event payload —
+// with every secret-shaped value masked, the same way the transcript ingest
+// masks a tool call (internal/redact: the code fields of the file-editing
+// tools get only the literal token shapes, everything else all classes). A
+// request without a secret is stored byte for byte.
+//
+// Only the stored copies are masked. The dedup hash, the prod-deploy guard,
+// the auto-approve rules and every decision sent back to the hook use the raw
+// input, so a secret in a command changes none of them.
+func storedRequestJSON(in HookInput) string {
+	doc, _ := redact.PayloadJSON(in.ToolName, string(in.Raw))
+	return doc
 }
 
 // CanonicalJSON re-serializes a JSON value with object keys sorted
@@ -405,19 +429,21 @@ func (s *Service) createLocked(in HookInput, hash string, hold func(id int64)) (
 	now := s.opt.Now().UTC()
 	requestedAt := now.Format(tsFormat)
 	expiresAt := now.Add(s.opt.Timeout).Format(tsFormat)
+	stored := storedRequestJSON(in)
 	res, err := s.db.Exec(
 		`INSERT INTO permission_requests
 		   (session_id, tool_name, request_json, status, requested_at, dedup_hash, expires_at, risk_class,
 		    channel, tool_use_id)
 		 VALUES (?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?)`,
-		sessionID, in.ToolName, string(in.Raw), requestedAt, hash, expiresAt, riskClass,
+		sessionID, in.ToolName, stored, requestedAt, hash, expiresAt, riskClass,
 		in.channel(), nullStr(in.ToolUseID))
 	if err != nil {
 		return 0, Decision{}, false, fmt.Errorf("insert permission_request: %w", err)
 	}
 	id, _ = res.LastInsertId()
+	s.rawRequests[id] = string(in.Raw)
 
-	eventID, err := s.insertEventLocked(sessionID, "permission_request", in.ToolName, "", requestedAt, string(in.Raw))
+	eventID, err := s.insertEventLocked(sessionID, "permission_request", in.ToolName, "", requestedAt, stored)
 	if err != nil {
 		return 0, Decision{}, false, err
 	}
@@ -652,6 +678,7 @@ func (s *Service) resolveLocked(id int64, status, via, reason string, updatedInp
 		status, now, nullStr(via), nullStr(reason), id); err != nil {
 		return err
 	}
+	delete(s.rawRequests, id)
 
 	payload, _ := json.Marshal(map[string]any{"requestId": id, "decision": status, "via": via})
 	eventID, err := s.insertEventLocked(sessionID, "permission_resolved", "", eventStatusFor(status), now, string(payload))
@@ -782,9 +809,10 @@ type answerQuestion struct {
 //
 // On success the row resolves as approved (resolved_via 'dashboard') with
 // reason = the human summary «Q» → A · «Q2» → B, C, and the Decision fans
-// out to all dedup waiters carrying UpdatedInput {questions, answers} built
-// from the stored request_json (questions echoed verbatim, E12a; multiSelect
-// answers as arrays of labels, E12c).
+// out to all dedup waiters carrying UpdatedInput {questions, answers}: the
+// answers are validated against the stored request_json (what the dashboard
+// showed), the questions go back as the hook sent them (echoed verbatim,
+// E12a — hookQuestionsLocked; multiSelect answers as arrays of labels, E12c).
 func (s *Service) Answer(id int64, answers map[string]json.RawMessage) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -842,19 +870,45 @@ func (s *Service) Answer(id int64, answers map[string]json.RawMessage) error {
 	// updatedInput = {questions verbatim, answers as validated} — built
 	// server-side so the shim (and the audit trail) never trust
 	// dashboard-echoed questions.
+	wireQuestions, wireAnswers := s.hookQuestionsLocked(id, rawQuestions, questions, answers)
 	updatedInput, err := json.Marshal(struct {
 		Questions json.RawMessage            `json:"questions"`
 		Answers   map[string]json.RawMessage `json:"answers"`
-	}{Questions: rawQuestions, Answers: answers})
+	}{Questions: wireQuestions, Answers: wireAnswers})
 	if err != nil {
 		return fmt.Errorf("marshal updatedInput: %w", err)
 	}
 	return s.resolveLocked(id, StatusApproved, "dashboard", answerSummary(questions, values), updatedInput)
 }
 
-// parseQuestions extracts tool_input.questions from a stored request_json
-// (the verbatim hook stdin): the raw value (echoed verbatim into
-// updatedInput) plus the parsed validation subset.
+// hookQuestionsLocked returns the questions and answers an Answer delivers to
+// the hook. The dashboard answered by the question texts it was shown — the
+// stored request_json, whose secret-shaped values are masked — but the hook
+// must get back the questions it asked, verbatim (E12a). When this process
+// holds the row's raw hook stdin (rawRequests), the questions come from there
+// and each answer is re-keyed, by position, to the raw question text. With no
+// raw copy, or one that does not line up, the stored questions are used as
+// before. A request without a secret is unaffected: both copies are equal.
+func (s *Service) hookQuestionsLocked(id int64, storedRaw json.RawMessage, stored []answerQuestion,
+	answers map[string]json.RawMessage) (json.RawMessage, map[string]json.RawMessage) {
+	raw, ok := s.rawRequests[id]
+	if !ok {
+		return storedRaw, answers
+	}
+	hookRaw, hook, err := parseQuestions(raw)
+	if err != nil || len(hook) != len(stored) {
+		return storedRaw, answers
+	}
+	keyed := make(map[string]json.RawMessage, len(answers))
+	for i, q := range stored {
+		keyed[hook[i].Question] = answers[q.Question]
+	}
+	return hookRaw, keyed
+}
+
+// parseQuestions extracts tool_input.questions from a request_json (the
+// stored, masked copy, or the hook stdin it was made from): the raw value
+// plus the parsed validation subset.
 func parseQuestions(requestJSON string) (json.RawMessage, []answerQuestion, error) {
 	var p struct {
 		ToolInput struct {

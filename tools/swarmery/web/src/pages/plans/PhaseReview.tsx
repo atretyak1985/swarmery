@@ -26,6 +26,7 @@ import type {
 import { DiffView } from '../../components/DiffView';
 import { ConfirmDialog, Loading } from '../../components/ui';
 import { fmtAgo } from '../../lib/format';
+import { safeHref } from '../../lib/safeHref';
 import { phaseGuard } from '../../api/guard';
 import { GuardBadge } from './GuardBadge';
 import { canLand, canReturn, landingLabel, prLinkText } from './landingModel';
@@ -125,7 +126,7 @@ function LandingStrip({ landing, terms }: { landing: PhaseLanding; terms: Provid
     <div className="flex flex-wrap items-center gap-2 font-mono text-[10.5px] text-ink-faint">
       <span className={`rounded border px-1.5 py-px text-[9.5px] ${tone}`}>{landingLabel(landing.state, terms)}</span>
       {link !== null && landing.prUrl !== null && (
-        <a href={landing.prUrl} target="_blank" rel="noreferrer" className="text-brand hover:underline">
+        <a href={safeHref(landing.prUrl) ?? undefined} target="_blank" rel="noreferrer" className="text-brand hover:underline">
           {link}
         </a>
       )}

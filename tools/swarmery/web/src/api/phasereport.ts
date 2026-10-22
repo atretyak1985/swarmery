@@ -128,7 +128,7 @@ async function errorText(res: Response, fallback: string): Promise<string> {
 }
 
 /** GET /api/epics/{taskId}/phases/{phaseId}/findings — the doc's review rounds
- *  as data (migration 0122). The epic payload carries the same rounds
+ *  as data (migration 0123). The epic payload carries the same rounds
  *  (`phase.reviewBlocks`); this is the per-phase read for consumers outside it. */
 export async function fetchPhaseFindings(taskId: number, phaseId: number): Promise<PhaseFindings> {
   if (MOCK) return { legacyReview: false, blocks: [] };

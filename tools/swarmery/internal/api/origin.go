@@ -234,6 +234,23 @@ func requireLocalOrigin(next http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
+// requireLocalOriginUnlessRead applies requireLocalOrigin to every request that
+// can change state and lets plain reads through. It is for a route registered
+// without a method — the serena reverse proxy relays any method to an upstream
+// whose own API has mutating endpoints — so the fence follows the method: only
+// a GET or HEAD that asks for no protocol upgrade skips it.
+func requireLocalOriginUnlessRead(next http.HandlerFunc) http.HandlerFunc {
+	fenced := requireLocalOrigin(next)
+	return func(w http.ResponseWriter, r *http.Request) {
+		read := r.Method == http.MethodGet || r.Method == http.MethodHead
+		if read && r.Header.Get("Upgrade") == "" {
+			next(w, r)
+			return
+		}
+		fenced(w, r)
+	}
+}
+
 // requireLocalHost refuses any request whose Host header does not name this
 // daemon (DNS-rebinding fence). Applied to every route, reads included, before
 // the mux dispatches: a rebinding page reads, it does not need to write.

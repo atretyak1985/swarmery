@@ -37,6 +37,7 @@ import { msg } from '@lingui/core/macro';
 import { Trans, useLingui } from '@lingui/react/macro';
 import { Suspense, lazy, useState } from 'react';
 import { completeUsageLogin, probeAccount, startUsageLogin } from '../../api';
+import { safeHref } from '../../lib/safeHref';
 import { useUsage } from '../../lib/usageData';
 
 // The heavy xterm bundle stays in its own chunk (same trick as the dock):
@@ -96,10 +97,11 @@ export function UsageConnect({
     try {
       const { authorizeUrl: url } = await startUsageLogin(account);
       setAuthorizeUrl(url);
+      const safeUrl = safeHref(url);
       // noopener/noreferrer: the authorization page must not get a handle on
       // this window. A blocked popup is not an error — the link below is the
       // fallback, and it is the same URL.
-      window.open(url, '_blank', 'noopener,noreferrer');
+      if (safeUrl !== null) window.open(safeUrl, '_blank', 'noopener,noreferrer');
       setPhase('awaiting-code');
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : String(e));
@@ -263,7 +265,7 @@ export function UsageConnect({
           </p>
           {authorizeUrl !== null && (
             <a
-              href={authorizeUrl}
+              href={safeHref(authorizeUrl) ?? undefined}
               target="_blank"
               rel="noopener noreferrer"
               className="font-mono text-[9.5px] break-all text-brand underline-offset-2 hover:underline"

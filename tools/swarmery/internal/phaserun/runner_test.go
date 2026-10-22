@@ -63,7 +63,7 @@ func TestClaudeRunner_Start_DefaultNoModelFlag(t *testing.T) {
 	// Edit and un-allowlisted Bash call in the run is auto-denied (no approver
 	// exists in a headless run) and the process still exits 0 — a phase recorded
 	// as a clean success that landed nothing (internal/claudeflags).
-	want := []string{"-p", "execute phase", "--session-id", "u1", "--permission-mode", "bypassPermissions"}
+	want := []string{"-p", "--session-id", "u1", "--permission-mode", "bypassPermissions", "--", "execute phase"}
 	if len(args) != len(want) {
 		t.Fatalf("args = %q, want %q", args, want)
 	}
@@ -282,8 +282,8 @@ func TestClaudeRunner_Start_FullArgvPin(t *testing.T) {
 	}
 	got := strings.Split(strings.TrimSpace(string(raw)), "\n")
 	want := []string{
-		"-p", "execute phase", "--session-id", "u-full",
-		"--permission-mode", "acceptEdits", "--model", "claude-opus-5", "--settings", settings,
+		"-p", "--session-id", "u-full",
+		"--permission-mode", "acceptEdits", "--model", "claude-opus-5", "--settings", settings, "--", "execute phase",
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("argv = %q, want %q", got, want)

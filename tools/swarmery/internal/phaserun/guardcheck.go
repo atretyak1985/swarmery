@@ -54,7 +54,7 @@ type GuardLogLine struct {
 }
 
 // GuardResult is what one guard check found. Its JSON is phase_reviews.guard_json
-// and phase_decisions.guard_json (migration 0121), and the web's GuardSummary.
+// and phase_decisions.guard_json (migration 0124), and the web's GuardSummary.
 type GuardResult struct {
 	// HasGuard: the doc carries a parseable `kind: guard` block.
 	HasGuard       bool     `json:"hasGuard"`

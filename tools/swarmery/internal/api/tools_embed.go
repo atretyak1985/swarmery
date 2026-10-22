@@ -5,9 +5,12 @@ package api
 // project's live serena dashboard origin (incl. websocket upgrade passthrough
 // via httputil.ReverseProxy), graphifyStatic serves the repo's graphify-out/
 // build artifacts read-only behind a traversal jail, and architectureStatic
-// serves architecture-out/ artifacts via the same shared jail helper. Neither
-// is origin-fenced: the daemon is loopback-only, and the proxy enforces that
-// the parsed DashboardURL targets a loopback address before dialing.
+// serves architecture-out/ artifacts via the same shared jail helper. The two
+// static routes serve repository content, so it runs CSP-sandboxed with an
+// opaque origin (artifactCSP), never as the daemon's own origin. The proxy's
+// relayed responses are sandboxed the same way (serenaProxyCSP), its non-read
+// and upgrade requests carry the origin fence (routes.go), and it dials only a
+// loopback DashboardURL.
 
 import (
 	"database/sql"
@@ -88,23 +91,61 @@ func (h *Handler) serenaProxy(w http.ResponseWriter, r *http.Request) {
 	// before sending headers yields ReverseProxy's default 502 (its default
 	// ErrorHandler logs the dial/roundtrip error); a backend dying mid-stream
 	// yields an aborted connection to the client.
-	proxy := &httputil.ReverseProxy{Rewrite: func(pr *httputil.ProxyRequest) {
-		pr.Out.URL.Scheme = target.Scheme
-		pr.Out.URL.Host = target.Host
-		pr.Out.URL.Path = "/" + rest
-		pr.Out.URL.RawPath = ""
-		pr.Out.URL.RawQuery = r.URL.RawQuery
-		pr.Out.Host = target.Host
-	}}
+	//
+	// Proxied documents never run on the daemon's origin: the baseline CSP
+	// securityHeaders stamped is dropped and every upstream response gets
+	// serenaProxyCSP instead (replacing any policy serena sent).
+	w.Header().Del("Content-Security-Policy")
+	proxy := &httputil.ReverseProxy{
+		Rewrite: func(pr *httputil.ProxyRequest) {
+			pr.Out.URL.Scheme = target.Scheme
+			pr.Out.URL.Host = target.Host
+			pr.Out.URL.Path = "/" + rest
+			pr.Out.URL.RawPath = ""
+			pr.Out.URL.RawQuery = r.URL.RawQuery
+			pr.Out.Host = target.Host
+		},
+		ModifyResponse: func(res *http.Response) error {
+			res.Header.Set("Content-Security-Policy", serenaProxyCSP)
+			res.Header.Set("X-Content-Type-Options", "nosniff")
+			return nil
+		},
+	}
 	proxy.ServeHTTP(w, r)
 }
 
-// jailedProjectStatic serves <projectPath>/<subdir> read-only. Jail contract
-// identical to the original graphifyStatic: method guard here (the "/" SPA
-// catch-all would swallow non-GET otherwise), filepath.IsLocal rejects every
-// escaping/rooted/empty rest, symlinks inside the artifact dir are trusted
-// (produced by tooling in the user's own repo).
+// serenaProxyCSP goes on every response the serena proxy relays. serena's
+// dashboard is a third-party page, and anything it renders (log lines, memory
+// files, config) can carry content from the repository it indexes; served from
+// /api/projects/{id}/serena/ it would otherwise run with the daemon's own
+// origin and reach the whole API. The sandbox gives it an opaque origin. The
+// dashboard tab does not use this route — it frames serena's own origin
+// (Serena.tsx), because the dashboard's root-absolute API calls cannot work
+// under a path prefix — so the sandbox costs no working feature. allow-forms
+// is kept for the dashboard's own forms; allow-same-origin must never be added
+// (with allow-scripts it cancels the sandbox).
+const serenaProxyCSP = "sandbox allow-scripts allow-forms; frame-ancestors 'self'"
+
+// artifactCSP is the Content-Security-Policy every jailed artifact response
+// carries. The artifacts are files from a repository, not code the daemon
+// ships, so they never run on the daemon's origin: the CSP sandbox gives the
+// document an opaque origin (no cookies, storage, or same-origin reach into the
+// dashboard or the API) whether it is framed or opened top-level, while
+// allow-scripts keeps the interactive viewers working. allow-same-origin must
+// never be added — together with allow-scripts it cancels the sandbox. The
+// policy replaces securityHeaders' baseline, so it restates frame-ancestors.
+const artifactCSP = "sandbox allow-scripts; frame-ancestors 'self'"
+
+// jailedProjectStatic serves <projectPath>/<subdir> read-only. Method guard
+// here (the "/" SPA catch-all would swallow non-GET otherwise);
+// filepath.IsLocal rejects every escaping/rooted/empty rest; and a symlink is
+// followed only while its resolved target stays inside the resolved artifact
+// dir — the dir's content comes from the repository, so a link inside it is
+// not trusted to point anywhere else on disk. Every response, errors included,
+// carries artifactCSP and nosniff.
 func (h *Handler) jailedProjectStatic(w http.ResponseWriter, r *http.Request, subdir, defaultDoc string) {
+	w.Header().Set("Content-Security-Policy", artifactCSP)
+	w.Header().Set("X-Content-Type-Options", "nosniff")
 	if r.Method != http.MethodGet && r.Method != http.MethodHead {
 		w.Header().Set("Allow", "GET, HEAD")
 		http.Error(w, `{"error":"method not allowed"}`, http.StatusMethodNotAllowed)
@@ -122,7 +163,11 @@ func (h *Handler) jailedProjectStatic(w http.ResponseWriter, r *http.Request, su
 		http.Error(w, `{"error":"path escapes `+subdir+`"}`, http.StatusForbidden)
 		return
 	}
-	full := filepath.Join(projectPath, subdir, filepath.FromSlash(rest))
+	full, ok := resolveInJail(projectPath, subdir, filepath.FromSlash(rest))
+	if !ok {
+		http.NotFound(w, r)
+		return
+	}
 	fi, err := os.Stat(full)
 	if err != nil || fi.IsDir() {
 		http.NotFound(w, r)
@@ -136,13 +181,42 @@ func (h *Handler) jailedProjectStatic(w http.ResponseWriter, r *http.Request, su
 	http.ServeFile(w, r, full)
 }
 
+// resolveInJail resolves every symlink on <projectPath>/<subdir>/<rest> and
+// reports false unless both containments hold on the resolved paths: the
+// artifact dir sits under the project (a symlinked architecture-out → $HOME
+// would otherwise turn the whole home dir into the jail), and the file sits
+// under the artifact dir. Every side is resolved, so a project reached through
+// a symlinked parent (macOS /var → /private/var) compares like for like. The
+// returned path is the resolved one, so the file served is the file checked.
+func resolveInJail(projectPath, subdir, rest string) (string, bool) {
+	realProject, err := filepath.EvalSymlinks(projectPath)
+	if err != nil {
+		return "", false
+	}
+	dir := filepath.Join(projectPath, subdir)
+	realDir, err := filepath.EvalSymlinks(dir)
+	if err != nil || !within(realProject, realDir) {
+		return "", false
+	}
+	realFull, err := filepath.EvalSymlinks(filepath.Join(dir, rest))
+	if err != nil || !within(realDir, realFull) {
+		return "", false
+	}
+	return realFull, true
+}
+
+// within reports whether path is strictly below root (both already resolved).
+func within(root, path string) bool {
+	rel, err := filepath.Rel(root, path)
+	return err == nil && rel != "." && filepath.IsLocal(rel)
+}
+
 // graphifyStatic handles GET|HEAD /api/projects/{id}/graphify/{rest...} — a
 // read-only jail over <projectPath>/graphify-out (default document graph.html).
 // The method guard lives in jailedProjectStatic. Jail: the mux 301-cleans
 // literal "../" segments away, but an encoded ..%2F arrives decoded in rest —
 // filepath.IsLocal rejects every escaping, rooted, or empty path outright with
-// 403. Symlinks inside graphify-out are trusted: the dir is produced by the
-// graphify CLI in the user's own repo.
+// 403, and a symlink whose target leaves graphify-out is a 404 (resolveInJail).
 func (h *Handler) graphifyStatic(w http.ResponseWriter, r *http.Request) {
 	h.jailedProjectStatic(w, r, "graphify-out", "graph.html")
 }

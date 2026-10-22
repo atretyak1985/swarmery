@@ -14,6 +14,7 @@ import (
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/mdfence"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/runcore"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/store"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/workaround"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/worktree"
 )
 
@@ -221,7 +222,7 @@ func TestReviewPromptGuardGolden(t *testing.T) {
 		GuardBlocksTotal: 1,
 		DocCopyMismatch:  true,
 	}
-	got := reviewPrompt(guard.Summary(), "Phase 1 — Trap", "# Phase 1 — Trap\n", "DIFF: none", 7777, 1)
+	got := reviewPrompt(guard.Summary(), "Phase 1 — Trap", "# Phase 1 — Trap\n", "DIFF: none", 7777, 1, workaround.PhaseHits{})
 	got = got[:strings.Index(got, reviewerRole)+len("You are the fleet's independent code reviewer")]
 	if *updateReviewGolden {
 		if err := os.WriteFile(file, []byte(got), 0o644); err != nil {

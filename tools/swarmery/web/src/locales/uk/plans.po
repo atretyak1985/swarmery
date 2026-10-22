@@ -70,6 +70,10 @@ msgstr "{archivedCount} в архіві"
 msgid "{blocked, plural, one {# blocked attempt} few {# blocked attempts} many {# blocked attempts} other {# blocked attempts}}"
 msgstr "{blocked, plural, one {# заблокована спроба} few {# заблоковані спроби} many {# заблокованих спроб} other {# заблокованої спроби}}"
 
+#: src/pages/plans/WorkaroundHits.tsx
+msgid "{capped} more past the per-session cap — counted, not stored."
+msgstr "Ще {capped} понад ліміт сесії — пораховано, але не збережено."
+
 #: src/pages/plans/GuardBadge.tsx
 msgid "{changedCount, plural, one {# protected file changed} few {# protected files changed} many {# protected files changed} other {# protected files changed}}"
 msgstr "{changedCount, plural, one {змінено # захищений файл} few {змінено # захищені файли} many {змінено # захищених файлів} other {змінено # захищеного файлу}}"
@@ -553,6 +557,10 @@ msgstr "ніхто не впіймав"
 #: src/pages/plans/PhaseReview.tsx
 msgid "change request"
 msgstr "пул-реквест"
+
+#: src/pages/plans/WorkaroundHits.tsx
+msgid "Changed the plan · {count}"
+msgstr "Відступ від плану · {count}"
 
 #: src/pages/plans/LandingStatus.tsx
 msgid "changes requested"
@@ -1668,6 +1676,10 @@ msgstr "оберіть усе, що підходить"
 msgid "pick one"
 msgstr "оберіть одне"
 
+#: src/pages/plans/WorkaroundHits.tsx
+msgid "Places where the agent changed the plan"
+msgstr "Місця, де агент відступив від плану"
+
 #: src/pages/Plans.tsx
 #: src/pages/Plans.tsx
 #: src/pages/Plans.tsx
@@ -2308,6 +2320,14 @@ msgstr "shell-команда (напр. curl -fsS -X POST …)"
 msgid "Show AI Reasoning"
 msgstr "Показати міркування ШІ"
 
+#: src/pages/plans/WorkaroundHits.tsx
+msgid "Show all {allCount}"
+msgstr "Показати всі {allCount}"
+
+#: src/pages/plans/WorkaroundHits.tsx
+msgid "Show fewer"
+msgstr "Показати менше"
+
 #: src/pages/plans/ForecastStory.tsx
 msgid "show the score breakdown"
 msgstr "показати розбивку оцінки"
@@ -2476,6 +2496,10 @@ msgstr "tech-lead (типово)"
 #: src/pages/plans/ReviewFindings.tsx
 msgid "test caught"
 msgstr "спіймав тест"
+
+#: src/pages/plans/WorkaroundHits.tsx
+msgid "The agent's own words where it went around something. Read these first; each is a place to check, not a verdict."
+msgstr "Власні слова агента там, де він щось обійшов. Прочитайте їх першими: кожне — місце для перевірки, а не вирок."
 
 #: src/pages/plans/ForecastVsActual.tsx
 msgid "the Completion Report carries no “Where reality diverged” paragraph"
@@ -2717,6 +2741,11 @@ msgstr "зачепила {count} {areas}{offNote}"
 #: src/pages/PlanningMode.tsx
 msgid "Transform your idea into a plan"
 msgstr "Перетворіть ідею на план"
+
+#. placeholder {0}: h.turnSeq
+#: src/pages/plans/WorkaroundHits.tsx
+msgid "turn {0}"
+msgstr "хід {0}"
 
 #: src/pages/plans/ReviewFindings.tsx
 msgid "type"

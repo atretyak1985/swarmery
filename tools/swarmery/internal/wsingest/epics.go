@@ -108,7 +108,7 @@ type epicPhase struct {
 	reviews    []mdfence.Review
 	reviewErrs int
 	// decisionDeps are the `D-n` ids the doc's `**Depends on decisions:**` header
-	// declares (ParseDecisionDeps, migration 0120); nil when absent.
+	// declares (ParseDecisionDeps, migration 0122); nil when absent.
 	decisionDeps []string
 }
 
@@ -968,12 +968,14 @@ func parseSpec(planDir string, warn func(string, ...any)) []SpecCriterion {
 //
 // v11: phase_decisions + epic_phases.decision_deps — the README's `## Decisions`
 // section and the `**Depends on decisions:**` header line (decisions.go, migration
-// 0120). Without the bump an indexed plan that already carries either keeps no
+// 0122). Without the bump an indexed plan that already carries either keeps no
 // decision rows and an empty decision_deps, and the start gate never holds it.
+//
 // v12: review_blocks / review_findings / epic_phases.legacy_review — the doc's
-// `kind: review` blocks (review_blocks.go, migration 0122). Without the bump an
+// `kind: review` blocks (review_blocks.go, migration 0123). Without the bump an
 // already-indexed plan keeps zero findings and legacy_review = 0 until some other
-// byte of it changes. (Both lines first shipped as v11 on parallel branches.)
+// byte of it changes. Both landed as v11 on separate branches; v12 rescans a plan
+// indexed under either v11 so it picks up the other's rows too.
 const parserVersion = "v12"
 
 // planHash combines every plan file's bytes into one content hash, so the gate
@@ -1339,7 +1341,7 @@ func applyEpics(tx *sql.Tx, taskID int64, phases []epicPhase, readmePresent bool
 			  WHERE phase_id NOT IN (SELECT id FROM epic_phases)`); err != nil {
 			return err
 		}
-		// review_blocks / review_findings (0122) are keyed by doc_path, not phase
+		// review_blocks / review_findings (0123) are keyed by doc_path, not phase
 		// id; a doc that left the plan takes its review rows with it.
 		if err := sweepOrphanReviewRows(tx, taskID); err != nil {
 			return err

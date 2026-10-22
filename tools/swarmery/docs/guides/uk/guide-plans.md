@@ -532,7 +532,11 @@ flowchart LR
 | `SWARMERY_AUTOVERIFY` | увімк. | Автоматична перевірка після запуску; ручна перевірка працює й коли вимкнено |
 | `SWARMERY_VERIFY_MAX_DIFF_FILES` | `40` | Межа розміру диффа, понад яку перевірка повертає inconclusive |
 | `SWARMERY_VERIFY_TIMEOUT_MIN` | `15` | Хвилин до того, як прогін перевірки буде покинуто |
-| `SWARMERY_VERIFY_PERMISSION_MODE` | `bypassPermissions` | Режим дозволів перевіряльника без права на запис (відкочується до `SWARMERY_PERMISSION_MODE`); інструменти редагування заборонені в кожному режимі, `off` прибирає прапорець |
+| `SWARMERY_VERIFY_PERMISSION_MODE` | `dontAsk`, коли документ фази оголошує блок Verify, інакше `bypassPermissions` | Режим дозволів перевіряльника без права на запис (відкочується до `SWARMERY_PERMISSION_MODE`). З блоком Verify він може запускати лише оголошені команди та git лише для читання, а заборонена перевірка дає `inconclusive`; інструменти редагування заборонені в кожному режимі, `off` прибирає прапорець |
+| `SWARMERY_REVIEW_PERMISSION_MODE` | `dontAsk` | Режим дозволів рецензентів фази й плану; вони отримують лише Read/Grep/Glob |
+| `SWARMERY_PLANNING_PERMISSION_MODE` | `dontAsk` | Режим дозволів планувальника, який працює у вашому основному checkout: читає що завгодно, запускає лише `git log`/`git show` і пише лише під коренем workspace |
+| `SWARMERY_AGENT_DENY_RULES` | увімкнено | `0` прибирає список заборон (без `git push`, без змінювальних підкоманд `gh pr`/`glab mr`, без API демона — рутини API демона зберігають), який несе кожен агент у `bypassPermissions` |
+| `SWARMERY_AGENT_SCRUB_VCS_TOKENS` | увімкнено | `0` залишає агентам змінні на кшталт `GH_TOKEN`/`GLAB_TOKEN` з оточення демона; власне приземлення демона це не зачіпає |
 | `SWARMERY_WORKTREE_LEND` | `node_modules`, `.venv`, `vendor` + вкладені `<dir>/node_modules` | Теки, що позичаються у свіжий worktree, щоб збірки працювали одразу; явне значення замінює типові й вимикає пошук вкладених |
 
 > [!NOTE]

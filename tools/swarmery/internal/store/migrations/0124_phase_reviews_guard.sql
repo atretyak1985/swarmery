@@ -1,4 +1,4 @@
--- 0121: the guard check of a phase run (verify-not-trust phase 4,
+-- 0124: the guard check of a phase run (verify-not-trust phase 4,
 -- internal/phaserun/guardcheck.go). After a run settles, the daemon audits it
 -- against the guard block of the doc as lent — protected files the run changed,
 -- the lent copy compared with that doc, the hook's .swarmery/guard.log — and

@@ -118,6 +118,7 @@ import { RunsReviewBlock } from './plans/RunsReviewBlock';
 import { VerifyVerdictChip } from './plans/VerifyVerdictChip';
 import { reverifyAction, useReverify, type Reverify } from './plans/useReverify';
 import { hasReviewTab, NEUTRAL_TERMS, showsReviewTab } from './plans/landingModel';
+import { WorkaroundHits } from './plans/WorkaroundHits';
 import { useProjectVcs } from '../lib/useProjectVcs';
 import {
   parsePlansRoute,
@@ -3321,6 +3322,12 @@ function PhaseDetailPanel({
             {...(phase.completionReport !== null ? { report: <Markdown text={phase.completionReport} /> } : {})}
             terms={terms}
             decisionHref={(d) => decisionTurnHref(projectSlug, d)}
+          />
+          <WorkaroundHits
+            phaseId={phase.id}
+            // A daemon older than migration 0120 sends neither field.
+            hits={phase.workaroundHits ?? []}
+            total={phase.workaroundTotal ?? 0}
           />
           <ForecastStory phase={phase} />
           {phase.surprise == null && <ForecastSection phase={phase} />}

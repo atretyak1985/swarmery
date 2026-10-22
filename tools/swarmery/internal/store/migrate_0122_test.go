@@ -1,93 +1,115 @@
-package store_test
+package store
 
-import (
-	"testing"
-	"time"
+import "testing"
 
-	"github.com/atretyak1985/swarmery/tools/swarmery/internal/store"
-	"github.com/atretyak1985/swarmery/tools/swarmery/internal/wsingest"
-)
-
-// TestMigrate0122FreshDB: the tables land, their CHECKs and unique keys hold, and
-// the migration's own applied_at is readable as D21's cutoff.
+// TestMigrate0122FreshDB: phase_decisions and epic_phases.decision_deps land on a
+// fresh database, and the CHECKs refuse a value outside each closed set.
 func TestMigrate0122FreshDB(t *testing.T) {
-	before := time.Now().UTC().Add(-time.Second)
-	db, err := store.Open(t.TempDir() + "/m122.db")
-	if err != nil {
-		t.Fatal(err)
+	db := openRaw(t)
+	if err := Migrate(db); err != nil {
+		t.Fatalf("migrate fresh db: %v", err)
 	}
-	defer db.Close()
-	at, ok, err := store.MigrationAppliedAt(db, store.ReviewFindingsMigration)
-	if err != nil || !ok {
-		t.Fatalf("MigrationAppliedAt = %v, %t, %v; want the 0122 row", at, ok, err)
+	var name string
+	if err := db.QueryRow(`SELECT name FROM schema_migrations WHERE version = 122`).Scan(&name); err != nil {
+		t.Fatalf("migration 122 not recorded: %v", err)
 	}
-	if at.Before(before) || at.After(time.Now().UTC().Add(time.Second)) {
-		t.Errorf("applied_at = %v, want ≈ now", at)
+	if name != "0122_phase_decisions.sql" {
+		t.Errorf("migration 122 name: want 0122_phase_decisions.sql, got %s", name)
 	}
-	if _, ok, err := store.MigrationAppliedAt(db, "9999_nope.sql"); ok || err != nil {
-		t.Errorf("an unrecorded migration: ok=%t err=%v, want false, nil", ok, err)
-	}
+	mustHaveColumns(t, db, "phase_decisions",
+		"id", "workspace_task_id", "planning_session_id", "decision_id", "seq", "source",
+		"question_id", "question", "cost", "cost_reason", "status", "answer",
+		"option_ids_json", "phase_id", "created_at", "decided_at")
+	mustHaveColumns(t, db, "epic_phases", "decision_deps")
 
-	ins := func(typ, source string) error {
-		_, err := db.Exec(`INSERT INTO review_findings
-			(workspace_task_id, doc_path, round, finding_id, type, source, created_at)
-			VALUES (1, '/p/phase-1.md', '1', 'R1-1', ?, ?, '2026-10-22T00:00:00Z')`, typ, source)
+	ins := func(cost, status, source string) error {
+		_, err := db.Exec(`INSERT INTO phase_decisions (workspace_task_id, decision_id, seq, source, cost, status, created_at)
+			VALUES (1, 'D-' || abs(random() % 100000), 1, ?, ?, ?, '2026-10-22T00:00:00Z')`, source, cost, status)
 		return err
 	}
-	if err := ins("correctness", "daemon"); err != nil {
-		t.Fatalf("insert a finding: %v", err)
+	if err := ins("cheap", "decided", "interview"); err != nil {
+		t.Fatalf("valid row refused: %v", err)
 	}
-	if err := ins("correctness", "daemon"); err == nil {
-		t.Error("a second (doc_path, round, finding_id) was accepted; want the unique key to refuse it")
-	}
-	if _, err := db.Exec(`DELETE FROM review_findings`); err != nil {
-		t.Fatal(err)
-	}
-	if err := ins("style", "daemon"); err == nil {
-		t.Error("type 'style' was accepted; the CHECK allows only the five lenses")
-	}
-	if err := ins("quality", "model"); err == nil {
-		t.Error("source 'model' was accepted; the CHECK allows daemon|interactive|backfill")
-	}
-	if _, err := db.Exec(`INSERT INTO review_blocks (workspace_task_id, doc_path, round, verdict, written_at)
-		VALUES (1, '/p/phase-1.md', 'plan', 'PASS', '2026-10-22T00:00:00Z')`); err != nil {
-		t.Fatalf("insert a block: %v", err)
-	}
-	var legacy int
-	if err := db.QueryRow(`SELECT COUNT(*) FROM pragma_table_info('epic_phases') WHERE name = 'legacy_review'`).Scan(&legacy); err != nil || legacy != 1 {
-		t.Errorf("epic_phases.legacy_review present = %d, %v", legacy, err)
+	for _, bad := range [][3]string{
+		{"pricey", "decided", "interview"},
+		{"cheap", "maybe", "interview"},
+		{"cheap", "decided", "chat"},
+	} {
+		if err := ins(bad[0], bad[1], bad[2]); err == nil {
+			t.Errorf("row %v accepted — CHECK missing", bad)
+		}
 	}
 }
 
-// TestMigrate0122OnAnExistingDB: a database that already holds phases (built up to
-// the previous migration, as a copied live DB is) migrates; its rows survive with
-// legacy_review = 0 until wsingest computes it.
-func TestMigrate0122OnAnExistingDB(t *testing.T) {
-	db := openRaw0103(t)
-	if err := store.MigrateUpTo(db, 119); err != nil {
+// TestMigrate0122OnPopulatedDB: a database holding phases and a planning session
+// from before 0120 (the shape of a copied live store) migrates; existing phases
+// read decision_deps='[]', and both natural keys refuse a duplicate.
+func TestMigrate0122OnPopulatedDB(t *testing.T) {
+	db := openRaw(t)
+	migrateUpTo(t, db, 119)
+	if cols := columnSet(t, db, "epic_phases"); cols["decision_deps"] {
+		t.Fatal("epic_phases.decision_deps exists before 0120 — migrateUpTo applied too much")
+	}
+	for _, q := range []string{
+		`INSERT INTO projects (id, path, slug, first_seen) VALUES (1, '/tmp/p', 'p', '2026-10-01T00:00:00Z')`,
+		`INSERT INTO tasks (id, project_id, title, prompt, status, created_at, source, external_id)
+		 VALUES (7, 1, 'plan', 'p', 'queued', '2026-10-01T00:00:00Z', 'workspace', 'ws-7')`,
+		`INSERT INTO epic_phases (workspace_task_id, seq, name, doc_path) VALUES (7, 1, 'Phase one', '/p/phase-1.md')`,
+		`INSERT INTO planning_sessions (id, project_id, session_uuid, idea, created_at, updated_at)
+		 VALUES (3, 1, 'u-1', 'idea', '2026-10-01T00:00:00Z', '2026-10-01T00:00:00Z')`,
+	} {
+		if _, err := db.Exec(q); err != nil {
+			t.Fatalf("seed %q: %v", q, err)
+		}
+	}
+	if err := Migrate(db); err != nil {
+		t.Fatalf("migrate populated db: %v", err)
+	}
+	var deps string
+	if err := db.QueryRow(`SELECT decision_deps FROM epic_phases WHERE workspace_task_id = 7`).Scan(&deps); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := db.Exec(wsingest.PhaseUpsertSQL,
-		7, 1, "Phase one", "/plan/phase-1.md", "[]", 2, 2, "done", nil,
-		"shipped", nil, "[]", "off", nil, 0, 0, "off"); err != nil {
-		t.Fatalf("seed a phase: %v", err)
+	if deps != "[]" {
+		t.Errorf("pre-existing phase decision_deps = %q, want []", deps)
 	}
-	if _, ok, _ := store.MigrationAppliedAt(db, store.ReviewFindingsMigration); ok {
-		t.Fatal("0122 recorded before it ran")
-	}
-	if err := store.Migrate(db); err != nil {
-		t.Fatalf("migrate: %v", err)
-	}
-	var legacy int
-	var status string
-	if err := db.QueryRow(`SELECT legacy_review, doc_status FROM epic_phases WHERE doc_path = '/plan/phase-1.md'`).
-		Scan(&legacy, &status); err != nil {
+
+	sid := int64(3)
+	d := Decision{PlanningSessionID: &sid, DecisionID: "D-1", Seq: 1, Question: "q", Cost: "expensive",
+		Status: DecisionUndecided, CreatedAt: "2026-10-22T00:00:00Z"}
+	if err := UpsertSessionDecision(db, d); err != nil {
 		t.Fatal(err)
 	}
-	if legacy != 0 || status != "done" {
-		t.Errorf("after 0122: legacy_review=%d status=%q, want 0 and done", legacy, status)
+	// Idempotent on (planning_session_id, decision_id).
+	d.Question = "q2"
+	if err := UpsertSessionDecision(db, d); err != nil {
+		t.Fatal(err)
 	}
-	if _, ok, err := store.MigrationAppliedAt(db, store.ReviewFindingsMigration); !ok || err != nil {
-		t.Errorf("applied_at unreadable after migrating an existing db: %t, %v", ok, err)
+	got, err := ListSessionDecisions(db, 3)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 1 || got[0].Question != "q2" || !got[0].HoldsWork() {
+		t.Fatalf("session decisions = %+v, want one undecided+expensive row with question q2", got)
+	}
+
+	// Flipping the cost re-derives an unanswered decision's status.
+	upd, err := SetSessionDecisionCost(db, 3, "D-1", DecisionCostCheap, "a rename later is cheap")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if upd == nil || upd.Status != DecisionRecommended || upd.CostReason != "a rename later is cheap" || upd.HoldsWork() {
+		t.Fatalf("after cheap flip = %+v, want recommended, not holding", upd)
+	}
+	if miss, err := SetSessionDecisionCost(db, 3, "D-9", DecisionCostCheap, ""); err != nil || miss != nil {
+		t.Fatalf("flip of an unrecorded decision = %+v, %v — want nil, nil", miss, err)
+	}
+
+	if _, err := db.Exec(`INSERT INTO phase_decisions (workspace_task_id, decision_id, seq, status, created_at)
+		VALUES (7, 'D-1', 1, 'decided', 'x')`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(`INSERT INTO phase_decisions (workspace_task_id, decision_id, seq, status, created_at)
+		VALUES (7, 'D-1', 1, 'decided', 'x')`); err == nil {
+		t.Error("duplicate (workspace_task_id, decision_id) accepted")
 	}
 }

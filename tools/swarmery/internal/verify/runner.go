@@ -2,7 +2,6 @@ package verify
 
 import (
 	"context"
-	"fmt"
 	"strings"
 	"time"
 
@@ -45,7 +44,26 @@ type RunSpec struct {
 	// CLI whether the lists merge or the last one wins, and the read-only set must
 	// not depend on that.
 	DisallowedTools []string
+
+	// AllowedTools, when non-empty, makes this a LEAST-PRIVILEGE run: the mode
+	// resolves for claudeflags.SiteReadOnly (dontAsk unless a knob says otherwise)
+	// and the list travels as ONE --allowedTools flag. The reviewers pass the
+	// read tools; the verifier passes the read tools plus one Bash rule per Verify
+	// command its target declares (VerifierAllowList). Empty keeps the measured
+	// fallback: bypassPermissions plus the deny list, for a task whose checks the
+	// model has to pick itself — an allow-list that missed one would turn that
+	// check into a silent denial.
+	AllowedTools []string
+
+	// PermissionEnv names the knob this run's mode resolves from ("" is
+	// SWARMERY_VERIFY_PERMISSION_MODE). The reviewers pass their own
+	// (ReviewPermEnv), so loosening the verifier does not loosen them.
+	PermissionEnv string
 }
+
+// ReviewPermEnv is the phase and plan reviewers' --permission-mode knob. They
+// spawn through this runner, and used to share the verifier's knob.
+const ReviewPermEnv = "SWARMERY_REVIEW_PERMISSION_MODE"
 
 // Run is the outcome of a completed verifier process. Unlike the dispatcher,
 // verification READS the model's stdout — the verdict lives in the transcript —
@@ -137,48 +155,19 @@ func ToolDenyArgs(extra []string) []string {
 	return []string{"--disallowedTools", strings.Join(tools, ",")}
 }
 
-// daemonClients and daemonHosts span DaemonDenyPatterns: the HTTP clients a model
-// reaches for, against both spellings of the loopback address the daemon binds by
-// default.
-var (
-	daemonClients = []string{"curl", "wget", "http"}
-	daemonHosts   = []string{"127.0.0.1", "localhost"}
-)
-
 // DaemonDenyPatterns are the deny rules that keep a run off this daemon's own HTTP
 // API on port: one Bash rule per client and host, `Bash(curl *127.0.0.1:7777*)`. A
-// port <= 0 is DefaultDaemonPort. The verifier and the reviewer run under
-// bypassPermissions, and that API does what neither of them may: stamp verdicts,
-// tick phases, start runs, answer approvals. Callers pass the result as extra to
-// ToolDenyArgs (RunSpec.DisallowedTools), so it joins the ONE flag.
-//
-// Syntax, from the Claude Code permissions reference
-// (https://code.claude.com/docs/en/permissions — "Wildcard patterns", "Compound
-// commands", "What a Bash rule doesn't match"; checked 2026-10-10):
-//   - `*` may stand anywhere in a Bash rule and matches any text, spaces included,
-//     so `curl *127.0.0.1:7777*` matches `curl -s http://127.0.0.1:7777/api/x`.
-//   - the `:*` suffix is only recognised at the END of a rule. Mid-rule the colon is
-//     literal, so `Bash(curl:*127.0.0.1:7777*)` would match no curl command at all.
-//   - a deny rule applies when ANY subcommand of a compound command matches, and
-//     past a leading env assignment; and "deny rules block in every mode, including
-//     bypassPermissions" (https://code.claude.com/docs/en/permission-modes).
-//   - it does not match the program by path (`/usr/bin/curl …`) or inside `sh -c`:
-//     this guards the commands a model writes, it is not a network boundary. The
-//     prompt sentence (DaemonAPINotice) is the other half.
-//
-// A space inside the parentheses survives the comma-joined list: `claude --help`
-// documents `"Bash(git *) Edit"` as one --disallowedTools value holding two rules.
+// port <= 0 is claudeflags.DaemonPort() — the one source of truth the executor
+// sites use too: the port this daemon serves, else DefaultDaemonPort. That API
+// does what neither the verifier nor a
+// reviewer may: stamp verdicts, tick phases, start runs, answer approvals. Callers
+// pass the result as extra to ToolDenyArgs (RunSpec.DisallowedTools), so it joins
+// the ONE flag. The rule syntax and its limits are documented on
+// claudeflags.DaemonDenyRules, which builds them — the executor sites carry the
+// same rules (claudeflags.AgentDenyRules). The prompt sentence (DaemonAPINotice)
+// is the other half.
 func DaemonDenyPatterns(port int) []string {
-	if port <= 0 {
-		port = DefaultDaemonPort
-	}
-	out := make([]string, 0, len(daemonClients)*len(daemonHosts))
-	for _, c := range daemonClients {
-		for _, h := range daemonHosts {
-			out = append(out, fmt.Sprintf("Bash(%s *%s:%d*)", c, h, port))
-		}
-	}
-	return out
+	return claudeflags.DaemonDenyRules(port)
 }
 
 // ClaudeRunner spawns `claude -p <prompt> --session-id <uuid> [--model <m>]`
@@ -222,6 +211,19 @@ func (r ClaudeRunner) Run(ctx context.Context, spec RunSpec) (*Run, error) {
 	if timeout <= 0 {
 		timeout = claudeTimeout
 	}
+	// Least privilege when the caller named what the run may do; otherwise the
+	// measured fallback (see RunSpec.AllowedTools).
+	site := claudeflags.SiteExecutor
+	if len(spec.AllowedTools) > 0 {
+		site = claudeflags.SiteReadOnly
+	}
+	knob := spec.PermissionEnv
+	if knob == "" {
+		knob = permEnv
+	}
+	// Both lists sit last on the argv: each flag takes a variadic list, so a bare
+	// positional argument after one would be read as another tool name.
+	extra := append(claudeflags.AllowedToolsArgs(spec.AllowedTools), ToolDenyArgs(spec.DisallowedTools)...)
 
 	res, err := runcore.ClaudeRunner{Engine: "verify"}.Start(ctx, runcore.Spec{
 		Prompt:      spec.Prompt,
@@ -233,11 +235,10 @@ func (r ClaudeRunner) Run(ctx context.Context, spec RunSpec) (*Run, error) {
 		// every graded task in the fleet.
 		Effort: claudeflags.Effort(effortEnv, DefaultEffort),
 		// A mode that never asks: a prompt in a headless run waits for nobody
-		// until the timeout kills the run (see permEnv).
-		PermissionMode: claudeflags.Mode(permEnv),
-		// Last on the argv: --disallowedTools takes a variadic list, so a bare
-		// positional argument after it would be read as another tool name.
-		ExtraArgs: ToolDenyArgs(spec.DisallowedTools),
+		// until the timeout kills the run (see permEnv). dontAsk with an allow-list
+		// never asks either — it denies what the list does not name, at once.
+		PermissionMode: claudeflags.ModeFor(site, knob),
+		ExtraArgs:      extra,
 		// --setting-sources project,local: skip user-level settings (global plugin
 		// stack) — headless runs don't need them; project plugins and OAuth are
 		// unaffected.

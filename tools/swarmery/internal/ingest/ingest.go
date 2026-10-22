@@ -19,6 +19,8 @@ import (
 	"time"
 
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/cost" // metrics hook (wave C)
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/redact"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/workaround"
 )
 
 // Stats counts rows created by one ingest run (idempotent re-runs report zeros).
@@ -200,6 +202,14 @@ type ingester struct {
 	// subagent whose sidechain is being processed (analytics phase 2), or ""
 	// for the main orchestrator transcript. Set at the top of processRecords.
 	agentName string
+	// agentLabel is the sidechain's dispatch description (meta.json), "" for
+	// the main chain — set by the caller before processRecords; it attributes
+	// a run-plan executor's prose to "Phase N" (workaround.go).
+	agentLabel string
+	// waResolved/waLink: the workaround hook's per-chain link, resolved once
+	// per processRecords call (workaround.go).
+	waResolved bool
+	waLink     workaround.Link
 
 	// pending tool_use calls awaiting their tool_result (keyed by toolu_… id).
 	pending map[string]*pendingTool
@@ -277,7 +287,7 @@ func (in *ingester) upsertProjectAndSession(recs []record, mtime time.Time, side
 		switch r.Type {
 		case "ai-title":
 			if r.AITitle != "" {
-				title = r.AITitle // latest wins (checkpoint snapshot semantics)
+				title = redact.All(r.AITitle) // latest wins (checkpoint snapshot semantics)
 			}
 		case "assistant":
 			if model == "" {
@@ -292,7 +302,7 @@ func (in *ingester) upsertProjectAndSession(recs []record, mtime time.Time, side
 				if json.Unmarshal(r.Message, &m) == nil {
 					var s string
 					if json.Unmarshal(m.Content, &s) == nil && s != "" {
-						firstPrompt = truncate(s, titleLimit)
+						firstPrompt = truncate(redact.All(s), titleLimit)
 					}
 				}
 			}
@@ -477,6 +487,7 @@ func (in *ingester) processRecords(recs []record, path string, sidechain bool, s
 	// Tag turns created in this call with their agent (phase 2). Main
 	// transcript passes "" (NULL agent_name = orchestrator).
 	in.agentName = agentName
+	in.waResolved = false
 	if in.pending == nil {
 		in.pending = map[string]*pendingTool{}
 		in.subagentStarts = map[string]int64{}
@@ -554,7 +565,7 @@ func (in *ingester) processRecords(recs []record, path string, sidechain bool, s
 			}
 			curTurnID, curMsgID = turnID, ""
 			in.addTurnText(turnID, promptText)
-			payload := map[string]any{"content": truncate(promptText, payloadStrLimit)}
+			payload := map[string]any{"content": truncate(redact.All(promptText), payloadStrLimit)}
 			if r.PromptSource != "" {
 				payload["promptSource"] = r.PromptSource
 			}
@@ -642,6 +653,17 @@ func (in *ingester) processRecords(recs []record, path string, sidechain bool, s
 					// Turn prose (Chat tab): text blocks only — thinking and
 					// tool_use are never part of turns.text.
 					in.addTurnText(curTurnID, b.Text)
+				}
+				// Workaround words (workaround.go): assistant prose of both
+				// chains, and a subagent's handback report — never tool output.
+				if b.Type == "text" {
+					if err := in.scanWorkaround(curTurnID, b.Text, sidechain); err != nil {
+						return err
+					}
+				} else if report := handbackText(b); report != "" {
+					if err := in.scanWorkaround(curTurnID, report, sidechain); err != nil {
+						return err
+					}
 				}
 				if b.Type != "tool_use" {
 					continue // thinking / text blocks are turn content, not events
@@ -750,12 +772,15 @@ func (in *ingester) addTurnText(turnID int64, text string) {
 //   - otherwise                       → stored + "\n\n" + batch (incremental
 //     tail: the batch carries only NEW trailing lines of the turn).
 //
-// Text is stored verbatim — never truncated. Crash safety mirrors events:
-// the update commits in the same transaction as the file offset, so a tail
-// batch can never be applied twice.
+// Text is stored never truncated, but redacted (redact.All): the batch is
+// redacted before the compare, and so is the stored text — a row written
+// before ingest redacted still prefixes the redacted batch, so a full re-read
+// replaces it instead of appending. Crash safety mirrors events: the update
+// commits in the same transaction as the file offset, so a tail batch can
+// never be applied twice.
 func (in *ingester) flushTurnTexts() error {
 	for _, id := range in.turnTextOrder {
-		batch := strings.Join(in.turnTexts[id], "\n\n")
+		batch := redact.All(strings.Join(in.turnTexts[id], "\n\n"))
 		if batch == "" {
 			continue
 		}
@@ -763,9 +788,10 @@ func (in *ingester) flushTurnTexts() error {
 		if err := in.tx.QueryRow(`SELECT text FROM turns WHERE id = ?`, id).Scan(&stored); err != nil {
 			return fmt.Errorf("read turn %d text: %w", id, err)
 		}
+		storedText := redact.All(stored.String)
 		next := batch
-		if stored.Valid && stored.String != "" && !strings.HasPrefix(batch, stored.String) {
-			next = stored.String + "\n\n" + batch
+		if stored.Valid && storedText != "" && !strings.HasPrefix(batch, storedText) {
+			next = storedText + "\n\n" + batch
 		}
 		if stored.Valid && stored.String == next {
 			continue
@@ -788,6 +814,9 @@ func (in *ingester) openToolCall(r *record, b contentBlock, dedup string, turnID
 			input = map[string]any{}
 		}
 	}
+	// Redact before truncating: a value cut at the limit no longer matches
+	// its own shape.
+	input = redactPayload(b.Name, input)
 	truncateStrings(input)
 	input["tool_use_id"] = b.ID
 	// Skill attribution (§9): tool calls issued while a skill is active carry
@@ -909,6 +938,7 @@ func (in *ingester) closeToolCall(r *record, b contentBlock, dedup string, paren
 	if len(r.ToolUseResult) > 0 {
 		var res any
 		if json.Unmarshal(r.ToolUseResult, &res) == nil {
+			res = redactResult(p.name, res) // before truncation, see openToolCall
 			if m, ok := res.(map[string]any); ok {
 				delete(m, "originalFile")
 				truncateStrings(m)
@@ -918,7 +948,9 @@ func (in *ingester) closeToolCall(r *record, b contentBlock, dedup string, paren
 			}
 		}
 	}
-	payloadJSON, _ := json.Marshal(payload)
+	// The whole payload once more: p.input may have been recovered from a row
+	// stored before ingest redacted (recoverPending).
+	payloadJSON, _ := json.Marshal(redactPayload(p.name, payload))
 	if _, err := in.tx.Exec(
 		`UPDATE events SET status = ?, duration_ms = ?, payload = ? WHERE id = ?`,
 		status, durationMs, string(payloadJSON), p.eventID); err != nil {
@@ -998,6 +1030,7 @@ func (in *ingester) insertFileChange(p *pendingTool, rawResult json.RawMessage) 
 		changeType = "create"
 	}
 	diff, additions, deletions := fileChangeDiff(fc)
+	diff = redact.Literal(diff) // code: literal token shapes only (see redact.go)
 	// Idempotency: one file_change per event. A row that predates the
 	// synthesised create diff (diff '') is completed in place when a replay
 	// (rebuild-text, a reset offset) hands us the content again.
@@ -1107,6 +1140,8 @@ func (in *ingester) ingestSidechain(path string) error {
 	if scope == "" {
 		scope = filepath.Base(path)
 	}
+	in.agentLabel = meta.Description
+	defer func() { in.agentLabel = "" }()
 	if err := in.processRecords(recs, path, true, scope, parentID, in.agentNameFor(parentID, meta.AgentType)); err != nil {
 		return err
 	}
@@ -1313,7 +1348,8 @@ type eventRow struct {
 func (in *ingester) insertEvent(e eventRow) (int64, bool, error) {
 	var payloadJSON any
 	if e.payload != nil {
-		b, err := json.Marshal(e.payload)
+		// Every event payload is redacted here, whatever built it (redact.go).
+		b, err := json.Marshal(redactPayload(e.toolName, e.payload))
 		if err != nil {
 			return 0, false, err
 		}

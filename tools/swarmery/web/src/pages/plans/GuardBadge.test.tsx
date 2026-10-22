@@ -2,7 +2,7 @@
 //
 // The guard badge (verify-not-trust phase 4): red pills for what the daemon's
 // guard check found in a finished run, nothing at all for a clean check, a
-// pre-0121 review (`{}`) or an older daemon (no field). Also: the phase card
+// pre-0124 review (`{}`) or an older daemon (no field). Also: the phase card
 // and the Review tab show it from the phase's open decision or latest review.
 
 import { cleanup, render, screen } from '../../test/render';

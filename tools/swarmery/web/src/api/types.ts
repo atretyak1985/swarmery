@@ -1833,7 +1833,7 @@ export interface GuardParseError {
 
 /**
  * The guard check of a finished phase run (Go phaserun.GuardResult, stored as
- * guard_json — migration 0121). `{}` on a review written before it, so every
+ * guard_json — migration 0124). `{}` on a review written before it, so every
  * field is optional.
  */
 export interface GuardSummary {
@@ -4050,7 +4050,7 @@ export interface EpicPhase {
   dependsOn: number[];
   checkboxesDone: number;
   checkboxesTotal: number;
-  /** Optional on the type so fixtures predating migration 0120 stay valid; the
+  /** Optional on the type so fixtures predating migration 0122 stay valid; the
    *  daemon always sends it (null when nothing holds the phase). */
   decisionHold?: DecisionHold | null;
   /** Unticked `[LAND]` criteria (migration 0105): closed by landing — the daemon
@@ -4185,12 +4185,18 @@ export interface EpicPhase {
    *  review stage — read it as `phase.reviews ?? []`. */
   reviews?: PhaseReviewSummary[];
   /** The doc's `kind: review` rounds as the daemon projected them (migration
-   *  0122), oldest round first, each with its findings. [] when the doc carries
+   *  0123), oldest round first, each with its findings. [] when the doc carries
    *  none; absent from an older daemon — read it as `phase.reviewBlocks ?? []`. */
   reviewBlocks?: ReviewBlock[];
   /** D21: the phase was Done before review findings existed and carries no
    *  block. A badge on the Review tab — never a blocker. */
   legacyReview?: boolean;
+  /** Where the phase's agent said it changed course (migration 0120, D23):
+   *  workaround words in its assistant prose, oldest first, at most 50 per
+   *  session with text. Absent from an older daemon — read `?? []`. */
+  workaroundHits?: WorkaroundHit[];
+  /** All hits, including the key-only ones past the per-session cap. */
+  workaroundTotal?: number;
   /** D20: why the doc's latest review round is incomplete — "round N: <reason>"
    *  — or "" when it is complete or there is none. The completion gate holds the
    *  phase on it. Absent from an older daemon. */
@@ -4246,6 +4252,24 @@ export interface PhaseFindings {
   blocks: ReviewBlock[];
 }
 
+/** One workaround_hits row (Go workaround.Stored, internal/workaround/store.go;
+ *  also GET /api/epics/{taskId}/phases/{phaseId}/workaround-hits). */
+export interface WorkaroundHit {
+  id: number;
+  sessionUuid: string;
+  /** The turn's seq in its session; 0 when the turn is gone. */
+  turnSeq: number;
+  turnAt: string;
+  /** The subagent that said it; '' for the session's main chain. */
+  agentName: string;
+  /** The list entry that matched (as configured, e.g. "for now", "поки що"). */
+  word: string;
+  sentence: string;
+  /** The sentence before and after; '' at either end. */
+  before: string;
+  after: string;
+}
+
 /** One code review of a phase's run as the epic payload carries it (Go reviewDTO,
  *  internal/api/reviews.go). The full row — with `findings`, which the epic
  *  payload leaves '' for size — is GET /api/epics/{taskId}/phases/{phaseId}/reviews
@@ -4261,7 +4285,7 @@ export interface PhaseReviewSummary {
   runSessionUuid: string;
   startedAt: string;
   finishedAt: string | null;
-  /** The run's guard check (migration 0121); `{}` before it, absent from an older daemon. */
+  /** The run's guard check (migration 0124); `{}` before it, absent from an older daemon. */
   guard?: GuardSummary;
 }
 

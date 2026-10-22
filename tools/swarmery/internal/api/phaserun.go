@@ -221,7 +221,7 @@ func writePhaseStartRefusal(w http.ResponseWriter, err error) {
 			"earliest": earliestErr.Earliest,
 			"hint":     hintNotYetEarliest,
 		})
-	// The decision hold (migration 0120): read-only like the doc gates above and,
+	// The decision hold (migration 0122): read-only like the doc gates above and,
 	// like them, not lifted by force — the fix is to take the decision.
 	case errors.As(err, &decisionErr):
 		writeConflictFields(w, codeDecisionUndecided, decisionErr.Error(), map[string]any{

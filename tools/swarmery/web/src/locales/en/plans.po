@@ -70,6 +70,10 @@ msgstr "{archivedCount} archived"
 msgid "{blocked, plural, one {# blocked attempt} few {# blocked attempts} many {# blocked attempts} other {# blocked attempts}}"
 msgstr "{blocked, plural, one {# blocked attempt} few {# blocked attempts} many {# blocked attempts} other {# blocked attempts}}"
 
+#: src/pages/plans/WorkaroundHits.tsx
+msgid "{capped} more past the per-session cap — counted, not stored."
+msgstr "{capped} more past the per-session cap — counted, not stored."
+
 #: src/pages/plans/GuardBadge.tsx
 msgid "{changedCount, plural, one {# protected file changed} few {# protected files changed} many {# protected files changed} other {# protected files changed}}"
 msgstr "{changedCount, plural, one {# protected file changed} few {# protected files changed} many {# protected files changed} other {# protected files changed}}"
@@ -553,6 +557,10 @@ msgstr "caught by nobody"
 #: src/pages/plans/PhaseReview.tsx
 msgid "change request"
 msgstr "change request"
+
+#: src/pages/plans/WorkaroundHits.tsx
+msgid "Changed the plan · {count}"
+msgstr "Changed the plan · {count}"
 
 #: src/pages/plans/LandingStatus.tsx
 msgid "changes requested"
@@ -1668,6 +1676,10 @@ msgstr "pick any that apply"
 msgid "pick one"
 msgstr "pick one"
 
+#: src/pages/plans/WorkaroundHits.tsx
+msgid "Places where the agent changed the plan"
+msgstr "Places where the agent changed the plan"
+
 #: src/pages/Plans.tsx
 #: src/pages/Plans.tsx
 #: src/pages/Plans.tsx
@@ -2308,6 +2320,14 @@ msgstr "shell command (e.g. curl -fsS -X POST …)"
 msgid "Show AI Reasoning"
 msgstr "Show AI Reasoning"
 
+#: src/pages/plans/WorkaroundHits.tsx
+msgid "Show all {allCount}"
+msgstr "Show all {allCount}"
+
+#: src/pages/plans/WorkaroundHits.tsx
+msgid "Show fewer"
+msgstr "Show fewer"
+
 #: src/pages/plans/ForecastStory.tsx
 msgid "show the score breakdown"
 msgstr "show the score breakdown"
@@ -2476,6 +2496,10 @@ msgstr "tech-lead (default)"
 #: src/pages/plans/ReviewFindings.tsx
 msgid "test caught"
 msgstr "test caught"
+
+#: src/pages/plans/WorkaroundHits.tsx
+msgid "The agent's own words where it went around something. Read these first; each is a place to check, not a verdict."
+msgstr "The agent's own words where it went around something. Read these first; each is a place to check, not a verdict."
 
 #: src/pages/plans/ForecastVsActual.tsx
 msgid "the Completion Report carries no “Where reality diverged” paragraph"
@@ -2717,6 +2741,11 @@ msgstr "touched {count} {areas}{offNote}"
 #: src/pages/PlanningMode.tsx
 msgid "Transform your idea into a plan"
 msgstr "Transform your idea into a plan"
+
+#. placeholder {0}: h.turnSeq
+#: src/pages/plans/WorkaroundHits.tsx
+msgid "turn {0}"
+msgstr "turn {0}"
 
 #: src/pages/plans/ReviewFindings.tsx
 msgid "type"

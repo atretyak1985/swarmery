@@ -42,13 +42,14 @@ import (
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/runcore"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/store"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/surprise"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/workaround"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/wsingest"
 )
 
 // ── DTOs ────────────────────────────────────────────────────────────────────
 
 // epicPhaseDTO is one phase row (camelCase, mirrored in web/src/api/types.ts).
-// decisionHoldDTO is a phase's decision hold (migration 0120): the decisions its
+// decisionHoldDTO is a phase's decision hold (migration 0122): the decisions its
 // doc depends on that are still undecided and expensive to change. Detail is the
 // phase-run start gate's refusal text; each entry links back to the planning
 // session turn that asked it (null for a decision born in the README).
@@ -239,12 +240,17 @@ type epicPhaseDTO struct {
 	// oldest first: every time a finished phase was sent back because a defect
 	// slipped past its gates, with the gate that caught it. Never null.
 	Reopens []reopenDTO `json:"reopens"`
+	// WorkaroundHits are the places the phase's agent said it changed course
+	// (migration 0120, workaround_hits.go), oldest first; WorkaroundTotal counts
+	// the key-only ones past the per-session cap too. Never null.
+	WorkaroundHits  []workaround.Stored `json:"workaroundHits"`
+	WorkaroundTotal int                 `json:"workaroundTotal"`
 	// Reviews are the phase's code reviews (migration 0106, phase_reviews
 	// scope='phase', reviews.go), newest first, with Findings always "" — the Runs
 	// tab fetches the latest review's findings from …/phases/{id}/reviews. Never null.
 	Reviews []reviewDTO `json:"reviews"`
 	// ReviewBlocks are the doc's `kind: review` rounds as wsingest projected them
-	// (migration 0122, review_findings.go), oldest round first, each with its
+	// (migration 0123, review_findings.go), oldest round first, each with its
 	// findings. Never null; empty for a phase whose doc carries no block.
 	ReviewBlocks []reviewBlockDTO `json:"reviewBlocks"`
 	// LegacyReview (D21): the phase was Done before review findings existed and
@@ -837,7 +843,7 @@ func (h *Handler) epicPhases(taskID int64, planDir string) ([]epicPhaseDTO, epic
 			runBranch string
 			// The landing columns (0103), daemon-owned.
 			landing landingRow
-			// epic_phases.decision_deps (0120), doc-owned JSON list of D-n.
+			// epic_phases.decision_deps (0122), doc-owned JSON list of D-n.
 			decisionDepsJSON string
 			// phasegate.ReviewDecisionSQL: the latest review decision's state.
 			reviewDecision string
@@ -979,9 +985,10 @@ func (h *Handler) epicPhases(taskID int64, planDir string) ([]epicPhaseDTO, epic
 	reopens := h.phaseReopens(taskID, docs)      // and again
 	reviews := h.phaseReviews(taskID)            // and again
 	blocks := h.phaseReviewBlocks(taskID, docs)  // and again
+	verifying := h.phasesVerifying(phases)       // and again
+	workarounds := h.phaseWorkaroundHits(taskID) // and again
 	guards := h.phaseGuardDecisions(taskID)      // and again
 	reviewDecs := h.phaseReviewDecisions(taskID) // and again
-	verifying := h.phasesVerifying(phases)       // and again
 	for i := range phases {
 		phases[i].VerifyRunning = verifying[phases[i].ID]
 		phases[i].RunEvents = runEventsOrEmpty(runcore.RunEvents(h.DB, phaserun.Engine, phases[i].ID))
@@ -1005,6 +1012,11 @@ func (h *Handler) epicPhases(taskID int64, planDir string) ([]epicPhaseDTO, epic
 		phases[i].ReviewBlocks = blocks[phases[i].ID]
 		if phases[i].ReviewBlocks == nil {
 			phases[i].ReviewBlocks = []reviewBlockDTO{}
+		}
+		wh := workarounds[phases[i].ID]
+		phases[i].WorkaroundHits, phases[i].WorkaroundTotal = wh.Hits, wh.Total
+		if phases[i].WorkaroundHits == nil {
+			phases[i].WorkaroundHits = []workaround.Stored{} // [] not null: the UI maps over it
 		}
 		phases[i].GuardDecision = guards[phases[i].ID]
 		phases[i].ReviewDecision = reviewDecs[phases[i].ID]

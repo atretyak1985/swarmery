@@ -38,6 +38,7 @@ import type { AnswerMap } from '../lib/approvals';
 import { fmtSpan } from '../lib/format';
 import { kindLabel, replyPrefix, replyWithOption } from '../lib/needsYou';
 import { findProject } from '../lib/projectSlug';
+import { safeHref } from '../lib/safeHref';
 import { useScope } from '../lib/scope';
 import { useSessionHref } from '../lib/sessionHref';
 import { useNowMs } from '../lib/sessionState';
@@ -61,6 +62,8 @@ const FOCUS = 'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visi
 const BTN = `rounded-lg border px-3 py-1.5 font-mono text-[11.5px] transition-colors disabled:opacity-50 ${FOCUS}`;
 const LINK = `font-mono text-[11px] text-ink-dim transition-colors hover:text-brand ${FOCUS}`;
 const COPIED_MS = 2_000;
+/** The deep-link schemes a terminal's focus URL may use (Warp's WARP_FOCUS_URL). */
+const TERM_FOCUS_SCHEMES: readonly string[] = ['warp:'];
 
 async function copyText(text: string): Promise<boolean> {
   try {
@@ -169,6 +172,9 @@ function AwaitingReply({
 function ConfirmLocally({ item, sessionTo }: { item: NeedsYouItem; sessionTo: string }): JSX.Element {
   const { t } = useLingui();
   const sessionName = item.sessionName;
+  // The focus URL is whatever the session's terminal reported (Warp's deep
+  // link): only that app scheme is a link, anything else renders no button.
+  const focusHref = safeHref(item.termFocusUrl, TERM_FOCUS_SCHEMES);
   return (
     <>
       <p className="mt-2 text-[13px] leading-[1.55] text-ink-2">
@@ -180,9 +186,9 @@ function ConfirmLocally({ item, sessionTo }: { item: NeedsYouItem; sessionTo: st
         </code>
       )}
       <div className="mt-3 flex flex-wrap items-center gap-3">
-        {item.termFocusUrl !== null && item.termFocusUrl !== '' && (
+        {focusHref !== null && (
           <a
-            href={item.termFocusUrl}
+            href={focusHref}
             aria-label={t`Focus the terminal of ${sessionName}`}
             className={`${BTN} border-amber/50 text-amber hover:bg-amber/10`}
           >
@@ -306,7 +312,7 @@ function ManualPhase({ item, phaseTo }: { item: NeedsYouItem; phaseTo: string | 
 
 /** Only the merge is left: Review pushes and opens the PR; an open PR merges on the host. */
 function AwaitingMerge({ item, reviewTo }: { item: NeedsYouItem; reviewTo: string | null }): JSX.Element {
-  const prUrl = item.phase?.landingState === 'pr_open' ? (item.phase.prUrl ?? '') : '';
+  const prUrl = item.phase?.landingState === 'pr_open' ? (safeHref(item.phase.prUrl) ?? '') : '';
   return (
     <div className="mt-2 flex flex-wrap items-center gap-3">
       <span className="min-w-0 flex-1 text-[12.5px] text-ink-3">{item.preview}</span>

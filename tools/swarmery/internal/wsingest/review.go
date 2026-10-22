@@ -2,7 +2,7 @@
 // with a `**Review:** on` header line; after its run settles, internal/phaserun
 // spawns a read-only reviewer, and every verdict — PASS and FAIL alike — is written
 // back INTO the doc (md = truth) as a `kind: review` block under `## Review`
-// (D42, migration 0122); a FAIL's block is what the fix re-run reads first
+// (D42, migration 0123); a FAIL's block is what the fix re-run reads first
 // (phaserun.ReviewFixNote).
 
 package wsingest
