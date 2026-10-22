@@ -6,13 +6,15 @@ What the dashboard's vocabulary means, and what to do about each thing. Short de
 
 ## Handoff
 
-When a live session's context footprint crosses **150k tokens**, the daemon spends one cheap model run writing a continuation brief — goal, current state, files touched, key decisions, next step — to `~/.swarmery/handoffs/<session_uuid>.md`. The session's card then shows a violet `Handoff` chip.
+When a live session's context footprint crosses **150k tokens**, the daemon spends one cheap model run writing a continuation brief — goal, current state, files touched, key decisions, what was ruled out, next step — to `~/.swarmery/handoffs/<session_uuid>.md`. The session's card then shows a violet `Handoff` chip.
 
 This is a parachute, not an alarm. Nothing is broken; the daemon has simply made it cheap for you to start over on a clean context whenever you want to.
 
 **Why it exists.** At a near-full window every further turn re-reads almost the whole window. A long session does not just get slower — it gets monotonically more expensive per unit of work, and the model's attention is spread across a lot of history that stopped being relevant hours ago.
 
 **Where the brief comes from.** The generator reads the daemon's **own SQLite database**, never the raw transcript. Feeding a 400k-token transcript to a model to explain why a 400k-token session is expensive would make the cure cost as much as the disease. It takes a bounded digest instead: the most recent assistant and user turns, truncated, plus the touched-file list.
+
+**What the brief contains.** Sections in order: State, Files touched, Key decisions, Non-goals, Rejected, Open risks & failed checks, Next step, Verification — then a repository anchor (root, HEAD, branch, uncommitted paths) that the daemon records itself rather than asking the model. **Rejected** lists the paths the work already ruled out, one `- <option> — <why> [<source>]` line each, so the fresh session does not walk them again. Its first lines come from the database and are kept verbatim: the unchosen options of the plan's answered Planning Mode questions (`interview D-n`), the unchosen variants of the plan's recorded decisions (`decision D-n`), and operator corrections of the session or its plan (`correction <ref>`). The model may add paths the recent messages show were tried and abandoned. The section is capped at 10 lines; the overflow becomes `… and N more`. A session belongs to a plan when its terminal picked one, or when a plan or phase run spawned it; a session with no plan gets corrections only.
 
 **Using it.** Open the session, expand the rail's `handoff` section, read the brief, press *copy resume command*, then stop the session and paste the command into a fresh terminal. Commit or stash first: the brief describes the state of your work, it does not save it.
 
