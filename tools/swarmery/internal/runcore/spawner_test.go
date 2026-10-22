@@ -44,12 +44,12 @@ func TestArgs_PerEngineArgvPin(t *testing.T) {
 		{
 			name: "planning/minimal",
 			spec: Spec{Prompt: "plan this", SessionUUID: "u-plan", Model: "claude-opus-5", PermissionMode: "bypassPermissions"},
-			want: []string{"-p", "plan this", "--session-id", "u-plan", "--permission-mode", "bypassPermissions", "--model", "claude-opus-5"},
+			want: []string{"-p", "--session-id", "u-plan", "--permission-mode", "bypassPermissions", "--model", "claude-opus-5", "--", "plan this"},
 		},
 		{
 			name: "planning/model-override",
 			spec: Spec{Prompt: "plan this", SessionUUID: "u-plan", Model: "claude-sonnet-5", PermissionMode: "bypassPermissions"},
-			want: []string{"-p", "plan this", "--session-id", "u-plan", "--permission-mode", "bypassPermissions", "--model", "claude-sonnet-5"},
+			want: []string{"-p", "--session-id", "u-plan", "--permission-mode", "bypassPermissions", "--model", "claude-sonnet-5", "--", "plan this"},
 		},
 
 		// ── phaserun: one plan phase. Permission mode from its own knob, model from
@@ -58,7 +58,7 @@ func TestArgs_PerEngineArgvPin(t *testing.T) {
 		{
 			name: "phaserun/minimal",
 			spec: Spec{Prompt: "execute phase", SessionUUID: "u-phase", PermissionMode: "bypassPermissions"},
-			want: []string{"-p", "execute phase", "--session-id", "u-phase", "--permission-mode", "bypassPermissions"},
+			want: []string{"-p", "--session-id", "u-phase", "--permission-mode", "bypassPermissions", "--", "execute phase"},
 		},
 		{
 			name: "phaserun/full",
@@ -67,8 +67,8 @@ func TestArgs_PerEngineArgvPin(t *testing.T) {
 				PermissionMode: "acceptEdits", Model: "claude-opus-5", SettingsFile: settings,
 			},
 			want: []string{
-				"-p", "execute phase", "--session-id", "u-phase",
-				"--permission-mode", "acceptEdits", "--model", "claude-opus-5", "--settings", settings,
+				"-p", "--session-id", "u-phase",
+				"--permission-mode", "acceptEdits", "--model", "claude-opus-5", "--settings", settings, "--", "execute phase",
 			},
 		},
 
@@ -78,7 +78,7 @@ func TestArgs_PerEngineArgvPin(t *testing.T) {
 		{
 			name: "planrun/minimal",
 			spec: Spec{Prompt: "run plan", SessionUUID: "u-planrun", PermissionMode: "bypassPermissions"},
-			want: []string{"-p", "run plan", "--session-id", "u-planrun", "--permission-mode", "bypassPermissions"},
+			want: []string{"-p", "--session-id", "u-planrun", "--permission-mode", "bypassPermissions", "--", "run plan"},
 		},
 		{
 			name: "planrun/full",
@@ -88,9 +88,9 @@ func TestArgs_PerEngineArgvPin(t *testing.T) {
 				Model: "claude-opus-5", SettingsFile: settings,
 			},
 			want: []string{
-				"-p", "run plan", "--session-id", "u-planrun",
+				"-p", "--session-id", "u-planrun",
 				"--permission-mode", "bypassPermissions", "--agent", "tech-lead",
-				"--model", "claude-opus-5", "--settings", settings,
+				"--model", "claude-opus-5", "--settings", settings, "--", "run plan",
 			},
 		},
 
@@ -104,8 +104,8 @@ func TestArgs_PerEngineArgvPin(t *testing.T) {
 				SettingSources: "project,local", PermissionMode: "bypassPermissions",
 			},
 			want: []string{
-				"-p", "do the task", "--session-id", "u-task",
-				"--setting-sources", "project,local", "--permission-mode", "bypassPermissions",
+				"-p", "--session-id", "u-task",
+				"--setting-sources", "project,local", "--permission-mode", "bypassPermissions", "--", "do the task",
 			},
 		},
 		{
@@ -115,9 +115,9 @@ func TestArgs_PerEngineArgvPin(t *testing.T) {
 				SettingSources: "project,local", PermissionMode: "plan", Model: "claude-sonnet-5",
 			},
 			want: []string{
-				"-p", "@tech-lead: do the task", "--session-id", "u-task",
+				"-p", "--session-id", "u-task",
 				"--setting-sources", "project,local", "--permission-mode", "plan",
-				"--model", "claude-sonnet-5",
+				"--model", "claude-sonnet-5", "--", "@tech-lead: do the task",
 			},
 		},
 
@@ -126,7 +126,7 @@ func TestArgs_PerEngineArgvPin(t *testing.T) {
 		{
 			name: "verify/minimal",
 			spec: Spec{Prompt: "grade this", SessionUUID: "u-verify", SettingSources: "project,local"},
-			want: []string{"-p", "grade this", "--session-id", "u-verify", "--setting-sources", "project,local"},
+			want: []string{"-p", "--session-id", "u-verify", "--setting-sources", "project,local", "--", "grade this"},
 		},
 		{
 			name: "verify/model",
@@ -135,8 +135,8 @@ func TestArgs_PerEngineArgvPin(t *testing.T) {
 				SettingSources: "project,local", Model: "claude-opus-5",
 			},
 			want: []string{
-				"-p", "grade this", "--session-id", "u-verify",
-				"--setting-sources", "project,local", "--model", "claude-opus-5",
+				"-p", "--session-id", "u-verify",
+				"--setting-sources", "project,local", "--model", "claude-opus-5", "--", "grade this",
 			},
 		},
 	}
@@ -158,7 +158,7 @@ func TestArgs_OmitsBlankFlags(t *testing.T) {
 		Prompt: "p", SessionUUID: "u",
 		Model: "  ", Agent: "\t", PermissionMode: " ", SettingsFile: "", SettingSources: " ",
 	})
-	want := []string{"-p", "p", "--session-id", "u"}
+	want := []string{"-p", "--session-id", "u", "--", "p"}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("Args() = %q, want %q", got, want)
 	}
@@ -168,14 +168,14 @@ func TestArgs_OmitsBlankFlags(t *testing.T) {
 // when blank, because the caller owns what a run is asked to do.
 func TestArgs_PassesPromptVerbatim(t *testing.T) {
 	got := Args(Spec{Prompt: "  leading space matters\n", SessionUUID: "u"})
-	if got[1] != "  leading space matters\n" {
-		t.Errorf("prompt was rewritten: %q", got[1])
+	if p := got[len(got)-1]; p != "  leading space matters\n" {
+		t.Errorf("prompt was rewritten: %q", p)
 	}
 }
 
 func TestArgs_ExtraArgsAppendLast(t *testing.T) {
 	got := Args(Spec{Prompt: "p", SessionUUID: "u", Model: "m", ExtraArgs: []string{"--verbose", "--foo=bar"}})
-	want := []string{"-p", "p", "--session-id", "u", "--model", "m", "--verbose", "--foo=bar"}
+	want := []string{"-p", "--session-id", "u", "--model", "m", "--verbose", "--foo=bar", "--", "p"}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("Args() = %q, want %q", got, want)
 	}

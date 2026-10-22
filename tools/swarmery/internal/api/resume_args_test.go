@@ -17,7 +17,7 @@ func TestResumeArgs_CarriesPermissionMode(t *testing.T) {
 
 	args := resumeArgs("u-1", "go ahead", resumeOrigin{})
 
-	want := []string{"-r", "u-1", "-p", "go ahead", "--output-format", "json"}
+	want := []string{"-r", "u-1", "-p", "--output-format", "json", "--", "go ahead"}
 	if strings.Join(args, "\x00") != strings.Join(want, "\x00") {
 		t.Fatalf("argv = %q, want %q", args, want)
 	}
@@ -28,7 +28,7 @@ func TestResumeArgs_CarriesPermissionMode(t *testing.T) {
 func TestResumeArgs_ModeOverrides(t *testing.T) {
 	t.Setenv(claudeflags.ModeEnv, "acceptEdits")
 	t.Setenv(resumePermEnv, "plan")
-	if got := resumeArgs("u", "t", resumeOrigin{}); got[len(got)-1] != "plan" {
+	if got := resumeArgs("u", "t", resumeOrigin{}); got[len(got)-3] != "plan" { // … --permission-mode plan -- t
 		t.Fatalf("site env ignored: %q", got)
 	}
 
@@ -50,7 +50,7 @@ func TestResumeArgs_Model(t *testing.T) {
 	t.Setenv(claudeflags.ModeEnv, "")
 
 	got := resumeArgs("u-1", "go ahead", resumeOrigin{Model: "claude-sonnet-5"})
-	want := []string{"-r", "u-1", "-p", "go ahead", "--output-format", "json", "--model", "claude-sonnet-5"}
+	want := []string{"-r", "u-1", "-p", "--output-format", "json", "--model", "claude-sonnet-5", "--", "go ahead"}
 	if strings.Join(got, "\x00") != strings.Join(want, "\x00") {
 		t.Fatalf("argv = %q, want %q", got, want)
 	}
@@ -77,9 +77,10 @@ func TestResumeArgs_CarriesOriginFlags(t *testing.T) {
 		SettingSources: "project,local",
 	})
 	want := []string{
-		"-r", "u-1", "-p", "go ahead", "--output-format", "json",
+		"-r", "u-1", "-p", "--output-format", "json",
 		"--model", "claude-opus-5-5", "--effort", "high",
 		"--agent", "tech-lead", "--setting-sources", "project,local",
+		"--", "go ahead",
 	}
 	if strings.Join(got, "\x00") != strings.Join(want, "\x00") {
 		t.Fatalf("argv = %q, want %q", got, want)
@@ -120,9 +121,10 @@ func TestResumeArgs_CarriesSettingsFile(t *testing.T) {
 		SettingsFile: "/p/.claude/settings.json",
 	})
 	want := []string{
-		"-r", "u-1", "-p", "go ahead", "--output-format", "json",
+		"-r", "u-1", "-p", "--output-format", "json",
 		"--model", "claude-opus-5-5", "--effort", "high",
 		"--agent", "tech-lead", "--settings", "/p/.claude/settings.json",
+		"--", "go ahead",
 	}
 	if strings.Join(got, "\x00") != strings.Join(want, "\x00") {
 		t.Fatalf("argv = %q, want %q", got, want)

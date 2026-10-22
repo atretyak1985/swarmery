@@ -31,16 +31,21 @@ const StderrTailBytes = 4096
 // under it.
 const drainGrace = 5 * time.Second
 
-// Args builds the canonical argv. The `claude` CLI is order-insensitive, so the
-// order below is a CHOICE, not a constraint — it is the one order that reproduces
-// what all five engines emitted before they shared this builder, which is why
-// spawner_test.go pins it per engine rather than describing it in prose:
+// Args builds the canonical argv, pinned per engine in spawner_test.go:
 //
-//	-p <prompt> --session-id <uuid> [--setting-sources S] [--permission-mode P]
-//	[--agent A] [--model M] [--effort E] [--settings F] [extra…]
+//	-p --session-id <uuid> [--setting-sources S] [--permission-mode P]
+//	[--agent A] [--model M] [--effort E] [--settings F] [extra…] -- <prompt>
 //
-// A Resume spec swaps the head for `-r <uuid> -p <prompt>` — the shape
-// internal/api's resumeArgs already emits — and keeps every remaining flag
+// The prompt is LAST, after the end-of-options marker, and that is a
+// constraint, not a choice: -p is the boolean --print and the prompt is the
+// CLI's positional argument, so a prompt that began with a dash and sat among
+// the flags was parsed as an option — the run then failed, or ran with flags
+// nobody chose. After `--` it is data whatever it says. Every flag — a variadic one in extra included, such as
+// verify's --disallowedTools — must come before the marker; the CLI accepts `--`
+// with --session-id and with -r (probed against 2.1.308).
+//
+// A Resume spec swaps the head for `-r <uuid> -p` — the shape internal/api's
+// resumeArgs emits — and keeps every remaining flag
 // byte-identical, because a continuation that silently changed model, effort or
 // permission mode would not be a continuation of the same run. Note in
 // particular what NOT emitting --effort would mean here: the CLI's unpinned
@@ -50,9 +55,9 @@ const drainGrace = 5 * time.Second
 // Prompt and SessionUUID are NOT trimmed: they are values, not flags, and a
 // prompt's leading whitespace is the caller's business.
 func Args(spec Spec) []string {
-	args := []string{"-p", spec.Prompt, "--session-id", spec.SessionUUID}
+	args := []string{"-p", "--session-id", spec.SessionUUID}
 	if spec.Resume {
-		args = []string{"-r", spec.SessionUUID, "-p", spec.Prompt}
+		args = []string{"-r", spec.SessionUUID, "-p"}
 	}
 	if s := strings.TrimSpace(spec.SettingSources); s != "" {
 		args = append(args, "--setting-sources", s)
@@ -84,7 +89,8 @@ func Args(spec Spec) []string {
 	if f := strings.TrimSpace(spec.SettingsFile); f != "" {
 		args = append(args, "--settings", f)
 	}
-	return append(args, spec.ExtraArgs...)
+	args = append(args, spec.ExtraArgs...)
+	return append(args, "--", spec.Prompt)
 }
 
 // ClaudeRunner is the production spawner: one argv builder, one env merge, one

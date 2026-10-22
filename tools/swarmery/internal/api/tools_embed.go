@@ -7,9 +7,10 @@ package api
 // build artifacts read-only behind a traversal jail, and architectureStatic
 // serves architecture-out/ artifacts via the same shared jail helper. The two
 // static routes serve repository content, so it runs CSP-sandboxed with an
-// opaque origin (artifactCSP), never as the daemon's own origin. Neither is
-// origin-fenced: the daemon is loopback-only, and the proxy enforces that the
-// parsed DashboardURL targets a loopback address before dialing.
+// opaque origin (artifactCSP), never as the daemon's own origin. The proxy's
+// relayed responses are sandboxed the same way (serenaProxyCSP), its non-read
+// and upgrade requests carry the origin fence (routes.go), and it dials only a
+// loopback DashboardURL.
 
 import (
 	"database/sql"
@@ -90,16 +91,40 @@ func (h *Handler) serenaProxy(w http.ResponseWriter, r *http.Request) {
 	// before sending headers yields ReverseProxy's default 502 (its default
 	// ErrorHandler logs the dial/roundtrip error); a backend dying mid-stream
 	// yields an aborted connection to the client.
-	proxy := &httputil.ReverseProxy{Rewrite: func(pr *httputil.ProxyRequest) {
-		pr.Out.URL.Scheme = target.Scheme
-		pr.Out.URL.Host = target.Host
-		pr.Out.URL.Path = "/" + rest
-		pr.Out.URL.RawPath = ""
-		pr.Out.URL.RawQuery = r.URL.RawQuery
-		pr.Out.Host = target.Host
-	}}
+	//
+	// Proxied documents never run on the daemon's origin: the baseline CSP
+	// securityHeaders stamped is dropped and every upstream response gets
+	// serenaProxyCSP instead (replacing any policy serena sent).
+	w.Header().Del("Content-Security-Policy")
+	proxy := &httputil.ReverseProxy{
+		Rewrite: func(pr *httputil.ProxyRequest) {
+			pr.Out.URL.Scheme = target.Scheme
+			pr.Out.URL.Host = target.Host
+			pr.Out.URL.Path = "/" + rest
+			pr.Out.URL.RawPath = ""
+			pr.Out.URL.RawQuery = r.URL.RawQuery
+			pr.Out.Host = target.Host
+		},
+		ModifyResponse: func(res *http.Response) error {
+			res.Header.Set("Content-Security-Policy", serenaProxyCSP)
+			res.Header.Set("X-Content-Type-Options", "nosniff")
+			return nil
+		},
+	}
 	proxy.ServeHTTP(w, r)
 }
+
+// serenaProxyCSP goes on every response the serena proxy relays. serena's
+// dashboard is a third-party page, and anything it renders (log lines, memory
+// files, config) can carry content from the repository it indexes; served from
+// /api/projects/{id}/serena/ it would otherwise run with the daemon's own
+// origin and reach the whole API. The sandbox gives it an opaque origin. The
+// dashboard tab does not use this route — it frames serena's own origin
+// (Serena.tsx), because the dashboard's root-absolute API calls cannot work
+// under a path prefix — so the sandbox costs no working feature. allow-forms
+// is kept for the dashboard's own forms; allow-same-origin must never be added
+// (with allow-scripts it cancels the sandbox).
+const serenaProxyCSP = "sandbox allow-scripts allow-forms; frame-ancestors 'self'"
 
 // artifactCSP is the Content-Security-Policy every jailed artifact response
 // carries. The artifacts are files from a repository, not code the daemon

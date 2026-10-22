@@ -21,6 +21,13 @@ regexes = [
 ]
 
 [[allowlists]]
+description = "RFC 6455's published sample WebSocket nonce (`the sample nonce`, base64). Sec-WebSocket-Key is a per-handshake random value, never a credential; live-daemon-hardening.sh (commit 01031e7d) sends this literal to exercise the proxy's upgrade fence. Scoped to this one literal so a real secret on the same line is still caught."
+regexTarget = "line"
+regexes = [
+  '''Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==''',
+]
+
+[[allowlists]]
 description = "planrev store tests — fixture doc filenames like `phase-3-api.md` inside a wantOrder slice trip generic-api-key (the literal `api` keyword next to a quoted string); nothing in this file is credential-shaped. Path-scoped so real secrets elsewhere are still caught."
 paths = [
   '''tools/swarmery/internal/planrev/store_test\.go''',
