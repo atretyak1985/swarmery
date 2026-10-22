@@ -50,6 +50,7 @@ import (
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/automode"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/calibration"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/claudeacct"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/claudeflags"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/cost"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/decide"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/dispatch"
@@ -1785,6 +1786,9 @@ func cmdServe(args []string) error {
 	wsCfg := wsingestFlags(fs)
 	sysCfg := sysscanFlags(fs)
 	fs.Parse(args)
+	// The executor sites' deny list keeps agents off THIS daemon's API; record the
+	// port it serves before anything can spawn (claudeflags.AgentDenyArgs).
+	claudeflags.SetDaemonPort(*port)
 	if *answerDelivery != approvals.DeliveryUpdatedInput && *answerDelivery != approvals.DeliveryDenyMessage {
 		return fmt.Errorf("--answer-delivery must be %q or %q, got %q",
 			approvals.DeliveryUpdatedInput, approvals.DeliveryDenyMessage, *answerDelivery)

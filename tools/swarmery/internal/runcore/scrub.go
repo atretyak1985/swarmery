@@ -3,13 +3,18 @@ package runcore
 import (
 	"os"
 	"strings"
+
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/claudeflags"
 )
 
-// ScrubVCSTokensEnv opts agent spawns out of the daemon's code-host
-// credentials. When it is "1", every spawn's environment loses the variables
-// gh and glab read a token or a config dir from, so an agent can only reach a
-// code host the way the daemon's own land path decides to — through
-// internal/repoprovider. Any other value (unset included) leaves the env alone.
+// ScrubVCSTokensEnv keeps agent spawns away from the daemon's code-host
+// credentials. Scrubbing is ON by default: every spawn's environment loses the
+// variables gh and glab read a token or a config dir from, so an agent can only
+// reach a code host the way the daemon's own land path decides to — through
+// internal/repoprovider, which runs from the daemon's own process and env and is
+// never scrubbed (repoprovider/exec_scrub_test.go pins that). "0", "off",
+// "false" or "no" opts out and leaves the env byte-identical; any other value,
+// unset included, scrubs.
 //
 // It removes ENVIRONMENT-carried credentials only. Without the config-dir
 // overrides gh/glab fall back to their default config and the keyring, where
@@ -33,12 +38,12 @@ var scrubbedVCSKeys = map[string]bool{
 	"GLAB_CONFIG_DIR":     true,
 }
 
-// scrubVCSTokens applies ScrubVCSTokensEnv to a composed spawn env. With the
-// flag off it returns env itself — the same slice, no copy — so an operator who
-// never set it gets a byte-identical environment. With it on it returns a new
-// slice without the scrubbed keys, every other entry kept in order.
+// scrubVCSTokens applies ScrubVCSTokensEnv to a composed spawn env. Opted out it
+// returns env itself — the same slice, no copy — so the opt-out is a
+// byte-identical environment. Otherwise it returns a new slice without the
+// scrubbed keys, every other entry kept in order.
 func scrubVCSTokens(env []string) []string {
-	if os.Getenv(ScrubVCSTokensEnv) != "1" {
+	if claudeflags.OptedOut(os.Getenv(ScrubVCSTokensEnv)) {
 		return env
 	}
 	out := make([]string, 0, len(env))
