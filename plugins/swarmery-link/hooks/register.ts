@@ -146,6 +146,7 @@ import {
   withBeneath,
 } from './lib/swarm'
 import { measurePayload } from './lib/usage'
+import { signedFetch } from './signed'
 import { claimFile, heldElsewhere, releaseClaims, sendToSession } from './swarm'
 
 const NAME = 'swarmery-link'
@@ -238,7 +239,7 @@ async function within<T>($: EngineInterface, pending: Promise<T>, ms: number): P
 
 /** One POST of `body`, raced against a `$.clock` timer: HttpInit has no timeout or signal. */
 async function post($: EngineInterface, link: Link, body: string, timeoutMs: number): Promise<Reply> {
-  const request = $.http.fetch(link.url, linkRequest(link.token ?? '', body)).then(
+  const request = signedFetch($, link.token ?? '', link.url, linkRequest(body)).then(
     (r): Reply => ({ status: r.status }),
     (error: unknown): Reply => ({ error }),
   )
@@ -527,7 +528,8 @@ type Control = {
   readonly swarm: Swarm | undefined
 }
 
-type PollReply = { readonly status?: number; readonly text?: string; readonly error?: unknown }
+/** A command poll's end; `isVerified`: the daemon signed the answer (only a signed command runs). */
+type PollReply = { readonly status?: number; readonly text?: string; readonly error?: unknown; readonly isVerified?: boolean }
 
 const newControl = (origin: string, sessionId: string, previous: Control | undefined, swarm: Swarm | undefined): Control => {
   let settleStopped: () => void = () => undefined
@@ -577,8 +579,8 @@ async function pause($: EngineInterface, control: Control, ms: number): Promise<
 
 /** One long poll, raced against its 28 s timer and the loop's stop. */
 async function fetchCommand($: EngineInterface, link: Link, control: Control): Promise<PollReply | 'stopped'> {
-  const request = $.http.fetch(commandsUrl(control.origin, control.sessionId), pollRequest(link.token ?? '')).then(
-    (r): PollReply => ({ status: r.status, text: r.text }),
+  const request = signedFetch($, link.token ?? '', commandsUrl(control.origin, control.sessionId), pollRequest()).then(
+    (r): PollReply => ({ status: r.status, text: r.text, isVerified: r.isVerified }),
     (error: unknown): PollReply => ({ error }),
   )
   const reply = await Promise.race([within($, request, POLL_TIMEOUT_MS), control.stopped])
@@ -588,7 +590,7 @@ async function fetchCommand($: EngineInterface, link: Link, control: Control): P
 /** Acks a command. A lost ack is not retried: the daemon delivers the command again and the executed set answers it. */
 async function sendAck($: EngineInterface, link: Link, control: Control, id: string, ack: Ack): Promise<void> {
   try {
-    const request = $.http.fetch(ackUrl(control.origin, id), linkRequest(link.token ?? '', ackBody(ack))).then(
+    const request = signedFetch($, link.token ?? '', ackUrl(control.origin, id), linkRequest(ackBody(ack))).then(
       (r): Reply => ({ status: r.status }),
       (error: unknown): Reply => ({ error }),
     )
@@ -657,6 +659,12 @@ async function poll($: EngineInterface, link: Link, control: Control): Promise<v
       if (reply === 'stopped' || control.isStopped || link.isOff) return
       switch (pollOutcome(reply.status)) {
         case 'command': {
+          if (reply.isVerified !== true) {
+            // not the daemon's answer: nothing runs on it
+            logOnce($, link, 'command-unsigned', 'control: a command reply without the daemon\'s signature was ignored')
+            await pause($, control, nextPollDelay('retry', 0))
+            continue
+          }
           const command = parseCommand(reply.text)
           control.hasRetriedAuth = false
           if (command === undefined) {

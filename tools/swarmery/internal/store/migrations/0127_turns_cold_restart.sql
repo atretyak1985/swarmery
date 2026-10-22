@@ -1,4 +1,4 @@
--- 0122: the cache-cold fact and the cache-cold prediction (internal/cachecold).
+-- 0127: the cache-cold fact and the cache-cold prediction (internal/cachecold).
 --
 -- A prompt cache lives for its TTL — 1 h for the cache Claude Code writes on a
 -- subscription (migration 0075), 5 min on an API key. A fat session left idle

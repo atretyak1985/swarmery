@@ -7,7 +7,9 @@ import (
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/claudeflags"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/dispatch"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/phaserun"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/planning"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/planrun"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/verify"
 )
 
 // A resume is not a new run — it is the SAME conversation, one turn later. But
@@ -55,6 +57,34 @@ type resumeOrigin struct {
 	// enabled plugins — and with them the agent those plugins ship, which is why
 	// an origin that cannot recover its settings file emits no --agent either.
 	SettingsFile string
+
+	// Site picks the permission default the resume inherits from the run it
+	// continues: an executor's bypass (with its deny list), a reader's or the
+	// planner's dontAsk + AllowedTools. The zero value is SiteForeign — a session
+	// swarmery did not spawn — which passes no permission flag at all: never
+	// bypass for a conversation the daemon never owned.
+	Site claudeflags.Site
+	// AllowedTools reaches --allowedTools. Empty omits the flag.
+	AllowedTools []string
+	// PermEnv is the ORIGINAL spawn site's --permission-mode knob. A resume
+	// resolves it first, then its own SWARMERY_RESUME_PERMISSION_MODE, then the
+	// global — so pinning SWARMERY_PLANNING_PERMISSION_MODE also governs the
+	// wizard's PROCEED turn, which is a resume. "" for a foreign session.
+	PermEnv string
+	// DenyArgs is the ORIGINAL site's deny flag pair (`--disallowedTools …`): an
+	// executor's AgentDenyArgs, the verifier's edit-tool + daemon-API denial. A
+	// resume carries it whatever mode a knob resolves, so a knob pinning
+	// bypassPermissions can never shed the deny list the run was spawned with.
+	DenyArgs []string
+}
+
+// withPlannerWritable gives a planning resume the planner's allow-list with
+// Edit rules under writable (planning.Service.WritableDirs).
+func withPlannerWritable(o resumeOrigin, writable []string) resumeOrigin {
+	o.Site = claudeflags.SitePlanner
+	o.PermEnv = "SWARMERY_PLANNING_PERMISSION_MODE"
+	o.AllowedTools = planning.AllowedTools(writable)
+	return o
 }
 
 // resumeEffortEnv is the resume spawn's --effort knob. Its default is
@@ -128,6 +158,8 @@ func lookupResumeOrigin(db *sql.DB, sessionUUID string) resumeOrigin {
 		// agent rather than emit --agent against a worktree with nothing to
 		// resolve it.
 		o.SettingSources = swarmerySettingSources
+		o.Site, o.PermEnv = claudeflags.SiteExecutor, "SWARMERY_DISPATCH_PERMISSION_MODE"
+		o.DenyArgs = claudeflags.AgentDenyArgs(0)
 		file, ok := dispatch.ResumeSettingsFile(db, sessionUUID, cwd.String)
 		if !ok {
 			break
@@ -147,6 +179,8 @@ func lookupResumeOrigin(db *sql.DB, sessionUUID string) resumeOrigin {
 		// exist — a spawn that dies on a flag we added. When the file cannot be
 		// recovered the honest resume is the one every resume made before origin
 		// flags existed: model only.
+		o.Site, o.PermEnv = claudeflags.SiteExecutor, "SWARMERY_PLANRUN_PERMISSION_MODE"
+		o.DenyArgs = claudeflags.AgentDenyArgs(0)
 		file, ok := planrun.ResumeSettingsFile(db, sessionUUID, cwd.String)
 		if !ok {
 			break
@@ -159,6 +193,8 @@ func lookupResumeOrigin(db *sql.DB, sessionUUID string) resumeOrigin {
 		// phaserun: no --agent and no --setting-sources (phaserun.RunSpec carries
 		// neither), but the same lent settings file as a plan run. Nothing here
 		// depends on the recovery succeeding, so a miss simply omits the flag.
+		o.Site, o.PermEnv = claudeflags.SiteExecutor, "SWARMERY_PHASERUN_PERMISSION_MODE"
+		o.DenyArgs = claudeflags.AgentDenyArgs(0)
 		o.SettingsFile, _ = phaserun.ResumeSettingsFile(db, sessionUUID, cwd.String)
 	case db.QueryRow(
 		`SELECT 1 FROM verification_runs WHERE verify_session_uuid = ?`, sessionUUID,
@@ -167,6 +203,16 @@ func lookupResumeOrigin(db *sql.DB, sessionUUID string) resumeOrigin {
 		// and lends no settings file; unlike dispatch it runs as no named agent
 		// (verify.RunSpec has no Agent field — the contract is the prompt).
 		o.SettingSources = swarmerySettingSources
+		o.Site, o.PermEnv = claudeflags.SiteReadOnly, "SWARMERY_VERIFY_PERMISSION_MODE"
+		o.DenyArgs = verify.ToolDenyArgs(verify.DaemonDenyPatterns(0))
+		o.AllowedTools = []string{"Read", "Grep", "Glob"}
+	case db.QueryRow(
+		`SELECT 1 FROM planning_sessions WHERE session_uuid = ?`, sessionUUID,
+	).Scan(&one) == nil:
+		// planning: the planner's least-privilege shape. The composer cannot know
+		// the wizard's writable dir, so it gets the read-only half;
+		// wizardResumeOrigin adds the Edit rule for the PROCEED turn.
+		o = withPlannerWritable(o, nil)
 	}
 	return o
 }

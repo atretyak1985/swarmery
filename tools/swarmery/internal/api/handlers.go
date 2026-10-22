@@ -260,7 +260,7 @@ type sessionDTO struct {
 	// server-computed live flag. Always present as an explicit "link": null when
 	// no mod ever reported on the session. See internal/api/session_link.go.
 	Link *sessionLinkDTO `json:"link"`
-	// CacheCold is the «cache cold» prediction (migration 0122): the session's
+	// CacheCold is the «cache cold» prediction (migration 0127): the session's
 	// prompt cache expired while it sat idle and its next message re-writes the
 	// whole context. Always present as an explicit "cacheCold": null when the
 	// session is warm, ended, or under the handoff threshold. See
@@ -292,7 +292,7 @@ type turnDTO struct {
 	CostUSD          *float64 `json:"costUsd"`
 	Text             *string  `json:"text"`
 	// ColdRestart marks a turn that paid for a cold prompt cache after a pause
-	// (migration 0122, internal/cachecold.IsColdRestart).
+	// (migration 0127, internal/cachecold.IsColdRestart).
 	ColdRestart bool `json:"coldRestart"`
 	// StopReason is why the turn ended (migration 0078): end_turn, tool_use,
 	// max_tokens, stop_sequence, refusal. Null on user turns and on every turn
@@ -336,7 +336,7 @@ type sessionDetailDTO struct {
 	// Always present (0 when nothing errored or nothing recovered).
 	Recovered int64 `json:"recovered"`
 	// ColdRestarts counts the session's turns marked cold_restart (migration
-	// 0122) — main thread and subagents alike, though only the main thread is
+	// 0127) — main thread and subagents alike, though only the main thread is
 	// ever marked. Always present.
 	ColdRestarts int64 `json:"coldRestarts"`
 }

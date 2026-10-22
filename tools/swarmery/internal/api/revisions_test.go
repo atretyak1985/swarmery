@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -271,6 +272,9 @@ func TestGetRevisionDiffAndStale(t *testing.T) {
 
 func TestApplyRevisionEndpoint(t *testing.T) {
 	srv, db, _ := serverWithPlanning(t, &planStubRunner{})
+	var relent []string
+	AttachRevisionRelend(func(docs []string) int { relent = append(relent, docs...); return len(docs) })
+	t.Cleanup(func() { AttachRevisionRelend(nil) })
 	planDir := t.TempDir()
 	taskID := seedRevisionTask(t, db, planDir)
 	if err := os.WriteFile(filepath.Join(planDir, "a.md"), []byte("v1"), 0o644); err != nil {
@@ -291,6 +295,9 @@ func TestApplyRevisionEndpoint(t *testing.T) {
 	}
 	if b, _ := os.ReadFile(filepath.Join(planDir, "a.md")); string(b) != "v2" {
 		t.Errorf("a.md = %q, want the apply landed", b)
+	}
+	if want := []string{filepath.Join(planDir, "a.md")}; !reflect.DeepEqual(relent, want) {
+		t.Errorf("re-lent %q, want %q — an applied revision must re-lend the docs it wrote", relent, want)
 	}
 
 	// Re-apply a decided revision → 409.

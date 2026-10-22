@@ -333,6 +333,10 @@ msgstr "усі рекомендації в ретро →"
 msgid "all sessions →"
 msgstr "усі сесії →"
 
+#: src/pages/NeedsYou.tsx
+msgid "Allow (add to scope)"
+msgstr "Дозволити (додати до обсягу)"
+
 #: src/pages/Approvals.tsx
 msgid "always allow…"
 msgstr "завжди дозволяти…"
@@ -353,6 +357,10 @@ msgstr "а цикл замикається, коли «Зміна» знижує
 msgctxt "verb: the button that opens the question"
 msgid "answer"
 msgstr "відповісти"
+
+#: src/pages/NeedsYou.tsx
+msgid "answer {decisionId}"
+msgstr "відповісти на {decisionId}"
 
 #: src/pages/Approvals.tsx
 msgid "answer in terminal →"
@@ -1182,6 +1190,10 @@ msgstr "не надіслано: {msg}"
 msgid "note (optional)"
 msgstr "нотатка (необов’язково)"
 
+#: src/pages/NeedsYou.tsx
+msgid "note (optional) — recorded with the answer in the phase doc"
+msgstr "примітка (необов'язково) — записується з відповіддю в документ фази"
+
 #: src/pages/ProjectOverview.tsx
 msgid "nothing flagged"
 msgstr "нічого не позначено"
@@ -1262,6 +1274,7 @@ msgstr "відкрити у Системі"
 msgid "open PR ↗"
 msgstr "відкрити PR ↗"
 
+#: src/pages/NeedsYou.tsx
 #: src/pages/NeedsYou.tsx
 msgid "open review →"
 msgstr "відкрити рев’ю →"
@@ -1419,6 +1432,10 @@ msgstr "Отримувач"
 #: src/pages/SessionDetail.tsx
 msgid "recovered"
 msgstr "відновлено"
+
+#: src/pages/NeedsYou.tsx
+msgid "Reject"
+msgstr "Відхилити"
 
 #: src/pages/Approvals.tsx
 msgid "release with no decision — the native selector renders in the terminal (E12d/E12e)"

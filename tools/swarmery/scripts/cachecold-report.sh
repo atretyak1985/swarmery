@@ -4,7 +4,7 @@
 # Usage: cachecold-report.sh <db-path> [days] [ttl-minutes]
 #        (defaults: the last 30 days; a 60 min TTL, the subscription cache)
 #
-# Reads turns.cold_restart (migration 0122; set live by ingest and for history
+# Reads turns.cold_restart (migration 0127; set live by ingest and for history
 # by `swarmery cachecold-backfill`) and prints:
 #
 #   1. per day: how many main-thread turns were cold restarts and their summed

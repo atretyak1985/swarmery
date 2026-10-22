@@ -18,7 +18,7 @@ func TestArgs_Effort(t *testing.T) {
 		{
 			name: "effort sits beside the model",
 			spec: Spec{Prompt: "p", SessionUUID: "u", Model: "m", Effort: "high"},
-			want: []string{"-p", "p", "--session-id", "u", "--model", "m", "--effort", "high"},
+			want: []string{"-p", "--session-id", "u", "--model", "m", "--effort", "high", "--", "p"},
 		},
 		{
 			// "" is an explicit "off", reachable only through the claudeflags
@@ -26,19 +26,19 @@ func TestArgs_Effort(t *testing.T) {
 			// engine's default instead.
 			name: "empty effort omits the flag",
 			spec: Spec{Prompt: "p", SessionUUID: "u", Model: "m"},
-			want: []string{"-p", "p", "--session-id", "u", "--model", "m"},
+			want: []string{"-p", "--session-id", "u", "--model", "m", "--", "p"},
 		},
 		{
 			name: "whitespace is not a value",
 			spec: Spec{Prompt: "p", SessionUUID: "u", Effort: "   "},
-			want: []string{"-p", "p", "--session-id", "u"},
+			want: []string{"-p", "--session-id", "u", "--", "p"},
 		},
 		{
 			// An engine may pin depth without pinning a model (the model then
 			// comes from the spec's own ladder), so the two are independent.
 			name: "effort without a model",
 			spec: Spec{Prompt: "p", SessionUUID: "u", Effort: "low"},
-			want: []string{"-p", "p", "--session-id", "u", "--effort", "low"},
+			want: []string{"-p", "--session-id", "u", "--effort", "low", "--", "p"},
 		},
 		{
 			name: "full flag order",
@@ -48,12 +48,12 @@ func TestArgs_Effort(t *testing.T) {
 				Model: "m", Effort: "max", SettingsFile: "/s.json",
 			},
 			want: []string{
-				"-p", "p", "--session-id", "u",
+				"-p", "--session-id", "u",
 				"--setting-sources", "project,local",
 				"--permission-mode", "bypassPermissions",
 				"--agent", "tech-lead",
 				"--model", "m", "--effort", "max",
-				"--settings", "/s.json",
+				"--settings", "/s.json", "--", "p",
 			},
 		},
 	} {

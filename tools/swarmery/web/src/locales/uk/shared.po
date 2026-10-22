@@ -1046,6 +1046,10 @@ msgstr "причина"
 msgid "change the plan — interview + staged diff, applied only on your approval"
 msgstr "змінити план — інтерв’ю + підготований дифф, застосовується лише після вашого схвалення"
 
+#: src/api.ts
+msgid "changing the cost failed: {status}"
+msgstr "не вдалося змінити вартість: {status}"
+
 #: src/components/ProjectPlugins.tsx
 msgid "check"
 msgstr "перевірити"
@@ -1941,6 +1945,10 @@ msgstr "Git push ніколи не погоджується автоматичн
 #: src/components/PermissionPresets.tsx
 msgid "Git writes (add, commit, checkout, worktree)"
 msgstr "Записи git (add, commit, checkout, worktree)"
+
+#: src/lib/needsYou.ts
+msgid "Guard decision"
+msgstr "Рішення guard"
 
 #: src/pages/docsRail.ts
 msgid "Guides"
@@ -4046,6 +4054,10 @@ msgstr "Це тестове пояснення простими словами. 
 #: src/components/PluginConfigModal.tsx
 msgid "this pack's config schema is missing or malformed"
 msgstr "схема конфігурації цього пакета відсутня або пошкоджена"
+
+#: src/api.ts
+msgid "This phase builds on a decision that is still open and expensive to change. Answer it in the plan's Decisions, or mark it cheap to change in the planning session, then run the phase."
+msgstr "Ця фаза спирається на рішення, яке ще не ухвалене і яке дорого змінити. Дайте відповідь у розділі Decisions плану або позначте його дешевим для зміни в сесії планування, а тоді запустіть фазу."
 
 #: src/components/RunOutcomeModal.tsx
 msgid "this phase has not been run"

@@ -50,6 +50,7 @@ import (
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/automode"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/calibration"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/claudeacct"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/claudeflags"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/cost"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/decide"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/dispatch"
@@ -79,6 +80,7 @@ import (
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/procwatch"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/prune"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/quota"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/redact"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/replyextract"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/repopath"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/route"
@@ -202,6 +204,10 @@ func main() {
 		os.Exit(cmdTriage(os.Args[2:]))
 	case "link":
 		err = cmdLink(os.Args[2:], os.Stdout)
+	case "rescrub":
+		err = cmdRescrub(os.Args[2:], os.Stdout)
+	case "workaround-backfill":
+		err = cmdWorkaroundBackfill(os.Args[2:], os.Stdout)
 	case "-h", "--help", "help":
 		usage()
 	default:
@@ -258,6 +264,11 @@ func usage() {
                                    the model-upgrade routine's comparison column). Groups under
                                    20 non-post-hoc samples are hidden. Read-only.
   swarmery backup   [--db <path>] [--out <path>]   VACUUM-INTO snapshot (safe while serving)
+  swarmery rescrub  --count --db <copy.db>          per-class counts of secret-shaped values the
+                                   background rescrub would mask (values never printed; read-only)
+  swarmery workaround-backfill [--db <path>] [--since <Nd>] [--plan <yyyy-mm-dd-slug>]
+                                   scan phase-linked sessions since --since (default 30d) for
+                                   guards.json workaroundWords; idempotent; prints per-phase counts
   swarmery prune    [--db <path>] --older-than <Nd> [--dry-run]
                                    retention: write daily_rollups for sessions ended > Nd ago,
                                    delete their events/file_changes/turns (headers kept, pruned=1),
@@ -1783,6 +1794,9 @@ func cmdServe(args []string) error {
 	wsCfg := wsingestFlags(fs)
 	sysCfg := sysscanFlags(fs)
 	fs.Parse(args)
+	// The executor sites' deny list keeps agents off THIS daemon's API; record the
+	// port it serves before anything can spawn (claudeflags.AgentDenyArgs).
+	claudeflags.SetDaemonPort(*port)
 	if *answerDelivery != approvals.DeliveryUpdatedInput && *answerDelivery != approvals.DeliveryDenyMessage {
 		return fmt.Errorf("--answer-delivery must be %q or %q, got %q",
 			approvals.DeliveryUpdatedInput, approvals.DeliveryDenyMessage, *answerDelivery)
@@ -1851,6 +1865,15 @@ func cmdServe(args []string) error {
 	// internal/spawnpath; SWARMERY_SPAWN_PATH prepends extra dirs verbatim.
 	spawnpath.Apply()
 	bootLog := logbuf.Tagged(slog.Default(), "boot")
+
+	// The store directory (~/.swarmery) and its backup trees hold transcripts
+	// and config copies: private to the user. Fixes modes an older build left
+	// open; best-effort, a failure is logged and never stops the daemon.
+	if def, derr := store.DefaultDBPath(); derr == nil {
+		if perr := store.TightenPerms(filepath.Dir(def)); perr != nil {
+			log.Printf("warning: store: tighten file modes: %v", perr)
+		}
+	}
 
 	migrateStart := time.Now()
 	db, err := store.Open(*dbPath)
@@ -2619,6 +2642,9 @@ func cmdServe(args []string) error {
 		log.Printf("warning: phaserun heal on startup: %v", err)
 	}
 	api.AttachPhaseRun(phaserunSvc)
+	// verify-not-trust phase 4: an applied plan revision re-lends the docs it
+	// wrote into any phase worktree that still holds a copy.
+	api.AttachRevisionRelend(phaserunSvc.RelendDocs)
 	// Opt-in post-run verification for phases (execution-engine unification phase 5):
 	// a phase doc carrying `**Verify:** strict` gets graded by the SAME read-only
 	// engine board cards go through, before its worktree is reclaimed. Wired here
@@ -2857,6 +2883,18 @@ func cmdServe(args []string) error {
 		return store.Optimize(ctx, db, startup)
 	}, storeOptimizeFirstDelay, storeOptimizeEvery, log.Printf)
 
+	// Background rescrub (internal/redact/rescrub.go): masks secret-shaped
+	// values in rows stored before ingest redacted them — small batches,
+	// a persisted cursor, a pause between batches, stopped by shutdown and
+	// resumed on the next start. Started here, never by store.Open, so
+	// `swarmery backup` and the CLI never run it. SWARMERY_RESCRUB=off
+	// disables it; _BATCH / _SLEEP_MS tune it.
+	rescrubCfg, rescrubWarns := redact.RescrubConfigFromEnv(os.Getenv)
+	for _, w := range rescrubWarns {
+		log.Printf("warn: %s", w)
+	}
+	go redact.RunRescrub(ctx, db, rescrubCfg, log.Printf)
+
 	// fusion phase 3: run the dispatcher poll-fallback ticker under the shutdown
 	// context. It runs an initial Schedule immediately (drains any Todo backlog
 	// on restart) then sweeps every PollInterval; the event fast path is the
@@ -2969,7 +3007,7 @@ func cmdServe(args []string) error {
 			wtjCfg.TickInterval, wtjCfg.MinIdle)
 	}
 
-	srv := &http.Server{Addr: addr, Handler: handler}
+	srv := api.NewHTTPServer(addr, handler)
 	errCh := make(chan error, 1)
 	go func() { errCh <- srv.ListenAndServe() }()
 	select {

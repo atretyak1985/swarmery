@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -77,6 +78,10 @@ var (
 	// on a tree without its go.mod (2026-10-19, 222 files). Refused, never repaired
 	// or removed here: whether what is left holds work is the operator's call.
 	ErrIncompleteCheckout = errors.New("worktree: checkout is missing tracked files")
+	// ErrInvalidTaskID: the task id is not a single safe path component (see
+	// checkTaskID). Refused before git or the filesystem is touched, because the
+	// id becomes both a directory under Root and a branch name.
+	ErrInvalidTaskID = errors.New("worktree: invalid task id")
 )
 
 // staleLockAge is how old a .git/worktrees/*/index.lock must be before the
@@ -145,11 +150,38 @@ func (m *Manager) RootDir() (string, error) {
 // It answers for a path that may not exist: whether anything is there is the
 // caller's question, not this one's.
 func (m *Manager) Path(projectSlug, taskID string) (string, error) {
+	// Every Acquire entry point derives its path here, so this one check covers
+	// Acquire, AcquireAt and AcquireExisting as well.
+	if err := checkTaskID(taskID); err != nil {
+		return "", err
+	}
 	root, err := m.resolveRoot()
 	if err != nil {
 		return "", err
 	}
 	return filepath.Join(root, projectSlug, taskID), nil
+}
+
+// maxTaskIDLen bounds a task id. The daemon's own ids ("T-" + 6 chars,
+// "phase-<n>", "plan-<n>") are a small fraction of it.
+const maxTaskIDLen = 128
+
+// validTaskID is the alphabet a task id may use: it becomes one path component
+// under the worktree root and the tail of a swarm/ branch name, so no path
+// separator, no NUL, no whitespace and no other control or shell character.
+var validTaskID = regexp.MustCompile(`^[A-Za-z0-9._-]+$`)
+
+// checkTaskID refuses an id that could name anything but its own single
+// directory under <Root>/<projectSlug>: empty, ".", "..", a separator or other
+// character outside validTaskID, or longer than maxTaskIDLen.
+func checkTaskID(taskID string) error {
+	if len(taskID) > maxTaskIDLen {
+		return fmt.Errorf("%w: %d characters (max %d)", ErrInvalidTaskID, len(taskID), maxTaskIDLen)
+	}
+	if taskID == "." || taskID == ".." || !validTaskID.MatchString(taskID) {
+		return fmt.Errorf("%w: %q", ErrInvalidTaskID, taskID)
+	}
+	return nil
 }
 
 // swarmPrefix namespaces every branch this package creates. It is also the

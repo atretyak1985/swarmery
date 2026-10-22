@@ -2,6 +2,7 @@ package mdfence
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 )
 
@@ -18,13 +19,19 @@ const GuardKind = "guard"
 //	stop_if:
 //	  - out-of-scope change
 //	  - protected path
+//	allow:
+//	  - "pkg/export/writer_test.go"
 //	```
 //
 // ProtectedPaths are globs naming FILES the phase run must not edit; StopIf are
 // the conditions under which the run stops and reports instead of carrying on.
+// Allow is optional: paths (or globs) the operator let back into scope by
+// answering a guard decision `allow-add-to-scope` (AddGuardAllow) — a protected
+// path that also matches an allow entry may be edited.
 type Guard struct {
 	ProtectedPaths []string
 	StopIf         []string
+	Allow          []string
 	// Warnings are lints that do not make the block unparsable — today only a
 	// glob that names a directory instead of files (D22). The glob is still in
 	// ProtectedPaths: dropping it would silently unprotect what the planner meant.
@@ -63,6 +70,11 @@ func ParseGuard(doc string) (Guard, *ParseError) {
 	if g.StopIf, perr = stringList(b, "stop_if", keys["stop_if"]); perr != nil {
 		return Guard{}, perr
 	}
+	if n, ok := keys[GuardAllowKey]; ok {
+		if g.Allow, perr = stringList(b, GuardAllowKey, n); perr != nil {
+			return Guard{}, perr
+		}
+	}
 	for _, p := range g.ProtectedPaths {
 		if NamesDirectory(p) {
 			g.Warnings = append(g.Warnings, fmt.Sprintf(
@@ -73,6 +85,66 @@ func ParseGuard(doc string) (Guard, *ParseError) {
 		g.Warnings = append(g.Warnings, fmt.Sprintf("a second `kind: guard` block at line %d is ignored", extra.Start+1))
 	}
 	return g, nil
+}
+
+// GuardAllowKey is the guard block's optional exclusion list.
+const GuardAllowKey = "allow"
+
+// AddGuardAllow returns doc with paths added to its guard block's `allow:` list:
+// the existing entries first, then every new one not already there, each written
+// as a double-quoted scalar. The rest of the document — the block's other keys
+// and comments included — is left byte for byte as it was.
+//
+// The guard must parse: an absent block has nothing to widen and an unparsable
+// one cannot be edited safely, so both return the ParseError.
+func AddGuardAllow(doc string, paths []string) (string, *ParseError) {
+	g, perr := ParseGuard(doc)
+	if perr != nil {
+		return "", perr
+	}
+	merged := append([]string(nil), g.Allow...)
+	seen := make(map[string]bool, len(merged))
+	for _, p := range merged {
+		seen[p] = true
+	}
+	for _, p := range paths {
+		if p = strings.TrimSpace(p); p != "" && !seen[p] {
+			seen[p] = true
+			merged = append(merged, p)
+		}
+	}
+	b := kindBlocks(doc, GuardKind)[0]
+	lines := strings.Split(doc, "\n")
+	body := strings.Split(b.Content, "\n")
+	closing := b.Start + 1 + len(body) // the closing fence's index; == len(lines) when unclosed
+
+	// Drop the block's own `allow:` key — its line and everything indented
+	// under it — then append the merged list at the end of the block.
+	kept := make([]string, 0, len(body)+len(merged)+1)
+	inAllow := false
+	for _, l := range body {
+		top := l != "" && l[0] != ' ' && l[0] != '\t' && l[0] != '#' && l[0] != '-'
+		if top {
+			inAllow = strings.HasPrefix(l, GuardAllowKey+":")
+		}
+		if !inAllow {
+			kept = append(kept, l)
+		}
+	}
+	for len(kept) > 0 && strings.TrimSpace(kept[len(kept)-1]) == "" {
+		kept = kept[:len(kept)-1]
+	}
+	kept = append(kept, GuardAllowKey+":")
+	for _, p := range merged {
+		kept = append(kept, "  - "+strconv.Quote(p))
+	}
+	out := make([]string, 0, len(lines)+len(merged)+1)
+	out = append(out, lines[:b.Start+1]...)
+	out = append(out, kept...)
+	if closing < len(lines) {
+		out = append(out, lines[closing:]...)
+	}
+	return strings.Join(out, "\n"), nil
 }
 
 // NamesDirectory reports whether a protected-path glob names a directory rather

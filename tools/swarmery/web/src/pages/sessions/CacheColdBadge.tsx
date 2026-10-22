@@ -1,4 +1,4 @@
-// «Cache cold» chip + «continue from handoff» action (migration 0122,
+// «Cache cold» chip + «continue from handoff» action (migration 0127,
 // internal/cachecold). The daemon flags a live fat session whose prompt cache
 // expired while it sat idle: its next message re-writes the whole context at
 // the cache-write rate. Continuing from the handoff brief in a fresh session

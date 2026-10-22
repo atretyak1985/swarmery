@@ -79,6 +79,20 @@ carries the full format; honor it precisely:
   consumes (must pass `python3 -m json.tool`).
 - Optional `plan/spec.md` with `- [ ] **SC-n** — …` criteria; then each phase
   doc declares a `**Covers:** SC-…` line (the dashboard lints coverage).
+- A `## Decisions` section in `plan/README.md` whenever you asked the user
+  anything: one line per question, in the order asked, numbered `D-1`, `D-2`, …,
+  shaped exactly
+  `- **D-n** (<cheap|expensive>, <decided|recommended|undecided>) — <question> → <answer> (reason: <why it is cheap or expensive to change>)`.
+  Judge each question's cost to change: expensive when reversing it means a
+  schema or data migration, a public contract, a file format or redone work;
+  cheap otherwise. An answered question is `decided` with the answer; an
+  unanswered cheap one is `recommended`, its answer your pick followed by
+  `(без відповіді, рекомендований)`; an unanswered expensive one is
+  `undecided`, its answer the word `undecided`. The dashboard reads these lines
+  as the plan's decision ids.
+- A phase that builds on a decision carries `**Depends on decisions:** D-n, …`
+  in its header block — always for an `undecided` one. The dashboard refuses to
+  start that phase while a listed decision is undecided and expensive.
 
 # What makes criteria good
 

@@ -259,7 +259,7 @@ function buildItems(turns: readonly Turn[], eventsByTurn: ReadonlyMap<number, Ev
   return items;
 }
 
-/** Inline mark on a turn that paid for a cold prompt cache (migration 0122):
+/** Inline mark on a turn that paid for a cold prompt cache (migration 0127):
  * after the pause it re-wrote the session's context instead of reading it. */
 function ColdRestartMark({ turn }: { turn: Turn }): JSX.Element {
   const { t } = useLingui();

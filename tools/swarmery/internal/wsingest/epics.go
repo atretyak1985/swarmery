@@ -99,6 +99,17 @@ type epicPhase struct {
 	// forecast row so a later scoring pass can tell whether the forecast it grades
 	// is still the one in the doc. "" when the doc did not resolve.
 	docHash string
+	// docRead is true when the doc's bytes were read this scan; reviews and
+	// reviewErrs below mean nothing otherwise (review_blocks.go).
+	docRead bool
+	// reviews are the doc's parsable `kind: review` blocks (mdfence.ParseReviews),
+	// in document order; reviewErrs counts the blocks it could not read. Projected
+	// into review_blocks / review_findings by applyReviewBlocks.
+	reviews    []mdfence.Review
+	reviewErrs int
+	// decisionDeps are the `D-n` ids the doc's `**Depends on decisions:**` header
+	// declares (ParseDecisionDeps, migration 0122); nil when absent.
+	decisionDeps []string
 }
 
 var (
@@ -834,6 +845,7 @@ func parsePlan(planDir string, warn func(string, ...any)) []epicPhase {
 		// Same single read of the doc body as every extraction above it — the doc is
 		// opened once per scan and each parser is handed the bytes, never the path.
 		phases[i].docModel = ParseModel(string(body))
+		phases[i].decisionDeps = ParseDecisionDeps(string(body))
 		// A prior written into a doc that ALREADY reports its work done is not a
 		// prediction; ParseCompletionReport above has the only fact that can say so,
 		// which is why it is threaded in rather than re-read.
@@ -841,6 +853,13 @@ func parsePlan(planDir string, warn func(string, ...any)) []epicPhase {
 		if len(phases[i].forecasts) > 0 {
 			sum := sha256.Sum256(body)
 			phases[i].docHash = hex.EncodeToString(sum[:])
+		}
+		phases[i].docRead = true
+		var reviewErrs []mdfence.ParseError
+		phases[i].reviews, reviewErrs = mdfence.ParseReviews(string(body))
+		phases[i].reviewErrs = len(reviewErrs)
+		for _, e := range reviewErrs {
+			warn("epics plan %s: phase doc %s: review block %s", planDir, doc, e.Error())
 		}
 		if fi, err := os.Stat(abs); err == nil {
 			phases[i].docUpdatedAt = fi.ModTime().UTC().Format(time.RFC3339)
@@ -946,7 +965,18 @@ func parseSpec(planDir string, warn func(string, ...any)) []SpecCriterion {
 // migration 0106). A doc that already declared `**Review:** on` before the column
 // existed would otherwise keep the column's default 'off' until some other byte of
 // the plan changed, and its runs would silently skip the review stage.
-const parserVersion = "v10"
+//
+// v11: phase_decisions + epic_phases.decision_deps — the README's `## Decisions`
+// section and the `**Depends on decisions:**` header line (decisions.go, migration
+// 0122). Without the bump an indexed plan that already carries either keeps no
+// decision rows and an empty decision_deps, and the start gate never holds it.
+//
+// v12: review_blocks / review_findings / epic_phases.legacy_review — the doc's
+// `kind: review` blocks (review_blocks.go, migration 0123). Without the bump an
+// already-indexed plan keeps zero findings and legacy_review = 0 until some other
+// byte of it changes. Both landed as v11 on separate branches; v12 rescans a plan
+// indexed under either v11 so it picks up the other's rows too.
+const parserVersion = "v12"
 
 // planHash combines every plan file's bytes into one content hash, so the gate
 // re-parses when the README OR any phase doc changes (a checkbox flip lives in a
@@ -1039,6 +1069,11 @@ func (s *Scanner) scanEpics(taskID int64, dir string, warn func(string, ...any))
 	if err := applySpec(tx, taskID, crits); err != nil {
 		tx.Rollback()
 		warn("epics task#%d (%s): spec: %v", taskID, planDir, err)
+		return
+	}
+	if err := applyDecisions(tx, taskID, planDir, parseDecisionsFile(planDir)); err != nil {
+		tx.Rollback()
+		warn("epics task#%d (%s): decisions: %v", taskID, planDir, err)
 		return
 	}
 	if _, err := tx.Exec(`
@@ -1142,6 +1177,7 @@ func applyEpics(tx *sql.Tx, taskID int64, phases []epicPhase, readmePresent bool
 	if err != nil {
 		return err
 	}
+	cutoff, haveCutoff := reviewCutoff(tx)
 
 	for _, p := range phases {
 		depJSON, err := json.Marshal(p.dependsOn)
@@ -1202,6 +1238,12 @@ func applyEpics(tx *sql.Tx, taskID int64, phases []epicPhase, readmePresent bool
 		// After the upsert, so the row (and therefore its id) exists whether this
 		// scan inserted it or updated it.
 		if err := applyForecasts(tx, taskID, p); err != nil {
+			return err
+		}
+		if err := applyReviewBlocks(tx, taskID, p, cutoff, haveCutoff); err != nil {
+			return err
+		}
+		if err := applyDecisionDeps(tx, taskID, p); err != nil {
 			return err
 		}
 	}
@@ -1297,6 +1339,11 @@ func applyEpics(tx *sql.Tx, taskID int64, phases []epicPhase, readmePresent bool
 		if _, err := tx.Exec(
 			`DELETE FROM phase_surprise
 			  WHERE phase_id NOT IN (SELECT id FROM epic_phases)`); err != nil {
+			return err
+		}
+		// review_blocks / review_findings (0123) are keyed by doc_path, not phase
+		// id; a doc that left the plan takes its review rows with it.
+		if err := sweepOrphanReviewRows(tx, taskID); err != nil {
 			return err
 		}
 	}

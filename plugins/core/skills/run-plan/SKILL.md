@@ -1,7 +1,7 @@
 ---
 name: run-plan
 description: "EXECUTES an existing @planner plan -- parses the phase DAG, dispatches per-phase implement+review loops, preserving ASK gates. NOT for creating plans; NOT usable from inside a subagent."
-version: "1.4.0"
+version: "1.5.0"
 owner: "swarmery-core"
 docs:
   status: reviewed
@@ -52,6 +52,40 @@ never be delegated.
    reviewer reply without the block is recorded as a block you write from its
    findings, with `complete: false`. Shape:
    `workspace-plans/resources/plan-format.md` → "`## Review`".
+9. **Brief the reviewer with where the executor changed course** — before each
+   review, collect the executor's own workaround words: the guards list
+   `workaround`, `instead`, `bypass`, `pre-existing`, `skip`, `skipped`,
+   `flaky`, `for now`, `temporarily`, `обхід`, `обійти`, `замість`,
+   `тимчасово`, `поки що`, `пропускаю`, `пропустив`, `нестабільний`,
+   `вже був зламаний` (whole word, any case, prose only — not code).
+   - With the daemon reachable, read them from it: in
+     `curl -s http://localhost:7777/api/epics`, the epic whose `planDir` is this
+     plan, then the phase by `seq`; its `workaroundHits` hold the word, the
+     sentence and the sentences around it. The same list is
+     `GET /api/epics/<taskId>/phases/<phaseId>/workaround-hits`. The daemon
+     reads the executor's whole transcript, so dispatch every executor with a
+     description that starts `Phase <N>` — that is how it attributes the prose
+     to the phase.
+   - Without a daemon, or while it lists none yet, find the same words in the
+     executor's final message yourself.
+   - Put them at the top of the code-reviewer brief, under
+     `Look first — the agent changed course here:`, one line each (word and
+     sentence). They are places to check first, not findings.
+10. **Incomplete is never passed; two automatic rounds, then the operator.** A
+    round is incomplete when the reviewer timed out or was resumed after a turn
+    limit, gave no VERDICT line, gave no readable block (a PASS without a block
+    included), said `complete: false`, or its block's `verdict` disagrees with its
+    VERDICT line. An incomplete round starts no fix dispatch. Brief round 2 with
+    ONLY round 1's open findings (ids, file:line, evidence), its `scope_left` and
+    the diff since the tree round 1 reviewed — not the whole phase — and require
+    `round: 2` with `resolves: [ids]`. A round-1 finding round 2 neither resolves
+    nor re-reports goes into round 2's block as a `plan-conformance` finding
+    `unaddressed <id>`, written by you, not the reviewer. There is no third
+    automatic round: an incomplete round, or a FAIL at round 2, is handed to the
+    operator with exactly two options — **repeat the review** or **accept it as
+    is** (recorded as a `D-n` decision in the plan). When the plan is tracked by
+    the swarmery daemon and it offers a review `phase_decision` for the phase,
+    answer through that instead of asking in chat.
 
 # Resources
 

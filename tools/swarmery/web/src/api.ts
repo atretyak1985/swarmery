@@ -68,6 +68,8 @@ import type {
   PlanRevision,
   TerminalSession,
   PlanRunMode,
+  PlanningCost,
+  PlanningQuestion,
   PlanningStart,
   PlanningStatus,
   RevisionConflict,
@@ -1620,6 +1622,30 @@ export async function proceedPlanning(projectId: number): Promise<{ status: stri
   return (await res.json()) as { status: string };
 }
 
+/** PATCH /api/planning/sessions/{id}/turns/{seq}/cost — flip one interview
+ *  question's cost-to-change. Returns the updated question. */
+export async function setPlanningTurnCost(
+  planningSessionId: number,
+  seq: number,
+  cost: PlanningCost,
+  reason?: string,
+): Promise<PlanningQuestion> {
+  if (MOCK) return mockApi.setPlanningTurnCost(planningSessionId, seq, cost);
+  const res = await fetch(
+    `/api/planning/sessions/${String(planningSessionId)}/turns/${String(seq)}/cost`,
+    {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(reason !== undefined ? { cost, reason } : { cost }),
+    },
+  );
+  if (!res.ok) {
+    const data = (await res.json().catch(() => ({}))) as { error?: string };
+    throw new Error(data.error ?? t`changing the cost failed: ${{ status: res.status }}`);
+  }
+  return ((await res.json()) as { question: PlanningQuestion }).question;
+}
+
 // --- plan revisions (plan-revision phase 4) -----------------------------------
 
 /** startRevision 409: when a staged revision is already open, the server names
@@ -2526,6 +2552,9 @@ export const RUN_CONFLICT_HINTS: Partial<Record<RunConflictCode, string>> = {
   get 'not-yet-earliest'() {
     return t`This phase is date-gated by its doc's Earliest: line. Run it on or after that date, or edit the line if the gate no longer applies.`;
   },
+  get 'decision-undecided'() {
+    return t`This phase builds on a decision that is still open and expensive to change. Answer it in the plan's Decisions, or mark it cheap to change in the planning session, then run the phase.`;
+  },
 };
 
 /**
@@ -2563,7 +2592,7 @@ function runConflictError(
   fallback: string,
 ): PhaseRunBranchError {
   const hint =
-    body.code === 'manual-only' || body.code === 'not-yet-earliest'
+    body.code === 'manual-only' || body.code === 'not-yet-earliest' || body.code === 'decision-undecided'
       ? (body.hint ?? RUN_CONFLICT_HINTS[body.code])
       : undefined;
   const text = body.message ?? body.error ?? fallback;

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 //
-// «Cache cold» chip + «continue from handoff» (migration 0122). The claims:
+// «Cache cold» chip + «continue from handoff» (migration 0127). The claims:
 //
 //   1. Nothing renders while the session is warm (cacheCold null).
 //   2. With a brief, the action opens it: the session detail at #handoff — and

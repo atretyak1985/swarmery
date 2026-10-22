@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 //
-// Cold-restart marks in the Chat turn list (migration 0122): a turn the daemon
+// Cold-restart marks in the Chat turn list (migration 0127): a turn the daemon
 // marked coldRestart gets an inline mark right where the pause ended — before
 // that turn's prose — and an unmarked session shows none.
 //

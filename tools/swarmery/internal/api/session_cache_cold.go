@@ -3,7 +3,7 @@ package api
 import "database/sql"
 
 // sessionCacheColdCols is the «cache cold» tail of a session row (migration
-// 0122), declared beside the scan that reads it (same convention as
+// 0127), declared beside the scan that reads it (same convention as
 // sessionModelCols). The daemon's 60 s tick (internal/cachecold.Sync) keeps one
 // session_cache_cold row per session; an open row (cleared_at NULL) is the
 // prediction that the next message re-writes the whole context. Three lookups

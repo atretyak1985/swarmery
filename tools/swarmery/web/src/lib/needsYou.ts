@@ -26,6 +26,7 @@ export function replyWithOption(item: NeedsYouItem, option: string): string {
 const KIND_LABELS: Record<NeedsYouKind, MessageDescriptor> = {
   approval: msg`Approval`,
   question: msg`Question`,
+  phase_decision: msg`Guard decision`,
   prod_deploy_local: msg`Confirm locally`,
   awaiting_reply: msg`Awaiting your reply`,
   failed: msg`Failed`,
