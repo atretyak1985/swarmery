@@ -3,6 +3,7 @@ import type { MessageDescriptor } from '@lingui/core';
 import { msg, t as tr } from '@lingui/core/macro';
 import { Trans, useLingui } from '@lingui/react/macro';
 import { useCallback, useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import {
   acceptLesson,
   confirmRetirement,
@@ -13,6 +14,7 @@ import {
   keepLesson,
   type Lesson,
   type LessonEffectiveness,
+  type LessonFinding,
   type LessonMatch,
   type LessonStatus,
   mergeLesson,
@@ -21,6 +23,7 @@ import {
   retireLesson,
 } from '../api/lessons';
 import { CalibrationPanel } from './LessonsCalibration';
+import { plansPath, plansTaskHref } from './plans/plansUrl';
 
 const BTN = 'rounded border border-line px-2 py-px font-mono text-[11px] text-ink-dim hover:text-ink';
 const BTN_PRIMARY = 'rounded border border-brand px-2 py-px font-mono text-[11px] text-brand';
@@ -142,6 +145,48 @@ function matchLabel(m: LessonMatch): string {
   return `${m.exact ? '= ' : '≈ '}${m.title} (${where})`;
 }
 
+/** Where a cited review finding is read: its phase's Review tab when the plan and
+ *  phase are known, else the plan; null when the plan is gone. */
+export function findingHref(f: LessonFinding): string | null {
+  if (f.projectSlug === '') return null;
+  if (f.planId !== '' && f.phaseSeq > 0) {
+    return plansPath(f.projectSlug, { plan: f.planId, detail: { kind: 'phase', seq: f.phaseSeq, tab: 'review' } });
+  }
+  return f.taskId > 0 ? plansTaskHref(f.projectSlug, f.taskId) : null;
+}
+
+/** The evidence ids, each `finding:<id>` the API resolved shown as a link to it. */
+function EvidenceList({ lesson }: { lesson: Lesson }): JSX.Element {
+  const byRef = new Map(lesson.findings.map((f) => [`finding:${String(f.id)}`, f]));
+  return (
+    <div className="mt-1 flex flex-wrap items-baseline gap-x-1 font-mono text-[10px] text-ink-dim">
+      <Trans>evidence:</Trans>
+      {lesson.evidence.map((e, i) => {
+        const f = byRef.get(e);
+        const href = f === undefined ? null : findingHref(f);
+        const sep = i > 0 ? '· ' : '';
+        if (f === undefined || href === null) {
+          return (
+            <span key={e}>
+              {sep}
+              {e}
+            </span>
+          );
+        }
+        const where = f.line > 0 ? `${f.file}:${String(f.line)}` : f.file;
+        return (
+          <span key={e}>
+            {sep}
+            <Link to={href} title={`${f.planId} · ${f.phaseName} · ${where}`} className="text-brand hover:underline">
+              {f.findingId} · {f.phaseName}
+            </Link>
+          </span>
+        );
+      })}
+    </div>
+  );
+}
+
 function EditForm({
   lesson,
   busy,
@@ -235,6 +280,14 @@ function LessonCard({
       <div className="flex items-baseline justify-between gap-3">
         <div className="text-ink">{lesson.title}</div>
         <div className="shrink-0 font-mono text-[10px] text-ink-dim">
+          {lesson.source === 'review' && (
+            <span
+              className="mr-1 rounded border border-brand px-1 text-brand"
+              title={t`proposed because reviewers raised the same finding type in this area in several phases`}
+            >
+              <Trans>review</Trans>
+            </span>
+          )}
           {lesson.status}
           {surprise !== null && t` · surprise ${surprise}`}
           {lesson.recurrences > 1 && t` · seen ${recurrences}×`}
@@ -256,9 +309,7 @@ function LessonCard({
           {lesson.cause}
         </p>
       )}
-      <div className="mt-1 font-mono text-[10px] text-ink-dim">
-        <Trans>evidence:</Trans> {lesson.evidence.join(' · ')}
-      </div>
+      <EvidenceList lesson={lesson} />
       <div className="mt-1 font-mono text-[10px] text-ink-dim">
         {lesson.planId} · {lesson.phaseName}
         {linkedTitle !== '' && t` · linked to "${linkedTitle}"`}
@@ -425,6 +476,10 @@ export function Lessons({ embedded = false }: { embedded?: boolean } = {}): JSX.
           Active lessons are re-measured against their area&apos;s surprise; one that stops earning
           its place is proposed for retirement below, and retired on its own after 14 days without
           an answer.
+        </Trans>{' '}
+        <Trans>
+          A review finding type that repeats in one area across two or more phases is proposed here
+          too, marked review and citing its findings; dismissing it mutes that area for 30 days.
         </Trans>
       </p>
       <RetirementQueue />

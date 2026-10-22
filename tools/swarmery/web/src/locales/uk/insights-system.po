@@ -571,6 +571,10 @@ msgstr "запуск фази розходиться з планом"
 msgid "a plan phase run ends and the rules can't tell"
 msgstr "запуск фази плану завершується, а правила не можуть визначити результат"
 
+#: src/pages/Lessons.tsx
+msgid "A review finding type that repeats in one area across two or more phases is proposed here too, marked review and citing its findings; dismissing it mutes that area for 30 days."
+msgstr "Тип зауваження з рев’ю, що повторюється в одній зоні у двох і більше фазах, теж пропонується тут — з позначкою рев’ю й посиланнями на ці зауваження; якщо його прибрати, ця зона стихне на 30 днів."
+
 #: src/pages/learning/classifierModel.ts
 #: src/pages/learning/classifierModel.ts
 msgid "a session finishes"
@@ -3217,6 +3221,10 @@ msgid "proposals"
 msgstr "пропозиції"
 
 #: src/pages/Lessons.tsx
+msgid "proposed because reviewers raised the same finding type in this area in several phases"
+msgstr "запропоновано, бо рев’юери знаходили той самий тип зауважень у цій зоні в кількох фазах"
+
+#: src/pages/Lessons.tsx
 msgid "Proposed retirements"
 msgstr "Пропозиції списати"
 
@@ -3394,6 +3402,10 @@ msgstr "повторити"
 #: src/pages/Retro.tsx
 msgid "Retry"
 msgstr "Повторити"
+
+#: src/pages/Lessons.tsx
+msgid "review"
+msgstr "рев’ю"
 
 #: src/pages/inbox/ReviewItem.tsx
 msgid "review {verdictWord}"
