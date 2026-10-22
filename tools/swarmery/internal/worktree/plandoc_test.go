@@ -1,6 +1,7 @@
 package worktree
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -217,5 +218,61 @@ func TestCollectReportTruncatesAPastedLog(t *testing.T) {
 	}
 	if !strings.HasSuffix(got, "(truncated)") {
 		t.Errorf("a truncated report must say so; got the tail %q", got[max(0, len(got)-20):])
+	}
+}
+
+func TestDocCopyHash(t *testing.T) {
+	wt, ws := t.TempDir(), t.TempDir()
+	doc := filepath.Join(ws, "phase-1-x.md")
+	if err := os.WriteFile(doc, []byte("# Phase 1\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := DocCopyHash(wt, doc); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("no copy yet: err = %v, want ErrNotExist", err)
+	}
+	if _, err := LendPlanDoc(wt, doc); err != nil {
+		t.Fatal(err)
+	}
+	got, err := DocCopyHash(wt, doc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want, _ := FileHash(doc)
+	// sha256("# Phase 1\n"), pinned so the hash is the content's, not a path's.
+	if got != want || got != "bedee2be41b4880554d301f7949823b2dffad1c90d065f339d6f3d4dfb9b8daf" {
+		t.Fatalf("DocCopyHash = %s, want %s", got, want)
+	}
+	if err := os.WriteFile(filepath.Join(wt, LentPlanDocRel(doc)), []byte("# Phase 1 tampered\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if tampered, _ := DocCopyHash(wt, doc); tampered == want {
+		t.Fatal("a tampered copy hashes like the canonical doc")
+	}
+}
+
+func TestRelendPlanDoc(t *testing.T) {
+	wt, ws := t.TempDir(), t.TempDir()
+	doc := filepath.Join(ws, "phase-1-x.md")
+	if err := os.WriteFile(doc, []byte("v1\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	// No copy in the worktree: nothing is planted.
+	if ok, err := RelendPlanDoc(wt, doc); ok || err != nil {
+		t.Fatalf("RelendPlanDoc without a copy = %v, %v", ok, err)
+	}
+	if _, err := os.Stat(filepath.Join(wt, PlanDocDir)); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("a .swarmery/plan was planted: %v", err)
+	}
+	if _, err := LendPlanDoc(wt, doc); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(doc, []byte("v2 revised\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if ok, err := RelendPlanDoc(wt, doc); !ok || err != nil {
+		t.Fatalf("RelendPlanDoc = %v, %v", ok, err)
+	}
+	if b, _ := os.ReadFile(filepath.Join(wt, LentPlanDocRel(doc))); string(b) != "v2 revised\n" {
+		t.Fatalf("copy = %q, want the revised doc", b)
 	}
 }

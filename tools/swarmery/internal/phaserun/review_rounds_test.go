@@ -1,10 +1,13 @@
 package phaserun
 
 import (
+	"errors"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/phasegate"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/store"
 )
 
 // Two automatic rounds, then nothing automatic: a third review exists only as
@@ -106,5 +109,97 @@ func TestDepSatisfiedHeldByAnIncompleteReview(t *testing.T) {
 		VALUES (?, ?, ?, '10', 'PASS', 1, 'now')`, taskID, p1, doc)
 	if ok, _ := s.depSatisfied(taskID, 1); !ok {
 		t.Error("a complete later round (10, numeric order) does not lift the hold")
+	}
+}
+
+// The daemon's own decision sink (no ReviewDecisions override): a round-2 FAIL
+// raises ONE source='review' phase_decisions row, undecided, with the two
+// options; it holds the phase although round 2's block is complete; accept-as-is
+// appends the D-n line to the doc and lifts the hold, repeat-review only records
+// the answer.
+func TestReviewDecisionRaisedHeldAndAccepted(t *testing.T) {
+	const finding = "[{id: R1-1, type: correctness, file: a.go, line: 3, evidence: broken}]"
+	_, db, p1, _, _, _ := startReviewed(t, reviewerOutput("FAIL", finding), reviewerOutput("FAIL", finding))
+	var taskID int64
+	if err := db.QueryRow(`SELECT workspace_task_id FROM epic_phases WHERE id = ?`, p1).Scan(&taskID); err != nil {
+		t.Fatal(err)
+	}
+	ds, err := store.ListTaskDecisions(db, taskID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(ds) != 1 {
+		t.Fatalf("decisions = %+v, want one", ds)
+	}
+	d := ds[0]
+	if d.Source != store.DecisionSourceReview || d.Status != store.DecisionUndecided || d.PhaseID == nil || *d.PhaseID != p1 ||
+		strings.Join(d.OptionIDs, ",") != ReviewOptionRepeat+","+ReviewOptionAccept ||
+		!strings.Contains(d.Question, "Review round 2 did not settle: the review still fails after round 2") {
+		t.Fatalf("decision = %+v", d)
+	}
+
+	// Ticked, ungraded-by-choice dependency: only the review decision can hold it.
+	mustExec(t, db, `UPDATE epic_phases SET checkboxes_done = checkboxes_total, verify_mode = 'off' WHERE id = ?`, p1)
+	s := newTestService(db, &stubRunner{}, &stubWt{})
+	if ok, err := s.depSatisfied(taskID, 1); err != nil || ok {
+		t.Fatalf("open review decision: depSatisfied = (%v, %v), want held", ok, err)
+	}
+
+	if _, err := AnswerReviewDecision(db, taskID, p1, d.DecisionID, GuardAnswer{Option: "maybe"}, time.Now()); !errors.Is(err, ErrDecisionBadOption) {
+		t.Errorf("bad option: %v", err)
+	}
+	got, err := AnswerReviewDecision(db, taskID, p1, d.DecisionID, GuardAnswer{Option: ReviewOptionAccept, Note: "flaky reviewer"}, time.Now())
+	if err != nil || got.Status != store.DecisionDecided || got.Answer != "accept as is — flaky reviewer" {
+		t.Fatalf("accept = %+v, %v", got, err)
+	}
+	doc, _, _, _ := phaseDocAndState(t, db, p1)
+	if !strings.Contains(doc, "## Decisions\n\n- **"+d.DecisionID+"** (review) — Review round 2 did not settle") ||
+		!strings.Contains(doc, "→ accept as is — flaky reviewer") {
+		t.Errorf("doc lacks the D-n line:\n%s", doc)
+	}
+	if ok, _ := s.depSatisfied(taskID, 1); !ok {
+		t.Error("accepted as is, the phase is still held")
+	}
+	if _, err := AnswerReviewDecision(db, taskID, p1, d.DecisionID, GuardAnswer{Option: ReviewOptionAccept}, time.Now()); !errors.Is(err, ErrDecisionNotOpen) {
+		t.Errorf("second answer: %v, want ErrDecisionNotOpen", err)
+	}
+}
+
+// accept-as-is also lifts the doc's incomplete-round hold; a new hand-over mints
+// a fresh decision that holds again.
+func TestReviewDecisionAcceptLiftsIncompleteHold(t *testing.T) {
+	_, db, p1, _, _, _ := startReviewed(t, "- P0 a.go:1 — broken.\nVERDICT: FAIL") // no block ⇒ incomplete
+	var taskID int64
+	_ = db.QueryRow(`SELECT workspace_task_id FROM epic_phases WHERE id = ?`, p1).Scan(&taskID)
+	mustExec(t, db, `UPDATE epic_phases SET checkboxes_done = checkboxes_total, verify_mode = 'off' WHERE id = ?`, p1)
+	doc := phaseDocPath(t, db, p1)
+	// The workspace scan would project the doc's incomplete round; stand in for it.
+	mustExec(t, db, `INSERT INTO review_blocks (workspace_task_id, phase_id, doc_path, round, verdict, complete, scope_left_json, written_at)
+		VALUES (?, ?, ?, '1', 'FAIL', 0, '["review-incomplete: no-block"]', 'now')`, taskID, p1, doc)
+	s := newTestService(db, &stubRunner{}, &stubWt{})
+	if ok, _ := s.depSatisfied(taskID, 1); ok {
+		t.Fatal("an incomplete review does not hold")
+	}
+	ds, _ := store.ListTaskDecisions(db, taskID)
+	if len(ds) != 1 || !strings.Contains(ds[0].Question, IncompleteNoBlock) {
+		t.Fatalf("decisions = %+v", ds)
+	}
+	if _, err := AnswerReviewDecision(db, taskID, p1, ds[0].DecisionID, GuardAnswer{Option: ReviewOptionAccept}, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	if ok, _ := s.depSatisfied(taskID, 1); !ok {
+		t.Error("accepted as is, the incomplete round still holds")
+	}
+
+	info, err := s.loadPhase(p1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.handOverReview(p1, info, 2, "review-incomplete: reviewer-timed-out — killed")
+	if ok, _ := s.depSatisfied(taskID, 1); ok {
+		t.Error("a new open review decision does not hold again")
+	}
+	if ds, _ := store.ListTaskDecisions(db, taskID); len(ds) != 2 || ds[1].DecisionID != "D-2" {
+		t.Errorf("decisions = %+v, want a fresh D-2", ds)
 	}
 }

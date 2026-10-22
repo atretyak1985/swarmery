@@ -66,7 +66,7 @@ func TestRound2BriefIsFindingsScopeAndNewDiff(t *testing.T) {
 	if brief.fullDiff {
 		t.Fatal("the brief fell back to the whole diff although round 1's tree is known")
 	}
-	prompt := round2Prompt(info.Name, brief, 0, 2)
+	prompt := round2Prompt("", info.Name, brief, 0, 2)
 	for _, want := range []string{"REVIEW ROUND: 2\n", "id: R1-1", "id: R1-2", "rows are written before the header",
 		"- web/src/export", "fix.go", "// the review fix", "write round: 2"} {
 		if !strings.Contains(prompt, want) {
@@ -114,7 +114,7 @@ func round2Cycle(t *testing.T, output string) (verdict string, fix bool, doc str
 	s.treeFingerprint = func(string) (string, error) { return "tree-1", nil }
 	dec = &fakeDecider{}
 	s.ReviewDecisions = dec
-	verdict, fix = s.reviewCycle(p1, info, worktree.Acquired{Path: t.TempDir()}, 1, "", false)
+	verdict, fix = s.reviewCycle(p1, info, worktree.Acquired{Path: t.TempDir()}, 1, "", false, GuardResult{})
 	doc, _, _, _ = phaseDocAndState(t, db, p1)
 	return verdict, fix, doc, dec, reviewFixRound(t, db, p1)
 }
@@ -173,7 +173,7 @@ func TestRound2TimeoutIsIncomplete(t *testing.T) {
 	s.treeFingerprint = func(string) (string, error) { return "tree-1", nil }
 	dec := &fakeDecider{}
 	s.ReviewDecisions = dec
-	verdict, fix := s.reviewCycle(p1, info, worktree.Acquired{Path: t.TempDir()}, 1, "", false)
+	verdict, fix := s.reviewCycle(p1, info, worktree.Acquired{Path: t.TempDir()}, 1, "", false, GuardResult{})
 	if verdict != "inconclusive" || fix {
 		t.Fatalf("round 2 = (%q, %v), want (inconclusive, false)", verdict, fix)
 	}

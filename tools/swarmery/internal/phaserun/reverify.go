@@ -175,6 +175,14 @@ var opReverify = runBranchOp{gerund: "re-verifying", participle: "re-verified", 
 // it (when this call created it) and releases the slot; every refusal after the
 // slot was taken releases it.
 func (s *Service) admitOnRunBranch(phaseID int64, info phaseInfo, op runBranchOp, body func(worktree.Acquired)) (start func(), err error) {
+	start, _, err = s.admitOnRunBranchAbortable(phaseID, info, op, body)
+	return start, err
+}
+
+// admitOnRunBranchAbortable is admitOnRunBranch that also hands back abort:
+// the same release as start's, without running body. Exactly one of the two
+// must be called.
+func (s *Service) admitOnRunBranchAbortable(phaseID int64, info phaseInfo, op runBranchOp, body func(worktree.Acquired)) (start, abort func(), err error) {
 	// The task name — and with it the worktree path and the swarm/<taskName> branch
 	// the manager checks out — is derived from the STAMPED run_branch, not from the
 	// current row id: a re-keyed row (archived plan, renamed doc) carries the branch
@@ -183,7 +191,7 @@ func (s *Service) admitOnRunBranch(phaseID int64, info phaseInfo, op runBranchOp
 	// branch is never guessed at. The run slot stays keyed on the current id.
 	taskName, ok := runcore.PhaseTaskNameFromBranch(info.RunBranch)
 	if !ok {
-		return nil, refuseReverify(http.StatusUnprocessableEntity, ReverifyCodeNoRunBranch,
+		return nil, nil, refuseReverify(http.StatusUnprocessableEntity, ReverifyCodeNoRunBranch,
 			fmt.Sprintf("the phase's run branch %s is not a phase run branch (swarm/phase-<id>) — it cannot be %s",
 				info.RunBranch, op.participle))
 	}
@@ -191,28 +199,28 @@ func (s *Service) admitOnRunBranch(phaseID int64, info phaseInfo, op runBranchOp
 	// and the stamp's lineage fallback (verify.stampPhaseVerdict) relies on a branch
 	// naming exactly one row.
 	if other, err := s.otherBranchOwner(phaseID, info.RunBranch); err != nil {
-		return nil, err
+		return nil, nil, err
 	} else if other != 0 {
-		return nil, refuseReverify(http.StatusConflict, ReverifyCodeBranchBusy,
+		return nil, nil, refuseReverify(http.StatusConflict, ReverifyCodeBranchBusy,
 			fmt.Sprintf("run branch %s is also claimed by phase %d — resolve the duplicate before %s",
 				info.RunBranch, other, op.gerund))
 	}
 	if info.ProjectPath == "" {
-		return nil, ErrNoPath
+		return nil, nil, ErrNoPath
 	}
 	// loadPhase does not resolve the repository; StartWith does it itself, and so
 	// must this — the branch lives in the repo the run resolved to.
 	info.RepoRoot, err = s.runRoot(info)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	if s.branchTip(info.RepoRoot, info.RunBranch) == "" {
-		return nil, refuseReverify(http.StatusUnprocessableEntity, ReverifyCodeNoRunBranch,
+		return nil, nil, refuseReverify(http.StatusUnprocessableEntity, ReverifyCodeNoRunBranch,
 			fmt.Sprintf("the run branch %s does not exist in %s", info.RunBranch, info.RepoRoot))
 	}
 	ex, ok := s.Wt.(ExistingBranchWorktrees)
 	if !ok {
-		return nil, refuseReverify(http.StatusServiceUnavailable, ReverifyCodeNotWired,
+		return nil, nil, refuseReverify(http.StatusServiceUnavailable, ReverifyCodeNotWired,
 			"the worktree manager cannot check out an existing branch")
 	}
 
@@ -225,10 +233,10 @@ func (s *Service) admitOnRunBranch(phaseID int64, info phaseInfo, op runBranchOp
 	if err != nil {
 		cancel()
 		if errors.Is(err, runcore.ErrBusy) {
-			return nil, refuseReverify(http.StatusConflict, ReverifyCodeAlreadyRunning,
+			return nil, nil, refuseReverify(http.StatusConflict, ReverifyCodeAlreadyRunning,
 				"a run, a re-verification or a review is already active for this phase")
 		}
-		return nil, err // runcore.ErrNoSlot travels as itself
+		return nil, nil, err // runcore.ErrNoSlot travels as itself
 	}
 	// The slot alone cannot exclude a second re-verification of the same branch: a
 	// re-key while this one grades (wsingest moves the row to a new id) leaves the
@@ -238,7 +246,7 @@ func (s *Service) admitOnRunBranch(phaseID int64, info phaseInfo, op runBranchOp
 	if !s.claimReverifyBranch(info.RunBranch) {
 		cancel()
 		releaseSlot()
-		return nil, refuseReverify(http.StatusConflict, ReverifyCodeAlreadyRunning,
+		return nil, nil, refuseReverify(http.StatusConflict, ReverifyCodeAlreadyRunning,
 			fmt.Sprintf("a %s of run branch %s is already active — the phase was re-keyed while it ran; wait for it to finish",
 				op.noun, info.RunBranch))
 	}
@@ -258,11 +266,11 @@ func (s *Service) admitOnRunBranch(phaseID int64, info phaseInfo, op runBranchOp
 	left, err := s.leftoverWorktree(info.RepoRoot, info.ProjectSlug, taskName)
 	if err != nil {
 		release()
-		return nil, fmt.Errorf("worktree inspect: %w", err)
+		return nil, nil, fmt.Errorf("worktree inspect: %w", err)
 	}
 	if left.dirty {
 		release()
-		return nil, refuseReverify(http.StatusConflict, ReverifyCodeWorktreeDirty,
+		return nil, nil, refuseReverify(http.StatusConflict, ReverifyCodeWorktreeDirty,
 			fmt.Sprintf("a leftover worktree of this phase at %s holds uncommitted changes — commit them to %s "+
 				"or remove the worktree (`git worktree remove`, after saving anything worth keeping), then %s",
 				left.path, info.RunBranch, op.again))
@@ -274,13 +282,13 @@ func (s *Service) admitOnRunBranch(phaseID int64, info phaseInfo, op runBranchOp
 		release()
 		switch {
 		case errors.Is(err, worktree.ErrBranchBusy):
-			return nil, refuseReverify(http.StatusConflict, ReverifyCodeBranchBusy,
+			return nil, nil, refuseReverify(http.StatusConflict, ReverifyCodeBranchBusy,
 				"the run branch is checked out in another worktree — remove it or finish what holds it, then "+op.again)
 		case errors.Is(err, worktree.ErrStartRefUnresolved):
-			return nil, refuseReverify(http.StatusUnprocessableEntity, ReverifyCodeNoRunBranch,
+			return nil, nil, refuseReverify(http.StatusUnprocessableEntity, ReverifyCodeNoRunBranch,
 				fmt.Sprintf("the run branch %s no longer resolves", info.RunBranch))
 		}
-		return nil, fmt.Errorf("worktree acquire: %w", err)
+		return nil, nil, fmt.Errorf("worktree acquire: %w", err)
 	}
 
 	// A clean checkout already on the run branch at this path is the one
@@ -289,15 +297,18 @@ func (s *Service) admitOnRunBranch(phaseID int64, info phaseInfo, op runBranchOp
 	// in place) is a checkout this call cut, and it is removed afterwards.
 	created := !(left.registered && left.branch == acq.Branch)
 
-	return func() {
+	finish := func(run bool) {
 		// Worktree FIRST, slot LAST (defers run LIFO) — the invariant runAndHandle
 		// keeps, so no run can warm-reuse a worktree that is about to be removed.
 		defer release()
 		if created {
 			defer s.removeWorktree(info.RepoRoot, acq)
 		}
-		body(acq)
-	}, nil
+		if run {
+			body(acq)
+		}
+	}
+	return func() { finish(true) }, func() { finish(false) }, nil
 }
 
 // claimReverifyBranch marks branch as being re-verified; false when it already is.

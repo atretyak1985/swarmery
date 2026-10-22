@@ -50,8 +50,14 @@ In your kind: review block write round: 2. List in resolves the ids of the previ
 
 // round2Prompt renders the reviewer's prompt for a round-2 review: the role, the
 // round, the phase title and the brief — no phase document, no whole-run diff.
-func round2Prompt(title string, b round2Brief, daemonPort, round int) string {
+// guardSummary opens it when the run's guard check found anything, as in
+// reviewPrompt.
+func round2Prompt(guardSummary, title string, b round2Brief, daemonPort, round int) string {
 	var s strings.Builder
+	if g := strings.TrimSpace(guardSummary); g != "" {
+		s.WriteString(g)
+		s.WriteString("\n\n")
+	}
 	s.WriteString(reviewerPreamble(daemonPort))
 	s.WriteString("\n\nREVIEW ROUND: ")
 	s.WriteString(strconv.Itoa(round))

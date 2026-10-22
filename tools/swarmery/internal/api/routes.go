@@ -261,6 +261,8 @@ func Routes(root *http.ServeMux, h *Handler) {
 	mux.HandleFunc("POST /api/projects/{id}/planning/answer", requireLocalOrigin(h.answerPlanning))
 	mux.HandleFunc("POST /api/projects/{id}/planning/refine", requireLocalOrigin(h.refinePlanning))
 	mux.HandleFunc("POST /api/projects/{id}/planning/proceed", requireLocalOrigin(h.proceedPlanning))
+	// decision ids (verify-not-trust phase 2): flip a question's cost-to-change.
+	mux.HandleFunc("PATCH /api/planning/sessions/{id}/turns/{seq}/cost", requireLocalOrigin(h.patchPlanningTurnCost))
 
 	// phase 2: approvals (frozen contract — docs/hooks-protocol.md).
 	// All write endpoints reject foreign browser Origins (D4). The shim's
@@ -460,6 +462,9 @@ func Routes(root *http.ServeMux, h *Handler) {
 	// phase-run mechanism. Route is intentionally absent (→ 404).
 	mux.HandleFunc("GET /api/epics", h.listEpics)
 	mux.HandleFunc("POST /api/epics/{taskId}/lifecycle", requireLocalOrigin(h.epicLifecycle))
+	mux.HandleFunc("GET /api/epics/{taskId}/decisions", h.getEpicDecisions)
+	// verify-not-trust phase 4: answer a guard decision (needs-you phase_decision).
+	mux.HandleFunc("POST /api/epics/{taskId}/phases/{phaseId}/decisions/{decisionId}", requireLocalOrigin(h.answerPhaseDecision))
 	mux.HandleFunc("GET /api/epics/{taskId}/docs", h.getPlanDoc)
 	mux.HandleFunc("PUT /api/epics/{taskId}/docs", requireLocalOrigin(h.putPlanDoc))
 	mux.HandleFunc("PATCH /api/epics/{taskId}/docs", requireLocalOrigin(h.patchPlanDoc))

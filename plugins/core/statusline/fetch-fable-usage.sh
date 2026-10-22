@@ -83,11 +83,33 @@ else
   SERVICES=("Claude Code-credentials" "Claude Code-credentials-${CFG_SUFFIX}")
 fi
 
+# The token travels on curl's STDIN, never in its argv: argv is readable by
+# every account on the machine (ps, /proc/<pid>/cmdline) for as long as the
+# request runs. `-H @-` reads headers from stdin (curl >= 7.55); older curl
+# gets the same header through a config file on stdin (`--config -`).
+curl_headers_from_stdin() {
+  local v major minor
+  v=$(curl --version 2>/dev/null | head -1 | awk '{print $2}')
+  major="${v%%.*}"; minor="${v#*.}"; minor="${minor%%.*}"
+  case "$major$minor" in ''|*[!0-9]*) return 1 ;; esac
+  [ "$major" -gt 7 ] || { [ "$major" -eq 7 ] && [ "$minor" -ge 55 ]; }
+}
+if curl_headers_from_stdin; then CURL_STDIN_HEADERS=1; else CURL_STDIN_HEADERS=0; fi
+
 fetch_usage() {
-  curl -fsS --max-time "$TIMEOUT" "$USAGE_URL" \
-    -H "Authorization: Bearer $1" \
-    -H "Content-Type: application/json" \
-    -H "anthropic-beta: $OAUTH_BETA" 2>/dev/null
+  if [ "$CURL_STDIN_HEADERS" = "1" ]; then
+    printf 'Authorization: Bearer %s\n' "$1" \
+      | curl -fsS --max-time "$TIMEOUT" "$USAGE_URL" \
+          -H @- \
+          -H "Content-Type: application/json" \
+          -H "anthropic-beta: $OAUTH_BETA" 2>/dev/null
+  else
+    printf 'header = "Authorization: Bearer %s"\n' "$1" \
+      | curl -fsS --max-time "$TIMEOUT" "$USAGE_URL" \
+          --config - \
+          -H "Content-Type: application/json" \
+          -H "anthropic-beta: $OAUTH_BETA" 2>/dev/null
+  fi
 }
 
 RESP=""

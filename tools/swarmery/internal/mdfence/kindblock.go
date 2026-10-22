@@ -29,9 +29,9 @@ const (
 // ParseError is why a kind block could not be used. Line is the 1-based line in
 // the WHOLE document (0 for an absent block); Reason is the operator's sentence.
 type ParseError struct {
-	Kind   string
-	Line   int
-	Reason string
+	Kind   string `json:"kind"`
+	Line   int    `json:"line"`
+	Reason string `json:"reason"`
 }
 
 func (e *ParseError) Error() string {

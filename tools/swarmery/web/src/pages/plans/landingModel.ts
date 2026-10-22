@@ -167,12 +167,14 @@ export function landingChip(
 export interface FindingsPhase {
   reviewBlocks?: readonly unknown[] | undefined;
   legacyReview?: boolean | undefined;
+  /** An open review decision is answered on the Review tab (phase 9). */
+  reviewDecision?: unknown;
 }
 
 /** Whether the phase has anything for the Review tab's findings table: a
  *  `kind: review` round in its doc, or the D21 legacy badge. */
 export function hasReviewFindings(phase: FindingsPhase): boolean {
-  return (phase.reviewBlocks?.length ?? 0) > 0 || phase.legacyReview === true;
+  return (phase.reviewBlocks?.length ?? 0) > 0 || phase.legacyReview === true || phase.reviewDecision != null;
 }
 
 /** Whether the phase panel shows a Review tab at all: a run to land

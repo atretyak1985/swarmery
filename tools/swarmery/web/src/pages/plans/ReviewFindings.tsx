@@ -14,7 +14,9 @@
 
 import { t } from '@lingui/core/macro';
 import { Trans, useLingui } from '@lingui/react/macro';
-import type { ReviewBlock, ReviewFinding } from '../../api/types';
+import { useState } from 'react';
+import { answerPhaseDecision } from '../../api/guard';
+import type { NeedsYouDecision, ReviewBlock, ReviewFinding } from '../../api/types';
 import { fmtAgo } from '../../lib/format';
 
 export interface ReviewFindingsProps {
@@ -25,6 +27,60 @@ export interface ReviewFindingsProps {
   /** D20: why the latest round is incomplete (`phase.reviewHold`), "" or
    *  absent when it is complete. */
   hold?: string;
+  /** The phase's open review decision (`phase.reviewDecision`): answered inline
+   *  here — repeat the review or accept it as is. */
+  decision?: NeedsYouDecision | null;
+  /** Called after an answer was recorded (refetch the plan). */
+  onAnswered?: () => void;
+}
+
+/** The inline answer to a review decision: the question and one button per
+ *  option, POSTed to the phase's decision endpoint. */
+export function ReviewDecisionActions({
+  decision,
+  onAnswered,
+}: {
+  decision: NeedsYouDecision;
+  onAnswered?: () => void;
+}): JSX.Element {
+  const { t } = useLingui();
+  const [busy, setBusy] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const answer = (option: string): void => {
+    setBusy(option);
+    setError(null);
+    answerPhaseDecision(decision.taskId, decision.phaseId, decision.decisionId, option, '')
+      .then(() => onAnswered?.())
+      .catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)))
+      .finally(() => setBusy(null));
+  };
+  const id = decision.decisionId;
+  return (
+    <div role="group" aria-label={t`Review decision ${id}`} className="mt-2 border-t border-amber/30 pt-2">
+      <p className="text-[11px] text-ink-2">
+        <span className="mr-1 font-mono text-[10.5px] text-amber">{id}</span>
+        {decision.question}
+      </p>
+      <div className="mt-1.5 flex flex-wrap gap-1.5">
+        {decision.options.map((o) => (
+          <button
+            key={o.id}
+            type="button"
+            disabled={busy !== null}
+            onClick={() => answer(o.id)}
+            className="rounded border border-line bg-surface px-2 py-0.5 font-mono text-[10.5px] text-ink-2 hover:border-amber/60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber disabled:opacity-50"
+          >
+            {busy === o.id ? t`answering…` : o.label}
+          </button>
+        ))}
+      </div>
+      {error !== null && (
+        <p role="alert" className="mt-1 font-mono text-[10.5px] text-red">
+          {error}
+        </p>
+      )}
+    </div>
+  );
 }
 
 /** The daemon's bound on automatic review rounds per cycle (D42). */
@@ -36,7 +92,15 @@ export function roundsText(blocks: readonly ReviewBlock[]): string {
   return n === 1 ? t`1 review round` : t`${String(n)} review rounds`;
 }
 
-function HoldBanner({ hold }: { hold: string }): JSX.Element {
+function HoldBanner({
+  hold,
+  decision,
+  onAnswered,
+}: {
+  hold: string;
+  decision: NeedsYouDecision | null;
+  onAnswered?: () => void;
+}): JSX.Element {
   const { t } = useLingui();
   const max = String(MAX_AUTO_REVIEW_ROUNDS);
   return (
@@ -51,6 +115,20 @@ function HoldBanner({ hold }: { hold: string }): JSX.Element {
           {max} review rounds on its own.
         </Trans>
       </p>
+      {decision !== null && <ReviewDecisionActions decision={decision} {...(onAnswered ? { onAnswered } : {})} />}
+    </div>
+  );
+}
+
+/** An open review decision with a complete latest round — a FAIL at round 2. */
+function DecisionBanner({ decision, onAnswered }: { decision: NeedsYouDecision; onAnswered?: () => void }): JSX.Element {
+  const { t } = useLingui();
+  return (
+    <div role="status" aria-label={t`Review did not settle`} className="rounded-lg border border-amber/40 bg-amber/10 px-2.5 py-2">
+      <div className="font-mono text-[10px] tracking-[0.14em] text-amber uppercase">
+        <Trans>Review did not settle — the operator decides</Trans>
+      </div>
+      <ReviewDecisionActions decision={decision} {...(onAnswered ? { onAnswered } : {})} />
     </div>
   );
 }
@@ -176,10 +254,17 @@ function Round({ block }: { block: ReviewBlock }): JSX.Element {
   );
 }
 
-export function ReviewFindings({ blocks, legacy, hold = '' }: ReviewFindingsProps): JSX.Element | null {
+export function ReviewFindings({
+  blocks,
+  legacy,
+  hold = '',
+  decision = null,
+  onAnswered,
+}: ReviewFindingsProps): JSX.Element | null {
   const { t } = useLingui();
   const held = hold.trim() !== '';
-  if (blocks.length === 0 && !legacy && !held) return null;
+  if (blocks.length === 0 && !legacy && !held && decision === null) return null;
+  const answered = onAnswered ? { onAnswered } : {};
   return (
     <section aria-label={t`Review findings`} className="space-y-2">
       <div className="flex flex-wrap items-center gap-1.5">
@@ -197,7 +282,8 @@ export function ReviewFindings({ blocks, legacy, hold = '' }: ReviewFindingsProp
         {blocks.length > 0 && <span className="font-mono text-[10px] text-ink-faint">{roundsText(blocks)}</span>}
         {held && <span className={`${CHIP} border-amber/40 text-amber`}>{t`review incomplete`}</span>}
       </div>
-      {held && <HoldBanner hold={hold} />}
+      {held && <HoldBanner hold={hold} decision={decision} {...answered} />}
+      {!held && decision !== null && <DecisionBanner decision={decision} {...answered} />}
       {blocks.map((b) => (
         <Round key={b.round} block={b} />
       ))}

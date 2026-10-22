@@ -203,6 +203,7 @@ func Diagnose(db *sql.DB, git worktree.Git, own OwnCheckout, phaseID int64) (Dia
 		completionReport sql.NullString
 		reviewHold       string
 		legacyReview     bool
+		reviewDecision   string
 		lessonRecorded   bool
 	)
 	err := db.QueryRow(`
@@ -215,7 +216,7 @@ func Diagnose(db *sql.DB, git worktree.Git, own OwnCheckout, phaseID int64) (Dia
 		                 JOIN task_retros r ON r.id = l.retro_id
 		                WHERE r.task_id = e.workspace_task_id),
 		       p.path,
-		       `+phasegate.ReviewHoldSQL+`, e.legacy_review
+		       `+phasegate.ReviewHoldSQL+`, e.legacy_review, `+phasegate.ReviewDecisionSQL+`
 		  FROM epic_phases e
 		  JOIN tasks t ON t.id = e.workspace_task_id
 		  JOIN projects p ON p.id = t.project_id
@@ -224,7 +225,7 @@ func Diagnose(db *sql.DB, git worktree.Git, own OwnCheckout, phaseID int64) (Dia
 		&total, &don, &runState, &uuid,
 		&startedAt, &endedAt, &runErr, &before, &after,
 		&verifyMode, &verdict, &vDetail, &completionReport, &lessonRecorded, &projPath,
-		&reviewHold, &legacyReview)
+		&reviewHold, &legacyReview, &reviewDecision)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Diagnosis{}, ErrPhaseNotFound
 	}
@@ -386,6 +387,7 @@ func Diagnose(db *sql.DB, git worktree.Git, own OwnCheckout, phaseID int64) (Dia
 	// modal, the Plans list and the dependency gate cannot disagree about the same
 	// row. `fail` is deliberately NOT routed here: decision D5 keeps a failed grade
 	// as completed work with a verify-failed blocker beside it, and 5 above says so.
+	reviewDecisionOpen, reviewAccepted := phasegate.ParseReviewDecision(reviewDecision)
 	gate := phasegate.Check(phasegate.Input{
 		CriteriaDone:     d.CriteriaAfter,
 		CriteriaTotal:    total,
@@ -397,6 +399,9 @@ func Diagnose(db *sql.DB, git worktree.Git, own OwnCheckout, phaseID int64) (Dia
 		ClosureRequired:  phasegate.ClosureGateEnabled(),
 		ReviewHold:       reviewHold,
 		LegacyReview:     legacyReview,
+		ReviewAccepted:   reviewAccepted,
+		// The phase's open review decision, if any (verify-not-trust phase 9).
+		ReviewDecisionOpen: reviewDecisionOpen,
 	})
 	switch gate.State {
 	case phasegate.StateUnverified:

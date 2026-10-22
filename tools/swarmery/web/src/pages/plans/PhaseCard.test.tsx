@@ -108,3 +108,36 @@ describe('PhaseCard landing chip', () => {
     expect(chip()).toBeNull();
   });
 });
+
+// Decision ids (migration 0120): a phase whose decision is undecided and
+// expensive shows "waits on D-n" inline, linking to the planning turn.
+describe('PhaseCard decision hold', () => {
+  const hold = {
+    detail: 'decision-undecided: D-3 (Which store?)',
+    decisions: [
+      { decisionId: 'D-3', question: 'Which store?', seq: 3, planningSessionId: 44 },
+      { decisionId: 'D-5', question: 'Split the service?', seq: 5, planningSessionId: null },
+    ],
+  };
+
+  it('renders nothing when nothing holds the phase', () => {
+    render(<PhaseCard phase={phase({ decisionHold: null })} />);
+    expect(screen.queryByTestId('decision-hold')).toBeNull();
+  });
+
+  it('names each holding decision and links the ones an interview asked', () => {
+    render(
+      <PhaseCard
+        phase={phase({ decisionHold: hold, runOutcome: 'idle', runState: 'idle' })}
+        decisionHref={(d) => (d.planningSessionId === null ? null : `/plan?turn=${String(d.seq)}`)}
+      />,
+    );
+    const note = screen.getByTestId('decision-hold');
+    expect(note.textContent).toContain('waits on D-3');
+    expect(note.textContent).toContain('Which store?');
+    expect(note.textContent).toContain('waits on D-5');
+    const links = screen.getAllByRole('link', { name: 'open the question →' });
+    expect(links).toHaveLength(1);
+    expect(links[0]?.getAttribute('href')).toBe('/plan?turn=3');
+  });
+});

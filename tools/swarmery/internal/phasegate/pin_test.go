@@ -21,7 +21,7 @@ package phasegate
 // verdict is held against a phase only when the daemon started it, the one path
 // on which a verifier can run. See Input.Dispatched.
 //
-// ReviewHold / ReviewAccepted / LegacyReview (2026-10-22, verify-not-trust phase
+// ReviewHold / ReviewAccepted / ReviewDecisionOpen / LegacyReview (2026-10-22, verify-not-trust phase
 // 9, D20) widen it on purpose: a review that stopped early is «incomplete», never
 // «passed», so a phase whose latest review round is `complete: false` is held as
 // unverified until the operator repeats the review or accepts it as is. D21
@@ -29,18 +29,19 @@ package phasegate
 // separation from the landing lifecycle stands.
 
 var _ = Input{
-	CriteriaDone:     0,
-	CriteriaTotal:    0,
-	VerifyMode:       "",
-	VerifyVerdict:    "",
-	LegacyDone:       false,
-	CompletionReport: "",
-	Ran:              false,
-	Dispatched:       false,
-	ClosureRequired:  false,
-	ReviewHold:       "",
-	ReviewAccepted:   false,
-	LegacyReview:     false,
+	CriteriaDone:       0,
+	CriteriaTotal:      0,
+	VerifyMode:         "",
+	VerifyVerdict:      "",
+	LegacyDone:         false,
+	CompletionReport:   "",
+	Ran:                false,
+	Dispatched:         false,
+	ClosureRequired:    false,
+	ReviewHold:         "",
+	ReviewAccepted:     false,
+	ReviewDecisionOpen: "",
+	LegacyReview:       false,
 }
 
 var _ = Result{
@@ -49,18 +50,19 @@ var _ = Result{
 }
 
 var _ = struct {
-	CriteriaDone     int
-	CriteriaTotal    int
-	VerifyMode       string
-	VerifyVerdict    string
-	LegacyDone       bool
-	CompletionReport string
-	Ran              bool
-	Dispatched       bool
-	ClosureRequired  bool
-	ReviewHold       string
-	ReviewAccepted   bool
-	LegacyReview     bool
+	CriteriaDone       int
+	CriteriaTotal      int
+	VerifyMode         string
+	VerifyVerdict      string
+	LegacyDone         bool
+	CompletionReport   string
+	Ran                bool
+	Dispatched         bool
+	ClosureRequired    bool
+	ReviewHold         string
+	ReviewAccepted     bool
+	ReviewDecisionOpen string
+	LegacyReview       bool
 }(Input{})
 
 var _ = struct {

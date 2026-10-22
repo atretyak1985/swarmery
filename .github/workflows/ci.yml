@@ -44,8 +44,9 @@ jobs:
           # Error-severity floor: catch genuine bugs (bad redirects, unset
           # command substitutions) without failing on style. The pre-commit
           # gate runs shellcheck at default severity locally for the stricter
-          # developer signal; this is the hard CI floor.
-          find plugins scripts -name '*.sh' -print0 \
+          # developer signal; this is the hard CI floor. tools/swarmery/scripts
+          # holds the operator scripts the shell tests drive (guard-trap.sh).
+          find plugins scripts tools/swarmery/scripts -name '*.sh' -print0 \
             | xargs -0 shellcheck -S error
 
       - name: Shell tests

@@ -66,6 +66,14 @@ msgstr "{0} review rounds"
 msgid "{archivedCount} archived"
 msgstr "{archivedCount} archived"
 
+#: src/pages/plans/GuardBadge.tsx
+msgid "{blocked, plural, one {# blocked attempt} few {# blocked attempts} many {# blocked attempts} other {# blocked attempts}}"
+msgstr "{blocked, plural, one {# blocked attempt} few {# blocked attempts} many {# blocked attempts} other {# blocked attempts}}"
+
+#: src/pages/plans/GuardBadge.tsx
+msgid "{changedCount, plural, one {# protected file changed} few {# protected files changed} many {# protected files changed} other {# protected files changed}}"
+msgstr "{changedCount, plural, one {# protected file changed} few {# protected files changed} many {# protected files changed} other {# protected files changed}}"
+
 #: src/pages/plans/landingModel.ts
 msgid "{changeShort} open"
 msgstr "{changeShort} open"
@@ -366,6 +374,10 @@ msgstr "answer the planner"
 msgid "answer the planner…"
 msgstr "answer the planner…"
 
+#: src/pages/plans/ReviewFindings.tsx
+msgid "answering…"
+msgstr "answering…"
+
 #: src/pages/Plans.tsx
 msgid "applied"
 msgstr "applied"
@@ -546,6 +558,10 @@ msgstr "change request"
 msgid "changes requested"
 msgstr "changes requested"
 
+#: src/pages/planning/CostBadge.tsx
+msgid "cheap to change"
+msgstr "cheap to change"
+
 #: src/pages/plans/LandingStatus.tsx
 msgid "checked {checkedAgo}"
 msgstr "checked {checkedAgo}"
@@ -669,6 +685,11 @@ msgstr "decided {decided}"
 msgid "decided {decided} by {by}"
 msgstr "decided {decided} by {by}"
 
+#. placeholder {0}: linkedTurn.seq
+#: src/pages/PlanningMode.tsx
+msgid "decision D-{0}"
+msgstr "decision D-{0}"
+
 #: src/pages/Routines.tsx
 msgid "Delete"
 msgstr "Delete"
@@ -750,6 +771,10 @@ msgstr "dispatch an implementer + a fresh reviewer per phase"
 #: src/pages/Plans.tsx
 msgid "doc"
 msgstr "doc"
+
+#: src/pages/plans/GuardBadge.tsx
+msgid "doc copy mismatch"
+msgstr "doc copy mismatch"
 
 #: src/pages/Plans.tsx
 msgid "doc: {shortName}"
@@ -875,6 +900,10 @@ msgstr "execution record"
 msgid "expected"
 msgstr "expected"
 
+#: src/pages/planning/CostBadge.tsx
+msgid "expensive to change"
+msgstr "expensive to change"
+
 #: src/pages/PlanningMode.tsx
 #: src/pages/Plans.tsx
 msgid "fable 5.1 — most capable, ~2.5× cost"
@@ -988,6 +1017,14 @@ msgstr "grade this phase's run branch again with the read-only verifier — no e
 #: src/pages/Board.tsx
 msgid "Graph"
 msgstr "Graph"
+
+#: src/pages/plans/GuardBadge.tsx
+msgid "guard block unreadable"
+msgstr "guard block unreadable"
+
+#: src/pages/plans/GuardBadge.tsx
+msgid "guard check"
+msgstr "guard check"
 
 #: src/pages/Plans.tsx
 msgid "hand the whole plan to one agent, headlessly, in an isolated worktree"
@@ -1178,6 +1215,22 @@ msgstr "Mark [LAND]"
 #: src/pages/plans/CriterionLint.tsx
 msgid "Mark [MANUAL]"
 msgstr "Mark [MANUAL]"
+
+#: src/pages/planning/CostBadge.tsx
+msgid "Mark {decisionId} cheap to change"
+msgstr "Mark {decisionId} cheap to change"
+
+#: src/pages/planning/CostBadge.tsx
+msgid "Mark {decisionId} expensive to change"
+msgstr "Mark {decisionId} expensive to change"
+
+#: src/pages/planning/CostBadge.tsx
+msgid "mark cheap"
+msgstr "mark cheap"
+
+#: src/pages/planning/CostBadge.tsx
+msgid "mark expensive"
+msgstr "mark expensive"
 
 #: src/pages/PlanningMode.tsx
 #: src/pages/Plans.tsx
@@ -1504,6 +1557,10 @@ msgstr "open Plans →"
 #: src/pages/PlanningMode.tsx
 msgid "open session →"
 msgstr "open session →"
+
+#: src/pages/plans/PhaseCard.tsx
+msgid "open the question →"
+msgstr "open the question →"
 
 #: src/pages/plans/LandCriterionAction.tsx
 #: src/pages/plans/PhaseReview.tsx
@@ -1986,6 +2043,18 @@ msgstr "Review"
 #: src/pages/PlanningMode.tsx
 msgid "Review changes →"
 msgstr "Review changes →"
+
+#: src/pages/plans/ReviewFindings.tsx
+msgid "Review decision {id}"
+msgstr "Review decision {id}"
+
+#: src/pages/plans/ReviewFindings.tsx
+msgid "Review did not settle"
+msgstr "Review did not settle"
+
+#: src/pages/plans/ReviewFindings.tsx
+msgid "Review did not settle — the operator decides"
+msgstr "Review did not settle — the operator decides"
 
 #: src/pages/plans/ReviewFindings.tsx
 #: src/pages/plans/ReviewFindings.tsx
@@ -2484,6 +2553,14 @@ msgstr "the phase doc asks for {docModel}, but the picker above is set to {picke
 msgid "the phase doc declares **Model:** {docModel}, which is not a model this daemon knows (opus, sonnet, fable) — a run will be refused until the line is fixed"
 msgstr "the phase doc declares **Model:** {docModel}, which is not a model this daemon knows (opus, sonnet, fable) — a run will be refused until the line is fixed"
 
+#: src/pages/plans/GuardBadge.tsx
+msgid "the phase doc lent into the worktree was edited outside its checkboxes, Status, Forecast and Completion Report"
+msgstr "the phase doc lent into the worktree was edited outside its checkboxes, Status, Forecast and Completion Report"
+
+#: src/pages/plans/GuardBadge.tsx
+msgid "the phase guard refused these calls — see .swarmery/guard.log"
+msgstr "the phase guard refused these calls — see .swarmery/guard.log"
+
 #: src/pages/plans/ReviewFindings.tsx
 msgid "The phase is held until the operator decides: repeat the review, or accept it as is. The daemon runs at most {max} review rounds on its own."
 msgstr "The phase is held until the operator decides: repeat the review, or accept it as is. The daemon runs at most {max} review rounds on its own."
@@ -2524,6 +2601,10 @@ msgstr "The planner was {percent} % sure"
 #: src/pages/plans/ReviewFindings.tsx
 msgid "the reviewer wrote no readable kind: review block — its own words are in the doc"
 msgstr "the reviewer wrote no readable kind: review block — its own words are in the doc"
+
+#: src/pages/plans/GuardBadge.tsx
+msgid "the run changed protected paths: {changedList}"
+msgstr "the run changed protected paths: {changedList}"
 
 #: src/pages/Plans.tsx
 msgid "the run ended its turn with criteria unticked and was resumed {resumed}× — {tip}"
@@ -2704,6 +2785,10 @@ msgstr "verifying…"
 #: src/pages/Plans.tsx
 msgid "waiting on phase {waitingOn}"
 msgstr "waiting on phase {waitingOn}"
+
+#: src/pages/plans/PhaseCard.tsx
+msgid "waits on {id}"
+msgstr "waits on {id}"
 
 #: src/pages/Routines.tsx
 msgid "webhook"

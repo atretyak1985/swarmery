@@ -18,6 +18,9 @@
 //                        whose run branch is ready, pushed or under an open
 //                        PR: a link to the phase's Review tab (push / open PR)
 //                        and, once a PR is open, a link to that PR
+//   phase_decision       a phase run touched protected paths: the guard badge,
+//                        one button per option (allow into scope / reject) and
+//                        a free-text note, answered in place
 //
 // Nothing here delivers a reply to a session: the operator pastes it.
 
@@ -25,6 +28,7 @@ import { Trans, useLingui } from '@lingui/react/macro';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { fetchApprovals, resolveApproval, type ApprovalAction } from '../api';
+import { answerGuardDecision } from '../api/guard';
 import type { NeedsYouItem, NeedsYouKind, PermissionRequest } from '../api/types';
 import { PendingCard } from './Approvals';
 import { ChannelBadge } from '../components/ChannelBadge';
@@ -38,12 +42,14 @@ import { useScope } from '../lib/scope';
 import { useSessionHref } from '../lib/sessionHref';
 import { useNowMs } from '../lib/sessionState';
 import { useNeedsYou } from '../lib/useNeedsYou';
+import { GuardBadge } from './plans/GuardBadge';
 import { plansPath } from './plans/plansUrl';
 
 /** Kind badge tones — the label always carries the meaning, colour only echoes it. */
 const KIND_BADGE: Record<NeedsYouKind, string> = {
   approval: 'border-amber/40 text-amber',
   question: 'border-brand/50 text-brand',
+  phase_decision: 'border-red/45 bg-red/10 text-red',
   prod_deploy_local: 'border-amber/60 bg-amber/10 text-amber',
   awaiting_reply: 'border-amber/40 text-amber',
   failed: 'border-red/40 text-red',
@@ -209,8 +215,80 @@ function phaseHref(item: NeedsYouItem, tab: 'criteria' | 'review'): string | nul
 /** The phase link a phase item's title and body open; null for a session item. */
 function phaseItemHref(item: NeedsYouItem): string | null {
   if (item.kind === 'manual_phase') return phaseHref(item, 'criteria');
-  if (item.kind === 'awaiting_merge') return phaseHref(item, 'review');
+  if (item.kind === 'awaiting_merge' || item.kind === 'phase_decision') return phaseHref(item, 'review');
   return null;
+}
+
+/** A guard decision: what the run touched, the options as buttons, a note. */
+export function PhaseDecision({
+  item,
+  reviewTo,
+  onAnswered,
+}: {
+  item: NeedsYouItem;
+  reviewTo: string | null;
+  onAnswered: () => void;
+}): JSX.Element | null {
+  const { t } = useLingui();
+  const [note, setNote] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const decision = item.decision;
+  if (decision === undefined) return null;
+  const answer = (option: string): void => {
+    setBusy(true);
+    setError(null);
+    answerGuardDecision(decision.taskId, decision.phaseId, decision.decisionId, option, note.trim())
+      .then(onAnswered)
+      .catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)))
+      .finally(() => setBusy(false));
+  };
+  const decisionId = decision.decisionId;
+  return (
+    <>
+      <div className="mt-2 flex flex-wrap items-center gap-2">
+        <span className="font-mono text-[11px] font-semibold text-ink-2">{decisionId}</span>
+        <GuardBadge guard={decision.guard} />
+      </div>
+      <p className="mt-1.5 text-[13px] leading-[1.55] text-ink-2 [text-wrap:pretty]">{decision.question}</p>
+      <label className="mt-2.5 block">
+        <span className="font-mono text-[10.5px] text-ink-dim">
+          <Trans>note (optional) — recorded with the answer in the phase doc</Trans>
+        </span>
+        <input
+          type="text"
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+          disabled={busy}
+          maxLength={2000}
+          className={`mt-1 block w-full rounded-lg border border-line bg-bg px-2.5 py-1.5 text-[12.5px] text-ink ${FOCUS}`}
+        />
+      </label>
+      <div className="mt-3 flex flex-wrap items-center gap-2" role="group" aria-label={t`answer ${decisionId}`}>
+        {decision.options.map((opt) => (
+          <button
+            key={opt.id}
+            type="button"
+            disabled={busy}
+            onClick={() => answer(opt.id)}
+            className={`${BTN} ${opt.id === 'reject' ? 'border-line-strong text-ink-3 hover:bg-surface2' : 'border-brand/50 bg-brand/10 font-semibold text-brand hover:bg-brand/20'}`}
+          >
+            {opt.id === 'allow-add-to-scope' ? t`Allow (add to scope)` : opt.id === 'reject' ? t`Reject` : opt.label}
+          </button>
+        ))}
+        {error !== null && (
+          <span role="alert" className="font-mono text-[11px] text-red">
+            {error}
+          </span>
+        )}
+        {reviewTo !== null && (
+          <Link to={reviewTo} className={`ml-auto ${LINK}`}>
+            <Trans>open review →</Trans>
+          </Link>
+        )}
+      </div>
+    </>
+  );
 }
 
 function ManualPhase({ item, phaseTo }: { item: NeedsYouItem; phaseTo: string | null }): JSX.Element {
@@ -258,6 +336,7 @@ function Row({
   sessionTo,
   onResolve,
   onDismiss,
+  onAnswered,
 }: {
   item: NeedsYouItem;
   /** The pending permission row behind an approval / question item, once loaded. */
@@ -269,6 +348,7 @@ function Row({
   sessionTo: string;
   onResolve: (request: PermissionRequest, action: ApprovalAction, reason?: string, answers?: AnswerMap) => void;
   onDismiss: () => void;
+  onAnswered: () => void;
 }): JSX.Element {
   const age = fmtSpan(item.blockingSince, new Date(nowMs).toISOString());
 
@@ -316,6 +396,9 @@ function Row({
       break;
     case 'awaiting_merge':
       body = <AwaitingMerge item={item} reviewTo={phaseItemHref(item)} />;
+      break;
+    case 'phase_decision':
+      body = <PhaseDecision item={item} reviewTo={phaseItemHref(item)} onAnswered={onAnswered} />;
       break;
   }
   // A phase row names a plan phase, not a session: its title opens the phase.
@@ -427,6 +510,7 @@ export function NeedsYou(): JSX.Element {
               sessionTo={sessionHref(item.sessionId)}
               onResolve={resolve}
               onDismiss={() => dismiss(item)}
+              onAnswered={reload}
             />
           ))}
         </ul>

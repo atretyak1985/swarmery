@@ -138,9 +138,15 @@ type Input struct {
 	// reviewer writes the same blocks, and an incomplete review is never a
 	// passed one whoever ran it.
 	ReviewHold string
-	// ReviewAccepted: the operator answered the phase's review decision with
-	// accept-as-is, which lifts ReviewHold (and is recorded as a D-n decision).
+	// ReviewAccepted: the operator answered the phase's latest review decision
+	// with accept-as-is, which lifts ReviewHold (and is recorded as a D-n
+	// decision). Callers read it with ReviewDecisionSQL / ParseReviewDecision.
 	ReviewAccepted bool
+	// ReviewDecisionOpen is the `D-n` of the phase's OPEN review decision (an
+	// incomplete review, or one still failing after its automatic rounds, handed
+	// to the operator), "" when there is none. An open one holds the phase even
+	// when the doc's latest round is complete: a FAIL at round 2 waits on it.
+	ReviewDecisionOpen string
 	// LegacyReview: D21 — the phase finished before review blocks existed
 	// (epic_phases.legacy_review). Excluded from the review-incomplete rule.
 	LegacyReview bool
@@ -159,6 +165,30 @@ const ReviewHoldSQL = `COALESCE((
 	  FROM review_blocks rb
 	 WHERE rb.doc_path = e.doc_path AND rb.round <> 'plan'
 	 ORDER BY CAST(rb.round AS INTEGER) DESC LIMIT 1), '')`
+
+// ReviewDecisionSQL is the SQL expression a caller selects for the phase's latest
+// review decision (phase_decisions, source 'review'), for a query whose
+// epic_phases alias is `e`: "open:D-n", "accepted:D-n", "answered:D-n" or ”.
+// Decode it with ParseReviewDecision.
+const ReviewDecisionSQL = `COALESCE((
+	SELECT CASE WHEN d.status = 'undecided' THEN 'open:'
+	            WHEN d.answer LIKE 'accept as is%' THEN 'accepted:'
+	            ELSE 'answered:' END || d.decision_id
+	  FROM phase_decisions d
+	 WHERE d.phase_id = e.id AND d.source = 'review'
+	 ORDER BY d.seq DESC LIMIT 1), '')`
+
+// ParseReviewDecision decodes a ReviewDecisionSQL value into Input's fields.
+func ParseReviewDecision(v string) (open string, accepted bool) {
+	state, id, _ := strings.Cut(strings.TrimSpace(v), ":")
+	switch state {
+	case "open":
+		return id, false
+	case "accepted":
+		return "", true
+	}
+	return "", false
+}
 
 // ReviewHoldReason is the gate's reason for a ReviewHold.
 func ReviewHoldReason(hold string) string {
@@ -270,9 +300,18 @@ func Check(in Input) Result {
 
 	// D20: a review that stopped early is incomplete, never passed — the ticked
 	// criteria are as unconfirmed as with no verdict at all.
-	if in.reviewHeld() {
+	switch {
+	case in.reviewHeld():
 		verificationUnmet = true
-		reasons = append(reasons, ReviewHoldReason(in.ReviewHold))
+		reason := ReviewHoldReason(in.ReviewHold)
+		if id := strings.TrimSpace(in.ReviewDecisionOpen); id != "" {
+			reason += " (decision " + id + " is open)"
+		}
+		reasons = append(reasons, reason)
+	case strings.TrimSpace(in.ReviewDecisionOpen) != "" && !in.LegacyReview:
+		verificationUnmet = true
+		reasons = append(reasons, ReviewIncomplete+": review decision "+strings.TrimSpace(in.ReviewDecisionOpen)+
+			" is open — the review did not settle on its own; repeat the review or accept it as is")
 	}
 
 	// The report is owed by a phase the daemon RAN — see Input.Ran.

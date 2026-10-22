@@ -57,8 +57,20 @@ fi
 # With a resolvable session_id, nudge at most once: a marker means we already
 # nudged this session, so stay silent. Missing session_id → fail open (nudge every
 # time, as before), and never create a marker.
+#
+# The marker lives in the private run dir (lib/session-file.sh), and the id is
+# reduced to [A-Za-z0-9_-] before it names a file: it comes from the payload,
+# and a `/` or `..` in it must not choose where the marker lands. No usable run
+# dir → no marker, which is the same fail-open as a missing id.
+session_id=$(printf '%s' "$session_id" | tr -cd 'A-Za-z0-9_-')
+run_dir=""
 if [ -n "$session_id" ]; then
-  marker="/tmp/graphify-stale-nudge-${session_id}"
+  # shellcheck source=lib/session-file.sh
+  . "$(dirname "${BASH_SOURCE[0]}")/lib/session-file.sh" 2>/dev/null \
+    && run_dir=$(swarmery_run_dir 2>/dev/null) || run_dir=""
+fi
+if [ -n "$session_id" ] && [ -n "$run_dir" ]; then
+  marker="${run_dir}/graphify-stale-nudge-${session_id}"
   if [ -f "$marker" ]; then
     echo '{"continue": true}'
     exit 0
