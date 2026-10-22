@@ -255,6 +255,16 @@ expected_rows=$'Edit\tpkg/trap_test.go\tprotected_paths "**/*_test.go"\nBash\t.s
 if [ "$(tail -n 3 "$log" | cut -f2-)" = "$expected_rows" ]; then ok "guard.log: tool, root-relative path and the matching glob per line"
 else bad "guard.log rows: $(tail -n 3 "$log" | cut -f2-)"; fi
 
+# ── allow: an answered guard decision lets named paths back in ────
+shape 0 "!pkg/trap_test.go" "allow entries are printed with a ! prefix" 'kind: guard\nprotected_paths: ["**/*_test.go"]\nstop_if: [x]\nallow:\n  - "pkg/trap_test.go"'
+shape 3 "allow: every entry must be a plain string" "a map under allow" 'kind: guard\nprotected_paths: []\nstop_if: []\nallow:\n  - {a: b}'
+A=$(mkroot allow -)
+mkdir -p "$A/.swarmery/plan"
+printf '# P\n\n```yaml\nkind: guard\nprotected_paths:\n  - "**/*_test.go"\nstop_if: [protected path]\nallow:\n  - "pkg/trap_test.go"\n  - ".swarmery/guard.log"\n```\n' > "$A/.swarmery/plan/allow.md"
+expect 0 "allow: an allowed protected file is editable"       "$A" Edit "$A/pkg/trap_test.go"
+expect 2 "allow: another file under the same glob still blocks" "$A" Edit "$A/trap_test.go" "$READ_GREP_MSG"
+expect 2 "allow: never exempts an implicit glob"               "$A" Bash "echo x > .swarmery/guard.log" "implicit"
+
 # ── speed: a long heredoc stays far inside the 5 s hook timeout ───
 big="cat > /tmp/out.txt <<'EOF'"$'\n'
 i=0

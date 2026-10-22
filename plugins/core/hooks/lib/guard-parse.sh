@@ -8,7 +8,9 @@
 # tools/swarmery/testdata/fixtures/guard-blocks/:
 #
 #   guard_parse <doc>
-#     0  parsed — stdout: every protected_paths glob, one per line
+#     0  parsed — stdout: every protected_paths glob, one per line, then
+#        every entry of the optional `allow` list prefixed with "!" (paths the
+#        operator let back into scope by answering a guard decision)
 #     1  absent — the doc carries no ```yaml block whose top-level kind is guard
 #     3  unparsable — stdout: ONE line, "unparsable (line N): <reason>", the
 #        document line and the reason, exactly ParseError.Error()'s shape
@@ -24,7 +26,7 @@
 # block counts when its info string is yaml/yml and its first top-level
 # `kind:` line says guard; a bare ``` block (the copy-paste agent prompt) never
 # does. Inside the block a small yaml subset is parsed: a top-level mapping
-# whose protected_paths / stop_if values are a block list, a one-line or
+# whose protected_paths / stop_if / allow values are a block list, a one-line or
 # multi-line flow list, a bare or quoted scalar, or null. Unknown keys are
 # skipped. Anything else under those two keys — an alias (an unquoted glob
 # that starts with *), an anchor, a tag, a block scalar, a nested list or map,
@@ -88,7 +90,7 @@ function syn(line, why) { if (SYNERR == "") { SYNERR = "not valid yaml: " why; S
 function shape(key, line, why) {
 	if (!(key in PERR)) { PERR[key] = key ": " why; PERRLINE[key] = line }
 }
-function known(key) { return key == "protected_paths" || key == "stop_if" }
+function known(key) { return key == "protected_paths" || key == "stop_if" || key == "allow" }
 function add(key, s) { if (known(key)) { NV[key]++; VAL[key, NV[key]] = s } }
 
 # quoted(s, pos): decode the quoted scalar opening at s[pos]. Sets Q_VAL and
@@ -320,12 +322,14 @@ END {
 	if (!("stop_if" in SEEN)) { print "unparsable (line " (GSTART + 1) "): missing key stop_if"; exit 3 }
 	if ("protected_paths" in PERR) { print "unparsable (line " PERRLINE["protected_paths"] "): " PERR["protected_paths"]; exit 3 }
 	if ("stop_if" in PERR) { print "unparsable (line " PERRLINE["stop_if"] "): " PERR["stop_if"]; exit 3 }
+	if ("allow" in PERR) { print "unparsable (line " PERRLINE["allow"] "): " PERR["allow"]; exit 3 }
 	for (k = 1; k <= NV["protected_paths"]; k++) {
 		g = VAL["protected_paths", k]
 		print g
 		if (names_dir(g))
 			printf "phase-guard: warning: protected path \"%s\" names a directory, not files — write the file pattern (e.g. \"%s\")\n", g, file_glob_for(g) > "/dev/stderr"
 	}
+	for (k = 1; k <= NV["allow"]; k++) print "!" VAL["allow", k]
 	for (k = 2; k <= NGB; k++)
 		printf "phase-guard: warning: a second `kind: guard` block at line %d is ignored\n", EXTRA[k] > "/dev/stderr"
 	exit 0

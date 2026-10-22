@@ -13,7 +13,10 @@
 #     protected file are all refused. Reading is refused too: a protected file
 #     is read with the Read / Grep tools, which this hook does not watch.
 #
-# No allowlist and no silent exceptions. On top of the doc's globs, the guard's
+# No silent exceptions: the only allowlist is the guard block's own `allow:`
+# list, which the daemon writes when the operator answers a guard decision with
+# allow-add-to-scope — an allowed path is exempt from the doc's protected_paths,
+# never from the implicit globs below. On top of the doc's globs, the guard's
 # own inputs are always protected: .swarmery/plan/** (the doc that carries the
 # guard) and .swarmery/guard.log (the record of what it refused), plus the
 # .swarmery and .swarmery/plan directory names themselves — removing either
@@ -130,6 +133,8 @@ esac
 # kinds[i] says where globs[i] came from; it is the guard.log reason.
 globs=(".swarmery/plan/**" ".swarmery/guard.log" ".swarmery/plan" ".swarmery")
 kinds=("implicit" "implicit" "implicit" "implicit")
+# allows: the guard blocks' `allow:` entries (guard_parse prints them as "!…").
+allows=()
 
 # shellcheck source=lib/guard-parse.sh
 . "$HOOK_DIR/lib/guard-parse.sh"
@@ -142,6 +147,9 @@ for doc in "$root/.swarmery/plan"/*.md; do
     0)
       while IFS= read -r g; do
         [ -n "$g" ] || continue
+        case "$g" in
+          '!'*) allows+=("${g#!}"); continue ;;
+        esac
         globs+=("$g")
         kinds+=("protected_paths")
       done <<< "$out"
@@ -206,23 +214,43 @@ _to_rel() {
   return 1
 }
 
-# _protected <rel> — HIT_GLOB / HIT_KIND: the first glob <rel> matches.
+# _glob_match <rel> <glob> — whether <rel> matches one protected-path glob.
+_glob_match() {
+  local rel="$1" g="$2" p1 p2
+  case "$g" in */) g="$g**" ;; esac
+  p1=${g//\*\*/*}
+  # shellcheck disable=SC2053  # the right side is a glob on purpose
+  [[ $rel == $p1 ]] && return 0
+  case "$g" in
+    *'**/'*)
+      p2=${g//\*\*\//}
+      p2=${p2//\*\*/*}
+      # shellcheck disable=SC2053
+      [[ $rel == $p2 ]] && return 0
+      ;;
+  esac
+  return 1
+}
+
+# _allowed <rel> — whether <rel> matches an `allow:` entry.
+_allowed() {
+  local a
+  for a in ${allows[@]+"${allows[@]}"}; do
+    _glob_match "$1" "$a" && return 0
+  done
+  return 1
+}
+
+# _protected <rel> — HIT_GLOB / HIT_KIND: the first glob <rel> matches. A
+# protected_paths hit on an allowed path does not count; an implicit one does.
 _protected() {
-  local rel="$1" i=0 g p1 p2
+  local rel="$1" i=0
   while [ "$i" -lt "${#globs[@]}" ]; do
-    g="${globs[i]}"
-    case "$g" in */) g="$g**" ;; esac
-    p1=${g//\*\*/*}
-    # shellcheck disable=SC2053  # the right side is a glob on purpose
-    if [[ $rel == $p1 ]]; then HIT_GLOB="${globs[i]}"; HIT_KIND="${kinds[i]}"; return 0; fi
-    case "$g" in
-      *'**/'*)
-        p2=${g//\*\*\//}
-        p2=${p2//\*\*/*}
-        # shellcheck disable=SC2053
-        if [[ $rel == $p2 ]]; then HIT_GLOB="${globs[i]}"; HIT_KIND="${kinds[i]}"; return 0; fi
-        ;;
-    esac
+    if _glob_match "$rel" "${globs[i]}"; then
+      if [ "${kinds[i]}" = "implicit" ] || ! _allowed "$rel"; then
+        HIT_GLOB="${globs[i]}"; HIT_KIND="${kinds[i]}"; return 0
+      fi
+    fi
     i=$((i + 1))
   done
   return 1

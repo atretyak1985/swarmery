@@ -169,3 +169,60 @@ func TestNamesDirectory(t *testing.T) {
 		}
 	}
 }
+
+func TestParseGuardAllow(t *testing.T) {
+	doc := "## Guard\n\n```yaml\nkind: guard\nprotected_paths: [\"**/*_test.go\"]\nstop_if: [protected path]\nallow:\n  - \"trap_test.go\"\n```\n"
+	g, perr := ParseGuard(doc)
+	if perr != nil {
+		t.Fatalf("ParseGuard: %v", perr)
+	}
+	if !reflect.DeepEqual(g.Allow, []string{"trap_test.go"}) {
+		t.Fatalf("Allow = %q", g.Allow)
+	}
+	if _, perr := ParseGuard(strings.Replace(doc, "  - \"trap_test.go\"", "  - {a: b}", 1)); perr == nil || perr.Kind != ErrUnparsable {
+		t.Fatalf("a map under allow must be unparsable, got %v", perr)
+	}
+}
+
+func TestAddGuardAllow(t *testing.T) {
+	doc := fixture(t, "guard-blocks", "ok.md")
+	out, perr := AddGuardAllow(doc, []string{"pkg/a_test.go", "pkg/a_test.go", " "})
+	if perr != nil {
+		t.Fatalf("AddGuardAllow: %v", perr)
+	}
+	g, perr := ParseGuard(out)
+	if perr != nil {
+		t.Fatalf("re-parse: %v\n%s", perr, out)
+	}
+	if !reflect.DeepEqual(g.Allow, []string{"pkg/a_test.go"}) {
+		t.Fatalf("Allow = %q", g.Allow)
+	}
+	before, _ := ParseGuard(doc)
+	if !reflect.DeepEqual(g.ProtectedPaths, before.ProtectedPaths) || !reflect.DeepEqual(g.StopIf, before.StopIf) {
+		t.Fatalf("the other keys changed: %+v", g)
+	}
+	// Only the block changed: everything after its closing fence is intact.
+	if !strings.HasSuffix(out, doc[strings.Index(doc, "## Acceptance Criteria"):]) {
+		t.Fatalf("text after the block changed:\n%s", out)
+	}
+	if !strings.Contains(out, "  - criterion impossible\nallow:\n  - \"pkg/a_test.go\"\n```\n") {
+		t.Fatalf("allow list not appended at the end of the block:\n%s", out)
+	}
+
+	// A second call merges into the existing list instead of adding a second key.
+	again, perr := AddGuardAllow(out, []string{"pkg/b_test.go", "pkg/a_test.go"})
+	if perr != nil {
+		t.Fatalf("AddGuardAllow again: %v", perr)
+	}
+	if strings.Count(again, "\nallow:") != 1 {
+		t.Fatalf("allow key duplicated:\n%s", again)
+	}
+	g, _ = ParseGuard(again)
+	if !reflect.DeepEqual(g.Allow, []string{"pkg/a_test.go", "pkg/b_test.go"}) {
+		t.Fatalf("merged Allow = %q", g.Allow)
+	}
+
+	if _, perr := AddGuardAllow(fixture(t, "guard-blocks", "absent.md"), []string{"x"}); perr == nil || perr.Kind != ErrAbsent {
+		t.Fatalf("absent guard: %v", perr)
+	}
+}
