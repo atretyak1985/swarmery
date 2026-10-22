@@ -67,7 +67,7 @@ func TestReviewerRoleBlockMatchesAgentFile(t *testing.T) {
 }
 
 func TestReviewPromptCarriesRound(t *testing.T) {
-	p := reviewPrompt("Phase 1 — X", "# doc", "DIFF: none", 7777, 2, workaround.PhaseHits{})
+	p := reviewPrompt("", "Phase 1 — X", "# doc", "DIFF: none", 7777, 2, workaround.PhaseHits{})
 	if !strings.Contains(p, "\n\nREVIEW ROUND: 2\n\nPHASE: Phase 1 — X") {
 		t.Errorf("prompt lacks the round before the phase:\n%s", p)
 	}

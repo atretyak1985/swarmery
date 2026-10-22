@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -210,5 +211,35 @@ func TestApplyEpicsStoresDecisionDeps(t *testing.T) {
 	applyPhases(t, db, parsePlan(planDir, warn))
 	if got := deps("phase-1.md"); got != `[]` {
 		t.Errorf("phase-1 decision_deps after the line was deleted = %s, want []", got)
+	}
+}
+
+func TestAppendPhaseDecision(t *testing.T) {
+	line := FormatStopDecisionLine(5, "The run touched protected paths: a_test.go.\nAllow?", "reject")
+	if line != "- **D-5** (stop) — The run touched protected paths: a_test.go. Allow? → reject" {
+		t.Fatalf("line = %q", line)
+	}
+	// No section: a new one lands before the Completion Report.
+	doc := "# P\n\n## Acceptance Criteria\n\n- [ ] x\n\n## Completion Report\n"
+	got := AppendPhaseDecision(doc, line)
+	want := "# P\n\n## Acceptance Criteria\n\n- [ ] x\n\n## Decisions\n\n" + line + "\n\n## Completion Report\n"
+	if got != want {
+		t.Fatalf("new section:\n%q\nwant\n%q", got, want)
+	}
+	// An existing section: appended after its last entry, not after the gap.
+	second := FormatStopDecisionLine(6, "q", "allow")
+	got2 := AppendPhaseDecision(got, second)
+	if !strings.Contains(got2, line+"\n"+second+"\n\n## Completion Report") {
+		t.Fatalf("appended:\n%s", got2)
+	}
+	// A heading quoted inside a fence is not the section.
+	fenced := "# P\n\n```\n## Decisions\n```\n"
+	if out := AppendPhaseDecision(fenced, line); !strings.HasSuffix(out, "```\n\n## Decisions\n\n"+line+"\n") {
+		t.Fatalf("fenced heading taken for the section:\n%s", out)
+	}
+	// An empty section gets one blank line under its heading.
+	empty := "# P\n\n## Decisions\n\n## Completion Report\n"
+	if out := AppendPhaseDecision(empty, line); out != "# P\n\n## Decisions\n\n"+line+"\n\n## Completion Report\n" {
+		t.Fatalf("empty section:\n%q", out)
 	}
 }

@@ -2620,6 +2620,9 @@ func cmdServe(args []string) error {
 		log.Printf("warning: phaserun heal on startup: %v", err)
 	}
 	api.AttachPhaseRun(phaserunSvc)
+	// verify-not-trust phase 4: an applied plan revision re-lends the docs it
+	// wrote into any phase worktree that still holds a copy.
+	api.AttachRevisionRelend(phaserunSvc.RelendDocs)
 	// Opt-in post-run verification for phases (execution-engine unification phase 5):
 	// a phase doc carrying `**Verify:** strict` gets graded by the SAME read-only
 	// engine board cards go through, before its worktree is reclaimed. Wired here

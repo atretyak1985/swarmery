@@ -256,6 +256,18 @@ type epicPhaseDTO struct {
 	// LegacyReview (D21): the phase was Done before review findings existed and
 	// carries no block — a badge, never a blocker.
 	LegacyReview bool `json:"legacyReview"`
+	// ReviewHold (D20): why the doc's latest review round is incomplete —
+	// "round N: <reason>" — or "" when it is complete or there is none. The
+	// completion gate holds the phase on it (phasegate.ReviewHoldSQL).
+	ReviewHold string `json:"reviewHold"`
+	// GuardDecision is the phase's OPEN guard decision (verify-not-trust phase 4):
+	// its last run touched protected paths and the operator has not answered yet.
+	// null otherwise. The phase card shows its badge and answer buttons from it.
+	GuardDecision *needsYouDecision `json:"guardDecision"`
+	// ReviewDecision is the phase's OPEN review decision (verify-not-trust phase
+	// 9): its review cycle did not settle on its own — repeat the review or accept
+	// it as is. null otherwise. The Review tab answers it inline.
+	ReviewDecision *needsYouDecision `json:"reviewDecision"`
 }
 
 // phaseForecastDTO is one stored `## Forecast` block. Every text field is
@@ -767,6 +779,7 @@ func (h *Handler) epicPhases(taskID int64, planDir string) ([]epicPhaseDTO, epic
 		SELECT e.id, e.seq, e.name, e.doc_path, e.depends_on, e.covers,
 		       e.checkboxes_total, e.checkboxes_done, e.doc_status, e.doc_updated_at,
 		       e.criteria_land_open, e.criteria_manual_open, e.legacy_review,
+		       `+phasegate.ReviewHoldSQL+`, `+phasegate.ReviewDecisionSQL+`,
 		       e.completion_report, e.activated_at, e.activated_board_task_id,
 		       bt.external_id, bt.board_column,
 		       e.run_state, e.run_session_uuid, e.run_started_at, e.run_error,
@@ -832,10 +845,12 @@ func (h *Handler) epicPhases(taskID int64, planDir string) ([]epicPhaseDTO, epic
 			landing landingRow
 			// epic_phases.decision_deps (0122), doc-owned JSON list of D-n.
 			decisionDepsJSON string
+			// phasegate.ReviewDecisionSQL: the latest review decision's state.
+			reviewDecision string
 		)
 		dest := []any{&p.ID, &p.Seq, &p.Name, &p.DocPath, &depsJSON, &coversJSON,
 			&p.CheckboxesTotal, &p.CheckboxesDone, &docStatus, &docUpdatedAt,
-			&p.LandOpen, &p.ManualOpen, &p.LegacyReview,
+			&p.LandOpen, &p.ManualOpen, &p.LegacyReview, &p.ReviewHold, &reviewDecision,
 			&completion, &p.ActivatedAt, &boardTaskID, &boardExtID, &boardCol,
 			&p.RunState, &runUUID, &runStartedAt, &runError,
 			&runEndedAt, &runCheckboxesBefore, &runCheckboxesAfter,
@@ -918,7 +933,10 @@ func (h *Handler) epicPhases(taskID int64, planDir string) ([]epicPhaseDTO, epic
 			Ran:              runEndedAt.Valid,
 			Dispatched:       runStartedAt.Valid,
 			ClosureRequired:  closureRequired,
+			ReviewHold:       p.ReviewHold,
+			LegacyReview:     p.LegacyReview,
 		}
+		gateIn.ReviewDecisionOpen, gateIn.ReviewAccepted = phasegate.ParseReviewDecision(reviewDecision)
 		gate := phasegate.Check(gateIn)
 		p.CompletionState = gate.State
 		p.CompletionBlockers = gate.Reasons
@@ -969,6 +987,8 @@ func (h *Handler) epicPhases(taskID int64, planDir string) ([]epicPhaseDTO, epic
 	blocks := h.phaseReviewBlocks(taskID, docs)  // and again
 	verifying := h.phasesVerifying(phases)       // and again
 	workarounds := h.phaseWorkaroundHits(taskID) // and again
+	guards := h.phaseGuardDecisions(taskID)      // and again
+	reviewDecs := h.phaseReviewDecisions(taskID) // and again
 	for i := range phases {
 		phases[i].VerifyRunning = verifying[phases[i].ID]
 		phases[i].RunEvents = runEventsOrEmpty(runcore.RunEvents(h.DB, phaserun.Engine, phases[i].ID))
@@ -998,6 +1018,8 @@ func (h *Handler) epicPhases(taskID int64, planDir string) ([]epicPhaseDTO, epic
 		if phases[i].WorkaroundHits == nil {
 			phases[i].WorkaroundHits = []workaround.Stored{} // [] not null: the UI maps over it
 		}
+		phases[i].GuardDecision = guards[phases[i].ID]
+		phases[i].ReviewDecision = reviewDecs[phases[i].ID]
 	}
 	if rollup.Total > 0 {
 		rollup.Pct = float64(rollup.Done) / float64(rollup.Total) * 100

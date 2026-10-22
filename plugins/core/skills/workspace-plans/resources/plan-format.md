@@ -414,6 +414,9 @@ stop_if:
 - `stop_if` keeps the four defaults; add phase-specific triggers after them.
 - Both keys are required; an empty list is written `[]`. Unknown keys are
   ignored.
+- An `allow:` list is the daemon's, not the planner's: when a run touches a
+  protected path, the operator's *allow (add to scope)* answer appends those
+  paths under `allow:`, and the next run may edit them. Never write it in a plan.
 
 ## `## Review` (appended per review round, never by the planner)
 

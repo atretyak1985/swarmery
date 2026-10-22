@@ -247,3 +247,70 @@ func applyDecisionDeps(tx *sql.Tx, taskID int64, p epicPhase) error {
 		string(b), taskID, p.docPath)
 	return err
 }
+
+// FormatStopDecisionLine renders a phase doc's `## Decisions` entry for an
+// answered stop decision (verify-not-trust phase 4: a guard decision):
+//
+//   - **D-5** (stop) — The run touched protected paths: a_test.go. … → reject
+//
+// Phase docs are not read back by ParseDecisions (the README is the plan's
+// decision record); the line is the human-readable trail the next run reads.
+func FormatStopDecisionLine(seq int, question, answer string) string {
+	return FormatPhaseDecisionLine(seq, "stop", question, answer)
+}
+
+// FormatPhaseDecisionLine is FormatStopDecisionLine for any per-phase decision
+// source — `- **D-n** (<source>) — <question> → <answer>`; a review decision
+// (verify-not-trust phase 9) writes `(review)`.
+func FormatPhaseDecisionLine(seq int, source, question, answer string) string {
+	a := oneLine(answer)
+	if a == "" {
+		a = UndecidedAnswer
+	}
+	return fmt.Sprintf("- **D-%d** (%s) — %s → %s", seq, source, oneLine(question), a)
+}
+
+// AppendPhaseDecision returns doc with line appended to its `## Decisions`
+// section — after the section's last non-blank line — or, when the doc has no
+// such section, with a new one inserted right before `## Completion Report` (at
+// the end when that is missing too). Headings inside fenced blocks are text, not
+// sections.
+func AppendPhaseDecision(doc, line string) string {
+	lines := strings.Split(doc, "\n")
+	start, end := -1, len(lines)
+	forEachLineOutsideFences(doc, func(i int, l string) {
+		t := strings.TrimSpace(l)
+		switch {
+		case start < 0 && decisionsHeadingRe.MatchString(t):
+			start = i
+		case start >= 0 && end == len(lines) && i > start && strings.HasPrefix(t, "## "):
+			end = i
+		}
+	})
+	if start < 0 {
+		return insertBeforeCompletionReport(doc, "## Decisions\n\n"+line+"\n")
+	}
+	last := start
+	for i := start + 1; i < end; i++ {
+		if strings.TrimSpace(lines[i]) != "" {
+			last = i
+		}
+	}
+	out := make([]string, 0, len(lines)+2)
+	out = append(out, lines[:last+1]...)
+	if last == start {
+		out = append(out, "")
+	}
+	out = append(out, line)
+	out = append(out, lines[last+1:]...)
+	return strings.Join(out, "\n")
+}
+
+// WriteDocAtomic replaces the doc at path with text, keeping its permissions.
+func WriteDocAtomic(path, text string) error {
+	perm := os.FileMode(0o644)
+	if st, err := os.Stat(path); err == nil {
+		perm = st.Mode().Perm()
+	}
+	return writeFileAtomic(path, []byte(text), perm)
+}

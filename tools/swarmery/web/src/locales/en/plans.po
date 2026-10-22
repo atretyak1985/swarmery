@@ -57,13 +57,26 @@ msgstr "(post hoc — excluded from calibration)"
 msgid "(question could not be parsed)"
 msgstr "(question could not be parsed)"
 
+#. placeholder {0}: String(n)
+#: src/pages/plans/ReviewFindings.tsx
+msgid "{0} review rounds"
+msgstr "{0} review rounds"
+
 #: src/pages/Board.tsx
 msgid "{archivedCount} archived"
 msgstr "{archivedCount} archived"
 
+#: src/pages/plans/GuardBadge.tsx
+msgid "{blocked, plural, one {# blocked attempt} few {# blocked attempts} many {# blocked attempts} other {# blocked attempts}}"
+msgstr "{blocked, plural, one {# blocked attempt} few {# blocked attempts} many {# blocked attempts} other {# blocked attempts}}"
+
 #: src/pages/plans/WorkaroundHits.tsx
 msgid "{capped} more past the per-session cap — counted, not stored."
 msgstr "{capped} more past the per-session cap — counted, not stored."
+
+#: src/pages/plans/GuardBadge.tsx
+msgid "{changedCount, plural, one {# protected file changed} few {# protected files changed} many {# protected files changed} other {# protected files changed}}"
+msgstr "{changedCount, plural, one {# protected file changed} few {# protected files changed} many {# protected files changed} other {# protected files changed}}"
 
 #: src/pages/plans/landingModel.ts
 msgid "{changeShort} open"
@@ -230,6 +243,10 @@ msgstr "✓ summary"
 msgid "❐ open plan README"
 msgstr "❐ open plan README"
 
+#: src/pages/plans/ReviewFindings.tsx
+msgid "1 review round"
+msgstr "1 review round"
+
 #: src/pages/plans/forecastStoryModel.ts
 msgid "30 to 90 min"
 msgstr "30 to 90 min"
@@ -360,6 +377,10 @@ msgstr "answer the planner"
 #: src/pages/PlanningMode.tsx
 msgid "answer the planner…"
 msgstr "answer the planner…"
+
+#: src/pages/plans/ReviewFindings.tsx
+msgid "answering…"
+msgstr "answering…"
 
 #: src/pages/Plans.tsx
 msgid "applied"
@@ -759,6 +780,10 @@ msgstr "dispatch an implementer + a fresh reviewer per phase"
 msgid "doc"
 msgstr "doc"
 
+#: src/pages/plans/GuardBadge.tsx
+msgid "doc copy mismatch"
+msgstr "doc copy mismatch"
+
 #: src/pages/Plans.tsx
 msgid "doc: {shortName}"
 msgstr "doc: {shortName}"
@@ -1000,6 +1025,14 @@ msgstr "grade this phase's run branch again with the read-only verifier — no e
 #: src/pages/Board.tsx
 msgid "Graph"
 msgstr "Graph"
+
+#: src/pages/plans/GuardBadge.tsx
+msgid "guard block unreadable"
+msgstr "guard block unreadable"
+
+#: src/pages/plans/GuardBadge.tsx
+msgid "guard check"
+msgstr "guard check"
 
 #: src/pages/Plans.tsx
 msgid "hand the whole plan to one agent, headlessly, in an isolated worktree"
@@ -2024,9 +2057,33 @@ msgid "Review changes →"
 msgstr "Review changes →"
 
 #: src/pages/plans/ReviewFindings.tsx
+msgid "Review decision {id}"
+msgstr "Review decision {id}"
+
+#: src/pages/plans/ReviewFindings.tsx
+msgid "Review did not settle"
+msgstr "Review did not settle"
+
+#: src/pages/plans/ReviewFindings.tsx
+msgid "Review did not settle — the operator decides"
+msgstr "Review did not settle — the operator decides"
+
+#: src/pages/plans/ReviewFindings.tsx
 #: src/pages/plans/ReviewFindings.tsx
 msgid "Review findings"
 msgstr "Review findings"
+
+#: src/pages/plans/ReviewFindings.tsx
+msgid "review incomplete"
+msgstr "review incomplete"
+
+#: src/pages/plans/ReviewFindings.tsx
+msgid "Review incomplete"
+msgstr "Review incomplete"
+
+#: src/pages/plans/ReviewFindings.tsx
+msgid "Review incomplete — not a passed review"
+msgstr "Review incomplete — not a passed review"
 
 #: src/pages/PlanningMode.tsx
 msgid "Review it on the <0>Plans page</0> — phases run from there."
@@ -2520,6 +2577,18 @@ msgstr "the phase doc asks for {docModel}, but the picker above is set to {picke
 msgid "the phase doc declares **Model:** {docModel}, which is not a model this daemon knows (opus, sonnet, fable) — a run will be refused until the line is fixed"
 msgstr "the phase doc declares **Model:** {docModel}, which is not a model this daemon knows (opus, sonnet, fable) — a run will be refused until the line is fixed"
 
+#: src/pages/plans/GuardBadge.tsx
+msgid "the phase doc lent into the worktree was edited outside its checkboxes, Status, Forecast and Completion Report"
+msgstr "the phase doc lent into the worktree was edited outside its checkboxes, Status, Forecast and Completion Report"
+
+#: src/pages/plans/GuardBadge.tsx
+msgid "the phase guard refused these calls — see .swarmery/guard.log"
+msgstr "the phase guard refused these calls — see .swarmery/guard.log"
+
+#: src/pages/plans/ReviewFindings.tsx
+msgid "The phase is held until the operator decides: repeat the review, or accept it as is. The daemon runs at most {max} review rounds on its own."
+msgstr "The phase is held until the operator decides: repeat the review, or accept it as is. The daemon runs at most {max} review rounds on its own."
+
 #: src/pages/plans/PhaseReview.tsx
 msgid "The phase is still running — land it once the run has finished."
 msgstr "The phase is still running — land it once the run has finished."
@@ -2556,6 +2625,10 @@ msgstr "The planner was {percent} % sure"
 #: src/pages/plans/ReviewFindings.tsx
 msgid "the reviewer wrote no readable kind: review block — its own words are in the doc"
 msgstr "the reviewer wrote no readable kind: review block — its own words are in the doc"
+
+#: src/pages/plans/GuardBadge.tsx
+msgid "the run changed protected paths: {changedList}"
+msgstr "the run changed protected paths: {changedList}"
 
 #: src/pages/Plans.tsx
 msgid "the run ended its turn with criteria unticked and was resumed {resumed}× — {tip}"

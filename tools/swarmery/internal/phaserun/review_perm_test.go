@@ -23,17 +23,23 @@ func TestReviewSpawnArgsAreLeastPrivilege(t *testing.T) {
 	}
 	bin := t.TempDir()
 	argsOut := filepath.Join(t.TempDir(), "args.txt")
-	script := "#!/bin/sh\nfor a in \"$@\"; do printf '%s\\n' \"$a\"; done > \"$REVIEW_ARGS_OUT\"\necho '- no blocking findings'\necho 'VERDICT: PASS'\n"
+	// A PASS with its kind: review block: without one it would be review-incomplete (D20).
+	replyOut := filepath.Join(t.TempDir(), "reply.txt")
+	if err := os.WriteFile(replyOut, []byte(reviewerOutput("PASS", "[]")+"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	script := "#!/bin/sh\nfor a in \"$@\"; do printf '%s\\n' \"$a\"; done > \"$REVIEW_ARGS_OUT\"\ncat \"$REVIEW_REPLY\"\n"
 	if err := os.WriteFile(filepath.Join(bin, "claude"), []byte(script), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
 	t.Setenv("REVIEW_ARGS_OUT", argsOut)
+	t.Setenv("REVIEW_REPLY", replyOut)
 
 	s, _, p1, info := reviewFixture(t)
 	s.Review = verify.ClaudeRunner{}
 	dir, base := gitRepo(t)
-	if verdict, _ := s.reviewRun(p1, info, worktree.Acquired{Path: dir, Branch: "swarm/x", StartPoint: base}, "done"); verdict != "pass" {
+	if verdict, _ := s.reviewRun(p1, info, worktree.Acquired{Path: dir, Branch: "swarm/x", StartPoint: base}, "done", GuardResult{}); verdict != "pass" {
 		t.Fatalf("reviewRun verdict = %q, want pass", verdict)
 	}
 	raw, err := os.ReadFile(argsOut)

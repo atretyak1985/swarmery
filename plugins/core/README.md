@@ -69,6 +69,10 @@ stop_if: [protected path]
   the parser's line and reason until the plan is fixed; so do jq missing and a
   payload that is not JSON. A glob naming a directory (`dir/`, `dir/**`) only
   warns, and still protects the files under it.
+- **Allowed back in.** An optional `allow:` list in the same block exempts the
+  paths (or globs) it names from `protected_paths` — never from the
+  always-protected set. Nobody writes it by hand: the daemon appends it when
+  the operator answers the run's guard decision with *allow (add to scope)*.
 - **The record.** Each block appends `<RFC3339 ts>\t<tool>\t<path>\t<reason>`
   to `.swarmery/guard.log`; the hook never truncates it.
 - **Limits.** A command that reaches a protected file without naming it

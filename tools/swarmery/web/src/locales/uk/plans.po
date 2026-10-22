@@ -57,13 +57,26 @@ msgstr "(post hoc — не враховано в калібруванні)"
 msgid "(question could not be parsed)"
 msgstr "(питання не вдалося розібрати)"
 
+#. placeholder {0}: String(n)
+#: src/pages/plans/ReviewFindings.tsx
+msgid "{0} review rounds"
+msgstr "раундів рев’ю: {0}"
+
 #: src/pages/Board.tsx
 msgid "{archivedCount} archived"
 msgstr "{archivedCount} в архіві"
 
+#: src/pages/plans/GuardBadge.tsx
+msgid "{blocked, plural, one {# blocked attempt} few {# blocked attempts} many {# blocked attempts} other {# blocked attempts}}"
+msgstr "{blocked, plural, one {# заблокована спроба} few {# заблоковані спроби} many {# заблокованих спроб} other {# заблокованої спроби}}"
+
 #: src/pages/plans/WorkaroundHits.tsx
 msgid "{capped} more past the per-session cap — counted, not stored."
 msgstr "Ще {capped} понад ліміт сесії — пораховано, але не збережено."
+
+#: src/pages/plans/GuardBadge.tsx
+msgid "{changedCount, plural, one {# protected file changed} few {# protected files changed} many {# protected files changed} other {# protected files changed}}"
+msgstr "{changedCount, plural, one {змінено # захищений файл} few {змінено # захищені файли} many {змінено # захищених файлів} other {змінено # захищеного файлу}}"
 
 #: src/pages/plans/landingModel.ts
 msgid "{changeShort} open"
@@ -230,6 +243,10 @@ msgstr "✓ підсумок"
 msgid "❐ open plan README"
 msgstr "❐ відкрити README плану"
 
+#: src/pages/plans/ReviewFindings.tsx
+msgid "1 review round"
+msgstr "1 раунд рев’ю"
+
 #: src/pages/plans/forecastStoryModel.ts
 msgid "30 to 90 min"
 msgstr "30–90 хв"
@@ -360,6 +377,10 @@ msgstr "відповісти планувальнику"
 #: src/pages/PlanningMode.tsx
 msgid "answer the planner…"
 msgstr "відповісти планувальнику…"
+
+#: src/pages/plans/ReviewFindings.tsx
+msgid "answering…"
+msgstr "відповідаємо…"
 
 #: src/pages/Plans.tsx
 msgid "applied"
@@ -759,6 +780,10 @@ msgstr "на кожну фазу відправляти виконавця + с�
 msgid "doc"
 msgstr "документ"
 
+#: src/pages/plans/GuardBadge.tsx
+msgid "doc copy mismatch"
+msgstr "копія документа не збігається"
+
 #: src/pages/Plans.tsx
 msgid "doc: {shortName}"
 msgstr "документ: {shortName}"
@@ -1000,6 +1025,14 @@ msgstr "ще раз оцінити гілку запуску цієї фази �
 #: src/pages/Board.tsx
 msgid "Graph"
 msgstr "Граф"
+
+#: src/pages/plans/GuardBadge.tsx
+msgid "guard block unreadable"
+msgstr "блок guard не прочитати"
+
+#: src/pages/plans/GuardBadge.tsx
+msgid "guard check"
+msgstr "перевірка guard"
 
 #: src/pages/Plans.tsx
 msgid "hand the whole plan to one agent, headlessly, in an isolated worktree"
@@ -2024,9 +2057,33 @@ msgid "Review changes →"
 msgstr "Переглянути зміни →"
 
 #: src/pages/plans/ReviewFindings.tsx
+msgid "Review decision {id}"
+msgstr "Рішення щодо рев’ю {id}"
+
+#: src/pages/plans/ReviewFindings.tsx
+msgid "Review did not settle"
+msgstr "Рев’ю не завершилося само"
+
+#: src/pages/plans/ReviewFindings.tsx
+msgid "Review did not settle — the operator decides"
+msgstr "Рев’ю не завершилося само — вирішує оператор"
+
+#: src/pages/plans/ReviewFindings.tsx
 #: src/pages/plans/ReviewFindings.tsx
 msgid "Review findings"
 msgstr "Знахідки рев’ю"
+
+#: src/pages/plans/ReviewFindings.tsx
+msgid "review incomplete"
+msgstr "рев’ю неповне"
+
+#: src/pages/plans/ReviewFindings.tsx
+msgid "Review incomplete"
+msgstr "Рев’ю неповне"
+
+#: src/pages/plans/ReviewFindings.tsx
+msgid "Review incomplete — not a passed review"
+msgstr "Рев’ю неповне — це не пройдене рев’ю"
 
 #: src/pages/PlanningMode.tsx
 msgid "Review it on the <0>Plans page</0> — phases run from there."
@@ -2520,6 +2577,18 @@ msgstr "документ фази просить {docModel}, але вибір �
 msgid "the phase doc declares **Model:** {docModel}, which is not a model this daemon knows (opus, sonnet, fable) — a run will be refused until the line is fixed"
 msgstr "документ фази оголошує **Model:** {docModel} — цей демон такої моделі не знає (opus, sonnet, fable); запуск відхилятиметься, доки рядок не виправлять"
 
+#: src/pages/plans/GuardBadge.tsx
+msgid "the phase doc lent into the worktree was edited outside its checkboxes, Status, Forecast and Completion Report"
+msgstr "копію документа фази у worktree змінено поза її чекбоксами, Status, Forecast і Completion Report"
+
+#: src/pages/plans/GuardBadge.tsx
+msgid "the phase guard refused these calls — see .swarmery/guard.log"
+msgstr "phase guard відхилив ці виклики — див. .swarmery/guard.log"
+
+#: src/pages/plans/ReviewFindings.tsx
+msgid "The phase is held until the operator decides: repeat the review, or accept it as is. The daemon runs at most {max} review rounds on its own."
+msgstr "Фаза утримується, доки оператор не вирішить: повторити рев’ю чи прийняти як є. Сам демон проводить щонайбільше {max} раунди рев’ю."
+
 #: src/pages/plans/PhaseReview.tsx
 msgid "The phase is still running — land it once the run has finished."
 msgstr "Фаза ще виконується — здайте її, коли запуск завершиться."
@@ -2556,6 +2625,10 @@ msgstr "Планувальник був упевнений на {percent} %"
 #: src/pages/plans/ReviewFindings.tsx
 msgid "the reviewer wrote no readable kind: review block — its own words are in the doc"
 msgstr "рецензент не написав читабельного блоку kind: review — його власні слова є в документі"
+
+#: src/pages/plans/GuardBadge.tsx
+msgid "the run changed protected paths: {changedList}"
+msgstr "запуск змінив захищені шляхи: {changedList}"
 
 #: src/pages/Plans.tsx
 msgid "the run ended its turn with criteria unticked and was resumed {resumed}× — {tip}"

@@ -1,0 +1,6 @@
+GUARD CHECK (independent of the run's own report — verify each item against the diff):
+The run changed protected paths: pkg/a_test.go, trap_test.go.
+The phase guard refused 1 attempt to touch protected paths (trap_test.go).
+The phase doc lent into the worktree was changed outside its checkboxes, Status, Forecast and Completion Report.
+
+You are the fleet's independent code reviewer

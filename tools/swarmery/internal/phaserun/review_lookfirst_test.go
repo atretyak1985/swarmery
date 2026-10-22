@@ -42,7 +42,7 @@ func TestReviewPromptLookFirstGolden(t *testing.T) {
 	}
 
 	// In the prompt it sits after the phase document and before the diff.
-	p := reviewPrompt("Phase 4 — X", "# doc", "DIFF STAT: one file", 7777, 1, lookFirstHits)
+	p := reviewPrompt("", "Phase 4 — X", "# doc", "DIFF STAT: one file", 7777, 1, lookFirstHits)
 	doc := strings.Index(p, "# doc\n----------------------------------------")
 	look := strings.Index(p, "Look first — the agent changed course here:")
 	diff := strings.Index(p, "DIFF STAT: one file")
@@ -50,7 +50,7 @@ func TestReviewPromptLookFirstGolden(t *testing.T) {
 		t.Errorf("order doc=%d look=%d diff=%d — want doc < look first < diff", doc, look, diff)
 	}
 	// Without hits the prompt is the prompt it was before the section existed.
-	if p0 := reviewPrompt("Phase 4 — X", "# doc", "DIFF", 7777, 1, workaround.PhaseHits{}); strings.Contains(p0, "Look first") ||
+	if p0 := reviewPrompt("", "Phase 4 — X", "# doc", "DIFF", 7777, 1, workaround.PhaseHits{}); strings.Contains(p0, "Look first") ||
 		!strings.Contains(p0, "----------------------------------------\n\nDIFF") {
 		t.Errorf("a run without hits must not carry the section:\n%s", p0)
 	}
@@ -80,11 +80,12 @@ func TestReviewFeedsLookFirstHits(t *testing.T) {
 		VALUES (?, ?, ?, ?, ?, ?, ?, '2026-10-22T00:00:00Z')`
 	mustExec(t, db, ins, "run-1", 11, p1, "instead", "I checked the branch out instead of re-cutting it.", "h1", "The reclaim refused it.")
 	mustExec(t, db, ins, "older-run", 12, p1, "flaky", "An older run called it flaky.", "h2", "")
-	rev := &fakeReviewer{}
+	// A PASS with its kind: review block: without one it would be review-incomplete (D20).
+	rev := &fakeReviewer{outputs: []string{reviewerOutput("PASS", "[]")}}
 	s.Review = rev
 	dir, base := gitRepo(t)
 
-	if verdict, _ := s.reviewRun(p1, info, worktree.Acquired{Path: dir, Branch: "swarm/x", StartPoint: base}, "done"); verdict != "pass" {
+	if verdict, _ := s.reviewRun(p1, info, worktree.Acquired{Path: dir, Branch: "swarm/x", StartPoint: base}, "done", GuardResult{}); verdict != "pass" {
 		t.Fatalf("verdict = %q", verdict)
 	}
 	calls := rev.calls()

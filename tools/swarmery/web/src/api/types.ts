@@ -1779,11 +1779,13 @@ export type ApprovalChannel = 'shim' | 'mod';
  * ended its turn waiting for a typed reply, a recently failed session, a
  * plan phase whose every open criterion is `[MANUAL]` (only a human closes it),
  * or one whose every open criterion is `[LAND]` with its run branch ready,
- * pushed or under an open PR (only the merge is left).
+ * pushed or under an open PR (only the merge is left), or a phase whose run
+ * touched protected paths (`phase_decision`: allow them into scope or reject).
  */
 export type NeedsYouKind =
   | 'approval'
   | 'question'
+  | 'phase_decision'
   | 'prod_deploy_local'
   | 'awaiting_reply'
   | 'failed'
@@ -1810,6 +1812,69 @@ export interface NeedsYouPhase {
   landingState?: NeedsYouLandingState;
   /** `awaiting_merge` only, once a PR is open. */
   prUrl?: string;
+}
+
+/** One refusal the phase-guard hook logged to the run's `.swarmery/guard.log`. */
+export interface GuardLogLine {
+  at: string;
+  tool: string;
+  path: string;
+  reason: string;
+  /** Not the hook's four tab-separated fields; `reason` is then the raw line. */
+  malformed?: boolean;
+}
+
+/** A doc block that could not be read (Go mdfence.ParseError). */
+export interface GuardParseError {
+  kind: 'absent' | 'unparsable';
+  line: number;
+  reason: string;
+}
+
+/**
+ * The guard check of a finished phase run (Go phaserun.GuardResult, stored as
+ * guard_json — migration 0124). `{}` on a review written before it, so every
+ * field is optional.
+ */
+export interface GuardSummary {
+  hasGuard?: boolean;
+  protectedPaths?: string[];
+  allow?: string[];
+  /** Files under a protected glob the run changed (committed, uncommitted or new). */
+  protectedChanged?: string[];
+  /** The lent doc copy was changed outside the executor's own edits, or is gone. */
+  docCopyMismatch?: boolean;
+  docCopyMissing?: boolean;
+  guardBlocks?: GuardLogLine[];
+  guardBlocksTotal?: number;
+  malformedLogLines?: number;
+  parseError?: GuardParseError | null;
+  base?: string;
+  diffError?: string;
+}
+
+/** One answer a decision offers. */
+export interface DecisionOption {
+  id: string;
+  label: string;
+}
+
+/**
+ * An open guard decision (Go needsYouDecision): the run touched protected
+ * paths, and the operator allows them into scope or rejects. Answered through
+ * POST /api/epics/{taskId}/phases/{phaseId}/decisions/{decisionId}.
+ */
+export interface NeedsYouDecision {
+  taskId: number;
+  phaseId: number;
+  /** `D-n` within the plan. */
+  decisionId: string;
+  /** "stop" (a guard decision) or "review" (a review cycle that did not settle);
+   *  absent from an older daemon, which only had guard decisions. */
+  source?: 'stop' | 'review';
+  question: string;
+  options: DecisionOption[];
+  guard: GuardSummary;
 }
 
 /** Haiku-extracted reply card for an awaiting_reply item (always null until phase 4). */
@@ -1847,6 +1912,8 @@ export interface NeedsYouItem {
   phase?: NeedsYouPhase;
   /** approval items only: the transport of the permission request. Absent on an older daemon. */
   channel?: ApprovalChannel;
+  /** `phase_decision` only: the question, its options and the run's guard check. */
+  decision?: NeedsYouDecision;
 }
 
 /** GET /api/needs-you — items sorted oldest blocker first. */
@@ -4130,6 +4197,17 @@ export interface EpicPhase {
   workaroundHits?: WorkaroundHit[];
   /** All hits, including the key-only ones past the per-session cap. */
   workaroundTotal?: number;
+  /** D20: why the doc's latest review round is incomplete — "round N: <reason>"
+   *  — or "" when it is complete or there is none. The completion gate holds the
+   *  phase on it. Absent from an older daemon. */
+  reviewHold?: string;
+  /** The phase's OPEN guard decision: its last run touched protected paths and
+   *  nobody answered yet. null otherwise; absent from an older daemon. */
+  guardDecision?: NeedsYouDecision | null;
+  /** The phase's OPEN review decision (verify-not-trust phase 9): its review cycle
+   *  did not settle on its own — repeat the review or accept it as is. null
+   *  otherwise; absent from an older daemon. Answered inline on the Review tab. */
+  reviewDecision?: NeedsYouDecision | null;
 }
 
 /** One finding of a review round (Go reviewFindingDTO, internal/api/review_findings.go). */
@@ -4207,6 +4285,8 @@ export interface PhaseReviewSummary {
   runSessionUuid: string;
   startedAt: string;
   finishedAt: string | null;
+  /** The run's guard check (migration 0124); `{}` before it, absent from an older daemon. */
+  guard?: GuardSummary;
 }
 
 /** Which gate caught a defect in a finished phase — or that none did. */

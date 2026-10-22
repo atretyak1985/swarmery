@@ -71,6 +71,21 @@ never be delegated.
    - Put them at the top of the code-reviewer brief, under
      `Look first — the agent changed course here:`, one line each (word and
      sentence). They are places to check first, not findings.
+10. **Incomplete is never passed; two automatic rounds, then the operator.** A
+    round is incomplete when the reviewer timed out or was resumed after a turn
+    limit, gave no VERDICT line, gave no readable block (a PASS without a block
+    included), said `complete: false`, or its block's `verdict` disagrees with its
+    VERDICT line. An incomplete round starts no fix dispatch. Brief round 2 with
+    ONLY round 1's open findings (ids, file:line, evidence), its `scope_left` and
+    the diff since the tree round 1 reviewed — not the whole phase — and require
+    `round: 2` with `resolves: [ids]`. A round-1 finding round 2 neither resolves
+    nor re-reports goes into round 2's block as a `plan-conformance` finding
+    `unaddressed <id>`, written by you, not the reviewer. There is no third
+    automatic round: an incomplete round, or a FAIL at round 2, is handed to the
+    operator with exactly two options — **repeat the review** or **accept it as
+    is** (recorded as a `D-n` decision in the plan). When the plan is tracked by
+    the swarmery daemon and it offers a review `phase_decision` for the phase,
+    answer through that instead of asking in chat.
 
 # Resources
 

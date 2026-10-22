@@ -1946,6 +1946,10 @@ msgstr "Git push is never auto-approved unless you enable it explicitly."
 msgid "Git writes (add, commit, checkout, worktree)"
 msgstr "Git writes (add, commit, checkout, worktree)"
 
+#: src/lib/needsYou.ts
+msgid "Guard decision"
+msgstr "Guard decision"
+
 #: src/pages/docsRail.ts
 msgid "Guides"
 msgstr "Guides"

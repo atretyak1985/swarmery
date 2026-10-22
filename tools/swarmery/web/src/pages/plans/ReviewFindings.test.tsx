@@ -4,13 +4,32 @@
 // finding's columns and resolution, the round chips (verdict, source,
 // incomplete, unparsable) and the D21 legacy badge.
 
-import { cleanup, render, screen, within } from '../../test/render';
-import { afterEach, describe, expect, it } from 'vitest';
-import type { ReviewBlock } from '../../api/types';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '../../test/render';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import type { NeedsYouDecision, ReviewBlock } from '../../api/types';
 import { hasReviewFindings, showsReviewTab } from './landingModel';
 import { ReviewFindings } from './ReviewFindings';
 
-afterEach(cleanup);
+const answer = vi.hoisted(() => vi.fn<(...a: unknown[]) => Promise<void>>());
+vi.mock('../../api/guard', () => ({ answerPhaseDecision: answer }));
+
+afterEach(() => {
+  cleanup();
+  answer.mockReset();
+});
+
+const DECISION: NeedsYouDecision = {
+  taskId: 7,
+  phaseId: 42,
+  decisionId: 'D-5',
+  source: 'review',
+  question: 'Review round 2 did not settle: review-incomplete: reviewer-timed-out. Repeat the review or accept it as is?',
+  options: [
+    { id: 'repeat-review', label: 'Repeat the review' },
+    { id: 'accept-as-is', label: 'Accept as is' },
+  ],
+  guard: {} as NeedsYouDecision['guard'],
+};
 
 const ROUND1: ReviewBlock = {
   round: '1',
@@ -108,6 +127,49 @@ describe('ReviewFindings', () => {
     expect(container.innerHTML).toBe('');
   });
 
+  it('holds an incomplete latest round: badge, reason and the two operator options (D20)', () => {
+    const hold = 'round 2: review-incomplete: reviewer-timed-out — killed by the hard timeout';
+    render(<ReviewFindings blocks={[ROUND1, ROUND2]} legacy={false} hold={hold} />);
+    const top = screen.getByRole('region', { name: 'Review findings' });
+    expect(within(top).getByText('review incomplete')).toBeTruthy();
+    expect(within(top).getByText('2 review rounds')).toBeTruthy();
+    const banner = within(top).getByRole('status', { name: 'Review incomplete' });
+    expect(within(banner).getByText('Review incomplete — not a passed review')).toBeTruthy();
+    expect(within(banner).getByText(hold)).toBeTruthy();
+    expect(banner.textContent).toContain('repeat the review, or accept it as is');
+    expect(banner.textContent).toContain('at most 2 review rounds');
+  });
+
+  it('shows no hold for a complete latest round, and counts one round in the singular', () => {
+    render(<ReviewFindings blocks={[ROUND1, { ...ROUND2, round: 'plan' }]} legacy={false} hold="" />);
+    expect(screen.queryByRole('status', { name: 'Review incomplete' })).toBeNull();
+    expect(screen.queryByText('review incomplete')).toBeNull();
+    expect(screen.getByText('1 review round')).toBeTruthy();
+  });
+
+  it('answers the open review decision inline from the hold banner', async () => {
+    answer.mockResolvedValue(undefined);
+    const onAnswered = vi.fn();
+    render(
+      <ReviewFindings blocks={[ROUND1, ROUND2]} legacy={false} hold="round 2: x" decision={DECISION} onAnswered={onAnswered} />,
+    );
+    const banner = screen.getByRole('status', { name: 'Review incomplete' });
+    const group = within(banner).getByRole('group', { name: 'Review decision D-5' });
+    expect(within(group).getByText(/Review round 2 did not settle/)).toBeTruthy();
+    fireEvent.click(within(group).getByRole('button', { name: 'Accept as is' }));
+    await waitFor(() => expect(onAnswered).toHaveBeenCalledTimes(1));
+    expect(answer).toHaveBeenCalledWith(7, 42, 'D-5', 'accept-as-is', '');
+  });
+
+  it('shows an open decision over a complete round (a FAIL at round 2) and reports a refused answer', async () => {
+    answer.mockRejectedValue(new Error('the phase has no recorded run branch to review'));
+    render(<ReviewFindings blocks={[ROUND1]} legacy={false} decision={DECISION} />);
+    const banner = screen.getByRole('status', { name: 'Review did not settle' });
+    fireEvent.click(within(banner).getByRole('button', { name: 'Repeat the review' }));
+    expect((await screen.findByRole('alert')).textContent).toBe('the phase has no recorded run branch to review');
+    expect(answer).toHaveBeenCalledWith(7, 42, 'D-5', 'repeat-review', '');
+  });
+
   it('names the plan round', () => {
     render(<ReviewFindings blocks={[{ ...ROUND2, round: 'plan', unparsable: false }]} legacy={false} />);
     expect(screen.getByRole('region', { name: 'Plan round' })).toBeTruthy();
@@ -122,5 +184,6 @@ describe('showsReviewTab', () => {
     expect(showsReviewTab({ ...never, reviewBlocks: [ROUND1] })).toBe(true);
     expect(showsReviewTab({ ...never, reviewBlocks: [], legacyReview: true })).toBe(true);
     expect(showsReviewTab({ ...never, runState: 'done' })).toBe(true);
+    expect(showsReviewTab({ ...never, reviewDecision: { decisionId: 'D-1' } })).toBe(true);
   });
 });

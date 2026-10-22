@@ -41,6 +41,9 @@ type Decision struct {
 	PhaseID           *int64   `json:"phaseId"`
 	CreatedAt         string   `json:"createdAt"`
 	DecidedAt         *string  `json:"decidedAt"`
+	// GuardJSON is the guard check a stop decision is about (migration 0124,
+	// phaserun.GuardResult); "{}" for every other decision.
+	GuardJSON string `json:"-"`
 }
 
 // DecisionID renders the `D-n` id of a sequence number.
@@ -64,7 +67,7 @@ func UndecidedStatus(cost string) string {
 
 const decisionCols = `id, workspace_task_id, planning_session_id, decision_id, seq, source,
 	question_id, question, cost, cost_reason, status, answer, option_ids_json, phase_id,
-	created_at, decided_at`
+	created_at, decided_at, guard_json`
 
 func scanDecision(scan func(...any) error) (Decision, error) {
 	var (
@@ -75,7 +78,7 @@ func scanDecision(scan func(...any) error) (Decision, error) {
 	)
 	if err := scan(&d.ID, &task, &sess, &d.DecisionID, &d.Seq, &d.Source,
 		&d.QuestionID, &d.Question, &d.Cost, &d.CostReason, &d.Status, &d.Answer,
-		&optJSON, &phase, &d.CreatedAt, &decidedAt); err != nil {
+		&optJSON, &phase, &d.CreatedAt, &decidedAt, &d.GuardJSON); err != nil {
 		return Decision{}, err
 	}
 	if task.Valid {
@@ -194,4 +197,95 @@ func orDefault(v, def string) string {
 		return def
 	}
 	return v
+}
+
+// UpsertStopDecision records the open stop decision of one phase: while the
+// phase already has an UNDECIDED stop decision, that row is refreshed (question,
+// options, guard_json) instead of a second one being minted — a re-run that hits
+// the same guard asks the same question once. Otherwise a new row continues the
+// task's D-n sequence (MAX(seq)+1), undecided and expensive. Returns the row and
+// whether it was created.
+func UpsertStopDecision(q Querier, taskID, phaseID int64, question string, optionIDs []string, guardJSON, now string) (Decision, bool, error) {
+	return upsertPhaseDecision(q, DecisionSourceStop, taskID, phaseID, question, optionIDs, guardJSON, now)
+}
+
+// UpsertReviewDecision records the open review decision of one phase (source
+// 'review', verify-not-trust phase 9): a review cycle that could not settle on its
+// own — an incomplete review, or one still failing after its automatic rounds —
+// asks the operator to repeat the review or accept it as is. Same refresh-or-mint
+// rule as UpsertStopDecision: one open review decision per phase.
+func UpsertReviewDecision(q Querier, taskID, phaseID int64, question string, optionIDs []string, now string) (Decision, bool, error) {
+	return upsertPhaseDecision(q, DecisionSourceReview, taskID, phaseID, question, optionIDs, "{}", now)
+}
+
+// upsertPhaseDecision is the shared body of the per-phase decisions (stop,
+// review): refresh the phase's open decision of that source, else mint the next
+// D-n, undecided and expensive.
+func upsertPhaseDecision(q Querier, source string, taskID, phaseID int64, question string, optionIDs []string, guardJSON, now string) (Decision, bool, error) {
+	opt, err := json.Marshal(nonNilStrings(optionIDs))
+	if err != nil {
+		return Decision{}, false, err
+	}
+	if strings.TrimSpace(guardJSON) == "" {
+		guardJSON = "{}"
+	}
+	open, err := queryDecisions(q, `workspace_task_id = ? AND phase_id = ? AND source = ? AND status = ?`,
+		taskID, phaseID, source, DecisionUndecided)
+	if err != nil {
+		return Decision{}, false, err
+	}
+	if len(open) > 0 {
+		d := open[len(open)-1]
+		if _, err := q.Exec(`UPDATE phase_decisions SET question = ?, option_ids_json = ?, guard_json = ? WHERE id = ?`,
+			question, string(opt), guardJSON, d.ID); err != nil {
+			return Decision{}, false, err
+		}
+		got, err := GetDecision(q, d.ID)
+		return got, false, err
+	}
+	var seq int
+	if err := q.QueryRow(`SELECT COALESCE(MAX(seq), 0) + 1 FROM phase_decisions WHERE workspace_task_id = ?`,
+		taskID).Scan(&seq); err != nil {
+		return Decision{}, false, err
+	}
+	res, err := q.Exec(`
+		INSERT INTO phase_decisions
+			(workspace_task_id, decision_id, seq, source, question, cost, status,
+			 option_ids_json, phase_id, created_at, guard_json)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		taskID, DecisionID(seq), seq, source, question, DecisionCostExpensive,
+		DecisionUndecided, string(opt), phaseID, now, guardJSON)
+	if err != nil {
+		return Decision{}, false, err
+	}
+	id, err := res.LastInsertId()
+	if err != nil {
+		return Decision{}, false, err
+	}
+	got, err := GetDecision(q, id)
+	return got, true, err
+}
+
+// GetDecision reads one phase_decisions row by its primary key.
+func GetDecision(q Querier, id int64) (Decision, error) {
+	return scanDecision(q.QueryRow(`SELECT `+decisionCols+` FROM phase_decisions WHERE id = ?`, id).Scan)
+}
+
+// GetTaskDecision reads a plan's decision by its `D-n`; sql.ErrNoRows when the
+// plan has none of that id.
+func GetTaskDecision(q Querier, taskID int64, decisionID string) (Decision, error) {
+	return scanDecision(q.QueryRow(`SELECT `+decisionCols+` FROM phase_decisions
+		WHERE workspace_task_id = ? AND decision_id = ?`, taskID, decisionID).Scan)
+}
+
+// DecideDecision stamps an undecided decision decided with answer. It reports
+// false when the row was no longer undecided (someone answered first).
+func DecideDecision(q Querier, id int64, answer, now string) (bool, error) {
+	res, err := q.Exec(`UPDATE phase_decisions SET status = ?, answer = ?, decided_at = ?
+		WHERE id = ? AND status = ?`, DecisionDecided, answer, now, id, DecisionUndecided)
+	if err != nil {
+		return false, err
+	}
+	n, err := res.RowsAffected()
+	return n == 1, err
 }
