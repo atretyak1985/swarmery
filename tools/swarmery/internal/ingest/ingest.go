@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/cost" // metrics hook (wave C)
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/workaround"
 )
 
 // Stats counts rows created by one ingest run (idempotent re-runs report zeros).
@@ -200,6 +201,14 @@ type ingester struct {
 	// subagent whose sidechain is being processed (analytics phase 2), or ""
 	// for the main orchestrator transcript. Set at the top of processRecords.
 	agentName string
+	// agentLabel is the sidechain's dispatch description (meta.json), "" for
+	// the main chain — set by the caller before processRecords; it attributes
+	// a run-plan executor's prose to "Phase N" (workaround.go).
+	agentLabel string
+	// waResolved/waLink: the workaround hook's per-chain link, resolved once
+	// per processRecords call (workaround.go).
+	waResolved bool
+	waLink     workaround.Link
 
 	// pending tool_use calls awaiting their tool_result (keyed by toolu_… id).
 	pending map[string]*pendingTool
@@ -477,6 +486,7 @@ func (in *ingester) processRecords(recs []record, path string, sidechain bool, s
 	// Tag turns created in this call with their agent (phase 2). Main
 	// transcript passes "" (NULL agent_name = orchestrator).
 	in.agentName = agentName
+	in.waResolved = false
 	if in.pending == nil {
 		in.pending = map[string]*pendingTool{}
 		in.subagentStarts = map[string]int64{}
@@ -642,6 +652,17 @@ func (in *ingester) processRecords(recs []record, path string, sidechain bool, s
 					// Turn prose (Chat tab): text blocks only — thinking and
 					// tool_use are never part of turns.text.
 					in.addTurnText(curTurnID, b.Text)
+				}
+				// Workaround words (workaround.go): assistant prose of both
+				// chains, and a subagent's handback report — never tool output.
+				if b.Type == "text" {
+					if err := in.scanWorkaround(curTurnID, b.Text, sidechain); err != nil {
+						return err
+					}
+				} else if report := handbackText(b); report != "" {
+					if err := in.scanWorkaround(curTurnID, report, sidechain); err != nil {
+						return err
+					}
 				}
 				if b.Type != "tool_use" {
 					continue // thinking / text blocks are turn content, not events
@@ -1107,6 +1128,8 @@ func (in *ingester) ingestSidechain(path string) error {
 	if scope == "" {
 		scope = filepath.Base(path)
 	}
+	in.agentLabel = meta.Description
+	defer func() { in.agentLabel = "" }()
 	if err := in.processRecords(recs, path, true, scope, parentID, in.agentNameFor(parentID, meta.AgentType)); err != nil {
 		return err
 	}

@@ -1,7 +1,7 @@
 ---
 name: run-plan
 description: "EXECUTES an existing @planner plan -- parses the phase DAG, dispatches per-phase implement+review loops, preserving ASK gates. NOT for creating plans; NOT usable from inside a subagent."
-version: "1.4.0"
+version: "1.5.0"
 owner: "swarmery-core"
 docs:
   status: reviewed
@@ -52,6 +52,25 @@ never be delegated.
    reviewer reply without the block is recorded as a block you write from its
    findings, with `complete: false`. Shape:
    `workspace-plans/resources/plan-format.md` → "`## Review`".
+9. **Brief the reviewer with where the executor changed course** — before each
+   review, collect the executor's own workaround words: the guards list
+   `workaround`, `instead`, `bypass`, `pre-existing`, `skip`, `skipped`,
+   `flaky`, `for now`, `temporarily`, `обхід`, `обійти`, `замість`,
+   `тимчасово`, `поки що`, `пропускаю`, `пропустив`, `нестабільний`,
+   `вже був зламаний` (whole word, any case, prose only — not code).
+   - With the daemon reachable, read them from it: in
+     `curl -s http://localhost:7777/api/epics`, the epic whose `planDir` is this
+     plan, then the phase by `seq`; its `workaroundHits` hold the word, the
+     sentence and the sentences around it. The same list is
+     `GET /api/epics/<taskId>/phases/<phaseId>/workaround-hits`. The daemon
+     reads the executor's whole transcript, so dispatch every executor with a
+     description that starts `Phase <N>` — that is how it attributes the prose
+     to the phase.
+   - Without a daemon, or while it lists none yet, find the same words in the
+     executor's final message yourself.
+   - Put them at the top of the code-reviewer brief, under
+     `Look first — the agent changed course here:`, one line each (word and
+     sentence). They are places to check first, not findings.
 
 # Resources
 

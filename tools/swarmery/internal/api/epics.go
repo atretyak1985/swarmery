@@ -41,6 +41,7 @@ import (
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/planrun"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/runcore"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/surprise"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/workaround"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/wsingest"
 )
 
@@ -219,6 +220,11 @@ type epicPhaseDTO struct {
 	// oldest first: every time a finished phase was sent back because a defect
 	// slipped past its gates, with the gate that caught it. Never null.
 	Reopens []reopenDTO `json:"reopens"`
+	// WorkaroundHits are the places the phase's agent said it changed course
+	// (migration 0120, workaround_hits.go), oldest first; WorkaroundTotal counts
+	// the key-only ones past the per-session cap too. Never null.
+	WorkaroundHits  []workaround.Stored `json:"workaroundHits"`
+	WorkaroundTotal int                 `json:"workaroundTotal"`
 	// Reviews are the phase's code reviews (migration 0106, phase_reviews
 	// scope='phase', reviews.go), newest first, with Findings always "" — the Runs
 	// tab fetches the latest review's findings from …/phases/{id}/reviews. Never null.
@@ -925,9 +931,10 @@ func (h *Handler) epicPhases(taskID int64, planDir string) ([]epicPhaseDTO, epic
 	for _, p := range phases {
 		docs[p.ID] = p.DocPath
 	}
-	reopens := h.phaseReopens(taskID, docs) // and again
-	reviews := h.phaseReviews(taskID)       // and again
-	verifying := h.phasesVerifying(phases)  // and again
+	reopens := h.phaseReopens(taskID, docs)      // and again
+	reviews := h.phaseReviews(taskID)            // and again
+	verifying := h.phasesVerifying(phases)       // and again
+	workarounds := h.phaseWorkaroundHits(taskID) // and again
 	for i := range phases {
 		phases[i].VerifyRunning = verifying[phases[i].ID]
 		phases[i].RunEvents = runEventsOrEmpty(runcore.RunEvents(h.DB, phaserun.Engine, phases[i].ID))
@@ -947,6 +954,11 @@ func (h *Handler) epicPhases(taskID int64, planDir string) ([]epicPhaseDTO, epic
 		phases[i].Reviews = reviews[phases[i].ID]
 		if phases[i].Reviews == nil {
 			phases[i].Reviews = []reviewDTO{}
+		}
+		wh := workarounds[phases[i].ID]
+		phases[i].WorkaroundHits, phases[i].WorkaroundTotal = wh.Hits, wh.Total
+		if phases[i].WorkaroundHits == nil {
+			phases[i].WorkaroundHits = []workaround.Stored{} // [] not null: the UI maps over it
 		}
 	}
 	if rollup.Total > 0 {
