@@ -13,7 +13,8 @@ package sysscan
 // FK-only join calls every component dead. A component counts as used when an
 // event in the window names it — subagent_start.subagent_type for agents, the
 // Skill tool's input.skill or a slash-command prompt's <command-name> for skills
-// — folded to the segment after the last ':' and lower-cased, so
+// (or a used agent preloads the skill through its frontmatter `skills:`) —
+// folded to the segment after the last ':' and lower-cased, so
 // "core:workspace-plans" and "workspace-plans" are one skill. The FK columns
 // still count when set, so an ingest that starts filling them needs no change
 // here. Name grain means same-named copies in different projects share usage.
@@ -293,9 +294,20 @@ func ComputeSkillAudit(db *sql.DB, opts AuditOptions) (SkillAudit, error) {
 		skillNameSet[normComponent(s.Name)] = true
 	}
 
+	preloads, err := readAgentSkills(db)
+	if err != nil {
+		return rep, err
+	}
 	for _, a := range agents {
 		if !u.agentIDs[a.ID] && !u.agentNames[normComponent(a.Name)] {
 			rep.UnusedAgents = append(rep.UnusedAgents, a.AuditComponent)
+			continue
+		}
+		// A skill an agent preloads through its frontmatter `skills:` list
+		// loads with every run of that agent, and no Skill tool call ever
+		// names it.
+		for _, sk := range preloads[a.ID] {
+			u.skillNames[sk] = true
 		}
 	}
 	for _, s := range skills {
@@ -391,6 +403,47 @@ func (u usage) load(sessionID, projectID int64, name string) {
 		u.sessionProject[sessionID] = projectID
 	}
 	set[name] = true
+}
+
+// readAgentSkills maps each live agent to the folded names of the skills its
+// CURRENT stored version preloads (frontmatter `skills:`, a YAML list or a
+// comma-separated string). Agents whose frontmatter does not parse preload
+// nothing here — the scanner's parse_error finding owns them.
+func readAgentSkills(db *sql.DB) (map[int64][]string, error) {
+	rows, err := db.Query(`
+		SELECT a.id, v.content FROM agents a JOIN agent_versions v ON v.id = a.current_version_id
+		 WHERE a.deleted = 0`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := map[int64][]string{}
+	for rows.Next() {
+		var id int64
+		var content string
+		if err := rows.Scan(&id, &content); err != nil {
+			return nil, err
+		}
+		fm, err := parseFrontmatter([]byte(content))
+		if err != nil {
+			continue
+		}
+		var names []string
+		switch v := fm["skills"].(type) {
+		case []any:
+			for _, x := range v {
+				names = append(names, fmt.Sprint(x))
+			}
+		case string:
+			names = strings.FieldsFunc(v, func(r rune) bool { return r == ',' || unicode.IsSpace(r) })
+		}
+		for _, n := range names {
+			if f := normComponent(n); f != "" {
+				out[id] = append(out[id], f)
+			}
+		}
+	}
+	return out, rows.Err()
 }
 
 // component is a registry row plus the description the similarity rule reads.
@@ -569,7 +622,7 @@ func auditFindings(rep SkillAudit) map[string][]lintFinding {
 		byRule[RuleSkillDead] = append(byRule[RuleSkillDead], lintFinding{
 			target:   fmt.Sprintf("skill:%d", s.ID),
 			severity: "info",
-			message: fmt.Sprintf("skill %q: no Skill tool call or slash command named it in the last %d days (matched by name — events.skill_id is not populated; advisory)",
+			message: fmt.Sprintf("skill %q: no Skill tool call or slash command named it, and no agent that preloads it ran, in the last %d days (matched by name — events.skill_id is not populated; advisory)",
 				s.Name, window),
 		})
 	}

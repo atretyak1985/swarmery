@@ -51,10 +51,17 @@ func TestSkillAuditReport(t *testing.T) {
 	}
 
 	// workspace-plans (Skill tool, qualified and bare), run-plan (skill_id FK),
-	// graphify (slash command) and both pdf skills are used; old-helper's only
-	// use is 40 days old; never-used is only quoted in prose.
+	// graphify (slash command), both pdf skills and preloaded-skill (in the
+	// frontmatter of tech-lead, which ran) are used; old-helper's only use is
+	// 40 days old and the agent that preloads it never ran; never-used is only
+	// quoted in prose.
 	if got, want := names(rep.UnusedSkills), []string{"never-used", "old-helper"}; !reflect.DeepEqual(got, want) {
 		t.Errorf("unused skills = %v, want %v", got, want)
+	}
+	for _, s := range rep.UnusedSkills {
+		if s.ID == 10 {
+			t.Errorf("core:preloaded-skill is preloaded by tech-lead, which ran, yet reported unused")
+		}
 	}
 	// tech-lead runs by name, fk-agent through agent_id; gone-agent is deleted.
 	if got, want := names(rep.UnusedAgents), []string{"legacy-bot"}; !reflect.DeepEqual(got, want) {

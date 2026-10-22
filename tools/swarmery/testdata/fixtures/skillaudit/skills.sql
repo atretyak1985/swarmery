@@ -39,3 +39,28 @@ INSERT INTO skills (id, name, scope, project_id, dir_path, description, origin, 
   -- deleted rows are never audited
   (9, 'pdf-exporting', 'global', NULL, '/skills/pdf-exporting',
       'Export the session report to a PDF file with charts, tables and a cover page.', 'local', NULL, 1);
+
+-- Frontmatter preloads: tech-lead (which runs) preloads `preloaded-skill`, so
+-- that skill is used with no Skill tool call; legacy-bot (which does not run)
+-- preloads old-helper, which stays dead.
+UPDATE agents SET current_version_id = 1 WHERE id = 1;
+UPDATE agents SET current_version_id = 2 WHERE id = 2;
+INSERT INTO agent_versions (id, agent_id, content_hash, content, created_at) VALUES
+  (1, 1, 'tl', '---
+name: tech-lead
+skills:
+  - core:preloaded-skill
+---
+
+# Role
+', '2026-10-01T00:00:00Z'),
+  (2, 2, 'lb', '---
+name: legacy-bot
+skills: old-helper, never-used
+---
+
+# Role
+', '2026-10-01T00:00:00Z');
+INSERT INTO skills (id, name, scope, project_id, dir_path, description, origin, plugin_name, deleted) VALUES
+  (10, 'core:preloaded-skill', 'global', NULL, '/plugins/core/skills/preloaded-skill',
+      'Loaded through the tech-lead frontmatter, never through the Skill tool.', 'plugin', 'core', 0);

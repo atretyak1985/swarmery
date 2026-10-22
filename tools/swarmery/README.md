@@ -617,8 +617,10 @@ reaches `skillSimilarityThreshold` in `config/guards.json`) and
 `session_skill_load_high` (warn — a project whose p95 of distinct skills loaded
 per session exceeds `sessionSkillLoadP95`). Usage is matched by **name** — the
 Skill tool's `input.skill`, a slash command's `<command-name>`, a subagent's
-`subagent_type` — because the ingester never fills `events.skill_id` /
-`events.agent_id`. `swarmery skill-audit [--json]` prints the same audit on
+`subagent_type`, and a skill a running agent preloads through its frontmatter
+`skills:` — because the ingester never fills `events.skill_id` /
+`events.agent_id`. A skill injected by a hook (a SessionStart hook that pastes a
+skill body) leaves no such trace and reads as unused. `swarmery skill-audit [--json]` prints the same audit on
 demand; `--similarity` and `--p95` override the thresholds for one run.
 
 `config/routines/skill-audit.json` ships `skill-audit-weekly`: every Monday at
