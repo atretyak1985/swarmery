@@ -1,4 +1,4 @@
--- 0120: epic_phases.blast_radius — the phase doc's `Blast radius:` line (who
+-- 0126: epic_phases.blast_radius — the phase doc's `Blast radius:` line (who
 -- calls what the phase changes; wsingest.ParseBlastRadius, core workspace-plans
 -- resources/blast-radius.md), stored as written, '' when the doc has none.
 --

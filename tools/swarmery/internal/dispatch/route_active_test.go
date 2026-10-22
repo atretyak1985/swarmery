@@ -77,25 +77,25 @@ func readRouteRow(t *testing.T, db *sql.DB) routeRow {
 
 func TestRunSpecEffort(t *testing.T) {
 	quietKnobs(t)
-	if got := spawnArgs(t, RunSpec{Prompt: "p", SessionUUID: "e1", Effort: "low"}); !strings.Contains(got, "--effort low\n") {
+	if got := spawnArgs(t, RunSpec{Prompt: "p", SessionUUID: "e1", Effort: "low"}); !strings.Contains(got, "--effort low -- p\n") {
 		t.Errorf("a set Effort must reach --effort: %q", got)
 	}
-	if got := spawnArgs(t, RunSpec{Prompt: "p", SessionUUID: "e2", Effort: " MAX "}); !strings.Contains(got, "--effort max\n") {
+	if got := spawnArgs(t, RunSpec{Prompt: "p", SessionUUID: "e2", Effort: " MAX "}); !strings.Contains(got, "--effort max -- p\n") {
 		t.Errorf("a set Effort is normalised: %q", got)
 	}
 	// Empty keeps today's resolution exactly: the default …
-	if got := spawnArgs(t, RunSpec{Prompt: "p", SessionUUID: "e3"}); !strings.Contains(got, "--effort "+DefaultEffort+"\n") {
+	if got := spawnArgs(t, RunSpec{Prompt: "p", SessionUUID: "e3"}); !strings.Contains(got, "--effort "+DefaultEffort+" -- p\n") {
 		t.Errorf("empty Effort must fall back to DefaultEffort: %q", got)
 	}
 	// … and the site knob above it.
 	t.Setenv(effortEnv, "xhigh")
-	if got := spawnArgs(t, RunSpec{Prompt: "p", SessionUUID: "e4"}); !strings.Contains(got, "--effort xhigh\n") {
+	if got := spawnArgs(t, RunSpec{Prompt: "p", SessionUUID: "e4"}); !strings.Contains(got, "--effort xhigh -- p\n") {
 		t.Errorf("empty Effort must keep the %s knob: %q", effortEnv, got)
 	}
 	// An unusable value never reaches argv and never means "no flag": it is
 	// demoted to the knob.
 	for _, bad := range []string{"bogus", "off"} {
-		if got := spawnArgs(t, RunSpec{Prompt: "p", SessionUUID: "e5", Effort: bad}); !strings.Contains(got, "--effort xhigh\n") {
+		if got := spawnArgs(t, RunSpec{Prompt: "p", SessionUUID: "e5", Effort: bad}); !strings.Contains(got, "--effort xhigh -- p\n") {
 			t.Errorf("Effort=%q must demote to the knob: %q", bad, got)
 		}
 	}
@@ -280,7 +280,7 @@ func TestRouteHaiku(t *testing.T) {
 		t.Fatalf("S-tier spawn model = %q, want the full haiku ID %q", specs[0].Model, route.ModelHaiku)
 	}
 	got := spawnArgs(t, specs[0])
-	if !strings.Contains(got, "--model "+route.ModelHaiku+" --effort low\n") {
+	if !strings.Contains(got, "--model "+route.ModelHaiku+" --effort low -- ") {
 		t.Errorf("argv tail wrong: %q", got[strings.Index(got, " --session-id"):])
 	}
 	row := readRouteRow(t, db)
@@ -291,22 +291,45 @@ func TestRouteHaiku(t *testing.T) {
 
 // ── off golden ──
 
+// legacyArgv puts an echoed `-p --session-id … -- <prompt>\n` argv line back
+// into the `-p <prompt> --session-id …\n` order the claude argv used before the
+// prompt moved after the end-of-options marker.
+func legacyArgv(t *testing.T, argv string) string {
+	t.Helper()
+	i := strings.Index(argv, " -- ")
+	if !strings.HasPrefix(argv, "-p ") || i < 0 || !strings.HasSuffix(argv, "\n") {
+		t.Fatalf("argv %q is not `-p … -- <prompt>`", argv)
+	}
+	flags, prompt := argv[len("-p"):i], argv[i+len(" -- "):len(argv)-1]
+	return "-p " + prompt + flags + "\n"
+}
+
 // TestRouteOffGolden pins mode=off to the argv dispatch produced BEFORE the
 // router existed (captured from eec509c0 with the same fixtures): the card's
 // full argv — prompt included — hashed, plus the flag tail spelled out. off
 // must be byte-for-byte pre-router behaviour; this is the rollback guarantee.
 func TestRouteOffGolden(t *testing.T) {
 	quietKnobs(t)
-	const tail = " --setting-sources project,local --permission-mode bypassPermissions --model claude-sonnet-5 --effort medium\n"
+	const tail = " --setting-sources project,local --permission-mode bypassPermissions --model claude-sonnet-5 --effort medium -- "
 	for _, tc := range []struct {
 		name     string
 		prep     func(db *sql.DB, id int64)
 		playbook string
-		golden   []string
+		// golden hashes today's argv (prompt last, after `--`), captured from
+		// this test's own builder output when the prompt moved. legacy keeps
+		// the pre-router hashes from eec509c0: the argv put back into the old
+		// `-p <prompt> --session-id …` order must still hash to them, which
+		// proves the move changed the prompt's position and nothing else.
+		golden, legacy []string
 	}{
 		{"short card, standard", nil, "standard",
+			[]string{"7e60a8c5faaa0f5a9cca4945d0dea2b6f61cc36df0ae0489da2111aee71262f0"},
 			[]string{"54cafdf687812231a7dda070b9ca9eecc7f6f4f6f2bda9b4ceb9ec051b992475"}},
 		{"long card, plan-first", func(db *sql.DB, id int64) { setTaskPrompt(t, db, id, strings.Repeat("x", 5000)) }, "plan-first",
+			[]string{
+				"583e70202dff0899f1012e8040737003c40a9aba8d2f44dc87417452e0d0ff72",
+				"a5de72589c8986162586356506758384731b71221fda9880468ee325ab3a3974",
+			},
 			[]string{
 				"3a00f9d1be62e561efc1283b3943998b6ea57a190b869b5a1b7049520e86a3ed",
 				"73e647fe91b7eb87330faf9da877e8b3bf594ed76ee36c0c2116163b712b3046",
@@ -323,8 +346,12 @@ func TestRouteOffGolden(t *testing.T) {
 				if got := hex.EncodeToString(sum[:]); got != tc.golden[i] {
 					t.Errorf("stage %d argv drifted from the pre-router golden\n got sha %s\n argv tail %q", i+1, got, argv[strings.Index(argv, " --session-id"):])
 				}
-				if !strings.HasSuffix(argv, tail) {
-					t.Errorf("stage %d flags = %q, want suffix %q", i+1, argv[strings.Index(argv, " --session-id"):], tail)
+				legacySum := sha256.Sum256([]byte(legacyArgv(t, argv)))
+				if got := hex.EncodeToString(legacySum[:]); got != tc.legacy[i] {
+					t.Errorf("stage %d argv in the old prompt order no longer matches the eec509c0 golden (sha %s)", i+1, got)
+				}
+				if !strings.Contains(argv, tail) {
+					t.Errorf("stage %d flags = %q, want the flags %q before the prompt", i+1, argv[strings.Index(argv, " --session-id"):], tail)
 				}
 				if sp.Effort != "" {
 					t.Errorf("stage %d: off put Effort=%q on the spec", i+1, sp.Effort)

@@ -130,6 +130,79 @@ type Input struct {
 	// from ClosureGateEnabled(). Off ⇒ the report is not required, which is the
 	// migration path for plans already in flight when the gate shipped.
 	ClosureRequired bool
+	// ReviewHold is the review-incomplete hold (D20): why the phase doc's latest
+	// numbered `kind: review` round is incomplete (`complete: false` — a
+	// reviewer that stopped early, timed out, wrote no readable block, …), ""
+	// when it is complete or there is none. Callers read it with ReviewHoldSQL.
+	// Unlike a verdict it is not keyed on Dispatched: run-plan's interactive
+	// reviewer writes the same blocks, and an incomplete review is never a
+	// passed one whoever ran it.
+	ReviewHold string
+	// ReviewAccepted: the operator answered the phase's latest review decision
+	// with accept-as-is, which lifts ReviewHold (and is recorded as a D-n
+	// decision). Callers read it with ReviewDecisionSQL / ParseReviewDecision.
+	ReviewAccepted bool
+	// ReviewDecisionOpen is the `D-n` of the phase's OPEN review decision (an
+	// incomplete review, or one still failing after its automatic rounds, handed
+	// to the operator), "" when there is none. An open one holds the phase even
+	// when the doc's latest round is complete: a FAIL at round 2 waits on it.
+	ReviewDecisionOpen string
+	// LegacyReview: D21 — the phase finished before review blocks existed
+	// (epic_phases.legacy_review). Excluded from the review-incomplete rule.
+	LegacyReview bool
+}
+
+// ReviewHoldSQL is the SQL expression a caller selects as Input.ReviewHold, for
+// a query whose epic_phases alias is `e`: the latest numbered review round of
+// the doc (review_blocks, projected by wsingest) when it is incomplete —
+// "round N: <its last scope_left entry>" — else ”. A constant, not a query:
+// the gate itself stays free of the database.
+const ReviewHoldSQL = `COALESCE((
+	SELECT CASE WHEN rb.complete = 0 THEN
+	       'round ' || rb.round || ': ' ||
+	       COALESCE(NULLIF(json_extract(rb.scope_left_json, '$[#-1]'), ''), 'complete: false')
+	       END
+	  FROM review_blocks rb
+	 WHERE rb.doc_path = e.doc_path AND rb.round <> 'plan'
+	 ORDER BY CAST(rb.round AS INTEGER) DESC LIMIT 1), '')`
+
+// ReviewDecisionSQL is the SQL expression a caller selects for the phase's latest
+// review decision (phase_decisions, source 'review'), for a query whose
+// epic_phases alias is `e`: "open:D-n", "accepted:D-n", "answered:D-n" or ”.
+// Decode it with ParseReviewDecision.
+const ReviewDecisionSQL = `COALESCE((
+	SELECT CASE WHEN d.status = 'undecided' THEN 'open:'
+	            WHEN d.answer LIKE 'accept as is%' THEN 'accepted:'
+	            ELSE 'answered:' END || d.decision_id
+	  FROM phase_decisions d
+	 WHERE d.phase_id = e.id AND d.source = 'review'
+	 ORDER BY d.seq DESC LIMIT 1), '')`
+
+// ParseReviewDecision decodes a ReviewDecisionSQL value into Input's fields.
+func ParseReviewDecision(v string) (open string, accepted bool) {
+	state, id, _ := strings.Cut(strings.TrimSpace(v), ":")
+	switch state {
+	case "open":
+		return id, false
+	case "accepted":
+		return "", true
+	}
+	return "", false
+}
+
+// ReviewHoldReason is the gate's reason for a ReviewHold.
+func ReviewHoldReason(hold string) string {
+	hold = strings.TrimSpace(hold)
+	return ReviewIncomplete + ": the latest review is incomplete (" + hold +
+		") — it is not a passed review; repeat the review or accept it as is"
+}
+
+// ReviewIncomplete is the hold's class, as phaserun.ClassReviewIncomplete.
+const ReviewIncomplete = "review-incomplete"
+
+// reviewHeld reports whether the review-incomplete hold applies.
+func (in Input) reviewHeld() bool {
+	return strings.TrimSpace(in.ReviewHold) != "" && !in.ReviewAccepted && !in.LegacyReview
 }
 
 // Result is the gate's answer. Reasons is empty exactly when State is
@@ -223,6 +296,22 @@ func Check(in Input) Result {
 				"verification could not conclude, so the ticked criteria are unconfirmed — "+
 					"see the verify detail for whether the verifier ran at all")
 		}
+	}
+
+	// D20: a review that stopped early is incomplete, never passed — the ticked
+	// criteria are as unconfirmed as with no verdict at all.
+	switch {
+	case in.reviewHeld():
+		verificationUnmet = true
+		reason := ReviewHoldReason(in.ReviewHold)
+		if id := strings.TrimSpace(in.ReviewDecisionOpen); id != "" {
+			reason += " (decision " + id + " is open)"
+		}
+		reasons = append(reasons, reason)
+	case strings.TrimSpace(in.ReviewDecisionOpen) != "" && !in.LegacyReview:
+		verificationUnmet = true
+		reasons = append(reasons, ReviewIncomplete+": review decision "+strings.TrimSpace(in.ReviewDecisionOpen)+
+			" is open — the review did not settle on its own; repeat the review or accept it as is")
 	}
 
 	// The report is owed by a phase the daemon RAN — see Input.Ran.

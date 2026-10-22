@@ -1,0 +1,13 @@
+{
+  "extraKnownMarketplaces": {
+    "swarmery": {
+      "source": {
+        "source": "github",
+        "repo": "atretyak1985/swarmery"
+      }
+    }
+  },
+  "enabledPlugins": {
+    "core@swarmery": true
+  }
+}

@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/mdfence"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/workaround"
 )
 
 func blastDoc(t *testing.T, name string) string {
@@ -24,7 +25,7 @@ func blastDoc(t *testing.T, name string) string {
 // read and record in checked_callers.
 func TestReviewPromptRepeatsBlastRadius(t *testing.T) {
 	t.Run("doc with the line", func(t *testing.T) {
-		p := reviewPrompt("Phase 2 — Line-item totals", blastDoc(t, "phase-with-blast-radius.md"), "DIFF: none", 7777, 1)
+		p := reviewPrompt("", "Phase 2 — Line-item totals", blastDoc(t, "phase-with-blast-radius.md"), "DIFF: none", 7777, 1, workaround.PhaseHits{})
 		want := "\n\nBLAST RADIUS: 3 callers in internal/orders, internal/api — internal/orders/service.go:41, " +
 			"internal/api/line_items.go:88, internal/orders/totals_test.go:17 (sources: rg, serena)\n" +
 			"Read these call sites against the diff; list each one you read, as file:line, in the block's checked_callers."
@@ -40,7 +41,7 @@ func TestReviewPromptRepeatsBlastRadius(t *testing.T) {
 		}
 	})
 	t.Run("doc without one", func(t *testing.T) {
-		p := reviewPrompt("Phase 2 — Line-item totals", blastDoc(t, "phase-with-risk.md"), "DIFF: none", 7777, 1)
+		p := reviewPrompt("", "Phase 2 — Line-item totals", blastDoc(t, "phase-with-risk.md"), "DIFF: none", 7777, 1, workaround.PhaseHits{})
 		if !strings.Contains(p, "\n\nBLAST RADIUS: the phase document declares none") {
 			t.Error("a doc without a line does not say it declares none")
 		}

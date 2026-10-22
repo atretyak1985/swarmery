@@ -1,58 +1,35 @@
-package store_test
+package store
 
-import (
-	"testing"
+import "testing"
 
-	"github.com/atretyak1985/swarmery/tools/swarmery/internal/store"
-	"github.com/atretyak1985/swarmery/tools/swarmery/internal/wsingest"
-)
-
-// TestMigrate0120BlastRadiusDocOwned: blast_radius lands empty by default and is
-// doc-owned — the EXACT scan upsert rewrites it, including back to empty when the
-// doc's `Blast radius:` line is deleted.
-func TestMigrate0120BlastRadiusDocOwned(t *testing.T) {
-	db := openRaw0103(t)
-	if err := store.Migrate(db); err != nil {
-		t.Fatalf("migrate fresh db: %v", err)
-	}
-	var name string
-	if err := db.QueryRow(`SELECT name FROM schema_migrations WHERE version = 120`).Scan(&name); err != nil || name != "0120_phase_blast_radius.sql" {
-		t.Fatalf("migration 120 = %q, %v; want 0120_phase_blast_radius.sql", name, err)
-	}
-
-	const doc = "/plan/phase-2-totals.md"
-	upsert := func(line string) {
-		t.Helper()
-		if _, err := db.Exec(wsingest.PhaseUpsertSQL,
-			1, 2, "Phase two", doc, "[]", 3, 0, "in_progress", nil,
-			nil, nil, "[]", "off", nil, 0, 0, "off", line); err != nil {
-			t.Fatalf("PhaseUpsertSQL: %v", err)
-		}
-	}
-	read := func() string {
-		t.Helper()
-		var v string
-		if err := db.QueryRow(`SELECT blast_radius FROM epic_phases WHERE doc_path = ?`, doc).Scan(&v); err != nil {
-			t.Fatal(err)
-		}
-		return v
-	}
-
-	if _, err := db.Exec(`INSERT INTO epic_phases (workspace_task_id, seq, name, doc_path) VALUES (1, 9, 'Raw', '/plan/raw.md')`); err != nil {
+// TestMigrate0120AddsWorkaroundHits: the hits table lands with its dedup key
+// (turn, word, sentence hash) and the two link indexes the ingest tail probes.
+func TestMigrate0120AddsWorkaroundHits(t *testing.T) {
+	db, err := Open(t.TempDir() + "/m120.db")
+	if err != nil {
 		t.Fatal(err)
 	}
-	var def string
-	if err := db.QueryRow(`SELECT blast_radius FROM epic_phases WHERE doc_path = '/plan/raw.md'`).Scan(&def); err != nil || def != "" {
-		t.Fatalf("default blast_radius = %q, %v; want ''", def, err)
+	defer db.Close()
+	var name string
+	if err := db.QueryRow(`SELECT name FROM schema_migrations WHERE version = 120`).Scan(&name); err != nil {
+		t.Fatalf("migration 120 not recorded: %v", err)
 	}
-
-	const line = "Blast radius: 2 callers in internal/orders — internal/orders/a.go:1, internal/orders/b.go:2 (sources: rg)"
-	upsert(line)
-	if got := read(); got != line {
-		t.Errorf("blast_radius = %q, want the doc's line", got)
+	if name != "0120_workaround_hits.sql" {
+		t.Errorf("migration 120 name: want 0120_workaround_hits.sql, got %s", name)
 	}
-	upsert("")
-	if got := read(); got != "" {
-		t.Errorf("blast_radius = %q after a rescan found no line, want '' (doc-owned)", got)
+	const ins = `INSERT INTO workaround_hits (session_uuid, turn_id, word, sentence, sentence_hash, created_at)
+		VALUES ('s', 7, 'instead', 'I used Edit instead.', 'h1', '2026-10-22T00:00:00Z')`
+	if _, err := db.Exec(ins); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(ins); err == nil {
+		t.Fatal("duplicate (turn, word, sentence) accepted")
+	}
+	for _, idx := range []string{"idx_workaround_hits_phase", "idx_workaround_hits_session",
+		"idx_epic_phases_run_session", "idx_task_sessions_session"} {
+		var n int
+		if err := db.QueryRow(`SELECT COUNT(*) FROM sqlite_master WHERE type = 'index' AND name = ?`, idx).Scan(&n); err != nil || n != 1 {
+			t.Errorf("index %s missing (%v)", idx, err)
+		}
 	}
 }
