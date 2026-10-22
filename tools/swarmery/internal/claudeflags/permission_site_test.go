@@ -92,7 +92,8 @@ func TestEditUnder(t *testing.T) {
 
 func TestDaemonDenyRules(t *testing.T) {
 	got := DaemonDenyRules(0)
-	if len(got) != 6 || got[0] != "Bash(curl *127.0.0.1:7777*)" || got[5] != "Bash(http *localhost:7777*)" {
+	if len(got) != 8 || got[0] != "Bash(curl *127.0.0.1:7777*)" || got[5] != "Bash(http *localhost:7777*)" ||
+		got[6] != "Bash(swarmery api*)" || got[7] != "Bash(*/swarmery api*)" {
 		t.Errorf("DaemonDenyRules(0) = %q", got)
 	}
 	if got := DaemonDenyRules(7794); got[1] != "Bash(curl *localhost:7794*)" {
@@ -222,6 +223,20 @@ func TestAgentDenyArgs(t *testing.T) {
 	for _, want := range []string{"Bash(git push*)", "Bash(gh pr create*)", "Bash(gh pr merge*)", "Bash(glab mr merge*)", "Bash(curl *127.0.0.1:7794*)"} {
 		if !strings.Contains(args[1], want) {
 			t.Errorf("deny list %q lacks %q", args[1], want)
+		}
+	}
+	// `swarmery api` signs with the link token and reaches the daemon's write
+	// routes without curl; it must be denied by name and by installed path.
+	rules := strings.Split(args[1], ",")
+	for _, cmd := range []string{"swarmery api POST /api/routines", "/usr/local/bin/swarmery api PATCH /api/projects/1"} {
+		hit := false
+		for _, r := range rules {
+			if matchesRule(r, cmd) {
+				hit = true
+			}
+		}
+		if !hit {
+			t.Errorf("executor deny list misses %q", cmd)
 		}
 	}
 	for _, off := range []string{"0", "off", "false"} {

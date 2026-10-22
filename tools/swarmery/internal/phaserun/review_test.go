@@ -197,7 +197,8 @@ func TestReviewSpawnArgsDenyEditToolsAndBash(t *testing.T) {
 	const wantList = "Edit,Write,MultiEdit,NotebookEdit,Bash," +
 		"Bash(curl *127.0.0.1:8080*),Bash(curl *localhost:8080*)," +
 		"Bash(wget *127.0.0.1:8080*),Bash(wget *localhost:8080*)," +
-		"Bash(http *127.0.0.1:8080*),Bash(http *localhost:8080*)"
+		"Bash(http *127.0.0.1:8080*),Bash(http *localhost:8080*)," +
+		"Bash(swarmery api*),Bash(*/swarmery api*)"
 	if list != wantList {
 		t.Errorf("--disallowedTools %q, want %q", list, wantList)
 	}

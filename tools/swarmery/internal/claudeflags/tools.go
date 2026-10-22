@@ -108,12 +108,16 @@ func DaemonDenyRules(port int) []string {
 	if port <= 0 {
 		port = DaemonPort()
 	}
-	out := make([]string, 0, len(daemonClients)*len(daemonHosts))
+	out := make([]string, 0, len(daemonClients)*len(daemonHosts)+2)
 	for _, c := range daemonClients {
 		for _, h := range daemonHosts {
 			out = append(out, fmt.Sprintf("Bash(%s *%s:%d*)", c, h, port))
 		}
 	}
+	// `swarmery api` signs its request with the link token, which the agent's
+	// user can read, so it reaches the daemon's write routes without curl. Deny
+	// it by name and through an installed-binary path.
+	out = append(out, "Bash(swarmery api*)", "Bash(*/swarmery api*)")
 	return out
 }
 

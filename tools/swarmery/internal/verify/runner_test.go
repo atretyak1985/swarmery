@@ -101,11 +101,13 @@ func TestDaemonDenyPatterns(t *testing.T) {
 			"Bash(curl *127.0.0.1:7777*)", "Bash(curl *localhost:7777*)",
 			"Bash(wget *127.0.0.1:7777*)", "Bash(wget *localhost:7777*)",
 			"Bash(http *127.0.0.1:7777*)", "Bash(http *localhost:7777*)",
+			"Bash(swarmery api*)", "Bash(*/swarmery api*)",
 		}},
 		{8080, []string{
 			"Bash(curl *127.0.0.1:8080*)", "Bash(curl *localhost:8080*)",
 			"Bash(wget *127.0.0.1:8080*)", "Bash(wget *localhost:8080*)",
 			"Bash(http *127.0.0.1:8080*)", "Bash(http *localhost:8080*)",
+			"Bash(swarmery api*)", "Bash(*/swarmery api*)",
 		}},
 	} {
 		if got := DaemonDenyPatterns(tc.port); strings.Join(got, "|") != strings.Join(tc.want, "|") {
@@ -130,12 +132,14 @@ func TestToolDenyArgsDaemonDeny(t *testing.T) {
 			"--disallowedTools Edit,Write,MultiEdit,NotebookEdit," +
 				"Bash(curl *127.0.0.1:7777*),Bash(curl *localhost:7777*)," +
 				"Bash(wget *127.0.0.1:7777*),Bash(wget *localhost:7777*)," +
-				"Bash(http *127.0.0.1:7777*),Bash(http *localhost:7777*)"},
+				"Bash(http *127.0.0.1:7777*),Bash(http *localhost:7777*)," +
+				"Bash(swarmery api*),Bash(*/swarmery api*)"},
 		{"reviewer on 8080", append([]string{"Bash"}, DaemonDenyPatterns(8080)...),
 			"--disallowedTools Edit,Write,MultiEdit,NotebookEdit,Bash," +
 				"Bash(curl *127.0.0.1:8080*),Bash(curl *localhost:8080*)," +
 				"Bash(wget *127.0.0.1:8080*),Bash(wget *localhost:8080*)," +
-				"Bash(http *127.0.0.1:8080*),Bash(http *localhost:8080*)"},
+				"Bash(http *127.0.0.1:8080*),Bash(http *localhost:8080*)," +
+				"Bash(swarmery api*),Bash(*/swarmery api*)"},
 	} {
 		args := ToolDenyArgs(tc.extra)
 		if len(args) != 2 {
