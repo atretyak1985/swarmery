@@ -607,3 +607,32 @@ swarmery routine seed --from config/routines/memory-review.json
 
 Disabling and the `SWARMERY_ROUTINES=0` switch work exactly as for
 `inbox-triage-nightly` above.
+
+## Weekly skill audit
+
+The linter files four advisory usage rules into `config_lint_findings`, shown in
+the System hub's Insights tab: `agent_dead` and `skill_dead` (info — no use in
+30 days), `skill_desc_similar` (warn — two skill descriptions whose token Jaccard
+reaches `skillSimilarityThreshold` in `config/guards.json`) and
+`session_skill_load_high` (warn — a project whose p95 of distinct skills loaded
+per session exceeds `sessionSkillLoadP95`). Usage is matched by **name** — the
+Skill tool's `input.skill`, a slash command's `<command-name>`, a subagent's
+`subagent_type` — because the ingester never fills `events.skill_id` /
+`events.agent_id`. `swarmery skill-audit [--json]` prints the same audit on
+demand; `--similarity` and `--p95` override the thresholds for one run.
+
+`config/routines/skill-audit.json` ships `skill-audit-weekly`: every Monday at
+09:00 it runs `swarmery skill-audit --json`, hands the JSON to a `haiku` prompt
+that writes the report, and saves it to
+`<workspace root>/swarmery/workspace/retro/skill-audit-<date>.md` — the
+framework's own workspace, never a consumer project's. The save step fails the
+run when one of the five sections (Unused agents, Unused skills, Similar
+descriptions, Skills per session, Before a new agent, extend one of these) is
+missing, but keeps the file for reading. Each step reads the previous step's
+full output: a `command` step from the file named in `$SWARMERY_PREV_OUTPUT`, an
+`ai-prompt` step wherever its prompt says `{{prev_output}}`. Nothing is deleted
+or merged. Seed it once:
+
+```bash
+swarmery routine seed --from config/routines/skill-audit.json
+```

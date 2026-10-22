@@ -157,6 +157,8 @@ func main() {
 		err = cmdEvalsImport(os.Args[2:])
 	case "sysscan":
 		err = cmdSysscan(os.Args[2:])
+	case "skill-audit":
+		err = skillAudit(os.Args[2:], os.Stdout)
 	case "install":
 		err = installer.CmdInstall(os.Args[2:])
 	case "uninstall":
@@ -276,6 +278,13 @@ func usage() {
                                    nothing is edited. --project never opens the database;
                                    --all reads the non-archived project list from it (read-only,
                                    no migrations). The same report R13 and the Memory page show.
+  swarmery skill-audit [--db <path>] [--json] [--similarity <0..1>] [--p95 <n>] [--window <days>]
+                                   unused agents and skills, similar skill descriptions and the
+                                   per-project p95 of skills loaded per session, computed now from
+                                   the registry and the last 30 days of events (usage matched by
+                                   name). Thresholds default to guards.json; the flags override them
+                                   for one run (calibration). Read-only, never migrates; exit 0
+                                   whatever it finds. The weekly skill-audit routine's first step.
   swarmery wscan    [--db <path>] [--workspace-root <dir>]   one-shot workspace scan
   swarmery evals-import [--db <path>] --agent <name> <results.json>
                                    import a promptfoo results.json as an eval run for a
