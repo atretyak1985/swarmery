@@ -44,13 +44,13 @@ test('planBand off: no band, no /phase, no timer, no plan request', async ($, on
   expect(w.logs.some(l => l.includes('planBand'))).toBe(false)
 })
 
-test('session.start registers /phase and reads the plan with the bearer token, session and cwd', ON, async ($, on) => {
+test('session.start registers /phase and reads the plan signed with the token, with session and cwd', ON, async ($, on) => {
   const w = await begin($, on)
   expect(w.commands).toEqual([{ name: 'phase', argumentHint: '[task-id]' }])
   expect(gets(w)).toHaveLength(1)
   const [get] = gets(w)
   expect(get?.url).toBe(`http://127.0.0.1:7777${PLAN}?session=${SESSION_ID}&cwd=${encodeURIComponent(CWD)}`)
-  expect(get?.authorization).toBe(`Bearer ${TOKEN}`)
+  expect(get?.signedWith).toBe(TOKEN)
 })
 
 test('the band: Phase n — title · k/m, the open criteria, and three hotkey buttons', ON, async ($, on) => {
@@ -215,7 +215,7 @@ test('/phase <task-id> POSTs select, then shows the plan the daemon answered', O
   const w = await begin($, on, { plans: [204], planPosts: { select: [{ status: 200, body: PLAN_VIEW }] } })
   const result = await $.command.run(slash('2026-10-13-order-line-items'))
   expect(posts(w, 'select').map(c => c.body)).toEqual([{ session: SESSION_ID, cwd: CWD, taskId: '2026-10-13-order-line-items' }])
-  expect(posts(w, 'select')[0]?.authorization).toBe(`Bearer ${TOKEN}`)
+  expect(posts(w, 'select')[0]?.signedWith).toBe(TOKEN)
   expect(result.text).toContain('Phase 2 — Line-item CRUD')
   const ui = await band($)
   expect(await ui.find({ text: /^Phase 2 — / })).toBeDefined()

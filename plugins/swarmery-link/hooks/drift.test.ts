@@ -72,7 +72,7 @@ test('off-phase: a drift POST and one line beneath the answer', ON, async ($, on
       reason: 'edited src/billing/invoice.ts, docs/notes.md',
     },
   ])
-  expect(drifts(w)[0]?.authorization).toBe(`Bearer ${TOKEN}`)
+  expect(drifts(w)[0]?.signedWith).toBe(TOKEN)
 })
 
 test('on-phase or adjacent: no line, no drift POST', ON, async ($, on) => {
