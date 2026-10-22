@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os/exec"
+	"strings"
 	"syscall"
 	"time"
 )
@@ -21,6 +22,18 @@ const detailCap = 8 * 1024
 // stepOutputCap bounds one step's captured output inside the detail JSON so a
 // chatty command can't blow the whole-run detail budget on its own.
 const stepOutputCap = 1024
+
+// PreviousOutput is the placeholder an ai-prompt step's prompt may carry: it is
+// replaced with the output of the step that ran just before it (its tail, at
+// most previousOutputCap bytes; "" for a first step or one that printed
+// nothing). It is how a model step summarises what a command step reported
+// without reading files or running tools of its own. Whatever the previous step
+// prints reaches the model verbatim, so a step feeding one must not print
+// untrusted text.
+const PreviousOutput = "{{previous_output}}"
+
+// previousOutputCap bounds the text PreviousOutput expands to.
+const previousOutputCap = 8 * 1024
 
 // execRun runs one routine end-to-end: acquire a global-cap slot, insert a
 // 'running' run row, execute the steps sequentially under the whole-run timeout,
@@ -69,6 +82,7 @@ func (s *Service) execRun(ctx context.Context, r Routine, trigger string) {
 func (s *Service) runSteps(runCtx context.Context, r Routine, projectPath string) ([]StepResult, string) {
 	results := make([]StepResult, 0, len(r.Steps))
 	status := "ok"
+	prev := ""
 	for _, step := range r.Steps {
 		// Whole-run timeout tripped between steps → record the remaining step as
 		// timed out and stop.
@@ -78,7 +92,8 @@ func (s *Service) runSteps(runCtx context.Context, r Routine, projectPath string
 			return results, "timeout"
 		}
 
-		res := s.execStep(runCtx, r, projectPath, step)
+		res, out := s.execStep(runCtx, r, projectPath, step, prev)
+		prev = out
 		results = append(results, res)
 		if res.Status == "ok" {
 			continue
@@ -99,10 +114,12 @@ func (s *Service) runSteps(runCtx context.Context, r Routine, projectPath string
 	return results, status
 }
 
-// execStep dispatches one step by type and returns its result. Per-step timeout
+// execStep dispatches one step by type and returns its result plus the step's
+// output (bounded to previousOutputCap) for the next step's PreviousOutput.
+// prev is the output of the step before this one. Per-step timeout
 // (step.TimeoutSec, else defaultStepTimeout, else the whole-run ctx) is layered
 // on the run ctx.
-func (s *Service) execStep(ctx context.Context, r Routine, projectPath string, step Step) StepResult {
+func (s *Service) execStep(ctx context.Context, r Routine, projectPath string, step Step, prev string) (StepResult, string) {
 	res := StepResult{Name: step.Name, Type: step.Type}
 	stepCtx, cancel := s.stepContext(ctx, step)
 	defer cancel()
@@ -114,33 +131,36 @@ func (s *Service) execStep(ctx context.Context, r Routine, projectPath string, s
 		if err != nil {
 			res.Status = classify(stepCtx, err)
 			res.Error = err.Error()
-			return res
+			return res, clip(out, previousOutputCap)
 		}
 		res.Status = "ok"
+		return res, clip(out, previousOutputCap)
 	case StepAIPrompt:
 		if s.Runner == nil {
 			res.Status = "failed"
 			res.Error = "no runner configured"
-			return res
+			return res, ""
 		}
-		out, err := s.Runner.Run(stepCtx, projectPath, step.Prompt, step.Model)
+		prompt := strings.ReplaceAll(step.Prompt, PreviousOutput, strings.TrimSpace(prev))
+		out, err := s.Runner.Run(stepCtx, projectPath, prompt, step.Model)
 		res.Output = clip(out, stepOutputCap)
 		if err != nil {
 			res.Status = classify(stepCtx, err)
 			res.Error = err.Error()
-			return res
+			return res, clip(out, previousOutputCap)
 		}
 		res.Status = "ok"
+		return res, clip(out, previousOutputCap)
 	case StepCreateTask:
 		if s.Tasks == nil {
 			res.Status = "failed"
 			res.Error = "no task creator configured"
-			return res
+			return res, ""
 		}
 		if !r.ProjectID.Valid {
 			res.Status = "failed"
 			res.Error = "create-task requires a project-scoped routine"
-			return res
+			return res, ""
 		}
 		col := step.BoardColumn
 		if col == "" {
@@ -150,15 +170,16 @@ func (s *Service) execStep(ctx context.Context, r Routine, projectPath string, s
 		if err != nil {
 			res.Status = "failed"
 			res.Error = err.Error()
-			return res
+			return res, ""
 		}
 		res.Status = "ok"
 		res.Output = "created task " + cardID
+		return res, res.Output
 	default:
 		res.Status = "failed"
 		res.Error = "unknown step type " + step.Type
 	}
-	return res
+	return res, ""
 }
 
 // stepContext layers the per-step timeout onto the run ctx. A step override of 0

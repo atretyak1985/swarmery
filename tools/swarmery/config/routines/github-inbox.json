@@ -1,0 +1,23 @@
+{
+  "name": "github-inbox",
+  "cron": "15 */2 * * *",
+  "enabled": true,
+  "catchUp": "run_one",
+  "timeoutSec": 900,
+  "steps": [
+    {
+      "type": "command",
+      "name": "sync prReview repos into triage cards",
+      "command": "swarmery ghinbox sync --all",
+      "timeoutSec": 600,
+      "continueOnFailure": true
+    },
+    {
+      "type": "ai-prompt",
+      "name": "one line per project",
+      "model": "haiku",
+      "prompt": "Below is the report of the GitHub inbox sync that just ran: card lines (created/updated <label>), then one line per project. Write exactly one plain sentence per project line, plus one for a 'without a prReview block' line if there is one: how many cards it created, how many it brought back to the inbox with a new comment, or why the project was skipped, or which repositories failed. Use only the numbers and names in the report. Decide nothing, recommend nothing, and run no tools. If the report is empty, write: GitHub inbox: no report.\n\nReport:\n{{previous_output}}",
+      "timeoutSec": 180
+    }
+  ]
+}

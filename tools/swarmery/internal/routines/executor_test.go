@@ -265,3 +265,29 @@ func TestMissingRunnerAndTasks(t *testing.T) {
 		t.Errorf("create-task without creator: %+v", results[1])
 	}
 }
+
+// TestExecAIPromptPreviousOutput: an ai-prompt step's {{previous_output}} is the
+// output of the step just before it — even when that step failed and the run
+// continued — and "" when there is no step before it.
+func TestExecAIPromptPreviousOutput(t *testing.T) {
+	sr := &stubRunner{out: "summary"}
+	s, _ := newTestSvc(t, sr, &stubTasks{})
+	r := mustCreate(t, s, CreateParams{Name: "chain", TimeoutSec: 60, Steps: mkSteps(
+		Step{Type: StepAIPrompt, Name: "first", Prompt: "before:[" + PreviousOutput + "]"},
+		Step{Type: StepCommand, Name: "report", Command: "echo 'proj-a: created 2'; exit 1", ContinueOnFailure: true},
+		Step{Type: StepAIPrompt, Name: "sum", Prompt: "Report:\n" + PreviousOutput + "\nend"},
+	)})
+	run, results := runInline(t, s, r, "manual")
+	if run.Status != "failed" || len(results) != 3 {
+		t.Fatalf("run = %s with %d results, want failed (the command failed) with all 3 steps run", run.Status, len(results))
+	}
+	if sr.callCount() != 2 {
+		t.Fatalf("runner calls = %d, want 2", sr.callCount())
+	}
+	if got := sr.calls[0].prompt; got != "before:[]" {
+		t.Errorf("first step prompt = %q, want the placeholder emptied", got)
+	}
+	if got := sr.calls[1].prompt; got != "Report:\nproj-a: created 2\nend" {
+		t.Errorf("summary prompt = %q, want the command's output in place of the placeholder", got)
+	}
+}
