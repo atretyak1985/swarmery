@@ -223,13 +223,20 @@ if mkdir -p "$SESSIONS_DIR" 2>/dev/null; then
 
   # Extract unique repo roots from files-touched list. A repo root is the
   # nearest ancestor containing a .git directory. We sample up to 50 unique
-  # files to avoid pathological scans.
+  # files to avoid pathological scans. Only files inside the project scope
+  # count (lib/project-scope.sh), and the walk stops at the scope root: a repo
+  # outside it is somebody else's, and so is its git config.
+  # shellcheck source=lib/project-scope.sh
+  . "$(dirname "${BASH_SOURCE[0]}")/lib/project-scope.sh" 2>/dev/null \
+    || scope_root_for() { return 1; }
   declare -a REPO_ROOTS=()
   while IFS= read -r fp; do
     [ -z "$fp" ] && continue
     [ ! -e "$fp" ] && continue
-    dir="$(dirname "$fp")"
-    while [ "$dir" != "/" ] && [ "$dir" != "." ]; do
+    scope_root=$(scope_root_for "$fp") || continue
+    dir="$(dirname "$(ps_physical "$fp")")"
+    while :; do
+      case "$dir/" in "$scope_root"/*) ;; *) break ;; esac
       if [ -d "$dir/.git" ] || [ -f "$dir/.git" ]; then
         # de-dup
         if [[ " ${REPO_ROOTS[*]:-} " != *" ${dir} "* ]]; then
@@ -237,6 +244,7 @@ if mkdir -p "$SESSIONS_DIR" 2>/dev/null; then
         fi
         break
       fi
+      [ "$dir" = "$scope_root" ] && break
       dir="$(dirname "$dir")"
     done
   done < <(jq -r 'select(.file != "") | .file' "$SESSION_FILE" 2>/dev/null | sort -u | head -50)
@@ -249,11 +257,13 @@ if mkdir -p "$SESSIONS_DIR" 2>/dev/null; then
     name="$(basename "$repo")"
     # head -1 + tr: a commitless repo prints "HEAD" to stdout AND exits non-zero,
     # which used to embed a newline ("HEAD\nunknown") and break the JSON.
-    branch=$(git -C "$repo" rev-parse --abbrev-ref HEAD 2>/dev/null | head -1 | tr -d '\n')
+    # Every git runs with its plug-in points off: no fsmonitor, no hooks, no
+    # external diff driver, no textconv. A summary needs none of them.
+    branch=$(git -c core.fsmonitor=false -c core.hooksPath=/dev/null -C "$repo" rev-parse --abbrev-ref HEAD 2>/dev/null | head -1 | tr -d '\n')
     [ -z "$branch" ] && branch="unknown"
-    stat_line=$(git -C "$repo" diff --shortstat 2>/dev/null | tr -d '\n' | sed 's/"/\\"/g')
-    staged_stat=$(git -C "$repo" diff --cached --shortstat 2>/dev/null | tr -d '\n' | sed 's/"/\\"/g')
-    files_changed=$(git -C "$repo" diff --name-only 2>/dev/null | head -50 | jq -R . | jq -s . 2>/dev/null || echo "[]")
+    stat_line=$(git -c core.fsmonitor=false -c core.hooksPath=/dev/null -C "$repo" diff --no-ext-diff --no-textconv --shortstat 2>/dev/null | tr -d '\n' | sed 's/"/\\"/g')
+    staged_stat=$(git -c core.fsmonitor=false -c core.hooksPath=/dev/null -C "$repo" diff --no-ext-diff --no-textconv --cached --shortstat 2>/dev/null | tr -d '\n' | sed 's/"/\\"/g')
+    files_changed=$(git -c core.fsmonitor=false -c core.hooksPath=/dev/null -C "$repo" diff --no-ext-diff --no-textconv --name-only 2>/dev/null | head -50 | jq -R . | jq -s . 2>/dev/null || echo "[]")
     if [ $first -eq 0 ]; then repos_json="${repos_json},"; fi
     repos_json="${repos_json}{\"name\":\"${name}\",\"path\":\"${repo}\",\"branch\":\"${branch}\",\"unstaged\":\"${stat_line}\",\"staged\":\"${staged_stat}\",\"files\":${files_changed}}"
     first=0
