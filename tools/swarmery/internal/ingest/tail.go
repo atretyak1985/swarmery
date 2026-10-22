@@ -114,7 +114,7 @@ func TailFile(db *sql.DB, path, originRoot string, th Thresholds) (TailResult, e
 
 	ing := &ingester{tx: tx, stats: &stats, thresholds: th, originRoot: originRoot}
 	if len(recs) > 0 {
-		sidechain, scope, parentEventID, agentType := sidechainContext(tx, absPath, recs)
+		sidechain, scope, parentEventID, meta := sidechainContext(tx, absPath, recs)
 		if err := ing.upsertProjectAndSession(recs, fi.ModTime(), sidechain); err != nil {
 			if errors.Is(err, ErrNoSessionEvidence) {
 				// res.NextOffset is still the start offset, so the batch is
@@ -126,7 +126,8 @@ func TailFile(db *sql.DB, path, originRoot string, th Thresholds) (TailResult, e
 		}
 		agentName := ""
 		if sidechain {
-			agentName = ing.agentNameFor(parentEventID, agentType)
+			agentName = ing.agentNameFor(parentEventID, meta.AgentType)
+			ing.agentLabel = meta.Description
 		}
 		if err := ing.processRecords(recs, absPath, sidechain, scope, parentEventID, agentName); err != nil {
 			return res, err
@@ -220,25 +221,24 @@ func readRecordsFrom(path string, offset int64, stats *Stats) ([]record, int64, 
 }
 
 // sidechainContext detects a subagents/agent-*.jsonl transcript and resolves
-// its dedup scope + parent subagent_start event (via meta.json toolUseId, §7).
-func sidechainContext(tx *sql.Tx, path string, recs []record) (sidechain bool, scope string, parentEventID int64, agentType string) {
+// its dedup scope + parent subagent_start event (via meta.json toolUseId, §7),
+// and returns the meta.json it read (zero when absent).
+func sidechainContext(tx *sql.Tx, path string, recs []record) (sidechain bool, scope string, parentEventID int64, meta sidechainMeta) {
 	base := filepath.Base(path)
 	if filepath.Base(filepath.Dir(path)) != "subagents" || !strings.HasPrefix(base, "agent-") {
-		return false, "", 0, ""
+		return false, "", 0, sidechainMeta{}
 	}
 	scope = recs[0].AgentID
 	if scope == "" {
 		scope = base
 	}
 	metaPath := strings.TrimSuffix(path, ".jsonl") + ".meta.json"
-	var meta sidechainMeta
 	if raw, err := os.ReadFile(metaPath); err == nil {
 		_ = json.Unmarshal(raw, &meta)
 	}
 	// meta.AgentType is available whenever the sidechain file exists, so it
 	// backstops phase-2 agent attribution during the live-tail race where the
 	// parent subagent_start row does not exist yet.
-	agentType = meta.AgentType
 	if meta.ToolUseID != "" && recs[0].SessionID != "" {
 		_ = tx.QueryRow(
 			`SELECT e.id FROM events e JOIN sessions s ON s.id = e.session_id
@@ -246,7 +246,7 @@ func sidechainContext(tx *sql.Tx, path string, recs []record) (sidechain bool, s
 			   AND json_extract(e.payload, '$.tool_use_id') = ?`,
 			recs[0].SessionID, meta.ToolUseID).Scan(&parentEventID)
 	}
-	return true, scope, parentEventID, agentType
+	return true, scope, parentEventID, meta
 }
 
 // inodeOf extracts the inode number (0 when unavailable).
