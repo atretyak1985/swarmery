@@ -247,7 +247,8 @@ func loadActive(db *sql.DB) ([]Active, error) {
 		if err := rows.Scan(&a.ID, &a.Title, &a.Guidance, &globs, &a.ActivatedAt); err != nil {
 			return nil, err
 		}
-		if strings.TrimSpace(a.Guidance) == "" {
+		// A review lesson accepted before anyone wrote its sentence has nothing to say.
+		if g := strings.TrimSpace(a.Guidance); g == "" || g == DraftPendingGuidance {
 			continue
 		}
 		a.AreaGlobs = splitGlobs(globs)

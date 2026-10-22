@@ -321,3 +321,79 @@ func durOrDash(v *int64) string {
 	}
 	return fmt.Sprintf("%dm", *v/60)
 }
+
+// maxReviewPromptFindings bounds the findings one review draft reads (the
+// newest ones; the candidate row still cites every finding of the group).
+const maxReviewPromptFindings = 12
+
+// ReviewInput is what one review-group draft reads (verify-not-trust phase 8):
+// the repeated findings of one (type, area) group. Same evidence contract as
+// Input — every finding is rendered next to its [E:finding:<id>] marker, and
+// Allowed holds exactly those ids, so a lesson citing any other id is rejected.
+type ReviewInput struct {
+	Type      string
+	Area      string
+	AreaGlobs []string
+	Phases    int
+	Findings  []ReviewFinding
+	Allowed   map[string]bool
+}
+
+// FindingRef is a review finding's evidence id: "finding:<review_findings.id>".
+func FindingRef(id int64) string { return fmt.Sprintf("finding:%d", id) }
+
+// NewReviewInput renders a group as draft input: its newest findings, at most
+// maxReviewPromptFindings, oldest first.
+func NewReviewInput(g Group) ReviewInput {
+	fs := g.Findings
+	if len(fs) > maxReviewPromptFindings {
+		fs = fs[len(fs)-maxReviewPromptFindings:]
+	}
+	in := ReviewInput{Type: g.Type, Area: g.Area, AreaGlobs: g.AreaGlobs(), Phases: g.Phases(),
+		Findings: fs, Allowed: map[string]bool{}}
+	for _, f := range fs {
+		in.Allowed[FindingRef(f.ID)] = true
+	}
+	return in
+}
+
+// BuildReviewPrompt renders the review-group draft prompt.
+func BuildReviewPrompt(in ReviewInput) string {
+	var b strings.Builder
+	b.WriteString(reviewPromptHead)
+	fmt.Fprintf(&b, "\n## The repeat\nType: %s. Area: %s. Phases with this finding: %d. area_globs to return: %s.\n",
+		in.Type, orDash(in.Area), in.Phases, joinOrDash(in.AreaGlobs))
+	for _, f := range in.Findings {
+		fmt.Fprintf(&b, "\n## Finding %s\n", marker(FindingRef(f.ID)))
+		fmt.Fprintf(&b, "Plan %s, phase %q, review round %s, finding %s.\n", orDash(f.PlanID), f.PhaseName, orDash(f.Round), orDash(f.FindingID))
+		loc := f.File
+		if f.Line > 0 {
+			loc = fmt.Sprintf("%s:%d", f.File, f.Line)
+		}
+		fmt.Fprintf(&b, "file: %s\n", orDash(loc))
+		if f.Criterion != "" {
+			fmt.Fprintf(&b, "criterion: %s\n", f.Criterion)
+		}
+		if f.Evidence != "" {
+			fmt.Fprintf(&b, "evidence: %s\n", oneLine(f.Evidence))
+		}
+		if f.Note != "" {
+			fmt.Fprintf(&b, "note: %s\n", oneLine(f.Note))
+		}
+	}
+	b.WriteString(promptTail)
+	return b.String()
+}
+
+// oneLine folds a finding's free text onto one line, capped.
+func oneLine(s string) string { return capRunes(strings.Join(strings.Fields(s), " "), 400) }
+
+const reviewPromptHead = `You turn a REPEATED code-review finding into one durable lesson. Independent reviewers raised the same kind of finding in the same code area in two or more separate phases; the lesson is what a FUTURE run working there should check first so the reviewer stops finding it.
+
+Rules:
+- Return 0 or 1 lesson. Zero is the right answer when the findings below share only their type and area, not a cause.
+- "guidance": ONE imperative sentence, specific to this codebase (name the file, function, table, flag or convention the findings point at). No generic advice ("write tests", "handle errors").
+- "area_globs": return exactly the area_globs listed under "The repeat".
+- "cause": one sentence naming the mistake that keeps recurring, taken from the findings.
+- "evidence": 2-8 ids copied VERBATIM from the [E:finding:<id>] markers below, without the brackets (e.g. "finding:12"). Never invent an id; a lesson citing an id that is not below is discarded.
+`
