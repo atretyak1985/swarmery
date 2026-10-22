@@ -15,6 +15,7 @@ import { ProjectName } from '../components/ProjectName';
 import { PluginBadge, ProjectActions } from '../components/ProjectActions';
 import { ProjectPlugins } from '../components/ProjectPlugins';
 import { Card, ErrorBox, Loading, SectionTitle } from '../components/ui';
+import { FirstRequestCard } from './projects/FirstRequestCard';
 
 function BackLink(): JSX.Element {
   return (
@@ -162,6 +163,12 @@ export function ProjectDetail(): JSX.Element {
           value={stats.lastActivity !== null ? fmtAgo(stats.lastActivity) : '—'}
         />
       </div>
+
+      {/* Session-start cost: measured first request + its estimated split. */}
+      <SectionTitle>
+        <Trans>first request</Trans>
+      </SectionTitle>
+      <FirstRequestCard projectId={project.id} />
 
       {/* Components — only meaningful for a managed project. */}
       {managed ? (

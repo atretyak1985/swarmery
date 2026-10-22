@@ -86,6 +86,10 @@ msgstr "{classifierCalls, plural, one {The classifier labelled {count} session �
 msgid "{commands, plural, one {ran {count} command} few {ran {count} commands} many {ran {count} commands} other {ran {count} commands}}"
 msgstr "{commands, plural, one {ran {count} command} few {ran {count} commands} many {ran {count} commands} other {ran {count} commands}}"
 
+#: src/pages/sessions/ModelSwitchBadge.tsx
+msgid "{count, plural, one {# model} few {# models} many {# models} other {# models}}"
+msgstr "{count, plural, one {# model} few {# models} many {# models} other {# models}}"
+
 #: src/pages/Overview.tsx
 msgid "{count, plural, one {one agent is idle until you answer} few {# agents are idle until you answer} many {# agents are idle until you answer} other {# agents are idle until you answer}}"
 msgstr "{count, plural, one {one agent is idle until you answer} few {# agents are idle until you answer} many {# agents are idle until you answer} other {# agents are idle until you answer}}"
@@ -190,6 +194,10 @@ msgstr "{scoredRuns, plural, one {run scored} few {runs scored} many {runs score
 msgid "{sessionCount} sessions · {costLabel}"
 msgstr "{sessionCount} sessions · {costLabel}"
 
+#: src/pages/projects/FirstRequestCard.tsx
+msgid "{sessions, plural, one {measured: median of # session over {days} days · cache write {writeLabel}} few {measured: median of # sessions over {days} days · cache write {writeLabel}} many {measured: median of # sessions over {days} days · cache write {writeLabel}} other {measured: median of # sessions over {days} days · cache write {writeLabel}}}"
+msgstr "{sessions, plural, one {measured: median of # session over {days} days · cache write {writeLabel}} few {measured: median of # sessions over {days} days · cache write {writeLabel}} many {measured: median of # sessions over {days} days · cache write {writeLabel}} other {measured: median of # sessions over {days} days · cache write {writeLabel}}}"
+
 #: src/pages/Sessions.tsx
 msgid "{shownRuns, plural, one {# plan runs} few {# plan runs} many {# plan runs} other {# plan runs}}"
 msgstr "{shownRuns, plural, one {# plan runs} few {# plan runs} many {# plan runs} other {# plan runs}}"
@@ -217,6 +225,10 @@ msgstr "{stopTotal, plural, one {across # stop} few {across # stops} many {acros
 #: src/pages/detail/Timeline.tsx
 msgid "{tool} · awaiting approval"
 msgstr "{tool} · awaiting approval"
+
+#: src/pages/projects/FirstRequestCard.tsx
+msgid "{toolCount, plural, one {MCP: {nameOnly} of # tool counted by name only — its schema is readable only from the running server.} few {MCP: {nameOnly} of # tools counted by name only — their schemas are readable only from the running server.} many {MCP: {nameOnly} of # tools counted by name only — their schemas are readable only from the running server.} other {MCP: {nameOnly} of # tools counted by name only — their schemas are readable only from the running server.}}"
+msgstr "{toolCount, plural, one {MCP: {nameOnly} of # tool counted by name only — its schema is readable only from the running server.} few {MCP: {nameOnly} of # tools counted by name only — their schemas are readable only from the running server.} many {MCP: {nameOnly} of # tools counted by name only — their schemas are readable only from the running server.} other {MCP: {nameOnly} of # tools counted by name only — their schemas are readable only from the running server.}}"
 
 #: src/pages/detail/Chat.tsx
 msgid "{tools, plural, one {used {count} tool} few {used {count} tools} many {used {count} tools} other {used {count} tools}}"
@@ -482,6 +494,14 @@ msgstr "Choose a session…"
 msgid "claims…"
 msgstr "claims…"
 
+#: src/pages/projects/FirstRequestCard.tsx
+msgid "CLAUDE.md"
+msgstr "CLAUDE.md"
+
+#: src/pages/projects/FirstRequestCard.tsx
+msgid "CLAUDE.md files, MCP tools and skill descriptions are sized from disk at ~4 bytes per token; “other parts” are the measured first request minus them (system prompt, built-in tools, agent list)."
+msgstr "CLAUDE.md files, MCP tools and skill descriptions are sized from disk at ~4 bytes per token; “other parts” are the measured first request minus them (system prompt, built-in tools, agent list)."
+
 #: src/pages/SessionDetail.tsx
 msgid "click to rename"
 msgstr "click to rename"
@@ -693,6 +713,14 @@ msgstr "errors"
 msgid "Errors · {scopeName} · {day}"
 msgstr "Errors · {scopeName} · {day}"
 
+#: src/pages/projects/FirstRequestCard.tsx
+msgid "estimate (~bytes/4)"
+msgstr "estimate (~bytes/4)"
+
+#: src/pages/projects/FirstRequestCard.tsx
+msgid "estimated split: {barLabel}"
+msgstr "estimated split: {barLabel}"
+
 #: src/pages/Overview.tsx
 msgid "Every rule you add here removes a stop from tomorrow. Rules stay per-tool and per-project — narrow or revoke them in Approvals."
 msgstr "Every rule you add here removes a stop from tomorrow. Rules stay per-tool and per-project — narrow or revoke them in Approvals."
@@ -771,6 +799,14 @@ msgstr "File claims"
 #: src/pages/detail/DetailRail.tsx
 msgid "files changed"
 msgstr "files changed"
+
+#: src/pages/ProjectDetail.tsx
+msgid "first request"
+msgstr "first request"
+
+#: src/pages/projects/FirstRequestCard.tsx
+msgid "first request…"
+msgstr "first request…"
 
 #: src/pages/NeedsYou.tsx
 msgid "Focus terminal"
@@ -936,6 +972,10 @@ msgstr "manage plugins + detach in <0>Settings →</0>"
 msgid "marketplace: {marketplace}"
 msgstr "marketplace: {marketplace}"
 
+#: src/pages/projects/FirstRequestCard.tsx
+msgid "MCP tools"
+msgstr "MCP tools"
+
 #: src/pages/today/loopModel.ts
 #: src/pages/today/loopModel.ts
 msgid "Measure"
@@ -1084,6 +1124,10 @@ msgstr "no requests yet"
 #: src/pages/Approvals.tsx
 msgid "no rules — matching requests auto-approve with <0>via rule</0> and stay in History for audit"
 msgstr "no rules — matching requests auto-approve with <0>via rule</0> and stay in History for audit"
+
+#: src/pages/projects/FirstRequestCard.tsx
+msgid "no session in the last {days} days to measure"
+msgstr "no session in the last {days} days to measure"
 
 #: src/pages/Sessions.tsx
 msgid "no sessions from the {account} account — clear the account filter to see the rest"
@@ -1245,6 +1289,10 @@ msgstr "open review →"
 #: src/pages/Overview.tsx
 msgid "open session →"
 msgstr "open session →"
+
+#: src/pages/projects/FirstRequestCard.tsx
+msgid "other parts"
+msgstr "other parts"
 
 #: src/pages/detail/Diffs.tsx
 msgid "out of scope"
@@ -1599,6 +1647,7 @@ msgstr "Skill"
 #: src/pages/detail/SummaryChips.tsx
 #: src/pages/ProjectDetail.tsx
 #: src/pages/ProjectOverview.tsx
+#: src/pages/projects/FirstRequestCard.tsx
 msgid "skills"
 msgstr "skills"
 
@@ -1681,6 +1730,11 @@ msgstr "Swarm"
 #: src/pages/sessions/SwarmPanel.tsx
 msgid "Swarm messages"
 msgstr "Swarm messages"
+
+#: src/pages/sessions/ModelSwitchBadge.tsx
+#: src/pages/sessions/ModelSwitchBadge.tsx
+msgid "switched model mid-session: {list}"
+msgstr "switched model mid-session: {list}"
 
 #: src/pages/detail/LiveActivity.tsx
 msgid "Synthesizing"
@@ -1784,6 +1838,10 @@ msgstr "Today in detail"
 #: src/pages/SessionDetail.tsx
 msgid "tokens"
 msgstr "tokens"
+
+#: src/pages/projects/FirstRequestCard.tsx
+msgid "tokens in a session's first request"
+msgstr "tokens in a session's first request"
 
 #: src/pages/detail/ContextHogsCard.tsx
 msgid "tool"

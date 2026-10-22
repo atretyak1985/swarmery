@@ -73,6 +73,7 @@ import type {
   RevisionConflict,
   RevisionFile,
   ProjectDetail,
+  FirstRequest,
   RunConflictCode,
   ProjectMeta,
   ProjectMetaPatch,
@@ -162,6 +163,11 @@ export function fetchProjects(includeArchived = false): Promise<ProjectsResponse
 export function fetchProject(id: number | string): Promise<ProjectDetail> {
   if (MOCK) return mockApi.project(id);
   return get(`/api/projects/${encodeURIComponent(id)}`);
+}
+
+/** GET /api/projects/{id}/first-request — measured first-request size + its estimated split. */
+export function fetchProjectFirstRequest(id: number | string): Promise<FirstRequest> {
+  return get(`/api/projects/${encodeURIComponent(id)}/first-request`);
 }
 
 /** GET /api/projects/{id}/overview — Canvas v2 editorial aggregate (rightNow / thisWeek / attention). */
