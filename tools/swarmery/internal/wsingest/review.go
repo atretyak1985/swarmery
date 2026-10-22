@@ -97,6 +97,11 @@ type ReviewBlock struct {
 	// Prose is the reviewer's whole output. Written (quoted) only on the fallback
 	// path, when Review is nil.
 	Prose string
+	// Incomplete is the reason the daemon classified this round review-incomplete
+	// (D20) — "" for a round that covered its scope. Non-empty forces
+	// `complete: false` and is appended to scope_left, so the doc (md = truth)
+	// carries the hold the completion gate reads.
+	Incomplete string
 }
 
 // reviewYAML is the written block, in the contract's key order
@@ -175,12 +180,20 @@ func RenderReviewBlock(b ReviewBlock, round int, now time.Time) (string, error) 
 		for _, d := range r.Drift {
 			y.Drift = append(y.Drift, driftYAML{Criterion: d.Criterion, File: d.File, Note: capField(d.Note)})
 		}
-	} else {
+	} else if y.Verdict == mdfence.ReviewPass || y.Verdict == mdfence.ReviewFail {
 		// The fallback: the reviewer wrote prose and no readable block. The round
 		// is recorded — verdict and all — but as incomplete and unparsable, so a
 		// later stage never counts it as a whole review.
 		y.Complete, y.Unparsable = false, true
 		y.ScopeLeft = []string{"unparsable: the reviewer produced no readable kind: review block; its own words follow the block"}
+	} else {
+		// No verdict to record (a timeout, no VERDICT line): the round happened
+		// and covered nothing anyone can vouch for.
+		y.Complete = false
+	}
+	if why := strings.TrimSpace(b.Incomplete); why != "" {
+		y.Complete = false
+		y.ScopeLeft = append(append([]string(nil), y.ScopeLeft...), why)
 	}
 	// nil lists render as `[]`, never `null`: the contract keeps every key.
 	for _, l := range []*[]string{&y.ScopeLeft, &y.Resolves, &y.CheckedCallers} {

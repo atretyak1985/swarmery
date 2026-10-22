@@ -205,6 +205,12 @@ type Service struct {
 	// reviewRun). nil ⇒ the review stage is not wired: every unit test's state, and
 	// a valid production state. Runs BEFORE verifyRun, both before removeWorktree.
 	Review verify.Runner
+	// ReviewDecisions opens the operator decision a review cycle that could not
+	// settle on its own asks for — an incomplete review, or one still failing
+	// after the automatic rounds (D20/D42; review_rounds.go). nil ⇒ not wired:
+	// the hold still stands, carried by the round's `complete: false` block in
+	// the doc (phasegate), and the decision is only logged.
+	ReviewDecisions ReviewDecider
 	// DaemonPort is the port this daemon's HTTP API listens on. Reviewers (phase and
 	// plan branch) are denied curl/wget/http to it and told not to call it, like the
 	// verifier. 0 ⇒ verify.DefaultDaemonPort.

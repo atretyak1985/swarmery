@@ -161,7 +161,12 @@ func TestReviewSpawnArgsDenyEditToolsAndBash(t *testing.T) {
 	t.Setenv("SWARMERY_PERMISSION_MODE", "")
 	bin := t.TempDir()
 	argsOut := filepath.Join(t.TempDir(), "args.txt")
-	script := "#!/bin/sh\nfor a in \"$@\"; do printf '%s\\n' \"$a\"; done > \"$REVIEW_ARGS_OUT\"\necho '- no blocking findings'\necho 'VERDICT: PASS'\n"
+	script := "#!/bin/sh\nfor a in \"$@\"; do printf '%s\\n' \"$a\"; done > \"$REVIEW_ARGS_OUT\"\ncat \"$REVIEW_REPLY\"\n"
+	reply := filepath.Join(t.TempDir(), "reply.txt")
+	if err := os.WriteFile(reply, []byte(reviewerOutput("PASS", "[]")+"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("REVIEW_REPLY", reply)
 	if err := os.WriteFile(filepath.Join(bin, "claude"), []byte(script), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -258,7 +263,7 @@ func TestReviewDirtyButUntouchedTreeIsNotAMutation(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "left-by-executor.txt"), []byte("x\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	s.Review = &fakeReviewer{outputs: []string{"- fine\nVERDICT: PASS"}}
+	s.Review = &fakeReviewer{outputs: []string{reviewerOutput("PASS", "[]")}}
 
 	if verdict, _ := s.reviewRun(p1, info, worktree.Acquired{Path: dir, StartPoint: base}, "partial"); verdict != "pass" {
 		t.Fatalf("verdict = %q, want pass", verdict)
@@ -270,6 +275,12 @@ func TestReviewDirtyButUntouchedTreeIsNotAMutation(t *testing.T) {
 // stub verifier.
 func startReviewed(t *testing.T, outputs ...string) (*Service, *sql.DB, int64, *stubRunner, *fakeReviewer, *stubVerifier) {
 	t.Helper()
+	return startReviewedHook(t, nil, outputs...)
+}
+
+// startReviewedHook is startReviewed with hook applied to the service before Start.
+func startReviewedHook(t *testing.T, hook func(*Service), outputs ...string) (*Service, *sql.DB, int64, *stubRunner, *fakeReviewer, *stubVerifier) {
+	t.Helper()
 	db, _, p1, _ := fixture(t)
 	setReviewMode(t, db, p1, "on")
 	setVerifyMode(t, db, p1, "normal")
@@ -280,18 +291,23 @@ func startReviewed(t *testing.T, outputs ...string) (*Service, *sql.DB, int64, *
 	s.treeFingerprint = func(string) (string, error) { return "tree-1", nil }
 	v := &stubVerifier{}
 	s.Verify = v
+	if hook != nil {
+		hook(s)
+	}
 	if _, err := s.Start(p1, "", ""); err != nil {
 		t.Fatalf("Start: %v", err)
 	}
 	return s, db, p1, runner, rv, v
 }
 
-// (c) FAIL ⇒ `## Review findings` in the doc and exactly ONE Returned re-run, whose
-// prompt points at the findings; the re-run's FAIL is recorded and starts nothing.
-// The verifier grades both runs.
+// (c) FAIL ⇒ a `kind: review` block in the doc and exactly ONE Returned re-run,
+// whose prompt points at the findings; the re-run's review is round 2, and its
+// FAIL is recorded, starts nothing and hands the cycle over to the operator (at
+// most two automatic rounds). The verifier grades both runs.
 func TestReviewFailStartsExactlyOneFixRerun(t *testing.T) {
-	const fail = "- P0 internal/x.go:12 — the error is swallowed.\nVERDICT: FAIL"
-	_, db, p1, runner, rv, v := startReviewed(t, fail)
+	const finding = "[{id: R1-1, type: silent-failure, file: internal/x.go, line: 12, evidence: \"the error is swallowed\"}]"
+	_, db, p1, runner, rv, v, dec := startReviewedWithDecisions(t,
+		reviewerOutput("FAIL", finding), reviewerOutput("FAIL", finding))
 
 	if n := runner.specCount(); n != 2 {
 		t.Fatalf("executor runs = %d, want 2 (the run + one fix re-run)", n)
@@ -309,7 +325,7 @@ func TestReviewFailStartsExactlyOneFixRerun(t *testing.T) {
 		t.Error("the review fix re-run carries the OPERATOR feedback note")
 	}
 	if n := len(rv.calls()); n != 2 {
-		t.Errorf("reviews = %d, want 2", n)
+		t.Errorf("reviews = %d, want 2 — two automatic rounds, never a third", n)
 	}
 	if n := len(v.calls()); n != 2 {
 		t.Errorf("verifier calls = %d, want 2 — the verifier runs after the review either way", n)
@@ -319,30 +335,29 @@ func TestReviewFailStartsExactlyOneFixRerun(t *testing.T) {
 	if c := strings.Count(doc, "\n## Review\n"); c != 1 {
 		t.Errorf("doc carries %d `## Review` sections, want 1:\n%s", c, doc)
 	}
-	// The reviewer wrote prose and no block: each round is the unparsable
-	// fallback block with the prose quoted after it — round 1, then round 2 (the
-	// fix re-run's review, recorded although it starts nothing).
-	if !strings.Contains(doc, "> - P0 internal/x.go:12 — the error is swallowed.") {
-		t.Errorf("the findings are not quoted into the doc:\n%s", doc)
-	}
 	rs, errs := mdfence.ParseReviews(doc)
 	if len(errs) != 0 || len(rs) != 2 || rs[0].Round != "1" || rs[1].Round != "2" {
 		t.Fatalf("doc review blocks = %+v %+v, want rounds 1 and 2", rs, errs)
 	}
 	for _, r := range rs {
-		if r.Verdict != mdfence.ReviewFail || !r.Unparsable || r.Complete || r.Source != "daemon" {
-			t.Errorf("fallback block = %+v, want FAIL, unparsable, incomplete, source daemon", r)
+		if r.Verdict != mdfence.ReviewFail || r.Unparsable || !r.Complete || r.Source != "daemon" {
+			t.Errorf("block = %+v, want FAIL, complete, source daemon", r)
 		}
 	}
 	rows := reviewRows(t, db, p1)
 	if len(rows) != 2 || rows[0].fixRound != 0 || rows[1].fixRound != 1 || rows[0].verdict != "fail" || rows[1].verdict != "fail" {
 		t.Errorf("phase_reviews = %+v, want two fail rows at fix rounds 0 and 1", rows)
 	}
-	if got := reviewFixRound(t, db, p1); got != 1 {
-		t.Errorf("review_fix_round = %d, want 1 after the fix re-run", got)
+	if got := reviewFixRound(t, db, p1); got != maxAutoReviewRounds {
+		t.Errorf("review_fix_round = %d, want %d — the cycle is handed over", got, maxAutoReviewRounds)
 	}
 	if rows[0].findings == "" {
 		t.Error("the review row lost the findings")
+	}
+	if got := dec.all(); len(got) != 1 || got[0].Round != 2 || got[0].Source != ReviewDecisionSource ||
+		strings.Join(got[0].Options, ",") != ReviewOptionRepeat+","+ReviewOptionAccept ||
+		!strings.Contains(got[0].Reason, "still fails after round 2") {
+		t.Errorf("decisions = %+v, want one review decision after round 2 with repeat-review / accept-as-is", got)
 	}
 	// (a) at the service seam: the spec carries Bash and the daemon-API rules (no
 	// port set ⇒ the default) on top of the read-only set, merged into one flag by
@@ -361,12 +376,78 @@ func TestReviewFailStartsExactlyOneFixRerun(t *testing.T) {
 	if spec.Model != verify.DefaultModel {
 		t.Errorf("reviewer model = %q, want %q (the agent's opus, not the account default)", spec.Model, verify.DefaultModel)
 	}
+	// Round 2 got the brief, not the phase doc.
+	if p := rv.calls()[1].Prompt; !strings.Contains(p, "REVIEW ROUND: 2\n") || strings.Contains(p, "PHASE DOCUMENT:") ||
+		!strings.Contains(p, "id: R1-1") {
+		t.Errorf("round 2 prompt is not the round-2 brief:\n%s", p)
+	}
 }
 
-// reviewerOutput is a reviewer answer carrying the contract's block.
-func reviewerOutput(verdict, findings string) string {
+// A FAIL in prose with no `kind: review` block is review-incomplete (D20): no
+// fix re-run, an INCONCLUSIVE row with the sub-reason, the prose kept in the
+// doc under an incomplete block, and the decision handed to the operator.
+func TestReviewProseFailIsIncompleteAndStartsNoFix(t *testing.T) {
+	_, db, p1, runner, rv, _, dec := startReviewedWithDecisions(t, "- P0 internal/x.go:12 — the error is swallowed.\nVERDICT: FAIL")
+	if n := runner.specCount(); n != 1 {
+		t.Fatalf("executor runs = %d, want 1 — an incomplete review starts no fix", n)
+	}
+	if n := len(rv.calls()); n != 1 {
+		t.Errorf("reviews = %d, want 1", n)
+	}
+	rows := reviewRows(t, db, p1)
+	if len(rows) != 1 || rows[0].verdict != "inconclusive" ||
+		!strings.HasPrefix(rows[0].detail, ClassReviewIncomplete+": "+IncompleteNoBlock) {
+		t.Fatalf("phase_reviews = %+v, want one inconclusive review-incomplete: no-block row", rows)
+	}
+	doc, _, _, _ := phaseDocAndState(t, db, p1)
+	if !strings.Contains(doc, "> - P0 internal/x.go:12 — the error is swallowed.") {
+		t.Errorf("the prose is not quoted into the doc:\n%s", doc)
+	}
+	rs, _ := mdfence.ParseReviews(doc)
+	if len(rs) != 1 || rs[0].Complete || !rs[0].Unparsable {
+		t.Fatalf("doc blocks = %+v, want one incomplete, unparsable round", rs)
+	}
+	if got := dec.all(); len(got) != 1 || got[0].Round != 1 || !strings.Contains(got[0].Reason, IncompleteNoBlock) {
+		t.Errorf("decisions = %+v, want one review decision for round 1 (no-block)", got)
+	}
+	if got := reviewFixRound(t, db, p1); got != maxAutoReviewRounds {
+		t.Errorf("review_fix_round = %d, want %d", got, maxAutoReviewRounds)
+	}
+}
+
+// reviewerOutput is a reviewer answer carrying the contract's block; resolves
+// are the earlier findings it confirms fixed.
+func reviewerOutput(verdict, findings string, resolves ...string) string {
 	return "Findings above.\n\n```yaml\nkind: review\nround: 1\nverdict: " + verdict + "\ncomplete: true\nscope_left: []\n" +
-		"findings: " + findings + "\nresolves: []\nids: []\ndrift: []\nchecked_callers: []\n```\nVERDICT: " + verdict
+		"findings: " + findings + "\nresolves: [" + strings.Join(resolves, ", ") + "]\nids: []\ndrift: []\nchecked_callers: []\n```\nVERDICT: " + verdict
+}
+
+// fakeDecider records the review decisions the cycle hands over.
+type fakeDecider struct {
+	mu sync.Mutex
+	ds []ReviewDecision
+}
+
+func (f *fakeDecider) OpenReviewDecision(d ReviewDecision) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.ds = append(f.ds, d)
+	return nil
+}
+
+func (f *fakeDecider) all() []ReviewDecision {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return append([]ReviewDecision(nil), f.ds...)
+}
+
+// startReviewedWithDecisions is startReviewed with a decision sink attached
+// before the run starts.
+func startReviewedWithDecisions(t *testing.T, outputs ...string) (*Service, *sql.DB, int64, *stubRunner, *fakeReviewer, *stubVerifier, *fakeDecider) {
+	t.Helper()
+	dec := &fakeDecider{}
+	s, db, p1, runner, rv, v := startReviewedHook(t, func(s *Service) { s.ReviewDecisions = dec }, outputs...)
+	return s, db, p1, runner, rv, v, dec
 }
 
 // A PASS with a block is written into the doc too — zero findings, complete — and
@@ -396,7 +477,7 @@ func TestReviewPassWritesBlock(t *testing.T) {
 // one fix re-run is started exactly as before.
 func TestReviewFailWithBlockWritesFindings(t *testing.T) {
 	const finding = "[{id: R1-1, type: correctness, file: a.go, line: 3, test_caught: true, evidence: \"TestA fails\"}]"
-	_, db, p1, runner, _, _ := startReviewed(t, reviewerOutput("FAIL", finding), reviewerOutput("PASS", "[]"))
+	_, db, p1, runner, _, _ := startReviewed(t, reviewerOutput("FAIL", finding), reviewerOutput("PASS", "[]", "R1-1"))
 	if n := runner.specCount(); n != 2 {
 		t.Fatalf("executor runs = %d, want 2", n)
 	}
@@ -421,7 +502,9 @@ func TestReviewFailWithBlockWritesFindings(t *testing.T) {
 // A PASS on the fix re-run closes the cycle: review_fix_round back to 0, still one
 // re-run in total.
 func TestReviewPassAfterFixResetsRound(t *testing.T) {
-	_, db, p1, runner, _, _ := startReviewed(t, "- P1 a.go:1 — wrong.\nVERDICT: FAIL", "- none\nVERDICT: PASS")
+	_, db, p1, runner, _, _ := startReviewed(t,
+		reviewerOutput("FAIL", "[{id: R1-1, type: correctness, file: a.go, line: 1, evidence: wrong}]"),
+		reviewerOutput("PASS", "[]", "R1-1"))
 	if n := runner.specCount(); n != 2 {
 		t.Fatalf("executor runs = %d, want 2", n)
 	}
