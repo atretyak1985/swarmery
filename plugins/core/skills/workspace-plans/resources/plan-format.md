@@ -255,6 +255,24 @@ highest on the default branch at that moment. A number picked at write time
 collides with whatever lands first while the branch is open, and every collision
 costs a renumber commit.
 
+### New agents and skills: extend first
+
+Before a phase proposes a new agent or a new skill, its doc names the existing
+skill the work extends instead — or says in one sentence why none fits. Put it in
+`## Implementation Details` as one line, so a grep can find it:
+
+```markdown
+**Extends:** workspace-plans — the new check is one more section of the format, not a new skill.
+**Extends:** none — no installed skill touches billing exports; closest is pdf-export, which only renders.
+```
+
+Pick the candidate from the dashboard's System → Insights → Skill audit: its
+weekly report ends with "Before a new agent, extend one of these", and its
+similar-description pairs show where two skills already overlap. A roster that
+adds before it extends grows back to dozens of agents nobody calls — every new
+agent or skill costs trigger recall for all the others. A phase that adds
+neither needs no `**Extends:**` line.
+
 ## `## In plain words`
 
 Every plan README (directly under the H1) and every phase doc (directly after

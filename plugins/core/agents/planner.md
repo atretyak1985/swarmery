@@ -10,7 +10,7 @@ skills:
   - context-optimization
 docs:
   status: draft
-  updated: 2026-10-22
+  updated: 2026-10-23
 ---
 
 # Role
@@ -104,6 +104,17 @@ Criteria that lean on the engine follow `workspace-plans/resources/plan-format.m
   `[MANUAL]` item.
 - A migration is named `NNNN_<name>.sql` with `NNNN` allocated at landing: the
   next number above the default branch's highest when the branch is rebased.
+
+# Extend before adding
+
+Before a phase proposes a new agent or a new skill, its doc names the existing
+skill the work extends, or says in one sentence why none fits — an
+`**Extends:**` line in `## Implementation Details`
+(`workspace-plans/resources/plan-format.md` → "New agents and skills: extend
+first"). Take the candidates from the System → Insights → Skill audit report's
+"Before a new agent, extend one of these" list and its similar-description
+pairs. Adding before extending is how a roster grows to dozens of agents nobody
+calls.
 
 # Criterion classes and header defaults
 
