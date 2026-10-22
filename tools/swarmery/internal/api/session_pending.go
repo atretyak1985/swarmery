@@ -96,6 +96,7 @@ var pendingSessionExempt = map[string]string{
 	"account_limit_hits.session_uuid":      "an observation about an ALREADY-INGESTED transcript (or '' for a run verdict), never a daemon-minted uuid awaiting its first record",
 	"phase_reviews.session_uuid":           "the reviewer session of the phase review stage (internal/phaserun/review.go, migration 0106); the row is inserted only AFTER the reviewer's `claude -p` exited, so the uuid is never parked here while the run is live and the ingested sessions row answers for it",
 	"phase_reviews.run_session_uuid":       "scope=phase: a copy of epic_phases.run_session_uuid naming the run a review graded, written after that run ended, so the phase row is the source; scope=plan: not a session at all but the plan branch review's dedupe key, `branchset:<sha256>` (internal/phaserun/plan_review.go)",
+	"session_cache_cold.session_uuid":      "the cache-cold prediction (internal/cachecold, migration 0122) is upserted only for a session that already has ingested turns — it is computed FROM them — so the sessions row answers for the uuid",
 	"triage_runs.session_uuids":            "uuids of headless judge calls (internal/triage), read from the CLI's JSON envelope only AFTER each `claude -p` exited, so the uuid is never daemon-minted ahead of its transcript; the ingested sessions row answers for it",
 }
 
