@@ -2,6 +2,8 @@ package api
 
 import (
 	"database/sql"
+	"slices"
+	"strings"
 
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/modelid"
 )
@@ -35,16 +37,57 @@ const sessionModelCols = `,
 	         ORDER BY tr.seq DESC LIMIT 1),
 	       (SELECT COUNT(DISTINCT tr.model) FROM turns tr
 	         WHERE tr.session_id = s.id AND tr.role = 'assistant'
-	           AND tr.model IS NOT NULL AND tr.model <> '')`
+	           AND tr.model IS NOT NULL AND tr.model <> ''),
+	       (SELECT GROUP_CONCAT(m, char(31)) FROM (
+	          SELECT tr.model AS m FROM turns tr
+	           WHERE tr.session_id = s.id AND tr.role = 'assistant' AND tr.agent_name IS NULL
+	             AND tr.model IS NOT NULL AND tr.model <> '' AND tr.model <> '<synthetic>'
+	           GROUP BY tr.model ORDER BY MIN(tr.seq)))`
+
+// The fourth column is the session's model LIST for the model-switch badge:
+// the distinct models of the ORCHESTRATOR's assistant turns in first-use order,
+// joined by the unit separator (char(31) — no model id contains it). It is a
+// different, narrower question from the three above, which read every assistant
+// turn including subagents: "did the session itself switch model mid-flight?".
+// Two kinds of turn are left out because neither is a switch:
+//
+//   - subagent turns (agent_name set) — an Explore agent on haiku under an opus
+//     session is delegation, not the session changing model;
+//   - `<synthetic>` turns — Claude Code's own stand-ins for an interrupted or
+//     failed request, which carry that literal "model".
+//
+// Counting either reads as a switch on most sessions: on the live store a naive
+// `COUNT(DISTINCT turns.model) > 1` matched 127 sessions, of which 3 had
+// actually changed model.
 
 // sessionModelScan holds that tail.
 type sessionModelScan struct {
 	first    sql.NullString
 	last     sql.NullString
 	distinct sql.NullInt64
+	list     sql.NullString
 }
 
-func (m *sessionModelScan) dest() []any { return []any{&m.first, &m.last, &m.distinct} }
+func (m *sessionModelScan) dest() []any { return []any{&m.first, &m.last, &m.distinct, &m.list} }
+
+// modelListSep is the separator the list column is joined with (char(31)).
+const modelListSep = "\x1f"
+
+// switchedModels folds the raw list column into distinct models, first-use
+// order, with the context-window marker stripped (modelid.Base): one model
+// requested with and without `[1m]` is one model, not a switch.
+func switchedModels(raw string) []string {
+	out := []string{}
+	if raw == "" {
+		return out
+	}
+	for _, id := range strings.Split(raw, modelListSep) {
+		if base := modelid.Base(id); base != "" && !slices.Contains(out, base) {
+			out = append(out, base)
+		}
+	}
+	return out
+}
 
 // apply fills sessionDTO.ModelLast / ModelChanged.
 //
@@ -61,6 +104,8 @@ func (m *sessionModelScan) dest() []any { return []any{&m.first, &m.last, &m.dis
 // id by family in SQL — is a per-row scan on the busiest list in the product for
 // a case nothing has yet observed.
 func (m *sessionModelScan) apply(s *sessionDTO) {
+	s.Models = switchedModels(m.list.String)
+	s.ModelSwitched = len(s.Models) > 1
 	if m.last.Valid && m.last.String != "" {
 		v := m.last.String
 		s.ModelLast = &v

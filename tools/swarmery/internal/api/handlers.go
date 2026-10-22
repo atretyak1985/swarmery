@@ -260,6 +260,14 @@ type sessionDTO struct {
 	// server-computed live flag. Always present as an explicit "link": null when
 	// no mod ever reported on the session. See internal/api/session_link.go.
 	Link *sessionLinkDTO `json:"link"`
+
+	// ModelSwitched: the session's OWN turns ran on more than one model —
+	// subagent and synthetic turns excluded, `[1m]` folded — and Models lists
+	// them in first-use order (never null). Broader than ModelChanged, which
+	// compares only the two ends: a session that went opus → sonnet → opus
+	// switched without changing. See session_model.go.
+	ModelSwitched bool     `json:"modelSwitched"`
+	Models        []string `json:"models"`
 }
 
 // handoffDTO is the latest handoffs row projected onto a session, without the

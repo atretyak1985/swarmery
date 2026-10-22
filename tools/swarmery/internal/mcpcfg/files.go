@@ -76,7 +76,7 @@ func ReadConfigured(claudeDir, projectRoot string) []ConfiguredServer {
 	if raw, err := os.ReadFile(globalPath); err == nil {
 		_ = json.Unmarshal(raw, &g) // malformed → zero value → nothing declared
 	}
-	proj := g.Projects[projectRoot]
+	proj := g.Projects[projectRoot] // the zero value for "" — no project entry is keyed ""
 	disabled := proj.DisabledMCPServers
 
 	for name := range g.MCPServers {
@@ -90,10 +90,12 @@ func ReadConfigured(claudeDir, projectRoot string) []ConfiguredServer {
 		}
 	}
 
-	mcpJSON := filepath.Join(projectRoot, ".mcp.json")
-	if raw, err := os.ReadFile(mcpJSON); err == nil {
+	// An empty root asks for the user tier only — never a relative .mcp.json
+	// resolved against the daemon's own working directory.
+	if projectRoot != "" {
+		mcpJSON := filepath.Join(projectRoot, ".mcp.json")
 		var pf projectMCPFile
-		if json.Unmarshal(raw, &pf) == nil {
+		if raw, err := os.ReadFile(mcpJSON); err == nil && json.Unmarshal(raw, &pf) == nil {
 			for name := range pf.MCPServers {
 				if slices.Contains(disabled, name) || slices.Contains(proj.DisabledMCPJSONServers, name) {
 					continue

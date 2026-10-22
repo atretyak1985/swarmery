@@ -19,6 +19,7 @@ package sysscan
 // The linter never touches the scanner-owned parse_error rule.
 
 import (
+	"bytes"
 	"database/sql"
 	"fmt"
 	"log"
@@ -30,6 +31,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/findings"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/mcpcfg"
 )
 
 // Linter-owned rule names (design §3.5). parse_error is scanner-owned.
@@ -41,6 +43,11 @@ const (
 	RuleHookNoTimeout      = "hook_no_timeout"         // warn: hook command with neither timeout nor '|| true' — can stall Claude Code
 	RuleAgentNameDuplicate = "agent_name_duplicate"    // warn: one name in global AND project scope — override confusion
 	RuleAgentDead          = "agent_dead"              // info: 0 event mentions in 30 days (advisory — sparse events.agent_id)
+
+	// Session-start cost rules: what every session of a project loads before its
+	// first prompt (the first-request card, internal/firstreq, shows the size).
+	RuleClaudeMDOver200Lines = "claude_md_over_200_lines" // warn: project CLAUDE.md longer than MaxClaudeMDLines
+	RuleMCPServerUnused30d   = "mcp_server_unused_30d"    // info: file-configured MCP server, no mcp__<server>__* call in 30 days
 
 	// Usage-guide rules (docs/system-docs-format.md), all thin wrappers over
 	// ParseDocs (docs.go) — the parse is never re-implemented here.
@@ -70,9 +77,11 @@ var linterRules = []string{
 	RuleAgentNoDescription,
 	RuleSkillShortDesc,
 	RuleClaudeMDOversized,
+	RuleClaudeMDOver200Lines,
 	RuleHookNoTimeout,
 	RuleAgentNameDuplicate,
 	RuleAgentDead,
+	RuleMCPServerUnused30d,
 	RuleDocsMissing,
 	RuleDocsIncomplete,
 	RuleDocsDuplicate,
@@ -85,6 +94,10 @@ var linterRules = []string{
 const (
 	DefaultMinSkillDescription = 40   // runes
 	DefaultMaxClaudeMDTokens   = 2500 // estimated tokens (len/4)
+
+	// MaxClaudeMDLines is claude_md_over_200_lines' bound. Not configurable on
+	// purpose: the number is in the rule's name.
+	MaxClaudeMDLines = 200
 
 	EnvMinSkillDescription = "SWARMERY_LINT_MIN_SKILL_DESC"
 	EnvMaxClaudeMDTokens   = "SWARMERY_LINT_MAX_CLAUDE_MD_TOKENS"
@@ -164,6 +177,9 @@ func (s *Scanner) Lint() (LintStats, error) {
 	}
 	if err := s.lintDeadAgents(byRule); err != nil {
 		return st, fmt.Errorf("lint dead agents: %w", err)
+	}
+	if err := s.lintUnusedMCPServers(byRule); err != nil {
+		return st, fmt.Errorf("lint unused MCP servers: %w", err)
 	}
 	if err := s.lintDocs(byRule); err != nil {
 		return st, fmt.Errorf("lint docs: %w", err)
@@ -259,9 +275,12 @@ func (s *Scanner) lintSkillDescriptions(byRule map[string][]lintFinding) error {
 	return rows.Err()
 }
 
-// lintClaudeMD flags each project whose CLAUDE.md exceeds MaxClaudeMDTokens.
-// The token estimate is deliberately crude — len(bytes)/4; the precise
-// context-waste detector is design §5.2 and is NOT built here.
+// lintClaudeMD flags each project whose CLAUDE.md exceeds MaxClaudeMDTokens
+// (claude_md_oversized) or MaxClaudeMDLines (claude_md_over_200_lines), from one
+// read of the file. The token estimate is deliberately crude — len(bytes)/4; the
+// precise context-waste detector is design §5.2 and is NOT built here. The line
+// rule counts the project CLAUDE.md only, like the token rule: it is the file
+// the project owns and can trim.
 func (s *Scanner) lintClaudeMD(byRule map[string][]lintFinding) error {
 	projects, err := s.loadProjects()
 	if err != nil {
@@ -286,8 +305,26 @@ func (s *Scanner) lintClaudeMD(byRule map[string][]lintFinding) error {
 					path, tokens, max),
 			})
 		}
+		if lines := countLines(raw); lines > MaxClaudeMDLines {
+			byRule[RuleClaudeMDOver200Lines] = append(byRule[RuleClaudeMDOver200Lines], lintFinding{
+				target:   "claude_md:" + path,
+				severity: "warn",
+				message: fmt.Sprintf("%s: %d lines, over the %d-line guideline — every line is loaded into every session's first request; move detail into skills or .claude/rules",
+					path, lines, MaxClaudeMDLines),
+			})
+		}
 	}
 	return nil
+}
+
+// countLines counts text lines: newline-terminated ones plus a final
+// unterminated one.
+func countLines(raw []byte) int {
+	n := bytes.Count(raw, []byte{'\n'})
+	if len(raw) > 0 && raw[len(raw)-1] != '\n' {
+		n++
+	}
+	return n
 }
 
 // lintHookTimeouts flags enabled hook entries that have neither a "timeout"
@@ -377,6 +414,86 @@ func (s *Scanner) lintDeadAgents(byRule map[string][]lintFinding) error {
 		})
 	}
 	return rows.Err()
+}
+
+// lintUnusedMCPServers flags every MCP server a config FILE declares for a
+// live project (mcpcfg.ReadConfigured — user, local and project scope; never
+// `claude mcp list`, which would spawn each server to health-check it) that has
+// no mcp__<server>__* tool call in the last 30 days. A user-scope server is
+// machine-wide, so a call from any project counts as use and its finding is
+// reported once; a local/project-scope server only counts calls from its own
+// project's sessions. Info, like agent_dead: "unused by available telemetry".
+//
+// Tool names are matched by exact prefix in Go, not with LIKE: `_` is a LIKE
+// wildcard and every MCP tool name is full of them.
+func (s *Scanner) lintUnusedMCPServers(byRule map[string][]lintFinding) error {
+	projects, err := s.loadProjects()
+	if err != nil {
+		return err
+	}
+	type call struct {
+		tool      string
+		projectID int64
+	}
+	var calls []call
+	rows, err := s.db.Query(
+		`SELECT DISTINCT e.tool_name, s.project_id
+		 FROM events e JOIN sessions s ON s.id = e.session_id
+		 WHERE e.ts > date('now','-30 day') AND e.tool_name LIKE 'mcp\_\_%' ESCAPE '\'`)
+	if err != nil {
+		return err
+	}
+	for rows.Next() {
+		var c call
+		if err := rows.Scan(&c.tool, &c.projectID); err != nil {
+			rows.Close()
+			return err
+		}
+		calls = append(calls, c)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	used := func(server string, projectID int64, anyProject bool) bool {
+		prefix := mcpcfg.ToolPrefix(server)
+		for _, c := range calls {
+			if strings.HasPrefix(c.tool, prefix) && (anyProject || c.projectID == projectID) {
+				return true
+			}
+		}
+		return false
+	}
+
+	seen := map[string]bool{}
+	report := func(target string, srv mcpcfg.ConfiguredServer, where string) {
+		if seen[target] {
+			return
+		}
+		seen[target] = true
+		byRule[RuleMCPServerUnused30d] = append(byRule[RuleMCPServerUnused30d], lintFinding{
+			target:   target,
+			severity: "info",
+			message: fmt.Sprintf("MCP server %q (%s scope, %s): no %s* tool call in the last 30 days by available telemetry — its tools are still offered to every session; consider removing it",
+				srv.Name, srv.Scope, where, mcpcfg.ToolPrefix(srv.Name)),
+		})
+	}
+	// The user tier is read even with no project rows: it is configured
+	// machine-wide whether or not any project has been indexed yet.
+	for _, srv := range mcpcfg.ReadConfigured(s.cfg.ClaudeDir, "") {
+		if srv.Scope == mcpcfg.ScopeUser && !used(srv.Name, 0, true) {
+			report("mcp:user:"+srv.Name, srv, srv.Source)
+		}
+	}
+	for _, pr := range projects {
+		for _, srv := range mcpcfg.ReadConfigured(s.cfg.ClaudeDir, pr.path) {
+			if srv.Scope == mcpcfg.ScopeUser || used(srv.Name, pr.id, false) {
+				continue
+			}
+			report(fmt.Sprintf("mcp:%s:%s|%s", srv.Scope, srv.Name, pr.path), srv, pr.path)
+		}
+	}
+	return nil
 }
 
 // docsKinds are the item kinds the usage-guide rules cover. Agents and skills

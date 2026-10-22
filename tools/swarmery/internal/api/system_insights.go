@@ -34,6 +34,7 @@ import (
 	"database/sql"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/plugindrift"
@@ -117,6 +118,30 @@ type systemInsightsDTO struct {
 	// a kind-specific target expression ('agent:' || a.id and the like), and a
 	// plugin: target matches none of them.
 	PluginDrift []pluginDriftDTO `json:"pluginDrift"`
+	// StartCost is the session-start cost findings — the CLAUDE.md size rules
+	// and unused MCP servers (sysscan/lint.go): what every session of a project
+	// loads before its first prompt. Like PluginDrift, no component row carries
+	// these targets, so this list is the only place they render.
+	StartCost []startCostDTO `json:"startCost"`
+}
+
+// startCostDTO is one active session-start cost finding. ProjectPath is the
+// project it applies to; "" (and a null slug) for a user-scope MCP server,
+// which every project loads.
+type startCostDTO struct {
+	Rule        string  `json:"rule"`
+	Severity    string  `json:"severity"`
+	Target      string  `json:"target"`
+	Message     string  `json:"message"`
+	ProjectSlug *string `json:"projectSlug"`
+	ProjectPath string  `json:"projectPath"`
+}
+
+// startCostRules are the lint rules the StartCost list carries.
+var startCostRules = []string{
+	sysscan.RuleClaudeMDOversized,
+	sysscan.RuleClaudeMDOver200Lines,
+	sysscan.RuleMCPServerUnused30d,
 }
 
 // pluginDriftDTO is one active plugin_* finding, resolved to the project it
@@ -224,6 +249,7 @@ func computeInsights(db *sql.DB, esc *effectiveScope) (systemInsightsDTO, error)
 		Dead:                []deadComponentDTO{},
 		Undocumented:        []undocumentedItemDTO{},
 		PluginDrift:         []pluginDriftDTO{},
+		StartCost:           []startCostDTO{},
 	}
 	var err error
 	if out.PromotionCandidates, err = promotionCandidates(db, esc); err != nil {
@@ -243,7 +269,65 @@ func computeInsights(db *sql.DB, esc *effectiveScope) (systemInsightsDTO, error)
 	if drift, derr := pluginDriftFindings(db, esc); derr == nil {
 		out.PluginDrift = drift
 	}
+	if cost, cerr := startCostFindings(db, esc); cerr == nil {
+		out.StartCost = cost
+	}
 	return out, nil
+}
+
+// startCostFindings lists the active startCostRules findings, each resolved to
+// the project its target names: claude_md:<dir>/CLAUDE.md belongs to <dir>,
+// mcp:<scope>:<name>|<path> to <path>, and mcp:user:<name> to none — a
+// user-scope server is loaded by every project, so a project scope keeps it.
+func startCostFindings(db *sql.DB, esc *effectiveScope) ([]startCostDTO, error) {
+	holes := strings.Repeat(",?", len(startCostRules))[1:]
+	args := make([]any, len(startCostRules))
+	for i, rule := range startCostRules {
+		args[i] = rule
+	}
+	rows, err := db.Query(`
+		SELECT f.target, f.rule, f.severity, f.message
+		FROM config_lint_findings f
+		WHERE f.resolved_at IS NULL AND f.rule IN (`+holes+`)
+		ORDER BY f.severity DESC, f.rule, f.target`, args...)
+	if err != nil {
+		return nil, err
+	}
+	out := []startCostDTO{}
+	for rows.Next() {
+		var d startCostDTO
+		if err := rows.Scan(&d.Target, &d.Rule, &d.Severity, &d.Message); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		if md, ok := strings.CutPrefix(d.Target, "claude_md:"); ok {
+			d.ProjectPath = filepath.Dir(md)
+		} else if _, path, ok := strings.Cut(d.Target, "|"); ok {
+			d.ProjectPath = path
+		}
+		out = append(out, d)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	// Second pass after the cursor is closed — the single-connection rule
+	// pluginDriftFindings documents.
+	slugs, err := projectSlugsByPath(db)
+	if err != nil {
+		return nil, err
+	}
+	scopedOut := []startCostDTO{}
+	for _, d := range out {
+		if slug, ok := slugs[d.ProjectPath]; ok && d.ProjectPath != "" {
+			d.ProjectSlug = &slug
+		}
+		if esc.scoped() && d.ProjectPath != "" && (d.ProjectSlug == nil || *d.ProjectSlug != esc.slug()) {
+			continue
+		}
+		scopedOut = append(scopedOut, d)
+	}
+	return scopedOut, nil
 }
 
 // pluginDriftFindings lists active plugin_* findings with the project resolved
