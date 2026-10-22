@@ -46,6 +46,7 @@ Status: Pending
 ## Dependencies
 ## Acceptance Criteria
 - [ ] {measurable criterion with its verification command}
+## Risks                      ← first bullet: the `Blast radius:` line; see "## Risks" below
 ## Notes
 ## Guard                      ← the planner's `kind: guard` block; see "## Guard" below
 ## Forecast                   ← optional; see "## Forecast" below
@@ -375,6 +376,29 @@ independent observations set the flag, and the phase shows which one did:
 Neither is a gate. A post-hoc forecast still ingests, still renders, and still
 lets its phase run; the only consequence is that the learning loop does not
 score it.
+
+## `## Risks` (in every phase doc, written by the planner)
+
+The phase-specific risks, opening with the phase's blast radius — who calls
+what the phase changes — as one line:
+
+```markdown
+## Risks
+
+- Blast radius: <N> callers in <pkgs> — <file:line, …> (sources: rg, serena)
+```
+
+The planner computes it before writing the section, from the phase's Forecast
+`files`, with the procedure in `resources/blast-radius.md` (the `/impact`
+chain's shell equivalents, Serena when lsp-pack is enabled, a display cap of
+20 callers, `Blast radius: not computed — <reason>` when the chain cannot run).
+The daemon's reviewer brief repeats the line so the reviewer's `kind: review`
+block can list the call sites it read in `checked_callers`.
+
+Linted (shown on the phase, never enforced): `blast_radius_missing` — a
+Forecast that lists `files` in a doc with no `Blast radius:` line in its own
+text. A line quoted inside a fenced block does not count; a line under another
+section (`## Notes`) does.
 
 ## `## Guard` (in every phase doc, written by the planner)
 

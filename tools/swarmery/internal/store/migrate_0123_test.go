@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/store"
-	"github.com/atretyak1985/swarmery/tools/swarmery/internal/wsingest"
 )
 
 // TestMigrate0123FreshDB: the tables land, their CHECKs and unique keys hold, and
@@ -67,9 +66,14 @@ func TestMigrate0123OnAnExistingDB(t *testing.T) {
 	if err := store.MigrateUpTo(db, 122); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := db.Exec(wsingest.PhaseUpsertSQL,
-		7, 1, "Phase one", "/plan/phase-1.md", "[]", 2, 2, "done", nil,
-		"shipped", nil, "[]", "off", nil, 0, 0, "off"); err != nil {
+	// A raw INSERT, not wsingest.PhaseUpsertSQL: the current upsert also writes
+	// blast_radius (migration 0126), a column a database built up to 122 lacks.
+	if _, err := db.Exec(`INSERT INTO epic_phases
+		(workspace_task_id, seq, name, doc_path, depends_on, checkboxes_total,
+		 checkboxes_done, doc_status, completion_report, covers, verify_mode,
+		 criteria_land_open, criteria_manual_open, review_mode)
+		VALUES (7, 1, 'Phase one', '/plan/phase-1.md', '[]', 2, 2, 'done',
+		        'shipped', '[]', 'off', 0, 0, 'off')`); err != nil {
 		t.Fatalf("seed a phase: %v", err)
 	}
 	if _, ok, _ := store.MigrationAppliedAt(db, store.ReviewFindingsMigration); ok {

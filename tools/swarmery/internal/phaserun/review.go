@@ -105,6 +105,8 @@ Review the change below against the phase document it was meant to implement. Le
 
 Output: list only problems you would block the merge for — for each, file:line, one sentence on why it is wrong, and how to show it fails. Rank them by severity (P0 blocking / P1 must-fix). Zero findings is a legitimate result; say so plainly. At most one extra line for a non-blocking note, marked as non-blocking. When a verdict would need a build or test run, say so — the verifier runs after you. Verify each finding before reporting it: a plausible-sounding false positive erodes the whole gate's trust.
 
+When the prompt carries a BLAST RADIUS line — the phase document's list of who calls what the phase changes — read those call sites against the change, and list each one you read in checked_callers.
+
 Immediately before the verdict line, restate the review as one fenced ` + "```yaml" + ` block with kind: review — the machine copy appended to the phase document's ## Review section (one block per round):
 
 ` + "```yaml" + `
@@ -153,12 +155,30 @@ func reviewPrompt(guardSummary, title, doc, diff string, daemonPort, round int, 
 	b.WriteString(strconv.Itoa(round))
 	b.WriteString("\n\nPHASE: ")
 	b.WriteString(title)
+	b.WriteString("\n\n")
+	b.WriteString(blastRadiusBrief(doc))
 	b.WriteString("\n\nPHASE DOCUMENT:\n----------------------------------------\n")
 	b.WriteString(strings.TrimRight(doc, "\n"))
 	b.WriteString("\n----------------------------------------\n\n")
 	b.WriteString(lookFirstSection(lookFirst))
 	b.WriteString(diff)
 	return b.String()
+}
+
+// blastRadiusBrief repeats the phase doc's `Blast radius:` line — the planner's
+// list of who calls what the phase changes (wsingest.ParseBlastRadius, core
+// workspace-plans resources/blast-radius.md) — on its own line of the brief, so
+// the reviewer reads those call sites and lists them in checked_callers rather
+// than having to find the line inside the doc. A doc without one says so.
+func blastRadiusBrief(doc string) string {
+	line := wsingest.ParseBlastRadius(doc)
+	if line == "" {
+		return "BLAST RADIUS: the phase document declares none — list in checked_callers any call site you read for a changed signature."
+	}
+	// ParseBlastRadius matched the prefix case-insensitively; it is ASCII, so its
+	// length is the same whatever the case. Drop it and any bold marker after it.
+	rest := strings.TrimSpace(strings.TrimLeft(line[len("blast radius:"):], "*"))
+	return "BLAST RADIUS: " + rest + "\nRead these call sites against the diff; list each one you read, as file:line, in the block's checked_callers."
 }
 
 // lookFirstMax bounds the list in the prompt; the phase card shows them all.
