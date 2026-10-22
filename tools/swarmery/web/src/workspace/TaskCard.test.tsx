@@ -114,7 +114,7 @@ describe('TaskCard source line', () => {
   // Enumerated explicitly: adding a member to TaskOrigin must not be able to
   // crash the renderer, which is exactly what the Record this replaced did.
   it('renders every origin in the union without throwing', () => {
-    const origins: TaskOrigin[] = ['manual', 'session', 'llm', 'verify-fix'];
+    const origins: TaskOrigin[] = ['manual', 'session', 'llm', 'verify-fix', 'github'];
     for (const origin of origins) {
       expect(() => renderCard({ origin, originSessionId: origin === 'manual' ? null : 5 })).not.toThrow();
       cleanup();
@@ -124,6 +124,50 @@ describe('TaskCard source line', () => {
   it('shows the card age next to its source', () => {
     renderCard({ createdAt: new Date(Date.now() - 12 * 86_400_000).toISOString() });
     expect(screen.getByText('· 12d')).toBeDefined();
+  });
+});
+
+// The GitHub inbox (internal/ghinbox) mints one card per issue / PR, labelled
+// github:<owner>/<repo>#<n>, and returns it to the inbox marked new-comment when
+// someone comments again.
+describe('TaskCard GitHub inbox card', () => {
+  const ghCard: Partial<BoardTask> = {
+    origin: 'github',
+    boardColumn: 'triage',
+    title: 'Issue octo/widgets#12: crash',
+    labels: ['github:octo/widgets#12', 'new-comment'],
+  };
+
+  it('links the github: label chip to the item, in a new tab, without opening the card', () => {
+    const onOpen = vi.fn();
+    renderCard(ghCard, { onOpen });
+    const chip = screen.getByText('github:octo/widgets#12');
+    expect(chip.tagName).toBe('A');
+    expect(chip.getAttribute('href')).toBe('https://github.com/octo/widgets/issues/12');
+    expect(chip.getAttribute('target')).toBe('_blank');
+    expect(chip.getAttribute('rel')).toBe('noopener noreferrer');
+    expect(chip.getAttribute('aria-label')).toBe('open octo/widgets#12 on GitHub');
+    chip.addEventListener('click', (e) => e.preventDefault()); // jsdom: no navigation
+    chip.click();
+    expect(onOpen).not.toHaveBeenCalled();
+  });
+
+  it('shows the new-comment marker in the inbox instead of a plain new-comment chip', () => {
+    renderCard(ghCard);
+    expect(screen.getByText('● new comment')).toBeDefined();
+    expect(screen.queryByText('new-comment')).toBeNull();
+    expect(screen.getByText('from GitHub')).toBeDefined();
+  });
+
+  it('drops the marker once the card has left the inbox', () => {
+    renderCard({ ...ghCard, boardColumn: 'todo' });
+    expect(screen.queryByText('● new comment')).toBeNull();
+    expect(screen.queryByText('new-comment')).toBeNull();
+  });
+
+  it('leaves an ordinary label a plain chip', () => {
+    renderCard({ labels: ['jira-ticket'] });
+    expect(screen.getByText('jira-ticket').tagName).toBe('SPAN');
   });
 });
 
