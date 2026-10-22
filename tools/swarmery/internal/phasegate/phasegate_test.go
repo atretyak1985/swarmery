@@ -278,3 +278,39 @@ func TestUnreportedIsDistinctFromUnverified(t *testing.T) {
 		t.Errorf("states are swapped: %q / %q", unverified.State, unreported.State)
 	}
 }
+
+// D20: the latest review round incomplete ⇒ unverified with the review-incomplete
+// reason, whoever ran the phase; accepted as is, or a D21 legacy phase ⇒ no hold.
+func TestReviewIncompleteHold(t *testing.T) {
+	base := Input{CriteriaDone: 3, CriteriaTotal: 3, ReviewHold: "round 2: review-incomplete: reviewer-timed-out"}
+	r := Check(base)
+	if r.State != StateUnverified || len(r.Reasons) != 1 || !strings.HasPrefix(r.Reasons[0], "review-incomplete: ") ||
+		!strings.Contains(r.Reasons[0], "reviewer-timed-out") {
+		t.Fatalf("incomplete review = %+v, want unverified with the review-incomplete reason", r)
+	}
+	if !r.HoldsPlanBack(base) {
+		t.Error("an incomplete review does not hold the plan back")
+	}
+
+	accepted := base
+	accepted.ReviewAccepted = true
+	if r := Check(accepted); !r.Complete() {
+		t.Errorf("accepted as is = %+v, want complete", r)
+	}
+	legacy := base
+	legacy.LegacyReview = true
+	if r := Check(legacy); !r.Complete() {
+		t.Errorf("legacy review = %+v, want complete", r)
+	}
+	none := base
+	none.ReviewHold = "  "
+	if r := Check(none); !r.Complete() {
+		t.Errorf("no hold = %+v, want complete", r)
+	}
+	// Criteria still open: incomplete wins, the review reason is not reached.
+	open := base
+	open.CriteriaDone = 1
+	if r := Check(open); r.State != StateIncomplete {
+		t.Errorf("open criteria = %+v, want incomplete", r)
+	}
+}

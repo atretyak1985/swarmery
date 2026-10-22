@@ -230,6 +230,10 @@ type epicPhaseDTO struct {
 	// LegacyReview (D21): the phase was Done before review findings existed and
 	// carries no block — a badge, never a blocker.
 	LegacyReview bool `json:"legacyReview"`
+	// ReviewHold (D20): why the doc's latest review round is incomplete —
+	// "round N: <reason>" — or "" when it is complete or there is none. The
+	// completion gate holds the phase on it (phasegate.ReviewHoldSQL).
+	ReviewHold string `json:"reviewHold"`
 }
 
 // phaseForecastDTO is one stored `## Forecast` block. Every text field is
@@ -741,6 +745,7 @@ func (h *Handler) epicPhases(taskID int64, planDir string) ([]epicPhaseDTO, epic
 		SELECT e.id, e.seq, e.name, e.doc_path, e.depends_on, e.covers,
 		       e.checkboxes_total, e.checkboxes_done, e.doc_status, e.doc_updated_at,
 		       e.criteria_land_open, e.criteria_manual_open, e.legacy_review,
+		       `+phasegate.ReviewHoldSQL+`,
 		       e.completion_report, e.activated_at, e.activated_board_task_id,
 		       bt.external_id, bt.board_column,
 		       e.run_state, e.run_session_uuid, e.run_started_at, e.run_error,
@@ -805,7 +810,7 @@ func (h *Handler) epicPhases(taskID int64, planDir string) ([]epicPhaseDTO, epic
 		)
 		dest := []any{&p.ID, &p.Seq, &p.Name, &p.DocPath, &depsJSON, &coversJSON,
 			&p.CheckboxesTotal, &p.CheckboxesDone, &docStatus, &docUpdatedAt,
-			&p.LandOpen, &p.ManualOpen, &p.LegacyReview,
+			&p.LandOpen, &p.ManualOpen, &p.LegacyReview, &p.ReviewHold,
 			&completion, &p.ActivatedAt, &boardTaskID, &boardExtID, &boardCol,
 			&p.RunState, &runUUID, &runStartedAt, &runError,
 			&runEndedAt, &runCheckboxesBefore, &runCheckboxesAfter,
@@ -887,6 +892,8 @@ func (h *Handler) epicPhases(taskID int64, planDir string) ([]epicPhaseDTO, epic
 			Ran:              runEndedAt.Valid,
 			Dispatched:       runStartedAt.Valid,
 			ClosureRequired:  closureRequired,
+			ReviewHold:       p.ReviewHold,
+			LegacyReview:     p.LegacyReview,
 		}
 		gate := phasegate.Check(gateIn)
 		p.CompletionState = gate.State

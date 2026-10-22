@@ -1921,7 +1921,8 @@ func (s *Service) depSatisfied(taskID int64, seq int) (bool, error) {
 		       COALESCE(bt.board_column,''), bt.archived_at IS NOT NULL,
 		       EXISTS (SELECT 1 FROM retro_lessons l
 		                 JOIN task_retros r ON r.id = l.retro_id
-		                WHERE r.task_id = e.workspace_task_id)
+		                WHERE r.task_id = e.workspace_task_id),
+		       `+phasegate.ReviewHoldSQL+`, e.legacy_review
 		  FROM epic_phases e
 		  LEFT JOIN tasks bt ON bt.id = e.activated_board_task_id
 		 WHERE e.workspace_task_id = ? AND e.seq = ?`, taskID, seq)
@@ -1937,9 +1938,11 @@ func (s *Service) depSatisfied(taskID int64, seq int) (bool, error) {
 			done, total         int
 			dispatched          bool
 			archived, lesson    bool
+			reviewHold          string
+			legacyReview        bool
 		)
 		if err := rows.Scan(&done, &total, &verifyMode, &verdict, &report, &dispatched,
-			&boardCol, &archived, &lesson); err != nil {
+			&boardCol, &archived, &lesson, &reviewHold, &legacyReview); err != nil {
 			return false, err
 		}
 		// ClosureRequired is deliberately FALSE here, and this is the one place
@@ -1965,6 +1968,10 @@ func (s *Service) depSatisfied(taskID int64, seq int) (bool, error) {
 			Dispatched:      dispatched,
 			LegacyDone:      boardCol == "done" || archived,
 			ClosureRequired: false,
+			// An incomplete review is unconfirmed work, like a missing verdict:
+			// it gates what may start on top of it.
+			ReviewHold:   reviewHold,
+			LegacyReview: legacyReview,
 		})
 		if gate.Complete() {
 			return true, nil

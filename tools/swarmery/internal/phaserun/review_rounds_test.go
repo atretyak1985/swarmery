@@ -3,6 +3,8 @@ package phaserun
 import (
 	"strings"
 	"testing"
+
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/phasegate"
 )
 
 // Two automatic rounds, then nothing automatic: a third review exists only as
@@ -62,5 +64,47 @@ func TestAdmitRepeatReviewRefusals(t *testing.T) {
 	mustExec(t, db, `UPDATE epic_phases SET run_branch='swarm/phase-1', run_state='done' WHERE id=?`, p1)
 	if _, err := s.AdmitRepeatReview(p1); asRefusal(t, err).Code != ReviewCodeNotWired {
 		t.Errorf("no reviewer: %v", err)
+	}
+}
+
+// D20 at the dependency gate: a finished dependency whose latest review round is
+// incomplete does not unblock its dependents (phasegate.ReviewHoldSQL against the
+// real schema); a complete later round, or a D21 legacy phase, does.
+func TestDepSatisfiedHeldByAnIncompleteReview(t *testing.T) {
+	db, taskID, p1, _ := fixture(t)
+	s := newTestService(db, &stubRunner{}, &stubWt{})
+	mustExec(t, db, `UPDATE epic_phases SET checkboxes_done = checkboxes_total WHERE id = ?`, p1)
+	ok, err := s.depSatisfied(taskID, 1)
+	if err != nil || !ok {
+		t.Fatalf("ticked dependency without reviews = (%v, %v), want satisfied", ok, err)
+	}
+
+	doc := phaseDocPath(t, db, p1)
+	mustExec(t, db, `INSERT INTO review_blocks (workspace_task_id, phase_id, doc_path, round, verdict, complete, scope_left_json, written_at)
+		VALUES (?, ?, ?, '1', 'FAIL', 1, '[]', 'now'),
+		       (?, ?, ?, '2', 'INCONCLUSIVE', 0, '["web/", "review-incomplete: reviewer-timed-out — killed"]', 'now'),
+		       (?, ?, ?, 'plan', 'PASS', 1, '[]', 'now')`,
+		taskID, p1, doc, taskID, p1, doc, taskID, p1, doc)
+	var hold string
+	if err := db.QueryRow(`SELECT `+phasegate.ReviewHoldSQL+` FROM epic_phases e WHERE e.id = ?`, p1).Scan(&hold); err != nil {
+		t.Fatal(err)
+	}
+	if hold != "round 2: review-incomplete: reviewer-timed-out — killed" {
+		t.Errorf("ReviewHoldSQL = %q, want round 2's last scope_left entry", hold)
+	}
+	if ok, err := s.depSatisfied(taskID, 1); err != nil || ok {
+		t.Errorf("incomplete latest review = (%v, %v), want held", ok, err)
+	}
+
+	mustExec(t, db, `UPDATE epic_phases SET legacy_review = 1 WHERE id = ?`, p1)
+	if ok, _ := s.depSatisfied(taskID, 1); !ok {
+		t.Error("a legacy phase is held by the review rule")
+	}
+	mustExec(t, db, `UPDATE epic_phases SET legacy_review = 0 WHERE id = ?`, p1)
+
+	mustExec(t, db, `INSERT INTO review_blocks (workspace_task_id, phase_id, doc_path, round, verdict, complete, written_at)
+		VALUES (?, ?, ?, '10', 'PASS', 1, 'now')`, taskID, p1, doc)
+	if ok, _ := s.depSatisfied(taskID, 1); !ok {
+		t.Error("a complete later round (10, numeric order) does not lift the hold")
 	}
 }

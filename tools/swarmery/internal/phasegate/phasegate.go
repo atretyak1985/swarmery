@@ -130,6 +130,49 @@ type Input struct {
 	// from ClosureGateEnabled(). Off ⇒ the report is not required, which is the
 	// migration path for plans already in flight when the gate shipped.
 	ClosureRequired bool
+	// ReviewHold is the review-incomplete hold (D20): why the phase doc's latest
+	// numbered `kind: review` round is incomplete (`complete: false` — a
+	// reviewer that stopped early, timed out, wrote no readable block, …), ""
+	// when it is complete or there is none. Callers read it with ReviewHoldSQL.
+	// Unlike a verdict it is not keyed on Dispatched: run-plan's interactive
+	// reviewer writes the same blocks, and an incomplete review is never a
+	// passed one whoever ran it.
+	ReviewHold string
+	// ReviewAccepted: the operator answered the phase's review decision with
+	// accept-as-is, which lifts ReviewHold (and is recorded as a D-n decision).
+	ReviewAccepted bool
+	// LegacyReview: D21 — the phase finished before review blocks existed
+	// (epic_phases.legacy_review). Excluded from the review-incomplete rule.
+	LegacyReview bool
+}
+
+// ReviewHoldSQL is the SQL expression a caller selects as Input.ReviewHold, for
+// a query whose epic_phases alias is `e`: the latest numbered review round of
+// the doc (review_blocks, projected by wsingest) when it is incomplete —
+// "round N: <its last scope_left entry>" — else ”. A constant, not a query:
+// the gate itself stays free of the database.
+const ReviewHoldSQL = `COALESCE((
+	SELECT CASE WHEN rb.complete = 0 THEN
+	       'round ' || rb.round || ': ' ||
+	       COALESCE(NULLIF(json_extract(rb.scope_left_json, '$[#-1]'), ''), 'complete: false')
+	       END
+	  FROM review_blocks rb
+	 WHERE rb.doc_path = e.doc_path AND rb.round <> 'plan'
+	 ORDER BY CAST(rb.round AS INTEGER) DESC LIMIT 1), '')`
+
+// ReviewHoldReason is the gate's reason for a ReviewHold.
+func ReviewHoldReason(hold string) string {
+	hold = strings.TrimSpace(hold)
+	return ReviewIncomplete + ": the latest review is incomplete (" + hold +
+		") — it is not a passed review; repeat the review or accept it as is"
+}
+
+// ReviewIncomplete is the hold's class, as phaserun.ClassReviewIncomplete.
+const ReviewIncomplete = "review-incomplete"
+
+// reviewHeld reports whether the review-incomplete hold applies.
+func (in Input) reviewHeld() bool {
+	return strings.TrimSpace(in.ReviewHold) != "" && !in.ReviewAccepted && !in.LegacyReview
 }
 
 // Result is the gate's answer. Reasons is empty exactly when State is
@@ -223,6 +266,13 @@ func Check(in Input) Result {
 				"verification could not conclude, so the ticked criteria are unconfirmed — "+
 					"see the verify detail for whether the verifier ran at all")
 		}
+	}
+
+	// D20: a review that stopped early is incomplete, never passed — the ticked
+	// criteria are as unconfirmed as with no verdict at all.
+	if in.reviewHeld() {
+		verificationUnmet = true
+		reasons = append(reasons, ReviewHoldReason(in.ReviewHold))
 	}
 
 	// The report is owed by a phase the daemon RAN — see Input.Ran.

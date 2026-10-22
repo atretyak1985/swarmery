@@ -9,6 +9,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/mdfence"
 )
 
 // The projection of `kind: review` blocks (review_blocks.go, migration 0122),
@@ -343,5 +345,75 @@ func TestReviewRowsSweptWithTheirPhase(t *testing.T) {
 	scanReviewPlan(t, db, planDir)
 	if n := count(t, db, `SELECT (SELECT COUNT(*) FROM review_blocks) + (SELECT COUNT(*) FROM review_findings)`); n != 0 {
 		t.Errorf("review rows of a removed phase = %d, want 0", n)
+	}
+}
+
+// A round-2 block as the daemon's review stage writes it (AppendReviewFindings):
+// its `resolves` closes the cited round-1 finding (resolved_by = 2), the finding
+// it does not cite stays open, and the daemon-added «unaddressed» finding is a
+// plan-conformance row of round 2.
+func TestReviewBlocksRound2ResolvesFillResolvedBy(t *testing.T) {
+	db := carryFixture(t)
+	planDir, doc := reviewPlan(t, "# Phase 1 — One\n\n**Review:** on\n\n- [x] a\n\n## Completion Report\n")
+	at := time.Date(2026, 10, 22, 12, 0, 0, 0, time.UTC)
+	r1 := &mdfence.Review{Round: "1", Verdict: "FAIL", Complete: true, Findings: []mdfence.Finding{
+		{ID: "R1-1", Type: "silent-failure", File: "a.go", Line: 3, Evidence: "swallowed"},
+		{ID: "R1-2", Type: "correctness", File: "b.go", Line: 9, Evidence: "off by one"},
+	}}
+	if err := AppendReviewFindings(doc, ReviewBlock{Review: r1, Verdict: "FAIL"}, 1, at); err != nil {
+		t.Fatal(err)
+	}
+	r2 := &mdfence.Review{Round: "2", Verdict: "FAIL", Complete: true, Resolves: []string{"R1-1"}, Findings: []mdfence.Finding{
+		{ID: "R2-U1", Type: "plan-conformance", File: "b.go", Line: 9,
+			Evidence: "unaddressed R1-2: round 2 neither resolved nor re-reported it", Note: "added by the daemon, not the reviewer."},
+	}}
+	if err := AppendReviewFindings(doc, ReviewBlock{Review: r2, Verdict: "FAIL"}, 2, at); err != nil {
+		t.Fatal(err)
+	}
+	scanReviewPlan(t, db, planDir)
+
+	fs := readFindings(t, db, doc)
+	if got, want := keys(fs), []string{"1/R1-1", "1/R1-2", "2/R2-U1"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("findings = %v, want %v", got, want)
+	}
+	if fs["1/R1-1"].resolvedBy != "2" {
+		t.Errorf("R1-1 resolved_by = %q, want 2", fs["1/R1-1"].resolvedBy)
+	}
+	if fs["1/R1-2"].resolvedBy != "" {
+		t.Errorf("R1-2 resolved_by = %q, want open — round 2 did not resolve it", fs["1/R1-2"].resolvedBy)
+	}
+	if u := fs["2/R2-U1"]; u.typ != "plan-conformance" || u.source != ReviewSourceDaemon || !strings.HasPrefix(u.evidence, "unaddressed R1-2") {
+		t.Errorf("R2-U1 = %+v", u)
+	}
+}
+
+// An incomplete round (D20) is written complete: false with its reason last in
+// scope_left — the entry phasegate.ReviewHoldSQL reads — whatever the reviewer's
+// own block said; a timeout with no block is not marked unparsable.
+func TestRenderReviewBlockIncomplete(t *testing.T) {
+	at := time.Date(2026, 10, 22, 12, 0, 0, 0, time.UTC)
+	const why = "review-incomplete: verdict-mismatch — the block's verdict disagrees with the VERDICT line"
+	own := &mdfence.Review{Round: "1", Verdict: "PASS", Complete: true, ScopeLeft: []string{"web/"}}
+	text, err := RenderReviewBlock(ReviewBlock{Review: own, Verdict: "FAIL", Incomplete: why}, 1, at)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rs, errs := mdfence.ParseReviews(text)
+	if len(errs) != 0 || len(rs) != 1 || rs[0].Complete || rs[0].Verdict != "FAIL" ||
+		!reflect.DeepEqual(rs[0].ScopeLeft, []string{"web/", why}) {
+		t.Fatalf("rendered = %+v %+v\n%s", rs, errs, text)
+	}
+	if !reflect.DeepEqual(own.ScopeLeft, []string{"web/"}) {
+		t.Errorf("the reviewer's own scope_left was mutated: %v", own.ScopeLeft)
+	}
+
+	text, err = RenderReviewBlock(ReviewBlock{Verdict: "INCONCLUSIVE", Incomplete: "review-incomplete: reviewer-timed-out — killed"}, 2, at)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rs, _ = mdfence.ParseReviews(text)
+	if len(rs) != 1 || rs[0].Complete || rs[0].Unparsable || rs[0].Verdict != "INCONCLUSIVE" ||
+		!reflect.DeepEqual(rs[0].ScopeLeft, []string{"review-incomplete: reviewer-timed-out — killed"}) {
+		t.Fatalf("timeout block = %+v\n%s", rs, text)
 	}
 }

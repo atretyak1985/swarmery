@@ -201,6 +201,8 @@ func Diagnose(db *sql.DB, git worktree.Git, own OwnCheckout, phaseID int64) (Dia
 		verdict          sql.NullString
 		vDetail          sql.NullString
 		completionReport sql.NullString
+		reviewHold       string
+		legacyReview     bool
 		lessonRecorded   bool
 	)
 	err := db.QueryRow(`
@@ -212,7 +214,8 @@ func Diagnose(db *sql.DB, git worktree.Git, own OwnCheckout, phaseID int64) (Dia
 		       EXISTS (SELECT 1 FROM retro_lessons l
 		                 JOIN task_retros r ON r.id = l.retro_id
 		                WHERE r.task_id = e.workspace_task_id),
-		       p.path
+		       p.path,
+		       `+phasegate.ReviewHoldSQL+`, e.legacy_review
 		  FROM epic_phases e
 		  JOIN tasks t ON t.id = e.workspace_task_id
 		  JOIN projects p ON p.id = t.project_id
@@ -220,7 +223,8 @@ func Diagnose(db *sql.DB, git worktree.Git, own OwnCheckout, phaseID int64) (Dia
 		&taskID, &d.Seq, &d.Name, &docPath, &depsJSON,
 		&total, &don, &runState, &uuid,
 		&startedAt, &endedAt, &runErr, &before, &after,
-		&verifyMode, &verdict, &vDetail, &completionReport, &lessonRecorded, &projPath)
+		&verifyMode, &verdict, &vDetail, &completionReport, &lessonRecorded, &projPath,
+		&reviewHold, &legacyReview)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Diagnosis{}, ErrPhaseNotFound
 	}
@@ -391,6 +395,8 @@ func Diagnose(db *sql.DB, git worktree.Git, own OwnCheckout, phaseID int64) (Dia
 		Ran:              endedAt.Valid,
 		Dispatched:       startedAt.Valid,
 		ClosureRequired:  phasegate.ClosureGateEnabled(),
+		ReviewHold:       reviewHold,
+		LegacyReview:     legacyReview,
 	})
 	switch gate.State {
 	case phasegate.StateUnverified:
