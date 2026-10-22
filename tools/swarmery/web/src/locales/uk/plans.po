@@ -537,6 +537,10 @@ msgstr "Відступ від плану · {count}"
 msgid "changes requested"
 msgstr "запитано зміни"
 
+#: src/pages/planning/CostBadge.tsx
+msgid "cheap to change"
+msgstr "дешево змінити"
+
 #: src/pages/plans/LandingStatus.tsx
 msgid "checked {checkedAgo}"
 msgstr "перевірено {checkedAgo}"
@@ -651,6 +655,11 @@ msgstr "вирішено {decided}"
 #: src/pages/Plans.tsx
 msgid "decided {decided} by {by}"
 msgstr "вирішено {decided} ({by})"
+
+#. placeholder {0}: linkedTurn.seq
+#: src/pages/PlanningMode.tsx
+msgid "decision D-{0}"
+msgstr "рішення D-{0}"
 
 #: src/pages/Routines.tsx
 msgid "Delete"
@@ -853,6 +862,10 @@ msgstr "запис виконання"
 #: src/pages/plans/ForecastStory.tsx
 msgid "expected"
 msgstr "очікувалось"
+
+#: src/pages/planning/CostBadge.tsx
+msgid "expensive to change"
+msgstr "дорого змінити"
 
 #: src/pages/PlanningMode.tsx
 #: src/pages/Plans.tsx
@@ -1137,6 +1150,22 @@ msgstr "Позначити [LAND]"
 #: src/pages/plans/CriterionLint.tsx
 msgid "Mark [MANUAL]"
 msgstr "Позначити [MANUAL]"
+
+#: src/pages/planning/CostBadge.tsx
+msgid "Mark {decisionId} cheap to change"
+msgstr "Позначити {decisionId} як дешеве для зміни"
+
+#: src/pages/planning/CostBadge.tsx
+msgid "Mark {decisionId} expensive to change"
+msgstr "Позначити {decisionId} як дороге для зміни"
+
+#: src/pages/planning/CostBadge.tsx
+msgid "mark cheap"
+msgstr "позначити дешевим"
+
+#: src/pages/planning/CostBadge.tsx
+msgid "mark expensive"
+msgstr "позначити дорогим"
 
 #: src/pages/PlanningMode.tsx
 #: src/pages/Plans.tsx
@@ -1449,6 +1478,10 @@ msgstr "відкрити Плани →"
 #: src/pages/PlanningMode.tsx
 msgid "open session →"
 msgstr "відкрити сесію →"
+
+#: src/pages/plans/PhaseCard.tsx
+msgid "open the question →"
+msgstr "відкрити питання →"
 
 #: src/pages/plans/LandCriterionAction.tsx
 #: src/pages/plans/PhaseReview.tsx
@@ -2613,6 +2646,10 @@ msgstr "перевіряється…"
 #: src/pages/Plans.tsx
 msgid "waiting on phase {waitingOn}"
 msgstr "чекає на фазу {waitingOn}"
+
+#: src/pages/plans/PhaseCard.tsx
+msgid "waits on {id}"
+msgstr "чекає на {id}"
 
 #: src/pages/Routines.tsx
 msgid "webhook"

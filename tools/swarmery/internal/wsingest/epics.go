@@ -99,6 +99,9 @@ type epicPhase struct {
 	// forecast row so a later scoring pass can tell whether the forecast it grades
 	// is still the one in the doc. "" when the doc did not resolve.
 	docHash string
+	// decisionDeps are the `D-n` ids the doc's `**Depends on decisions:**` header
+	// declares (ParseDecisionDeps, migration 0122); nil when absent.
+	decisionDeps []string
 }
 
 var (
@@ -834,6 +837,7 @@ func parsePlan(planDir string, warn func(string, ...any)) []epicPhase {
 		// Same single read of the doc body as every extraction above it — the doc is
 		// opened once per scan and each parser is handed the bytes, never the path.
 		phases[i].docModel = ParseModel(string(body))
+		phases[i].decisionDeps = ParseDecisionDeps(string(body))
 		// A prior written into a doc that ALREADY reports its work done is not a
 		// prediction; ParseCompletionReport above has the only fact that can say so,
 		// which is why it is threaded in rather than re-read.
@@ -946,7 +950,12 @@ func parseSpec(planDir string, warn func(string, ...any)) []SpecCriterion {
 // migration 0106). A doc that already declared `**Review:** on` before the column
 // existed would otherwise keep the column's default 'off' until some other byte of
 // the plan changed, and its runs would silently skip the review stage.
-const parserVersion = "v10"
+//
+// v11: phase_decisions + epic_phases.decision_deps — the README's `## Decisions`
+// section and the `**Depends on decisions:**` header line (decisions.go, migration
+// 0120). Without the bump an indexed plan that already carries either keeps no
+// decision rows and an empty decision_deps, and the start gate never holds it.
+const parserVersion = "v11"
 
 // planHash combines every plan file's bytes into one content hash, so the gate
 // re-parses when the README OR any phase doc changes (a checkbox flip lives in a
@@ -1039,6 +1048,11 @@ func (s *Scanner) scanEpics(taskID int64, dir string, warn func(string, ...any))
 	if err := applySpec(tx, taskID, crits); err != nil {
 		tx.Rollback()
 		warn("epics task#%d (%s): spec: %v", taskID, planDir, err)
+		return
+	}
+	if err := applyDecisions(tx, taskID, planDir, parseDecisionsFile(planDir)); err != nil {
+		tx.Rollback()
+		warn("epics task#%d (%s): decisions: %v", taskID, planDir, err)
 		return
 	}
 	if _, err := tx.Exec(`
@@ -1202,6 +1216,9 @@ func applyEpics(tx *sql.Tx, taskID int64, phases []epicPhase, readmePresent bool
 		// After the upsert, so the row (and therefore its id) exists whether this
 		// scan inserted it or updated it.
 		if err := applyForecasts(tx, taskID, p); err != nil {
+			return err
+		}
+		if err := applyDecisionDeps(tx, taskID, p); err != nil {
 			return err
 		}
 	}

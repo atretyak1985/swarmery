@@ -60,6 +60,7 @@ import {
 } from 'react-router-dom';
 import type {
   BoardColumn,
+  DecisionHoldRef,
   Epic,
   EpicPhase,
   PhaseRunOutcome,
@@ -3210,6 +3211,7 @@ function PhaseDetailPanel({
   terms: ProviderTerms | null;
 }): JSX.Element {
   const { t, i18n } = useLingui();
+  const { slug: projectSlug } = useProjectWorkspace();
   const resolvedSeqs = useMemo(() => computeResolvedSeqs(epic.phases), [epic.phases]);
   const sessionHref = useSessionHref();
   const status = phaseStatus(phase, resolvedSeqs);
@@ -3318,6 +3320,7 @@ function PhaseDetailPanel({
             ]}
             {...(phase.completionReport !== null ? { report: <Markdown text={phase.completionReport} /> } : {})}
             terms={terms}
+            decisionHref={(d) => decisionTurnHref(projectSlug, d)}
           />
           <WorkaroundHits
             phaseId={phase.id}
@@ -4048,4 +4051,17 @@ function ContinuationChip({ events }: { events: RunEvent[] | null }): JSX.Elemen
       ↻ {continuations.length}
     </span>
   );
+}
+
+/** The planning page, opened on the turn a decision came from (PlanningMode
+ *  renders it inline from ?planningSession=&turn=). null for a decision born in
+ *  the README, which has no interview turn to open. */
+function decisionTurnHref(slug: string, d: DecisionHoldRef): string | null {
+  if (d.planningSessionId === null) return null;
+  const q = new URLSearchParams({
+    tab: 'new',
+    planningSession: String(d.planningSessionId),
+    turn: String(d.seq),
+  });
+  return `/p/${encodeURIComponent(slug)}/plans?${q.toString()}#planning-turn-${String(d.seq)}`;
 }

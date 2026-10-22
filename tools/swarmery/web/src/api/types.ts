@@ -2341,7 +2341,19 @@ export interface PlanningQuestion {
   description?: string;
   options: PlanningOption[];
   runningPlan?: PlanningSummary;
+  /** What reversing this decision later would cost (decision ids, migration
+   *  0120). Missing on questions stored before the field existed — read as cheap.
+   *  A skipped expensive question becomes an `undecided` D-n that holds every
+   *  phase depending on it; a skipped cheap one takes the recommended option. */
+  costToChange?: PlanningCost;
+  /** The planner's one-line why behind costToChange. */
+  costReason?: string;
+  /** What the daemon repaired while parsing (`question_cost_missing`, …). */
+  lints?: string[];
 }
+
+/** Go `planning.CostCheap` / `CostExpensive`. */
+export type PlanningCost = 'cheap' | 'expensive';
 
 /** Go `planning.wizardAnswer` — the JSON stamped onto a history turn. */
 export interface PlanningAnswer {
@@ -2387,6 +2399,8 @@ export type PlanningWizardStatus =
  * matches the bytes on the wire.
  */
 export interface PlanningStatus {
+  /** planning_sessions.id — addresses PATCH …/turns/{seq}/cost; 0 when no wizard row. */
+  planningSessionId: number;
   active: boolean;
   sessionUuid: string;
   sessionId: number | null;
@@ -3855,7 +3869,10 @@ export type RunConflictCode =
   | 'manual-only'
   /** phase run only: the doc's `Earliest:` date is still in the future; the body
    *  adds `earliest` (YYYY-MM-DD) and a `hint`. */
-  | 'not-yet-earliest';
+  | 'not-yet-earliest'
+  /** phase run only: the doc's `**Depends on decisions:**` names a decision still
+   *  undecided and expensive to change; the body adds `decisions`, `detail`, `hint`. */
+  | 'decision-undecided';
 
 /** The phase doc's verification opt-in (epic_phases.verify_mode). */
 export type PhaseVerifyMode = 'off' | 'normal' | 'strict';
@@ -3937,6 +3954,24 @@ export interface PhaseModelUse {
   turns: number;
 }
 
+/** One decision holding a phase (Go `decisionHoldRefDTO`). */
+export interface DecisionHoldRef {
+  decisionId: string;
+  question: string;
+  /** The planning turn that asked it (D-n's n). */
+  seq: number;
+  /** null for a decision born in the README rather than an interview. */
+  planningSessionId: number | null;
+}
+
+/** A phase's decision hold (Go `decisionHoldDTO`): non-null while a decision it
+ *  depends on is undecided and expensive to change. */
+export interface DecisionHold {
+  /** `decision-undecided: D-3 (<question>)` — the run gate's refusal text. */
+  detail: string;
+  decisions: DecisionHoldRef[];
+}
+
 export interface EpicPhase {
   id: number;
   seq: number;
@@ -3948,6 +3983,9 @@ export interface EpicPhase {
   dependsOn: number[];
   checkboxesDone: number;
   checkboxesTotal: number;
+  /** Optional on the type so fixtures predating migration 0122 stay valid; the
+   *  daemon always sends it (null when nothing holds the phase). */
+  decisionHold?: DecisionHold | null;
   /** Unticked `[LAND]` criteria (migration 0105): closed by landing — the daemon
    *  ticks them when the change request merges. Still inside checkboxesTotal. */
   landOpen: number;

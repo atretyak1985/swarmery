@@ -8,7 +8,14 @@ import type { MessageDescriptor } from '@lingui/core';
 import { msg } from '@lingui/core/macro';
 import { Trans, useLingui } from '@lingui/react/macro';
 import type { ReactNode } from 'react';
-import type { EpicPhase, PhaseLanding, PhaseRunOutcome, ProviderTerms } from '../../api/types';
+import type {
+  DecisionHold,
+  DecisionHoldRef,
+  EpicPhase,
+  PhaseLanding,
+  PhaseRunOutcome,
+  ProviderTerms,
+} from '../../api/types';
 import { fmtAgo, fmtDateTime, fmtSpan } from '../../lib/format';
 import { UI_TERMS } from '../../lib/glossary';
 import { offPlanBand, type OffPlanBand } from '../../lib/offPlan';
@@ -64,6 +71,44 @@ export interface PhaseCardProps {
   /** The project's code-host vocabulary; null (or absent) until it loads, and
    *  the landing chip stays hidden until then — it never guesses a label. */
   terms?: ProviderTerms | null;
+  /** Where a "waits on D-n" hold links: the planning session turn that asked the
+   *  decision. null (or absent) renders the hold without a link. */
+  decisionHref?: (ref: DecisionHoldRef) => string | null;
+}
+
+/** "waits on D-3 — <question>": the phase's decision hold, inline. The run gate
+ *  refuses this phase until each listed decision is taken or marked cheap. */
+export function DecisionHoldNote({
+  hold,
+  hrefFor,
+}: {
+  hold: DecisionHold;
+  hrefFor?: ((ref: DecisionHoldRef) => string | null) | undefined;
+}): JSX.Element {
+  return (
+    <div
+      data-testid="decision-hold"
+      className="mt-3 rounded-[10px] border border-amber/40 bg-amber/5 px-3 py-2.5 text-[12.5px]"
+    >
+      {hold.decisions.map((d) => {
+        const id = d.decisionId;
+        const href = hrefFor?.(d) ?? null;
+        return (
+          <div key={id} className="flex flex-wrap items-baseline gap-x-1.5">
+            <span className="font-medium text-amber">
+              <Trans>waits on {id}</Trans>
+            </span>
+            <span className="text-ink-3">— {d.question}</span>
+            {href !== null && (
+              <a href={href} className="font-mono text-[11px] text-ink-dim transition-colors hover:text-brand">
+                <Trans>open the question →</Trans>
+              </a>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
 }
 
 const OUTCOME_SENTENCE: Record<PhaseRunOutcome, MessageDescriptor> = {
@@ -162,6 +207,7 @@ export function PhaseCard({
   aside,
   report,
   terms = null,
+  decisionHref,
 }: PhaseCardProps): JSX.Element {
   const { i18n, t } = useLingui();
   const story = forecastStory(phase);
@@ -216,6 +262,10 @@ export function PhaseCard({
           )}
         </div>
       </div>
+
+      {phase.decisionHold != null && phase.decisionHold.decisions.length > 0 && (
+        <DecisionHoldNote hold={phase.decisionHold} hrefFor={decisionHref} />
+      )}
 
       {(primary !== undefined || secondaries.length > 0 || aside !== undefined) && (
         <div className="mt-3 flex flex-wrap items-center gap-2">
