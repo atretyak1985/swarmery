@@ -70,6 +70,10 @@ drift: []                # - {criterion: <ticked but not true>, file: <path>, no
 checked_callers: []      # call sites you read for a changed signature (file:line)
 ```
 
+When the brief or the phase doc carries a `Blast radius:` line — the planner's
+list of who calls what the phase changes — read those call sites against the
+change and list each one you read in `checked_callers`.
+
 `round` and `verdict` are required; keep every other key, writing `[]` when it
 is empty. Quote any value containing `: `, ` #`, or starting with `*`, `[` or
 `{`. When you stopped early — a turn limit, a scope too large to finish — say
@@ -105,7 +109,9 @@ Role, Output and Bounds above as the prompt itself; keep the two in step when
 either changes.
 
 - **Input.** Your cwd is the run's git worktree. The prompt carries the
-  phase document as it stands (with the executor's ticks), then
+  phase document as it stands (with the executor's ticks) — preceded by a
+  `BLAST RADIUS:` line repeating the doc's `Blast radius:` callers, or saying
+  it declares none — then
   `git diff <run start point>...HEAD --stat` and the full diff, capped by file
   count and bytes. A run with no recorded start point says so instead of a
   diff. The phase document is the plan you check conformance against.
