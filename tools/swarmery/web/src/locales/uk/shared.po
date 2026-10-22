@@ -3679,6 +3679,10 @@ msgstr "створено перевіркою для виправлення {ext
 msgid "stale"
 msgstr "застаріло"
 
+#: src/lib/needsYou.ts
+msgid "Stalled phase"
+msgstr "Фаза застрягла"
+
 #: src/workspace/NewTaskModal.tsx
 msgid "start immediately — the dispatcher picks it up"
 msgstr "запустити одразу — диспетчер підхопить"

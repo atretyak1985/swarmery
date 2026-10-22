@@ -25,6 +25,7 @@ export function replyWithOption(item: NeedsYouItem, option: string): string {
 
 const KIND_LABELS: Record<NeedsYouKind, MessageDescriptor> = {
   approval: msg`Approval`,
+  stalled_phase: msg`Stalled phase`,
   question: msg`Question`,
   prod_deploy_local: msg`Confirm locally`,
   awaiting_reply: msg`Awaiting your reply`,
@@ -58,7 +59,8 @@ export function visibleItems(
 
 /**
  * Oldest blocker first. Stable, so the server's same-instant tie-break
- * (approval < question < prod_deploy_local < awaiting_reply < failed) holds.
+ * (approval < stalled_phase < question < prod_deploy_local < awaiting_reply <
+ * failed < …) holds.
  */
 export function oldestFirst(items: readonly NeedsYouItem[]): NeedsYouItem[] {
   const at = (it: NeedsYouItem): number => {

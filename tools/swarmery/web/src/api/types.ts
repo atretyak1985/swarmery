@@ -558,7 +558,7 @@ export type SessionsResponse = SessionsPage;
 export interface PendingSession {
   pending: true;
   sessionUuid: string;
-  source: 'phase' | 'plan' | 'dispatch' | 'verify' | 'planning' | 'revision' | (string & {});
+  source: 'phase' | 'review' | 'plan' | 'dispatch' | 'verify' | 'planning' | 'revision' | (string & {});
   running: boolean;
   startedAt: string | null;
   label: string;
@@ -1778,11 +1778,13 @@ export type ApprovalChannel = 'shim' | 'mod';
  * a production deploy handed to the session's own terminal, a session that
  * ended its turn waiting for a typed reply, a recently failed session, a
  * plan phase whose every open criterion is `[MANUAL]` (only a human closes it),
- * or one whose every open criterion is `[LAND]` with its run branch ready,
- * pushed or under an open PR (only the merge is left).
+ * one whose every open criterion is `[LAND]` with its run branch ready,
+ * pushed or under an open PR (only the merge is left), or a plan phase whose
+ * active stage stopped working (`stalled_phase`, ranked just below approval).
  */
 export type NeedsYouKind =
   | 'approval'
+  | 'stalled_phase'
   | 'question'
   | 'prod_deploy_local'
   | 'awaiting_reply'
@@ -1810,6 +1812,14 @@ export interface NeedsYouPhase {
   landingState?: NeedsYouLandingState;
   /** `awaiting_merge` only, once a PR is open. */
   prUrl?: string;
+}
+
+/** A `stalled_phase` item's diagnosis — also on the approval item a
+ *  permission-pending stall was folded into (Go needsYouStall). */
+export interface NeedsYouStall {
+  stage: StallStage;
+  reason: StallReason;
+  sinceMinutes: number;
 }
 
 /** Haiku-extracted reply card for an awaiting_reply item (always null until phase 4). */
@@ -1843,8 +1853,11 @@ export interface NeedsYouItem {
   /** The session's terminal deep link (WARP_FOCUS_URL), when known. */
   termFocusUrl: string | null;
   suggestion: ReplySuggestion | null;
-  /** `manual_phase` / `awaiting_merge` only: the phase to open. Absent on every session item. */
+  /** `manual_phase` / `awaiting_merge` / `stalled_phase`: the phase to open — and on an
+   *  approval item a permission-pending stall was folded into. Absent on every other item. */
   phase?: NeedsYouPhase;
+  /** `stalled_phase`, and an approval a permission-pending stall was folded into. */
+  stall?: NeedsYouStall;
   /** approval items only: the transport of the permission request. Absent on an older daemon. */
   channel?: ApprovalChannel;
 }
@@ -4079,6 +4092,31 @@ export interface EpicPhase {
    *  newest first. [] when never reviewed. Absent from a daemon older than the
    *  review stage — read it as `phase.reviews ?? []`. */
   reviews?: PhaseReviewSummary[];
+  /** The phase's current stall — its active stage stopped working (Go
+   *  phaseStallDTO, internal/stall). null when not stalled; absent from a daemon
+   *  older than the stall detector — read it as `phase.stalled ?? null`.
+   *  Notification only: nothing about completion consults it. */
+  stalled?: PhaseStall | null;
+}
+
+/** Which session of a phase run is stalled. */
+export type StallStage = 'executor' | 'reviewer' | 'verifier';
+
+/** Why it counts as stalled: no turn for stallMinutes, a session that ended
+ *  without its report/verdict/record, or a permission request pending too long. */
+export type StallReason = 'no-turns' | 'ended' | 'permission-pending';
+
+/** Mirrors api.phaseStallDTO (the stall_notices ledger the detector's tick keeps). */
+export interface PhaseStall {
+  stage: StallStage;
+  reason: StallReason;
+  /** When the stall began (RFC3339): the last sign of life, or the request's time. */
+  since: string;
+  sinceMinutes: number;
+  /** The stalled stage's session; '' while it has not linked one. */
+  sessionUuid: string;
+  /** The pending permission request behind `permission-pending`. */
+  requestId: number | null;
 }
 
 /** One code review of a phase's run as the epic payload carries it (Go reviewDTO,

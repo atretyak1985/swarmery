@@ -821,6 +821,18 @@ msgstr "enable webhook trigger ({webhookRoute})"
 msgid "End the interview? The planner will write the full plan to the workspace."
 msgstr "End the interview? The planner will write the full plan to the workspace."
 
+#: src/pages/plans/StalledBadge.tsx
+msgid "ended without record"
+msgstr "ended without record"
+
+#: src/pages/plans/StalledBadge.tsx
+msgid "ended without report"
+msgstr "ended without report"
+
+#: src/pages/plans/StalledBadge.tsx
+msgid "ended without verdict"
+msgstr "ended without verdict"
+
 #: src/pages/plans/forecastStoryModel.ts
 msgid "ending blocked"
 msgstr "ending blocked"
@@ -841,6 +853,10 @@ msgstr "execution mode"
 #: src/pages/Plans.tsx
 msgid "execution record"
 msgstr "execution record"
+
+#: src/pages/plans/StalledBadge.tsx
+msgid "executor"
+msgstr "executor"
 
 #: src/pages/plans/ForecastStory.tsx
 msgid "expected"
@@ -1504,6 +1520,10 @@ msgstr "perm {permissionMode}"
 msgid "Permanently delete <0>{routineName}</0> and its run history? This cannot be undone."
 msgstr "Permanently delete <0>{routineName}</0> and its run history? This cannot be undone."
 
+#: src/pages/plans/StalledBadge.tsx
+msgid "permission pending"
+msgstr "permission pending"
+
 #: src/pages/Plans.tsx
 msgid "phase {phase} covers {cid}, which the spec never declares"
 msgstr "phase {phase} covers {cid}, which the spec never declares"
@@ -1932,6 +1952,10 @@ msgstr "review the open revision →"
 msgid "review…"
 msgstr "review…"
 
+#: src/pages/plans/StalledBadge.tsx
+msgid "reviewer"
+msgstr "reviewer"
+
 #: src/pages/Plans.tsx
 msgid "Revise plan"
 msgstr "Revise plan"
@@ -2155,6 +2179,10 @@ msgstr "showing every session of the plan — click to narrow to this phase"
 msgid "showing this phase only — click for every session of the plan"
 msgstr "showing this phase only — click for every session of the plan"
 
+#: src/pages/plans/StalledBadge.tsx
+msgid "silent"
+msgstr "silent"
+
 #: src/pages/plans/ForecastVsActual.tsx
 #: src/pages/plans/ForecastVsActual.tsx
 msgid "size"
@@ -2216,6 +2244,10 @@ msgstr "Staging the revision failed"
 #: src/pages/planning/RevisionReview.tsx
 msgid "stale"
 msgstr "stale"
+
+#: src/pages/plans/StalledBadge.tsx
+msgid "stalled: {stage} — {reason} {minutes} min"
+msgstr "stalled: {stage} — {reason} {minutes} min"
 
 #: src/pages/PlanningMode.tsx
 msgid "Start again"
@@ -2303,6 +2335,10 @@ msgstr "task title"
 #: src/pages/Plans.tsx
 msgid "tech-lead (default)"
 msgstr "tech-lead (default)"
+
+#: src/pages/plans/StalledBadge.tsx
+msgid "The {stage} of this phase has stopped working. Notification only — nothing was restarted."
+msgstr "The {stage} of this phase has stopped working. Notification only — nothing was restarted."
 
 #: src/pages/plans/ForecastVsActual.tsx
 msgid "the Completion Report carries no “Where reality diverged” paragraph"
@@ -2561,6 +2597,7 @@ msgid "verified"
 msgstr "verified"
 
 #: src/pages/plans/PhaseReopens.tsx
+#: src/pages/plans/StalledBadge.tsx
 msgid "verifier"
 msgstr "verifier"
 

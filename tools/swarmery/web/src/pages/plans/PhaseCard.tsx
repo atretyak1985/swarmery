@@ -16,6 +16,7 @@ import { modelShortName } from '../../lib/sessionModelChip';
 import { forecastStory } from './forecastStoryModel';
 import { ForecastVsActual, OFF_PLAN_LABEL } from './ForecastVsActual';
 import { landingChip, type LandingChip as LandingChipModel } from './landingModel';
+import { StalledBadge } from './StalledBadge';
 
 // OffPlanChip lives here so the story and the card share one band→tone mapping
 // (ForecastStory.tsx imports it from this file).
@@ -200,6 +201,7 @@ export function PhaseCard({
           </>
         )}
         <span className="ml-auto flex items-center gap-1.5">
+          <StalledBadge stall={phase.stalled} />
           {terms != null && phase.landing != null && <LandingChip landing={phase.landing} terms={terms} />}
           {band !== null && <OffPlanChip band={band} compact />}
         </span>

@@ -1231,6 +1231,11 @@ msgid "open in System"
 msgstr "відкрити у Системі"
 
 #: src/pages/NeedsYou.tsx
+#: src/pages/NeedsYou.tsx
+msgid "open phase →"
+msgstr "відкрити фазу →"
+
+#: src/pages/NeedsYou.tsx
 msgid "open PR ↗"
 msgstr "відкрити PR ↗"
 
@@ -1264,6 +1269,10 @@ msgstr "Настоює"
 #: src/pages/detail/Timeline.tsx
 msgid "Permission"
 msgstr "Дозвіл"
+
+#: src/pages/detail/PendingRunNotice.tsx
+msgid "phase review"
+msgstr "рев’ю фази"
 
 #: src/pages/detail/PendingRunNotice.tsx
 msgid "phase run"
@@ -1610,6 +1619,10 @@ msgstr "частина тексту асистента ще не проінде�
 #: src/pages/ProjectOverview.tsx
 msgid "source: {source}"
 msgstr "джерело: {source}"
+
+#: src/pages/NeedsYou.tsx
+msgid "stalls {planTitle} · Phase {seq}: {name}"
+msgstr "тримає {planTitle} · Фаза {seq}: {name}"
 
 #: src/pages/detail/CallTree.tsx
 msgid "started"

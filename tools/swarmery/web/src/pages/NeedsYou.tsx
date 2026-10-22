@@ -3,7 +3,13 @@
 // stream (lib/useNeedsYou). One row per blocker:
 //
 //   approval / question  the existing Approvals PendingCard (approve / deny /
-//                        answer), joined by requestId to the pending row
+//                        answer), joined by requestId to the pending row; when
+//                        a plan phase is stalled on that very request, the
+//                        server folds the stall in and the row adds an
+//                        «open phase» link to it
+//   stalled_phase        a plan phase whose active stage (executor, reviewer,
+//                        verifier) stopped working: a link to the phase's Runs
+//                        tab. Notification only — nothing here restarts it
 //   prod_deploy_local    "Confirm locally" — no allow and no deny: the daemon
 //                        hands a production deploy to the session's terminal
 //   awaiting_reply       "Copy reply" puts `[<session>] Re: <question>` on the
@@ -27,6 +33,7 @@ import { Link, useParams } from 'react-router-dom';
 import { fetchApprovals, resolveApproval, type ApprovalAction } from '../api';
 import type { NeedsYouItem, NeedsYouKind, PermissionRequest } from '../api/types';
 import { PendingCard } from './Approvals';
+import type { PhaseTab } from './plans/PhasePanel';
 import { ChannelBadge } from '../components/ChannelBadge';
 import { ProjectName } from '../components/ProjectName';
 import { Empty, ErrorBox, Loading } from '../components/ui';
@@ -43,6 +50,7 @@ import { plansPath } from './plans/plansUrl';
 /** Kind badge tones — the label always carries the meaning, colour only echoes it. */
 const KIND_BADGE: Record<NeedsYouKind, string> = {
   approval: 'border-amber/40 text-amber',
+  stalled_phase: 'border-amber/60 bg-amber/10 text-amber',
   question: 'border-brand/50 text-brand',
   prod_deploy_local: 'border-amber/60 bg-amber/10 text-amber',
   awaiting_reply: 'border-amber/40 text-amber',
@@ -198,7 +206,7 @@ function ConfirmLocally({ item, sessionTo }: { item: NeedsYouItem; sessionTo: st
  * [MANUAL] criteria are ticked by hand), Review for an awaiting_merge one
  * (where the run branch is pushed and its PR opened).
  */
-function phaseHref(item: NeedsYouItem, tab: 'criteria' | 'review'): string | null {
+function phaseHref(item: NeedsYouItem, tab: PhaseTab): string | null {
   if (item.phase === undefined || item.phase.planExternalId === '') return null;
   return plansPath(item.projectSlug, {
     plan: item.phase.planExternalId,
@@ -210,7 +218,42 @@ function phaseHref(item: NeedsYouItem, tab: 'criteria' | 'review'): string | nul
 function phaseItemHref(item: NeedsYouItem): string | null {
   if (item.kind === 'manual_phase') return phaseHref(item, 'criteria');
   if (item.kind === 'awaiting_merge') return phaseHref(item, 'review');
+  if (item.kind === 'stalled_phase') return phaseHref(item, 'runs');
   return null;
+}
+
+/** A stalled phase: what stopped and for how long (the server's preview), and a
+ *  link to the phase's Runs tab. Notification only — no restart action, by design. */
+function StalledPhase({ item, phaseTo }: { item: NeedsYouItem; phaseTo: string | null }): JSX.Element {
+  return (
+    <div className="mt-2 flex flex-wrap items-center gap-3">
+      <span className="min-w-0 flex-1 text-[12.5px] text-ink-3">{item.preview}</span>
+      {phaseTo !== null && (
+        <Link to={phaseTo} className={`ml-auto ${LINK}`}>
+          <Trans>open phase →</Trans>
+        </Link>
+      )}
+    </div>
+  );
+}
+
+/** The «open phase» second action of an approval a stalled phase waits on. */
+function StalledOn({ item }: { item: NeedsYouItem }): JSX.Element | null {
+  const to = item.stall !== undefined ? phaseHref(item, 'runs') : null;
+  if (to === null || item.phase === undefined) return null;
+  const { planTitle, seq, name } = item.phase;
+  return (
+    <div data-testid="needs-you-stalled-on" className="mt-2 flex flex-wrap items-center gap-3">
+      <span className="min-w-0 flex-1 truncate text-[12px] text-ink-3">
+        <Trans>
+          stalls {planTitle} · Phase {seq}: {name}
+        </Trans>
+      </span>
+      <Link to={to} className={`ml-auto ${LINK}`}>
+        <Trans>open phase →</Trans>
+      </Link>
+    </div>
+  );
 }
 
 function ManualPhase({ item, phaseTo }: { item: NeedsYouItem; phaseTo: string | null }): JSX.Element {
@@ -276,24 +319,28 @@ function Row({
   switch (item.kind) {
     case 'approval':
     case 'question':
-      body =
-        request !== null ? (
-          <PendingCard
-            request={request}
-            session={null}
-            nowMs={nowMs}
-            busy={busy}
-            onResolve={(action, reason, answers) => onResolve(request, action, reason, answers)}
-          />
-        ) : (
-          <div className="mt-2 flex flex-wrap items-center gap-3">
-            <ChannelBadge channel={item.channel} />
-            <code className="min-w-0 flex-1 truncate font-mono text-[11.5px] text-ink-3">{item.preview}</code>
-            <Link to={inboxHref} className={LINK}>
-              <Trans>review in Inbox →</Trans>
-            </Link>
-          </div>
-        );
+      body = (
+        <>
+          {request !== null ? (
+            <PendingCard
+              request={request}
+              session={null}
+              nowMs={nowMs}
+              busy={busy}
+              onResolve={(action, reason, answers) => onResolve(request, action, reason, answers)}
+            />
+          ) : (
+            <div className="mt-2 flex flex-wrap items-center gap-3">
+              <ChannelBadge channel={item.channel} />
+              <code className="min-w-0 flex-1 truncate font-mono text-[11.5px] text-ink-3">{item.preview}</code>
+              <Link to={inboxHref} className={LINK}>
+                <Trans>review in Inbox →</Trans>
+              </Link>
+            </div>
+          )}
+          <StalledOn item={item} />
+        </>
+      );
       break;
     case 'prod_deploy_local':
       body = <ConfirmLocally item={item} sessionTo={sessionTo} />;
@@ -316,6 +363,9 @@ function Row({
       break;
     case 'awaiting_merge':
       body = <AwaitingMerge item={item} reviewTo={phaseItemHref(item)} />;
+      break;
+    case 'stalled_phase':
+      body = <StalledPhase item={item} phaseTo={phaseItemHref(item)} />;
       break;
   }
   // A phase row names a plan phase, not a session: its title opens the phase.

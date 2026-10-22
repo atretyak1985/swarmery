@@ -47,6 +47,7 @@ describe('PendingRunNotice', () => {
 
   it('names every run kind the daemon can mint, with a fallback for new ones', () => {
     expect(pendingSourceLabel('phase')).toBe('phase run');
+    expect(pendingSourceLabel('review')).toBe('phase review');
     expect(pendingSourceLabel('plan')).toBe('plan run');
     expect(pendingSourceLabel('dispatch')).toBe('dispatched task');
     expect(pendingSourceLabel('verify')).toBe('verification run');
