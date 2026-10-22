@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/store"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/wtjanitor"
 )
 
 // fixture is a real repository plus a store that knows it as project 1, with
@@ -305,6 +306,28 @@ func TestCandidates_DetailNamesUncommittedPaths(t *testing.T) {
 	if d := scan.Candidates[0].Proof.Detail; !strings.Contains(d, "1 uncommitted path(s)") {
 		t.Errorf("detail = %q, want the uncommitted count", d)
 	}
+}
+
+// A repository git cannot list is a repo-error for this pass, never "gone":
+// nothing is known about its worktrees.
+func TestCandidates_UnreadableRepoIsNotGone(t *testing.T) {
+	f := newFixture(t)
+	ph := f.phase(1, "done", "done", "merged")
+	f.worktree("phase-x", "swarm/phase-"+itoa(ph), "x.md", "x\n")
+
+	scan, err := Candidates(f.db, failingGit{}, nil)
+	if err != nil {
+		t.Fatalf("Candidates: %v", err)
+	}
+	if len(scan.Candidates) != 0 || len(scan.Skipped) != 1 || scan.Skipped[0].Reason != SkipRepoError {
+		t.Errorf("scan = %+v, want one repo-error skip", scan)
+	}
+}
+
+type failingGit struct{ ExecGit }
+
+func (failingGit) Worktrees(string) ([]wtjanitor.Worktree, error) {
+	return nil, os.ErrPermission
 }
 
 type alwaysBusy struct{}

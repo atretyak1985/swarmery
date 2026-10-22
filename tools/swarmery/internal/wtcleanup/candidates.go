@@ -56,6 +56,7 @@ const (
 	SkipUnknownOwner = "unknown-owner" // no phase, plan or card owns the branch
 	SkipOpenOwner    = "open-owner"    // its phase or card is not closed
 	SkipActive       = "active"        // a run is in flight, or a process/session is inside
+	SkipRepoError    = "repo-error"    // git could not list the repository's worktrees this pass
 )
 
 // JournalWindow bounds how far back the sweep journal is read. The janitor
@@ -148,16 +149,21 @@ func Candidates(db *sql.DB, g Git, live wtjanitor.Liveness) (Scan, error) {
 	}
 
 	listed := map[string][]wtjanitor.Worktree{}
+	unreadable := map[string]bool{}
 	for _, e := range entries {
 		wts, ok := listed[e.repoRoot]
-		if !ok {
+		if !ok && !unreadable[e.repoRoot] {
 			if wts, err = g.Worktrees(e.repoRoot); err != nil {
-				wts = nil // an unreadable repository: every entry in it is gone for this pass
+				unreadable[e.repoRoot] = true
 			}
 			listed[e.repoRoot] = wts
 		}
 		skip := func(branch, reason string) {
 			scan.Skipped = append(scan.Skipped, Skipped{RepoRoot: e.repoRoot, ProjectSlug: e.slug, Path: e.path, Branch: branch, Reason: reason})
+		}
+		if unreadable[e.repoRoot] {
+			skip("", SkipRepoError) // not "gone": nothing is known about it this pass
+			continue
 		}
 		wt, found := findWorktree(wts, e.path)
 		if !found || wt.IsMain || !dirExists(wt.Path) {

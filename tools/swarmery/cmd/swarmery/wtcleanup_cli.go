@@ -219,7 +219,7 @@ func printScan(out io.Writer, rep scanReport) {
 		if len(r.Skipped) > 0 {
 			var parts []string
 			for _, k := range []string{wtcleanup.SkipOpenOwner, wtcleanup.SkipUnknownOwner, wtcleanup.SkipActive,
-				wtcleanup.SkipLocked, wtcleanup.SkipGone} {
+				wtcleanup.SkipLocked, wtcleanup.SkipGone, wtcleanup.SkipRepoError} {
 				if n := r.Skipped[k]; n > 0 {
 					parts = append(parts, fmt.Sprintf("%s %d", k, n))
 				}
