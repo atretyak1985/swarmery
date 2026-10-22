@@ -12,6 +12,7 @@ import type { EpicPhase, PhaseLanding, PhaseRunOutcome, ProviderTerms } from '..
 import { fmtAgo, fmtDateTime, fmtSpan } from '../../lib/format';
 import { UI_TERMS } from '../../lib/glossary';
 import { offPlanBand, type OffPlanBand } from '../../lib/offPlan';
+import { safeHref } from '../../lib/safeHref';
 import { modelShortName } from '../../lib/sessionModelChip';
 import { forecastStory } from './forecastStoryModel';
 import { ForecastVsActual, OFF_PLAN_LABEL } from './ForecastVsActual';
@@ -127,7 +128,7 @@ function LandingChip({
   return chip.href !== null ? (
     <a
       data-testid="phase-landing-chip"
-      href={chip.href}
+      href={safeHref(chip.href) ?? undefined}
       target="_blank"
       rel="noreferrer"
       className={`${cls} hover:underline`}

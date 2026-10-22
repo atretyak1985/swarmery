@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"strings"
 	"testing"
 	"testing/fstest"
 
@@ -128,6 +129,79 @@ func TestEndpoints(t *testing.T) {
 func jsonNum(f float64) string {
 	b, _ := json.Marshal(int64(f))
 	return string(b)
+}
+
+// TestSPAContentSecurityPolicy pins the dashboard shell's CSP: every SPA
+// response (index, client-side route fallback, static asset) carries spaCSP,
+// and that policy keeps the hardening directives it exists for.
+func TestSPAContentSecurityPolicy(t *testing.T) {
+	dist := fstest.MapFS{
+		"index.html":             {Data: []byte("<!doctype html><title>spa</title>")},
+		"assets/index-abc123.js": {Data: []byte("console.log('bundle')")},
+		"theme-boot.js":          {Data: []byte("void 0")},
+	}
+	srv := httptest.NewServer(spaHandler(dist))
+	t.Cleanup(srv.Close)
+
+	for _, path := range []string{"/", "/sessions/42", "/assets/index-abc123.js", "/theme-boot.js"} {
+		resp, err := http.Get(srv.URL + path)
+		if err != nil {
+			t.Fatalf("GET %s: %v", path, err)
+		}
+		resp.Body.Close()
+		if got := resp.Header.Get("Content-Security-Policy"); got != spaCSP {
+			t.Errorf("GET %s: Content-Security-Policy = %q, want spaCSP", path, got)
+		}
+	}
+	for _, directive := range []string{
+		"default-src 'self'", "script-src 'self';", "object-src 'none'",
+		"base-uri 'self'", "frame-ancestors 'self'",
+		// The Serena tab frames serena's own loopback origin, not the daemon.
+		"frame-src 'self' http://127.0.0.1:* http://localhost:*;",
+	} {
+		if !strings.Contains(spaCSP, directive) {
+			t.Errorf("spaCSP lacks %q: %s", directive, spaCSP)
+		}
+	}
+	if strings.Contains(spaCSP, "'unsafe-eval'") || strings.Contains(strings.Split(spaCSP, "style-src")[0], "'unsafe-inline'") {
+		t.Errorf("spaCSP must not allow eval or inline scripts: %s", spaCSP)
+	}
+}
+
+// TestSecurityHeadersOnEveryResponse pins the daemon-wide middleware: API
+// responses (success and error alike) get nosniff plus the baseline
+// frame-ancestors CSP, the SPA shell gets its own policy in place of the
+// baseline, and a jailed artifact keeps its sandbox policy — exactly one CSP
+// each, never the baseline stacked on top.
+func TestSecurityHeadersOnEveryResponse(t *testing.T) {
+	srv, _ := projectsTestServer(t)
+	seedArchitectureOut(t, srv.URL)
+
+	cases := []struct {
+		path    string
+		wantCSP string
+	}{
+		{"/api/projects", baselineCSP},
+		{"/api/sessions/does-not-exist", baselineCSP}, // 404 from a handler
+		{"/api/projects/bad/architecture/x.html", artifactCSP},
+		{"/api/projects/1/architecture/architecture-map.html", artifactCSP},
+		{"/", spaCSP},
+		{"/sessions/42", spaCSP},
+	}
+	for _, tc := range cases {
+		resp, err := http.Get(srv.URL + tc.path)
+		if err != nil {
+			t.Fatalf("GET %s: %v", tc.path, err)
+		}
+		resp.Body.Close()
+		if got := resp.Header.Get("X-Content-Type-Options"); got != "nosniff" {
+			t.Errorf("GET %s (%d): X-Content-Type-Options = %q, want nosniff", tc.path, resp.StatusCode, got)
+		}
+		csp := resp.Header.Values("Content-Security-Policy")
+		if len(csp) != 1 || csp[0] != tc.wantCSP {
+			t.Errorf("GET %s (%d): Content-Security-Policy = %q, want exactly [%q]", tc.path, resp.StatusCode, csp, tc.wantCSP)
+		}
+	}
 }
 
 // TestSPACacheHeaders pins the cache contract: index.html (and the SPA
