@@ -407,7 +407,7 @@ type StartOptions struct {
 	// ReviewFix: this run is the ONE fix re-run the review stage starts after a
 	// FAIL verdict (reviewRun). It implies Returned — the same continuation of the
 	// phase's own branch and the same blocked-guard bypass — but points the prompt
-	// at the doc's `## Review findings` section (ReviewFixNote) instead of the
+	// at the doc's latest `kind: review` block (ReviewFixNote) instead of the
 	// operator's feedback, and it is the only kind of run that keeps
 	// review_fix_round: every other run resets it to 0 when it opens, so a later
 	// review may again start one fix.
