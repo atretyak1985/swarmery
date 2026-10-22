@@ -33,15 +33,22 @@ Take the first graph the repo actually has, then always finish with the sweep:
 3. **ripgrep sweep** — always:
    `rg -n --no-heading -w "<sym>" --type go --type ts <repo>`. For a method or
    a generic name (`review`, `Run`) search the call form instead —
-   `rg -n --no-heading "\.<sym>\(|\b<sym>\(" --type go --type ts <repo>` — and
-   drop the declaration line and comment-only lines.
+   `rg -n --no-heading "\.<sym>\(|\b<sym>\(" --type go --type ts <repo>`. A Go
+   function is called qualified from other packages and bare inside its own,
+   tests included: sweep `"<pkg>\.<Sym>\("` across the repo **and**
+   `"\b<Sym>\("` inside the package's directory, or the package's own tests
+   go missing. Drop the declaration line, comment-only lines and string
+   literals (a test that greps source for the call names it without calling it).
 4. **Serena** — when `lsp-pack@<marketplace>` is `true` in the project's
    `.claude/settings.json` `enabledPlugins` and the session has the Serena MCP
    tools: `find_referencing_symbols` with `name_path` = the symbol and
    `relative_path` = its defining file. Serena resolves references through the
    language server, so its set is the reference; reconcile the sweep against
    it and name any delta. Without lsp-pack or without the tools, skip it and
-   say so in the sources.
+   say so in the sources. When the tools are there but the language server
+   did not start (Serena reports, say, `gopls` missing from its PATH), the
+   server's own CLI gives the same answer — `gopls references <file>:<line>:<col>`
+   on the declaration — and the sources say which one ran.
 
 Never run `graft build`, `graphify update` or `graphify .` for this step. An
 index the operator does not maintain is skipped, not built; one that
