@@ -18,7 +18,8 @@ type FactorCount struct {
 
 // BackfillResult is one Backfill run.
 type BackfillResult struct {
-	// Evaluated is the number of main-thread assistant turns in the window.
+	// Evaluated is the number of real (positive-footprint, RealTurnSQL)
+	// main-thread assistant turns in the window.
 	Evaluated int
 	// Marked is how many of them are cold restarts at the shipped Factor, and
 	// MarkedCostUSD their summed cost_usd.
@@ -60,7 +61,7 @@ func Backfill(db *sql.DB, since time.Time, cfg Config) (BackfillResult, error) {
 		FROM turns t
 		JOIN sessions s ON s.id = t.session_id
 		WHERE t.role = 'assistant' AND t.agent_name IS NULL
-		  AND (t.tokens_in IS NOT NULL OR t.tokens_cache_read IS NOT NULL OR t.tokens_cache_write IS NOT NULL)
+		  AND (COALESCE(t.tokens_in, 0) + COALESCE(t.tokens_cache_read, 0) + COALESCE(t.tokens_cache_write, 0)) > 0
 		  AND t.session_id IN (SELECT DISTINCT session_id FROM turns
 		                       WHERE started_at >= ? AND role = 'assistant' AND agent_name IS NULL)
 		ORDER BY t.session_id, t.seq`, cutoff, cutoff)

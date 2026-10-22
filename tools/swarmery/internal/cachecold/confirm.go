@@ -82,6 +82,14 @@ type Turn struct {
 // contextTokens.
 func Footprint(t Turn) int64 { return t.TokensIn + t.CacheRead + t.CacheWrite }
 
+// RealTurnSQL is the SQL predicate (over turns columns) for an assistant turn
+// that was a real API request: a positive footprint. Claude Code also writes
+// `<synthetic>` assistant messages — an API error, an interrupt — with all-zero
+// usage; they refresh no cache, so they are skipped when looking for the turn a
+// pause is measured from. On the operator store, 8 of the 16 expensive turns
+// after a pause that the first backfill missed sat right behind one.
+const RealTurnSQL = `(COALESCE(tokens_in, 0) + COALESCE(tokens_cache_read, 0) + COALESCE(tokens_cache_write, 0)) > 0`
+
 // Written is what the turn wrote to cache: cache_write_5m + cache_write_1h when
 // the split is known, the flat total otherwise (rows ingested before 0075).
 func (t Turn) Written() int64 {

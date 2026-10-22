@@ -30,10 +30,11 @@ type Cold struct {
 //   - it is interactive — a headless run (entrypoint sdk-cli) has no operator to
 //     continue from a handoff;
 //   - it is not archived, hidden or pruned (the handoff candidate rules);
-//   - its newest MAIN-THREAD turn is an assistant turn — a newer user turn means
-//     the next request is already in flight, so there is nothing left to warn
-//     about — whose footprint is at least cfg.MinFootprint and which ended more
-//     than the account kind's TTL ago.
+//   - its newest MAIN-THREAD turn (zero-usage `<synthetic>` stubs skipped, see
+//     RealTurnSQL) is an assistant turn — a newer user turn means the next
+//     request is already in flight, so there is nothing left to warn about —
+//     whose footprint is at least cfg.MinFootprint and which ended more than the
+//     account kind's TTL ago.
 //
 // Subagent turns are left out: they run on their own caches, and the main
 // thread's context is what the next message re-sends.
@@ -45,6 +46,7 @@ func Candidates(db *sql.DB, now time.Time, cfg Config) ([]Cold, error) {
 		JOIN projects p ON p.id = s.project_id
 		JOIN turns t ON t.id = (SELECT id FROM turns
 		                        WHERE session_id = s.id AND agent_name IS NULL
+		                          AND (role = 'user' OR ` + RealTurnSQL + `)
 		                        ORDER BY seq DESC LIMIT 1)
 		WHERE p.archived = 0
 		  AND s.hidden = 0
