@@ -26,6 +26,9 @@ package worktree
 
 import (
 	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
+	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -103,6 +106,47 @@ func LendPlanDoc(worktreePath, docPath string) (string, error) {
 // in-memory docRel died with the previous process.
 func LentPlanDocRel(docPath string) string {
 	return filepath.Join(PlanDocDir, filepath.Base(docPath))
+}
+
+// DocCopyHash is the hex sha256 of the doc copy lent into worktreePath for
+// docPath (LentPlanDocRel). A missing copy is an fs.ErrNotExist error, so a
+// caller can tell "never lent / deleted" from "lent and differs".
+func DocCopyHash(worktreePath, docPath string) (string, error) {
+	if worktreePath == "" || docPath == "" {
+		return "", fmt.Errorf("doc copy hash: worktree %q, doc %q: %w", worktreePath, docPath, os.ErrNotExist)
+	}
+	return FileHash(filepath.Join(worktreePath, LentPlanDocRel(docPath)))
+}
+
+// FileHash is the hex sha256 of the file at path.
+func FileHash(path string) (string, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return "", err
+	}
+	sum := sha256.Sum256(data)
+	return hex.EncodeToString(sum[:]), nil
+}
+
+// RelendPlanDoc refreshes a doc copy ALREADY lent into worktreePath from the
+// workspace document — the revise flow calls it after an apply rewrote docPath,
+// so a worktree that outlived its run does not keep grading against the old
+// text. A worktree that holds no copy is left alone (false, nil): lending into a
+// directory that never had one would plant a .swarmery/ in an unrelated tree.
+func RelendPlanDoc(worktreePath, docPath string) (bool, error) {
+	if worktreePath == "" || docPath == "" {
+		return false, nil
+	}
+	if _, err := os.Stat(filepath.Join(worktreePath, LentPlanDocRel(docPath))); err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return false, nil
+		}
+		return false, err
+	}
+	if _, err := LendPlanDoc(worktreePath, docPath); err != nil {
+		return false, err
+	}
+	return true, nil
 }
 
 // ReturnPlanDoc copies the worktree's copy back over the workspace document
