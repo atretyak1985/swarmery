@@ -20,17 +20,23 @@ fi
 agent_type=$(echo "$input" | jq -r '.tool_input.subagent_type // .tool_input.type // "general"' 2>/dev/null || echo general)
 description=$(echo "$input" | jq -r '.tool_input.description // ""' 2>/dev/null || true)
 # Correlation fields — availability depends on Claude Code version; set CLAUDE_HOOK_DEBUG=1
-# and inspect /tmp/claude-hook-payload-debug.jsonl to confirm which keys the payload carries
+# and inspect claude-hook-payload-debug.jsonl in the run dir (lib/session-file.sh)
+# to confirm which keys the payload carries
 parent_id=$(echo "$input" | jq -r '.parent_tool_use_id // .tool_use_id // empty' 2>/dev/null || true)
 session_id=$(echo "$input" | jq -r '.session_id // empty' 2>/dev/null || true)
 model_requested=$(echo "$input" | jq -r '.tool_input.model // empty' 2>/dev/null || true)
 
-if [ "${CLAUDE_HOOK_DEBUG:-0}" = "1" ]; then
-  echo "$input" >> /tmp/claude-hook-payload-debug.jsonl
+# Session log, debug dump and start stamp all live in the private run dir.
+# shellcheck source=lib/session-file.sh
+. "$(dirname "${BASH_SOURCE[0]}")/lib/session-file.sh"
+RUN_DIR=$(swarmery_run_dir) || RUN_DIR=""
+
+if [ "${CLAUDE_HOOK_DEBUG:-0}" = "1" ] && [ -n "$RUN_DIR" ]; then
+  (umask 077 && echo "$input" >> "$RUN_DIR/claude-hook-payload-debug.jsonl") 2>/dev/null || true
 fi
 
 # ── Log to session file ──────────────────────────────────────────
-SESSION_FILE="/tmp/claude-session-$(date +%Y%m%d).jsonl"
+SESSION_FILE=$(swarmery_session_file) || SESSION_FILE=/dev/null
 jq -c -n \
   --arg ts "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" \
   --arg cmd "spawn:${agent_type}" \
@@ -40,8 +46,14 @@ jq -c -n \
   '{ts: $ts, tool: "Agent", file: "", cmd: $cmd, parent_id: $parent_id, session_id: $session_id, model_requested: $model_requested}' >> "$SESSION_FILE"
 
 # ── Log agent start time for duration tracking ────────────────────
-AGENT_TRACKING="/tmp/claude-agent-${agent_type}-$(date +%s).tmp"
-date +%s > "$AGENT_TRACKING"
+# One mktemp stamp per spawn; subagent-stop.sh finds it by the same sanitized
+# agent-type prefix. The type comes from the payload, so it is reduced to a
+# safe filename alphabet before it names anything.
+if [ -n "$RUN_DIR" ]; then
+  safe_type=$(printf '%s' "$agent_type" | tr -c 'A-Za-z0-9_:-' '_')
+  AGENT_TRACKING=$(mktemp "$RUN_DIR/claude-agent-${safe_type}.XXXXXX" 2>/dev/null) || AGENT_TRACKING=""
+  if [ -n "$AGENT_TRACKING" ]; then date +%s > "$AGENT_TRACKING"; fi
+fi
 
 # ── Print ─────────────────────────────────────────────────────────
 echo ""

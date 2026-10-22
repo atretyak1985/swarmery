@@ -22,12 +22,12 @@ Agent roster and ownership metadata live in `AGENTS.md`, not here.
 | PostToolUse(Edit\|Write) | `code-formatter.sh` | Formats the edited file with the stack's formatter | — |
 | PostToolUse(Edit\|Write) | `type-checker.sh` | Type-checks after an edit | — |
 | PostToolUse(Bash) | `post_bash_index_check.sh` | Warns when the Graphify graph has drifted from HEAD | — |
-| PostToolUse(*) | `post-tool-observe.sh` | Records every tool call and tracks the session's token budget | `SWARMERY_SESSION_FILE`, `SWARMERY_SESSION_BUDGET_TOKENS`, `SWARMERY_PRICING_JSON` |
+| PostToolUse(*) | `post-tool-observe.sh` | Records every tool call (commands capped at 500 chars) in the per-day session log `claude-session-YYYYMMDD.jsonl`, kept in the private run dir (`~/.swarmery/run`, 0700; the log 0600), and tracks the session's token budget | `SWARMERY_RUN_DIR`, `SWARMERY_SESSION_FILE`, `SWARMERY_SESSION_BUDGET_TOKENS`, `SWARMERY_PRICING_JSON` |
 | SessionStart | `session-start.sh` | The welcome banner: component counts, active branches, in-flight tasks | — |
 | SessionStart | `session-context-bridge.sh` | Carries last session's state into a cold one — the newest `NEXT.md` slice (≤40 lines / 2048 B) and the newest daemon handoff brief for this project (≤1024 B), whole block ≤3072 B. Silent when there is nothing to inject or no daemon answers | `SWARMERY_CONTEXT_BRIDGE=0`, `SWARMERY_PORT` |
 | SessionStart | `task-session-log.sh` | Links the session uuid to the active task card | — |
 | SessionStart | `architecture-digest.sh` | Injects a compact architecture digest when the repo has a map | — |
-| SessionEnd | `session-summary.sh` | Aggregates the session's tool calls into a summary, and rotates the append-only logs it feeds — workspace `sessions/*.json`, `metrics/session-*.jsonl` and `logs/trace-*.jsonl` at 30d, the per-day statusline substrate `claude-session-*.jsonl` in `/tmp` at 7d. `working/**` and the single-file audit logs (`bash-shape-guard.jsonl`, `gate-bypasses.jsonl`) are never swept | `CLAUDE_SESSION_TMP` |
+| SessionEnd | `session-summary.sh` | Aggregates the session's tool calls into a summary, and rotates the append-only logs it feeds — workspace `sessions/*.json`, `metrics/session-*.jsonl` and `logs/trace-*.jsonl` at 30d, the per-day statusline substrate `claude-session-*.jsonl` in the run dir at 7d (legacy copies in `/tmp` are left for the OS). `working/**` and the single-file audit logs (`bash-shape-guard.jsonl`, `gate-bypasses.jsonl`) are never swept | `CLAUDE_SESSION_TMP` |
 | SubagentStart | `subagent-start.sh` | Records an agent spawn | — |
 | SubagentStop | `subagent-stop.sh` | Records an agent's completion and duration | — |
 | PreCompact | `pre-compact.sh` | Warns that the context window is about to be compacted | — |

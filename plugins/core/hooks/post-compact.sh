@@ -8,7 +8,9 @@ RST='\033[0m'; BOLD='\033[1m'; DIM='\033[2m'
 GREEN='\033[0;32m'; WHITE='\033[1;37m'
 
 # ── Log to session file ──────────────────────────────────────────
-SESSION_FILE="/tmp/claude-session-$(date +%Y%m%d).jsonl"
+# shellcheck source=lib/session-file.sh
+. "$(dirname "${BASH_SOURCE[0]}")/lib/session-file.sh"
+SESSION_FILE=$(swarmery_session_file) || SESSION_FILE=/dev/null
 echo "{\"ts\":\"$(date -u +"%Y-%m-%dT%H:%M:%SZ")\",\"tool\":\"_compact_done\",\"file\":\"\",\"cmd\":\"\"}" >> "$SESSION_FILE"
 
 # Count compactions today
