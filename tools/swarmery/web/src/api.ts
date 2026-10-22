@@ -108,6 +108,7 @@ import type {
   ContextHogsReport,
   PendingSession,
   SessionDetailResponse,
+  SessionHandoffRequest,
   SessionHandoffResponse,
   SessionOutcome,
   SessionsResponse,
@@ -520,6 +521,19 @@ export function fetchSession(id: number | string): Promise<SessionDetailResponse
 export function fetchSessionHandoff(id: number | string): Promise<SessionHandoffResponse> {
   if (MOCK) return mockApi.sessionHandoff(id);
   return get(`/api/sessions/${encodeURIComponent(id)}/handoff`);
+}
+
+/**
+ * POST /api/sessions/{id}/handoff — «continue from handoff» on a cache-cold
+ * session. Resolves `ready` with the existing brief, or `generating` when the
+ * daemon started one (a session_updated frame announces it). Rejects with the
+ * server's sentence on 409 (not a handoff candidate) and 503 (generation off).
+ */
+export async function requestSessionHandoff(id: number): Promise<SessionHandoffRequest> {
+  if (MOCK) return mockApi.requestSessionHandoff(id);
+  const res = await fetch(`/api/sessions/${String(id)}/handoff`, { method: 'POST' });
+  if (!res.ok) throw new Error(await errText(res));
+  return (await res.json()) as SessionHandoffRequest;
 }
 
 export function fetchSessionContextHogs(id: number | string): Promise<ContextHogsReport> {

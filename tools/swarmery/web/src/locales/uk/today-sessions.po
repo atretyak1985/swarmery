@@ -362,6 +362,10 @@ msgstr "відповісти в терміналі →"
 msgid "answer required"
 msgstr "потрібна відповідь"
 
+#: src/pages/sessions/CacheColdBadge.tsx
+msgid "API-key"
+msgstr "API-ключ"
+
 #: src/pages/today/loopModel.ts
 msgid "Appears after the first finished phase run."
 msgstr "З’явиться після першого завершеного запуску фази."
@@ -399,6 +403,10 @@ msgstr "приблизно — за вибіркою"
 #: src/pages/Projects.tsx
 msgid "archived"
 msgstr "в архіві"
+
+#: src/pages/sessions/CacheColdBadge.tsx
+msgid "Ask the daemon to write a handoff brief for this session"
+msgstr "Попросити демон написати бриф передачі для цієї сесії"
 
 #: src/pages/Approvals.tsx
 msgid "Auto-approve rules"
@@ -443,6 +451,10 @@ msgstr "заблоковано {age}"
 #: src/pages/Overview.tsx
 msgid "Blocked on you · {count}"
 msgstr "Чекають на вас · {count}"
+
+#: src/pages/sessions/CacheColdBadge.tsx
+msgid "cache cold"
+msgstr "кеш вистиг"
 
 #: src/pages/detail/ContextHogsCard.tsx
 msgid "cache-write per turn"
@@ -496,6 +508,14 @@ msgid "Cogitating"
 msgstr "Роздумує"
 
 #: src/pages/detail/Chat.tsx
+msgid "cold restart · {at} · re-wrote {k}k tokens of context · {cost}"
+msgstr "холодний перезапуск · {at} · перезаписано {k}k токенів контексту · {cost}"
+
+#: src/pages/SessionDetail.tsx
+msgid "cold restarts"
+msgstr "холодні перезапуски"
+
+#: src/pages/detail/Chat.tsx
 msgid "Collapse activity"
 msgstr "Згорнути активність"
 
@@ -539,6 +559,10 @@ msgstr "конфлікт"
 #: src/pages/detail/ContextHogsCard.tsx
 msgid "context hogs"
 msgstr "пожирачі контексту"
+
+#: src/pages/sessions/CacheColdBadge.tsx
+msgid "continue from handoff"
+msgstr "продовжити з передачі"
 
 #: src/pages/Sessions.tsx
 msgid "continue phase…"
@@ -791,6 +815,10 @@ msgstr "передано моду сесії"
 #: src/pages/detail/HandoffCard.tsx
 msgid "handoff"
 msgstr "передача"
+
+#: src/pages/sessions/CacheColdBadge.tsx
+msgid "handoff request failed"
+msgstr "запит передачі не вдався"
 
 #: src/pages/Approvals.tsx
 msgid "hangs {hangs}"
@@ -1246,6 +1274,10 @@ msgstr "відкрити рев’ю →"
 msgid "open session →"
 msgstr "відкрити сесію →"
 
+#: src/pages/sessions/CacheColdBadge.tsx
+msgid "Open the handoff brief and its resume command"
+msgstr "Відкрити бриф передачі та його команду продовження"
+
 #: src/pages/detail/Diffs.tsx
 msgid "out of scope"
 msgstr "поза межами"
@@ -1668,6 +1700,10 @@ msgstr "субагенти"
 msgid "submit answers"
 msgstr "надіслати відповіді"
 
+#: src/pages/sessions/CacheColdBadge.tsx
+msgid "subscription"
+msgstr "підписка"
+
 #: src/pages/NeedsYou.tsx
 msgid "suggested replies"
 msgstr "пропоновані відповіді"
@@ -1707,6 +1743,10 @@ msgstr "лише телеметрія — немає .claude/settings.json, пл
 msgid "Tests"
 msgstr "Тести"
 
+#: src/pages/sessions/CacheColdBadge.tsx
+msgid "The {channel} prompt cache of this {k}k-token session expired at {at}: the next message re-writes the whole context. Continue from the handoff brief in a fresh session instead."
+msgstr "Кеш промптів ({channel}) цієї сесії на {k}k токенів сплив о {at}: наступне повідомлення перезапише весь контекст. Краще продовжте з брифу передачі в новій сесії."
+
 #: src/pages/detail/PendingRunNotice.tsx
 msgid "the {kind} “{label}” ended without writing a transcript — the session never started or its transcript is gone"
 msgstr "{kind} «{label}» завершено без запису транскрипту — сесія так і не стартувала або її транскрипт зник"
@@ -1727,6 +1767,10 @@ msgstr "Цикл цього тижня"
 #: src/pages/detail/LiveActivity.tsx
 msgid "the OS process is alive (procwatch, 30s resolution); nothing written to the transcript during this stretch — typical for long builds/tests"
 msgstr "процес ОС живий (procwatch, крок 30 с); за цей час у транскрипт нічого не записано — типово для довгих збірок і тестів"
+
+#: src/pages/detail/Chat.tsx
+msgid "The prompt cache expired during the pause before this turn, so it re-wrote the whole context instead of reading it from cache."
+msgstr "Під час паузи перед цим ходом кеш промптів сплив, тож хід перезаписав увесь контекст замість прочитати його з кешу."
 
 #: src/pages/sessions/SwarmPanel.tsx
 msgid "The sending session's permission mode let the engine's classifier refuse the send. Relay from a session in another mode (e.g. acceptEdits or bypassPermissions)."
@@ -1924,6 +1968,10 @@ msgstr "працює · {lastActive}"
 #: src/pages/ProjectSettings.tsx
 msgid "workspace…"
 msgstr "робочий простір…"
+
+#: src/pages/sessions/CacheColdBadge.tsx
+msgid "writing handoff…"
+msgstr "пишу передачу…"
 
 #: src/pages/detail/CallTree.tsx
 msgid "Σ tokens"

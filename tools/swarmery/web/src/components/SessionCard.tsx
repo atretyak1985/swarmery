@@ -16,6 +16,7 @@ import { ProcBadge } from './ProcBadge';
 import { SessionControls } from './SessionControls';
 import { SessionLinkChips } from './SessionLinkChips';
 import { ConflictBadge } from '../lib/swarm';
+import { CacheColdBadge } from '../pages/sessions/CacheColdBadge';
 import { StopButton } from './StopButton';
 import { TaskChip } from './TaskChip';
 
@@ -344,6 +345,7 @@ export function SessionCard({
         <AccountBadge session={session} />
         <ContextBadge session={session} />
         <HandoffChip session={session} />
+        <CacheColdBadge session={session} />
         <SessionLinkChips session={session} />
         <ConflictBadge sessionId={session.id} />
         <ProcBadge session={session} />
@@ -467,6 +469,7 @@ export function SessionCard({
             <AccountBadge session={session} />
             <ContextBadge session={session} />
             <HandoffChip session={session} />
+            <CacheColdBadge session={session} />
             <SessionLinkChips session={session} />
             <ConflictBadge sessionId={session.id} />
           </span>
