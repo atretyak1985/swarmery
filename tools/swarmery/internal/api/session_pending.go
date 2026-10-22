@@ -97,6 +97,7 @@ var pendingSessionExempt = map[string]string{
 	"phase_reviews.session_uuid":           "the reviewer session of the phase review stage (internal/phaserun/review.go, migration 0106); the row is inserted only AFTER the reviewer's `claude -p` exited, so the uuid is never parked here while the run is live and the ingested sessions row answers for it",
 	"phase_reviews.run_session_uuid":       "scope=phase: a copy of epic_phases.run_session_uuid naming the run a review graded, written after that run ended, so the phase row is the source; scope=plan: not a session at all but the plan branch review's dedupe key, `branchset:<sha256>` (internal/phaserun/plan_review.go)",
 	"triage_runs.session_uuids":            "uuids of headless judge calls (internal/triage), read from the CLI's JSON envelope only AFTER each `claude -p` exited, so the uuid is never daemon-minted ahead of its transcript; the ingested sessions row answers for it",
+	"workaround_hits.session_uuid":         "a copy of an INGESTED session's uuid (internal/workaround, migration 0120): a hit is written only from a turn the tail already stored, so the sessions row answers for the uuid",
 }
 
 // pendingSessionDTO is the 202 body for GET /api/sessions/{uuid}. `pending` is the
