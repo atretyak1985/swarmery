@@ -223,6 +223,11 @@ type epicPhaseDTO struct {
 	// scope='phase', reviews.go), newest first, with Findings always "" — the Runs
 	// tab fetches the latest review's findings from …/phases/{id}/reviews. Never null.
 	Reviews []reviewDTO `json:"reviews"`
+	// Stalled is the phase's current stall — the active stage (executor, reviewer
+	// or verifier) stopped working (internal/stall, phase_stall.go). Null when the
+	// phase is not stalled. Notification only: nothing in CompletionState or
+	// RunOutcome consults it.
+	Stalled *phaseStallDTO `json:"stalled"`
 }
 
 // phaseForecastDTO is one stored `## Forecast` block. Every text field is
@@ -925,10 +930,12 @@ func (h *Handler) epicPhases(taskID int64, planDir string) ([]epicPhaseDTO, epic
 	for _, p := range phases {
 		docs[p.ID] = p.DocPath
 	}
-	reopens := h.phaseReopens(taskID, docs) // and again
-	reviews := h.phaseReviews(taskID)       // and again
-	verifying := h.phasesVerifying(phases)  // and again
+	reopens := h.phaseReopens(taskID, docs)           // and again
+	reviews := h.phaseReviews(taskID)                 // and again
+	verifying := h.phasesVerifying(phases)            // and again
+	stalls := h.phaseStalls(taskID, time.Now().UTC()) // and again
 	for i := range phases {
+		phases[i].Stalled = stalls[phases[i].ID]
 		phases[i].VerifyRunning = verifying[phases[i].ID]
 		phases[i].RunEvents = runEventsOrEmpty(runcore.RunEvents(h.DB, phaserun.Engine, phases[i].ID))
 		used := usage[phases[i].ID]
