@@ -57,6 +57,11 @@ msgstr "(post hoc — не враховано в калібруванні)"
 msgid "(question could not be parsed)"
 msgstr "(питання не вдалося розібрати)"
 
+#. placeholder {0}: String(n)
+#: src/pages/plans/ReviewFindings.tsx
+msgid "{0} review rounds"
+msgstr "раундів рев’ю: {0}"
+
 #: src/pages/Board.tsx
 msgid "{archivedCount} archived"
 msgstr "{archivedCount} в архіві"
@@ -225,6 +230,10 @@ msgstr "✓ підсумок"
 #: src/pages/Plans.tsx
 msgid "❐ open plan README"
 msgstr "❐ відкрити README плану"
+
+#: src/pages/plans/ReviewFindings.tsx
+msgid "1 review round"
+msgstr "1 раунд рев’ю"
 
 #: src/pages/plans/forecastStoryModel.ts
 msgid "30 to 90 min"
@@ -1983,6 +1992,18 @@ msgstr "Переглянути зміни →"
 msgid "Review findings"
 msgstr "Знахідки рев’ю"
 
+#: src/pages/plans/ReviewFindings.tsx
+msgid "review incomplete"
+msgstr "рев’ю неповне"
+
+#: src/pages/plans/ReviewFindings.tsx
+msgid "Review incomplete"
+msgstr "Рев’ю неповне"
+
+#: src/pages/plans/ReviewFindings.tsx
+msgid "Review incomplete — not a passed review"
+msgstr "Рев’ю неповне — це не пройдене рев’ю"
+
 #: src/pages/PlanningMode.tsx
 msgid "Review it on the <0>Plans page</0> — phases run from there."
 msgstr "Перегляньте його на <0>сторінці Плани</0> — фази запускаються звідти."
@@ -2462,6 +2483,10 @@ msgstr "документ фази просить {docModel}, але вибір �
 #: src/pages/Plans.tsx
 msgid "the phase doc declares **Model:** {docModel}, which is not a model this daemon knows (opus, sonnet, fable) — a run will be refused until the line is fixed"
 msgstr "документ фази оголошує **Model:** {docModel} — цей демон такої моделі не знає (opus, sonnet, fable); запуск відхилятиметься, доки рядок не виправлять"
+
+#: src/pages/plans/ReviewFindings.tsx
+msgid "The phase is held until the operator decides: repeat the review, or accept it as is. The daemon runs at most {max} review rounds on its own."
+msgstr "Фаза утримується, доки оператор не вирішить: повторити рев’ю чи прийняти як є. Сам демон проводить щонайбільше {max} раунди рев’ю."
 
 #: src/pages/plans/PhaseReview.tsx
 msgid "The phase is still running — land it once the run has finished."

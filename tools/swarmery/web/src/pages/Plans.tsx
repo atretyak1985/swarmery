@@ -3330,7 +3330,11 @@ function PhaseDetailPanel({
           {hasReviewTab(phase) && (
             <PhaseReview key={phase.id} epic={epic} phase={phase} terms={terms} onLanded={onDocChanged} />
           )}
-          <ReviewFindings blocks={phase.reviewBlocks ?? []} legacy={phase.legacyReview === true} />
+          <ReviewFindings
+            blocks={phase.reviewBlocks ?? []}
+            legacy={phase.legacyReview === true}
+            hold={phase.reviewHold ?? ''}
+          />
         </div>
       ) : activeTab === 'runs' ? (
         <>

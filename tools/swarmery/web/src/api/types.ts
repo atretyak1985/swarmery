@@ -4086,6 +4086,10 @@ export interface EpicPhase {
   /** D21: the phase was Done before review findings existed and carries no
    *  block. A badge on the Review tab — never a blocker. */
   legacyReview?: boolean;
+  /** D20: why the doc's latest review round is incomplete — "round N: <reason>"
+   *  — or "" when it is complete or there is none. The completion gate holds the
+   *  phase on it. Absent from an older daemon. */
+  reviewHold?: string;
 }
 
 /** One finding of a review round (Go reviewFindingDTO, internal/api/review_findings.go). */

@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -196,4 +197,51 @@ func TestLegacyReviewIsNotANeedsYouItem(t *testing.T) {
 	if !sawControl {
 		t.Fatalf("the [MANUAL] control phase is missing from needs-you (%d items) — the check proves nothing", len(items))
 	}
+}
+
+// D20 on the wire: a phase whose latest review round is incomplete carries
+// reviewHold, and the completion gate reads it as unverified with the
+// review-incomplete reason.
+func TestEpicPayloadCarriesReviewHold(t *testing.T) {
+	srv, db, taskID, phases := findingsFixture(t)
+	const why = "review-incomplete: reviewer-timed-out — killed"
+	if _, err := db.Exec(`UPDATE review_blocks SET complete = 0, scope_left_json = ?
+		 WHERE round = '2' AND doc_path = (SELECT doc_path FROM epic_phases WHERE id = ?)`,
+		`["`+why+`"]`, phases[1]); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(`UPDATE epic_phases SET checkboxes_total = 1, checkboxes_done = 1 WHERE id = ?`, phases[1]); err != nil {
+		t.Fatal(err)
+	}
+	type epicShape struct {
+		TaskID int64 `json:"taskId"`
+		Phases []struct {
+			ID                 int64    `json:"id"`
+			ReviewHold         string   `json:"reviewHold"`
+			CompletionState    string   `json:"completionState"`
+			CompletionBlockers []string `json:"completionBlockers"`
+		} `json:"phases"`
+	}
+	var epics []epicShape
+	getJSON(t, srv.URL+"/api/epics", &epics)
+	for _, e := range epics {
+		if e.TaskID != taskID {
+			continue
+		}
+		for _, p := range e.Phases {
+			switch p.ID {
+			case phases[1]:
+				if p.ReviewHold != "round 2: "+why || p.CompletionState != "unverified" ||
+					len(p.CompletionBlockers) != 1 || !strings.HasPrefix(p.CompletionBlockers[0], "review-incomplete: ") {
+					t.Errorf("held phase = %+v", p)
+				}
+			case phases[2]:
+				if p.ReviewHold != "" {
+					t.Errorf("legacy phase reviewHold = %q, want empty", p.ReviewHold)
+				}
+			}
+		}
+		return
+	}
+	t.Fatalf("task %d not in the payload", taskID)
 }

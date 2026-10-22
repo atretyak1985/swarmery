@@ -5,6 +5,12 @@
 // criterion, whether a test caught it, its evidence and whether a later round
 // resolved it. A phase finished before findings existed shows the «legacy
 // review» badge instead (D21): information, never a blocker.
+//
+// D20: when the latest round is incomplete (`complete: false` — a reviewer that
+// timed out, wrote no readable block, stopped early, or whose block disagrees
+// with its verdict), the tab says so above the rounds: the phase is held, it is
+// not a passed review, and only the operator can lift it — repeat the review or
+// accept it as is. The daemon runs at most two rounds on its own (D42).
 
 import { t } from '@lingui/core/macro';
 import { Trans, useLingui } from '@lingui/react/macro';
@@ -16,6 +22,37 @@ export interface ReviewFindingsProps {
   blocks: readonly ReviewBlock[];
   /** D21: Done before review findings existed, and no block. */
   legacy: boolean;
+  /** D20: why the latest round is incomplete (`phase.reviewHold`), "" or
+   *  absent when it is complete. */
+  hold?: string;
+}
+
+/** The daemon's bound on automatic review rounds per cycle (D42). */
+export const MAX_AUTO_REVIEW_ROUNDS = 2;
+
+/** The rounds count line: "2 rounds" / "1 round" (plan round excluded). */
+export function roundsText(blocks: readonly ReviewBlock[]): string {
+  const n = blocks.filter((b) => b.round !== 'plan').length;
+  return n === 1 ? t`1 review round` : t`${String(n)} review rounds`;
+}
+
+function HoldBanner({ hold }: { hold: string }): JSX.Element {
+  const { t } = useLingui();
+  const max = String(MAX_AUTO_REVIEW_ROUNDS);
+  return (
+    <div role="status" aria-label={t`Review incomplete`} className="rounded-lg border border-amber/40 bg-amber/10 px-2.5 py-2">
+      <div className="font-mono text-[10px] tracking-[0.14em] text-amber uppercase">
+        <Trans>Review incomplete — not a passed review</Trans>
+      </div>
+      <p className="mt-1 font-mono text-[10.5px] break-words text-ink-2">{hold}</p>
+      <p className="mt-1 text-[11px] text-ink-dim">
+        <Trans>
+          The phase is held until the operator decides: repeat the review, or accept it as is. The daemon runs at most{' '}
+          {max} review rounds on its own.
+        </Trans>
+      </p>
+    </div>
+  );
 }
 
 const VERDICT_CLS: Record<ReviewBlock['verdict'], string> = {
@@ -139,9 +176,10 @@ function Round({ block }: { block: ReviewBlock }): JSX.Element {
   );
 }
 
-export function ReviewFindings({ blocks, legacy }: ReviewFindingsProps): JSX.Element | null {
+export function ReviewFindings({ blocks, legacy, hold = '' }: ReviewFindingsProps): JSX.Element | null {
   const { t } = useLingui();
-  if (blocks.length === 0 && !legacy) return null;
+  const held = hold.trim() !== '';
+  if (blocks.length === 0 && !legacy && !held) return null;
   return (
     <section aria-label={t`Review findings`} className="space-y-2">
       <div className="flex flex-wrap items-center gap-1.5">
@@ -156,7 +194,10 @@ export function ReviewFindings({ blocks, legacy }: ReviewFindingsProps): JSX.Ele
             {t`legacy review`}
           </span>
         )}
+        {blocks.length > 0 && <span className="font-mono text-[10px] text-ink-faint">{roundsText(blocks)}</span>}
+        {held && <span className={`${CHIP} border-amber/40 text-amber`}>{t`review incomplete`}</span>}
       </div>
+      {held && <HoldBanner hold={hold} />}
       {blocks.map((b) => (
         <Round key={b.round} block={b} />
       ))}

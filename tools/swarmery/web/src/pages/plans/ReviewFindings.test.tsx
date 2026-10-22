@@ -108,6 +108,26 @@ describe('ReviewFindings', () => {
     expect(container.innerHTML).toBe('');
   });
 
+  it('holds an incomplete latest round: badge, reason and the two operator options (D20)', () => {
+    const hold = 'round 2: review-incomplete: reviewer-timed-out — killed by the hard timeout';
+    render(<ReviewFindings blocks={[ROUND1, ROUND2]} legacy={false} hold={hold} />);
+    const top = screen.getByRole('region', { name: 'Review findings' });
+    expect(within(top).getByText('review incomplete')).toBeTruthy();
+    expect(within(top).getByText('2 review rounds')).toBeTruthy();
+    const banner = within(top).getByRole('status', { name: 'Review incomplete' });
+    expect(within(banner).getByText('Review incomplete — not a passed review')).toBeTruthy();
+    expect(within(banner).getByText(hold)).toBeTruthy();
+    expect(banner.textContent).toContain('repeat the review, or accept it as is');
+    expect(banner.textContent).toContain('at most 2 review rounds');
+  });
+
+  it('shows no hold for a complete latest round, and counts one round in the singular', () => {
+    render(<ReviewFindings blocks={[ROUND1, { ...ROUND2, round: 'plan' }]} legacy={false} hold="" />);
+    expect(screen.queryByRole('status', { name: 'Review incomplete' })).toBeNull();
+    expect(screen.queryByText('review incomplete')).toBeNull();
+    expect(screen.getByText('1 review round')).toBeTruthy();
+  });
+
   it('names the plan round', () => {
     render(<ReviewFindings blocks={[{ ...ROUND2, round: 'plan', unparsable: false }]} legacy={false} />);
     expect(screen.getByRole('region', { name: 'Plan round' })).toBeTruthy();

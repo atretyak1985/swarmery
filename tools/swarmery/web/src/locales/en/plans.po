@@ -57,6 +57,11 @@ msgstr "(post hoc — excluded from calibration)"
 msgid "(question could not be parsed)"
 msgstr "(question could not be parsed)"
 
+#. placeholder {0}: String(n)
+#: src/pages/plans/ReviewFindings.tsx
+msgid "{0} review rounds"
+msgstr "{0} review rounds"
+
 #: src/pages/Board.tsx
 msgid "{archivedCount} archived"
 msgstr "{archivedCount} archived"
@@ -225,6 +230,10 @@ msgstr "✓ summary"
 #: src/pages/Plans.tsx
 msgid "❐ open plan README"
 msgstr "❐ open plan README"
+
+#: src/pages/plans/ReviewFindings.tsx
+msgid "1 review round"
+msgstr "1 review round"
 
 #: src/pages/plans/forecastStoryModel.ts
 msgid "30 to 90 min"
@@ -1983,6 +1992,18 @@ msgstr "Review changes →"
 msgid "Review findings"
 msgstr "Review findings"
 
+#: src/pages/plans/ReviewFindings.tsx
+msgid "review incomplete"
+msgstr "review incomplete"
+
+#: src/pages/plans/ReviewFindings.tsx
+msgid "Review incomplete"
+msgstr "Review incomplete"
+
+#: src/pages/plans/ReviewFindings.tsx
+msgid "Review incomplete — not a passed review"
+msgstr "Review incomplete — not a passed review"
+
 #: src/pages/PlanningMode.tsx
 msgid "Review it on the <0>Plans page</0> — phases run from there."
 msgstr "Review it on the <0>Plans page</0> — phases run from there."
@@ -2462,6 +2483,10 @@ msgstr "the phase doc asks for {docModel}, but the picker above is set to {picke
 #: src/pages/Plans.tsx
 msgid "the phase doc declares **Model:** {docModel}, which is not a model this daemon knows (opus, sonnet, fable) — a run will be refused until the line is fixed"
 msgstr "the phase doc declares **Model:** {docModel}, which is not a model this daemon knows (opus, sonnet, fable) — a run will be refused until the line is fixed"
+
+#: src/pages/plans/ReviewFindings.tsx
+msgid "The phase is held until the operator decides: repeat the review, or accept it as is. The daemon runs at most {max} review rounds on its own."
+msgstr "The phase is held until the operator decides: repeat the review, or accept it as is. The daemon runs at most {max} review rounds on its own."
 
 #: src/pages/plans/PhaseReview.tsx
 msgid "The phase is still running — land it once the run has finished."
