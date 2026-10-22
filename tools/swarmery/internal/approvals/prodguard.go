@@ -50,12 +50,19 @@ var ErrLocalOnly = errors.New("production deploys must be confirmed in the sessi
 // DefaultProdDeployPatterns are neutral, vendor-free rule globs (same syntax as
 // approval_rules, see ParseRulePattern), matched case-insensitively against the
 // tool's argument string. Bare `--prod` / `--production` globs are deliberately
-// absent: they match `npm ci --production`. Exported so a parity test can pin
+// absent: they match `npm ci --production`. The four terraform forms after the
+// anchored one catch an apply that does not start the command line (after
+// `&&` or `;`, behind `command`, or with `-chdir=`) without matching a quoted
+// mention such as `grep "terraform apply"`. Exported so a parity test can pin
 // any other consumer of the same defaults to this list.
 var DefaultProdDeployPatterns = []string{
 	"Bash(*deploy*prod*)",
 	"Bash(*release*prod*)",
 	"Bash(terraform apply*)",
+	"Bash(*&& terraform apply*)",
+	"Bash(*; terraform apply*)",
+	"Bash(*command terraform apply*)",
+	"Bash(*terraform -chdir=* apply*)",
 	"Bash(*terraform*apply*prod*)",
 	"Bash(*kubectl*prod*)",
 	"Bash(*helm*upgrade*prod*)",

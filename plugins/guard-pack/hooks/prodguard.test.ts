@@ -19,6 +19,38 @@ test('a production-deploy command is put to the ask dialog', async ($, on) => {
   }
 })
 
+test('terraform apply is caught behind a cd, a -chdir option or a command prefix', async ($, on) => {
+  world(on)
+  await $.session.start(START)
+  for (const [command, pattern] of [
+    ['cd infra && terraform apply -auto-approve', 'Bash(*&& terraform apply*)'],
+    ['cd infra; terraform apply', 'Bash(*; terraform apply*)'],
+    ['terraform -chdir=infra apply -auto-approve', 'Bash(*terraform -chdir=* apply*)'],
+    ['cd infra && terraform -chdir=stack apply', 'Bash(*terraform -chdir=* apply*)'],
+    ['command terraform apply', 'Bash(*command terraform apply*)'],
+  ] as const) {
+    const r = await $.tool.check({ tool: 'Bash', input: { command } })
+    expect(r.decision, command).toBe('ask')
+    expect(r.reason, command).toContain(pattern)
+  }
+})
+
+test('read-only commands naming the pattern file, and terraform plan, are not caught', async ($, on) => {
+  world(on)
+  await $.session.start(START)
+  for (const command of [
+    'grep -n terraform plugins/guard-pack/hooks/patterns/prod.json',
+    'grep -c apply plugins/guard-pack/hooks/patterns/prod.json',
+    'cat plugins/guard-pack/hooks/patterns/prod.json',
+    'grep -rn "terraform apply" docs',
+    'terraform plan',
+    'cd infra && terraform plan -out tf.plan',
+    'terraform -chdir=infra plan',
+  ]) {
+    expect((await $.tool.check({ tool: 'Bash', input: { command } })).decision, command).toBe('allow')
+  }
+})
+
 test("the project's own approvals.prodDeployPatterns are added", async ($, on) => {
   world(on)
   await $.session.start(START)

@@ -30,6 +30,15 @@ These are read on `session.start`, which fires again on every reload:
 With no `project.json` the guard still runs, with the session root,
 `~/.claude` and the temp dirs as its roots.
 
+A `repos[]` or `extraRoots` entry is ignored when it is `/`, the home
+directory, a directory above home, or a directory above the project directory
+or the session root. A project `name` that is not one path segment adds no
+workspace root. Such an entry would switch the fence off rather than widen
+it. Each ignored entry is logged once per `session.start` as
+`guard-pack: ignored root <dir> from <repos[]|extraRoots> (<why>)`. A sibling
+of the project (`"../shared-lib"`) and a directory under home
+(`"~/notes"`) still work. To open more than that, turn `isolation` off.
+
 ## Patterns
 
 - `hooks/patterns/prod.json` holds the default production-deploy globs. It has
@@ -52,6 +61,9 @@ markers. The daemon's parity tests (`go test ./internal/approvals
 ./internal/api -run Parity` in `tools/swarmery`) compare the JSON files with
 the Go lists and fail when a testkit copy differs from its file, so a pattern
 edit means editing the Go list, the JSON file and the testkit copy together.
+core's `hooks/lib/prod-deploy-patterns.txt` is pinned to the same Go list, and
+`scripts/tests/fixtures/prod-deploy-patterns/cases.tsv` holds the rows every
+matcher must agree on.
 
 ## Permission mode
 
@@ -133,6 +145,20 @@ Everything here is additive, and nothing depends on core or on the daemon:
 - the daemon's prod guard keeps marking those calls as local-only approvals.
   guard-pack makes sure the native dialog appears even in a session the daemon
   does not watch.
+
+## What this is not
+
+guard-pack is not a security boundary. Its Bash checks read the command line
+as text: they are speed bumps that catch a mistake, such as an `rm` aimed at
+the wrong tree or a production apply typed in the wrong session. A command
+built to get past them will get past them, because a shell offers many ways to
+write a file (`tee`, `dd`, `install`, `rsync`, `ln`, a path held in a
+variable) and many ways to spell a deploy. The production patterns match
+words, so a read-only command that names those words in the same order can be
+caught too, and one that spells the deploy differently is not. When a run
+must not reach outside its project, give it a boundary the operating system
+enforces: a sandbox, a container, or a permission mode with an explicit
+allow-list.
 
 ## Limits
 

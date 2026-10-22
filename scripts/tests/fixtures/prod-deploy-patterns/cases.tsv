@@ -20,6 +20,11 @@ kubectl --context prod-cluster apply -f app.yaml	ask
 helm upgrade api ./chart -n production	ask
 git push origin production	ask
 git push --force origin prod-hotfix	ask
+# terraform apply that does not start the command line
+cd infra && terraform apply -auto-approve	ask
+cd infra; terraform apply	ask
+terraform -chdir=infra apply	ask
+command terraform apply	ask
 # Case-insensitive on both sides
 NPM run DEPLOY:PROD	ask
 TERRAFORM APPLY	ask
@@ -41,6 +46,11 @@ git push origin main	none
 kubectl get pods	none
 helm upgrade api ./chart -n staging	none
 npm run deploy:staging	none
+cd infra && terraform plan -out tf.plan	none
+terraform -chdir=infra plan	none
+# Read-only commands that name the words or the pattern file
+grep -n terraform plugins/guard-pack/hooks/patterns/prod.json	none
+grep -rn "terraform apply" docs	none
 # Anchoring and order: documented gaps, not wishes (a project extra closes them)
 env TF_LOG=debug terraform apply	none
 ./prod-deploy.sh	none

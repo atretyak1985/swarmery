@@ -20,6 +20,8 @@ export const normalize = (path: string, base: string, home: string | undefined):
  * Whether `path` lies at or under `root`. Compared case-insensitively: on a
  * case-insensitive volume `/Work/x` and `/work/x` are one file, and a false
  * deny costs more than the miss this allows on a case-sensitive one.
+ * `/` holds every path. Among the roots it can only be the session root or
+ * cwd, which the operator chose: buildContext drops a declared root of `/`.
  */
 export const isUnder = (path: string, root: string): boolean => {
   const p = path.toLowerCase()

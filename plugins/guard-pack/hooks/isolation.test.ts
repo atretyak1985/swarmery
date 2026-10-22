@@ -113,6 +113,62 @@ test('no project.json: the guard still works from the session root', async ($, o
   expect((await $.tool.call({ tool: 'Read', file_path: `${HOME}/.ssh/id_ed25519` })).deny).toBeDefined()
 })
 
+// A project-declared root may narrow nothing and widen only to its own tree:
+// one that is `/`, the home directory, an ancestor of home, or an ancestor of
+// the project directory is dropped, so it can no longer switch the fence off.
+const projectWith = (json: Readonly<Record<string, unknown>>): Record<string, string> => ({
+  [`${ROOT}/.claude/project.json`]: JSON.stringify({ name: 'main-app', ...json }),
+})
+
+const SIBLING = '/work/apps/other-app/src/index.ts'
+
+for (const [label, repos] of [
+  ['/', ['/']],
+  ['../../../..', ['../../../..']],
+  ['the home directory', [HOME]],
+  ['~', ['~']],
+  ['an ancestor of home', ['/home']],
+  ['the project parent', ['..']],
+] as const) {
+  test(`a repos[] entry that is ${label} does not widen the roots`, async ($, on) => {
+    const { logs } = world(on, { files: projectWith({ repos: [...repos, 'packages/shared'] }) })
+    await $.session.start(START)
+    const zshrc = await $.tool.call({ tool: 'Write', file_path: `${HOME}/.zshrc`, content: 'x' })
+    expect(zshrc.deny, `${label}: ~/.zshrc`).toContain(`${HOME}/.zshrc is outside`)
+    expect((await $.tool.call({ tool: 'Read', file_path: SIBLING })).deny, `${label}: sibling`).toBeDefined()
+    // the legitimate roots stay
+    expect((await $.tool.call({ tool: 'Read', file_path: `${ROOT}/packages/shared/x.ts` })).deny).toBeUndefined()
+    expect((await $.tool.call({ tool: 'Read', file_path: `${HOME}/.claude/settings.json` })).deny).toBeUndefined()
+    expect(logs.some(l => l.includes('guard-pack: ignored root')), `${label}: logged`).toBe(true)
+  })
+}
+
+test('an extraRoots entry that is the project parent does not widen the roots', { options: { extraRoots: '.., /data/shared' } }, async ($, on) => {
+  const { logs } = world(on)
+  await $.session.start(START)
+  expect((await $.tool.call({ tool: 'Write', file_path: `${HOME}/.zshrc`, content: 'x' })).deny).toContain(
+    `${HOME}/.zshrc is outside`,
+  )
+  expect((await $.tool.call({ tool: 'Read', file_path: SIBLING })).deny).toBeDefined()
+  expect((await $.tool.call({ tool: 'Read', file_path: '/data/shared/a.csv' })).deny).toBeUndefined()
+  expect(logs.some(l => l.includes('guard-pack: ignored root /work/apps'))).toBe(true)
+})
+
+test('an extraRoots entry that is the home directory does not widen the roots', { options: { extraRoots: '~, ~/notes' } }, async ($, on) => {
+  world(on)
+  await $.session.start(START)
+  expect((await $.tool.call({ tool: 'Write', file_path: `${HOME}/.zshrc`, content: 'x' })).deny).toBeDefined()
+  expect((await $.tool.call({ tool: 'Read', file_path: `${HOME}/notes/todo.md` })).deny).toBeUndefined()
+})
+
+test('a project name that is not one path segment adds no workspace root', async ($, on) => {
+  const { logs } = world(on, { files: projectWith({ name: '../../..' }) })
+  await $.session.start(START)
+  expect((await $.tool.call({ tool: 'Write', file_path: `${HOME}/.zshrc`, content: 'x' })).deny).toBeDefined()
+  expect((await $.tool.call({ tool: 'Read', file_path: SIBLING })).deny).toBeDefined()
+  expect(logs.some(l => l.includes('guard-pack: ignored workspace root'))).toBe(true)
+})
+
 test('isolation off registers no tool.call hook', { options: { isolation: false } }, async ($, on) => {
   world(on)
   await $.session.start(START)
