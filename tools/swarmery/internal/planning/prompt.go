@@ -27,6 +27,14 @@ PHASE A — INTERVIEW (every turn until you receive the PROCEED instruction):
 
    Use "multi_select" when choices are not mutually exclusive. Keep runningPlan present and current on every turn. Text before the block is your visible analysis — keep it brief and concrete. Match the operator's language (the idea below) in question/option prose.`
 
+// effortRule is the planner's half of the `**Effort:**` contract, shared
+// verbatim by both wizard templates. The header has driven a phase run's
+// --effort since it existed (wsingest.ParseEffort → phaserun.resolveEffort);
+// what was missing is a planner that writes it, so an unpinned phase ran at
+// the daemon's default whatever its work needed. wsingest lints a doc without
+// one as phase_effort_missing.
+const effortRule = "Every phase doc's header block must carry an `**Effort:**` line (low | medium | high | xhigh) on its own line beside `**Verify:**` and `**Review:**` — the reasoning depth the phase's executor runs at, chosen together with the model that phase needs: low or medium for mechanical edits and config, high for ordinary implementation, xhigh for design-heavy or cross-cutting work. A phase doc without it is linted `phase_effort_missing`."
+
 // promptTemplate is the Interactive Planning v2 wizard prompt.  It instructs
 // the agent to research the repo first, then run PHASE A (structured interview
 // — one JSON question per turn) until it receives the PROCEED instruction,
@@ -46,6 +54,7 @@ PHASE B — PLAN (only after the operator sends the PROCEED instruction):
 - Plan contents per the workspace convention (CLAUDE.md section 11 / core pack): plan/README.md (objective, real file paths, phase sequencing table, risks, Definition of Done) plus phase-N docs, each with a self-contained copy-paste agent prompt, measurable acceptance criteria, and — as the doc's LAST section — an empty ` + "`## Completion Report`" + ` stub for the executor to fill at phase end (the dashboard renders exactly that section as the phase's summary, so a doc without the stub leaves the operator with "no summary of the work written"). Honor every decision and the final running plan from the interview.
 - Before the phase docs, write plan/spec.md — the WHAT/WHY: a short problem statement, user stories, and an "## Acceptance criteria" section whose items are checkboxes shaped exactly ` + "`- [ ] **SC-1** — <criterion>`" + ` (stable SC-n ids, one behavior each).
 - Every phase doc's header block must carry a ` + "`**Covers:** SC-…`" + ` line naming the spec criteria that phase delivers; every SC id must be covered by at least one phase, and no phase may cover an id the spec does not declare.
+- ` + effortRule + `
 - Give every phase doc a ` + "`## Forecast`" + ` section just before ` + "`## Completion Report`" + `, holding one ` + "`kind: prior`" + ` yaml block in the shape documented in the core workspace-plans skill's ` + "`resources/plan-format.md`" + ` (areas is the only required key). It is a prediction, not a limit: do whatever the phase actually needs.
 - Open the README and every phase doc with an ` + "`## In plain words`" + ` section — directly under the H1 in README.md, and after the header rows (before ` + "`## Goal`" + `) in every phase doc — saying in 3–6 jargon-free sentences, in the operator's language, what the plan or phase is for, what will be different once it is done and what it closes; no file paths, code, function names or SC ids (the dashboard shows it verbatim on its "In plain words" tab).
 - Do NOT implement anything and do NOT create git branches — planning only.
@@ -93,6 +102,7 @@ PHASE B — STAGE THE REVISION (only after the operator sends the PROCEED instru
   - {{.}}{{end}}{{else}} (none){{end}}
 - Every phase doc you write must keep its ` + "`## Completion Report`" + ` section as the LAST section (empty for a
   phase not yet executed, preserved verbatim for one that has run).
+- A phase doc you CREATE gets an ` + "`**Effort:**`" + ` header line like every phase doc of a new plan: ` + effortRule + `
 - A phase doc you CREATE gets a ` + "`## Forecast`" + ` section just before that stub, holding one ` + "`kind: prior`" + ` yaml
   block in the shape documented in the core workspace-plans skill's ` + "`resources/plan-format.md`" + `.
   It is a prediction, not a limit: do whatever the phase actually needs.

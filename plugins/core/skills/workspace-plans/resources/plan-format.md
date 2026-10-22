@@ -38,6 +38,7 @@ Status: Pending
 **Repo:** `<repo>` · **Branch:** `<branch>` · **Depends on:** … · **Estimate:** …   ← Branch is informational; the daemon lands swarm/phase-<id>
 **Verify:** off             ← off | normal | strict (see "Header rows" below)
 **Review:** off             ← on | off
+**Effort:** high            ← low | medium | high | xhigh — required (see "Header rows")
 ## In plain words           ← 3–6 jargon-free sentences; see below
 ## Goal
 ## Files to Create / Files to Modify
@@ -119,9 +120,9 @@ agents skip.
 The final phase of a multi-phase plan is always a quality gate
 (`kind: quality-gate`).
 
-### Header rows: `**Verify:**` and `**Review:**`
+### Header rows: `**Verify:**`, `**Review:**` and `**Effort:**`
 
-Both are read from the phase doc's header only — the lines before the first
+All three are read from the phase doc's header only — the lines before the first
 `## ` section, within the first 15 lines — so a `**Verify:**` line quoted in an
 agent prompt further down never counts. Put them on their own lines directly
 after the `**Repo:** …` line.
@@ -130,6 +131,7 @@ after the `**Repo:** …` line.
 |---|---|---|---|
 | `**Verify:**` | `off` \| `normal` \| `strict` | After a run ends `done` or `partial`, a read-only verifier grades the ticked criteria at the given strictness. Any value but `off` also makes the phase gate require a passing verdict before the phase counts as complete. A missing or unrecognized value means `off`. | L/XL: `normal`. S/M: `off`, or `normal` when the phase touches data, schemas or migrations. |
 | `**Review:**` | `on` \| `off` | The phase asks for a read-only code-review pass over its diff before the verifier runs; a failed review returns the phase once with the findings appended to the doc. A missing value means `off`, and a daemon without the review stage ignores the row. | L/XL: `on`. S/M: `off`. |
+| `**Effort:**` | `low` \| `medium` \| `high` \| `xhigh` | The reasoning depth the phase's run gets (`--effort`), chosen together with the model the phase needs. A value the CLI does not accept fails the run before it starts, naming the doc. Required: a doc without it runs at the daemon's default effort and is linted `phase_effort_missing`. | `low`/`medium` for mechanical edits and config, `high` for ordinary implementation, `xhigh` for design-heavy or cross-cutting work. |
 
 ### The header's `**Branch:**` is informational
 
