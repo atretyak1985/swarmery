@@ -17,7 +17,13 @@ func TestResumeArgs_DashLedMessageStaysData(t *testing.T) {
 
 	for _, text := range []string{"--add-dir=/", "-x", "--mcp-config={}"} {
 		t.Run(text, func(t *testing.T) {
-			args := resumeArgs("u-1", text, resumeOrigin{Model: "m", Agent: "a", SettingsFile: "/s.json"})
+			// An executor origin, so the resume carries a permission mode and a
+			// deny list; both must sit before the marker. (A foreign session gets
+			// no mode at all — see resume_perm_test.go.)
+			args := resumeArgs("u-1", text, resumeOrigin{
+				Model: "m", Agent: "a", SettingsFile: "/s.json",
+				Site: claudeflags.SiteExecutor, DenyArgs: claudeflags.AgentDenyArgs(0),
+			})
 			n := len(args)
 			if n < 2 || args[n-2] != "--" || args[n-1] != text {
 				t.Fatalf("argv must end with `-- <message>`: %q", args)
