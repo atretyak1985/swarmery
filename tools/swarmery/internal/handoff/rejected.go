@@ -32,6 +32,15 @@ import (
 const (
 	// rejectedHeading is the canonical brief section heading.
 	rejectedHeading = "## Rejected"
+	// rejectedDigestHeading names the structured list in the digest; the prompt
+	// tells the model to copy its lines verbatim.
+	rejectedDigestHeading = "## Rejected (structured)"
+	// nonGoalsHeading / openRisksHeading locate where the section belongs when
+	// the model left it out: after Non-goals, else before Open risks.
+	nonGoalsHeading  = "## Non-goals"
+	openRisksHeading = "## Open risks"
+	// noneRecorded is the section body when nothing was rejected.
+	noneRecorded = "- none recorded"
 	// maxRejectedLines caps the section body, the truncation marker included.
 	maxRejectedLines = 10
 	// rejectedTextCap bounds one Option / Why so a long description or a
@@ -101,6 +110,130 @@ func StructuredRejected(db *sql.DB, sessionUUID string) ([]Rejected, error) {
 		return nil, err
 	}
 	return dedupRejected(append(out, corr...)), nil
+}
+
+// ---------------------------------------------------------------------------
+// Generator side
+// ---------------------------------------------------------------------------
+
+// fitRejected holds the brief's `## Rejected` section to what the digest
+// promised, whatever the model wrote: the section exists (inserted after
+// Non-goals when the model left it out), its heading is the canonical one,
+// every structured line comes first and verbatim, the model's own additions
+// from the turn text follow, and the body is capped at maxRejectedLines with
+// a "… and N more" marker standing in for the overflow.
+func fitRejected(out string, structured []Rejected) string {
+	ls := strings.Split(strings.TrimRight(out, "\n"), "\n")
+
+	var before, after, modelLines []string
+	start := headingIndex(ls, rejectedHeading)
+	if start >= 0 {
+		end := sectionEnd(ls, start)
+		before, after = ls[:start], ls[end:]
+		for _, l := range ls[start+1 : end] {
+			if t := strings.TrimRight(l, " \t"); strings.TrimSpace(t) != "" {
+				modelLines = append(modelLines, t)
+			}
+		}
+	} else {
+		at := len(ls)
+		if ng := headingIndex(ls, nonGoalsHeading); ng >= 0 {
+			at = sectionEnd(ls, ng)
+		} else if or := headingIndex(ls, openRisksHeading); or >= 0 {
+			at = or
+		}
+		before, after = ls[:at], ls[at:]
+	}
+
+	var b strings.Builder
+	writeLines := func(ls []string) {
+		for _, l := range ls {
+			b.WriteString(l + "\n")
+		}
+	}
+	if start >= 0 {
+		writeLines(before) // the model's own text and spacing up to the heading
+	} else {
+		for len(before) > 0 && strings.TrimSpace(before[len(before)-1]) == "" {
+			before = before[:len(before)-1]
+		}
+		writeLines(before)
+		if len(before) > 0 {
+			b.WriteString("\n")
+		}
+	}
+	b.WriteString(rejectedHeading + "\n")
+	writeLines(rejectedBody(structured, modelLines))
+	for len(after) > 0 && strings.TrimSpace(after[0]) == "" {
+		after = after[1:]
+	}
+	if len(after) > 0 {
+		b.WriteString("\n")
+		writeLines(after)
+	}
+	return b.String()
+}
+
+// rejectedBody merges the structured lines (first, verbatim, in order) with the
+// model's lines that are not copies of them, drops the "none recorded"
+// placeholder once anything real is listed, and applies the cap.
+func rejectedBody(structured []Rejected, modelLines []string) []string {
+	body := make([]string, 0, len(structured)+len(modelLines))
+	seen := map[string]bool{}
+	for _, r := range structured {
+		l := r.Line()
+		if !seen[l] {
+			seen[l] = true
+			body = append(body, l)
+		}
+	}
+	for _, l := range modelLines {
+		t := strings.TrimSpace(l)
+		if seen[t] || isNoneRecorded(t) {
+			continue
+		}
+		seen[t] = true
+		body = append(body, l)
+	}
+	if len(body) == 0 {
+		return []string{noneRecorded}
+	}
+	if len(body) > maxRejectedLines {
+		keep := maxRejectedLines - 1
+		body = append(body[:keep:keep], fmt.Sprintf("- … and %d more", len(body)-keep))
+	}
+	return body
+}
+
+// isNoneRecorded matches the placeholder however the model spelled it.
+func isNoneRecorded(line string) bool {
+	t := strings.ToLower(strings.TrimSpace(strings.TrimLeft(line, "-* ")))
+	t = strings.Trim(t, "_*.() ")
+	return t == "none recorded" || t == "none"
+}
+
+// headingIndex returns the index of the first line that opens the given
+// `## ` section (prefix match, so "## Rejected — …" counts), or -1.
+func headingIndex(ls []string, heading string) int {
+	for i, l := range ls {
+		t := strings.TrimSpace(l)
+		if t == heading || strings.HasPrefix(t, heading+" ") {
+			return i
+		}
+	}
+	return -1
+}
+
+// sectionEnd returns the index of the next heading after start (a `#` or `##`
+// line), or len(ls) when the section runs to the end.
+func sectionEnd(ls []string, start int) int {
+	for j := start + 1; j < len(ls); j++ {
+		t := strings.TrimSpace(ls[j])
+		if strings.HasPrefix(t, "## ") || strings.HasPrefix(t, "# ") {
+			return j
+		}
+	}
+	return len(ls)
 }
 
 // ---------------------------------------------------------------------------
