@@ -47,7 +47,9 @@ func TestWorkaroundBackfillIsIdempotent(t *testing.T) {
 
 	const sid = "bbbbbbbb-0000-4000-8000-000000000001"
 	ts := time.Now().UTC().Add(-48 * time.Hour)
-	at := func(sec int) string { return ts.Add(time.Duration(sec) * time.Second).Format("2006-01-02T15:04:05.000Z") }
+	at := func(sec int) string {
+		return ts.Add(time.Duration(sec) * time.Second).Format("2006-01-02T15:04:05.000Z")
+	}
 	env := func(typ, uuid string, sec int, msg any, extra map[string]any) map[string]any {
 		r := map[string]any{"type": typ, "uuid": uuid, "timestamp": at(sec), "sessionId": sid,
 			"cwd": "/tmp/wbproj", "version": "2.1.170", "gitBranch": "main", "message": msg}
@@ -148,4 +150,3 @@ func TestWorkaroundBackfillRejectsBadSince(t *testing.T) {
 		}
 	}
 }
-
