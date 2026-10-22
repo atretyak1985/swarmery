@@ -1,0 +1,12 @@
+-- 0120: epic_phases.blast_radius — the phase doc's `Blast radius:` line (who
+-- calls what the phase changes; wsingest.ParseBlastRadius, core workspace-plans
+-- resources/blast-radius.md), stored as written, '' when the doc has none.
+--
+-- DOC-owned like review_mode: wsingest re-derives it on every scan, including
+-- back to '' when the line is deleted. Read only by the Plans API, which lints
+-- blast_radius_missing on a phase whose forecast lists files while this is ''.
+-- Advisory: nothing gates a run or a phase on it.
+--
+-- Rollback is `ALTER TABLE epic_phases DROP COLUMN blast_radius;` — the next
+-- scan of a daemon without this migration never reads it.
+ALTER TABLE epic_phases ADD COLUMN blast_radius TEXT NOT NULL DEFAULT '';

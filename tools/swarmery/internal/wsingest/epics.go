@@ -95,6 +95,9 @@ type epicPhase struct {
 	// document order. nil for every doc that carries none, which is all of them
 	// until an author opts in. DATA, never a gate — see forecast.go.
 	forecasts []Forecast
+	// blastRadius is the doc's `Blast radius:` line (ParseBlastRadius), "" when it
+	// carries none. Advisory like the forecast it is linted against.
+	blastRadius string
 	// docHash is sha256 of the phase doc's bytes at this scan, stored on each
 	// forecast row so a later scoring pass can tell whether the forecast it grades
 	// is still the one in the doc. "" when the doc did not resolve.
@@ -838,6 +841,7 @@ func parsePlan(planDir string, warn func(string, ...any)) []epicPhase {
 		// prediction; ParseCompletionReport above has the only fact that can say so,
 		// which is why it is threaded in rather than re-read.
 		phases[i].forecasts = ParseForecasts(string(body), phases[i].completionReport != "")
+		phases[i].blastRadius = ParseBlastRadius(string(body))
 		if len(phases[i].forecasts) > 0 {
 			sum := sha256.Sum256(body)
 			phases[i].docHash = hex.EncodeToString(sum[:])
@@ -946,7 +950,12 @@ func parseSpec(planDir string, warn func(string, ...any)) []SpecCriterion {
 // migration 0106). A doc that already declared `**Review:** on` before the column
 // existed would otherwise keep the column's default 'off' until some other byte of
 // the plan changed, and its runs would silently skip the review stage.
-const parserVersion = "v10"
+//
+// v11: epic_phases.blast_radius — the doc's `Blast radius:` line
+// (ParseBlastRadius, migration 0120). Without the bump every already-indexed doc
+// keeps the column's empty default and the Plans page would lint
+// blast_radius_missing on a phase whose doc already carries the line.
+const parserVersion = "v11"
 
 // planHash combines every plan file's bytes into one content hash, so the gate
 // re-parses when the README OR any phase doc changes (a checkbox flip lives in a
@@ -1068,7 +1077,7 @@ func (s *Scanner) scanEpics(taskID int64, dir string, warn func(string, ...any))
 // epic_phases with. Parameters, in order: workspace_task_id, seq, name, doc_path,
 // depends_on, checkboxes_total, checkboxes_done, doc_status, doc_updated_at,
 // completion_report, repo, covers, verify_mode, doc_model, criteria_land_open,
-// criteria_manual_open, review_mode.
+// criteria_manual_open, review_mode, blast_radius.
 //
 // Exported so the store's migration tests can re-run the EXACT upsert and prove a
 // daemon-owned column survives it — the run_* family, run_branch (0043), the
@@ -1080,8 +1089,8 @@ const PhaseUpsertSQL = `
 				(workspace_task_id, seq, name, doc_path, depends_on,
 				 checkboxes_total, checkboxes_done, doc_status, doc_updated_at,
 				 completion_report, repo, covers, verify_mode, doc_model,
-				 criteria_land_open, criteria_manual_open, review_mode)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+				 criteria_land_open, criteria_manual_open, review_mode, blast_radius)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 			ON CONFLICT(workspace_task_id, doc_path) DO UPDATE SET
 				seq               = excluded.seq,
 				name              = excluded.name,
@@ -1103,7 +1112,9 @@ const PhaseUpsertSQL = `
 				criteria_manual_open = excluded.criteria_manual_open,
 				-- Doc-owned like verify_mode (0106). review_fix_round, its
 				-- daemon-owned neighbour, is deliberately NOT listed.
-				review_mode       = excluded.review_mode`
+				review_mode       = excluded.review_mode,
+				-- Doc-owned (0120), re-derived back to '' when the line is deleted.
+				blast_radius      = excluded.blast_radius`
 
 // applyEpics folds the parsed plan into the task's epic_phases rows by UPSERTING
 // on the natural key UNIQUE(workspace_task_id, doc_path).
@@ -1196,7 +1207,7 @@ func applyEpics(tx *sql.Tx, taskID int64, phases []epicPhase, readmePresent bool
 			taskID, p.seq, p.name, p.docPath, string(depJSON),
 			p.checkboxesTotal, p.checkboxesDone, docStatus, docUpdatedAt,
 			completionReport, repo, string(coversJSON), verifyMode, docModel,
-			p.landOpen, p.manualOpen, reviewMode); err != nil {
+			p.landOpen, p.manualOpen, reviewMode, p.blastRadius); err != nil {
 			return err
 		}
 		// After the upsert, so the row (and therefore its id) exists whether this
