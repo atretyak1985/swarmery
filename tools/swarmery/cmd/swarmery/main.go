@@ -18,6 +18,7 @@
 //	swarmery onboard <slug>        bootstrap a consumer project (.claude + workspace)
 //	swarmery agents sync           regenerate the project-local agent overrides
 //	swarmery link token            print / rotate the swarmery link token
+//	swarmery ghinbox sync          prReview repos' new issues/PRs/comments → triage cards
 package main
 
 import (
@@ -200,6 +201,11 @@ func main() {
 		os.Exit(cmdTriage(os.Args[2:]))
 	case "link":
 		err = cmdLink(os.Args[2:], os.Stdout)
+	case "ghinbox":
+		// Exit code is the contract (ghinbox_cli.go): the github-inbox routine
+		// runs `ghinbox sync --all` as a command step, and a 1 there is what
+		// keeps the next run's window from moving past an unread repository.
+		os.Exit(cmdGhinbox(os.Args[2:]))
 	case "-h", "--help", "help":
 		usage()
 	default:
@@ -302,6 +308,11 @@ func usage() {
                                    minted on first use): no flag prints it, --print-path prints the
                                    file path, --rotate mints a new one (a running daemon picks it up
                                    on the next request that presents it). Never opens the database
+  swarmery ghinbox sync (--project <id|slug> | --all) [--since <RFC3339>] [--dry-run] [--db <path>]
+                                   GitHub inbox: one triage card per open issue / PR of the
+                                   prReview repos that is new or got a comment since the last
+                                   ok github-inbox run (else 24h); read with the daemon's stored
+                                   token only; never writes todo; --dry-run writes nothing
   swarmery hook <permission-request|stop>          Claude Code hook shim (reads stdin)
   swarmery hooks <install|uninstall|status> [--project <path>] [--all] [--port <n>]
   swarmery agents sync [--project <name|dir>] [--check] [--claude-dir <dir>] [--marketplace <name>]
