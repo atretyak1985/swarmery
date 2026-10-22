@@ -968,7 +968,7 @@ func parseSpec(planDir string, warn func(string, ...any)) []SpecCriterion {
 //
 // v11: phase_decisions + epic_phases.decision_deps — the README's `## Decisions`
 // section and the `**Depends on decisions:**` header line (decisions.go, migration
-// 0120). Without the bump an indexed plan that already carries either keeps no
+// 0122). Without the bump an indexed plan that already carries either keeps no
 // decision rows and an empty decision_deps, and the start gate never holds it.
 //
 // v12: review_blocks / review_findings / epic_phases.legacy_review — the doc's
