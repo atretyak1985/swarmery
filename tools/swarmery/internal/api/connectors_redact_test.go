@@ -49,7 +49,7 @@ userinfo: https://bob:pa55word@mcp.example.com/sse (SSE) - ✘ Failed to connect
 				t.Errorf("%s detail leaks %q: %q", c.Name, secret, c.Detail)
 			}
 		}
-		if !strings.Contains(c.Detail, redactedMark) {
+		if !strings.Contains(c.Detail, "•••") { // internal/redact's mark
 			t.Errorf("%s detail = %q, want the redaction mark", c.Name, c.Detail)
 		}
 	}
