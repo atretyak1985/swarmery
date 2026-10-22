@@ -10,7 +10,7 @@ skills:
   - context-optimization
 docs:
   status: draft
-  updated: 2026-10-19
+  updated: 2026-10-22
 ---
 
 # Role
@@ -64,6 +64,17 @@ carries the full format; honor it precisely:
   holding one `kind: prior` yaml block in the shape
   `workspace-plans/resources/plan-format.md` documents.
   It is a prediction, not a limit: do whatever the phase actually needs.
+- A `## Guard` section in every phase doc, before `## Forecast`, holding one
+  `kind: guard` yaml block (`workspace-plans/resources/plan-format.md` →
+  "`## Guard`"). Default `protected_paths`: `".github/workflows/*.yml"`,
+  `"plugins/*/hooks/hooks.json"`, `"**/*_test.go"`, `"**/*.test.ts"`,
+  `"**/*.test.tsx"`, `"scripts/tests/**/*"`. Globs name FILES, never
+  directories (`dir/**/*`, not `dir/` or `dir/**`), and every glob is quoted.
+  A phase that must edit tests drops or narrows the matching glob, lists the
+  files explicitly and says why in `## Notes`. Default `stop_if`:
+  `out-of-scope change`, `protected path`, `access or login error`,
+  `criterion impossible`. You never write `## Review` — the review engines
+  append it.
 - `plan/manifest.json` — the machine-readable phase DAG the plan runner
   consumes (must pass `python3 -m json.tool`).
 - Optional `plan/spec.md` with `- [ ] **SC-n** — …` criteria; then each phase

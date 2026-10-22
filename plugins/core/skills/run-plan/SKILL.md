@@ -1,12 +1,12 @@
 ---
 name: run-plan
 description: "EXECUTES an existing @planner plan -- parses the phase DAG, dispatches per-phase implement+review loops, preserving ASK gates. NOT for creating plans; NOT usable from inside a subagent."
-version: "1.3.0"
+version: "1.4.0"
 owner: "swarmery-core"
 docs:
   status: reviewed
   source_sha: 6ab5e18010a1
-  updated: 2026-08-06
+  updated: 2026-10-22
 ---
 
 # Purpose
@@ -41,6 +41,17 @@ never be delegated.
    note belongs in the same message as the next dispatch. Stop and ask only when
    a phase cannot continue without the operator, or at one of rule 4's
    ASK-gated actions.
+8. **Record every review round in the phase doc** — brief the reviewer with its
+   round (`round: 1` for the first review of a phase, `2` for the re-review
+   after a fix dispatch), then append the reviewer's `kind: review` yaml block
+   verbatim under the doc's `## Review` section, immediately before
+   `## Completion Report` (create the section on the first round; never edit
+   an earlier round's block). When the reviewer subagent hit its turn limit
+   and had to be resumed, set `complete: false` in that round's block and list
+   what it did not cover in `scope_left`, whatever the resumed turn said. A
+   reviewer reply without the block is recorded as a block you write from its
+   findings, with `complete: false`. Shape:
+   `workspace-plans/resources/plan-format.md` → "`## Review`".
 
 # Resources
 

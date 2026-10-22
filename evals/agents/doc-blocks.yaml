@@ -1,0 +1,73 @@
+# Phase-doc block contracts (verify-not-trust phase 1). MANUAL RUN — see
+# evals/README.md: the deterministic gate for these blocks is the Go golden
+# fixtures (tools/swarmery/testdata/fixtures/{review,guard}-blocks); these cases
+# only check that the agents emit what the parser reads.
+#
+#   - code-reviewer ends with a fenced ```yaml `kind: review` block and then the
+#     VERDICT line, nothing after it (plugins/core/agents/code-reviewer.md "Output");
+#   - planner writes a `## Guard` section with a fenced `kind: guard` block whose
+#     globs name files, never directories (plugins/core/agents/planner.md).
+#
+# JS regex, no flags: `[\s\S]` crosses lines, `(^|\n)` anchors a line start.
+
+- description: code-reviewer-emits-review-block
+  providers: [opus-tier]
+  vars:
+    system: file://../../plugins/core/agents/code-reviewer.md
+    task: |
+      Review this diff. It is the whole change. This is review round 1.
+
+      --- a/src/lib/export/writer.ts
+      +++ b/src/lib/export/writer.ts
+      @@ -78,12 +78,20 @@
+      +export async function finishExport(job: ExportJob, body: Buffer) {
+      +  const key = `exports/${job.id}.csv`
+      +  try {
+      +    await s3.putObject({ Bucket: BUCKET, Key: key, Body: body })
+      +  } catch (e) {
+      +    // upload flakes sometimes
+      +  }
+      +  await db.update(jobs).set({ status: 'done', url: presign(key) }).where(eq(jobs.id, job.id))
+      +  return presign(key)
+      +}
+  assert:
+    # hard — the fence is present and opens with kind: review
+    - type: regex
+      value: "```ya?ml\\s*\\n\\s*kind:\\s*review"
+    # hard — the block carries the two required keys
+    - type: regex
+      value: "kind:\\s*review[\\s\\S]*\\n\\s*round:\\s*1[\\s\\S]*\\n\\s*verdict:\\s*(PASS|FAIL|INCONCLUSIVE)"
+    # hard — ordering: the block closes, then the VERDICT line is the last line
+    - type: regex
+      value: "kind:\\s*review[\\s\\S]*\\n```\\s*\\n+\\s*VERDICT: (PASS|FAIL|INCONCLUSIVE)\\s*$"
+    # hard — a finding's type comes from the taxonomy
+    - type: regex
+      value: "type:\\s*(correctness|silent-failure|contract|plan-conformance|quality)\\b"
+
+- description: planner-emits-guard-block
+  providers: [opus-tier]
+  vars:
+    system: file://../../plugins/core/agents/planner.md
+    task: |
+      Write the full markdown of ONE phase doc for this phase: "add a
+      `favorite` boolean to order line items — migration in db/migrations/,
+      the field on the LineItem DTO in api/line_items.ts, and a toggle in
+      web/src/LineItemRow.tsx". Single repo, context already gathered.
+      Output only the phase doc.
+  assert:
+    # hard — the section and its fenced kind: guard block
+    - type: regex
+      value: "(^|\\n)## Guard\\s*\\n[\\s\\S]*?```ya?ml\\s*\\n\\s*kind:\\s*guard"
+    - type: regex
+      value: "kind:\\s*guard[\\s\\S]*protected_paths:[\\s\\S]*stop_if:"
+    # hard — the default stop triggers
+    - type: icontains
+      value: "out-of-scope change"
+    - type: icontains
+      value: "criterion impossible"
+    # hard — no glob that names a directory: a quoted entry ending in / or /**
+    - type: not-regex
+      value: "\\n\\s*-\\s*[\"'][^\"'\\n]*(/|/\\*\\*)[\"']\\s*(\\n|$)"
+    # hard — Guard sits before the Completion Report stub
+    - type: regex
+      value: "## Guard[\\s\\S]*## Completion Report"

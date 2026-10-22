@@ -1,0 +1,31 @@
+{
+  "workaroundWords": [
+    "workaround",
+    "work around",
+    "for now",
+    "temporarily",
+    "hack",
+    "bypass",
+    "skip the test",
+    "t.Skip",
+    "it.skip",
+    "xit(",
+    "--no-verify",
+    "nolint",
+    "eslint-disable",
+    "@ts-ignore",
+    "@ts-expect-error",
+    "TODO",
+    "FIXME"
+  ],
+  "stallMinutes": 20,
+  "playbookOverrides": {
+    "long-tests": 60
+  },
+  "cacheColdMinutes": {
+    "subscription": 60,
+    "api": 5
+  },
+  "skillSimilarityThreshold": 0.8,
+  "sessionSkillLoadP95": 12
+}
