@@ -109,7 +109,7 @@ func TestAddArgsStdio(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
-	want := []string{"mcp", "add", "-s", "user", "my-server", "npx", "-y", "my-mcp"}
+	want := []string{"mcp", "add", "-s", "user", "my-server", "--", "npx", "-y", "my-mcp"}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("stdio argv = %v, want %v", got, want)
 	}
