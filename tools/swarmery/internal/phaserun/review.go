@@ -143,8 +143,9 @@ FAIL when any P0/P1 stands; INCONCLUSIVE only when you genuinely could not asses
 // 2 for the review after its fix re-run — the `round` of the reviewer's `kind:
 // review` block), the phase doc as it stands now (with the executor's ticks), the
 // places the run's agent said it changed course (lookFirst; the section is absent
-// when there are none), and the run's diff.
-func reviewPrompt(guardSummary, title, doc, diff string, daemonPort, round int, lookFirst workaround.PhaseHits) string {
+// when there are none), the accepted lessons for the phase's areas (checkFirst,
+// rendered by lessons.ReviewerSection; "" for none), and the run's diff.
+func reviewPrompt(guardSummary, title, doc, diff string, daemonPort, round int, lookFirst workaround.PhaseHits, checkFirst string) string {
 	var b strings.Builder
 	if g := strings.TrimSpace(guardSummary); g != "" {
 		b.WriteString(g)
@@ -161,6 +162,7 @@ func reviewPrompt(guardSummary, title, doc, diff string, daemonPort, round int, 
 	b.WriteString(strings.TrimRight(doc, "\n"))
 	b.WriteString("\n----------------------------------------\n\n")
 	b.WriteString(lookFirstSection(lookFirst))
+	b.WriteString(checkFirst)
 	b.WriteString(diff)
 	return b.String()
 }
@@ -226,6 +228,36 @@ func (s *Service) lookFirst(phaseID int64, runUUID string) workaround.PhaseHits 
 		return workaround.PhaseHits{}
 	}
 	return h
+}
+
+// checkFirst reads the reviewer's «Check first» list (Service.CheckFirst). A
+// panic in the hook is logged and leaves the section out — it never blocks the
+// review.
+func (s *Service) checkFirst(phaseID int64) (text string) {
+	if s.CheckFirst == nil {
+		return ""
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			log.Printf("warning: phaserun: phase=%d check-first lessons panicked: %v", phaseID, r)
+			text = ""
+		}
+	}()
+	return s.CheckFirst(phaseID)
+}
+
+// reviewRecorded tells Service.ReviewRecorded a review was recorded; a panic in
+// the hook is logged, never propagated.
+func (s *Service) reviewRecorded(phaseID int64) {
+	if s.ReviewRecorded == nil {
+		return
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			log.Printf("warning: phaserun: phase=%d review-recorded hook panicked: %v", phaseID, r)
+		}
+	}()
+	s.ReviewRecorded(phaseID)
 }
 
 // reviewGit is the git the review stage shells out to in the run's worktree: the
@@ -521,6 +553,9 @@ func (s *Service) reviewCycle(phaseID int64, info phaseInfo, acq worktree.Acquir
 				phaseID, out.verdict, info.DocPath, appendErr)
 		}
 	}
+	// Repeated findings become lesson candidates (verify-not-trust phase 8): the
+	// hook only schedules the grouping, after the next scan projects this block.
+	s.reviewRecorded(phaseID)
 
 	switch {
 	case incomplete:
@@ -611,7 +646,7 @@ func (s *Service) review(phaseID int64, info phaseInfo, acq worktree.Acquired, r
 			_, runUUID = s.reviewState(phaseID)
 		}
 		prompt = reviewPrompt(guard.Summary(), info.Name, string(doc), s.reviewDiff(acq.Path, acq.StartPoint), s.DaemonPort, reviewRound,
-			s.lookFirst(phaseID, runUUID))
+			s.lookFirst(phaseID, runUUID), s.checkFirst(phaseID))
 	}
 	resolution := claudeacct.Resolve(info.ProjectPath)
 	spec := verify.RunSpec{

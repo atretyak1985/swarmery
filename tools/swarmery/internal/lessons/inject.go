@@ -297,8 +297,13 @@ func Select(db *sql.DB, sc Scope, budget int) (Selection, error) {
 
 // priorScope reads the prior forecasts' areas and files for the given phases.
 func priorScope(db *sql.DB, where string, arg int64) (Scope, error) {
+	return forecastScope(db, `f.kind = 'prior' AND `+where, arg)
+}
+
+// forecastScope reads the areas and files of the forecasts cond selects.
+func forecastScope(db *sql.DB, cond string, arg int64) (Scope, error) {
 	rows, err := db.Query(`SELECT f.areas_json, f.files_json FROM phase_forecasts f
-		WHERE f.kind = 'prior' AND `+where+` ORDER BY f.id`, arg)
+		WHERE `+cond+` ORDER BY f.id`, arg)
 	if err != nil {
 		return Scope{}, err
 	}
@@ -321,6 +326,12 @@ func priorScope(db *sql.DB, where string, arg int64) (Scope, error) {
 // PhaseScope is a phase run's scope: its prior forecast.
 func PhaseScope(db *sql.DB, phaseID int64) (Scope, error) {
 	return priorScope(db, `f.phase_id = ?`, phaseID)
+}
+
+// ReviewScope is a reviewed phase's scope: every forecast of the phase — the
+// prior, and the executor's posterior written once it had read the code.
+func ReviewScope(db *sql.DB, phaseID int64) (Scope, error) {
+	return forecastScope(db, `f.phase_id = ?`, phaseID)
 }
 
 // PlanScope is a plan run's scope: the priors of every phase of the plan.
@@ -497,6 +508,51 @@ func (i *Injector) ForPhase(phaseID int64, uuid string) string {
 		i.snapshotReport(phaseID, uuid)
 	}
 	return text
+}
+
+// reviewerHeader opens the reviewer's «Check first» list.
+const reviewerHeader = "Check first — accepted lessons for the areas this phase works in (each names a mistake that recurred here; look for it in the diff first, and cite the id when a finding confirms it):"
+
+// ReviewerSection renders lessons as the reviewer's «Check first» list: "" for
+// none, otherwise the header, one line per lesson and a blank line — the shape
+// of the "Look first" section it follows in the review prompt.
+func ReviewerSection(ls []Active) string {
+	if len(ls) == 0 {
+		return ""
+	}
+	var b strings.Builder
+	b.WriteString(reviewerHeader)
+	for _, l := range ls {
+		b.WriteString("\n")
+		b.WriteString(l.Line())
+	}
+	b.WriteString("\n\n")
+	return b.String()
+}
+
+// ForReviewer is phaserun.Service.CheckFirst (verify-not-trust phase 8): the
+// «Check first» list for the reviewer of phaseID — the ACTIVE lessons, whatever
+// produced them, whose areas overlap the phase's forecast areas and files,
+// ranked and cut like the executor's block. "" for none, and on any error.
+//
+// Not recorded in lesson_uses: that table is what a RUN was handed, and lesson
+// effectiveness reads it against run surprise; a reviewer is not a run.
+func (i *Injector) ForReviewer(phaseID int64) string {
+	sc, err := ReviewScope(i.DB, phaseID)
+	if err != nil {
+		log.Printf("warning: lessons: reviewer phase=%d: read scope: %v", phaseID, err)
+		return ""
+	}
+	sel, err := Select(i.DB, sc, i.Budget)
+	if err != nil {
+		log.Printf("warning: lessons: reviewer phase=%d: select: %v", phaseID, err)
+		return ""
+	}
+	if len(sel.Lessons) == 0 {
+		return ""
+	}
+	log.Printf("lessons: reviewer phase=%d handed %d lesson(s) to check first", phaseID, len(sel.Lessons))
+	return ReviewerSection(sel.Lessons)
 }
 
 // ForPlan is planrun.Service.InjectLessons.
