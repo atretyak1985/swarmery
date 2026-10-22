@@ -106,7 +106,8 @@
 #       Memories     : <account cfg dir>/projects/<cwd-slug>/memory/*.md
 #                      (slug derived from PROJECT_DIR; cfg dir = ACCT_CFG_DIR)
 #       Tasks        : workspace working/YYYY/MM/DD/<slug>/ dirs (legacy: .claude-workspace/)
-#       Sessions     : .swarmery/sessions/*.json (fallback /tmp/claude-session-*.jsonl)
+#       Sessions     : .swarmery/sessions/*.json (fallback: the per-day
+#                      claude-session-*.jsonl in ${SWARMERY_RUN_DIR:-~/.swarmery/run})
 #
 #  RELIABILITY TIERS:
 #    • Instant from JSON  → lines 1, 6 (+ parts of 2/7). Zero risk.
@@ -307,8 +308,16 @@ fi
 TASKS=$(find "$WORK_ROOT" -mindepth 4 -maxdepth 4 -type d 2>/dev/null | wc -l | tr -d ' ')
 # Recorded sessions
 SESS=$(find "$PROJECT_DIR/.swarmery/sessions" -name "*.json" 2>/dev/null | wc -l | tr -d ' ')
+# Fallback: the per-day logs in the private run dir the hooks write to
+# (hooks/lib/session-file.sh). Read-only here: a render never creates the dir.
+SESSION_LIB="$(dirname "${BASH_SOURCE[0]}")/../hooks/lib/session-file.sh"
+# shellcheck source=../hooks/lib/session-file.sh
+[ -r "$SESSION_LIB" ] && . "$SESSION_LIB"
+command -v swarmery_run_dir_path >/dev/null 2>&1 \
+  || swarmery_run_dir_path() { printf '%s\n' "${SWARMERY_RUN_DIR:-${HOME:-}/.swarmery/run}"; }
+RUN_DIR="$(swarmery_run_dir_path 2>/dev/null)"
 # shellcheck disable=SC2012  # simple count of glob matches; find not needed here
-[ "$SESS" = "0" ] && SESS=$(ls /tmp/claude-session-*.jsonl 2>/dev/null | wc -l | tr -d ' ')
+[ "$SESS" = "0" ] && [ -n "$RUN_DIR" ] && SESS=$(ls "$RUN_DIR"/claude-session-*.jsonl 2>/dev/null | wc -l | tr -d ' ')
 
 # ----- git (against cwd) ---------------------------------------------------
 # Optional locks off: `git status` otherwise takes index.lock to write back its
@@ -500,6 +509,22 @@ fmt_usd() { local v="${1:-}"; [ -z "$v" ] && { printf '?'; return; }; printf '$%
 NOW="$(date +%H:%M)"
 PWD_SHORT="$(basename "$CWD")"
 
+# strip_ctl <var-name>... — drop C0 control bytes and DEL from each named
+# variable, in place: the same set as `tr -d '\000-\037\177'`, done in bash so
+# the render path forks nothing for it (bash 3.2: ${!name} + printf -v).
+# These fields are text from outside the statusline — the harness, a cache
+# filled from the network, git, the filesystem — and a raw ESC or BEL in them
+# would reach the terminal as a control sequence.
+strip_ctl() {
+  local _n _v
+  for _n in "$@"; do
+    _v="${!_n}"
+    printf -v "$_n" '%s' "${_v//[[:cntrl:]]/}"
+  done
+}
+strip_ctl SESSION_NAME HEADER_TITLE MODEL_NAME STYLE EFFORT \
+  WX_LOC WX_TEMP WX_COND GIT_BRANCH PWD_SHORT FB_RESET
+
 # ----- render --------------------------------------------------------------
 # Header badges: effort level, thinking, fast-mode, then the session name.
 BADGES=""
@@ -526,11 +551,19 @@ fi
 NAME_PART=""
 # shellcheck disable=SC1111  # intentional typographic quotes around the session name
 [ -n "$SESSION_NAME" ] && NAME_PART="  ${GREY}“${SESSION_NAME}”${C_RST}"
-printf '%b\n' "${GREY}—${C_RST} ${BLUE}${C_B}${HEADER_TITLE}${C_RST} ${GREY}—${C_RST} ${PURPLE}${MODEL_NAME}${C_RST}${STYLE:+ ${GREY}·${C_RST} ${TEAL}${STYLE}${C_RST}}${BADGES}${NAME_PART}"
+# Outside text (session name, weather, branch, directory name, account email)
+# is printed through %s slots and was stripped of control bytes above; only
+# the palette constants live in the format strings. %b would interpret a
+# backslash sequence in that text as a terminal escape.
+# shellcheck disable=SC2059  # format = palette constants only; data goes through %s
+printf "${GREY}—${C_RST} ${BLUE}${C_B}%s${C_RST} ${GREY}—${C_RST} ${PURPLE}%s${C_RST}%s%s%s\n" \
+  "$HEADER_TITLE" "$MODEL_NAME" "${STYLE:+ ${GREY}·${C_RST} ${TEAL}${STYLE}${C_RST}}" "$BADGES" "$NAME_PART"
 
 # LOC line only when weather is available
 if [ -n "$WX_LOC" ]; then
-  printf '%b\n' "${GREEN}${C_B}LOC:${C_RST} ${WHITE}${WX_LOC}${C_RST}  ${sep}  ${CYAN}${NOW}${C_RST}  ${sep}  ${ORANGE}${WX_TEMP}${C_RST} ${GREY}${WX_COND}${C_RST}"
+  # shellcheck disable=SC2059  # format = palette constants only; data goes through %s
+  printf "${GREEN}${C_B}LOC:${C_RST} ${WHITE}%s${C_RST}  ${sep}  ${CYAN}%s${C_RST}  ${sep}  ${ORANGE}%s${C_RST} ${GREY}%s${C_RST}\n" \
+    "$WX_LOC" "$NOW" "$WX_TEMP" "$WX_COND"
 else
   printf '%b\n' "${GREEN}${C_B}TIME:${C_RST} ${CYAN}${NOW}${C_RST}  ${GREY}(weather warming up…)${C_RST}"
 fi
@@ -551,7 +584,8 @@ if [ -n "$U5_PCT" ] || [ -n "$UWK_PCT" ]; then
     [ -n "$FB_RESET" ] && fb_reset_part=" ${GREY}⟳$(fmt_reset_any "$FB_RESET")${C_RST}"
     fb_part="  ${sep}  ${GREY}FB${C_RST} ${cfb}${C_B}${FB_PCT}%${C_RST}${fb_reset_part}"
   fi
-  printf '%b\n' "${YELLOW}${C_B}USAGE:${C_RST} ${GREY}5H${C_RST} ${c5}${C_B}${U5_PCT:-?}%${C_RST} ${GREY}⟳$(fmt_reset "$U5_RESET")${C_RST}  ${sep}  ${GREY}WK${C_RST} ${c7}${C_B}${UWK_PCT:-?}%${C_RST} ${GREY}⟳$(fmt_reset "$UWK_RESET")${C_RST}${fb_part}"
+  # fb_part carries the cached reset text, so it rides in a %s slot.
+  printf '%b%s\n' "${YELLOW}${C_B}USAGE:${C_RST} ${GREY}5H${C_RST} ${c5}${C_B}${U5_PCT:-?}%${C_RST} ${GREY}⟳$(fmt_reset "$U5_RESET")${C_RST}  ${sep}  ${GREY}WK${C_RST} ${c7}${C_B}${UWK_PCT:-?}%${C_RST} ${GREY}⟳$(fmt_reset "$UWK_RESET")${C_RST}" "$fb_part"
 fi
 
 # SESSION cost — free from stdin JSON
@@ -568,6 +602,7 @@ if [ -n "$GIT_BRANCH" ]; then
   mod_color=$GREEN; [ "${GIT_MOD:-0}" -gt 0 ] && mod_color=$YELLOW
   GIT_PART="  ${sep}  ${CYAN}Branch ${WHITE}${GIT_BRANCH}${C_RST}${GIT_AGE:+  ${sep}  ${CYAN}Age ${WHITE}${GIT_AGE}${C_RST}}  ${sep}  ${CYAN}Mod ${mod_color}${GIT_MOD}${C_RST}  ${sep}  ${CYAN}Sync ${WHITE}${GIT_SYNC}${C_RST}"
 fi
-printf '%b\n' "${TEAL}${C_B}PWD:${C_RST} ${CYAN}${PWD_SHORT}${C_RST}${GIT_PART}"
+# shellcheck disable=SC2059  # format = palette constants only; data goes through %s
+printf "${TEAL}${C_B}PWD:${C_RST} ${CYAN}%s${C_RST}%s\n" "$PWD_SHORT" "$GIT_PART"
 
 printf '%b\n' "${PURPLE}${C_B}MEMORY:${C_RST} ${YELLOW}📁 ${WHITE}${MEMORIES}${C_RST} ${GREY}Memories${C_RST}  ${sep}  ${PURPLE}◆ ${WHITE}${TASKS}${C_RST} ${GREY}Tasks${C_RST}  ${sep}  ${TEAL}⊕ ${WHITE}${SESS}${C_RST} ${GREY}Sessions${C_RST}"

@@ -203,6 +203,8 @@ func main() {
 		err = cmdLink(os.Args[2:], os.Stdout)
 	case "rescrub":
 		err = cmdRescrub(os.Args[2:], os.Stdout)
+	case "workaround-backfill":
+		err = cmdWorkaroundBackfill(os.Args[2:], os.Stdout)
 	case "-h", "--help", "help":
 		usage()
 	default:
@@ -257,6 +259,9 @@ func usage() {
   swarmery backup   [--db <path>] [--out <path>]   VACUUM-INTO snapshot (safe while serving)
   swarmery rescrub  --count --db <copy.db>          per-class counts of secret-shaped values the
                                    background rescrub would mask (values never printed; read-only)
+  swarmery workaround-backfill [--db <path>] [--since <Nd>] [--plan <yyyy-mm-dd-slug>]
+                                   scan phase-linked sessions since --since (default 30d) for
+                                   guards.json workaroundWords; idempotent; prints per-phase counts
   swarmery prune    [--db <path>] --older-than <Nd> [--dry-run]
                                    retention: write daily_rollups for sessions ended > Nd ago,
                                    delete their events/file_changes/turns (headers kept, pruned=1),

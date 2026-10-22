@@ -68,6 +68,35 @@ if [ -z "$out" ]; then ok; else bad "helper: non-JSON response -> empty (silent 
 out="$(run_helper "file://$WORK/does-not-exist.json")"
 if [ -z "$out" ]; then ok; else bad "helper: fetch failure -> empty (silent failure)" "''" "'$out'"; fi
 
+# ── helper: the OAuth token never appears in curl's argv ──────────
+# argv is visible to every user on the machine (ps, /proc/<pid>/cmdline); stdin
+# is not. A curl shim records both and answers with the personal fixture, so
+# the case is offline and shows where the token actually travelled.
+SHIM="$WORK/curl-shim"; mkdir -p "$SHIM"
+REAL_CURL="$(command -v curl)"
+cat > "$SHIM/curl" <<EOS
+#!/bin/sh
+if [ "\${1:-}" = "--version" ]; then exec "$REAL_CURL" --version; fi
+: > "$WORK/curl.argv"
+for a in "\$@"; do printf '%s\n' "\$a" >> "$WORK/curl.argv"; done
+cat > "$WORK/curl.stdin"
+cat "$WORK/personal.json"
+EOS
+chmod +x "$SHIM/curl"
+SECRET="tok-argv-probe-$$-$RANDOM"
+out="$(SWARMERY_FABLE_TOKEN="$SECRET" \
+  SWARMERY_FABLE_KEYCHAIN_SERVICE="swarmery-test-nonexistent-item" \
+  SWARMERY_FABLE_USAGE_URL="https://usage.invalid/api" \
+  PATH="$SHIM:$PATH" bash "$HELPER" 2>/dev/null)"
+case "$out" in
+  32\|*) ok ;;
+  *) bad "helper via curl shim: Fable window -> PCT|RESET" "32|<reset>" "'$out'" ;;
+esac
+if [ -f "$WORK/curl.argv" ] && ! grep -qF "$SECRET" "$WORK/curl.argv"; then ok
+else bad "helper: token absent from curl argv" "no token in argv" "$(cat "$WORK/curl.argv" 2>/dev/null || echo '<curl not called>')"; fi
+if grep -qF "Authorization: Bearer $SECRET" "$WORK/curl.stdin" 2>/dev/null; then ok
+else bad "helper: Authorization header sent on stdin" "header on stdin" "$(cat "$WORK/curl.stdin" 2>/dev/null || echo '<empty>')"; fi
+
 # ── statusline render tests ───────────────────────────────────────
 CFG_DIR="$WORK/fake-config-dir"
 # Same portable digest the statusline uses (shasum on BSD/macOS, sha256sum on

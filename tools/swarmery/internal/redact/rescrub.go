@@ -8,7 +8,7 @@ package redact
 // without running it. For each text-bearing table it reads a small batch of
 // rows above its cursor, redacts them in memory, and in one short transaction
 // UPDATEs only the rows whose text changed and advances the cursor
-// (redaction_progress, migration 0120). It then sleeps, so the single writer
+// (redaction_progress, migration 0121). It then sleeps, so the single writer
 // connection is free for the ingest between batches. A restart resumes from
 // the cursor; a newer RulesVersion restarts every table from rowid 0.
 //

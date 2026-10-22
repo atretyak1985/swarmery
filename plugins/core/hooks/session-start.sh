@@ -17,15 +17,17 @@ CLAUDE_DIR="${PROJECT_DIR}/.claude"
 PROJECT_JSON="${CLAUDE_DIR}/project.json"
 
 # Per-project flavor (repos, name) comes from project.json — never hard-coded.
+# The path reaches node through the environment, never through the JS source:
+# a quote in a directory name is legal and must stay data.
 project_repos() {
   [ -f "$PROJECT_JSON" ] || return 0
-  node -e "try{const r=require('$PROJECT_JSON').repos||[];process.stdout.write(r.join('\n'))}catch(e){}" 2>/dev/null
+  PJ="$PROJECT_JSON" node -e 'try{const r=require(process.env.PJ).repos||[];process.stdout.write(r.join("\n"))}catch(e){}' 2>/dev/null
 }
 
 project_display_name() {
   local name=""
   if [ -f "$PROJECT_JSON" ]; then
-    name=$(node -e "try{process.stdout.write(require('$PROJECT_JSON').displayName||'')}catch(e){}" 2>/dev/null)
+    name=$(PJ="$PROJECT_JSON" node -e 'try{process.stdout.write(require(process.env.PJ).displayName||"")}catch(e){}' 2>/dev/null)
   fi
   printf '%s' "${name:-Project}"
 }
@@ -116,8 +118,11 @@ $counts
 EOF
 
 # ── Check for previous session data ──────────────────────────────
-today=$(date +%Y%m%d)
-prev_session="/tmp/claude-session-${today}.jsonl"
+# Today's log in the private run dir (lib/session-file.sh); /dev/null when the
+# run dir is unusable, so the banner still renders.
+# shellcheck source=lib/session-file.sh
+. "$(dirname "${BASH_SOURCE[0]}")/lib/session-file.sh"
+prev_session=$(swarmery_session_file) || prev_session=/dev/null
 prev_calls=0
 if [ -f "$prev_session" ] && [ -s "$prev_session" ]; then
   prev_calls=$(wc -l < "$prev_session" | tr -d ' ')

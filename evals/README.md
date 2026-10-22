@@ -78,6 +78,25 @@ Two authoring constraints worth knowing before adding assertions:
   return to tech-lead, implementation-agent, or code-reviewer. The tier sets
   `showThinking: false`, so these assertions see the visible answer only.
 
+## Added in core 3.17 (phase-doc blocks) — manual run
+
+[`agents/doc-blocks.yaml`](agents/doc-blocks.yaml) holds two cases, run **by
+hand only** (D33): the deterministic gate for the blocks is the Go golden
+fixtures under `tools/swarmery/testdata/fixtures/{review,guard}-blocks`, so
+these do not join any automated run.
+
+- **`code-reviewer-emits-review-block`** — a fenced ` ```yaml ` block opening
+  with `kind: review`, carrying `round` and `verdict`, a finding `type` from the
+  taxonomy, and the `VERDICT:` line last, right after the block.
+- **`planner-emits-guard-block`** — a `## Guard` section with a `kind: guard`
+  block holding `protected_paths` and the default `stop_if` triggers, no glob
+  that names a directory, and the section before `## Completion Report`.
+
+```bash
+cd evals
+npx promptfoo@latest eval --filter-pattern 'emits-(review|guard)-block'   # spends tokens
+```
+
 ## Effort sweep on a subscription (no API key)
 
 `providers/claude-cli.js` runs a case through `claude -p` with the agent file as

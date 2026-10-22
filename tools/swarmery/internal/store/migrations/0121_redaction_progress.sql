@@ -1,4 +1,4 @@
--- 0120: the cursor of the background rescrub (internal/redact/rescrub.go).
+-- 0121: the cursor of the background rescrub (internal/redact/rescrub.go).
 --
 -- Ingest masks secret-shaped values before it stores a row; rows stored
 -- before that still hold them. The daemon's rescrub worker walks each

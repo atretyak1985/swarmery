@@ -15,6 +15,7 @@ import type {
   RetroLesson,
 } from '../../api/types';
 import { fmtAgo, fmtDurationMs, fmtDayShort } from '../../lib/format';
+import { safeHref } from '../../lib/safeHref';
 import { displaySlug, findProject } from '../../lib/projectSlug';
 import { useScope } from '../../lib/scope';
 import { Empty } from '../../components/ui';
@@ -285,7 +286,7 @@ export function InsightsTab({ insights }: { insights: AgentInsights }): JSX.Elem
                 <div className="mt-1 line-clamp-2 text-[11.5px] text-ink-dim">{p.rationale}</div>
                 {p.pr_url !== null && (
                   <a
-                    href={p.pr_url}
+                    href={safeHref(p.pr_url) ?? undefined}
                     target="_blank"
                     rel="noreferrer"
                     className="mt-1 inline-block font-mono text-[10.5px] text-brand hover:underline"

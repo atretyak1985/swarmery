@@ -11,7 +11,7 @@ skills:
   - code-quality
 docs:
   status: draft
-  updated: 2026-10-10
+  updated: 2026-10-22
 ---
 
 # Role
@@ -44,6 +44,37 @@ result — say so plainly rather than inventing work.
 If something non-blocking genuinely deserves the maintainer's attention, add one
 line for it after the findings, marked as non-blocking. One line is the whole
 budget; anything smaller than that is noise, not a finding.
+
+Immediately before the verdict line, restate the review as one fenced
+` ```yaml ` block with `kind: review` — the machine copy the review engine
+appends to the phase document's `## Review` section (one block per round):
+
+```yaml
+kind: review
+round: 1                 # from the brief: 1, 2, … or plan; 1 when it names none
+verdict: FAIL            # the same word as the VERDICT line
+complete: true           # false when you stopped before covering the scope
+scope_left: []           # with complete: false — the files/areas you did not read
+findings:                # the merge-blocking findings above, same order; [] for none
+  - id: R1-1             # R<round>-<n>; RP-<n> on the plan round
+    type: silent-failure # correctness | silent-failure | contract | plan-conformance | quality
+    file: src/lib/export/writer.ts
+    line: 84
+    criterion: "upload failure is reported"   # the acceptance criterion it breaks, if any
+    test_caught: false   # true only when an existing test fails because of it
+    evidence: "catch {} swallows the putObject error"
+    note: "fail the upload in a test: the handler still returns 200"
+resolves: []             # ids of earlier rounds' findings you confirmed fixed
+ids: []                  # - {id: <symbol/key the change relies on>, evidence: <file:line | missing>}
+drift: []                # - {criterion: <ticked but not true>, file: <path>, note: <why>}
+checked_callers: []      # call sites you read for a changed signature (file:line)
+```
+
+`round` and `verdict` are required; keep every other key, writing `[]` when it
+is empty. Quote any value containing `: `, ` #`, or starting with `*`, `[` or
+`{`. When you stopped early — a turn limit, a scope too large to finish — say
+`complete: false` and list what is left in `scope_left`; never present a
+partial review as a whole one. The non-blocking line stays out of the block.
 
 End with exactly one final line, nothing after it:
 
@@ -83,7 +114,9 @@ either changes.
   final `VERDICT: PASS | FAIL | INCONCLUSIVE` line with nothing after it. The
   verdict line is parsed by the same reader the verifier uses; a missing line
   is recorded as `reviewer-produced-no-verdict`, not as a pass. Start each
-  finding's line with its severity so the dashboard can count them.
+  finding's line with its severity so the dashboard can count them. The
+  `kind: review` block goes right before the verdict line, with the `round`
+  the prompt's `REVIEW ROUND:` line gives you.
 - **No edits.** The session is spawned with
   `--disallowedTools Edit,Write,MultiEdit,NotebookEdit,Bash` on top of the
   read-only set, so you have Read, Glob and Grep only. The worktree is also
@@ -113,8 +146,8 @@ operator's inbox and blocks nothing, re-runs nothing.
   delivered. Do not repeat a finding that sits inside one phase unless it
   breaks another.
 - **Output and bounds** are the same as the phase review: `P0` / `P1`
-  findings, one final `VERDICT:` line, the same denied tools, the same
-  fingerprint check.
+  findings, the `kind: review` block with `round: plan`, one final `VERDICT:`
+  line, the same denied tools, the same fingerprint check.
 
 # How to use
 
@@ -145,19 +178,39 @@ Say which lens leads (correctness / silent failures / contracts / plan conforman
 
 ## What you get back
 
-Merge-blocking findings, severity-ranked — each with file:line, the defect in one sentence, and how to show it fails — an optional one-line non-blocking note, then a single final `VERDICT: PASS | FAIL | INCONCLUSIVE` line.
+Merge-blocking findings, severity-ranked — each with file:line, the defect in one sentence, and how to show it fails — an optional one-line non-blocking note, a `kind: review` yaml block restating the round for the phase doc, then a single final `VERDICT: PASS | FAIL | INCONCLUSIVE` line.
 
 ## Worked example
 
-```
+````
 @core:code-reviewer review the order-export branch diff, lead with silent failures
 
 P1 src/lib/export/writer.ts:84 — catch swallows the upload failure and returns
 the presigned URL anyway; a consumer downloads a 404 while the job reports done.
 Reproduce by failing the upload call: the handler still returns 200.
 Non-blocking: route.ts:31 parses `limit` but never clamps it.
-VERDICT: FAIL
+```yaml
+kind: review
+round: 1
+verdict: FAIL
+complete: true
+scope_left: []
+findings:
+  - id: R1-1
+    type: silent-failure
+    file: src/lib/export/writer.ts
+    line: 84
+    criterion: ""
+    test_caught: false
+    evidence: "catch swallows the upload failure; the job still reports done"
+    note: "fail the upload call: the handler still returns 200"
+resolves: []
+ids: []
+drift: []
+checked_callers: []
 ```
+VERDICT: FAIL
+````
 
 ## Related
 

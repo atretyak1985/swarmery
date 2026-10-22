@@ -4079,6 +4079,30 @@ export interface EpicPhase {
    *  newest first. [] when never reviewed. Absent from a daemon older than the
    *  review stage — read it as `phase.reviews ?? []`. */
   reviews?: PhaseReviewSummary[];
+  /** Where the phase's agent said it changed course (migration 0120, D23):
+   *  workaround words in its assistant prose, oldest first, at most 50 per
+   *  session with text. Absent from an older daemon — read `?? []`. */
+  workaroundHits?: WorkaroundHit[];
+  /** All hits, including the key-only ones past the per-session cap. */
+  workaroundTotal?: number;
+}
+
+/** One workaround_hits row (Go workaround.Stored, internal/workaround/store.go;
+ *  also GET /api/epics/{taskId}/phases/{phaseId}/workaround-hits). */
+export interface WorkaroundHit {
+  id: number;
+  sessionUuid: string;
+  /** The turn's seq in its session; 0 when the turn is gone. */
+  turnSeq: number;
+  turnAt: string;
+  /** The subagent that said it; '' for the session's main chain. */
+  agentName: string;
+  /** The list entry that matched (as configured, e.g. "for now", "поки що"). */
+  word: string;
+  sentence: string;
+  /** The sentence before and after; '' at either end. */
+  before: string;
+  after: string;
 }
 
 /** One code review of a phase's run as the epic payload carries it (Go reviewDTO,
