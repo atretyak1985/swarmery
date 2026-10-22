@@ -21,6 +21,10 @@ export const PROD_JSON = String.raw`[
   "Bash(*deploy*prod*)",
   "Bash(*release*prod*)",
   "Bash(terraform apply*)",
+  "Bash(*&& terraform apply*)",
+  "Bash(*; terraform apply*)",
+  "Bash(*command terraform apply*)",
+  "Bash(*terraform -chdir=* apply*)",
   "Bash(*terraform*apply*prod*)",
   "Bash(*kubectl*prod*)",
   "Bash(*helm*upgrade*prod*)",
@@ -68,6 +72,7 @@ export type World = {
  */
 export const world = (on: On, w: World = {}) => {
   const statuses: (string | undefined)[] = []
+  const logs: string[] = []
   const env: Readonly<Record<string, string>> = w.env ?? {
     HOME,
     TMPDIR: TMP,
@@ -91,6 +96,10 @@ export const world = (on: On, w: World = {}) => {
     return { value: undefined }
   })
   on('ui.notice', () => ({ value: undefined }))
+  on('ui.log', ($, e) => {
+    logs.push(e.text)
+    return { value: undefined }
+  })
   on('tool.call', () => ({ result: 'ran' }))
   on('tool.check', ($, e) => {
     const input = e.input as { readonly command?: unknown } | undefined
@@ -106,5 +115,5 @@ export const world = (on: On, w: World = {}) => {
   on('agent.offer', () => ({ isOffered: true }))
   on('tool.describe', ($, e) => ({ description: e.description }))
 
-  return { statuses }
+  return { statuses, logs }
 }

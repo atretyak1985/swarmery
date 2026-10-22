@@ -2,7 +2,7 @@
 // register.ts gathers the facts through `$` on session.start and hands them
 // here as plain values.
 
-import { normalize, splitList } from './paths'
+import { isUnder, normalize, splitList } from './paths'
 
 export type ProjectConfig = {
   /** The directory holding `.claude/project.json`. */
@@ -17,6 +17,8 @@ export type GuardContext = {
   readonly project: ProjectConfig | undefined
   /** Normalized absolute directories a file tool may touch. */
   readonly roots: readonly string[]
+  /** One line per declared root left out because it would widen the fence. */
+  readonly ignored: readonly string[]
 }
 
 export type GuardOptions = {
@@ -82,34 +84,74 @@ const tmpRoots = (tmpdir: string | undefined): string[] => {
   return out
 }
 
+const sameDir = (a: string, b: string): boolean => a.toLowerCase() === b.toLowerCase()
+
+/**
+ * Why a declared root would widen the fence past the project, or undefined
+ * when it may stay: the file-system root, the home directory or a directory
+ * above it, or a directory above one of `anchors` (the project directory and
+ * the session root). Every path is already normalized.
+ */
+const widening = (dir: string, home: string | undefined, anchors: readonly string[]): string | undefined => {
+  if (dir === '/') return 'is the file-system root'
+  if (home !== undefined && isUnder(home, dir)) {
+    return sameDir(home, dir) ? 'is the home directory' : 'contains the home directory'
+  }
+  const below = anchors.find(a => isUnder(a, dir) && !sameDir(a, dir))
+  return below === undefined ? undefined : `contains the project directory ${below}`
+}
+
+/** A workspace name is one path segment: no separator, not `.` or `..`. */
+const isSegment = (name: string): boolean => !name.includes('/') && name !== '.' && name !== '..'
+
 /**
  * The roots: the session root and cwd; with a project.json its directory,
  * every `repos[]` entry (relative to that directory) and the workspace
  * `<AGENT_WORKSPACE_ROOT>/<AGENT_PROJECT or name>`; always `~/.claude`, the
  * temp dirs and `extraRoots` (relative to the project directory).
+ *
+ * A declared root (`repos[]`, `extraRoots`) is dropped when it is `/`, the
+ * home directory or a directory above it, or a directory above the project
+ * directory or the session root; a project `name` that is not one path
+ * segment adds no workspace root. A declaration can add the project's own
+ * subtrees and its siblings, never a tree that holds the project or home.
+ * Each drop is reported in `ignored`.
  */
 export const buildContext = (facts: SessionFacts, options: GuardOptions): GuardContext => {
   const { cwd, home, project } = facts
   const root = facts.root ?? cwd
   const base = project?.dir ?? root
   const at = (p: string, from: string): string => normalize(p, from, home)
+  const homeDir = nonEmpty(home) ? at(home, '/') : undefined
 
   const roots: string[] = [at(root, '/'), at(cwd, '/')]
+  const ignored: string[] = []
+  const anchors = unique([at(root, '/'), ...(project !== undefined ? [at(project.dir, '/')] : [])])
+  const declare = (dir: string, from: string): void => {
+    const why = widening(dir, homeDir, anchors)
+    if (why === undefined) roots.push(dir)
+    else ignored.push(`guard-pack: ignored root ${dir} from ${from} (${why})`)
+  }
+
   if (project !== undefined) {
     roots.push(at(project.dir, '/'))
-    for (const repo of strings(project.json.repos)) roots.push(at(repo, project.dir))
+    for (const repo of strings(project.json.repos)) declare(at(repo, project.dir), 'repos[]')
   }
-  const name = nonEmpty(facts.agentProject)
+  const fromEnv = nonEmpty(facts.agentProject)
+  const name = fromEnv
     ? facts.agentProject
     : typeof project?.json.name === 'string'
       ? project.json.name
       : undefined
-  if (nonEmpty(facts.workspaceRoot) && nonEmpty(name)) roots.push(at(`${facts.workspaceRoot}/${name}`, base))
-  if (nonEmpty(home)) roots.push(`${at(home, '/')}/.claude`)
+  if (nonEmpty(facts.workspaceRoot) && nonEmpty(name)) {
+    if (fromEnv || isSegment(name.trim())) roots.push(at(`${facts.workspaceRoot}/${name}`, base))
+    else ignored.push(`guard-pack: ignored workspace root (project name ${JSON.stringify(name)} is not one path segment)`)
+  }
+  if (homeDir !== undefined) roots.push(`${homeDir}/.claude`)
   roots.push(...tmpRoots(facts.tmpdir).map(t => at(t, '/')))
-  for (const extra of options.extraRoots) roots.push(at(extra, base))
+  for (const extra of options.extraRoots) declare(at(extra, base), 'extraRoots')
 
-  return { cwd, root, home, project, roots: unique(roots) }
+  return { cwd, root, home, project, roots: unique(roots), ignored }
 }
 
 /** "a, b, c (+N more)" for a deny reason. */
