@@ -2947,7 +2947,7 @@ func cmdServe(args []string) error {
 			wtjCfg.TickInterval, wtjCfg.MinIdle)
 	}
 
-	srv := &http.Server{Addr: addr, Handler: handler}
+	srv := api.NewHTTPServer(addr, handler)
 	errCh := make(chan error, 1)
 	go func() { errCh <- srv.ListenAndServe() }()
 	select {
