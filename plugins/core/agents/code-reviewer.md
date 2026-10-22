@@ -70,11 +70,29 @@ drift: []                # - {criterion: <ticked but not true>, file: <path>, no
 checked_callers: []      # call sites you read for a changed signature (file:line)
 ```
 
+When the brief or the phase doc carries a `Blast radius:` line — the planner's
+list of who calls what the phase changes — read those call sites against the
+change and list each one you read in `checked_callers`.
+
 `round` and `verdict` are required; keep every other key, writing `[]` when it
 is empty. Quote any value containing `: `, ` #`, or starting with `*`, `[` or
 `{`. When you stopped early — a turn limit, a scope too large to finish — say
 `complete: false` and list what is left in `scope_left`; never present a
 partial review as a whole one. The non-blocking line stays out of the block.
+
+A review that stopped early is **incomplete, never passed**: the engine reads
+`complete: false`, a missing or unparsable block, a block whose `verdict`
+disagrees with the VERDICT line, a timeout and a missing VERDICT line alike —
+none of them starts a fix, all of them go to the operator.
+
+**Round 2.** The review after a fix is a narrower job. The brief gives you the
+previous round's open findings, that round's `scope_left`, and the diff since
+the tree it reviewed — review only those, not the whole phase again. Write
+`round: 2`; put every previous finding you confirmed fixed in `resolves`;
+report one that still stands again under its own id. A previous finding you
+neither resolve nor re-report is added back by the engine as an
+`unaddressed <id>` `plan-conformance` finding and the round fails on it. There
+is no automatic third round: after round 2 the operator decides.
 
 End with exactly one final line, nothing after it:
 
@@ -105,10 +123,15 @@ Role, Output and Bounds above as the prompt itself; keep the two in step when
 either changes.
 
 - **Input.** Your cwd is the run's git worktree. The prompt carries the
-  phase document as it stands (with the executor's ticks), then
+  phase document as it stands (with the executor's ticks) — preceded by a
+  `BLAST RADIUS:` line repeating the doc's `Blast radius:` callers, or saying
+  it declares none — then
   `git diff <run start point>...HEAD --stat` and the full diff, capped by file
   count and bytes. A run with no recorded start point says so instead of a
-  diff. The phase document is the plan you check conformance against.
+  diff. The phase document is the plan you check conformance against. Round 2
+  (`REVIEW ROUND: 2`) carries no phase document and no whole-run diff — only
+  round 1's open findings, its `scope_left` and the diff since the tree round 1
+  reviewed (the whole diff, said so, when that tree is unknown).
 - **Output.** Exactly the Output contract above: merge-blocking findings ranked
   `P0` / `P1`, each with `file:line`, at most one non-blocking line, and one
   final `VERDICT: PASS | FAIL | INCONCLUSIVE` line with nothing after it. The

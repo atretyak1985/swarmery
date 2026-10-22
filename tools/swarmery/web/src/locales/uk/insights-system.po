@@ -1657,6 +1657,10 @@ msgstr "Кожен наступний запуск, що торкається {a
 msgid "Every phase of this plan finished. A read-only reviewer read all of their run branches together, looking at the seams between phases — what one phase hands over and another expects. Nothing was blocked or re-run."
 msgstr "Усі фази цього плану завершені. Рев’юер без права на запис прочитав усі їхні гілки запусків разом, дивлячись на шви між фазами — що одна фаза передає, а інша очікує. Нічого не заблоковано і не перезапущено."
 
+#: src/pages/system/InsightsTab.tsx
+msgid "every project"
+msgstr "кожен проєкт"
+
 #: src/pages/Analytics.tsx
 msgid "every series is hidden — click a legend chip to show one"
 msgstr "усі серії приховано — клацніть чіп легенди, щоб показати одну"
@@ -2305,6 +2309,10 @@ msgstr "лінт…"
 msgid "LLM-judge trajectory score"
 msgstr "оцінка траєкторії LLM-суддею"
 
+#: src/pages/system/InsightsTab.tsx
+msgid "loaded into every session's first request — CLAUDE.md size, unused MCP servers"
+msgstr "завантажується в перший запит кожної сесії — розмір CLAUDE.md, невикористані сервери MCP"
+
 #: src/pages/health/PhaseRunsTab.tsx
 #: src/pages/inbox/Inbox.tsx
 #: src/pages/learning/Classifier.tsx
@@ -2716,6 +2724,10 @@ msgstr "відкритих рекомендацій немає — радник 
 #: src/pages/system/TemplatesTab.tsx
 msgid "no overlays found — the daemon's working copy has no overlays/ directory, or it is empty on this machine"
 msgstr "оверлеїв не знайдено — у робочій копії демона немає каталогу overlays/ або він порожній на цій машині"
+
+#: src/pages/system/InsightsTab.tsx
+msgid "no oversized CLAUDE.md and no idle MCP server"
+msgstr "немає завеликого CLAUDE.md і жодного простійного сервера MCP"
 
 #: src/pages/Analytics.tsx
 msgid "no priced tasks"
@@ -3643,6 +3655,10 @@ msgstr "сесія {sessionId}"
 #: src/pages/inbox/InboxDetail.tsx
 msgid "Session {sessionId} asked {askedAgo} ago and is waiting on you. Nothing runs until you answer."
 msgstr "Сесія {sessionId} запитала {askedAgo} тому й чекає на вас. Доки ви не відповісте, ніщо не виконується."
+
+#: src/pages/system/InsightsTab.tsx
+msgid "Session-start cost"
+msgstr "Вартість старту сесії"
 
 #: src/pages/Retro.tsx
 #: src/pages/system-hub/Profiles.tsx

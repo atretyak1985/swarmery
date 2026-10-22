@@ -61,6 +61,7 @@ import {
 } from '../lib/format';
 import { ScopeChip } from '../components/ScopeChip';
 import { PLACES } from '../lib/nav';
+import { safeHref } from '../lib/safeHref';
 import { useScope } from '../lib/scope';
 import { triageStateOf } from './health/healthModel';
 import { Explain } from '../components/Explain';
@@ -662,7 +663,7 @@ function ProposalDetail({
         )}
         {p.pr_url !== null && (
           <a
-            href={p.pr_url}
+            href={safeHref(p.pr_url) ?? undefined}
             target="_blank"
             rel="noreferrer"
             className="ml-auto font-mono text-[10.5px] text-green transition-colors hover:underline"

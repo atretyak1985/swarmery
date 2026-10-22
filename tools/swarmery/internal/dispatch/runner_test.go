@@ -79,8 +79,8 @@ func TestClaudeRunnerModelFlag(t *testing.T) {
 		t.Fatalf("read args: %v", err)
 	}
 	got := strings.TrimSpace(string(out))
-	want := "-p hello --session-id u3 --setting-sources project,local --permission-mode " +
-		claudeflags.DefaultMode + " --model sonnet --effort " + DefaultEffort
+	want := "-p --session-id u3 --setting-sources project,local --permission-mode " +
+		claudeflags.DefaultMode + " --model sonnet --effort " + DefaultEffort + " -- hello"
 	if got != want {
 		t.Errorf("argv = %q, want %q", got, want)
 	}
@@ -127,7 +127,7 @@ func TestClaudeRunnerAgentPrefixesPromptOnce(t *testing.T) {
 // behavior — the prompt is passed through with no mention of any kind.
 func TestClaudeRunnerNoAgentLeavesPromptUnchanged(t *testing.T) {
 	got := spawnArgs(t, RunSpec{Prompt: "hello", SessionUUID: "u7"})
-	if !contains(got, "-p hello ") {
+	if !strings.HasSuffix(strings.TrimSpace(got), " -- hello") {
 		t.Errorf("args %q should carry the bare prompt", got)
 	}
 	if contains(got, "@") {

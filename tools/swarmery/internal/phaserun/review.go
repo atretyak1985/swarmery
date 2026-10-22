@@ -13,8 +13,10 @@ import (
 	"strings"
 
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/claudeacct"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/mdfence"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/runsettings"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/verify"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/workaround"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/worktree"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/wsingest"
 )
@@ -22,9 +24,15 @@ import (
 // The review stage (decision D4): a phase doc carrying `**Review:** on` gets a
 // second, read-only headless session after its run settles done|partial and before
 // the verifier grades it. The reviewer reads the phase doc and the run's diff and
-// answers with code-reviewer's contract (findings + one VERDICT line). A FAIL is
-// written into the doc as `## Review findings` and starts ONE fix re-run; a second
-// FAIL is recorded and nothing more. Every review is a row in phase_reviews.
+// answers with code-reviewer's contract (findings, a `kind: review` block, one
+// VERDICT line). Every PASS, FAIL and incomplete review is written into the doc as
+// a `kind: review` block under `## Review` (wsingest.AppendReviewFindings, D42).
+// A FAIL starts ONE fix re-run, followed by a second review round that is given
+// only the first round's findings, its scope_left and the diff since (round2.go).
+// At most two automatic rounds: a review that is incomplete (D20, incomplete.go)
+// or still failing after the second round opens an operator decision — repeat the
+// review or accept it as is (review_rounds.go). Every review is a row in
+// phase_reviews.
 //
 // Read-only-ness is established twice, independently, because `claude` may change
 // its tool set between versions: on the argv (Edit, Write, MultiEdit, NotebookEdit
@@ -97,6 +105,8 @@ Review the change below against the phase document it was meant to implement. Le
 
 Output: list only problems you would block the merge for — for each, file:line, one sentence on why it is wrong, and how to show it fails. Rank them by severity (P0 blocking / P1 must-fix). Zero findings is a legitimate result; say so plainly. At most one extra line for a non-blocking note, marked as non-blocking. When a verdict would need a build or test run, say so — the verifier runs after you. Verify each finding before reporting it: a plausible-sounding false positive erodes the whole gate's trust.
 
+When the prompt carries a BLAST RADIUS line — the phase document's list of who calls what the phase changes — read those call sites against the change, and list each one you read in checked_callers.
+
 Immediately before the verdict line, restate the review as one fenced ` + "```yaml" + ` block with kind: review — the machine copy appended to the phase document's ## Review section (one block per round):
 
 ` + "```yaml" + `
@@ -126,22 +136,96 @@ End with exactly one final line, nothing after it:
 VERDICT: PASS | FAIL | INCONCLUSIVE
 FAIL when any P0/P1 stands; INCONCLUSIVE only when you genuinely could not assess (missing files, no diff) — name what was missing.`
 
-// reviewPrompt renders the reviewer's prompt: the role and the daemon-API rule for
-// daemonPort, the review round (1 for a phase's first review, 2 for the review
-// after its fix re-run — the `round` of the reviewer's `kind: review` block), the
-// phase doc as it stands now (with the executor's ticks), and the run's diff.
-func reviewPrompt(title, doc, diff string, daemonPort, round int) string {
+// reviewPrompt renders the reviewer's prompt: the guard check's summary FIRST when
+// it found anything (GuardResult.Summary — the reviewer reads what the run did to
+// protected paths before anything the run says about itself), the role and the
+// daemon-API rule for daemonPort, the review round (1 for a phase's first review,
+// 2 for the review after its fix re-run — the `round` of the reviewer's `kind:
+// review` block), the phase doc as it stands now (with the executor's ticks), the
+// places the run's agent said it changed course (lookFirst; the section is absent
+// when there are none), and the run's diff.
+func reviewPrompt(guardSummary, title, doc, diff string, daemonPort, round int, lookFirst workaround.PhaseHits) string {
 	var b strings.Builder
+	if g := strings.TrimSpace(guardSummary); g != "" {
+		b.WriteString(g)
+		b.WriteString("\n\n")
+	}
 	b.WriteString(reviewerPreamble(daemonPort))
 	b.WriteString("\n\nREVIEW ROUND: ")
 	b.WriteString(strconv.Itoa(round))
 	b.WriteString("\n\nPHASE: ")
 	b.WriteString(title)
+	b.WriteString("\n\n")
+	b.WriteString(blastRadiusBrief(doc))
 	b.WriteString("\n\nPHASE DOCUMENT:\n----------------------------------------\n")
 	b.WriteString(strings.TrimRight(doc, "\n"))
 	b.WriteString("\n----------------------------------------\n\n")
+	b.WriteString(lookFirstSection(lookFirst))
 	b.WriteString(diff)
 	return b.String()
+}
+
+// blastRadiusBrief repeats the phase doc's `Blast radius:` line — the planner's
+// list of who calls what the phase changes (wsingest.ParseBlastRadius, core
+// workspace-plans resources/blast-radius.md) — on its own line of the brief, so
+// the reviewer reads those call sites and lists them in checked_callers rather
+// than having to find the line inside the doc. A doc without one says so.
+func blastRadiusBrief(doc string) string {
+	line := wsingest.ParseBlastRadius(doc)
+	if line == "" {
+		return "BLAST RADIUS: the phase document declares none — list in checked_callers any call site you read for a changed signature."
+	}
+	// ParseBlastRadius matched the prefix case-insensitively; it is ASCII, so its
+	// length is the same whatever the case. Drop it and any bold marker after it.
+	rest := strings.TrimSpace(strings.TrimLeft(line[len("blast radius:"):], "*"))
+	return "BLAST RADIUS: " + rest + "\nRead these call sites against the diff; list each one you read, as file:line, in the block's checked_callers."
+}
+
+// lookFirstMax bounds the list in the prompt; the phase card shows them all.
+const lookFirstMax = 20
+
+// lookFirstSection lists the run's workaround hits (D23) — where the executor
+// said "instead", "for now", "pre-existing"… — so the reviewer checks those
+// places in the diff first. Advisory: a hit is a pointer, not a finding.
+func lookFirstSection(h workaround.PhaseHits) string {
+	if len(h.Hits) == 0 && h.Total == 0 {
+		return ""
+	}
+	var b strings.Builder
+	b.WriteString("Look first — the agent changed course here:\n")
+	b.WriteString("(the executor's own words, matched against the workaround-words list; each is a place to check in the diff, not a finding by itself)\n")
+	for i, hit := range h.Hits {
+		if i == lookFirstMax {
+			break
+		}
+		fmt.Fprintf(&b, "- %q — %s\n", hit.Word, hit.Sentence)
+		if hit.Before != "" {
+			fmt.Fprintf(&b, "    before: %s\n", hit.Before)
+		}
+		if hit.After != "" {
+			fmt.Fprintf(&b, "    after: %s\n", hit.After)
+		}
+	}
+	if more := h.Total - min(len(h.Hits), lookFirstMax); more > 0 {
+		fmt.Fprintf(&b, "- … and %d more on the phase card.\n", more)
+	}
+	b.WriteString("\n")
+	return b.String()
+}
+
+// lookFirst reads the run session's workaround hits for the review prompt. The
+// ingest tail stores them as the run's transcript lands; a read failure is
+// logged and leaves the section out — it never blocks the review.
+func (s *Service) lookFirst(phaseID int64, runUUID string) workaround.PhaseHits {
+	if s.DB == nil || runUUID == "" {
+		return workaround.PhaseHits{}
+	}
+	h, err := workaround.ForPhase(s.DB, phaseID, runUUID)
+	if err != nil {
+		log.Printf("warning: phaserun: phase=%d workaround hits unreadable: %v", phaseID, err)
+		return workaround.PhaseHits{}
+	}
+	return h
 }
 
 // reviewGit is the git the review stage shells out to in the run's worktree: the
@@ -165,13 +249,21 @@ func (s *Service) reviewDiff(dir, base string) string {
 	if base == "" {
 		return "DIFF: unavailable — this run recorded no start point, so there is no honest base to diff against. Review the commits on HEAD that the phase document describes."
 	}
+	return s.diffSection(dir, []string{base + "...HEAD"})
+}
+
+// diffSection renders `git diff --stat <rng>` and the full diff of at most
+// verify.DefaultMaxDiffFiles files, capped at reviewDiffMaxBytes. rng is one
+// range (`base...HEAD`) or two tree-ish (round 2: the previous round's tree and
+// this one's).
+func (s *Service) diffSection(dir string, rngArgs []string) string {
 	g := s.reviewGit()
-	rng := base + "...HEAD"
-	stat, err := g.Run(dir, "diff", "--stat", rng)
+	rng := strings.Join(rngArgs, " ")
+	stat, err := g.Run(dir, append([]string{"diff", "--stat"}, rngArgs...)...)
 	if err != nil {
 		return fmt.Sprintf("DIFF: unavailable — `git diff --stat %s` failed: %v", rng, err)
 	}
-	names, err := g.Run(dir, "diff", "--name-only", rng)
+	names, err := g.Run(dir, append([]string{"diff", "--name-only"}, rngArgs...)...)
 	if err != nil {
 		return fmt.Sprintf("DIFF: unavailable — `git diff --name-only %s` failed: %v", rng, err)
 	}
@@ -193,7 +285,8 @@ func (s *Service) reviewDiff(dir, base string) string {
 		fmt.Fprintf(&b, "\nThe change spans %d files; the full diff below covers the first %d. Read the rest from the tree.\n",
 			len(files), len(shown))
 	}
-	full, err := g.Run(dir, append([]string{"diff", rng, "--"}, shown...)...)
+	args := append(append([]string{"diff"}, rngArgs...), "--")
+	full, err := g.Run(dir, append(args, shown...)...)
 	if err != nil {
 		fmt.Fprintf(&b, "\nFULL DIFF: unavailable — %v\n", err)
 		return b.String()
@@ -298,6 +391,37 @@ func (s *Service) restoreTree(dir string) error {
 type reviewOutcome struct {
 	sessionUUID, treeBefore, treeAfter string
 	verdict, detail, findings          string
+	// block is the reviewer's own `kind: review` block (the last one that parses
+	// in its output); nil when it wrote none readable. Phase review only.
+	block *mdfence.Review
+	// blocks are all the parsable `kind: review` blocks of the output and
+	// blockErrs counts the ones that did not parse (ClassifyReview).
+	blocks    []mdfence.Review
+	blockErrs int
+	// prior is a round-2 review's input: the previous round's open findings
+	// (unaddressedFindings checks the answer against them). fullDiff: the
+	// round-2 diff base was unknown, so the brief carried the run's whole diff.
+	prior    []mdfence.Finding
+	fullDiff bool
+	// guard is the run's guard check, recorded as phase_reviews.guard_json.
+	guard GuardResult
+}
+
+// reviewerBlock is the last parsable `kind: review` block of the reviewer's
+// output — the contract asks for it right before the VERDICT line — or nil.
+func reviewerBlock(output string) *mdfence.Review {
+	rs, _ := reviewerBlocks(output)
+	if len(rs) == 0 {
+		return nil
+	}
+	return &rs[len(rs)-1]
+}
+
+// reviewerBlocks is every `kind: review` block of the reviewer's output that
+// parses, and how many did not.
+func reviewerBlocks(output string) ([]mdfence.Review, int) {
+	rs, errs := mdfence.ParseReviews(output)
+	return rs, len(errs)
 }
 
 // reviewRun is the review stage of a finished phase run. It returns the verdict
@@ -308,36 +432,116 @@ type reviewOutcome struct {
 // done|partial (a run that stopped mid-edit is measuring the interruption) and the
 // worktree is known. Every other failure is recorded as an inconclusive review and
 // never changes the run's own outcome.
-func (s *Service) reviewRun(phaseID int64, info phaseInfo, acq worktree.Acquired, endState string) (verdict string, fix bool) {
+func (s *Service) reviewRun(phaseID int64, info phaseInfo, acq worktree.Acquired, endState string, guard GuardResult) (verdict string, fix bool) {
 	if s.Review == nil || info.ReviewMode != wsingest.ReviewOn || acq.Path == "" ||
 		(endState != "done" && endState != "partial") {
 		return "", false
 	}
-	started := s.ts()
 	round, runUUID := s.reviewState(phaseID)
+	return s.reviewCycle(phaseID, info, acq, round, runUUID, false, guard)
+}
+
+// reviewCycle runs one review round and decides what follows it. fixRound is
+// review_fix_round: 0 before the fix re-run (this is round 1 of the cycle), 1
+// after it (round 2, given the round-2 brief), maxAutoReviewRounds once the
+// cycle handed over to the operator. manual marks a review the operator asked
+// for (repeat-review): it never starts a fix re-run and never uses the brief.
+//
+// guard is the run's guard check (guard.go): its summary opens the reviewer's
+// prompt and it is recorded on the phase_reviews row. A repeated review has no
+// run of its own, so it passes the zero GuardResult.
+func (s *Service) reviewCycle(phaseID int64, info phaseInfo, acq worktree.Acquired, fixRound int, runUUID string, manual bool, guard GuardResult) (verdict string, fix bool) {
+	started := s.ts()
 	// review_fix_round counts fix re-runs (0 before the first); the block's round
-	// counts reviews, so the first review is round 1.
-	out := s.recoveredReview(phaseID, info, acq, round+1)
-	s.recordReview(phaseID, info, runUUID, round, started, out)
+	// counts reviews, so the first review is round 1 — and never one the doc
+	// already carries.
+	reviewRound := wsingest.NextReviewRound(info.DocPath, fixRound+1)
+	second := !manual && fixRound == 1
+	out := s.recoveredReview(phaseID, info, acq, reviewRound, second, guard)
+	out.guard = guard
+
+	// D20 first: an incomplete review is never a PASS or a FAIL of record.
+	rawVerdict := out.verdict
+	sub, incomplete := ClassifyReview(out, out.blocks)
+	var reason string
+	switch {
+	case incomplete:
+		reason = incompleteReason(sub)
+		out.verdict, out.detail = string(verify.VerdictInconclusive), incompleteDetail(sub, out.detail)
+	case second && out.block != nil:
+		// D42: a previous finding the round neither resolved nor re-reported is
+		// added back by the daemon, and the round fails on it.
+		if added := unaddressedFindings(out.prior, out.block, reviewRound); len(added) > 0 {
+			b := *out.block
+			b.Findings = append(append([]mdfence.Finding(nil), b.Findings...), added...)
+			out.block = &b
+			out.verdict = string(verify.VerdictFail)
+			out.detail = strings.TrimSpace(out.detail + fmt.Sprintf("\n%d finding(s) of round %d unaddressed — added by the daemon",
+				len(added), reviewRound-1))
+		}
+	}
+	if second && out.fullDiff {
+		out.detail = strings.TrimSpace(out.detail + "\n" + DetailRound2FullDiff)
+	}
+
+	// PASS, FAIL and incomplete alike become a `kind: review` block in the doc;
+	// the row keeps the same block text (or, when the reviewer wrote none, its
+	// whole output). A reviewer that broke its contract (mutated tree) or never
+	// started writes nothing: that is INCONCLUSIVE, not a round.
+	var block wsingest.ReviewBlock
+	recorded := incomplete || out.verdict == string(verify.VerdictPass) || out.verdict == string(verify.VerdictFail)
+	now := s.clock()
+	if recorded {
+		blockVerdict := strings.ToUpper(out.verdict)
+		if incomplete {
+			// The reviewer's own word when it said one; INCONCLUSIVE when it did not.
+			blockVerdict = strings.ToUpper(rawVerdict)
+		}
+		block = wsingest.ReviewBlock{Review: out.block, Verdict: blockVerdict, Prose: out.findings, Incomplete: reason}
+		if rawVerdict != string(verify.VerdictFail) {
+			block.Prose = "" // a PASS without a block records the round, not the prose
+		}
+		if out.block != nil {
+			if text, err := wsingest.RenderReviewBlock(block, reviewRound, now); err == nil {
+				out.findings = text
+			}
+		}
+	}
+	s.recordReview(phaseID, info, runUUID, fixRound, started, out)
 	// The epic payload carries the phase's reviews: refetch it now, not after the
 	// verifier (which may take minutes) reaches the defer's own notify.
 	s.notify(info.WorkspaceTaskID)
-	log.Printf("phaserun: phase=%d review %s (fix round %d) %s", phaseID, out.verdict, round, out.detail)
+	log.Printf("phaserun: phase=%d review %s (fix round %d, review round %d, manual %v) %s",
+		phaseID, out.verdict, fixRound, reviewRound, manual, out.detail)
 
-	switch out.verdict {
-	case string(verify.VerdictPass):
+	var appendErr error
+	if recorded {
+		if appendErr = wsingest.AppendReviewFindings(info.DocPath, block, reviewRound, now); appendErr != nil {
+			log.Printf("error: phaserun: phase=%d review %s could not be written into %s: %v",
+				phaseID, out.verdict, info.DocPath, appendErr)
+		}
+	}
+
+	switch {
+	case incomplete:
+		// D20: no fix re-run on a review nobody can vouch for — the operator
+		// decides whether to repeat it or accept it as is.
+		s.handOverReview(phaseID, info, reviewRound, reason)
+	case out.verdict == string(verify.VerdictPass):
 		// A pass closes the fix cycle: a later review may start a fix again.
 		s.setReviewFixRound(phaseID, 0)
-	case string(verify.VerdictFail):
-		if round > 0 {
-			// The one fix already ran and the review still fails: recorded above,
-			// nothing more. The verifier still grades the run.
+	case out.verdict == string(verify.VerdictFail):
+		if manual || fixRound > 0 {
+			// The automatic rounds are spent (or the operator asked for this one)
+			// and the review still fails: recorded above, handed over. The
+			// verifier still grades the run.
+			s.handOverReview(phaseID, info, reviewRound,
+				fmt.Sprintf("the review still fails after round %d", reviewRound))
 			return out.verdict, false
 		}
-		if err := wsingest.AppendReviewFindings(info.DocPath, out.findings, s.clock()); err != nil {
+		if appendErr != nil {
 			// No findings in the doc ⇒ a re-run would not know what to fix.
-			log.Printf("error: phaserun: phase=%d review FAIL but the findings could not be written into %s: %v — no fix re-run",
-				phaseID, info.DocPath, err)
+			log.Printf("error: phaserun: phase=%d review FAIL without findings in the doc — no fix re-run", phaseID)
 			return out.verdict, false
 		}
 		s.setReviewFixRound(phaseID, 1)
@@ -349,7 +553,7 @@ func (s *Service) reviewRun(phaseID int64, info phaseInfo, acq worktree.Acquired
 // guardedReviewRun is reviewRun as runAndHandle's defer calls it: a panic anywhere
 // in the review stage is logged and read as an inconclusive review that asks for no
 // fix, so the verifier, the worktree removal and the slot release after it still run.
-func (s *Service) guardedReviewRun(phaseID int64, info phaseInfo, acq worktree.Acquired, endState string) (verdict string, fix bool) {
+func (s *Service) guardedReviewRun(phaseID int64, info phaseInfo, acq worktree.Acquired, endState string, guard GuardResult) (verdict string, fix bool) {
 	defer func() {
 		if r := recover(); r != nil {
 			log.Printf("error: phaserun: phase=%d review stage panicked: %v — read as inconclusive (%s)",
@@ -357,13 +561,13 @@ func (s *Service) guardedReviewRun(phaseID int64, info phaseInfo, acq worktree.A
 			verdict, fix = string(verify.VerdictInconclusive), false
 		}
 	}()
-	return s.reviewRun(phaseID, info, acq, endState)
+	return s.reviewRun(phaseID, info, acq, endState, guard)
 }
 
 // recoveredReview is review with a panic turned into an inconclusive
 // `reviewer-did-not-start` outcome, so the review is still recorded and the run's
 // exit path carries on.
-func (s *Service) recoveredReview(phaseID int64, info phaseInfo, acq worktree.Acquired, reviewRound int) (o reviewOutcome) {
+func (s *Service) recoveredReview(phaseID int64, info phaseInfo, acq worktree.Acquired, reviewRound int, second bool, guard GuardResult) (o reviewOutcome) {
 	defer func() {
 		if r := recover(); r != nil {
 			log.Printf("error: phaserun: phase=%d reviewer panicked: %v", phaseID, r)
@@ -373,12 +577,14 @@ func (s *Service) recoveredReview(phaseID int64, info phaseInfo, acq worktree.Ac
 			}
 		}
 	}()
-	return s.review(phaseID, info, acq, reviewRound)
+	return s.review(phaseID, info, acq, reviewRound, second, guard)
 }
 
 // review runs the reviewer and classifies what came back. The fingerprint is taken
 // on both sides of the spawn and compared FIRST: a mutated tree voids any verdict.
-func (s *Service) review(phaseID int64, info phaseInfo, acq worktree.Acquired, reviewRound int) reviewOutcome {
+// second asks for the round-2 brief (round2.go) instead of the phase doc and the
+// run's whole diff.
+func (s *Service) review(phaseID int64, info phaseInfo, acq worktree.Acquired, reviewRound int, second bool, guard GuardResult) reviewOutcome {
 	inconclusive := func(o reviewOutcome, class, detail string) reviewOutcome {
 		o.verdict, o.detail = string(verify.VerdictInconclusive), class+": "+detail
 		return o
@@ -394,9 +600,23 @@ func (s *Service) review(phaseID int64, info phaseInfo, acq worktree.Acquired, r
 	}
 
 	o.sessionUUID = s.UUID()
+	s.parkReviewSession(phaseID, o.sessionUUID)
+	var prompt string
+	if second {
+		brief := s.buildRound2Brief(phaseID, info, acq, reviewRound-1, o.treeBefore)
+		o.prior, o.fullDiff = brief.findings, brief.fullDiff
+		prompt = round2Prompt(guard.Summary(), info.Name, brief, s.DaemonPort, reviewRound)
+	} else {
+		var runUUID string
+		if s.DB != nil {
+			_, runUUID = s.reviewState(phaseID)
+		}
+		prompt = reviewPrompt(guard.Summary(), info.Name, string(doc), s.reviewDiff(acq.Path, acq.StartPoint), s.DaemonPort, reviewRound,
+			s.lookFirst(phaseID, runUUID))
+	}
 	resolution := claudeacct.Resolve(info.ProjectPath)
 	spec := verify.RunSpec{
-		Prompt:      reviewPrompt(info.Name, string(doc), s.reviewDiff(acq.Path, acq.StartPoint), s.DaemonPort, reviewRound),
+		Prompt:      prompt,
 		SessionUUID: o.sessionUUID,
 		Cwd:         acq.Path,
 		Model:       reviewModel,
@@ -405,6 +625,10 @@ func (s *Service) review(phaseID int64, info phaseInfo, acq worktree.Acquired, r
 		Resolution:      resolution,
 		SettingsFile:    runsettings.Compose("review", resolution, runsettings.Inputs{}),
 		DisallowedTools: s.reviewDenials(),
+		// Least privilege: dontAsk with the read tools only (the reviewer never
+		// runs a command), on the reviewers' own knob.
+		AllowedTools:  verify.ReadOnlyTools(),
+		PermissionEnv: verify.ReviewPermEnv,
 	}
 	log.Printf("phaserun: phase=%d reviewing worktree=%q", phaseID, acq.Path)
 	// context.Background(): the run's own context is already cancelled (the defer's
@@ -417,6 +641,10 @@ func (s *Service) review(phaseID int64, info phaseInfo, acq worktree.Acquired, r
 	}
 	if run != nil {
 		o.findings = capFindings(run.Output)
+		o.blocks, o.blockErrs = reviewerBlocks(run.Output)
+		if len(o.blocks) > 0 {
+			o.block = &o.blocks[len(o.blocks)-1]
+		}
 	}
 	if o.treeAfter != o.treeBefore {
 		detail := o.treeBefore + "→" + o.treeAfter
@@ -488,24 +716,38 @@ func (s *Service) reviewState(phaseID int64) (round int, runUUID string) {
 	return round, runUUID
 }
 
+// parkReviewSession records the reviewer's session on the phase row at spawn
+// (migration 0128), the way run_session_uuid records the executor's. The
+// phase_reviews row only lands after the reviewer exits, so without this the
+// review stage is invisible while it runs — to the stalled-phase detector
+// (internal/stall) and to GET /api/sessions/{uuid} before the transcript exists.
+// Best-effort: a lost stamp must not stop the review.
+func (s *Service) parkReviewSession(phaseID int64, uuid string) {
+	if _, err := s.DB.Exec(`UPDATE epic_phases SET review_session_uuid = ?, review_started_at = ? WHERE id = ?`,
+		uuid, s.ts(), phaseID); err != nil {
+		log.Printf("warning: phaserun: phase=%d park review session: %v", phaseID, err)
+	}
+}
+
 func (s *Service) setReviewFixRound(phaseID int64, round int) {
 	if _, err := s.DB.Exec(`UPDATE epic_phases SET review_fix_round = ? WHERE id = ?`, round, phaseID); err != nil {
 		log.Printf("error: phaserun: phase=%d review_fix_round=%d: %v", phaseID, round, err)
 	}
 }
 
-// recordReview writes the phase_reviews row. Best-effort: a lost record must not
-// change the run's outcome, so a failure is logged.
+// recordReview writes the phase_reviews row, guard_json included (the run's guard
+// check, '{}'-shaped when the run had none to make). Best-effort: a lost record
+// must not change the run's outcome, so a failure is logged.
 func (s *Service) recordReview(phaseID int64, info phaseInfo, runUUID string, round int, started string, o reviewOutcome) {
 	if _, err := s.DB.Exec(`
 		INSERT INTO phase_reviews
 			(scope, phase_id, workspace_task_id, session_uuid, run_session_uuid,
 			 tree_before, tree_after, verdict, detail, findings, fix_round,
-			 started_at, finished_at)
-		VALUES ('phase', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			 started_at, finished_at, guard_json)
+		VALUES ('phase', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		phaseID, strconv.FormatInt(info.WorkspaceTaskID, 10), o.sessionUUID, runUUID,
 		o.treeBefore, o.treeAfter, o.verdict, o.detail, o.findings, round,
-		started, s.ts()); err != nil {
+		started, s.ts(), guardJSON(o.guard)); err != nil {
 		log.Printf("error: phaserun: phase=%d record review: %v", phaseID, err)
 	}
 }

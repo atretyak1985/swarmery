@@ -38,6 +38,7 @@ Status: Pending
 **Repo:** `<repo>` · **Branch:** `<branch>` · **Depends on:** … · **Estimate:** …   ← Branch is informational; the daemon lands swarm/phase-<id>
 **Verify:** off             ← off | normal | strict (see "Header rows" below)
 **Review:** off             ← on | off
+**Effort:** high            ← low | medium | high | xhigh — required (see "Header rows")
 ## In plain words           ← 3–6 jargon-free sentences; see below
 ## Goal
 ## Files to Create / Files to Modify
@@ -46,6 +47,7 @@ Status: Pending
 ## Dependencies
 ## Acceptance Criteria
 - [ ] {measurable criterion with its verification command}
+## Risks                      ← first bullet: the `Blast radius:` line; see "## Risks" below
 ## Notes
 ## Guard                      ← the planner's `kind: guard` block; see "## Guard" below
 ## Forecast                   ← optional; see "## Forecast" below
@@ -119,9 +121,9 @@ agents skip.
 The final phase of a multi-phase plan is always a quality gate
 (`kind: quality-gate`).
 
-### Header rows: `**Verify:**` and `**Review:**`
+### Header rows: `**Verify:**`, `**Review:**` and `**Effort:**`
 
-Both are read from the phase doc's header only — the lines before the first
+All three are read from the phase doc's header only — the lines before the first
 `## ` section, within the first 15 lines — so a `**Verify:**` line quoted in an
 agent prompt further down never counts. Put them on their own lines directly
 after the `**Repo:** …` line.
@@ -130,6 +132,7 @@ after the `**Repo:** …` line.
 |---|---|---|---|
 | `**Verify:**` | `off` \| `normal` \| `strict` | After a run ends `done` or `partial`, a read-only verifier grades the ticked criteria at the given strictness. Any value but `off` also makes the phase gate require a passing verdict before the phase counts as complete. A missing or unrecognized value means `off`. | L/XL: `normal`. S/M: `off`, or `normal` when the phase touches data, schemas or migrations. |
 | `**Review:**` | `on` \| `off` | The phase asks for a read-only code-review pass over its diff before the verifier runs; a failed review returns the phase once with the findings appended to the doc. A missing value means `off`, and a daemon without the review stage ignores the row. | L/XL: `on`. S/M: `off`. |
+| `**Effort:**` | `low` \| `medium` \| `high` \| `xhigh` | The reasoning depth the phase's run gets (`--effort`), chosen together with the model the phase needs. A value the CLI does not accept fails the run before it starts, naming the doc. Required: a doc without it runs at the daemon's default effort and is linted `phase_effort_missing`. | `low`/`medium` for mechanical edits and config, `high` for ordinary implementation, `xhigh` for design-heavy or cross-cutting work. |
 
 ### The header's `**Branch:**` is informational
 
@@ -308,6 +311,25 @@ spec.md exists, every phase doc MUST carry a `**Covers:** SC-…` line; every
 SC id must be covered by ≥1 phase and no phase may cover an undeclared id —
 the platform lints coverage.
 
+## `## Decisions` (README, whenever the plan rests on answered or open questions)
+
+One line per decision, in the order the questions were asked, numbered `D-1`,
+`D-2`, … — the plan's stable decision ids:
+
+```
+- **D-3** (expensive, undecided) — Which store backs the cache? → undecided (reason: a data migration to undo)
+```
+
+The tuple is `(<cheap|expensive>, <decided|recommended|undecided>)`: the cost of
+reversing the decision later, then its state. Answered → `decided` with the
+answer; unanswered and cheap → `recommended`, the answer being the planner's pick
+followed by `(без відповіді, рекомендований)`; unanswered and expensive →
+`undecided`, answer `undecided`. `(reason: …)` is optional. A phase doc that
+builds on a decision declares it in its header block —
+`**Depends on decisions:** D-1, D-3` — and the platform refuses to start that
+phase while a listed decision is undecided and expensive. Plans without the
+section are unaffected.
+
 ## `## Forecast` (optional, in a phase doc, before `## Completion Report`)
 
 A small prediction the platform stores and later scores. It is DATA, never a
@@ -357,6 +379,29 @@ Neither is a gate. A post-hoc forecast still ingests, still renders, and still
 lets its phase run; the only consequence is that the learning loop does not
 score it.
 
+## `## Risks` (in every phase doc, written by the planner)
+
+The phase-specific risks, opening with the phase's blast radius — who calls
+what the phase changes — as one line:
+
+```markdown
+## Risks
+
+- Blast radius: <N> callers in <pkgs> — <file:line, …> (sources: rg, serena)
+```
+
+The planner computes it before writing the section, from the phase's Forecast
+`files`, with the procedure in `resources/blast-radius.md` (the `/impact`
+chain's shell equivalents, Serena when lsp-pack is enabled, a display cap of
+20 callers, `Blast radius: not computed — <reason>` when the chain cannot run).
+The daemon's reviewer brief repeats the line so the reviewer's `kind: review`
+block can list the call sites it read in `checked_callers`.
+
+Linted (shown on the phase, never enforced): `blast_radius_missing` — a
+Forecast that lists `files` in a doc with no `Blast radius:` line in its own
+text. A line quoted inside a fenced block does not count; a line under another
+section (`## Notes`) does.
+
 ## `## Guard` (in every phase doc, written by the planner)
 
 What the phase run must not touch, and when it must stop and report instead of
@@ -395,6 +440,9 @@ stop_if:
 - `stop_if` keeps the four defaults; add phase-specific triggers after them.
 - Both keys are required; an empty list is written `[]`. Unknown keys are
   ignored.
+- An `allow:` list is the daemon's, not the planner's: when a run touches a
+  protected path, the operator's *allow (add to scope)* answer appends those
+  paths under `allow:`, and the next run may edit them. Never write it in a plan.
 
 ## `## Review` (appended per review round, never by the planner)
 

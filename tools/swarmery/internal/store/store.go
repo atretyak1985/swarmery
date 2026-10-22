@@ -22,11 +22,25 @@ func DefaultDBPath() (string, error) {
 
 // Open opens (creating if needed) the SQLite database at path, enables WAL and
 // foreign keys, and applies pending migrations.
+//
+// The store holds transcripts, so its files are private to the user: a new
+// directory is created 0700 (and the default ~/.swarmery is tightened to 0700
+// when it already exists), a new database file is created 0600 before SQLite
+// opens it — SQLite gives the -wal and -shm sidecars the database file's mode —
+// and after the migration the database and any sidecars are set to 0600.
 func Open(path string) (*sql.DB, error) {
 	if dir := filepath.Dir(path); dir != "" && dir != "." {
-		if err := os.MkdirAll(dir, 0o755); err != nil {
+		if err := os.MkdirAll(dir, 0o700); err != nil {
 			return nil, fmt.Errorf("create db dir: %w", err)
 		}
+		if isDefaultDir(dir) {
+			if err := os.Chmod(dir, 0o700); err != nil {
+				return nil, fmt.Errorf("chmod db dir: %w", err)
+			}
+		}
+	}
+	if err := createPrivate(path); err != nil {
+		return nil, fmt.Errorf("create db file: %w", err)
 	}
 	dsn := "file:" + path + "?_pragma=journal_mode(WAL)&_pragma=foreign_keys(1)&_pragma=busy_timeout(5000)"
 	db, err := sql.Open("sqlite", dsn)
@@ -39,6 +53,10 @@ func Open(path string) (*sql.DB, error) {
 	// The daemon's reads that must not queue behind it go through OpenReader.
 	db.SetMaxOpenConns(1)
 	if err := Migrate(db); err != nil {
+		db.Close()
+		return nil, err
+	}
+	if err := privateDBFiles(path); err != nil {
 		db.Close()
 		return nil, err
 	}
@@ -115,7 +133,8 @@ func OpenReader(path string) (*sql.DB, error) {
 // WAL database (the daemon may keep serving) — VACUUM takes only a brief read
 // lock and the snapshot is a single self-contained file with no -wal/-shm
 // sidecars. destPath must not already exist; its parent dir is created as
-// needed. Returns the snapshot's size in bytes.
+// needed (0700), and the snapshot is set to 0600. Returns the snapshot's size
+// in bytes.
 func Backup(srcPath, destPath string) (int64, error) {
 	if _, err := os.Stat(destPath); err == nil {
 		return 0, fmt.Errorf("backup target already exists: %s", destPath)
@@ -123,7 +142,7 @@ func Backup(srcPath, destPath string) (int64, error) {
 		return 0, fmt.Errorf("stat backup target: %w", err)
 	}
 	if dir := filepath.Dir(destPath); dir != "" && dir != "." {
-		if err := os.MkdirAll(dir, 0o755); err != nil {
+		if err := os.MkdirAll(dir, 0o700); err != nil {
 			return 0, fmt.Errorf("create backup dir: %w", err)
 		}
 	}
@@ -137,6 +156,10 @@ func Backup(srcPath, destPath string) (int64, error) {
 	escaped := strings.ReplaceAll(destPath, "'", "''")
 	if _, err := db.Exec("VACUUM INTO '" + escaped + "'"); err != nil {
 		return 0, fmt.Errorf("vacuum into %s: %w", destPath, err)
+	}
+	// A snapshot is the whole store: private like the database itself.
+	if err := os.Chmod(destPath, 0o600); err != nil {
+		return 0, fmt.Errorf("chmod snapshot: %w", err)
 	}
 	fi, err := os.Stat(destPath)
 	if err != nil {

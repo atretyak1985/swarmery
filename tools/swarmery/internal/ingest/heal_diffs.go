@@ -19,6 +19,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/redact"
 )
 
 // HealCreateDiffs fills diff/additions on Write-create rows that have none,
@@ -116,6 +118,7 @@ func healCreateDiffsIn(db *sql.DB, path string, pending map[string]int64) (int, 
 				continue
 			}
 			diff, additions, deletions := fileChangeDiff(fc)
+			diff = redact.Literal(diff) // as insertFileChange: code, literal shapes only
 			if _, err := db.Exec(
 				`UPDATE file_changes SET additions = ?, deletions = ?, diff = ? WHERE id = ?`,
 				additions, deletions, diff, id); err != nil {

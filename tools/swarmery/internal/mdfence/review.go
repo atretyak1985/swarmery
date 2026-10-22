@@ -43,7 +43,18 @@ type Review struct {
 	IDs            []IDEvidence
 	Drift          []Drift
 	CheckedCallers []string // call sites the reviewer read for a changed signature
-	Line           int      // 1-based document line of the block's opening fence
+	// Source is who wrote the block: "daemon" (the review stage), "interactive"
+	// (run-plan's orchestrator) or "backfill" (an operator, after the fact). ""
+	// when absent — a reviewer copying the contract never writes it; the engine
+	// that appends the block does.
+	Source string
+	// WrittenAt is the block's `written_at:` as written; "" when absent.
+	WrittenAt string
+	// Unparsable marks the daemon's prose fallback: the reviewer produced no
+	// readable block, so the daemon wrapped its prose in a minimal one
+	// (complete: false). A later stage must treat such a round as incomplete.
+	Unparsable bool
+	Line       int // 1-based document line of the block's opening fence
 }
 
 // Finding is one merge-blocking problem a review round reports.
@@ -161,6 +172,14 @@ func decodeReview(b Block) (Review, *ParseError) {
 			return Review{}, bad(n, fmt.Sprintf("complete %q is not true or false", n.Value))
 		}
 		r.Complete = c
+	}
+
+	r.Source, _ = scalar(keys["source"])
+	r.WrittenAt, _ = scalar(keys["written_at"])
+	if n := keys["unparsable"]; !isNull(n) {
+		if n.Kind != yaml.ScalarNode || n.Decode(&r.Unparsable) != nil {
+			return Review{}, bad(n, fmt.Sprintf("unparsable %q is not true or false", n.Value))
+		}
 	}
 
 	for _, l := range []struct {

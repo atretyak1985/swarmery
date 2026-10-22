@@ -24,6 +24,7 @@ import { Trans, useLingui } from '@lingui/react/macro';
 import { type FormEvent, useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import { pollVcsLogin, startVcsLogin, submitVcsToken, VcsLoginError } from '../api';
 import type { VcsInfo, VcsLoginStart } from '../api/types';
+import { safeHref } from '../lib/safeHref';
 import { containTab } from './ui';
 
 export interface VcsSignInDialogProps {
@@ -308,7 +309,11 @@ export function VcsSignInDialog({ projectId, vcs, onClose }: VcsSignInDialogProp
                   </button>
                 </div>
                 <a
-                  href={device.start.verificationUriComplete ?? device.start.verificationUri}
+                  href={
+                    safeHref(device.start.verificationUriComplete) ??
+                    safeHref(device.start.verificationUri) ??
+                    undefined
+                  }
                   target="_blank"
                   rel="noopener noreferrer"
                   className="mt-2.5 inline-block text-ink underline underline-offset-2 hover:text-green"

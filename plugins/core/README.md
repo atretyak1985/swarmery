@@ -6,8 +6,9 @@ environment knob for each, so an operator can tell what a hook does and how to
 switch it off without reading the script.
 
 Every hook here is best-effort and exits 0 unless the table says otherwise.
-Only `pre-model-switch.sh` may block (exit 2) — plus `protect-sensitive-files.sh`
-and `architecture-freshness.sh`, whose refusals are the point of the gate.
+Only `pre-model-switch.sh` may block (exit 2) — plus `phase-guard.sh`,
+`protect-sensitive-files.sh` and `architecture-freshness.sh`, whose refusals are
+the point of the gate.
 
 Agent roster and ownership metadata live in `AGENTS.md`, not here.
 
@@ -15,6 +16,7 @@ Agent roster and ownership metadata live in `AGENTS.md`, not here.
 
 | Event | Hook | What it does | Knob |
 |---|---|---|---|
+| PreToolUse(Edit\|Write\|Bash) | `phase-guard.sh` | Inside a phase run (a `.swarmery/plan/` dir at or above the cwd) **blocks (exit 2)** an Edit/Write on, or a Bash command naming, a file the lent phase doc's `kind: guard` block protects — reads through Bash included — plus the guard's own inputs (`.swarmery/plan/**`, `.swarmery/guard.log`). Logs every block to `.swarmery/guard.log`. Silent no-op outside a run; see "Phase guard" below | — |
 | PreToolUse(Edit\|Write) | `protect-sensitive-files.sh` | Blocks edits to secrets, keys, and other protected paths | — |
 | PreToolUse(Bash) | `bash-shape-guard.sh` | Refuses malformed Bash command shapes before the permission classifier sees them | — |
 | PreToolUse(Bash) | `prod-deploy-guard.sh` | Answers `ask` for a command matching a production-deploy pattern, so the native dialog shows even when an allow rule, auto mode or `bypassPermissions` would skip it; in a headless `-p` run that resolves to a denial. Never emits `allow`; burn-in in `docs/GATE-HARDENING.md` | `approvals.prodDeployPatterns` in `.claude/project.json`, `PROD_DEPLOY_GUARD_LOG` |
@@ -36,6 +38,47 @@ Agent roster and ownership metadata live in `AGENTS.md`, not here.
 | PreModelSwitch | `pre-model-switch.sh` | **Blocks (exit 2)** a switch UP onto a model with no recorded validation. A switch DOWN (weaker family — fable/mythos › opus › sonnet › haiku — or an older generation of the same family) always passes — that is the shape of a safeguard fallback, and blocking one strands the session | `SWARMERY_ALLOW_UNVALIDATED_MODEL`, `SWARMERY_PORT`, `SWARMERY_MODEL_SWITCH_PAYLOAD_LOG` |
 | PostModelSwitch | `post-model-switch.sh` | Records that the session's model changed, and warns once when the change was a downgrade | `SWARMERY_SESSION_FILE` |
 
+## Phase guard
+
+`phase-guard.sh` enforces the `## Guard` block a planner writes into every
+phase doc (`skills/workspace-plans/resources/plan-format.md` → "`## Guard`"):
+
+```yaml
+kind: guard
+protected_paths:
+  - "**/*_test.go"
+  - ".github/workflows/*.yml"
+stop_if: [protected path]
+```
+
+- **Where it looks.** The daemon lends the phase doc into the run's worktree
+  at `.swarmery/plan/<doc>.md`; the hook walks up from the session cwd (then
+  from `$CLAUDE_PROJECT_DIR`, so a session that `cd`'d out still meets it) to
+  the first such dir and parses every doc in it with `hooks/lib/guard-parse.sh`
+  (the bash twin of the daemon's Go parser, held to the same fixtures). No dir
+  → exit 0 at once, so interactive sessions never pay for it.
+- **What it blocks.** Edit / Write / MultiEdit / NotebookEdit by target path
+  (also where a symlink makes it land); Bash by every path-shaped token, so
+  `sed -i`, `tee`, `>`, `chmod`, a heredoc body and `python -c` are refused —
+  and so is `cat`. **Read protected files with Read / Grep**, which the hook
+  does not watch. `**` matches zero or more directories; matching ignores case.
+- **Always protected**, guard block or not: `.swarmery/plan/**` (the doc that
+  carries the guard), `.swarmery/guard.log`, and the `.swarmery` /
+  `.swarmery/plan` directories themselves.
+- **Fail closed.** An unparsable guard block blocks every Edit/Write/Bash with
+  the parser's line and reason until the plan is fixed; so do jq missing and a
+  payload that is not JSON. A glob naming a directory (`dir/`, `dir/**`) only
+  warns, and still protects the files under it.
+- **Allowed back in.** An optional `allow:` list in the same block exempts the
+  paths (or globs) it names from `protected_paths` — never from the
+  always-protected set. Nobody writes it by hand: the daemon appends it when
+  the operator answers the run's guard decision with *allow (add to scope)*.
+- **The record.** Each block appends `<RFC3339 ts>\t<tool>\t<path>\t<reason>`
+  to `.swarmery/guard.log`; the hook never truncates it.
+- **Limits.** A command that reaches a protected file without naming it
+  (`rm pkg/*`, `find … -exec`, a variable) is not seen. The hook is the early,
+  explained refusal, not a sandbox; the run's diff is what later stages check.
+
 ## Shipped but not wired
 
 Deliberately unregistered — enable per project by adding the entry to that
@@ -50,7 +93,7 @@ project's hooks config:
 
 Hook behaviour is pinned by `scripts/tests/*.test.sh` in the marketplace repo —
 for example `session-context-bridge.test.sh`, `architecture-freshness.test.sh`,
-`protect-sensitive-files.test.sh`. `portable-shell.test.sh` scans every script
+`protect-sensitive-files.test.sh`, `phase-guard.test.sh`. `portable-shell.test.sh` scans every script
 here for macOS-only spellings (`stat -f`, `shasum`, `date -v`, bash 4 builtins),
 because a hook that is green on a dev Mac and dead on Linux is the failure mode
 this layer keeps producing.

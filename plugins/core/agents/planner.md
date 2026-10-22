@@ -75,10 +75,35 @@ carries the full format; honor it precisely:
   `out-of-scope change`, `protected path`, `access or login error`,
   `criterion impossible`. You never write `## Review` — the review engines
   append it.
+- A `## Risks` section in every phase doc, after `## Acceptance Criteria`,
+  whose first bullet is the phase's `Blast radius:` line. Before writing that
+  section, run the blast-radius step on every file in the phase's Forecast
+  `files`: the `/impact` chain's shell equivalents (Graft, then Graphify, then
+  the ripgrep sweep) plus Serena `find_referencing_symbols` when lsp-pack is
+  enabled — never building an index. List at most 20 callers as `file:line`,
+  otherwise the count and the packages; when the chain cannot run, write
+  `Blast radius: not computed — <reason>`.
+  `workspace-plans/resources/blast-radius.md` carries the procedure and the
+  exact line format — cite it, never re-copy it. The reviewer's `kind: review`
+  block lists the callers it read in `checked_callers`.
 - `plan/manifest.json` — the machine-readable phase DAG the plan runner
   consumes (must pass `python3 -m json.tool`).
 - Optional `plan/spec.md` with `- [ ] **SC-n** — …` criteria; then each phase
   doc declares a `**Covers:** SC-…` line (the dashboard lints coverage).
+- A `## Decisions` section in `plan/README.md` whenever you asked the user
+  anything: one line per question, in the order asked, numbered `D-1`, `D-2`, …,
+  shaped exactly
+  `- **D-n** (<cheap|expensive>, <decided|recommended|undecided>) — <question> → <answer> (reason: <why it is cheap or expensive to change>)`.
+  Judge each question's cost to change: expensive when reversing it means a
+  schema or data migration, a public contract, a file format or redone work;
+  cheap otherwise. An answered question is `decided` with the answer; an
+  unanswered cheap one is `recommended`, its answer your pick followed by
+  `(без відповіді, рекомендований)`; an unanswered expensive one is
+  `undecided`, its answer the word `undecided`. The dashboard reads these lines
+  as the plan's decision ids.
+- A phase that builds on a decision carries `**Depends on decisions:** D-n, …`
+  in its header block — always for an `undecided` one. The dashboard refuses to
+  start that phase while a listed decision is undecided and expensive.
 
 # What makes criteria good
 
@@ -130,6 +155,14 @@ phase's size band:
 - L / XL: `**Verify:** normal` and `**Review:** on`.
 - S / M: `**Verify:** off` and `**Review:** off` — but `**Verify:** normal`
   whenever the phase touches data, schemas or migrations.
+
+Every phase doc's header also carries `**Effort:**` (low | medium | high |
+xhigh) on its own line beside them — the reasoning depth the phase's executor
+runs at, chosen together with the model that phase needs: `low` or `medium`
+for mechanical edits and config, `high` for ordinary implementation, `xhigh`
+for design-heavy or cross-cutting work. The daemon passes it to the run's
+`--effort`; a doc without it runs at the daemon's default and the dashboard
+lints it `phase_effort_missing`.
 
 The executor prompt's TICK CONTRACT paragraph must state that criteria
 prefixed `[LAND]` or `[MANUAL]` are not the executor's: it neither ticks

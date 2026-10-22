@@ -580,6 +580,35 @@ func writeJSON(path string, v any) error {
 	return nil
 }
 
+// writeBackup writes the pre-edit copy of a settings file to path+".bak",
+// private to the user (0600): settings files can hold env values and
+// credentials-bearing config, and a backup must not be readable by more users
+// than the file it copies. A .bak left by an older build is made private (or,
+// when it is a symlink, removed) BEFORE the new contents land in it, since
+// WriteFile's mode applies only to a file it creates.
+func writeBackup(path string, data []byte) error {
+	bak := path + ".bak"
+	if fi, err := os.Lstat(bak); err == nil {
+		switch {
+		case fi.Mode()&os.ModeSymlink != 0:
+			if err := os.Remove(bak); err != nil {
+				return fmt.Errorf("remove backup symlink %s: %w", bak, err)
+			}
+		case fi.Mode().Perm() != 0o600:
+			if err := os.Chmod(bak, 0o600); err != nil {
+				return fmt.Errorf("chmod backup %s: %w", bak, err)
+			}
+		}
+	}
+	if err := os.WriteFile(bak, data, 0o600); err != nil {
+		return fmt.Errorf("write backup %s: %w", bak, err)
+	}
+	if err := os.Chmod(bak, 0o600); err != nil {
+		return fmt.Errorf("chmod backup %s: %w", bak, err)
+	}
+	return nil
+}
+
 func knownPack(p string) bool {
 	for _, k := range KnownPacks {
 		if k == p {

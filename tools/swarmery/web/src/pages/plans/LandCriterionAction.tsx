@@ -12,6 +12,7 @@ import { Trans, useLingui } from '@lingui/react/macro';
 import { useEffect, useRef, useState } from 'react';
 import { landPhase } from '../../api';
 import type { Epic, EpicPhase, ProviderTerms } from '../../api/types';
+import { safeHref } from '../../lib/safeHref';
 import { criterionClassOf } from './CriterionLint';
 import { hasReviewTab, landCriterionAction, NEUTRAL_TERMS } from './landingModel';
 import { LandFailure } from './PhaseReview';
@@ -105,7 +106,7 @@ export function LandCriterionAction({
           </button>
         )}
         {action.kind === 'pr-link' && (
-          <a href={action.href} target="_blank" rel="noreferrer" className="text-brand hover:underline">
+          <a href={safeHref(action.href) ?? undefined} target="_blank" rel="noreferrer" className="text-brand hover:underline">
             {action.text}
           </a>
         )}
