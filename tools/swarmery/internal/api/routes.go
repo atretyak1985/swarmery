@@ -59,6 +59,9 @@ func Routes(root *http.ServeMux, h *Handler) {
 	mux.HandleFunc("POST /api/projects/{id}/config/{key}/probe", requireLocalOrigin(h.probeProjectConfig))
 	// canvas v2 parity: project editorial aggregate (rightNow + thisWeek + attention).
 	mux.HandleFunc("GET /api/projects/{id}/overview", h.projectOverview)
+	// session-start cost: the measured first-request size + its estimated
+	// CLAUDE.md / MCP / skills split (first_request.go, internal/firstreq).
+	mux.HandleFunc("GET /api/projects/{id}/first-request", h.projectFirstRequest)
 	// phase landing: the project's code host, its vocabulary and the daemon's
 	// sign-in state (vcs.go; cached 60s per project).
 	mux.HandleFunc("GET /api/projects/{id}/vcs", h.projectVcs)

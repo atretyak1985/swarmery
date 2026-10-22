@@ -366,6 +366,12 @@ export interface Session {
    *  modelChanged, which has no direction: an operator escalating sonnet ->
    *  opus changed model but did not fall back. The chip renders on THIS. */
   modelFellBack: boolean;
+  /** The session's OWN turns ran on more than one model (subagent and
+   *  `<synthetic>` turns excluded, `[1m]` folded). Broader than modelChanged,
+   *  which compares only the first and last model. Additive optional. */
+  modelSwitched?: boolean;
+  /** The distinct models of those turns, first-use order. Additive optional. */
+  models?: string[];
   gitBranch: string | null;
   cwd: string | null;
   status: SessionStatus;
@@ -2969,6 +2975,22 @@ export interface SystemInsights {
    * drift scanner.
    */
   pluginDrift?: SystemPluginDrift[];
+  /**
+   * Active session-start cost findings — claude_md_oversized,
+   * claude_md_over_200_lines, mcp_server_unused_30d. Additive optional.
+   */
+  startCost?: SystemStartCost[];
+}
+
+/** One active session-start cost finding (Go: startCostDTO). */
+export interface SystemStartCost {
+  rule: string;
+  severity: string;
+  target: string;
+  message: string;
+  /** Null for a user-scope MCP server — every project loads it. */
+  projectSlug: string | null;
+  projectPath: string;
 }
 
 /** One active plugin_* finding, resolved to the project it belongs to. */
@@ -5089,3 +5111,44 @@ export type PhaseLandingRefreshErrorCode =
   | 'no-remote'
   | 'provider-unknown'
   | 'status-failed';
+
+// --- session-start cost: GET /api/projects/{id}/first-request ---------------
+
+/** Go: firstreq.Measured — real usage of each session's first request. */
+export interface FirstRequestMeasured {
+  /** Median cache write (5m + 1h) of the first assistant turn. */
+  medianTokens: number;
+  /** Median whole first prompt (input + cache read + cache write). */
+  medianPromptTokens: number;
+  sessions: number;
+}
+
+/** Go: firstreq.Breakdown — an ESTIMATE (~bytes/4) of medianPromptTokens. */
+export interface FirstRequestEstimate {
+  claudeMd: number;
+  mcp: number;
+  skills: number;
+  /** Measured prompt minus the three parts above. */
+  other: number;
+  /** The caveat, verbatim. */
+  note: string;
+  claudeMdFiles: string[];
+  mcpTools: number;
+  mcpSchemas: number;
+  skillCount: number;
+}
+
+/** Go: mcpcfg.ConfiguredServer. */
+export interface ConfiguredMcpServer {
+  name: string;
+  scope: string;
+  source: string;
+}
+
+/** Go: firstRequestDTO. */
+export interface FirstRequest {
+  windowDays: number;
+  measured: FirstRequestMeasured;
+  estimate: FirstRequestEstimate;
+  mcpServers: ConfiguredMcpServer[];
+}

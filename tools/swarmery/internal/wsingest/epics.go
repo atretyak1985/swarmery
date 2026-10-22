@@ -58,6 +58,9 @@ var (
 
 // epicPhase is one parsed phase (a README table row joined to its doc file).
 type epicPhase struct {
+	// docLints are the header lints of the phase doc (LintPhaseDoc), for the
+	// author's eyes only — see logDocLints.
+	docLints        []PhaseDocLint
 	seq             int
 	name            string
 	docPath         string // absolute path to the phase/step doc (may not exist on disk yet)
@@ -848,6 +851,7 @@ func parsePlan(planDir string, warn func(string, ...any)) []epicPhase {
 		// Same single read of the doc body as every extraction above it — the doc is
 		// opened once per scan and each parser is handed the bytes, never the path.
 		phases[i].docModel = ParseModel(string(body))
+		phases[i].docLints = LintPhaseDoc(string(body))
 		phases[i].decisionDeps = ParseDecisionDeps(string(body))
 		// A prior written into a doc that ALREADY reports its work done is not a
 		// prediction; ParseCompletionReport above has the only fact that can say so,
@@ -1057,6 +1061,7 @@ func (s *Scanner) scanEpics(taskID int64, dir string, warn func(string, ...any))
 
 	phases := parsePlan(planDir, warn)
 	crits := parseSpec(planDir, warn)
+	logDocLints(planDir, phases)
 
 	// README presence gates the prune: a plan dir caught mid-`git checkout` (or
 	// mid-archive-move) has neither README nor docs, and must not be read as

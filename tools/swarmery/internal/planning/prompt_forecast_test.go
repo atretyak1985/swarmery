@@ -41,3 +41,22 @@ func TestRevisePromptForecastContract(t *testing.T) {
 		t.Error("the revise prompt never names the `kind: prior` block a NEW phase doc needs")
 	}
 }
+
+// The planner's half of the `**Effort:**` contract: both prompts require the
+// header on every phase doc they write, and name the lint that catches a doc
+// without it.
+func TestPromptsRequireEffortHeader(t *testing.T) {
+	for name, got := range map[string]string{
+		"plan": BuildPrompt("add line items to orders", "/ws"),
+		"revise": BuildRevisePrompt(ReviseInput{
+			Reason: "scope changed", PlanDir: "/p/plan", ScratchDir: "/p/scratch", PlanTitle: "Epic",
+		}),
+	} {
+		if !strings.Contains(got, "`**Effort:**` line (low | medium | high | xhigh)") {
+			t.Errorf("%s prompt does not require the **Effort:** header", name)
+		}
+		if !strings.Contains(got, "phase_effort_missing") {
+			t.Errorf("%s prompt does not name the phase_effort_missing lint", name)
+		}
+	}
+}

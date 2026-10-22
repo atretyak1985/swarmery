@@ -1657,6 +1657,10 @@ msgstr "Every future run touching {areas} gets this sentence in its brief. We th
 msgid "Every phase of this plan finished. A read-only reviewer read all of their run branches together, looking at the seams between phases — what one phase hands over and another expects. Nothing was blocked or re-run."
 msgstr "Every phase of this plan finished. A read-only reviewer read all of their run branches together, looking at the seams between phases — what one phase hands over and another expects. Nothing was blocked or re-run."
 
+#: src/pages/system/InsightsTab.tsx
+msgid "every project"
+msgstr "every project"
+
 #: src/pages/Analytics.tsx
 msgid "every series is hidden — click a legend chip to show one"
 msgstr "every series is hidden — click a legend chip to show one"
@@ -2305,6 +2309,10 @@ msgstr "lint…"
 msgid "LLM-judge trajectory score"
 msgstr "LLM-judge trajectory score"
 
+#: src/pages/system/InsightsTab.tsx
+msgid "loaded into every session's first request — CLAUDE.md size, unused MCP servers"
+msgstr "loaded into every session's first request — CLAUDE.md size, unused MCP servers"
+
 #: src/pages/health/PhaseRunsTab.tsx
 #: src/pages/inbox/Inbox.tsx
 #: src/pages/learning/Classifier.tsx
@@ -2716,6 +2724,10 @@ msgstr "no open recommendations — the advisor found nothing to flag"
 #: src/pages/system/TemplatesTab.tsx
 msgid "no overlays found — the daemon's working copy has no overlays/ directory, or it is empty on this machine"
 msgstr "no overlays found — the daemon's working copy has no overlays/ directory, or it is empty on this machine"
+
+#: src/pages/system/InsightsTab.tsx
+msgid "no oversized CLAUDE.md and no idle MCP server"
+msgstr "no oversized CLAUDE.md and no idle MCP server"
 
 #: src/pages/Analytics.tsx
 msgid "no priced tasks"
@@ -3643,6 +3655,10 @@ msgstr "session {sessionId}"
 #: src/pages/inbox/InboxDetail.tsx
 msgid "Session {sessionId} asked {askedAgo} ago and is waiting on you. Nothing runs until you answer."
 msgstr "Session {sessionId} asked {askedAgo} ago and is waiting on you. Nothing runs until you answer."
+
+#: src/pages/system/InsightsTab.tsx
+msgid "Session-start cost"
+msgstr "Session-start cost"
 
 #: src/pages/Retro.tsx
 #: src/pages/system-hub/Profiles.tsx

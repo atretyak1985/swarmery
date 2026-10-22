@@ -156,6 +156,14 @@ phase's size band:
 - S / M: `**Verify:** off` and `**Review:** off` — but `**Verify:** normal`
   whenever the phase touches data, schemas or migrations.
 
+Every phase doc's header also carries `**Effort:**` (low | medium | high |
+xhigh) on its own line beside them — the reasoning depth the phase's executor
+runs at, chosen together with the model that phase needs: `low` or `medium`
+for mechanical edits and config, `high` for ordinary implementation, `xhigh`
+for design-heavy or cross-cutting work. The daemon passes it to the run's
+`--effort`; a doc without it runs at the daemon's default and the dashboard
+lints it `phase_effort_missing`.
+
 The executor prompt's TICK CONTRACT paragraph must state that criteria
 prefixed `[LAND]` or `[MANUAL]` are not the executor's: it neither ticks
 them nor tries to perform them (no push, no PR, no production access), and it
