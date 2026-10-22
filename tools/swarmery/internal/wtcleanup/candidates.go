@@ -86,10 +86,11 @@ type Candidate struct {
 
 // Skipped is a keep-unmerged worktree that is not a candidate, and why.
 type Skipped struct {
-	RepoRoot string `json:"repoRoot"`
-	Path     string `json:"path"`
-	Branch   string `json:"branch"`
-	Reason   string `json:"reason"`
+	RepoRoot    string `json:"repoRoot"`
+	ProjectSlug string `json:"projectSlug"`
+	Path        string `json:"path"`
+	Branch      string `json:"branch"`
+	Reason      string `json:"reason"`
 }
 
 // Scan is one pass over the journal.
@@ -156,7 +157,7 @@ func Candidates(db *sql.DB, g Git, live wtjanitor.Liveness) (Scan, error) {
 			listed[e.repoRoot] = wts
 		}
 		skip := func(branch, reason string) {
-			scan.Skipped = append(scan.Skipped, Skipped{RepoRoot: e.repoRoot, Path: e.path, Branch: branch, Reason: reason})
+			scan.Skipped = append(scan.Skipped, Skipped{RepoRoot: e.repoRoot, ProjectSlug: e.slug, Path: e.path, Branch: branch, Reason: reason})
 		}
 		wt, found := findWorktree(wts, e.path)
 		if !found || wt.IsMain || !dirExists(wt.Path) {
@@ -532,7 +533,9 @@ func Summarize(s Scan) []RepoSummary {
 		r.ByProof[c.Proof.Kind]++
 	}
 	for _, sk := range s.Skipped {
-		get(sk.RepoRoot).Skipped[sk.Reason]++
+		r := get(sk.RepoRoot)
+		r.ProjectSlug = sk.ProjectSlug
+		r.Skipped[sk.Reason]++
 	}
 	out := make([]RepoSummary, 0, len(by))
 	for _, r := range by {
