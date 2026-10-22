@@ -3,7 +3,7 @@
 // the feed lists projects with architecture-pack enabled OR an existing artifact,
 // so the dropdown also shows pack-enabled projects that have not yet run
 // /architecture-map (hasMap=false). Clone of the Graphify page idioms — single
-// load with ErrorBox retry, project selection by id, same-origin iframe.
+// load with ErrorBox retry, project selection by id, sandboxed iframe.
 //
 // Freshness is a NUMBER, not a badge: analyzedAtCommit (baked into the map
 // JSON) against headCommit gives "current", and commitsBehind/touchedModules/
@@ -14,8 +14,8 @@
 // The <BlastStrip> below the header comes from a SEPARATE endpoint
 // (…/architecture/blast), on its own failure budget: it answers 404 with no map
 // and 409 with no git baseline, and either simply means no strip. Clicking a
-// module chip highlights that module inside the iframe — see highlightModules
-// for why that goes over both postMessage and a same-origin class toggle.
+// module chip highlights that module inside the iframe — over postMessage, the
+// only channel into the sandboxed map (see MapMessage).
 
 import type { MessageDescriptor } from '@lingui/core';
 import { msg, plural } from '@lingui/core/macro';
@@ -56,7 +56,7 @@ const POLL_MS = 3_000;
 
 // architecture-map.html ships its own hardcoded palette + a standalone light/dark
 // toggle. Embedded in the dashboard it must follow the app theme instead, so the
-// same-origin iframe gets the app's live tokens pushed in as INLINE custom
+// iframe is posted the app's live tokens, which its listener sets as INLINE custom
 // properties on its <html> (inline wins over both its `:root` defaults and its
 // `html[data-theme]` overrides — the map cannot re-theme itself independently).
 // Map-var ← app-token pairs; values are resolved via getComputedStyle so every
@@ -136,14 +136,15 @@ function ProvisionProgress({ provision }: { provision: ProvisionState }): JSX.El
 // than a class so the rule can never collide with a class the artifact uses.
 const EXPANDED_ATTR = 'data-swarmery-expanded';
 
-// CSS pushed INTO the map document for as long as it is embedded here.
+// CSS posted INTO the map document (swarmery:theme `css`) for as long as it is
+// embedded here; the template's listener installs it as one <style> element.
 //
 // WHY it lives dashboard-side and not in the generator's template
-// (plugins/architecture-pack/templates/map.html.tpl): injecting it applies to the
-// architecture-out/architecture-map.html files that consumers have ALREADY
-// generated. A template fix would only reach a project after it re-ran
-// /architecture-map with a newer pack, so every existing artifact would stay
-// broken in the embed until someone rebuilt it. The artifact is also still opened
+// (plugins/architecture-pack/skills/architecture-map/templates/map.html.tpl):
+// the embed's layout is the dashboard's concern and changes with it, and a
+// template change reaches a project only after it re-runs /architecture-map.
+// Maps generated before architecture-pack 1.7.0 have no theme listener, so they
+// render with their own palette inside the sandbox until rebuilt. The artifact is also still opened
 // standalone (file:// straight from architecture-out/), and standalone is exactly
 // where these rules must NOT apply — the map is the whole page there, keeps its
 // own theme toggle, and sizes against a real viewport.
@@ -187,12 +188,10 @@ const EMBED_CSS = [
   // gutter platforms with classic (non-overlay) scrollbars reserve.
   '#inspector{max-height:min(44vh,calc(100% - 200px));bottom:28px}',
   // Blast highlight. The class is applied by the viewer's own message listener
-  // (architecture-pack ≥ 1.3.0) AND, for artifacts generated before that pack
-  // shipped, by highlightModules below reaching into the same-origin document.
-  // Shipping the RULE here is what makes the second path work at all: an old
-  // artifact has no .blast style of its own, so the class alone would be
-  // invisible. outline rather than border — a border would reflow the card and
-  // move every edge the SVG has already routed.
+  // (architecture-pack ≥ 1.3.0); the rule ships here so the highlight reads the
+  // same whichever template version styled the card. outline rather than
+  // border — a border would reflow the card and move every edge the SVG has
+  // already routed.
   '.card.blast{outline:2px solid var(--accent);outline-offset:2px}',
   // Expanded pane: drop the header's left block (see EXPANDED_ATTR) and pull the
   // remaining search box onto a slim right-aligned bar. The header is
@@ -202,63 +201,47 @@ const EMBED_CSS = [
   `html[${EXPANDED_ATTR}] header{padding:8px 24px;justify-content:flex-end}`,
 ].join('');
 
-/** The one message the dashboard sends into the map iframe. */
-const HIGHLIGHT_MSG = 'swarmery:highlight';
+/**
+ * The messages the dashboard sends into the map iframe — the whole channel.
+ *
+ * The frame is sandboxed (`allow-scripts` only, and the daemon serves the
+ * artifact with a `sandbox` CSP), so the map document has an opaque origin and
+ * the dashboard cannot reach into it; the viewer template's own listener
+ * applies each message (architecture-pack ≥ 1.3.0 for highlight, ≥ 1.7.0 for
+ * theme and expanded). The target origin is `'*'` because a sandboxed frame's
+ * origin is `"null"`, which no other value matches; the payloads carry nothing
+ * the artifact could not already see.
+ */
+type MapMessage =
+  | { type: 'swarmery:highlight'; moduleIds: string[] }
+  | { type: 'swarmery:theme'; theme: 'light' | 'dark'; vars: Record<string, string>; css: string }
+  | { type: 'swarmery:expanded'; expanded: boolean };
+
+function postToMap(frame: HTMLIFrameElement, message: MapMessage): void {
+  frame.contentWindow?.postMessage(message, '*');
+}
 
 /** Push the dashboard theme into the map iframe: resolved mode on `data-theme`,
  * app tokens as inline vars, and the embed-only CSS above (which includes hiding
  * the map's own theme toggle — standalone opens of the artifact keep it). */
 function syncMapTheme(frame: HTMLIFrameElement, resolved: 'light' | 'dark'): void {
-  const doc = frame.contentDocument;
-  if (doc === null) return;
-  const root = doc.documentElement;
-  root.dataset.theme = resolved;
   const cs = getComputedStyle(document.documentElement);
+  const vars: Record<string, string> = {};
   for (const [mapVar, token] of MAP_VARS) {
     const v = cs.getPropertyValue(token).trim();
-    if (v !== '') root.style.setProperty(mapVar, v);
+    if (v !== '') vars[mapVar] = v;
   }
-  if (doc.getElementById('swarmery-embed-style') === null) {
-    const style = doc.createElement('style');
-    style.id = 'swarmery-embed-style';
-    style.textContent = EMBED_CSS;
-    // Appended last, so equal-specificity rules (`body`, `#inspector`) win over
-    // the artifact's own <style> earlier in the head without needing !important.
-    doc.head.appendChild(style);
-  }
+  postToMap(frame, { type: 'swarmery:theme', theme: resolved, vars, css: EMBED_CSS });
 }
 
 /** Mirror the pane's expanded state into the map document (see EXPANDED_ATTR). */
 function syncExpanded(frame: HTMLIFrameElement, expanded: boolean): void {
-  frame.contentDocument?.documentElement.toggleAttribute(EXPANDED_ATTR, expanded);
+  postToMap(frame, { type: 'swarmery:expanded', expanded });
 }
 
-/**
- * Highlight a set of modules in the map iframe.
- *
- * Two paths on purpose, and they are not redundant:
- *
- *  1. postMessage — the contract the viewer template implements from
- *     architecture-pack 1.3.0 on. This is the path that would keep working if
- *     the artifact ever stopped being same-origin.
- *  2. A direct same-origin class toggle — the fallback for every map ALREADY
- *     on disk, generated by an older pack with no listener in it. Same reason
- *     EMBED_CSS is injected from here rather than fixed in the template: a
- *     template-only change reaches a project only after it rebuilds.
- *
- * Both are idempotent and converge on the same class, so an artifact that
- * honours the message simply gets told twice.
- */
+/** Highlight a set of modules in the map iframe; an empty list clears it. */
 function highlightModules(frame: HTMLIFrameElement, moduleIds: readonly string[]): void {
-  frame.contentWindow?.postMessage({ type: HIGHLIGHT_MSG, moduleIds: [...moduleIds] }, '*');
-
-  const doc = frame.contentDocument;
-  if (doc === null) return;
-  const wanted = new Set(moduleIds);
-  for (const el of doc.querySelectorAll<HTMLElement>('.card[data-id]')) {
-    const id = el.dataset.id;
-    el.classList.toggle('blast', id !== undefined && wanted.has(id));
-  }
+  postToMap(frame, { type: 'swarmery:highlight', moduleIds: [...moduleIds] });
 }
 
 /**
@@ -844,6 +827,9 @@ export function Architecture({
                       : project.mapPath
                   }
                   title={t`Architecture map`}
+                  // Repository content: scripts run, but with an opaque origin
+                  // and no reach into the dashboard. Never add allow-same-origin.
+                  sandbox="allow-scripts"
                   // Theme, highlight AND expanded state are re-pushed on load: a
                   // fresh document has none of them, and all three may predate
                   // the frame.

@@ -43,18 +43,30 @@ fi
 
 model_observed=$(echo "$input" | jq -r '.tool_response.model // .model // empty' 2>/dev/null)
 
-if [ "${CLAUDE_HOOK_DEBUG:-0}" = "1" ]; then
-  echo "$input" >> /tmp/claude-hook-payload-debug.jsonl
+# Session log, debug dump and start stamps all live in the private run dir.
+# shellcheck source=lib/session-file.sh
+. "$(dirname "${BASH_SOURCE[0]}")/lib/session-file.sh"
+RUN_DIR=$(swarmery_run_dir) || RUN_DIR=""
+
+if [ "${CLAUDE_HOOK_DEBUG:-0}" = "1" ] && [ -n "$RUN_DIR" ]; then
+  (umask 077 && echo "$input" >> "$RUN_DIR/claude-hook-payload-debug.jsonl") 2>/dev/null || true
 fi
 
 # ── Try to calculate duration from tracking file ──────────────────
 duration_str=""
-# Find most recent tracking file for this agent type
-AGENT_TRACKING=$(find /tmp -maxdepth 1 -name "claude-agent-${agent_type}-*.tmp" -type f 2>/dev/null | head -1)
-if [ -n "$AGENT_TRACKING" ] && [ -f "$AGENT_TRACKING" ]; then
-  start_epoch=$(cat "$AGENT_TRACKING")
+# Find a start stamp for this agent type (subagent-start.sh names it with the
+# same sanitized type). Its content must be an epoch — it feeds arithmetic.
+AGENT_TRACKING=""
+if [ -n "$RUN_DIR" ]; then
+  safe_type=$(printf '%s' "$agent_type" | tr -c 'A-Za-z0-9_:-' '_')
+  AGENT_TRACKING=$(find "$RUN_DIR" -maxdepth 1 -name "claude-agent-${safe_type}.*" -type f 2>/dev/null | head -1)
+fi
+start_epoch=""
+[ -n "$AGENT_TRACKING" ] && [ -f "$AGENT_TRACKING" ] && start_epoch=$(cat "$AGENT_TRACKING" 2>/dev/null)
+[[ "$start_epoch" =~ ^[0-9]+$ ]] || start_epoch=""
+if [ -n "$start_epoch" ]; then
   end_epoch=$(date +%s)
-  diff_s=$((end_epoch - start_epoch))
+  diff_s=$((end_epoch - 10#$start_epoch))
 
   if [ $diff_s -ge 60 ]; then
     mins=$((diff_s / 60))
@@ -68,7 +80,7 @@ if [ -n "$AGENT_TRACKING" ] && [ -f "$AGENT_TRACKING" ]; then
 fi
 
 # ── Log to session file ──────────────────────────────────────────
-SESSION_FILE="/tmp/claude-session-$(date +%Y%m%d).jsonl"
+SESSION_FILE=$(swarmery_session_file) || SESSION_FILE=/dev/null
 jq -c -n \
   --arg ts "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" \
   --arg cmd "done:${agent_type}" \

@@ -47,7 +47,9 @@ Status: Pending
 ## Acceptance Criteria
 - [ ] {measurable criterion with its verification command}
 ## Notes
+## Guard                      ← the planner's `kind: guard` block; see "## Guard" below
 ## Forecast                   ← optional; see "## Forecast" below
+## Review                     ← appended per review round; see "## Review" below
 ## Completion Report          ← empty stub, ALWAYS the last section
 ```
 
@@ -354,6 +356,84 @@ independent observations set the flag, and the phase shows which one did:
 Neither is a gate. A post-hoc forecast still ingests, still renders, and still
 lets its phase run; the only consequence is that the learning loop does not
 score it.
+
+## `## Guard` (in every phase doc, written by the planner)
+
+What the phase run must not touch, and when it must stop and report instead of
+carrying on. One `kind: guard` yaml block; the platform parses it and a later
+guard stage enforces it, so — unlike a forecast — a block that exists but cannot
+be read is reported as **unparsable**, not as absent.
+
+````markdown
+## Guard
+
+```yaml
+kind: guard
+protected_paths:
+  - ".github/workflows/*.yml"
+  - "plugins/*/hooks/hooks.json"
+  - "**/*_test.go"
+  - "**/*.test.ts"
+  - "**/*.test.tsx"
+  - "scripts/tests/**/*"
+stop_if:
+  - out-of-scope change
+  - protected path
+  - access or login error
+  - criterion impossible
+```
+````
+
+- **Globs name files, never directories.** `scripts/tests/**/*`, not
+  `scripts/tests/**` or `scripts/tests/`; `**` matches zero or more directories.
+  A glob that ends in `/` or `/**` still parses, with a warning.
+- **Quote every glob.** A yaml value that starts with `*` is an alias, so an
+  unquoted `- **/*_test.go` makes the whole block unparsable.
+- The defaults above protect CI workflows, hook manifests and tests. A phase
+  that must edit a protected file (it writes or fixes tests) removes or narrows
+  that glob, lists the files it will edit, and says why in `## Notes`.
+- `stop_if` keeps the four defaults; add phase-specific triggers after them.
+- Both keys are required; an empty list is written `[]`. Unknown keys are
+  ignored.
+
+## `## Review` (appended per review round, never by the planner)
+
+Both review engines — the daemon's headless reviewer and `run-plan`'s
+orchestrator — record each review round as one `kind: review` block under
+`## Review`, immediately before `## Completion Report` (D42: one block per
+round, earlier rounds are never rewritten). The reviewer emits the block right
+before its `VERDICT:` line; the engine copies it into the doc.
+
+````markdown
+## Review
+
+```yaml
+kind: review
+round: 1                 # 1, 2, … per fix round; plan for the plan-branch review
+verdict: FAIL            # PASS | FAIL | INCONCLUSIVE — the same word as VERDICT:
+complete: true           # false when the review stopped before covering its scope
+scope_left: []           # with complete: false — what was not read
+findings:
+  - id: R1-1             # R<round>-<n>; stable, a later round's resolves cites it
+    type: silent-failure # correctness | silent-failure | contract | plan-conformance | quality
+    file: src/lib/export/writer.ts
+    line: 84
+    criterion: "upload failure is reported"   # the criterion it breaks, if any
+    test_caught: false   # an existing test fails because of it
+    evidence: "catch {} swallows the putObject error"
+    note: "fail the upload in a test: the handler still returns 200"
+resolves: []             # ids from earlier rounds this round confirms fixed
+ids: []                  # - {id: <symbol/key the change relies on>, evidence: <file:line | missing>}
+drift: []                # - {criterion: <ticked but not true>, file: <path>, note: <why>}
+checked_callers: []      # call sites read for a changed signature (file:line)
+```
+````
+
+`round` and `verdict` are required — without either the block is unparsable.
+`complete` defaults to `true`; every list may be `[]`. The latest round is the
+highest number, and `plan` sorts after every number. A subagent reviewer that
+was resumed after hitting its turn limit records `complete: false` even when
+its second turn finished.
 
 ## Verification hooks for planners
 

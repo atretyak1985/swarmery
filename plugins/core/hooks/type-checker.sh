@@ -21,12 +21,23 @@ if [[ "$ext" != "ts" && "$ext" != "tsx" ]]; then
   exit 0
 fi
 
-# Determine the package root generically: nearest package.json walking up from the file.
-# No hard-coded repo names — works for any project layout.
+# Only files inside the project scope are checked (lib/project-scope.sh:
+# $CLAUDE_PROJECT_DIR plus the repos[] of its .claude/project.json). A folder
+# outside it brings its own package.json scripts, which are not ours to run.
+# shellcheck source=lib/project-scope.sh
+. "$(dirname "${BASH_SOURCE[0]}")/lib/project-scope.sh" 2>/dev/null || exit 0
+scope_root=$(scope_root_for "$file_path") || exit 0
+phys_file=$(ps_physical "$file_path") || exit 0
+
+# Determine the package root generically: nearest package.json walking up from
+# the file, stopping at the scope root. No hard-coded repo names — works for any
+# project layout.
 project_dir=""
-_d="$(dirname "$file_path")"
-while [ "$_d" != "/" ] && [ "$_d" != "." ]; do
+_d="$(dirname "$phys_file")"
+while :; do
+  case "$_d/" in "$scope_root"/*) ;; *) break ;; esac
   if [ -f "$_d/package.json" ]; then project_dir="$_d"; break; fi
+  [ "$_d" = "$scope_root" ] && break
   _d="$(dirname "$_d")"
 done
 

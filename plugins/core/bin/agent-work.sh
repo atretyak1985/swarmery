@@ -118,6 +118,18 @@ _card_status() {
     echo "$st"
 }
 
+# A task id is <yyyy-mm-dd>-<slug>, slug as slugify() writes it, and nothing else.
+# Every lookup below builds a directory path from the id, and complete/restore
+# MOVE what that path names — so an id carrying "/" or ".." is refused (exit 2)
+# before any path is built. Called on every id a caller supplies; --latest ids
+# come from the directory tree itself.
+_require_task_id() {
+    if ! [[ "$1" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}-[a-z0-9][a-z0-9-]*$ ]]; then
+        log_error "Invalid task id: '${1}' (expected yyyy-mm-dd-slug, slug [a-z0-9-])"
+        exit 2
+    fi
+}
+
 # Tasks live under working/YYYY/MM/DD/<slug> (mirrors archive/). The canonical task-id
 # stays <yyyy-mm-dd-slug>: the YYYY/MM/DD are derived from its embedded start date and
 # the leaf folder is just the slug, so no lookup is needed for the common path. A find()
@@ -193,8 +205,10 @@ _resolve_task_dir() {
     if [ "$task_id" = "--latest" ]; then
         task_id=$(_latest_task_id)
         [ -z "$task_id" ] && { log_error "No active tasks in working/ — nothing to resolve with --latest"; exit 1; }
+    else
+        [ -z "$task_id" ] && { log_error "Task ID required (or --latest)"; exit 1; }
+        _require_task_id "$task_id"
     fi
-    [ -z "$task_id" ] && { log_error "Task ID required (or --latest)"; exit 1; }
     local dir; dir=$(_task_dir_for "$task_id")
     [ -n "$dir" ] && [ -d "$dir" ] || { log_error "Not found in working/: ${task_id}"; exit 1; }
     echo "$dir"
@@ -302,8 +316,10 @@ cmd_restore() {
     if [ "$task_id" = "--latest" ]; then
         task_id=$(_latest_id_in "${ARCHIVE_DIR}")
         [ -z "$task_id" ] && { log_error "Archive is empty — nothing to restore"; exit 1; }
+    else
+        [ -z "$task_id" ] && { log_error "Task ID required (or --latest)"; exit 1; }
+        _require_task_id "$task_id"
     fi
-    [ -z "$task_id" ] && { log_error "Task ID required (or --latest)"; exit 1; }
     local src; src=$(_archived_dir_for "$task_id")
     [ -n "$src" ] && [ -d "$src" ] || { log_error "Not found in archive/: ${task_id}"; exit 1; }
     task_id=$(_id_from_dir "$src")  # canonical id from the dir's actual archive location

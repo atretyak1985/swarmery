@@ -31,6 +31,7 @@ import (
 
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/ingest"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/runcore"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/workaround"
 )
 
 // DefaultRescanInterval is the fallback periodic rescan cadence. Workspace
@@ -946,8 +947,37 @@ func escapeLike(s string) string {
 // lives in internal/runcore — the run engines write explicit links through the same
 // statement, and two copies of "explicit always wins" is one copy too many for a
 // rule whose whole job is to be consistent across writers.
+//
+// A link that did not exist before also triggers one workaround-words scan of
+// the session (verify-not-trust phase 5): an interactive run-plan session is
+// tailed BEFORE this pass links it to its plan, so the ingest hook — which only
+// scans phase-linked sessions — saw nothing to do for it. Callers never hold a
+// cursor here (single connection), which the scan's own reads rely on.
 func (s *Scanner) upsertLink(taskID, sessionID int64, source string, confidence *float64) error {
-	return runcore.UpsertLink(s.db, taskID, sessionID, source, confidence)
+	var existed int
+	if err := s.db.QueryRow(`SELECT COUNT(*) FROM task_sessions WHERE task_id = ? AND session_id = ?`,
+		taskID, sessionID).Scan(&existed); err != nil {
+		return err
+	}
+	if err := runcore.UpsertLink(s.db, taskID, sessionID, source, confidence); err != nil {
+		return err
+	}
+	if existed == 0 {
+		s.scanWorkaround(sessionID)
+	}
+	return nil
+}
+
+// scanWorkaround scans a newly linked session for workaround words. Best-effort:
+// the hits are a hint, so a failure is logged and the link stands.
+func (s *Scanner) scanWorkaround(sessionID int64) {
+	var uuid string
+	if err := s.db.QueryRow(`SELECT session_uuid FROM sessions WHERE id = ?`, sessionID).Scan(&uuid); err != nil {
+		return
+	}
+	if _, err := workaround.ScanSession(s.db, workaround.Default(), uuid, time.Now()); err != nil {
+		log.Printf("warn: wsingest: workaround scan of session %s: %v", uuid, err)
+	}
 }
 
 func nullStr(s string) any {

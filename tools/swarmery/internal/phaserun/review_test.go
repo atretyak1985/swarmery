@@ -208,6 +208,9 @@ func TestReviewSpawnArgsDenyEditToolsAndBash(t *testing.T) {
 	if !strings.Contains(string(raw), "VERDICT: PASS | FAIL | INCONCLUSIVE") || !strings.Contains(string(raw), "func main() {}") {
 		t.Errorf("the review prompt lacks the verdict contract or the run's diff:\n%s", raw)
 	}
+	if !strings.Contains(string(raw), "REVIEW ROUND: 1\n") {
+		t.Errorf("the first review of a phase is not round 1:\n%s", raw)
+	}
 	if !strings.Contains(string(raw), "--model\n"+verify.DefaultModel) {
 		t.Errorf("the reviewer is not pinned to %s:\n%s", verify.DefaultModel, raw)
 	}

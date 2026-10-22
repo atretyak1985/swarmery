@@ -22,6 +22,11 @@ trap 'rm -rf "$WORK"' EXIT
 
 OUTSIDE_REPO="$WORK/outside-repo"
 mkdir -p "$OUTSIDE_REPO"
+# Pin the Sessions counter too: with one recorded session in the project, the
+# statusline never falls back to counting the per-day hook logs, whose location
+# is machine state (and moved between plugin versions), not part of this proof.
+mkdir -p "$OUTSIDE_REPO/.swarmery/sessions"
+printf '{}\n' > "$OUTSIDE_REPO/.swarmery/sessions/pinned.json"
 
 # A `date` shim first on PATH pins the TIME field (`date +%H:%M`) to 12:34 for
 # every render, the OLD script's included (it can never learn an env knob), so

@@ -200,6 +200,8 @@ func main() {
 		os.Exit(cmdTriage(os.Args[2:]))
 	case "link":
 		err = cmdLink(os.Args[2:], os.Stdout)
+	case "workaround-backfill":
+		err = cmdWorkaroundBackfill(os.Args[2:], os.Stdout)
 	case "-h", "--help", "help":
 		usage()
 	default:
@@ -252,6 +254,9 @@ func usage() {
                                    the model-upgrade routine's comparison column). Groups under
                                    20 non-post-hoc samples are hidden. Read-only.
   swarmery backup   [--db <path>] [--out <path>]   VACUUM-INTO snapshot (safe while serving)
+  swarmery workaround-backfill [--db <path>] [--since <Nd>] [--plan <yyyy-mm-dd-slug>]
+                                   scan phase-linked sessions since --since (default 30d) for
+                                   guards.json workaroundWords; idempotent; prints per-phase counts
   swarmery prune    [--db <path>] --older-than <Nd> [--dry-run]
                                    retention: write daily_rollups for sessions ended > Nd ago,
                                    delete their events/file_changes/turns (headers kept, pruned=1),
