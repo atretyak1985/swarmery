@@ -333,6 +333,10 @@ msgstr "all recommendations in Retro →"
 msgid "all sessions →"
 msgstr "all sessions →"
 
+#: src/pages/NeedsYou.tsx
+msgid "Allow (add to scope)"
+msgstr "Allow (add to scope)"
+
 #: src/pages/Approvals.tsx
 msgid "always allow…"
 msgstr "always allow…"
@@ -353,6 +357,10 @@ msgstr "and the loop closes when Change lowers next week's Measure"
 msgctxt "verb: the button that opens the question"
 msgid "answer"
 msgstr "answer"
+
+#: src/pages/NeedsYou.tsx
+msgid "answer {decisionId}"
+msgstr "answer {decisionId}"
 
 #: src/pages/Approvals.tsx
 msgid "answer in terminal →"
@@ -1154,6 +1162,10 @@ msgstr "not sent: {msg}"
 msgid "note (optional)"
 msgstr "note (optional)"
 
+#: src/pages/NeedsYou.tsx
+msgid "note (optional) — recorded with the answer in the phase doc"
+msgstr "note (optional) — recorded with the answer in the phase doc"
+
 #: src/pages/ProjectOverview.tsx
 msgid "nothing flagged"
 msgstr "nothing flagged"
@@ -1239,6 +1251,7 @@ msgstr "open phase →"
 msgid "open PR ↗"
 msgstr "open PR ↗"
 
+#: src/pages/NeedsYou.tsx
 #: src/pages/NeedsYou.tsx
 msgid "open review →"
 msgstr "open review →"
@@ -1396,6 +1409,10 @@ msgstr "Recipient"
 #: src/pages/SessionDetail.tsx
 msgid "recovered"
 msgstr "recovered"
+
+#: src/pages/NeedsYou.tsx
+msgid "Reject"
+msgstr "Reject"
 
 #: src/pages/Approvals.tsx
 msgid "release with no decision — the native selector renders in the terminal (E12d/E12e)"

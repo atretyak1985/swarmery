@@ -106,12 +106,15 @@ type WizardTurn struct {
 // Field names are FROZEN — phase 3 mirrors them verbatim in TypeScript
 // (Mode/ReviseTaskId: plan-revision phase 4 does the same).
 type WizardStatus struct {
-	Active      bool    `json:"active"`
-	SessionUUID string  `json:"sessionUuid"`
-	SessionID   *int64  `json:"sessionId"`
-	StartedAt   *string `json:"startedAt"`
-	Status      string  `json:"status"` // "" when no wizard row (legacy idle)
-	Mode        string  `json:"mode"`   // plan|revise; "" when no wizard row
+	// PlanningSessionID is the planning_sessions row id (0 when no wizard row) —
+	// the {id} of PATCH /api/planning/sessions/{id}/turns/{seq}/cost.
+	PlanningSessionID int64   `json:"planningSessionId"`
+	Active            bool    `json:"active"`
+	SessionUUID       string  `json:"sessionUuid"`
+	SessionID         *int64  `json:"sessionId"`
+	StartedAt         *string `json:"startedAt"`
+	Status            string  `json:"status"` // "" when no wizard row (legacy idle)
+	Mode              string  `json:"mode"`   // plan|revise; "" when no wizard row
 	// Model is the full model ID every turn of this wizard runs on (see Models);
 	// "" when no wizard row.
 	Model string `json:"model"`
@@ -581,6 +584,12 @@ func (s *Service) Proceed(projectID int64) (text, sessionUUID string, err error)
 	if err := s.setStatus(row, StatusProceeding); err != nil {
 		return "", "", err
 	}
+	// Decision ids: every turn becomes a D-n row BEFORE the planner resumes, and
+	// the lines travel in the message so the README states what was recorded. A
+	// revise session numbers nothing — its plan already has its decisions.
+	if row.mode == ModePlan {
+		return BuildProceedMessage(s.recordDecisions(row.id)...), row.uuid, nil
+	}
 	return BuildProceedMessage(), row.uuid, nil
 }
 
@@ -690,14 +699,15 @@ func (s *Service) WizardSnapshot(projectID int64) (WizardStatus, error) {
 
 	startedAt := row.createdAt
 	st := WizardStatus{
-		Active:      alive,
-		SessionUUID: row.uuid,
-		StartedAt:   &startedAt,
-		Status:      row.status,
-		Mode:        row.mode,
-		Model:       DefaultModel,
-		Effort:      DefaultEffort,
-		History:     []WizardTurn{},
+		PlanningSessionID: row.id,
+		Active:            alive,
+		SessionUUID:       row.uuid,
+		StartedAt:         &startedAt,
+		Status:            row.status,
+		Mode:              row.mode,
+		Model:             DefaultModel,
+		Effort:            DefaultEffort,
+		History:           []WizardTurn{},
 	}
 	if row.model.Valid && row.model.String != "" {
 		st.Model = row.model.String

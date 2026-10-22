@@ -35,6 +35,7 @@ var needsYouKindRank = map[string]int{
 	needsYouApproval:        0,
 	needsYouStalledPhase:    1,
 	needsYouQuestion:        2,
+	needsYouPhaseDecision:   3,
 	needsYouProdDeployLocal: 3,
 	needsYouAwaitingReply:   4,
 	needsYouFailed:          5,
@@ -66,7 +67,7 @@ type replySuggestion struct {
 
 // needsYouItem is one blocker. Mirrors NeedsYouItem in web/src/api/types.ts.
 type needsYouItem struct {
-	Kind string `json:"kind"` // approval | stalled_phase | question | prod_deploy_local | awaiting_reply | failed | manual_phase | awaiting_merge
+	Kind string `json:"kind"` // approval | stalled_phase | question | phase_decision | prod_deploy_local | awaiting_reply | failed | manual_phase | awaiting_merge
 	// SessionID / SessionUUID are 0 / "" for a phase item (manual_phase,
 	// awaiting_merge): a plan phase blocks, not a session. A stalled_phase item
 	// carries its stalled stage's session once that session is ingested.
@@ -102,6 +103,8 @@ type needsYouItem struct {
 	// Stall is the stalled_phase diagnosis — on a stalled_phase item, and on the
 	// approval item a permission-pending stall was merged into.
 	Stall *needsYouStall `json:"stall,omitempty"`
+	// Decision is a phase_decision item's question, options and guard check.
+	Decision *needsYouDecision `json:"decision,omitempty"`
 
 	at time.Time // parsed BlockingSince; zero when unparseable
 }
@@ -182,8 +185,12 @@ func collectNeedsYou(db *sql.DB, r *http.Request, now time.Time) ([]needsYouItem
 	if err != nil {
 		return nil, err
 	}
+	decisions, err := queryNeedsYouPhaseDecisions(db, scope, projArgs)
+	if err != nil {
+		return nil, err
+	}
 
-	all := make([]needsYouItem, 0, len(pending)+len(local)+len(awaiting)+len(failed)+len(manual)+len(merge)+len(stalled))
+	all := make([]needsYouItem, 0, len(pending)+len(local)+len(awaiting)+len(failed)+len(manual)+len(merge)+len(stalled)+len(decisions))
 	all = append(all, pending...)
 	all = append(all, stalled...)
 	all = append(all, local...)
@@ -191,6 +198,7 @@ func collectNeedsYou(db *sql.DB, r *http.Request, now time.Time) ([]needsYouItem
 	all = append(all, failed...)
 	all = append(all, manual...)
 	all = append(all, merge...)
+	all = append(all, decisions...)
 	items := dedupeNeedsYou(all)
 	for i := range items {
 		items[i].BlockingSeconds = blockingSeconds(items[i].at, now)
@@ -379,19 +387,29 @@ func clipTail(s string, max int) string {
 
 // dedupeNeedsYou keeps one item per blocker: a permission-pending stalled_phase
 // is merged into the approval item of its request (mergeStallsIntoApprovals),
-// and an awaiting_reply item whose session is also listed as failed is dropped —
-// one session, one item, the failure wins.
+// an awaiting_reply item whose session is also listed as failed is dropped —
+// one session, one item, the failure wins — and so is a manual_phase or
+// awaiting_merge item whose phase has an open phase_decision (one phase, one
+// item, the decision wins: what the run did to protected paths is settled
+// before the hand check or the merge).
 func dedupeNeedsYou(items []needsYouItem) []needsYouItem {
 	items = mergeStallsIntoApprovals(items)
 	failedSessions := map[int64]bool{}
+	decidingPhases := map[int64]bool{}
 	for _, it := range items {
-		if it.Kind == needsYouFailed {
+		switch {
+		case it.Kind == needsYouFailed:
 			failedSessions[it.SessionID] = true
+		case it.Kind == needsYouPhaseDecision && it.Phase != nil:
+			decidingPhases[it.Phase.PhaseID] = true
 		}
 	}
 	out := make([]needsYouItem, 0, len(items))
 	for _, it := range items {
 		if it.Kind == needsYouAwaitingReply && failedSessions[it.SessionID] {
+			continue
+		}
+		if (it.Kind == needsYouManualPhase || it.Kind == needsYouAwaitingMerge) && it.Phase != nil && decidingPhases[it.Phase.PhaseID] {
 			continue
 		}
 		out = append(out, it)
@@ -400,9 +418,9 @@ func dedupeNeedsYou(items []needsYouItem) []needsYouItem {
 }
 
 // sortNeedsYou orders items oldest blocker first; ties break on kind (approval <
-// stalled_phase < question < … < manual_phase < awaiting_merge — the order of
-// needsYouKindRank), then on the item id (request id, else phase id, else
-// session id).
+// stalled_phase < question < phase_decision < prod_deploy_local < awaiting_reply <
+// failed < manual_phase < awaiting_merge — the order of needsYouKindRank), then
+// on the item id (request id, else phase id, else session id).
 func sortNeedsYou(items []needsYouItem) {
 	sort.SliceStable(items, func(i, j int) bool {
 		a, b := items[i], items[j]

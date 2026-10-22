@@ -33,6 +33,11 @@ const THEME = {
   brightBlack: '#5b6472',
 } as const;
 
+/** Open a terminal hyperlink only when it is an http(s) URL; anything else is a no-op. */
+export function openWebLink(uri: string): void {
+  if (/^https?:\/\//i.test(uri)) window.open(uri, '_blank', 'noopener,noreferrer');
+}
+
 export const XTerm = forwardRef<
   XTermHandle,
   {
@@ -71,6 +76,11 @@ export const XTerm = forwardRef<
         cursorBlink: true,
         scrollback: 5000,
         convertEol: false,
+        // OSC 8 hyperlinks come from whatever runs in the PTY, so their target is
+        // untrusted: only an ordinary web link opens, in a new tab with no handle
+        // back to this window. Every other scheme is ignored rather than handed
+        // to xterm's default (a confirm() and then window.open of anything).
+        linkHandler: { activate: (_event, uri) => openWebLink(uri) },
       });
       const fit = new FitAddon();
       term.loadAddon(fit);

@@ -12,7 +12,6 @@ package api
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
@@ -418,8 +417,10 @@ func (h *Handler) patchProposal(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		Status string `json:"status"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		writeClientErr(w, http.StatusBadRequest, "invalid JSON body")
+	if err := decodeJSONLimited(w, r, &body, maxJSONBody); err != nil {
+		if !isBodyTooLarge(err) {
+			writeClientErr(w, http.StatusBadRequest, "invalid JSON body")
+		}
 		return
 	}
 	if body.Status != "approved" && body.Status != "rejected" {

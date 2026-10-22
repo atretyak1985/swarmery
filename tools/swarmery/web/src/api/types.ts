@@ -1779,13 +1779,16 @@ export type ApprovalChannel = 'shim' | 'mod';
  * ended its turn waiting for a typed reply, a recently failed session, a
  * plan phase whose every open criterion is `[MANUAL]` (only a human closes it),
  * one whose every open criterion is `[LAND]` with its run branch ready,
- * pushed or under an open PR (only the merge is left), or a plan phase whose
- * active stage stopped working (`stalled_phase`, ranked just below approval).
+ * pushed or under an open PR (only the merge is left), a phase whose run
+ * touched protected paths (`phase_decision`: allow them into scope or reject),
+ * or a plan phase whose active stage stopped working (`stalled_phase`, ranked
+ * just below approval).
  */
 export type NeedsYouKind =
   | 'approval'
   | 'stalled_phase'
   | 'question'
+  | 'phase_decision'
   | 'prod_deploy_local'
   | 'awaiting_reply'
   | 'failed'
@@ -1820,6 +1823,69 @@ export interface NeedsYouStall {
   stage: StallStage;
   reason: StallReason;
   sinceMinutes: number;
+}
+
+/** One refusal the phase-guard hook logged to the run's `.swarmery/guard.log`. */
+export interface GuardLogLine {
+  at: string;
+  tool: string;
+  path: string;
+  reason: string;
+  /** Not the hook's four tab-separated fields; `reason` is then the raw line. */
+  malformed?: boolean;
+}
+
+/** A doc block that could not be read (Go mdfence.ParseError). */
+export interface GuardParseError {
+  kind: 'absent' | 'unparsable';
+  line: number;
+  reason: string;
+}
+
+/**
+ * The guard check of a finished phase run (Go phaserun.GuardResult, stored as
+ * guard_json — migration 0124). `{}` on a review written before it, so every
+ * field is optional.
+ */
+export interface GuardSummary {
+  hasGuard?: boolean;
+  protectedPaths?: string[];
+  allow?: string[];
+  /** Files under a protected glob the run changed (committed, uncommitted or new). */
+  protectedChanged?: string[];
+  /** The lent doc copy was changed outside the executor's own edits, or is gone. */
+  docCopyMismatch?: boolean;
+  docCopyMissing?: boolean;
+  guardBlocks?: GuardLogLine[];
+  guardBlocksTotal?: number;
+  malformedLogLines?: number;
+  parseError?: GuardParseError | null;
+  base?: string;
+  diffError?: string;
+}
+
+/** One answer a decision offers. */
+export interface DecisionOption {
+  id: string;
+  label: string;
+}
+
+/**
+ * An open guard decision (Go needsYouDecision): the run touched protected
+ * paths, and the operator allows them into scope or rejects. Answered through
+ * POST /api/epics/{taskId}/phases/{phaseId}/decisions/{decisionId}.
+ */
+export interface NeedsYouDecision {
+  taskId: number;
+  phaseId: number;
+  /** `D-n` within the plan. */
+  decisionId: string;
+  /** "stop" (a guard decision) or "review" (a review cycle that did not settle);
+   *  absent from an older daemon, which only had guard decisions. */
+  source?: 'stop' | 'review';
+  question: string;
+  options: DecisionOption[];
+  guard: GuardSummary;
 }
 
 /** Haiku-extracted reply card for an awaiting_reply item (always null until phase 4). */
@@ -1860,6 +1926,8 @@ export interface NeedsYouItem {
   stall?: NeedsYouStall;
   /** approval items only: the transport of the permission request. Absent on an older daemon. */
   channel?: ApprovalChannel;
+  /** `phase_decision` only: the question, its options and the run's guard check. */
+  decision?: NeedsYouDecision;
 }
 
 /** GET /api/needs-you — items sorted oldest blocker first. */
@@ -2354,7 +2422,19 @@ export interface PlanningQuestion {
   description?: string;
   options: PlanningOption[];
   runningPlan?: PlanningSummary;
+  /** What reversing this decision later would cost (decision ids, migration
+   *  0120). Missing on questions stored before the field existed — read as cheap.
+   *  A skipped expensive question becomes an `undecided` D-n that holds every
+   *  phase depending on it; a skipped cheap one takes the recommended option. */
+  costToChange?: PlanningCost;
+  /** The planner's one-line why behind costToChange. */
+  costReason?: string;
+  /** What the daemon repaired while parsing (`question_cost_missing`, …). */
+  lints?: string[];
 }
+
+/** Go `planning.CostCheap` / `CostExpensive`. */
+export type PlanningCost = 'cheap' | 'expensive';
 
 /** Go `planning.wizardAnswer` — the JSON stamped onto a history turn. */
 export interface PlanningAnswer {
@@ -2400,6 +2480,8 @@ export type PlanningWizardStatus =
  * matches the bytes on the wire.
  */
 export interface PlanningStatus {
+  /** planning_sessions.id — addresses PATCH …/turns/{seq}/cost; 0 when no wizard row. */
+  planningSessionId: number;
   active: boolean;
   sessionUuid: string;
   sessionId: number | null;
@@ -3868,7 +3950,10 @@ export type RunConflictCode =
   | 'manual-only'
   /** phase run only: the doc's `Earliest:` date is still in the future; the body
    *  adds `earliest` (YYYY-MM-DD) and a `hint`. */
-  | 'not-yet-earliest';
+  | 'not-yet-earliest'
+  /** phase run only: the doc's `**Depends on decisions:**` names a decision still
+   *  undecided and expensive to change; the body adds `decisions`, `detail`, `hint`. */
+  | 'decision-undecided';
 
 /** The phase doc's verification opt-in (epic_phases.verify_mode). */
 export type PhaseVerifyMode = 'off' | 'normal' | 'strict';
@@ -3950,6 +4035,24 @@ export interface PhaseModelUse {
   turns: number;
 }
 
+/** One decision holding a phase (Go `decisionHoldRefDTO`). */
+export interface DecisionHoldRef {
+  decisionId: string;
+  question: string;
+  /** The planning turn that asked it (D-n's n). */
+  seq: number;
+  /** null for a decision born in the README rather than an interview. */
+  planningSessionId: number | null;
+}
+
+/** A phase's decision hold (Go `decisionHoldDTO`): non-null while a decision it
+ *  depends on is undecided and expensive to change. */
+export interface DecisionHold {
+  /** `decision-undecided: D-3 (<question>)` — the run gate's refusal text. */
+  detail: string;
+  decisions: DecisionHoldRef[];
+}
+
 export interface EpicPhase {
   id: number;
   seq: number;
@@ -3961,6 +4064,9 @@ export interface EpicPhase {
   dependsOn: number[];
   checkboxesDone: number;
   checkboxesTotal: number;
+  /** Optional on the type so fixtures predating migration 0122 stay valid; the
+   *  daemon always sends it (null when nothing holds the phase). */
+  decisionHold?: DecisionHold | null;
   /** Unticked `[LAND]` criteria (migration 0105): closed by landing — the daemon
    *  ticks them when the change request merges. Still inside checkboxesTotal. */
   landOpen: number;
@@ -4092,6 +4198,30 @@ export interface EpicPhase {
    *  newest first. [] when never reviewed. Absent from a daemon older than the
    *  review stage — read it as `phase.reviews ?? []`. */
   reviews?: PhaseReviewSummary[];
+  /** The doc's `kind: review` rounds as the daemon projected them (migration
+   *  0123), oldest round first, each with its findings. [] when the doc carries
+   *  none; absent from an older daemon — read it as `phase.reviewBlocks ?? []`. */
+  reviewBlocks?: ReviewBlock[];
+  /** D21: the phase was Done before review findings existed and carries no
+   *  block. A badge on the Review tab — never a blocker. */
+  legacyReview?: boolean;
+  /** Where the phase's agent said it changed course (migration 0120, D23):
+   *  workaround words in its assistant prose, oldest first, at most 50 per
+   *  session with text. Absent from an older daemon — read `?? []`. */
+  workaroundHits?: WorkaroundHit[];
+  /** All hits, including the key-only ones past the per-session cap. */
+  workaroundTotal?: number;
+  /** D20: why the doc's latest review round is incomplete — "round N: <reason>"
+   *  — or "" when it is complete or there is none. The completion gate holds the
+   *  phase on it. Absent from an older daemon. */
+  reviewHold?: string;
+  /** The phase's OPEN guard decision: its last run touched protected paths and
+   *  nobody answered yet. null otherwise; absent from an older daemon. */
+  guardDecision?: NeedsYouDecision | null;
+  /** The phase's OPEN review decision (verify-not-trust phase 9): its review cycle
+   *  did not settle on its own — repeat the review or accept it as is. null
+   *  otherwise; absent from an older daemon. Answered inline on the Review tab. */
+  reviewDecision?: NeedsYouDecision | null;
   /** The phase's current stall — its active stage stopped working (Go
    *  phaseStallDTO, internal/stall). null when not stalled; absent from a daemon
    *  older than the stall detector — read it as `phase.stalled ?? null`.
@@ -4119,6 +4249,66 @@ export interface PhaseStall {
   requestId: number | null;
 }
 
+/** One finding of a review round (Go reviewFindingDTO, internal/api/review_findings.go). */
+export interface ReviewFinding {
+  /** The block's finding id (`R1-1`), else `r<round>-<n>`. */
+  id: string;
+  /** correctness | silent-failure | contract | plan-conformance | quality; ''
+   *  when the doc named another type (kept at the head of `note`). */
+  type: string;
+  file: string;
+  line: number | null;
+  /** The acceptance criterion (or spec SC-n) it breaks; '' when none. */
+  criterion: string;
+  /** An existing test failed because of it. */
+  testCaught: boolean;
+  evidence: string;
+  note: string;
+  /** The round whose `resolves:` closed it; null while open. */
+  resolvedBy: string | null;
+}
+
+/** One `kind: review` round of a phase doc (Go reviewBlockDTO). */
+export interface ReviewBlock {
+  /** "1", "2", … or "plan". */
+  round: string;
+  verdict: 'PASS' | 'FAIL' | 'INCONCLUSIVE';
+  /** false when the review stopped before covering its scope. */
+  complete: boolean;
+  scopeLeft: string[];
+  checkedCallers: string[];
+  resolves: string[];
+  /** The daemon's prose fallback: the reviewer wrote no readable block. */
+  unparsable: boolean;
+  source: 'daemon' | 'interactive' | 'backfill';
+  writtenAt: string;
+  findings: ReviewFinding[];
+}
+
+/** GET /api/epics/{taskId}/phases/{phaseId}/findings (Go phaseFindingsDTO). */
+export interface PhaseFindings {
+  legacyReview: boolean;
+  blocks: ReviewBlock[];
+}
+
+/** One workaround_hits row (Go workaround.Stored, internal/workaround/store.go;
+ *  also GET /api/epics/{taskId}/phases/{phaseId}/workaround-hits). */
+export interface WorkaroundHit {
+  id: number;
+  sessionUuid: string;
+  /** The turn's seq in its session; 0 when the turn is gone. */
+  turnSeq: number;
+  turnAt: string;
+  /** The subagent that said it; '' for the session's main chain. */
+  agentName: string;
+  /** The list entry that matched (as configured, e.g. "for now", "поки що"). */
+  word: string;
+  sentence: string;
+  /** The sentence before and after; '' at either end. */
+  before: string;
+  after: string;
+}
+
 /** One code review of a phase's run as the epic payload carries it (Go reviewDTO,
  *  internal/api/reviews.go). The full row — with `findings`, which the epic
  *  payload leaves '' for size — is GET /api/epics/{taskId}/phases/{phaseId}/reviews
@@ -4134,6 +4324,8 @@ export interface PhaseReviewSummary {
   runSessionUuid: string;
   startedAt: string;
   finishedAt: string | null;
+  /** The run's guard check (migration 0124); `{}` before it, absent from an older daemon. */
+  guard?: GuardSummary;
 }
 
 /** Which gate caught a defect in a finished phase — or that none did. */

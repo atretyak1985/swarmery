@@ -603,9 +603,9 @@ func TestPlanReviewWaitsForTheLastPhaseReviewAndItsFix(t *testing.T) {
 		}
 		phaseReviews++
 		if phaseReviews == 1 {
-			return "- P1 api/x.go:1 — x.id is read before it exists.\nVERDICT: FAIL"
+			return reviewerOutput("FAIL", "[{id: R1-1, type: correctness, file: api/x.go, line: 1, evidence: \"x.id is read before it exists\"}]")
 		}
-		return "- none\nVERDICT: PASS"
+		return reviewerOutput("PASS", "[]", "R1-1")
 	}
 
 	var fixTip string

@@ -23,7 +23,7 @@ test('turn.complete sends one POST carrying turn.complete and a session.measure 
   const [request] = w.requests
   expect(request?.url).toBe('http://127.0.0.1:7777/api/link/events')
   expect(request?.method).toBe('POST')
-  expect(request?.headers.authorization).toBe(`Bearer ${TOKEN}`)
+  expect(request?.signedWith).toBe(TOKEN)
   const kinds = request?.body.events.map(e => e.kind)
   expect(kinds).toEqual(['session.start', 'turn.complete', 'session.measure'])
   const measure = request?.body.events.find(e => e.kind === 'session.measure')
@@ -95,7 +95,7 @@ test('401: the token is re-read once and retried no sooner than 1 s later; a sec
   expect(w.requests).toHaveLength(1)
   await w.clock.advance(200)
   expect(w.requests).toHaveLength(2)
-  expect(w.requests[1]?.headers.authorization).toBe('Bearer new-token')
+  expect(w.requests[1]?.signedWith).toBe('new-token')
   expect(w.tokenReads()).toBe(2)
   expect(w.logs.some(l => l.includes('link off for this session'))).toBe(true)
   await $.turn.complete(COMPLETE)
@@ -187,7 +187,7 @@ test('session.end behind an in-flight turn flush still sends the session.end eve
   expect(sent(w.requests).at(-1)).toMatchObject({ kind: 'session.end', payload: { reason: 'other' } })
 })
 
-// daemonUrl: only a loopback http origin may receive the bearer token.
+// daemonUrl: only a loopback http origin may receive a signed request.
 const DEFAULT_EVENTS = 'http://127.0.0.1:7777/api/link/events'
 const DAEMON_URLS: ReadonlyArray<readonly [string, string]> = [
   ['http://127.0.0.1:8899/', 'http://127.0.0.1:8899/api/link/events'],

@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	rules "github.com/atretyak1985/swarmery/tools/swarmery/internal/redact"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/store"
 )
 
@@ -530,7 +531,7 @@ func TestRedactPatterns(t *testing.T) {
 			t.Errorf("%s: redact(%q) = %q, want %q", c.name, c.in, got, c.want)
 		}
 	}
-	if n := len(redactRules); n != 11 {
+	if n := len(rules.RuleNames()); n != 11 {
 		t.Errorf("redact pattern classes = %d, want 11 (format doc §8)", n)
 	}
 }

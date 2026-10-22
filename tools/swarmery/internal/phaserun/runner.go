@@ -221,6 +221,10 @@ func (r ClaudeRunner) Start(ctx context.Context, spec RunSpec) (*Run, error) {
 		// verification command and cannot commit — and it still exits 0. See
 		// internal/claudeflags for the resolution and its escape hatch.
 		PermissionMode: claudeflags.Mode(permEnv),
+		// bypassPermissions honours deny rules, and these are the executor's: no
+		// remote writes, no PR/MR, no daemon API (claudeflags.AgentDenyArgs). The
+		// daemon lands the phase itself. A resume copies this Spec.
+		ExtraArgs: claudeflags.AgentDenyArgs(0),
 		// Already resolved by the service (request → doc → env → planning.DefaultModel).
 		Model: spec.Model,
 		// Also already resolved by the service (request → doc → env → DefaultEffort).

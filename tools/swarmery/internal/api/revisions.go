@@ -15,6 +15,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -32,6 +33,36 @@ var revisionRescan func(planDir string)
 // AttachRevisionRescan wires the post-apply rescan callback. nil detaches
 // (tests); planrev.Apply treats nil as a no-op.
 func AttachRevisionRescan(fn func(planDir string)) { revisionRescan = fn }
+
+// revisionRelend, when attached, refreshes the lent copy of every doc an applied
+// revision wrote in any phase worktree that still holds one
+// (phaserun.Service.RelendDocs, wired by cmd/swarmery/main.go), so a leftover
+// worktree never keeps the pre-revision doc. nil ⇒ no-op.
+var revisionRelend func(docPaths []string) int
+
+// AttachRevisionRelend wires the post-apply re-lend callback. nil detaches.
+func AttachRevisionRelend(fn func(docPaths []string) int) { revisionRelend = fn }
+
+// relendRevision hands revisionRelend the absolute paths revision id wrote:
+// created, updated and renamed docs (a deleted one has nothing to lend).
+func (h *Handler) relendRevision(id int64) {
+	if revisionRelend == nil {
+		return
+	}
+	rev, err := planrev.Get(h.DB, id)
+	if err != nil || rev == nil {
+		return
+	}
+	var docs []string
+	for _, f := range rev.Files {
+		if f.Action != planrev.ActionDelete {
+			docs = append(docs, filepath.Join(rev.PlanDir, f.DocPath))
+		}
+	}
+	if len(docs) > 0 {
+		revisionRelend(docs)
+	}
+}
 
 // maxRevisionReasonLen bounds the operator's reason (prose, not a spec).
 const maxRevisionReasonLen = 8000
@@ -239,6 +270,7 @@ func (h *Handler) applyRevision(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, err)
 		return
 	}
+	h.relendRevision(id)
 	writeJSON(w, map[string]any{"status": "applied", "files": n}, nil)
 }
 

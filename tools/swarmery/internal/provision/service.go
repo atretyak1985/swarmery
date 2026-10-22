@@ -165,7 +165,17 @@ func (s *Service) run(ctx context.Context, jobID int64, projectPath, pack string
 	// reasoning depth without anyone having chosen it.
 	genArgs := append([]string{"-p", "--model", DefaultModel, "--output-format", "text"},
 		claudeflags.EffortArgs(effortEnv, DefaultEffort)...)
+	//
+	// bypassPermissions is kept, deliberately: the generator runs a pack skill
+	// (architecture-map) whose Bash commands — git reads plus the pack's render
+	// script — and whose Skill-tool behaviour under dontAsk have not been
+	// enumerated or measured, and a list that missed one would deny it with exit 0.
+	// The target is dontAsk + Read/Grep/Glob/Skill + Edit under architecture-out/
+	// + the skill's exact commands, once one probe leg runs the real skill. Until
+	// then it carries the executor deny list (no remote writes, no PR/MR, no
+	// daemon API), which bypass honours.
 	genArgs = append(genArgs, claudeflags.PermissionModeArgs(permEnv)...)
+	genArgs = append(genArgs, claudeflags.AgentDenyArgs(0)...)
 	if _, err := s.Runner.Claude(gctx, projectPath, act.Prompt, genArgs...); err != nil {
 		s.set(jobID, "failed", "", err.Error(), true)
 		return err

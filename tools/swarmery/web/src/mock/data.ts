@@ -29,6 +29,7 @@ import type {
   PlanRevision,
   PlanningQuestion,
   PlanningStart,
+  PlanningCost,
   PlanningStatus,
   PlanningSummary,
   PlanningTurn,
@@ -2167,6 +2168,7 @@ const mockPlanning: Record<number, PlanningStatus> = {};
 
 /** The extended-DTO idle shape (Go sends status:"" when no wizard row exists). */
 const mockPlanningIdle: PlanningStatus = {
+  planningSessionId: 0,
   active: false,
   sessionUuid: '',
   sessionId: null,
@@ -3377,6 +3379,7 @@ export const mockApi = {
     // running plan — the full §5 demo state.
     mockPlanning[projectId] = {
       ...mockPlanningIdle,
+      planningSessionId: projectId,
       active: true,
       sessionUuid: uuid,
       sessionId: 9001, // a canned session so the demo shows the session link
@@ -3455,6 +3458,19 @@ export const mockApi = {
       };
     }
     return { status: 'generating' };
+  },
+
+  async setPlanningTurnCost(_sessionId: number, seq: number, cost: PlanningCost): Promise<PlanningQuestion> {
+    await delay(80);
+    for (const cur of Object.values(mockPlanning)) {
+      const turn = cur.history.find((h) => h.seq === seq && h.question !== null);
+      if (turn?.question != null) {
+        turn.question = { ...turn.question, costToChange: cost };
+        if (cur.currentQuestion?.id === turn.question.id) cur.currentQuestion = turn.question;
+        return turn.question;
+      }
+    }
+    throw new Error('mock: no such planning turn');
   },
 
   async proceedPlanning(projectId: number): Promise<{ status: string }> {
