@@ -184,6 +184,7 @@ func writePhaseStartRefusal(w http.ResponseWriter, err error) {
 	var docEffortErr *phaserun.DocEffortError
 	var manualOnlyErr *phaserun.ManualOnlyError
 	var earliestErr *phaserun.NotYetEarliestError
+	var decisionErr *phaserun.DecisionUndecidedError
 	// Start wraps the reclaim/acquire failures (fmt.Errorf("reclaim run branch:
 	// %w", …)), so errors.Is still matches through the wrap. Resolved BEFORE the
 	// switch and placed above the generic arm — an arm below `default` is
@@ -219,6 +220,14 @@ func writePhaseStartRefusal(w http.ResponseWriter, err error) {
 		writeConflictFields(w, codeNotYetEarliest, earliestErr.Error(), map[string]any{
 			"earliest": earliestErr.Earliest,
 			"hint":     hintNotYetEarliest,
+		})
+	// The decision hold (migration 0120): read-only like the doc gates above and,
+	// like them, not lifted by force — the fix is to take the decision.
+	case errors.As(err, &decisionErr):
+		writeConflictFields(w, codeDecisionUndecided, decisionErr.Error(), map[string]any{
+			"decisions": decisionErr.Decisions,
+			"detail":    decisionErr.Detail,
+			"hint":      hintDecisionUndecided,
 		})
 	case errors.As(err, &manualOnlyErr):
 		writeConflictFields(w, codeManualOnly, manualOnlyErr.Error(), map[string]any{

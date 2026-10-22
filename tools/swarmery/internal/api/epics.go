@@ -40,6 +40,7 @@ import (
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/phaserun"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/planrun"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/runcore"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/store"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/surprise"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/wsingest"
 )
@@ -47,6 +48,22 @@ import (
 // ── DTOs ────────────────────────────────────────────────────────────────────
 
 // epicPhaseDTO is one phase row (camelCase, mirrored in web/src/api/types.ts).
+// decisionHoldDTO is a phase's decision hold (migration 0120): the decisions its
+// doc depends on that are still undecided and expensive to change. Detail is the
+// phase-run start gate's refusal text; each entry links back to the planning
+// session turn that asked it (null for a decision born in the README).
+type decisionHoldDTO struct {
+	Detail    string               `json:"detail"`
+	Decisions []decisionHoldRefDTO `json:"decisions"`
+}
+
+type decisionHoldRefDTO struct {
+	DecisionID        string `json:"decisionId"`
+	Question          string `json:"question"`
+	Seq               int    `json:"seq"`
+	PlanningSessionID *int64 `json:"planningSessionId"`
+}
+
 type epicPhaseDTO struct {
 	ID              int64  `json:"id"`
 	Seq             int    `json:"seq"`
@@ -56,6 +73,9 @@ type epicPhaseDTO struct {
 	DependsOn       []int  `json:"dependsOn"`
 	CheckboxesDone  int    `json:"checkboxesDone"`
 	CheckboxesTotal int    `json:"checkboxesTotal"`
+	// DecisionHold is non-null while the phase's `**Depends on decisions:**` names
+	// a decision still undecided and expensive — the run would be refused.
+	DecisionHold *decisionHoldDTO `json:"decisionHold"`
 	// LandOpen / ManualOpen: how many of the UNTICKED criteria carry a `[LAND]` /
 	// `[MANUAL]` class marker (migration 0105, wsingest/classes.go). Both are
 	// still inside CheckboxesTotal — the completion gate counts every criterion —
@@ -742,6 +762,7 @@ func (h *Handler) epicPhases(taskID int64, planDir string) ([]epicPhaseDTO, epic
 		       e.doc_model,
 		       se.model,
 		       COALESCE(e.run_branch, ''),
+		       e.decision_deps,
 		       `+landingColumns+`
 		FROM epic_phases e
 		LEFT JOIN tasks bt ON bt.id = e.activated_board_task_id
@@ -758,6 +779,7 @@ func (h *Handler) epicPhases(taskID int64, planDir string) ([]epicPhaseDTO, epic
 
 	phases := []epicPhaseDTO{}
 	covers := []phaseCovers{}
+	decisionDeps := map[int64][]string{}
 	var rollup epicRollupDTO
 	for rows.Next() {
 		var (
@@ -795,6 +817,8 @@ func (h *Handler) epicPhases(taskID int64, planDir string) ([]epicPhaseDTO, epic
 			runBranch string
 			// The landing columns (0103), daemon-owned.
 			landing landingRow
+			// epic_phases.decision_deps (0120), doc-owned JSON list of D-n.
+			decisionDepsJSON string
 		)
 		dest := []any{&p.ID, &p.Seq, &p.Name, &p.DocPath, &depsJSON, &coversJSON,
 			&p.CheckboxesTotal, &p.CheckboxesDone, &docStatus, &docUpdatedAt,
@@ -802,11 +826,12 @@ func (h *Handler) epicPhases(taskID int64, planDir string) ([]epicPhaseDTO, epic
 			&completion, &p.ActivatedAt, &boardTaskID, &boardExtID, &boardCol,
 			&p.RunState, &runUUID, &runStartedAt, &runError,
 			&runEndedAt, &runCheckboxesBefore, &runCheckboxesAfter,
-			&p.VerifyMode, &verifyVerdict, &verifyDetail, &docModel, &runModel, &runBranch}
+			&p.VerifyMode, &verifyVerdict, &verifyDetail, &docModel, &runModel, &runBranch, &decisionDepsJSON}
 		if err := rows.Scan(append(dest, landing.dest()...)...); err != nil {
 			return nil, epicRollupDTO{}, nil, err
 		}
 		p.Landing = landing.dto(p.RunState)
+		decisionDeps[p.ID] = decodeStrList(decisionDepsJSON)
 		p.RunBranch = runBranch
 		p.DependsOn = decodeIntList(depsJSON)
 		covers = append(covers, phaseCovers{seq: p.Seq, cids: decodeStrList(coversJSON)})
@@ -919,8 +944,9 @@ func (h *Handler) epicPhases(taskID int64, planDir string) ([]epicPhaseDTO, epic
 	// Same rule, same reason: one query for the whole task AFTER the cursor is
 	// closed, never one per phase inside the loop.
 	usage := h.phaseRunModels(taskID)
-	forecasts := h.phaseForecasts(taskID) // same rule, same reason: one query, cursor closed
-	surprises := h.phaseSurprises(taskID) // and again
+	h.attachDecisionHolds(taskID, phases, decisionDeps) // same rule: one query, cursor closed
+	forecasts := h.phaseForecasts(taskID)               // same rule, same reason: one query, cursor closed
+	surprises := h.phaseSurprises(taskID)               // and again
 	docs := make(map[int64]string, len(phases))
 	for _, p := range phases {
 		docs[p.ID] = p.DocPath
@@ -1580,4 +1606,44 @@ func runEventsOrEmpty(evs []runcore.RunEvent) []runcore.RunEvent {
 		return []runcore.RunEvent{}
 	}
 	return evs
+}
+
+// attachDecisionHolds sets each phase's DecisionHold from ONE read of the plan's
+// decisions, judged by the same phasegate call the phase-run start gate makes.
+// Best-effort: a failed read leaves every hold null (the start gate still refuses).
+func (h *Handler) attachDecisionHolds(taskID int64, phases []epicPhaseDTO, deps map[int64][]string) {
+	declared := false
+	for _, d := range deps {
+		if len(d) > 0 {
+			declared = true
+			break
+		}
+	}
+	if !declared {
+		return
+	}
+	ds, err := store.ListTaskDecisions(h.DB, taskID)
+	if err != nil {
+		log.Printf("warn: api: decisions for task %d: %v", taskID, err)
+		return
+	}
+	judged := make([]phasegate.Decision, 0, len(ds))
+	byID := make(map[string]store.Decision, len(ds))
+	for _, d := range ds {
+		judged = append(judged, phasegate.Decision{ID: d.DecisionID, Question: d.Question, Cost: d.Cost, Status: d.Status})
+		byID[d.DecisionID] = d
+	}
+	for i := range phases {
+		hold := phaserun.HoldFor(deps[phases[i].ID], judged)
+		if hold == nil {
+			continue
+		}
+		dto := &decisionHoldDTO{Detail: hold.Detail, Decisions: []decisionHoldRefDTO{}}
+		for _, id := range hold.Decisions {
+			d := byID[id]
+			dto.Decisions = append(dto.Decisions, decisionHoldRefDTO{
+				DecisionID: id, Question: d.Question, Seq: d.Seq, PlanningSessionID: d.PlanningSessionID})
+		}
+		phases[i].DecisionHold = dto
+	}
 }
