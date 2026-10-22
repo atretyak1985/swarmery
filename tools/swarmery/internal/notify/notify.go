@@ -111,6 +111,9 @@ type PhaseStalled struct {
 	Reason          string // no-turns | ended | permission-pending
 	SinceMinutes    int
 	SessionUUID     string
+	// Detail is the reason in the operator's words (stall.Describe), the body's
+	// second half.
+	Detail string
 }
 
 // PhaseStalledEvent renders one phase_stalled notification: the human title and
@@ -125,7 +128,7 @@ func PhaseStalledEvent(p PhaseStalled) Event {
 		Type:         EventPhaseStalled,
 		Project:      p.Project,
 		Title:        "Phase stalled: " + phase,
-		Body:         fmt.Sprintf("%s — %s", p.Stage, stallReasonText(p.Stage, p.Reason, p.SinceMinutes)),
+		Body:         p.Stage + " — " + p.Detail,
 		TaskID:       p.TaskID,
 		PhaseID:      p.PhaseID,
 		Stage:        p.Stage,
@@ -133,26 +136,6 @@ func PhaseStalledEvent(p PhaseStalled) Event {
 		SinceMinutes: p.SinceMinutes,
 		SessionUUID:  p.SessionUUID,
 	}
-}
-
-// stallReasonText is the reason in the operator's words.
-func stallReasonText(stage, reason string, minutes int) string {
-	switch reason {
-	case "no-turns":
-		return fmt.Sprintf("no new turn for %d min", minutes)
-	case "permission-pending":
-		return fmt.Sprintf("a permission request has waited %d min", minutes)
-	case "ended":
-		left := "its Completion Report"
-		switch stage {
-		case "reviewer":
-			left = "a verdict"
-		case "verifier":
-			left = "a verification record"
-		}
-		return fmt.Sprintf("the session ended without %s (%d min ago)", left, minutes)
-	}
-	return fmt.Sprintf("%s for %d min", reason, minutes)
 }
 
 // Config tunes a Notifier; zero values fall back to defaults.

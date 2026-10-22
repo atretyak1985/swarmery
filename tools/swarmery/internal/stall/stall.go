@@ -93,6 +93,28 @@ type Stalled struct {
 	Playbook string
 }
 
+// Describe is a stall's reason in the operator's words — the webhook body and the
+// Needs-you preview. The dashboard renders its own localized copy from the same
+// stage/reason/minutes.
+func Describe(stage Stage, reason Reason, minutes int) string {
+	switch reason {
+	case ReasonNoTurns:
+		return fmt.Sprintf("no new turn for %d min", minutes)
+	case ReasonPermissionPending:
+		return fmt.Sprintf("a permission request has waited %d min", minutes)
+	case ReasonEnded:
+		left := "its Completion Report"
+		switch stage {
+		case StageReviewer:
+			left = "a verdict"
+		case StageVerifier:
+			left = "a verification record"
+		}
+		return fmt.Sprintf("the session ended without %s (%d min ago)", left, minutes)
+	}
+	return fmt.Sprintf("%s for %d min", reason, minutes)
+}
+
 // Minutes is how long the condition has held at now, in whole minutes.
 func (s Stalled) Minutes(now time.Time) int {
 	if now.Before(s.Since) {

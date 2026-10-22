@@ -24,6 +24,7 @@ func TestPhaseStalledEventPayload(t *testing.T) {
 	e := PhaseStalledEvent(PhaseStalled{
 		TaskID: 12, PhaseID: 34, PhaseSeq: 3, PhaseName: "Stall detector", PlanTitle: "Verify, not trust",
 		Project: "swarmery", Stage: "reviewer", Reason: "ended", SinceMinutes: 25, SessionUUID: "rev-1",
+		Detail: "the session ended without a verdict (25 min ago)",
 	})
 	if e.Title != "Phase stalled: Verify, not trust · Phase 3: Stall detector" {
 		t.Errorf("Title = %q", e.Title)
@@ -47,19 +48,6 @@ func TestPhaseStalledEventPayload(t *testing.T) {
 	for k, v := range want {
 		if got[k] != v {
 			t.Errorf("payload[%s] = %v, want %v (body %s)", k, got[k], v, raw)
-		}
-	}
-}
-
-func TestStallReasonText(t *testing.T) {
-	for _, tc := range []struct{ stage, reason, want string }{
-		{"executor", "no-turns", "no new turn for 21 min"},
-		{"verifier", "permission-pending", "a permission request has waited 21 min"},
-		{"executor", "ended", "the session ended without its Completion Report (21 min ago)"},
-		{"verifier", "ended", "the session ended without a verification record (21 min ago)"},
-	} {
-		if got := stallReasonText(tc.stage, tc.reason, 21); got != tc.want {
-			t.Errorf("stallReasonText(%s, %s) = %q, want %q", tc.stage, tc.reason, got, tc.want)
 		}
 	}
 }

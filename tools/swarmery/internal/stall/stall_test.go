@@ -421,3 +421,21 @@ func TestReconcileWithoutNotifier(t *testing.T) {
 		t.Errorf("notified_at = %q without a notifier, want NULL", notified.String)
 	}
 }
+
+func TestDescribe(t *testing.T) {
+	for _, tc := range []struct {
+		stage  Stage
+		reason Reason
+		want   string
+	}{
+		{StageExecutor, ReasonNoTurns, "no new turn for 21 min"},
+		{StageVerifier, ReasonPermissionPending, "a permission request has waited 21 min"},
+		{StageExecutor, ReasonEnded, "the session ended without its Completion Report (21 min ago)"},
+		{StageReviewer, ReasonEnded, "the session ended without a verdict (21 min ago)"},
+		{StageVerifier, ReasonEnded, "the session ended without a verification record (21 min ago)"},
+	} {
+		if got := Describe(tc.stage, tc.reason, 21); got != tc.want {
+			t.Errorf("Describe(%s, %s) = %q, want %q", tc.stage, tc.reason, got, tc.want)
+		}
+	}
+}
