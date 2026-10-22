@@ -223,6 +223,13 @@ type epicPhaseDTO struct {
 	// scope='phase', reviews.go), newest first, with Findings always "" — the Runs
 	// tab fetches the latest review's findings from …/phases/{id}/reviews. Never null.
 	Reviews []reviewDTO `json:"reviews"`
+	// ReviewBlocks are the doc's `kind: review` rounds as wsingest projected them
+	// (migration 0122, review_findings.go), oldest round first, each with its
+	// findings. Never null; empty for a phase whose doc carries no block.
+	ReviewBlocks []reviewBlockDTO `json:"reviewBlocks"`
+	// LegacyReview (D21): the phase was Done before review findings existed and
+	// carries no block — a badge, never a blocker.
+	LegacyReview bool `json:"legacyReview"`
 }
 
 // phaseForecastDTO is one stored `## Forecast` block. Every text field is
@@ -733,7 +740,7 @@ func (h *Handler) epicPhases(taskID int64, planDir string) ([]epicPhaseDTO, epic
 	rows, err := h.DB.Query(`
 		SELECT e.id, e.seq, e.name, e.doc_path, e.depends_on, e.covers,
 		       e.checkboxes_total, e.checkboxes_done, e.doc_status, e.doc_updated_at,
-		       e.criteria_land_open, e.criteria_manual_open,
+		       e.criteria_land_open, e.criteria_manual_open, e.legacy_review,
 		       e.completion_report, e.activated_at, e.activated_board_task_id,
 		       bt.external_id, bt.board_column,
 		       e.run_state, e.run_session_uuid, e.run_started_at, e.run_error,
@@ -798,7 +805,7 @@ func (h *Handler) epicPhases(taskID int64, planDir string) ([]epicPhaseDTO, epic
 		)
 		dest := []any{&p.ID, &p.Seq, &p.Name, &p.DocPath, &depsJSON, &coversJSON,
 			&p.CheckboxesTotal, &p.CheckboxesDone, &docStatus, &docUpdatedAt,
-			&p.LandOpen, &p.ManualOpen,
+			&p.LandOpen, &p.ManualOpen, &p.LegacyReview,
 			&completion, &p.ActivatedAt, &boardTaskID, &boardExtID, &boardCol,
 			&p.RunState, &runUUID, &runStartedAt, &runError,
 			&runEndedAt, &runCheckboxesBefore, &runCheckboxesAfter,
@@ -925,9 +932,10 @@ func (h *Handler) epicPhases(taskID int64, planDir string) ([]epicPhaseDTO, epic
 	for _, p := range phases {
 		docs[p.ID] = p.DocPath
 	}
-	reopens := h.phaseReopens(taskID, docs) // and again
-	reviews := h.phaseReviews(taskID)       // and again
-	verifying := h.phasesVerifying(phases)  // and again
+	reopens := h.phaseReopens(taskID, docs)     // and again
+	reviews := h.phaseReviews(taskID)           // and again
+	blocks := h.phaseReviewBlocks(taskID, docs) // and again
+	verifying := h.phasesVerifying(phases)      // and again
 	for i := range phases {
 		phases[i].VerifyRunning = verifying[phases[i].ID]
 		phases[i].RunEvents = runEventsOrEmpty(runcore.RunEvents(h.DB, phaserun.Engine, phases[i].ID))
@@ -947,6 +955,10 @@ func (h *Handler) epicPhases(taskID int64, planDir string) ([]epicPhaseDTO, epic
 		phases[i].Reviews = reviews[phases[i].ID]
 		if phases[i].Reviews == nil {
 			phases[i].Reviews = []reviewDTO{}
+		}
+		phases[i].ReviewBlocks = blocks[phases[i].ID]
+		if phases[i].ReviewBlocks == nil {
+			phases[i].ReviewBlocks = []reviewBlockDTO{}
 		}
 	}
 	if rollup.Total > 0 {

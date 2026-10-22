@@ -111,11 +111,12 @@ import { PHASE_TABS, PhasePanel, type PhaseTab } from './plans/PhasePanel';
 import { PhaseReopens } from './plans/PhaseReopens';
 import { TerminalBadge, useTerminalSessions } from './plans/TerminalBadge';
 import { PhaseReview } from './plans/PhaseReview';
+import { ReviewFindings } from './plans/ReviewFindings';
 import { PlainSummary } from './plans/PlainSummary';
 import { RunsReviewBlock } from './plans/RunsReviewBlock';
 import { VerifyVerdictChip } from './plans/VerifyVerdictChip';
 import { reverifyAction, useReverify, type Reverify } from './plans/useReverify';
-import { hasReviewTab, NEUTRAL_TERMS } from './plans/landingModel';
+import { hasReviewTab, NEUTRAL_TERMS, showsReviewTab } from './plans/landingModel';
 import { useProjectVcs } from '../lib/useProjectVcs';
 import {
   parsePlansRoute,
@@ -913,7 +914,7 @@ function canonicalPlansTarget(
     const tab: PhaseDetailTab =
       d.tab === 'edit' && phaseStatus(p, resolvedSeqs) === 'done'
         ? 'report'
-        : d.tab === 'review' && !hasReviewTab(p)
+        : d.tab === 'review' && !showsReviewTab(p)
           ? 'runs'
           : d.tab;
     return { target: { plan: epic.externalId, detail: { kind: 'phase', seq: d.seq, tab } }, missing: null };
@@ -3223,7 +3224,7 @@ function PhaseDetailPanel({
   const editable = status !== 'done';
   // Likewise a phase that never ran has no Review tab; `review` degrades to Runs.
   const activeTab: PhaseDetailTab =
-    tab === 'edit' && !editable ? 'report' : tab === 'review' && !hasReviewTab(phase) ? 'runs' : tab;
+    tab === 'edit' && !editable ? 'report' : tab === 'review' && !showsReviewTab(phase) ? 'runs' : tab;
   const at = epic.phases.findIndex((p) => p.seq === phase.seq);
   const prev = epic.phases[at - 1];
   const next = epic.phases[at + 1];
@@ -3322,9 +3323,15 @@ function PhaseDetailPanel({
           {phase.surprise == null && <ForecastSection phase={phase} />}
         </div>
       ) : activeTab === 'review' ? (
-        // Keyed by phase: ↑/↓ step navigation keeps the tab, and a land still in
-        // flight for the previous phase must not render onto this one.
-        <PhaseReview key={phase.id} epic={epic} phase={phase} terms={terms} onLanded={onDocChanged} />
+        <div className="space-y-4">
+          {/* Keyed by phase: ↑/↓ step navigation keeps the tab, and a land still in
+              flight for the previous phase must not render onto this one. A phase
+              the daemon never ran has nothing to land — only its findings. */}
+          {hasReviewTab(phase) && (
+            <PhaseReview key={phase.id} epic={epic} phase={phase} terms={terms} onLanded={onDocChanged} />
+          )}
+          <ReviewFindings blocks={phase.reviewBlocks ?? []} legacy={phase.legacyReview === true} />
+        </div>
       ) : activeTab === 'runs' ? (
         <>
           <div className="flex flex-wrap items-center gap-1.5">

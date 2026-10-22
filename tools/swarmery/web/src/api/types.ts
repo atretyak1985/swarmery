@@ -4079,6 +4079,55 @@ export interface EpicPhase {
    *  newest first. [] when never reviewed. Absent from a daemon older than the
    *  review stage — read it as `phase.reviews ?? []`. */
   reviews?: PhaseReviewSummary[];
+  /** The doc's `kind: review` rounds as the daemon projected them (migration
+   *  0122), oldest round first, each with its findings. [] when the doc carries
+   *  none; absent from an older daemon — read it as `phase.reviewBlocks ?? []`. */
+  reviewBlocks?: ReviewBlock[];
+  /** D21: the phase was Done before review findings existed and carries no
+   *  block. A badge on the Review tab — never a blocker. */
+  legacyReview?: boolean;
+}
+
+/** One finding of a review round (Go reviewFindingDTO, internal/api/review_findings.go). */
+export interface ReviewFinding {
+  /** The block's finding id (`R1-1`), else `r<round>-<n>`. */
+  id: string;
+  /** correctness | silent-failure | contract | plan-conformance | quality; ''
+   *  when the doc named another type (kept at the head of `note`). */
+  type: string;
+  file: string;
+  line: number | null;
+  /** The acceptance criterion (or spec SC-n) it breaks; '' when none. */
+  criterion: string;
+  /** An existing test failed because of it. */
+  testCaught: boolean;
+  evidence: string;
+  note: string;
+  /** The round whose `resolves:` closed it; null while open. */
+  resolvedBy: string | null;
+}
+
+/** One `kind: review` round of a phase doc (Go reviewBlockDTO). */
+export interface ReviewBlock {
+  /** "1", "2", … or "plan". */
+  round: string;
+  verdict: 'PASS' | 'FAIL' | 'INCONCLUSIVE';
+  /** false when the review stopped before covering its scope. */
+  complete: boolean;
+  scopeLeft: string[];
+  checkedCallers: string[];
+  resolves: string[];
+  /** The daemon's prose fallback: the reviewer wrote no readable block. */
+  unparsable: boolean;
+  source: 'daemon' | 'interactive' | 'backfill';
+  writtenAt: string;
+  findings: ReviewFinding[];
+}
+
+/** GET /api/epics/{taskId}/phases/{phaseId}/findings (Go phaseFindingsDTO). */
+export interface PhaseFindings {
+  legacyReview: boolean;
+  blocks: ReviewBlock[];
 }
 
 /** One code review of a phase's run as the epic payload carries it (Go reviewDTO,

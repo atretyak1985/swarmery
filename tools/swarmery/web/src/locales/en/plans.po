@@ -189,6 +189,10 @@ msgstr "{title} · Plans · {tail}"
 msgid "{title} lane"
 msgstr "{title} lane"
 
+#: src/pages/plans/ReviewFindings.tsx
+msgid "{title}: {count} findings"
+msgstr "{title}: {count} findings"
+
 #: src/pages/Plans.tsx
 msgid "{turns, plural, one {{model} (# turn)} few {{model} (# turns)} many {{model} (# turns)} other {{model} (# turns)}}"
 msgstr "{turns, plural, one {{model} (# turn)} few {{model} (# turns)} many {{model} (# turns)} other {{model} (# turns)}}"
@@ -445,6 +449,10 @@ msgstr "Back"
 msgid "back to the phase list (Esc)"
 msgstr "back to the phase list (Esc)"
 
+#: src/pages/plans/ReviewFindings.tsx
+msgid "backfilled"
+msgstr "backfilled"
+
 #: src/pages/plans/ForecastVsActual.tsx
 msgid "bands & outcome"
 msgstr "bands & outcome"
@@ -628,9 +636,17 @@ msgstr "criteria to untick"
 msgid "criteria…"
 msgstr "criteria…"
 
+#: src/pages/plans/ReviewFindings.tsx
+msgid "criterion"
+msgstr "criterion"
+
 #: src/pages/Routines.tsx
 msgid "Cron (5-field, blank = manual/webhook only)"
 msgstr "Cron (5-field, blank = manual/webhook only)"
+
+#: src/pages/plans/ReviewFindings.tsx
+msgid "daemon review"
+msgstr "daemon review"
 
 #: src/pages/Routines.tsx
 msgid "daily at {time}"
@@ -833,6 +849,10 @@ msgstr "epics…"
 msgid "every minute"
 msgstr "every minute"
 
+#: src/pages/plans/ReviewFindings.tsx
+msgid "evidence"
+msgstr "evidence"
+
 #: src/pages/Plans.tsx
 msgid "execution mode"
 msgstr "execution mode"
@@ -891,6 +911,10 @@ msgstr "findings ({count})"
 #: src/pages/plans/RunsReviewBlock.tsx
 msgid "findings (none blocking)"
 msgstr "findings (none blocking)"
+
+#: src/pages/plans/ReviewFindings.tsx
+msgid "finished before review findings were recorded — nothing is missing and nothing is required"
+msgstr "finished before review findings were recorded — nothing is missing and nothing is required"
 
 #: src/pages/plans/forecastStoryModel.ts
 msgid "finishing part of the work"
@@ -1005,6 +1029,10 @@ msgstr "how hard every Run phase / Retry run on this plan thinks. Leave it on th
 msgid "how hard the planning interview thinks, on every turn of this wizard — the first spawn and each resume. Leave it on the default to let the daemon's knob and the planner's pinned default decide. Note that NO effort is not the cheap end — an unpinned claude run thinks at xhigh, the deepest setting."
 msgstr "how hard the planning interview thinks, on every turn of this wizard — the first spawn and each resume. Leave it on the default to let the daemon's knob and the planner's pinned default decide. Note that NO effort is not the cheap end — an unpinned claude run thinks at xhigh, the deepest setting."
 
+#: src/pages/plans/ReviewFindings.tsx
+msgid "id"
+msgstr "id"
+
 #: src/pages/plans/forecastStoryModel.ts
 msgid "in a failure"
 msgstr "in a failure"
@@ -1019,6 +1047,10 @@ msgstr "in plain words"
 msgid "In plain words"
 msgstr "In plain words"
 
+#: src/pages/plans/ReviewFindings.tsx
+msgid "incomplete"
+msgstr "incomplete"
+
 #: src/pages/Plans.tsx
 msgid "inferred"
 msgstr "inferred"
@@ -1030,6 +1062,10 @@ msgstr "inferred from files this session edited under plan/"
 #: src/pages/Plans.tsx
 msgid "inline"
 msgstr "inline"
+
+#: src/pages/plans/ReviewFindings.tsx
+msgid "interactive review"
+msgstr "interactive review"
 
 #: src/pages/Plans.tsx
 msgid "interview against this plan and stage the changes as a reviewable diff"
@@ -1070,6 +1106,10 @@ msgstr "last run: done"
 #: src/pages/PlanningMode.tsx
 msgid "latest reasoning"
 msgstr "latest reasoning"
+
+#: src/pages/plans/ReviewFindings.tsx
+msgid "legacy review"
+msgstr "legacy review"
 
 #: src/pages/Plans.tsx
 msgid "let the run-plan skill triage the route from the phase DAG"
@@ -1215,6 +1255,10 @@ msgstr "next idea"
 msgid "nightly advisor re-run"
 msgstr "nightly advisor re-run"
 
+#: src/pages/plans/ReviewFindings.tsx
+msgid "no"
+msgstr "no"
+
 #: src/pages/Plans.tsx
 msgid "no {filterLabel} plans"
 msgstr "no {filterLabel} plans"
@@ -1242,6 +1286,10 @@ msgstr "no content change"
 #: src/pages/Plans.tsx
 msgid "no epics yet — a plan under this project's workspace (a <0>plan/</0> dir with a phase table) becomes an epic here"
 msgstr "no epics yet — a plan under this project's workspace (a <0>plan/</0> dir with a phase table) becomes an epic here"
+
+#: src/pages/plans/ReviewFindings.tsx
+msgid "No findings."
+msgstr "No findings."
 
 #: src/pages/plans/ForecastVsActual.tsx
 msgid "no forecast"
@@ -1343,6 +1391,11 @@ msgstr "not landed"
 msgid "not live"
 msgstr "not live"
 
+#. placeholder {0}: block.scopeLeft.join(', ')
+#: src/pages/plans/ReviewFindings.tsx
+msgid "not reviewed: {0}"
+msgstr "not reviewed: {0}"
+
 #: src/pages/plans/ForecastVsActual.tsx
 msgid "not run yet — a score appears once a run of this phase has finished and been measured"
 msgstr "not run yet — a score appears once a run of this phase has finished and been measured"
@@ -1400,6 +1453,7 @@ msgid "only a human can close it — you tick it after checking by hand"
 msgstr "only a human can close it — you tick it after checking by hand"
 
 #: src/pages/plans/LandingStatus.tsx
+#: src/pages/plans/ReviewFindings.tsx
 msgid "open"
 msgstr "open"
 
@@ -1585,6 +1639,10 @@ msgstr "plan is not active"
 #: src/pages/PlanningMode.tsx
 msgid "Plan ready"
 msgstr "Plan ready"
+
+#: src/pages/plans/ReviewFindings.tsx
+msgid "Plan round"
+msgstr "Plan round"
 
 #: src/pages/Plans.tsx
 msgid "plan run failed"
@@ -1866,6 +1924,14 @@ msgstr "reply"
 msgid "Report"
 msgstr "Report"
 
+#: src/pages/plans/ReviewFindings.tsx
+msgid "resolved in round {resolvedBy}"
+msgstr "resolved in round {resolvedBy}"
+
+#: src/pages/plans/ReviewFindings.tsx
+msgid "resolved in the plan round"
+msgstr "resolved in the plan round"
+
 #: src/pages/Plans.tsx
 msgid "Restore"
 msgstr "Restore"
@@ -1911,6 +1977,11 @@ msgstr "Review"
 #: src/pages/PlanningMode.tsx
 msgid "Review changes →"
 msgstr "Review changes →"
+
+#: src/pages/plans/ReviewFindings.tsx
+#: src/pages/plans/ReviewFindings.tsx
+msgid "Review findings"
+msgstr "Review findings"
 
 #: src/pages/PlanningMode.tsx
 msgid "Review it on the <0>Plans page</0> — phases run from there."
@@ -1980,6 +2051,10 @@ msgstr "revisions…"
 #: src/pages/plans/ForecastVsActual.tsx
 msgid "risks"
 msgstr "risks"
+
+#: src/pages/plans/ReviewFindings.tsx
+msgid "Round {round}"
+msgstr "Round {round}"
 
 #: src/pages/Routines.tsx
 msgid "Routines"
@@ -2247,6 +2322,10 @@ msgstr "started {startedAgo}"
 msgid "starting…"
 msgstr "starting…"
 
+#: src/pages/plans/ReviewFindings.tsx
+msgid "status"
+msgstr "status"
+
 #: src/pages/plans/LandingStatus.tsx
 msgid "status not read yet"
 msgstr "status not read yet"
@@ -2303,6 +2382,10 @@ msgstr "task title"
 #: src/pages/Plans.tsx
 msgid "tech-lead (default)"
 msgstr "tech-lead (default)"
+
+#: src/pages/plans/ReviewFindings.tsx
+msgid "test caught"
+msgstr "test caught"
 
 #: src/pages/plans/ForecastVsActual.tsx
 msgid "the Completion Report carries no “Where reality diverged” paragraph"
@@ -2412,6 +2495,10 @@ msgstr "The planner run ended without a reply. Adjust the idea below (it is pref
 #: src/pages/plans/forecastStoryModel.ts
 msgid "The planner was {percent} % sure"
 msgstr "The planner was {percent} % sure"
+
+#: src/pages/plans/ReviewFindings.tsx
+msgid "the reviewer wrote no readable kind: review block — its own words are in the doc"
+msgstr "the reviewer wrote no readable kind: review block — its own words are in the doc"
 
 #: src/pages/Plans.tsx
 msgid "the run ended its turn with criteria unticked and was resumed {resumed}× — {tip}"
@@ -2525,6 +2612,10 @@ msgstr "touched {count} {areas}{offNote}"
 msgid "Transform your idea into a plan"
 msgstr "Transform your idea into a plan"
 
+#: src/pages/plans/ReviewFindings.tsx
+msgid "type"
+msgstr "type"
+
 #: src/pages/Plans.tsx
 msgid "un-tick this criterion in the doc"
 msgstr "un-tick this criterion in the doc"
@@ -2547,6 +2638,10 @@ msgstr "unexpected"
 #: src/pages/Playbooks.tsx
 msgid "unknown project — pick one from the switcher"
 msgstr "unknown project — pick one from the switcher"
+
+#: src/pages/plans/ReviewFindings.tsx
+msgid "unparsable"
+msgstr "unparsable"
 
 #: src/pages/Plans.tsx
 msgid "unreported"
@@ -2630,6 +2725,10 @@ msgstr "what was shipped — per-phase executed work"
 msgid "when this phase doc was last edited — no run is attached to it"
 msgstr "when this phase doc was last edited — no run is attached to it"
 
+#: src/pages/plans/ReviewFindings.tsx
+msgid "where"
+msgstr "where"
+
 #: src/pages/plans/ForecastVsActual.tsx
 #: src/pages/plans/ForecastVsActual.tsx
 msgid "where reality diverged"
@@ -2685,6 +2784,10 @@ msgstr "written to the doc after the run had already changed another file — no
 #: src/pages/Plans.tsx
 msgid "xhigh — deepest, slowest"
 msgstr "xhigh — deepest, slowest"
+
+#: src/pages/plans/ReviewFindings.tsx
+msgid "yes"
+msgstr "yes"
 
 #: src/pages/Board.tsx
 msgid "Yes, archive {amnestyMatched}"

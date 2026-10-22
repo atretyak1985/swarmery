@@ -488,6 +488,8 @@ func Routes(root *http.ServeMux, h *Handler) {
 	// The review stage's rows (reviews.go): a phase's own reviews, the plan branch
 	// reviews the Inbox lists, and their acknowledgement.
 	mux.HandleFunc("GET /api/epics/{taskId}/phases/{phaseId}/reviews", h.listPhaseReviews)
+	// Review findings as data (migration 0122): the doc's kind: review rounds.
+	mux.HandleFunc("GET /api/epics/{taskId}/phases/{phaseId}/findings", h.listPhaseFindings)
 	mux.HandleFunc("GET /api/reviews", h.listReviews)
 	mux.HandleFunc("POST /api/reviews/{id}/ack", requireLocalOrigin(h.ackReview))
 	// Read the phase's change-request status now (phase_landing_refresh.go) — the
