@@ -13,7 +13,7 @@ import (
 
 // manualPhaseFixture plants one plan per project plus phases on both sides of
 // the manual_phase rule, on top of needsYouServerDB's session fixture.
-func manualPhaseFixture(t *testing.T, db *sql.DB) (alphaPhase, betaPhase int64) {
+func manualPhaseFixture(t *testing.T, db *sql.DB) (alphaPhase, doneDocPhase, betaPhase int64) {
 	t.Helper()
 	now := time.Now().UTC()
 	ago := func(d time.Duration) string { return now.Add(-d).Format(time.RFC3339) }
@@ -48,15 +48,17 @@ func manualPhaseFixture(t *testing.T, db *sql.DB) (alphaPhase, betaPhase int64) 
 	phase(alpha, 2, 4, 1, 2, 0, nil, ago(3*time.Hour))                        // an executable one still open
 	phase(alpha, 3, 4, 2, 1, 1, nil, ago(3*time.Hour))                        // a [LAND] one still open
 	phase(alpha, 4, 3, 3, 0, 0, nil, ago(3*time.Hour))                        // all ticked
-	phase(alpha, 5, 3, 2, 1, 0, "done", ago(3*time.Hour))                     // doc says done
-	phase(alpha, 6, 3, 3, 1, 0, nil, ago(3*time.Hour))                        // inconsistent counts: nothing open
+	// Doc says done but a [MANUAL] is still open → listed: executors mark the
+	// doc Done once their own criteria are ticked, and what is left is yours.
+	doneDocPhase = phase(alpha, 5, 3, 2, 1, 0, "done", ago(150*time.Minute))
+	phase(alpha, 6, 3, 3, 1, 0, nil, ago(3*time.Hour)) // inconsistent counts: nothing open
 
 	beta := task(2, "2026-10-02-beta-plan", "Beta plan", nil)
 	betaPhase = phase(beta, 1, 2, 1, 1, 0, nil, ago(2*time.Hour)) // NULL doc_status still counts
 
 	archived := task(1, "2026-09-01-old-plan", "Old plan", ago(24*time.Hour))
 	phase(archived, 1, 2, 1, 1, 0, nil, ago(4*time.Hour)) // archived plan → skipped
-	return alphaPhase, betaPhase
+	return alphaPhase, doneDocPhase, betaPhase
 }
 
 func manualItems(items []needsYouItem) []needsYouItem {
@@ -71,16 +73,18 @@ func manualItems(items []needsYouItem) []needsYouItem {
 
 func TestNeedsYouManualPhase(t *testing.T) {
 	srv, db := needsYouServerDB(t)
-	alphaPhase, betaPhase := manualPhaseFixture(t, db)
+	alphaPhase, doneDocPhase, betaPhase := manualPhaseFixture(t, db)
 
 	resp := getNeedsYou(t, srv.URL+"/api/needs-you")
 	got := manualItems(resp.Items)
-	if len(got) != 2 {
-		t.Fatalf("manual_phase items = %d, want 2: %+v", len(got), got)
+	if len(got) != 3 {
+		t.Fatalf("manual_phase items = %d, want 3: %+v", len(got), got)
 	}
-	a, b := got[0], got[1] // oldest blocker first: alpha (3h) before beta (2h)
-	if a.Phase == nil || a.Phase.PhaseID != alphaPhase || b.Phase == nil || b.Phase.PhaseID != betaPhase {
-		t.Fatalf("phases = %+v / %+v, want %d then %d", a.Phase, b.Phase, alphaPhase, betaPhase)
+	// Oldest blocker first: alpha (3h), alpha's done doc (2.5h), beta (2h).
+	a, d, b := got[0], got[1], got[2]
+	if a.Phase == nil || a.Phase.PhaseID != alphaPhase || d.Phase == nil || d.Phase.PhaseID != doneDocPhase ||
+		b.Phase == nil || b.Phase.PhaseID != betaPhase {
+		t.Fatalf("phases = %+v / %+v / %+v, want %d, %d, %d", a.Phase, d.Phase, b.Phase, alphaPhase, doneDocPhase, betaPhase)
 	}
 	want := needsYouPhase{
 		TaskID: a.Phase.TaskID, PlanExternalID: "2026-10-01-alpha-plan", PlanTitle: "Alpha plan",
@@ -217,7 +221,6 @@ func awaitingMergeFixture(t *testing.T, db *sql.DB) (ready, pushed, prOpen int64
 	phase(alpha, landPhase{seq: 7, total: 3, done: 1, landOpen: 1, runBranch: br(7), runState: "done", landingState: "none", runEnded: time.Hour})
 	phase(alpha, landPhase{seq: 8, total: 3, done: 1, manualOpen: 1, landOpen: 1, runBranch: br(8), runState: "done", landingState: "none", runEnded: time.Hour})
 	phase(alpha, landPhase{seq: 9, total: 2, done: 1, landOpen: 1, runBranch: br(9), runState: "partial", landingState: "none", runEnded: time.Hour})
-	phase(alpha, landPhase{seq: 10, total: 2, done: 1, landOpen: 1, runBranch: br(10), runState: "done", landingState: "pushed", docStatus: "done", runEnded: time.Hour})
 
 	archived := task(1, "2026-09-01-old-land", "Old land", ago(24*time.Hour))
 	phase(archived, landPhase{seq: 1, total: 2, done: 1, landOpen: 1, runBranch: br(11), runState: "done", landingState: "none", runEnded: 6 * time.Hour})
@@ -296,6 +299,42 @@ func TestNeedsYouAwaitingMerge(t *testing.T) {
 	}
 }
 
+// TestNeedsYouAwaitingMergeListsDoneDoc pins the live case that hid every
+// real candidate: an executor marks the doc Status: Done once its own criteria
+// are ticked and leaves [LAND] open — that phase is awaiting merge.
+func TestNeedsYouAwaitingMergeListsDoneDoc(t *testing.T) {
+	srv, db := needsYouServerDB(t)
+	awaitingMergeFixture(t, db)
+	now := time.Now().UTC()
+	res, err := db.Exec(`INSERT INTO tasks (project_id, title, prompt, status, created_at, started_at, source, external_id)
+		VALUES (1, 'Done doc', 'goal', 'running', ?, ?, 'workspace', '2026-10-21-done-doc')`,
+		now.Add(-48*time.Hour).Format(time.RFC3339), now.Add(-48*time.Hour).Format(time.RFC3339))
+	if err != nil {
+		t.Fatal(err)
+	}
+	taskID, _ := res.LastInsertId()
+	res, err = db.Exec(`INSERT INTO epic_phases
+		(workspace_task_id, seq, name, doc_path, depends_on, checkboxes_total, checkboxes_done,
+		 criteria_manual_open, criteria_land_open, doc_status, doc_updated_at,
+		 run_branch, run_state, run_ended_at, landing_state)
+		VALUES (?, 6, 'Today v6', '/ws/done-doc/phase-6.md', '[]', 10, 9, 0, 1, 'done', ?,
+		        'swarm/phase-6', 'done', ?, 'none')`,
+		taskID, now.Add(-time.Hour).Format(time.RFC3339), now.Add(-2*time.Hour).Format(time.RFC3339))
+	if err != nil {
+		t.Fatal(err)
+	}
+	phaseID, _ := res.LastInsertId()
+	for _, it := range itemsOfKind(getNeedsYou(t, srv.URL+"/api/needs-you?project=-work-alpha").Items, needsYouAwaitingMerge) {
+		if it.Phase.PhaseID == phaseID {
+			if it.Phase.LandingState != "ready" || it.Phase.LandOpen != 1 {
+				t.Errorf("done-doc phase state/open = %q/%d, want ready/1", it.Phase.LandingState, it.Phase.LandOpen)
+			}
+			return
+		}
+	}
+	t.Fatalf("phase %d (doc done, only [LAND] open, landing ready) not listed as awaiting_merge", phaseID)
+}
+
 // TestNeedsYouAwaitingMergeExclusions names every SC-6 exclusion on its own,
 // so a regression says which rule broke.
 func TestNeedsYouAwaitingMergeExclusions(t *testing.T) {
@@ -308,13 +347,12 @@ func TestNeedsYouAwaitingMergeExclusions(t *testing.T) {
 		}
 	}
 	for seq, why := range map[int]string{
-		4:  "landing merged",
-		5:  "landing returned",
-		6:  "run_branch empty",
-		7:  "an executable criterion is open",
-		8:  "a [MANUAL] criterion is open",
-		9:  "landing none but the run is not done",
-		10: "the doc says done",
+		4: "landing merged",
+		5: "landing returned",
+		6: "run_branch empty",
+		7: "an executable criterion is open",
+		8: "a [MANUAL] criterion is open",
+		9: "landing none but the run is not done",
 	} {
 		if listed[seq] {
 			t.Errorf("phase %d listed although %s", seq, why)

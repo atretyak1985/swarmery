@@ -54,6 +54,15 @@ export const register: Register = (on, rawOptions) => {
         if (project !== undefined) break
       }
       ctx = buildContext({ cwd, root, home, tmpdir, workspaceRoot, agentProject, project }, options)
+      if (options.isolation) {
+        for (const line of ctx.ignored) {
+          try {
+            ignore($.ui.log(line))
+          } catch {
+            // the root stays dropped without its log line
+          }
+        }
+      }
 
       if (options.redaction) {
         secrets = compileSecrets(parseJson(await settle($.fs.read(`${$.plugin.root}/hooks/patterns/secrets.json`))))

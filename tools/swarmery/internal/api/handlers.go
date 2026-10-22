@@ -15,9 +15,9 @@ import (
 
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/improve"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/ingest"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/plainsum"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/projectscan"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/provision"
-	"github.com/atretyak1985/swarmery/tools/swarmery/internal/plainsum"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/retroanalysis"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/worktree"
 )

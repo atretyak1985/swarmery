@@ -55,7 +55,9 @@ type needsYouPhase struct {
 // queryNeedsYouManualPhases lists the phases left to the operator. The rule is
 // exact, not "has a manual criterion": open criteria = manual open criteria,
 // so a phase that still has executable or [LAND] work is not listed (a run, or
-// the merge, closes that first). doc_status may be NULL (no Status: line).
+// the merge, closes that first). doc_status is not consulted: executors set
+// Status: Done once their own criteria are ticked, and the [MANUAL] they leave
+// open is exactly what this item is for.
 func queryNeedsYouManualPhases(db *sql.DB, scope string, projArgs []any) ([]needsYouItem, error) {
 	q := `SELECT e.id, e.seq, e.name, e.criteria_manual_open,
 		       t.id, COALESCE(t.external_id, ''), COALESCE(t.title, ''), p.slug,
@@ -65,7 +67,6 @@ func queryNeedsYouManualPhases(db *sql.DB, scope string, projArgs []any) ([]need
 		JOIN projects p ON p.id = t.project_id
 		WHERE e.criteria_manual_open > 0
 		  AND e.checkboxes_total - e.checkboxes_done = e.criteria_manual_open
-		  AND COALESCE(e.doc_status, '') <> 'done'
 		  AND t.archived_at IS NULL` + scope
 	rows, err := db.Query(q, projArgs...)
 	if err != nil {
@@ -94,8 +95,11 @@ func queryNeedsYouManualPhases(db *sql.DB, scope string, projArgs []any) ([]need
 // merge: open criteria = [LAND] open criteria, a run branch to land, and a
 // landing state the operator can move — ready (stored none + run done),
 // pushed or pr_open. merged / returned are excluded, and so is a phase never
-// run by the daemon (no run_branch): there is nothing to push. blockingSince
-// is when the run ended — when landing became possible — else the doc's mtime.
+// run by the daemon (no run_branch): there is nothing to push. A doc marked
+// done stays listed: executors set Status: Done once their own criteria are
+// ticked, and the [LAND] they leave open is exactly what this item is for.
+// blockingSince is when the run ended — when landing became possible — else
+// the doc's mtime.
 func queryNeedsYouAwaitingMerge(db *sql.DB, scope string, projArgs []any) ([]needsYouItem, error) {
 	q := `SELECT e.id, e.seq, e.name, e.criteria_land_open, e.landing_state, COALESCE(e.pr_url, ''),
 		       t.id, COALESCE(t.external_id, ''), COALESCE(t.title, ''), p.slug,
@@ -108,7 +112,6 @@ func queryNeedsYouAwaitingMerge(db *sql.DB, scope string, projArgs []any) ([]nee
 		  AND COALESCE(e.run_branch, '') <> ''
 		  AND (e.landing_state IN (?, ?)
 		       OR (COALESCE(e.landing_state, ?) = ? AND e.run_state = 'done'))
-		  AND COALESCE(e.doc_status, '') <> 'done'
 		  AND t.archived_at IS NULL` + scope
 	args := append([]any{landingPushed, landingPROpen, landingNone, landingNone}, projArgs...)
 	rows, err := db.Query(q, args...)
