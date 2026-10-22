@@ -51,9 +51,39 @@ export interface Review {
  */
 const FINDING_LINE = /^\s*(?:[-*•]|\d+[.)])?\s*(?:\*\*|\[)?P[01]\b/;
 
-/** The number of P0/P1 findings in a review's findings block. */
+/**
+ * The entries of the `findings:` list of a `kind: review` yaml block (the
+ * machine copy the review stage stores since migration 0122), or null when the
+ * text carries no such block. An entry is a `- ` line at the list's own indent.
+ */
+function countBlockFindings(text: string): number | null {
+  const block = /```ya?ml\n((?:(?!```)[\s\S])*?^kind:\s*review\b[\s\S]*?)```/m.exec(text);
+  if (block === null) return null;
+  let inList = false;
+  let indent: number | null = null;
+  let n = 0;
+  for (const line of (block[1] ?? '').split('\n')) {
+    if (!inList) {
+      if (/^findings:\s*(\[\s*\])?\s*(#.*)?$/.test(line)) {
+        if (line.includes('[')) return 0;
+        inList = true;
+      }
+      continue;
+    }
+    if (/^\S/.test(line)) break; // the next top-level key
+    const item = /^(\s*)- /.exec(line);
+    if (item === null) continue;
+    const at = item[1]?.length ?? 0;
+    indent ??= at;
+    if (at === indent) n++;
+  }
+  return n;
+}
+
+/** The number of findings in a review's findings text: the entries of its
+ *  `kind: review` block when it carries one, else its P0/P1 lines. */
 export function countFindings(findings: string): number {
-  return findings.split('\n').filter((line) => FINDING_LINE.test(line)).length;
+  return countBlockFindings(findings) ?? findings.split('\n').filter((line) => FINDING_LINE.test(line)).length;
 }
 
 async function failure(res: Response, what: string): Promise<Error> {

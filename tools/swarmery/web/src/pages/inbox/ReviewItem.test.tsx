@@ -53,6 +53,14 @@ describe('countFindings', () => {
     expect(countFindings(review().findings)).toBe(2);
     expect(countFindings('Zero findings: nothing blocks.\nVERDICT: PASS')).toBe(0);
     expect(countFindings('1. P1 a.go:1 — x\n2) [P0] b.go:2 — y\n  * P1 c.go:3 — z')).toBe(3);
+    // The kind: review block the review stage stores since migration 0122: its
+    // findings list is counted — not the ids list of the same shape, nor prose.
+    const block =
+      '```yaml\nkind: review\nround: 1\nverdict: FAIL\ncomplete: true\nscope_left: []\nfindings:\n' +
+      '  - id: R1-1\n    type: correctness\n    note: |-\n      - not an entry\n  - id: R1-2\n    type: quality\n' +
+      'resolves: []\nids:\n  - id: Foo\n    evidence: a.go:1\n```';
+    expect(countFindings(block)).toBe(2);
+    expect(countFindings('```yaml\nkind: review\nround: 2\nverdict: PASS\nfindings: []\n```')).toBe(0);
     expect(countFindings('')).toBe(0);
   });
 });
