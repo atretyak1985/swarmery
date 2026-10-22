@@ -26,6 +26,8 @@ import type {
 import { DiffView } from '../../components/DiffView';
 import { ConfirmDialog, Loading } from '../../components/ui';
 import { fmtAgo } from '../../lib/format';
+import { phaseGuard } from '../../api/guard';
+import { GuardBadge } from './GuardBadge';
 import { canLand, canReturn, landingLabel, prLinkText } from './landingModel';
 import { LandingStatus } from './LandingStatus';
 import { VerifyVerdictChip } from './VerifyVerdictChip';
@@ -295,6 +297,7 @@ export function PhaseReview({ epic, phase, terms, onLanded }: PhaseReviewProps):
       <div className="flex flex-wrap items-center gap-2">
         {landing !== null && vocab !== null && <LandingStrip landing={landing} terms={vocab} />}
         <VerifyVerdictChip verdict={verdict} detail={verdictDetail} />
+        <GuardBadge guard={phaseGuard(phase)} />
       </div>
       {landing !== null && (
         <LandingStatus

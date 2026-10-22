@@ -61,6 +61,14 @@ msgstr "(питання не вдалося розібрати)"
 msgid "{archivedCount} archived"
 msgstr "{archivedCount} в архіві"
 
+#: src/pages/plans/GuardBadge.tsx
+msgid "{blocked, plural, one {# blocked attempt} few {# blocked attempts} many {# blocked attempts} other {# blocked attempts}}"
+msgstr "{blocked, plural, one {# заблокована спроба} few {# заблоковані спроби} many {# заблокованих спроб} other {# заблокованої спроби}}"
+
+#: src/pages/plans/GuardBadge.tsx
+msgid "{changedCount, plural, one {# protected file changed} few {# protected files changed} many {# protected files changed} other {# protected files changed}}"
+msgstr "{changedCount, plural, one {змінено # захищений файл} few {змінено # захищені файли} many {змінено # захищених файлів} other {змінено # захищеного файлу}}"
+
 #: src/pages/plans/landingModel.ts
 msgid "{changeShort} open"
 msgstr "{changeShort} відкрито"
@@ -735,6 +743,10 @@ msgstr "на кожну фазу відправляти виконавця + с�
 msgid "doc"
 msgstr "документ"
 
+#: src/pages/plans/GuardBadge.tsx
+msgid "doc copy mismatch"
+msgstr "копія документа не збігається"
+
 #: src/pages/Plans.tsx
 msgid "doc: {shortName}"
 msgstr "документ: {shortName}"
@@ -968,6 +980,14 @@ msgstr "ще раз оцінити гілку запуску цієї фази �
 #: src/pages/Board.tsx
 msgid "Graph"
 msgstr "Граф"
+
+#: src/pages/plans/GuardBadge.tsx
+msgid "guard block unreadable"
+msgstr "блок guard не прочитати"
+
+#: src/pages/plans/GuardBadge.tsx
+msgid "guard check"
+msgstr "перевірка guard"
 
 #: src/pages/Plans.tsx
 msgid "hand the whole plan to one agent, headlessly, in an isolated worktree"
@@ -2413,6 +2433,14 @@ msgstr "документ фази просить {docModel}, але вибір �
 msgid "the phase doc declares **Model:** {docModel}, which is not a model this daemon knows (opus, sonnet, fable) — a run will be refused until the line is fixed"
 msgstr "документ фази оголошує **Model:** {docModel} — цей демон такої моделі не знає (opus, sonnet, fable); запуск відхилятиметься, доки рядок не виправлять"
 
+#: src/pages/plans/GuardBadge.tsx
+msgid "the phase doc lent into the worktree was edited outside its checkboxes, Status, Forecast and Completion Report"
+msgstr "копію документа фази у worktree змінено поза її чекбоксами, Status, Forecast і Completion Report"
+
+#: src/pages/plans/GuardBadge.tsx
+msgid "the phase guard refused these calls — see .swarmery/guard.log"
+msgstr "phase guard відхилив ці виклики — див. .swarmery/guard.log"
+
 #: src/pages/plans/PhaseReview.tsx
 msgid "The phase is still running — land it once the run has finished."
 msgstr "Фаза ще виконується — здайте її, коли запуск завершиться."
@@ -2445,6 +2473,10 @@ msgstr "Запуск планувальника завершився без ві
 #: src/pages/plans/forecastStoryModel.ts
 msgid "The planner was {percent} % sure"
 msgstr "Планувальник був упевнений на {percent} %"
+
+#: src/pages/plans/GuardBadge.tsx
+msgid "the run changed protected paths: {changedList}"
+msgstr "запуск змінив захищені шляхи: {changedList}"
 
 #: src/pages/Plans.tsx
 msgid "the run ended its turn with criteria unticked and was resumed {resumed}× — {tip}"

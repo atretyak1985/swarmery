@@ -7,6 +7,7 @@
 // render their empty state offline.
 
 import { MOCK } from '../api';
+import type { GuardSummary } from './types';
 
 export type ReviewScope = 'phase' | 'plan';
 export type ReviewVerdict = 'pass' | 'fail' | 'inconclusive';
@@ -42,6 +43,8 @@ export interface Review {
   startedAt: string;
   finishedAt: string | null;
   ackedAt: string | null;
+  /** The run's guard check (migration 0121); `{}` before it, absent from an older daemon. */
+  guard?: GuardSummary;
 }
 
 /**

@@ -1946,6 +1946,10 @@ msgstr "Git push ніколи не погоджується автоматичн
 msgid "Git writes (add, commit, checkout, worktree)"
 msgstr "Записи git (add, commit, checkout, worktree)"
 
+#: src/lib/needsYou.ts
+msgid "Guard decision"
+msgstr "Рішення guard"
+
 #: src/pages/docsRail.ts
 msgid "Guides"
 msgstr "Посібники"

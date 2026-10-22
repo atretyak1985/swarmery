@@ -16,12 +16,14 @@ import type {
   PhaseRunOutcome,
   ProviderTerms,
 } from '../../api/types';
+import { phaseGuard } from '../../api/guard';
 import { fmtAgo, fmtDateTime, fmtSpan } from '../../lib/format';
 import { UI_TERMS } from '../../lib/glossary';
 import { offPlanBand, type OffPlanBand } from '../../lib/offPlan';
 import { modelShortName } from '../../lib/sessionModelChip';
 import { forecastStory } from './forecastStoryModel';
 import { ForecastVsActual, OFF_PLAN_LABEL } from './ForecastVsActual';
+import { GuardBadge } from './GuardBadge';
 import { landingChip, type LandingChip as LandingChipModel } from './landingModel';
 
 // OffPlanChip lives here so the story and the card share one band→tone mapping
@@ -265,6 +267,8 @@ export function PhaseCard({
       {phase.decisionHold != null && phase.decisionHold.decisions.length > 0 && (
         <DecisionHoldNote hold={phase.decisionHold} hrefFor={decisionHref} />
       )}
+
+      <GuardBadge guard={phaseGuard(phase)} className="mt-2" />
 
       {(primary !== undefined || secondaries.length > 0 || aside !== undefined) && (
         <div className="mt-3 flex flex-wrap items-center gap-2">

@@ -1779,11 +1779,13 @@ export type ApprovalChannel = 'shim' | 'mod';
  * ended its turn waiting for a typed reply, a recently failed session, a
  * plan phase whose every open criterion is `[MANUAL]` (only a human closes it),
  * or one whose every open criterion is `[LAND]` with its run branch ready,
- * pushed or under an open PR (only the merge is left).
+ * pushed or under an open PR (only the merge is left), or a phase whose run
+ * touched protected paths (`phase_decision`: allow them into scope or reject).
  */
 export type NeedsYouKind =
   | 'approval'
   | 'question'
+  | 'phase_decision'
   | 'prod_deploy_local'
   | 'awaiting_reply'
   | 'failed'
@@ -1810,6 +1812,66 @@ export interface NeedsYouPhase {
   landingState?: NeedsYouLandingState;
   /** `awaiting_merge` only, once a PR is open. */
   prUrl?: string;
+}
+
+/** One refusal the phase-guard hook logged to the run's `.swarmery/guard.log`. */
+export interface GuardLogLine {
+  at: string;
+  tool: string;
+  path: string;
+  reason: string;
+  /** Not the hook's four tab-separated fields; `reason` is then the raw line. */
+  malformed?: boolean;
+}
+
+/** A doc block that could not be read (Go mdfence.ParseError). */
+export interface GuardParseError {
+  kind: 'absent' | 'unparsable';
+  line: number;
+  reason: string;
+}
+
+/**
+ * The guard check of a finished phase run (Go phaserun.GuardResult, stored as
+ * guard_json — migration 0121). `{}` on a review written before it, so every
+ * field is optional.
+ */
+export interface GuardSummary {
+  hasGuard?: boolean;
+  protectedPaths?: string[];
+  allow?: string[];
+  /** Files under a protected glob the run changed (committed, uncommitted or new). */
+  protectedChanged?: string[];
+  /** The lent doc copy was changed outside the executor's own edits, or is gone. */
+  docCopyMismatch?: boolean;
+  docCopyMissing?: boolean;
+  guardBlocks?: GuardLogLine[];
+  guardBlocksTotal?: number;
+  malformedLogLines?: number;
+  parseError?: GuardParseError | null;
+  base?: string;
+  diffError?: string;
+}
+
+/** One answer a decision offers. */
+export interface DecisionOption {
+  id: string;
+  label: string;
+}
+
+/**
+ * An open guard decision (Go needsYouDecision): the run touched protected
+ * paths, and the operator allows them into scope or rejects. Answered through
+ * POST /api/epics/{taskId}/phases/{phaseId}/decisions/{decisionId}.
+ */
+export interface NeedsYouDecision {
+  taskId: number;
+  phaseId: number;
+  /** `D-n` within the plan. */
+  decisionId: string;
+  question: string;
+  options: DecisionOption[];
+  guard: GuardSummary;
 }
 
 /** Haiku-extracted reply card for an awaiting_reply item (always null until phase 4). */
@@ -1847,6 +1909,8 @@ export interface NeedsYouItem {
   phase?: NeedsYouPhase;
   /** approval items only: the transport of the permission request. Absent on an older daemon. */
   channel?: ApprovalChannel;
+  /** `phase_decision` only: the question, its options and the run's guard check. */
+  decision?: NeedsYouDecision;
 }
 
 /** GET /api/needs-you — items sorted oldest blocker first. */
@@ -4117,6 +4181,9 @@ export interface EpicPhase {
    *  newest first. [] when never reviewed. Absent from a daemon older than the
    *  review stage — read it as `phase.reviews ?? []`. */
   reviews?: PhaseReviewSummary[];
+  /** The phase's OPEN guard decision: its last run touched protected paths and
+   *  nobody answered yet. null otherwise; absent from an older daemon. */
+  guardDecision?: NeedsYouDecision | null;
 }
 
 /** One code review of a phase's run as the epic payload carries it (Go reviewDTO,
@@ -4134,6 +4201,8 @@ export interface PhaseReviewSummary {
   runSessionUuid: string;
   startedAt: string;
   finishedAt: string | null;
+  /** The run's guard check (migration 0121); `{}` before it, absent from an older daemon. */
+  guard?: GuardSummary;
 }
 
 /** Which gate caught a defect in a finished phase — or that none did. */
