@@ -477,13 +477,47 @@ a fresh login.
 `--notify-events` (env `SWARMERY_NOTIFY_EVENTS`) chooses what is sent — any
 comma-separated mix of `approval_requested`, `approval_expired`,
 `session_completed`, `session_error`, `plugin_drift`, `phase_surprise`,
-`run_needs_operator`. The default is `approval_requested,run_needs_operator`:
+`run_needs_operator`, `phase_stalled`. The default is `approval_requested,run_needs_operator`:
 the two moments a human is blocking work (a pending tool approval, a headless
 run that stopped to ask the operator). An explicit value **replaces** the
 default rather than extending it, so keep both names in the list when adding
 others. `approval_expired` also fires for approvals a daemon restart orphaned
 (the hook died with the old process, so the request can no longer be answered
 from the dashboard) — the body says so, and the answer belongs in the terminal.
+
+`phase_stalled` comes from the stalled-phase detector (below): exactly one
+event per (phase, reason), with `{taskId, phaseId, stage, reason,
+sinceMinutes, sessionUuid}` on the generic JSON body beside the usual
+title/body.
+
+### Stalled phases
+
+Every 60 s the daemon looks at each plan phase with a stage in flight and finds
+the **active** one — the executor while the run is running, else the reviewer
+whose verdict is not recorded yet, else the verifier whose verification is still
+running — then flags it as stalled when:
+
+- **no-turns** — its session is open but has produced no turn for
+  `stallMinutes` (`config/guards.json`, default 20). A phase doc whose header
+  names a playbook with an override (`**Playbook:** long-tests`, 60 min by
+  default) gets that threshold instead;
+- **ended** — its session is over but left nothing behind: the executor no
+  Completion Report on a run that never settled, the reviewer no verdict, the
+  verifier no finished verification record;
+- **permission-pending** — a permission request of that session has waited
+  longer than `stallMinutes`.
+
+A stall shows as a «stalled: <stage> — <reason> <N min>» badge on the phase card
+and as a `stalled_phase` item in **Needs you** (a permission-pending one is folded
+into the approval it waits on, with an «open phase» link), and fires one
+`phase_stalled` webhook. The `stall_notices` table is the dedupe ledger: a row
+per (phase, reason) while the condition holds, cleared when it clears, so a
+recurrence notifies again. Notification only — nothing is restarted or killed.
+
+| Env | Values | Default | What it does |
+|---|---|---|---|
+| `SWARMERY_STALL` | `0` | on | `0` disables the detector. The boot log says `swarmery stall detector started (…)` or `… disabled`. |
+| `SWARMERY_GUARDS` | path to a JSON file | embedded `config/guards.json` | Replaces the whole guards document (`stallMinutes`, `playbookOverrides`, …). An unreadable or incomplete file disables the detector with an error in the boot log rather than falling back. |
 
 ## Complexity routing
 
