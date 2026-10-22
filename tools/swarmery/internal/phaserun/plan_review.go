@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/claudeacct"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/mdfence"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/phasediag"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/runsettings"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/verify"
@@ -593,6 +594,7 @@ func planReviewPrompt(title, readme, sections string, daemonPort int) string {
 	b.WriteString(reviewerPreamble(daemonPort))
 	b.WriteString("\n\n")
 	b.WriteString(planSeamFocus)
+	b.WriteString("\n\nREVIEW ROUND: " + mdfence.ReviewRoundPlan)
 	b.WriteString("\n\nPLAN: ")
 	b.WriteString(title)
 	if strings.TrimSpace(readme) != "" {

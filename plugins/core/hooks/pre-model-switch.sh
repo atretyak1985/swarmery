@@ -121,11 +121,17 @@ if [ "${SWARMERY_ALLOW_UNVALIDATED_MODEL:-0}" = "1" ]; then
 fi
 
 port="${SWARMERY_PORT:-7777}"
-# --globoff is load bearing: a context-window marker makes curl read `[1m]` as a
-# range glob and fail with exit 3 before the request is ever sent, which this
-# hook would then report as "daemon unreachable". The daemon resolves the marked
-# id fine (modeleval.Newest bases it); only curl's own globbing was in the way.
-resp=$(curl -fsS --globoff --max-time 2 "http://127.0.0.1:${port}/api/models/${to_model}/validation" 2>/dev/null)
+# The model id is payload data, so it is percent-encoded into ONE path segment:
+# a `/`, `?`, `#` or `..` in it must not add path, query or fragment parts to
+# the daemon request. The daemon's router decodes the segment back to the id,
+# so a context-window marker (`[1m]`) still resolves (modeleval.Newest bases
+# it). jq is already required above; the encoder takes the id on stdin.
+to_model_enc=$(printf '%s' "$to_model" | jq -sRr @uri 2>/dev/null || true)
+[ -n "$to_model_enc" ] || exit 0
+# --globoff stays: it keeps curl from reading anything in the URL as a range
+# glob and failing with exit 3, which this hook would report as "daemon
+# unreachable".
+resp=$(curl -fsS --globoff --max-time 2 "http://127.0.0.1:${port}/api/models/${to_model_enc}/validation" 2>/dev/null)
 rc=$?
 
 # 22 = HTTP error (404 included); anything else non-zero is an infrastructure

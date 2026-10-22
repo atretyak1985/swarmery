@@ -24,7 +24,9 @@ session_id=$(printf '%s' "$input" | jq -r '.session_id // empty' 2>/dev/null || 
 # Resume restoring the same model is not a switch worth a row.
 [ "$to_model" = "$from_model" ] && exit 0
 
-SESSION_FILE="/tmp/claude-session-$(date +%Y%m%d).jsonl"
+# shellcheck source=lib/session-file.sh
+. "$(dirname "${BASH_SOURCE[0]}")/lib/session-file.sh"
+SESSION_FILE=$(swarmery_session_file) || SESSION_FILE=/dev/null
 jq -c -n \
   --arg ts "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" \
   --arg cmd "model:${from_model:-?}->${to_model}" \

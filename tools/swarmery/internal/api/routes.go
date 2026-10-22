@@ -499,6 +499,9 @@ func Routes(root *http.ServeMux, h *Handler) {
 	// criteria in the doc; the GET serves the history and the ticked labels.
 	mux.HandleFunc("POST /api/epics/{taskId}/phases/{phaseId}/reopen", requireLocalOrigin(h.reopenPhase))
 	mux.HandleFunc("GET /api/epics/{taskId}/phases/{phaseId}/reopens", h.listPhaseReopens)
+	// Where the phase's agent said it changed course (workaround_hits.go) — a
+	// plain read; the epic payload carries the same list per phase.
+	mux.HandleFunc("GET /api/epics/{taskId}/phases/{phaseId}/workaround-hits", h.listWorkaroundHits)
 	// The cleanup action behind phasediag's orphan-branch blocker: a swarm/phase-<id>
 	// branch whose id matches no phase row — work stranded under a previous id
 	// generation, which the phase-scoped route above structurally cannot name. Kept a
