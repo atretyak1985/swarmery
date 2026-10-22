@@ -306,6 +306,25 @@ spec.md exists, every phase doc MUST carry a `**Covers:** SC-…` line; every
 SC id must be covered by ≥1 phase and no phase may cover an undeclared id —
 the platform lints coverage.
 
+## `## Decisions` (README, whenever the plan rests on answered or open questions)
+
+One line per decision, in the order the questions were asked, numbered `D-1`,
+`D-2`, … — the plan's stable decision ids:
+
+```
+- **D-3** (expensive, undecided) — Which store backs the cache? → undecided (reason: a data migration to undo)
+```
+
+The tuple is `(<cheap|expensive>, <decided|recommended|undecided>)`: the cost of
+reversing the decision later, then its state. Answered → `decided` with the
+answer; unanswered and cheap → `recommended`, the answer being the planner's pick
+followed by `(без відповіді, рекомендований)`; unanswered and expensive →
+`undecided`, answer `undecided`. `(reason: …)` is optional. A phase doc that
+builds on a decision declares it in its header block —
+`**Depends on decisions:** D-1, D-3` — and the platform refuses to start that
+phase while a listed decision is undecided and expensive. Plans without the
+section are unaffected.
+
 ## `## Forecast` (optional, in a phase doc, before `## Completion Report`)
 
 A small prediction the platform stores and later scores. It is DATA, never a
