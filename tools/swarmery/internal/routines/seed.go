@@ -21,6 +21,30 @@ type SeedFile struct {
 	Steps      []Step `json:"steps"`
 }
 
+// ShippedSeed registers one routine definition shipped under config/routines/.
+// The daemon never seeds them by itself; `swarmery routine seed --from
+// config/routines/<File>` does, once per machine.
+type ShippedSeed struct {
+	File string // file name under config/routines/
+	Name string // the routine's name: seeding's identity
+	// Model is the model every ai-prompt step of the routine must pin; "" = no
+	// ai-prompt step, or the runner's DefaultModel.
+	Model string
+}
+
+// ShippedSeeds is the registry of shipped routines. A file in config/routines/
+// that is not listed here — or a listed one that is missing, renamed, or pins a
+// different model — fails TestShippedSeedsAreRegistered.
+var ShippedSeeds = []ShippedSeed{
+	{File: "inbox-triage.json", Name: "inbox-triage-nightly"},
+	{File: "memory-review.json", Name: "memory-review-weekly"},
+	{File: "model-upgrade.json", Name: "model-upgrade"},
+	// Daily: narrows the janitor's keep-unmerged pile to closed phases/cards
+	// with a proof and posts the Needs-you card; a haiku step summarises the
+	// scan. Never removes anything — removal is the operator's click.
+	{File: "worktree-cleanup.json", Name: "worktree-cleanup-daily", Model: "haiku"},
+}
+
 // LoadSeedFile reads and validates a definition, including its steps.
 func LoadSeedFile(path string) (*SeedFile, error) {
 	raw, err := os.ReadFile(path)
