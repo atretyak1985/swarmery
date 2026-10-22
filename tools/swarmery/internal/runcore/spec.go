@@ -37,7 +37,7 @@ import (
 // the flag" — Args emits only what is set — so an engine that never used a flag
 // keeps an argv byte-identical to the one it emitted before this package.
 type Spec struct {
-	Prompt      string // -p; passed as an argument (not stdin) so --session-id positioning is unambiguous
+	Prompt      string // the positional prompt; Args passes it last, after `--`, so it is never parsed as a flag
 	SessionUUID string // --session-id: the daemon-generated explicit run↔session link
 	Cwd         string // the process's working directory (a worktree, or a project path for planning)
 

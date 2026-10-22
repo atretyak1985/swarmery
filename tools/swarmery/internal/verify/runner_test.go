@@ -49,8 +49,8 @@ func TestClaudeRunnerArgs(t *testing.T) {
 	// invisible to everything except an assertion like this one. Mirrors the
 	// verify/model case in internal/runcore/spawner_test.go.
 	got := strings.TrimSpace(string(out))
-	want := "-p hello --session-id u1 --setting-sources project,local --permission-mode bypassPermissions --model opus --effort " +
-		DefaultEffort + " --disallowedTools Edit,Write,MultiEdit,NotebookEdit"
+	want := "-p --session-id u1 --setting-sources project,local --permission-mode bypassPermissions --model opus --effort " +
+		DefaultEffort + " --disallowedTools Edit,Write,MultiEdit,NotebookEdit -- hello"
 	if got != want {
 		t.Errorf("argv = %q, want %q", got, want)
 	}
@@ -74,8 +74,9 @@ func TestClaudeRunnerMergesDisallowedTools(t *testing.T) {
 	if n := strings.Count(argv, "--disallowedTools"); n != 1 {
 		t.Fatalf("argv %q carries %d --disallowedTools flags, want exactly 1", argv, n)
 	}
-	if !strings.HasSuffix(argv, "--disallowedTools Edit,Write,MultiEdit,NotebookEdit,Bash") {
-		t.Errorf("argv %q does not end with the merged, de-duplicated denial list", argv)
+	// Last flag, right before the `-- <prompt>` that ends the options.
+	if !strings.HasSuffix(argv, "--disallowedTools Edit,Write,MultiEdit,NotebookEdit,Bash -- review") {
+		t.Errorf("argv %q does not end with the merged, de-duplicated denial list before the prompt", argv)
 	}
 }
 
@@ -161,11 +162,13 @@ func TestClaudeRunnerDaemonDenyIsOneArgvElement(t *testing.T) {
 		t.Fatalf("Run: %v", err)
 	}
 	argv := strings.Split(readArgs(t, cwd), "\n")
-	if n := len(argv); n < 2 || argv[n-2] != "--disallowedTools" {
-		t.Fatalf("argv does not end with --disallowedTools <list>: %q", argv)
+	// … --disallowedTools <list> -- <prompt>: the list is the last flag value.
+	n := len(argv)
+	if n < 4 || argv[n-4] != "--disallowedTools" || argv[n-2] != "--" || argv[n-1] != "verify" {
+		t.Fatalf("argv does not end with --disallowedTools <list> -- <prompt>: %q", argv)
 	}
 	want := strings.Join(ToolDenyArgs(DaemonDenyPatterns(8080))[1:], "")
-	if got := argv[len(argv)-1]; got != want {
+	if got := argv[n-3]; got != want {
 		t.Errorf("--disallowedTools value = %q, want %q", got, want)
 	}
 }

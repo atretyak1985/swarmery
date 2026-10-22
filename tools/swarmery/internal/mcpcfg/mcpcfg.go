@@ -216,6 +216,11 @@ func validateName(name string) error {
 	if len(name) > 200 {
 		return fmt.Errorf("%w: name too long", ErrInvalidInput)
 	}
+	// `claude mcp add|remove` parse their argv with an option parser: a name
+	// that begins with a dash would be read as one of their flags.
+	if strings.HasPrefix(name, "-") {
+		return fmt.Errorf("%w: name must not begin with '-'", ErrInvalidInput)
+	}
 	for _, r := range name {
 		// Control characters (incl. NUL, newline) have no place in a server
 		// name and are the kind of thing an injection attempt would smuggle.
@@ -254,12 +259,20 @@ func addArgs(spec AddSpec) ([]string, error) {
 		if strings.TrimSpace(spec.Command) == "" {
 			return nil, fmt.Errorf("%w: stdio transport requires a command", ErrInvalidInput)
 		}
+		// A command is an executable, never a flag; one beginning with a dash
+		// is refused rather than passed on.
+		if strings.HasPrefix(spec.Command, "-") {
+			return nil, fmt.Errorf("%w: command must not begin with '-'", ErrInvalidInput)
+		}
 		if err := validateArgTokens(spec.Args); err != nil {
 			return nil, err
 		}
-		args = append(args, "-s", string(spec.Scope), spec.Name, spec.Command)
-		// Everything after the name+command is the child argv; the CLI takes it
-		// positionally. We pass each token discretely.
+		// `--` ends the CLI's own options before the command: everything after
+		// it is the child argv, taken positionally. A child argument that begins
+		// with a dash (`npx -y pkg`, `-e K=V`) is then the child's, not an option
+		// of `mcp add` — without the marker `-e K=V` became an environment entry
+		// of the server. Each token is still passed discretely.
+		args = append(args, "-s", string(spec.Scope), spec.Name, "--", spec.Command)
 		args = append(args, spec.Args...)
 	case TransportHTTP, TransportSSE:
 		if err := validateURL(spec.URL); err != nil {

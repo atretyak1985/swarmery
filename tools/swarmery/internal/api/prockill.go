@@ -2,7 +2,6 @@ package api
 
 import (
 	"database/sql"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
@@ -100,8 +99,12 @@ func (h *Handler) hookSessionStart(w http.ResponseWriter, r *http.Request) {
 		// sessions.account (where its transcript lands). "" from an older shim.
 		LaunchAccount string `json:"launchAccount"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.PID <= 0 || body.SessionID == "" {
-		w.WriteHeader(http.StatusNoContent) // fire-and-forget — never error back
+	if err := decodeJSONLimited(w, r, &body, maxJSONBody); err != nil || body.PID <= 0 || body.SessionID == "" {
+		// Fire-and-forget — never error back, except the 413 an oversized
+		// body already got (no shim sends one).
+		if !isBodyTooLarge(err) {
+			w.WriteHeader(http.StatusNoContent)
+		}
 		return
 	}
 	// launchAccount is an account key from the hook body: one that is not a
@@ -229,7 +232,11 @@ func (h *Handler) KillSession(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Force bool `json:"force"`
 	}
-	json.NewDecoder(r.Body).Decode(&req) //nolint:errcheck // empty body → Force=false
+	// An empty or malformed body means Force=false; only an oversized one is
+	// refused (the 413 is already written).
+	if err := decodeJSONLimited(w, r, &req, maxJSONBody); isBodyTooLarge(err) {
+		return
+	}
 
 	idArg := r.PathValue("id")
 	id, err := strconv.ParseInt(idArg, 10, 64)
