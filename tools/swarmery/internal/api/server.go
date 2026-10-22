@@ -30,6 +30,43 @@ const (
 	cacheControlImmutable = "public, max-age=31536000, immutable"
 )
 
+// Content-Security-Policy values. baselineCSP goes on every response the daemon
+// writes (securityHeaders): only the dashboard itself may frame it. spaCSP is
+// the dashboard shell's own policy — everything from the daemon's origin, no
+// plugins, no <base> rewrites, no foreign framing. Its relaxations are what
+// the shipped shell actually needs: 'unsafe-inline' styles (React style props,
+// mermaid's generated SVG <style>); the Google Fonts stylesheet + font hosts
+// that index.html links; and loopback frames, because the Serena tab frames
+// serena's own dashboard origin (tools_dash.go serenaProjectDTO.DashboardURL,
+// e.g. http://127.0.0.1:24282/…) rather than the daemon proxy. Routes that
+// serve repository content set their own sandbox policy (artifactCSP).
+const (
+	baselineCSP = "frame-ancestors 'self'"
+	spaCSP      = "default-src 'self'; script-src 'self'; " +
+		"style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " +
+		"font-src 'self' https://fonts.gstatic.com; " +
+		"img-src 'self' data: blob:; connect-src 'self' ws: wss:; " +
+		"frame-src 'self' http://127.0.0.1:* http://localhost:*; " +
+		"object-src 'none'; base-uri 'self'; frame-ancestors 'self'"
+)
+
+// securityHeaders stamps the daemon-wide browser hardening on every response
+// before the route runs: nosniff, so no response is ever content-sniffed into
+// something it was not served as, and the baseline frame-ancestors CSP, so no
+// other origin can frame any page or API response. A handler that needs a
+// stricter policy (the SPA shell, the jailed artifacts) Sets its own
+// Content-Security-Policy, replacing the baseline. The ResponseWriter is passed
+// through unwrapped, so streaming (Flusher) and websocket upgrades (Hijacker)
+// behave exactly as before.
+func securityHeaders(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		h := w.Header()
+		h.Set("X-Content-Type-Options", "nosniff")
+		h.Set("Content-Security-Policy", baselineCSP)
+		next.ServeHTTP(w, r)
+	})
+}
+
 // inboxTTL is the sweeper TTL the board DTO derives staleAfter from. Set by
 // AttachInboxTTL at startup from the same SWARMERY_INBOX_TTL resolution the
 // sweeper itself uses; the default matches the sweeper's default so a daemon
@@ -129,14 +166,18 @@ func NewServer(db *sql.DB, watching bool) (http.Handler, error) {
 	// daemon — a request must name it in Host — is simpler to reason about
 	// than a public shell whose every fetch then fails.
 	mux.Handle("/", requireLocalHost(spaHandler(dist)))
-	return mux, nil
+	return securityHeaders(mux), nil
 }
 
 // spaHandler serves static files from the embedded dist, falling back to
 // index.html for client-side routes (never for /api/*, which the mux owns).
+// Every response carries spaCSP: the policy only bites on the HTML documents,
+// and stamping all of them keeps a non-index entry point from slipping out
+// without one.
 func spaHandler(dist fs.FS) http.Handler {
 	fileServer := http.FileServerFS(dist)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Security-Policy", spaCSP)
 		path := r.URL.Path
 		if path != "/" {
 			if _, err := fs.Stat(dist, path[1:]); err == nil {

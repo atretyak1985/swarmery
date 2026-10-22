@@ -78,6 +78,18 @@ func TestParseGuardFixtures(t *testing.T) {
 	}
 }
 
+// The guard-trap fixture's phase doc is what a live trap run enforces; the bash
+// hook's tests parse it too, so both parsers must read the same one glob.
+func TestParseGuardTrapFixture(t *testing.T) {
+	g, perr := ParseGuard(fixture(t, filepath.Join("guard-trap", "plan"), "phase-1-trap.md"))
+	if perr != nil {
+		t.Fatal(perr)
+	}
+	if !reflect.DeepEqual(g.ProtectedPaths, []string{"**/*_test.go"}) || len(g.Warnings) != 0 {
+		t.Fatalf("guard = %+v, want exactly **/*_test.go and no warnings", g)
+	}
+}
+
 func TestParseGuardDirectoryWarningsNameTheGlob(t *testing.T) {
 	g, perr := ParseGuard(fixture(t, "guard-blocks", "dirs-not-files.md"))
 	if perr != nil {
