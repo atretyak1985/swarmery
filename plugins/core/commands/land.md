@@ -51,7 +51,8 @@ find "$WS/working" -mindepth 2 -maxdepth 2 -name README.md 2>/dev/null
 
 # c) files this session actually touched (activity tracker)
 today=$(date +%Y%m%d)
-for f in /tmp/claude-session-*-${today}.jsonl /tmp/claude-session-${today}.jsonl; do
+RUN_DIR="${SWARMERY_RUN_DIR:-$HOME/.swarmery/run}"   # private per-user hook state
+for f in "$RUN_DIR"/claude-session-*-${today}.jsonl "$RUN_DIR/claude-session-${today}.jsonl"; do
   [ -f "$f" ] && jq -r 'select(.file!="") | .file' "$f" 2>/dev/null
 done | sort -u
 ```

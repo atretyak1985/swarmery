@@ -226,8 +226,11 @@ if [[ ("$file_path" == *"agents/docs/generated/"* || "$file_path" == *".claude/d
     metrics_dir="${CLAUDE_PROJECT_DIR:-.}/.claude-workspace/metrics"
   fi
   mkdir -p "$metrics_dir" 2>/dev/null || true
-  printf '{"ts":"%s","hook":"protect-sensitive-files","stanza":"generated-wiki","mode":"warn","file":"%s"}\n' \
-    "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$file_path" >> "$metrics_dir/gate-bypasses.jsonl" 2>/dev/null || true
+  # jq encodes the file name, so a quote or backslash in it cannot break the
+  # line or add fields to the audit record.
+  jq -nc --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --arg file "$file_path" \
+    '{ts:$ts,hook:"protect-sensitive-files",stanza:"generated-wiki",mode:"warn",file:$file}' \
+    >> "$metrics_dir/gate-bypasses.jsonl" 2>/dev/null || true
   exit 0
 fi
 

@@ -144,5 +144,19 @@ assert 2 "tmp block: lock deep in a temp-dir repo"   "$(jp "$scratch/repo/sub/ya
 assert 2 "tmp block: lock through a temp symlink"    "$(jp "$scratch/link/package-lock.json")"
 assert 2 "tmp block: a symlinked lock file"          "$(jp "$scratch/w/package-lock.json")"
 
+# ── Audit log line stays valid JSON for any file name ─────────────
+# The generated-wiki warning appends a JSON line naming the file. A name with a
+# double quote or a backslash must be encoded, not spliced into the line.
+wiki_proj="$scratch/wiki-proj"
+mkdir -p "$wiki_proj"
+wiki_path='/repo/agents/docs/generated/a"b\c.md'
+wiki_payload=$(jq -nc --arg p "$wiki_path" '{tool_input:{file_path:$p}}')
+printf '%s' "$wiki_payload" | ( unset AGENT_PROJECT; CLAUDE_PROJECT_DIR="$wiki_proj" "$HOOK" ) >/dev/null 2>&1
+record 0 "$?" "generated-wiki warn exits 0"
+wiki_log="$wiki_proj/.claude-workspace/metrics/gate-bypasses.jsonl"
+logged=$(tail -1 "$wiki_log" 2>/dev/null | jq -r '.file // empty' 2>/dev/null)
+if [ "$logged" = "$wiki_path" ]; then record 0 0 "audit line is valid JSON carrying the exact file name"
+else record 0 1 "audit line is valid JSON carrying the exact file name (got: $(tail -1 "$wiki_log" 2>/dev/null))"; fi
+
 printf 'protect-sensitive-files: %d passed, %d failed\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]

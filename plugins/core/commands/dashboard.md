@@ -25,8 +25,9 @@ Read the session tracking file to get tool usage stats:
 
 ```bash
 today=$(date +%Y%m%d)
+RUN_DIR="${SWARMERY_RUN_DIR:-$HOME/.swarmery/run}"   # private per-user hook state
 SESSION_FILE=""
-for f in /tmp/claude-session-*-${today}.jsonl /tmp/claude-session-${today}.jsonl; do
+for f in "$RUN_DIR"/claude-session-*-${today}.jsonl "$RUN_DIR/claude-session-${today}.jsonl"; do
   [ -f "$f" ] && [ -s "$f" ] && SESSION_FILE="$f"
 done
 

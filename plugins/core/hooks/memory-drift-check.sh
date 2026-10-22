@@ -16,14 +16,15 @@ PROJECT_JSON="${PROJECT_DIR}/.claude/project.json"
 [ -d "$MEM_DIR" ] || exit 0
 [ -f "$PROJECT_JSON" ] || exit 0
 
-# Known-good vocabulary: repos + apps + mainApp + device from project.json
-known=$(node -e "
+# Known-good vocabulary: repos + apps + mainApp + device from project.json.
+# The path reaches node through the environment, never through the JS source.
+known=$(PJ="$PROJECT_JSON" node -e '
 try {
-  const p = require('$PROJECT_JSON');
+  const p = require(process.env.PJ);
   const v = new Set([...(p.repos||[]), ...(p.apps||[]), p.mainApp, p.device, p.monorepo].filter(Boolean));
-  console.log([...v].join('\n'));
+  console.log([...v].join("\n"));
 } catch (e) {}
-" 2>/dev/null)
+' 2>/dev/null)
 [ -n "$known" ] || exit 0
 
 # Heuristic: repo-shaped tokens in memory files (path-like segments under apps/ or

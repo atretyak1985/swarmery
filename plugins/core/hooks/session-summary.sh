@@ -7,7 +7,8 @@
 #   ${WS_ROOT}/sessions/*.json          30d
 #   ${WS_ROOT}/metrics/session-*.jsonl  30d
 #   ${WS_ROOT}/logs/trace-*.jsonl       30d
-#   /tmp/claude-session-*.jsonl          7d   (per-day statusline substrate)
+#   <run dir>/claude-session-*.jsonl     7d   (per-day statusline substrate;
+#                                             run dir = lib/session-file.sh)
 #
 # The metrics window covers session-*.jsonl ONLY, never metrics/*.jsonl. The
 # other files there (bash-shape-guard.jsonl, gate-bypasses.jsonl) are single
@@ -16,11 +17,11 @@
 # when a quiet period makes it most worth keeping. Only per-session files rotate.
 #
 # ${WS_ROOT}/working/** is never swept — task dirs are the work product.
-# The /tmp sweep runs OUTSIDE the workspace block (which is NOT the same as
+# The run-dir sweep runs OUTSIDE the workspace block (which is NOT the same as
 # unconditionally): WS_ROOT is empty whenever AGENT_PROJECT is unset and no
 # ancestor carries both .claude-workspace and .claude, and in that configuration
-# a workspace-gated sweep would let /tmp grow forever — the unbounded growth
-# this rotation exists to stop.
+# a workspace-gated sweep would let the substrate grow forever — the unbounded
+# growth this rotation exists to stop.
 #
 # The real precondition for EVERY sweep here is the early exit further down:
 # with no non-empty substrate file for today, the hook `exit 0`s before any
@@ -44,13 +45,15 @@ WHITE='\033[1;37m'
 today=$(date +%Y%m%d)
 SESSION_FILE=""
 
-# Where the per-day statusline substrate lives. The default is the literal /tmp
-# every other hook in this pack writes to (session-start, subagent-start/stop,
-# pre/post-compact, notify-completion) — this variable exists so the rotation
-# test can point the hook at a sandbox instead of sweeping a real developer's
-# /tmp. Overriding it in production would desync this hook from the six that
-# hardcode /tmp, so leave it unset outside tests.
-CLAUDE_SESSION_TMP="${CLAUDE_SESSION_TMP:-/tmp}"
+# Where the per-day statusline substrate lives. The default is the private run
+# dir every other hook in this pack writes to through lib/session-file.sh
+# (SWARMERY_RUN_DIR moves all of them together). CLAUDE_SESSION_TMP exists so
+# the rotation test can point this hook alone at a sandbox; overriding it in
+# production would desync it from the writers, so leave it unset outside tests.
+# shellcheck source=lib/session-file.sh
+. "$(dirname "${BASH_SOURCE[0]}")/lib/session-file.sh"
+CLAUDE_SESSION_TMP="${CLAUDE_SESSION_TMP:-$(swarmery_run_dir_path || true)}"
+[ -n "$CLAUDE_SESSION_TMP" ] || exit 0
 
 # Try to find the most recent session file for today
 for f in "${CLAUDE_SESSION_TMP}"/claude-session-*-"${today}".jsonl "${CLAUDE_SESSION_TMP}/claude-session-${today}.jsonl"; do
@@ -58,6 +61,10 @@ for f in "${CLAUDE_SESSION_TMP}"/claude-session-*-"${today}".jsonl "${CLAUDE_SES
     SESSION_FILE="$f"
   fi
 done
+# The writers' own override wins, as it does for them (lib/session-file.sh).
+if [ -n "${SWARMERY_SESSION_FILE:-}" ] && [ -s "$SWARMERY_SESSION_FILE" ]; then
+  SESSION_FILE="$SWARMERY_SESSION_FILE"
+fi
 
 if [ -z "$SESSION_FILE" ] || [ ! -s "$SESSION_FILE" ]; then
   exit 0
@@ -302,10 +309,11 @@ else
   done
 fi
 
-# 0) Rotate the per-day statusline substrate in /tmp. This sweep is OUTSIDE the
-#    workspace block on purpose: WS_ROOT is empty whenever AGENT_PROJECT is unset
-#    AND no ancestor of the project dir carries both .claude-workspace and
-#    .claude, and gating the sweep on it meant /tmp grew without bound in exactly
+# 0) Rotate the per-day statusline substrate in the run dir. This sweep is
+#    OUTSIDE the workspace block on purpose: WS_ROOT is empty whenever
+#    AGENT_PROJECT is unset AND no ancestor of the project dir carries both
+#    .claude-workspace and .claude, and gating the sweep on it meant the
+#    substrate dir (then /tmp) grew without bound in exactly
 #    that configuration — the failure this rotation exists to prevent. The files
 #    are regenerated per day and only ever read for "today", hence 7d, tighter
 #    than the 30d workspace windows below. -maxdepth 1 and -type f keep it to the
@@ -316,14 +324,16 @@ fi
 #    unconditional. The SESSION_FILE check near the top of this script exits 0
 #    when today's substrate file is missing or empty, which is upstream of this
 #    line, so a session that recorded no tool calls never reaches this sweep.
-#    Accepted: no substrate file today means nothing was added to /tmp today
-#    either, so the backlog cannot grow while the sweep is being skipped.
+#    Accepted: no substrate file today means nothing was added to the run dir
+#    today either, so the backlog cannot grow while the sweep is being skipped.
+#    Legacy /tmp/claude-session-*.jsonl files from older plugin versions are
+#    left for the OS to clean; this hook no longer sweeps a shared directory.
 #
-#    The trailing slash is load-bearing. On macOS /tmp is a symlink to
-#    /private/tmp, and find (default -P) does not follow a symlinked starting
-#    point: `find /tmp -maxdepth 1 -type f` lists nothing there, so this sweep
-#    was a silent no-op on the platform it matters most on. `/tmp/` resolves
-#    through the link before find ever sees it.
+#    The trailing slash is load-bearing. find (default -P) does not follow a
+#    symlinked starting point — on macOS /tmp is a symlink to /private/tmp, and
+#    an operator may symlink the run dir too — so `find <link> -maxdepth 1
+#    -type f` lists nothing. `<dir>/` resolves through the link before find
+#    ever sees it.
 find "${CLAUDE_SESSION_TMP%/}/" -maxdepth 1 -name 'claude-session-*.jsonl' -type f -mtime +7 -delete 2>/dev/null || true
 
 if [ -n "$WS_ROOT" ]; then
@@ -338,7 +348,7 @@ if [ -n "$WS_ROOT" ]; then
 
   # 1b) Rotate the other append-only workspace logs nobody rotates. Each of these
   #     grows one file per session/day forever; the sessions mirror above was the
-  #     only one with a window. 30d matches that mirror. (The /tmp substrate has
+  #     only one with a window. 30d matches that mirror. (The run-dir substrate has
   #     its own, tighter window and is swept above — outside this workspace
   #     block, though still downstream of the SESSION_FILE early exit, so
   #     "outside the workspace block" rather than "unconditionally".)
