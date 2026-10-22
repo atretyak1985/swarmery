@@ -14,8 +14,9 @@ planner's habit disagree, this file wins.
 
 ## plan/README.md (≤ ~150 lines)
 
-Required content: objective; architecture decisions with real file paths;
-risks; Definition of Done; and the phase sequencing table with EXACTLY these
+Required content: an `## In plain words` section directly under the H1 (see
+"`## In plain words`" below); objective; architecture decisions with real file
+paths; risks; Definition of Done; and the phase sequencing table with EXACTLY these
 header cells (the platform parses this shape; the Doc cell wraps the filename
 in backticks):
 
@@ -37,6 +38,7 @@ Status: Pending
 **Repo:** `<repo>` · **Branch:** `<branch>` · **Depends on:** … · **Estimate:** …   ← Branch is informational; the daemon lands swarm/phase-<id>
 **Verify:** off             ← off | normal | strict (see "Header rows" below)
 **Review:** off             ← on | off
+## In plain words           ← 3–6 jargon-free sentences; see below
 ## Goal
 ## Files to Create / Files to Modify
 ## Implementation Details
@@ -250,6 +252,29 @@ allocated when the branch is rebased for landing: the next number above the
 highest on the default branch at that moment. A number picked at write time
 collides with whatever lands first while the branch is open, and every collision
 costs a renumber commit.
+
+## `## In plain words`
+
+Every plan README (directly under the H1) and every phase doc (directly after
+the header rows, before `## Goal`) opens with this section. The rest of the doc
+is written for the executor; this one is written for a person who did not
+write the plan and does not know the codebase — the operator skimming the
+Plans page. The dashboard shows it verbatim on its "In plain words" tab, and
+generates a retelling with a model only when the section is missing or empty.
+
+- **Phase doc:** what the phase is for and why it is needed (the problem or
+  gap it closes), what will be different once it is done — in terms of what a
+  user or the team gets — and, when it matters, what it unblocks.
+- **README:** what the plan is about and why it exists, what will be different
+  when it is all done, how the work is split in one or two sentences, and the
+  main risk if there is one.
+- 3–6 sentences of prose (a short bullet list is fine). No file paths, code,
+  function names, SC ids or phase numbers; explain an unavoidable technical
+  term in a few words. Say only what the doc supports.
+- Write it in the language the operator wrote the request in. The heading
+  itself stays `## In plain words` — the dashboard matches it by name.
+- A revision that changes what a phase does rewrites this section too; a
+  stale plain-words section misleads exactly the reader it exists for.
 
 ## plan/manifest.json
 

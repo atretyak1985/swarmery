@@ -67,6 +67,15 @@ func (h *Handler) servePlain(w http.ResponseWriter, r *http.Request, generate bo
 		writeJSON(w, plainDTO{Status: "empty"}, nil)
 		return
 	}
+	// A phase doc or README whose planner wrote `## In plain words` is shown
+	// as written — no cache, no model run. Reports are the executor's text and
+	// are always retold.
+	if kind == plainsum.KindPhase || kind == plainsum.KindPlan {
+		if text := plainsum.Authored(source); text != "" {
+			writeJSON(w, plainDTO{Status: "ready", Text: text}, nil)
+			return
+		}
+	}
 	if !generate {
 		text, ok, err := h.Plain.Cached(plainsum.Key(kind, lang, source))
 		if err != nil {

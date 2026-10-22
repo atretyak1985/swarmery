@@ -18,6 +18,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -65,6 +66,29 @@ const maxSource = 120_000
 
 // ErrEmpty means there is nothing to retell (an empty source).
 var ErrEmpty = errors.New("nothing to retell")
+
+// authoredHeadingRe matches the planner-written section's heading. The
+// canonical name is "In plain words" (core's plan format); the Ukrainian name
+// is accepted for docs written by hand in that language.
+var (
+	authoredHeadingRe = regexp.MustCompile(`(?mi)^##\s+(?:In plain words|Простими словами)\s*$`)
+	nextHeadingRe     = regexp.MustCompile(`(?m)^##\s`)
+)
+
+// Authored returns the body of the doc's own `## In plain words` section (to
+// the next `## ` heading or EOF), trimmed; "" when the doc has none. When a
+// planner wrote it, the dashboard shows it as-is and no model run is needed.
+func Authored(doc string) string {
+	loc := authoredHeadingRe.FindStringIndex(doc)
+	if loc == nil {
+		return ""
+	}
+	body := doc[loc[1]:]
+	if next := nextHeadingRe.FindStringIndex(body); next != nil {
+		body = body[:next[0]]
+	}
+	return strings.TrimSpace(body)
+}
 
 // Key is the cache key of one retelling.
 func Key(kind Kind, lang, source string) string {
