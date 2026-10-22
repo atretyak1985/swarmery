@@ -7,6 +7,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -24,22 +25,25 @@ func daemonStub(t *testing.T, status int, body string) (*httptest.Server, *[]byt
 		if r.Header.Get("Origin") != "" {
 			t.Error("the shim must send no Origin header")
 		}
-		w.WriteHeader(status)
-		if body != "" {
-			w.Write([]byte(body))
-		}
+		// the daemon signs its answer to a request signed with its token
+		key, nonce := verifiedKey(r, got, shimKey)
+		answerSigned(w, key, nonce, status, body)
 	}))
 	t.Cleanup(srv.Close)
 	return srv, &got
 }
 
+// runShim runs one hook call holding shimKey, the key daemonStub signs with.
 func runShim(t *testing.T, event, baseURL string, stdin string) (stdout, stderr string, code int) {
 	t.Helper()
+	tokenPath := filepath.Join(t.TempDir(), "link-token")
+	writeToken(t, tokenPath, shimKey)
 	var out, errBuf bytes.Buffer
 	code = Run(event, strings.NewReader(stdin), Config{
-		BaseURL: baseURL,
-		Stdout:  &out,
-		Stderr:  &errBuf,
+		BaseURL:   baseURL,
+		Stdout:    &out,
+		Stderr:    &errBuf,
+		TokenPath: tokenPath,
 	})
 	return out.String(), errBuf.String(), code
 }

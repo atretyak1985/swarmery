@@ -35,6 +35,7 @@ import {
   titleLine,
   truncate,
 } from './lib/plan'
+import { type LinkInit, signedFetch } from './signed'
 
 /** What the plan requests read of the link: its token, session and cwd, and whether it is off. */
 export type PlanAccess = {
@@ -81,10 +82,10 @@ export async function bounded<T>($: EngineInterface, pending: Promise<T>, ms: nu
   }
 }
 
-/** One plan request, bounded by PLAN_TIMEOUT_MS. Never rejects. */
-async function planFetch($: EngineInterface, url: string, init: Parameters<EngineInterface['http']['fetch']>[1]): Promise<PlanReply> {
+/** One signed plan request, bounded by PLAN_TIMEOUT_MS. Never rejects. */
+async function planFetch($: EngineInterface, key: string, url: string, init: LinkInit): Promise<PlanReply> {
   try {
-    const request = $.http.fetch(url, init).then(
+    const request = signedFetch($, key, url, init).then(
       (r): PlanReply => ({ status: r.status, text: r.text }),
       (error: unknown): PlanReply => ({ error }),
     )
@@ -121,7 +122,7 @@ export async function refreshPlan($: EngineInterface, planner: Planner, access: 
   }
   const version = planner.version
   const sessionId = access.sessionId
-  const reply = await planFetch($, planUrl(planner.origin, sessionId, access.cwd), planGetRequest(access.token ?? ''))
+  const reply = await planFetch($, access.token ?? '', planUrl(planner.origin, sessionId, access.cwd), planGetRequest())
   if (planner.version !== version || access.sessionId !== sessionId) return
   setView($, planner, reply.status === 200 ? parsePlanView(reply.text) : undefined)
 }
@@ -129,7 +130,7 @@ export async function refreshPlan($: EngineInterface, planner: Planner, access: 
 /** POSTs `body` to /api/link/plan/<action>. Never rejects. */
 export async function postPlan($: EngineInterface, planner: Planner, access: PlanAccess, action: PlanAction, body: object): Promise<PlanReply> {
   if (!canRequest(access)) return { error: 'no token' }
-  return planFetch($, planActionUrl(planner.origin, action), linkRequest(access.token ?? '', JSON.stringify(body)))
+  return planFetch($, access.token ?? '', planActionUrl(planner.origin, action), linkRequest(JSON.stringify(body)))
 }
 
 /** Starts the 60 s refresh once; it runs until stopPlanTimer. */
