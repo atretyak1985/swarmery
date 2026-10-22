@@ -529,6 +529,10 @@ msgstr "change request"
 msgid "changes requested"
 msgstr "changes requested"
 
+#: src/pages/planning/CostBadge.tsx
+msgid "cheap to change"
+msgstr "cheap to change"
+
 #: src/pages/plans/LandingStatus.tsx
 msgid "checked {checkedAgo}"
 msgstr "checked {checkedAgo}"
@@ -643,6 +647,11 @@ msgstr "decided {decided}"
 #: src/pages/Plans.tsx
 msgid "decided {decided} by {by}"
 msgstr "decided {decided} by {by}"
+
+#. placeholder {0}: linkedTurn.seq
+#: src/pages/PlanningMode.tsx
+msgid "decision D-{0}"
+msgstr "decision D-{0}"
 
 #: src/pages/Routines.tsx
 msgid "Delete"
@@ -845,6 +854,10 @@ msgstr "execution record"
 #: src/pages/plans/ForecastStory.tsx
 msgid "expected"
 msgstr "expected"
+
+#: src/pages/planning/CostBadge.tsx
+msgid "expensive to change"
+msgstr "expensive to change"
 
 #: src/pages/PlanningMode.tsx
 #: src/pages/Plans.tsx
@@ -1129,6 +1142,22 @@ msgstr "Mark [LAND]"
 #: src/pages/plans/CriterionLint.tsx
 msgid "Mark [MANUAL]"
 msgstr "Mark [MANUAL]"
+
+#: src/pages/planning/CostBadge.tsx
+msgid "Mark {decisionId} cheap to change"
+msgstr "Mark {decisionId} cheap to change"
+
+#: src/pages/planning/CostBadge.tsx
+msgid "Mark {decisionId} expensive to change"
+msgstr "Mark {decisionId} expensive to change"
+
+#: src/pages/planning/CostBadge.tsx
+msgid "mark cheap"
+msgstr "mark cheap"
+
+#: src/pages/planning/CostBadge.tsx
+msgid "mark expensive"
+msgstr "mark expensive"
 
 #: src/pages/PlanningMode.tsx
 #: src/pages/Plans.tsx
@@ -1441,6 +1470,10 @@ msgstr "open Plans →"
 #: src/pages/PlanningMode.tsx
 msgid "open session →"
 msgstr "open session →"
+
+#: src/pages/plans/PhaseCard.tsx
+msgid "open the question →"
+msgstr "open the question →"
 
 #: src/pages/plans/LandCriterionAction.tsx
 #: src/pages/plans/PhaseReview.tsx
@@ -2584,6 +2617,10 @@ msgstr "verifying…"
 #: src/pages/Plans.tsx
 msgid "waiting on phase {waitingOn}"
 msgstr "waiting on phase {waitingOn}"
+
+#: src/pages/plans/PhaseCard.tsx
+msgid "waits on {id}"
+msgstr "waits on {id}"
 
 #: src/pages/Routines.tsx
 msgid "webhook"

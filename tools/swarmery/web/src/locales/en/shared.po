@@ -1046,6 +1046,10 @@ msgstr "cause"
 msgid "change the plan — interview + staged diff, applied only on your approval"
 msgstr "change the plan — interview + staged diff, applied only on your approval"
 
+#: src/api.ts
+msgid "changing the cost failed: {status}"
+msgstr "changing the cost failed: {status}"
+
 #: src/components/ProjectPlugins.tsx
 msgid "check"
 msgstr "check"
@@ -4046,6 +4050,10 @@ msgstr "This is a mock plain-language explanation. In the real dashboard Claude 
 #: src/components/PluginConfigModal.tsx
 msgid "this pack's config schema is missing or malformed"
 msgstr "this pack's config schema is missing or malformed"
+
+#: src/api.ts
+msgid "This phase builds on a decision that is still open and expensive to change. Answer it in the plan's Decisions, or mark it cheap to change in the planning session, then run the phase."
+msgstr "This phase builds on a decision that is still open and expensive to change. Answer it in the plan's Decisions, or mark it cheap to change in the planning session, then run the phase."
 
 #: src/components/RunOutcomeModal.tsx
 msgid "this phase has not been run"
