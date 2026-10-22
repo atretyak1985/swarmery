@@ -172,7 +172,7 @@ func TestReviewSpawnArgsDenyEditToolsAndBash(t *testing.T) {
 	s.DaemonPort = 8080
 	dir, base := gitRepo(t)
 
-	verdict, fix := s.reviewRun(p1, info, worktree.Acquired{Path: dir, Branch: "swarm/x", StartPoint: base}, "done")
+	verdict, fix := s.reviewRun(p1, info, worktree.Acquired{Path: dir, Branch: "swarm/x", StartPoint: base}, "done", GuardResult{})
 	if verdict != "pass" || fix {
 		t.Fatalf("reviewRun = (%q, %v), want (pass, false); rows %+v", verdict, fix, reviewRows(t, db, p1))
 	}
@@ -230,7 +230,7 @@ func TestReviewMutatedTreeIsInconclusiveAndRestored(t *testing.T) {
 		},
 	}
 
-	verdict, fix := s.reviewRun(p1, info, worktree.Acquired{Path: dir, StartPoint: base}, "done")
+	verdict, fix := s.reviewRun(p1, info, worktree.Acquired{Path: dir, StartPoint: base}, "done", GuardResult{})
 	if verdict != "inconclusive" || fix {
 		t.Fatalf("reviewRun = (%q, %v), want (inconclusive, false)", verdict, fix)
 	}
@@ -259,7 +259,7 @@ func TestReviewDirtyButUntouchedTreeIsNotAMutation(t *testing.T) {
 	}
 	s.Review = &fakeReviewer{outputs: []string{"- fine\nVERDICT: PASS"}}
 
-	if verdict, _ := s.reviewRun(p1, info, worktree.Acquired{Path: dir, StartPoint: base}, "partial"); verdict != "pass" {
+	if verdict, _ := s.reviewRun(p1, info, worktree.Acquired{Path: dir, StartPoint: base}, "partial", GuardResult{}); verdict != "pass" {
 		t.Fatalf("verdict = %q, want pass", verdict)
 	}
 }

@@ -21,6 +21,7 @@ import (
 	"bufio"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -96,20 +97,31 @@ func (r GuardResult) HasFindings() bool {
 // the paths the hook refused (the "-" of a refusal without one is skipped), in
 // first-seen order.
 func (r GuardResult) Paths() []string {
+	return uniquePaths(r.ProtectedChanged, r.refusedPaths())
+}
+
+// refusedPaths are the paths of guard.log's well-formed lines, the guard's own
+// inputs (.swarmery/…) left out: allowing those is never on offer.
+func (r GuardResult) refusedPaths() []string {
 	var out []string
-	seen := map[string]bool{}
-	add := func(p string) {
-		if p = strings.TrimSpace(p); p != "" && p != "-" && !seen[p] {
-			seen[p] = true
-			out = append(out, p)
-		}
-	}
-	for _, p := range r.ProtectedChanged {
-		add(p)
-	}
 	for _, l := range r.GuardBlocks {
 		if !l.Malformed && !strings.HasPrefix(l.Path, ".swarmery") {
-			add(l.Path)
+			out = append(out, l.Path)
+		}
+	}
+	return uniquePaths(out)
+}
+
+// uniquePaths concatenates lists, dropping blanks, "-" and repeats.
+func uniquePaths(lists ...[]string) []string {
+	var out []string
+	seen := map[string]bool{}
+	for _, list := range lists {
+		for _, p := range list {
+			if p = strings.TrimSpace(p); p != "" && p != "-" && !seen[p] {
+				seen[p] = true
+				out = append(out, p)
+			}
 		}
 	}
 	return out
@@ -124,7 +136,7 @@ func (r GuardResult) Summary() string {
 	}
 	if r.GuardBlocksTotal > 0 {
 		b.WriteString("The phase guard refused " + plural(r.GuardBlocksTotal, "attempt") + " to touch protected paths")
-		if ps := r.Paths(); len(ps) > 0 {
+		if ps := r.refusedPaths(); len(ps) > 0 {
 			b.WriteString(" (" + strings.Join(ps, ", ") + ")")
 		}
 		b.WriteString(".\n")
@@ -319,4 +331,13 @@ func gitGlob(g string) string {
 		return g + "**"
 	}
 	return g
+}
+
+// guardJSON is r as stored in a guard_json column.
+func guardJSON(r GuardResult) string {
+	b, err := json.Marshal(r)
+	if err != nil {
+		return "{}"
+	}
+	return string(b)
 }

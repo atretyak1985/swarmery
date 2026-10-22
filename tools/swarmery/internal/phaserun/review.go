@@ -126,12 +126,19 @@ End with exactly one final line, nothing after it:
 VERDICT: PASS | FAIL | INCONCLUSIVE
 FAIL when any P0/P1 stands; INCONCLUSIVE only when you genuinely could not assess (missing files, no diff) — name what was missing.`
 
-// reviewPrompt renders the reviewer's prompt: the role and the daemon-API rule for
-// daemonPort, the review round (1 for a phase's first review, 2 for the review
-// after its fix re-run — the `round` of the reviewer's `kind: review` block), the
-// phase doc as it stands now (with the executor's ticks), and the run's diff.
-func reviewPrompt(title, doc, diff string, daemonPort, round int) string {
+// reviewPrompt renders the reviewer's prompt: the guard check's summary FIRST when
+// it found anything (GuardResult.Summary — the reviewer reads what the run did to
+// protected paths before anything the run says about itself), the role and the
+// daemon-API rule for daemonPort, the review round (1 for a phase's first review,
+// 2 for the review after its fix re-run — the `round` of the reviewer's `kind:
+// review` block), the phase doc as it stands now (with the executor's ticks), and
+// the run's diff.
+func reviewPrompt(guardSummary, title, doc, diff string, daemonPort, round int) string {
 	var b strings.Builder
+	if g := strings.TrimSpace(guardSummary); g != "" {
+		b.WriteString(g)
+		b.WriteString("\n\n")
+	}
 	b.WriteString(reviewerPreamble(daemonPort))
 	b.WriteString("\n\nREVIEW ROUND: ")
 	b.WriteString(strconv.Itoa(round))
@@ -298,6 +305,8 @@ func (s *Service) restoreTree(dir string) error {
 type reviewOutcome struct {
 	sessionUUID, treeBefore, treeAfter string
 	verdict, detail, findings          string
+	// guard is the run's guard check, recorded as phase_reviews.guard_json.
+	guard GuardResult
 }
 
 // reviewRun is the review stage of a finished phase run. It returns the verdict
@@ -308,7 +317,7 @@ type reviewOutcome struct {
 // done|partial (a run that stopped mid-edit is measuring the interruption) and the
 // worktree is known. Every other failure is recorded as an inconclusive review and
 // never changes the run's own outcome.
-func (s *Service) reviewRun(phaseID int64, info phaseInfo, acq worktree.Acquired, endState string) (verdict string, fix bool) {
+func (s *Service) reviewRun(phaseID int64, info phaseInfo, acq worktree.Acquired, endState string, guard GuardResult) (verdict string, fix bool) {
 	if s.Review == nil || info.ReviewMode != wsingest.ReviewOn || acq.Path == "" ||
 		(endState != "done" && endState != "partial") {
 		return "", false
@@ -317,7 +326,8 @@ func (s *Service) reviewRun(phaseID int64, info phaseInfo, acq worktree.Acquired
 	round, runUUID := s.reviewState(phaseID)
 	// review_fix_round counts fix re-runs (0 before the first); the block's round
 	// counts reviews, so the first review is round 1.
-	out := s.recoveredReview(phaseID, info, acq, round+1)
+	out := s.recoveredReview(phaseID, info, acq, round+1, guard)
+	out.guard = guard
 	s.recordReview(phaseID, info, runUUID, round, started, out)
 	// The epic payload carries the phase's reviews: refetch it now, not after the
 	// verifier (which may take minutes) reaches the defer's own notify.
@@ -349,7 +359,7 @@ func (s *Service) reviewRun(phaseID int64, info phaseInfo, acq worktree.Acquired
 // guardedReviewRun is reviewRun as runAndHandle's defer calls it: a panic anywhere
 // in the review stage is logged and read as an inconclusive review that asks for no
 // fix, so the verifier, the worktree removal and the slot release after it still run.
-func (s *Service) guardedReviewRun(phaseID int64, info phaseInfo, acq worktree.Acquired, endState string) (verdict string, fix bool) {
+func (s *Service) guardedReviewRun(phaseID int64, info phaseInfo, acq worktree.Acquired, endState string, guard GuardResult) (verdict string, fix bool) {
 	defer func() {
 		if r := recover(); r != nil {
 			log.Printf("error: phaserun: phase=%d review stage panicked: %v — read as inconclusive (%s)",
@@ -357,13 +367,13 @@ func (s *Service) guardedReviewRun(phaseID int64, info phaseInfo, acq worktree.A
 			verdict, fix = string(verify.VerdictInconclusive), false
 		}
 	}()
-	return s.reviewRun(phaseID, info, acq, endState)
+	return s.reviewRun(phaseID, info, acq, endState, guard)
 }
 
 // recoveredReview is review with a panic turned into an inconclusive
 // `reviewer-did-not-start` outcome, so the review is still recorded and the run's
 // exit path carries on.
-func (s *Service) recoveredReview(phaseID int64, info phaseInfo, acq worktree.Acquired, reviewRound int) (o reviewOutcome) {
+func (s *Service) recoveredReview(phaseID int64, info phaseInfo, acq worktree.Acquired, reviewRound int, guard GuardResult) (o reviewOutcome) {
 	defer func() {
 		if r := recover(); r != nil {
 			log.Printf("error: phaserun: phase=%d reviewer panicked: %v", phaseID, r)
@@ -373,12 +383,12 @@ func (s *Service) recoveredReview(phaseID int64, info phaseInfo, acq worktree.Ac
 			}
 		}
 	}()
-	return s.review(phaseID, info, acq, reviewRound)
+	return s.review(phaseID, info, acq, reviewRound, guard)
 }
 
 // review runs the reviewer and classifies what came back. The fingerprint is taken
 // on both sides of the spawn and compared FIRST: a mutated tree voids any verdict.
-func (s *Service) review(phaseID int64, info phaseInfo, acq worktree.Acquired, reviewRound int) reviewOutcome {
+func (s *Service) review(phaseID int64, info phaseInfo, acq worktree.Acquired, reviewRound int, guard GuardResult) reviewOutcome {
 	inconclusive := func(o reviewOutcome, class, detail string) reviewOutcome {
 		o.verdict, o.detail = string(verify.VerdictInconclusive), class+": "+detail
 		return o
@@ -396,7 +406,7 @@ func (s *Service) review(phaseID int64, info phaseInfo, acq worktree.Acquired, r
 	o.sessionUUID = s.UUID()
 	resolution := claudeacct.Resolve(info.ProjectPath)
 	spec := verify.RunSpec{
-		Prompt:      reviewPrompt(info.Name, string(doc), s.reviewDiff(acq.Path, acq.StartPoint), s.DaemonPort, reviewRound),
+		Prompt:      reviewPrompt(guard.Summary(), info.Name, string(doc), s.reviewDiff(acq.Path, acq.StartPoint), s.DaemonPort, reviewRound),
 		SessionUUID: o.sessionUUID,
 		Cwd:         acq.Path,
 		Model:       reviewModel,
@@ -494,18 +504,19 @@ func (s *Service) setReviewFixRound(phaseID int64, round int) {
 	}
 }
 
-// recordReview writes the phase_reviews row. Best-effort: a lost record must not
-// change the run's outcome, so a failure is logged.
+// recordReview writes the phase_reviews row, guard_json included (the run's guard
+// check, '{}'-shaped when the run had none to make). Best-effort: a lost record
+// must not change the run's outcome, so a failure is logged.
 func (s *Service) recordReview(phaseID int64, info phaseInfo, runUUID string, round int, started string, o reviewOutcome) {
 	if _, err := s.DB.Exec(`
 		INSERT INTO phase_reviews
 			(scope, phase_id, workspace_task_id, session_uuid, run_session_uuid,
 			 tree_before, tree_after, verdict, detail, findings, fix_round,
-			 started_at, finished_at)
-		VALUES ('phase', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			 started_at, finished_at, guard_json)
+		VALUES ('phase', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		phaseID, strconv.FormatInt(info.WorkspaceTaskID, 10), o.sessionUUID, runUUID,
 		o.treeBefore, o.treeAfter, o.verdict, o.detail, o.findings, round,
-		started, s.ts()); err != nil {
+		started, s.ts(), guardJSON(o.guard)); err != nil {
 		log.Printf("error: phaserun: phase=%d record review: %v", phaseID, err)
 	}
 }
