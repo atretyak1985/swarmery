@@ -243,6 +243,10 @@ type epicPhaseDTO struct {
 	// scope='phase', reviews.go), newest first, with Findings always "" — the Runs
 	// tab fetches the latest review's findings from …/phases/{id}/reviews. Never null.
 	Reviews []reviewDTO `json:"reviews"`
+	// GuardDecision is the phase's OPEN guard decision (verify-not-trust phase 4):
+	// its last run touched protected paths and the operator has not answered yet.
+	// null otherwise. The phase card shows its badge and answer buttons from it.
+	GuardDecision *needsYouDecision `json:"guardDecision"`
 }
 
 // phaseForecastDTO is one stored `## Forecast` block. Every text field is
@@ -953,6 +957,7 @@ func (h *Handler) epicPhases(taskID int64, planDir string) ([]epicPhaseDTO, epic
 	}
 	reopens := h.phaseReopens(taskID, docs) // and again
 	reviews := h.phaseReviews(taskID)       // and again
+	guards := h.phaseGuardDecisions(taskID) // and again
 	verifying := h.phasesVerifying(phases)  // and again
 	for i := range phases {
 		phases[i].VerifyRunning = verifying[phases[i].ID]
@@ -974,6 +979,7 @@ func (h *Handler) epicPhases(taskID int64, planDir string) ([]epicPhaseDTO, epic
 		if phases[i].Reviews == nil {
 			phases[i].Reviews = []reviewDTO{}
 		}
+		phases[i].GuardDecision = guards[phases[i].ID]
 	}
 	if rollup.Total > 0 {
 		rollup.Pct = float64(rollup.Done) / float64(rollup.Total) * 100

@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/mdfence"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/runcore"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/store"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/worktree"
 )
@@ -233,5 +234,38 @@ func TestReviewPromptGuardGolden(t *testing.T) {
 	}
 	if string(want) != got {
 		t.Fatalf("review prompt head changed:\n--- golden\n%s\n--- got\n%s", want, got)
+	}
+}
+
+// A plan revision rewrote a doc: a worktree still holding its copy gets the new
+// text, and a phase without a lent copy gets nothing planted.
+func TestRelendDocsRefreshesALeftoverCopy(t *testing.T) {
+	db, _, p1, p2 := fixture(t)
+	var doc1, doc2 string
+	_ = db.QueryRow(`SELECT doc_path FROM epic_phases WHERE id=?`, p1).Scan(&doc1)
+	_ = db.QueryRow(`SELECT doc_path FROM epic_phases WHERE id=?`, p2).Scan(&doc2)
+	root := t.TempDir()
+	wt := &stubWt{root: root}
+	s := newTestService(db, &stubRunner{}, wt)
+	wt1, _ := wt.Path("p", runcore.PhaseTaskName(p1))
+	if _, err := worktree.LendPlanDoc(wt1, doc1); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(doc1, []byte("# Phase 1 — Schema (revised)\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if n := s.RelendDocs([]string{doc1, doc2}); n != 1 {
+		t.Fatalf("RelendDocs = %d, want 1", n)
+	}
+	copyHash, err := worktree.DocCopyHash(wt1, doc1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want, _ := worktree.FileHash(doc1); copyHash != want {
+		t.Fatal("the lent copy still holds the pre-revision doc")
+	}
+	wt2, _ := wt.Path("p", runcore.PhaseTaskName(p2))
+	if _, err := os.Stat(filepath.Join(wt2, worktree.PlanDocDir)); !os.IsNotExist(err) {
+		t.Fatalf("a copy was planted for a phase that had none: %v", err)
 	}
 }

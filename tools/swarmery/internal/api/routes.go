@@ -463,6 +463,8 @@ func Routes(root *http.ServeMux, h *Handler) {
 	mux.HandleFunc("GET /api/epics", h.listEpics)
 	mux.HandleFunc("POST /api/epics/{taskId}/lifecycle", requireLocalOrigin(h.epicLifecycle))
 	mux.HandleFunc("GET /api/epics/{taskId}/decisions", h.getEpicDecisions)
+	// verify-not-trust phase 4: answer a guard decision (needs-you phase_decision).
+	mux.HandleFunc("POST /api/epics/{taskId}/phases/{phaseId}/decisions/{decisionId}", requireLocalOrigin(h.answerPhaseDecision))
 	mux.HandleFunc("GET /api/epics/{taskId}/docs", h.getPlanDoc)
 	mux.HandleFunc("PUT /api/epics/{taskId}/docs", requireLocalOrigin(h.putPlanDoc))
 	mux.HandleFunc("PATCH /api/epics/{taskId}/docs", requireLocalOrigin(h.patchPlanDoc))

@@ -2,6 +2,7 @@ package api
 
 import (
 	"database/sql"
+	"encoding/json"
 	"log"
 	"net/http"
 	"strconv"
@@ -48,6 +49,9 @@ type reviewDTO struct {
 	StartedAt    string   `json:"startedAt"`
 	FinishedAt   *string  `json:"finishedAt"`
 	AckedAt      *string  `json:"ackedAt"`
+	// Guard is the run's guard check (migration 0121, phaserun.GuardResult);
+	// {} for a review written before it, or for a plan review.
+	Guard json.RawMessage `json:"guard"`
 }
 
 // branchSetPrefix mirrors phaserun.planReviewKeyPrefix: the plan review stores
@@ -58,7 +62,7 @@ const reviewSelect = `
 	SELECT r.id, r.scope, CAST(r.workspace_task_id AS INTEGER), COALESCE(t.title, ''), COALESCE(p.slug, ''),
 	       r.phase_id, COALESCE(e.name, ''), r.session_uuid, r.run_session_uuid,
 	       r.verdict, r.detail, r.findings, r.fix_round, r.cost_usd,
-	       r.tree_before, r.tree_after, r.started_at, r.finished_at, r.acked_at
+	       r.tree_before, r.tree_after, r.started_at, r.finished_at, r.acked_at, r.guard_json
 	  FROM phase_reviews r
 	  LEFT JOIN tasks t ON t.id = CAST(r.workspace_task_id AS INTEGER)
 	  LEFT JOIN projects p ON p.id = t.project_id
@@ -75,10 +79,11 @@ func scanReviews(rows *sql.Rows) ([]reviewDTO, error) {
 			finished sql.NullString
 			acked    sql.NullString
 			runUUID  string
+			guard    string
 		)
 		if err := rows.Scan(&d.ID, &d.Scope, &d.TaskID, &d.PlanTitle, &d.ProjectSlug, &phaseID, &d.PhaseName,
 			&d.SessionUUID, &runUUID, &d.Verdict, &d.Detail, &d.Findings, &d.FixRound, &cost,
-			&d.TreeBefore, &d.TreeAfter, &d.StartedAt, &finished, &acked); err != nil {
+			&d.TreeBefore, &d.TreeAfter, &d.StartedAt, &finished, &acked, &guard); err != nil {
 			return nil, err
 		}
 		if phaseID.Valid {
@@ -96,6 +101,10 @@ func scanReviews(rows *sql.Rows) ([]reviewDTO, error) {
 		if acked.Valid {
 			v := acked.String
 			d.AckedAt = &v
+		}
+		d.Guard = json.RawMessage(guard)
+		if !json.Valid(d.Guard) {
+			d.Guard = json.RawMessage("{}")
 		}
 		if d.Scope == "plan" {
 			d.BranchSetKey = strings.TrimPrefix(runUUID, branchSetPrefix)
