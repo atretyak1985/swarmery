@@ -42,9 +42,9 @@ func scanReviewPlan(t *testing.T, db *sql.DB, planDir string) {
 }
 
 type findingRow struct {
-	id                                                      int64
+	id                                                       int64
 	typ, file, criterion, evidence, note, resolvedBy, source string
-	line, testCaught                                        int
+	line, testCaught                                         int
 }
 
 // readFindings keys a doc's review_findings rows by "<round>/<finding_id>".
