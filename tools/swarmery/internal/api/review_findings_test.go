@@ -15,7 +15,7 @@ import (
 
 // findingsFixture scans a real temp workspace holding one plan with three
 // phases: a two-round reviewed doc, a legacy Done doc (no block, dated before
-// migration 0122's applied_at) and a control phase left with only a [MANUAL]
+// migration 0123's applied_at) and a control phase left with only a [MANUAL]
 // criterion — the one needs-you item the plan should produce.
 func findingsFixture(t *testing.T) (srv *httptest.Server, db *sql.DB, taskID int64, phases map[int]int64) {
 	t.Helper()

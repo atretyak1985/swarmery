@@ -34,6 +34,28 @@ type RunSpec struct {
 	// back through SWARMERY_PLANNING_EFFORT to DefaultEffort). Rung 1 of the
 	// effort ladder, the twin of Model's.
 	Effort string
+	// WritableDirs are the absolute dirs this run may write under — the workspace
+	// root for a plan run, the scratch dir for a revise run (Service.WritableDirs).
+	// Each becomes one path-confined Edit rule of the allow-list; nothing else,
+	// the primary checkout included, is writable. Empty: nothing is.
+	WritableDirs []string
+}
+
+// AllowedTools is the planner's --allowedTools for a run that may write under
+// writable: read anything (the workspace root sits outside cwd, and dontAsk
+// denies reads outside cwd unless a Read rule allows them — measured), read git
+// history, and Edit only under the named dirs. No unrestricted Bash: the cwd is
+// the operator's PRIMARY checkout. Exported because a resume of a planning
+// session (internal/api) must carry the same list — the PROCEED turn that writes
+// the plan is a resume.
+func AllowedTools(writable []string) []string {
+	out := []string{"Read", "Grep", "Glob", "Bash(git log*)", "Bash(git show*)"}
+	for _, d := range writable {
+		if rule := claudeflags.EditUnder(d); rule != "" {
+			out = append(out, rule)
+		}
+	}
+	return out
 }
 
 // Run is the outcome of a completed planner process.
@@ -125,8 +147,13 @@ func ResolveModel(choice string) (string, error) {
 // permEnv is this spawn site's --permission-mode knob (internal/claudeflags owns
 // the resolution and the "off" escape hatch). A planner run's whole product is
 // files — a plan dir under the private workspace — so the flag is not optional
-// here: without it every Write and every mkdir is auto-denied, the process still
-// exits 0, and the plan survives only in a reply nobody stores.
+// here: without it every Write is auto-denied, the process still exits 0, and the
+// plan survives only in a reply nobody stores.
+//
+// The default is claudeflags.SitePlanner's dontAsk WITH AllowedTools, not
+// bypassPermissions: the run's cwd is the operator's primary checkout, and the
+// measured dontAsk + Edit(//<dir>/**) shape writes the plan dir while every edit
+// in the checkout and every unlisted command is denied.
 const permEnv = "SWARMERY_PLANNING_PERMISSION_MODE"
 
 // ClaudeRunner spawns `claude -p <prompt> --session-id <uuid>` with cwd set to
@@ -184,9 +211,11 @@ func (r ClaudeRunner) Start(ctx context.Context, spec RunSpec) (*Run, error) {
 		// Without --effort the CLI thinks at xhigh on every turn of a 20-minute
 		// planner run. Resolved, never omitted by accident.
 		Effort: effort,
-		// The planner writes: a plan dir with README/spec/phase docs, and nothing
-		// else it does matters if that write is denied. See internal/claudeflags.
-		PermissionMode: claudeflags.Mode(permEnv),
+		// The planner writes a plan dir with README/spec/phase docs and nothing
+		// else: dontAsk, read tools, git history, Edit under WritableDirs only.
+		// See internal/claudeflags.
+		PermissionMode: claudeflags.ModeFor(claudeflags.SitePlanner, permEnv),
+		ExtraArgs:      claudeflags.AllowedToolsArgs(AllowedTools(spec.WritableDirs)),
 		// Resolving from cwd is correct HERE — and only here and in provision. A
 		// planner run's Cwd is the PROJECT path (see RunSpec.Cwd), so the walk from
 		// it finds the project's account and estate. dispatch and verify look the

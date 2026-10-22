@@ -9,7 +9,7 @@ import (
 // ReviewFindingsMigration is the file that introduced review_findings; its
 // applied_at is D21's cutoff — a phase Done before it without a `kind: review`
 // block is a "legacy review" (wsingest/review_blocks.go).
-const ReviewFindingsMigration = "0122_review_findings.sql"
+const ReviewFindingsMigration = "0123_review_findings.sql"
 
 // MigrationAppliedAt is when the migration file name was applied to this
 // database, read from schema_migrations.applied_at. ok is false when the

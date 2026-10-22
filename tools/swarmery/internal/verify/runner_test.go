@@ -49,8 +49,8 @@ func TestClaudeRunnerArgs(t *testing.T) {
 	// invisible to everything except an assertion like this one. Mirrors the
 	// verify/model case in internal/runcore/spawner_test.go.
 	got := strings.TrimSpace(string(out))
-	want := "-p hello --session-id u1 --setting-sources project,local --permission-mode bypassPermissions --model opus --effort " +
-		DefaultEffort + " --disallowedTools Edit,Write,MultiEdit,NotebookEdit"
+	want := "-p --session-id u1 --setting-sources project,local --permission-mode bypassPermissions --model opus --effort " +
+		DefaultEffort + " --disallowedTools Edit,Write,MultiEdit,NotebookEdit -- hello"
 	if got != want {
 		t.Errorf("argv = %q, want %q", got, want)
 	}
@@ -74,8 +74,9 @@ func TestClaudeRunnerMergesDisallowedTools(t *testing.T) {
 	if n := strings.Count(argv, "--disallowedTools"); n != 1 {
 		t.Fatalf("argv %q carries %d --disallowedTools flags, want exactly 1", argv, n)
 	}
-	if !strings.HasSuffix(argv, "--disallowedTools Edit,Write,MultiEdit,NotebookEdit,Bash") {
-		t.Errorf("argv %q does not end with the merged, de-duplicated denial list", argv)
+	// Last flag, right before the `-- <prompt>` that ends the options.
+	if !strings.HasSuffix(argv, "--disallowedTools Edit,Write,MultiEdit,NotebookEdit,Bash -- review") {
+		t.Errorf("argv %q does not end with the merged, de-duplicated denial list before the prompt", argv)
 	}
 }
 
@@ -101,11 +102,13 @@ func TestDaemonDenyPatterns(t *testing.T) {
 			"Bash(curl *127.0.0.1:7777*)", "Bash(curl *localhost:7777*)",
 			"Bash(wget *127.0.0.1:7777*)", "Bash(wget *localhost:7777*)",
 			"Bash(http *127.0.0.1:7777*)", "Bash(http *localhost:7777*)",
+			"Bash(swarmery api*)", "Bash(*/swarmery api*)",
 		}},
 		{8080, []string{
 			"Bash(curl *127.0.0.1:8080*)", "Bash(curl *localhost:8080*)",
 			"Bash(wget *127.0.0.1:8080*)", "Bash(wget *localhost:8080*)",
 			"Bash(http *127.0.0.1:8080*)", "Bash(http *localhost:8080*)",
+			"Bash(swarmery api*)", "Bash(*/swarmery api*)",
 		}},
 	} {
 		if got := DaemonDenyPatterns(tc.port); strings.Join(got, "|") != strings.Join(tc.want, "|") {
@@ -130,12 +133,14 @@ func TestToolDenyArgsDaemonDeny(t *testing.T) {
 			"--disallowedTools Edit,Write,MultiEdit,NotebookEdit," +
 				"Bash(curl *127.0.0.1:7777*),Bash(curl *localhost:7777*)," +
 				"Bash(wget *127.0.0.1:7777*),Bash(wget *localhost:7777*)," +
-				"Bash(http *127.0.0.1:7777*),Bash(http *localhost:7777*)"},
+				"Bash(http *127.0.0.1:7777*),Bash(http *localhost:7777*)," +
+				"Bash(swarmery api*),Bash(*/swarmery api*)"},
 		{"reviewer on 8080", append([]string{"Bash"}, DaemonDenyPatterns(8080)...),
 			"--disallowedTools Edit,Write,MultiEdit,NotebookEdit,Bash," +
 				"Bash(curl *127.0.0.1:8080*),Bash(curl *localhost:8080*)," +
 				"Bash(wget *127.0.0.1:8080*),Bash(wget *localhost:8080*)," +
-				"Bash(http *127.0.0.1:8080*),Bash(http *localhost:8080*)"},
+				"Bash(http *127.0.0.1:8080*),Bash(http *localhost:8080*)," +
+				"Bash(swarmery api*),Bash(*/swarmery api*)"},
 	} {
 		args := ToolDenyArgs(tc.extra)
 		if len(args) != 2 {
@@ -161,11 +166,13 @@ func TestClaudeRunnerDaemonDenyIsOneArgvElement(t *testing.T) {
 		t.Fatalf("Run: %v", err)
 	}
 	argv := strings.Split(readArgs(t, cwd), "\n")
-	if n := len(argv); n < 2 || argv[n-2] != "--disallowedTools" {
-		t.Fatalf("argv does not end with --disallowedTools <list>: %q", argv)
+	// … --disallowedTools <list> -- <prompt>: the list is the last flag value.
+	n := len(argv)
+	if n < 4 || argv[n-4] != "--disallowedTools" || argv[n-2] != "--" || argv[n-1] != "verify" {
+		t.Fatalf("argv does not end with --disallowedTools <list> -- <prompt>: %q", argv)
 	}
 	want := strings.Join(ToolDenyArgs(DaemonDenyPatterns(8080))[1:], "")
-	if got := argv[len(argv)-1]; got != want {
+	if got := argv[n-3]; got != want {
 		t.Errorf("--disallowedTools value = %q, want %q", got, want)
 	}
 }

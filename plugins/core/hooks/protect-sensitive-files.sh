@@ -1,13 +1,98 @@
 #!/bin/bash
 # Protect Sensitive Files Hook for Claude Code
 # Blocks edits to sensitive files and directories
+#
+# FAIL CLOSED. This guard stands between an agent's Edit / Write / MultiEdit /
+# NotebookEdit and the paths below, so when it cannot read its input it blocks
+# (exit 2) rather than allows: jq missing, or stdin that is not a JSON object.
+#
+# EVERY PATH, EVERY SPELLING. One payload can name several paths (file_path,
+# path, notebook_path, edits[].file_path), and one path can reach a protected
+# file under another spelling: through a symlinked directory or file, or in a
+# different letter case on a case-insensitive file system. The dispatcher below
+# expands a payload into every candidate — each path as written, plus where the
+# write lands once symlinks are resolved — and runs the single-path check once
+# per candidate (PSF_SINGLE=1 re-invocation of this file). Any candidate blocked
+# blocks the call. Every name comparison in the single-path check ignores case.
+# Covered by scripts/tests/protect-sensitive-files.test.sh.
 
 set -e
 
 # Read JSON input from stdin
 input=$(cat)
 
-# Extract file path using jq
+if ! command -v jq >/dev/null 2>&1; then
+  echo "protect-sensitive-files: jq missing — blocking" >&2
+  exit 2
+fi
+if ! printf '%s' "$input" | jq -e 'type == "object"' >/dev/null 2>&1; then
+  echo "protect-sensitive-files: hook input is not a JSON object — blocking" >&2
+  exit 2
+fi
+
+# existing_dir <path> — the deepest directory of <path> that exists.
+existing_dir() {
+  local p="$1"
+  while [ ! -d "$p" ]; do p=$(dirname "$p"); done
+  printf '%s\n' "$p"
+}
+
+# physical <path> — <path> with its existing directory prefix resolved through
+# every symlink (cd -P / pwd -P: stock macOS has no readlink -f) and the part
+# that does not exist yet appended as written.
+physical() {
+  local dir rest phys
+  dir=$(existing_dir "$1")
+  rest="${1#"${dir%/}"}"
+  phys=$(cd -P "$dir" 2>/dev/null && pwd -P) || phys="$dir"
+  printf '%s%s\n' "${phys%/}" "$rest"
+}
+
+# ── Dispatcher: payload → every candidate path → one check each ───
+if [ -z "${PSF_SINGLE:-}" ]; then
+  hook_cwd=$(printf '%s' "$input" | jq -r '.cwd // empty')
+  [ -n "$hook_cwd" ] || hook_cwd="$PWD"
+  candidates=()
+  add_candidate() {
+    local c
+    for c in ${candidates[@]+"${candidates[@]}"}; do [ "$c" = "$1" ] && return 0; done
+    candidates+=("$1")
+  }
+  while IFS= read -r -d '' p; do
+    add_candidate "$p"
+    case "$p" in /*) cur="$p" ;; *) cur="${hook_cwd%/}/$p" ;; esac
+    hops=0
+    while :; do
+      land=$(physical "$cur")
+      case "$land" in
+        */../*|*/..)
+          echo "🚫 BLOCKED: path climbs out of a directory that does not exist: $p" >&2
+          exit 2 ;;
+      esac
+      add_candidate "$land"
+      [ -L "$land" ] || break
+      hops=$((hops + 1))
+      if [ "$hops" -gt 8 ]; then
+        echo "🚫 BLOCKED: symlink chain too deep: $p" >&2
+        exit 2
+      fi
+      target=$(readlink "$land") || break
+      case "$target" in /*) cur="$target" ;; *) cur="$(dirname "$land")/$target" ;; esac
+    done
+  done < <(printf '%s' "$input" | jq -j '
+    [ .tool_input.file_path, .tool_input.path, .tool_input.notebook_path,
+      ((.tool_input.edits // []) | if type == "array" then .[] | objects | .file_path else empty end) ]
+    | .[] | strings | select(. != "") | . + "\u0000"')
+  for c in ${candidates[@]+"${candidates[@]}"}; do
+    rc=0
+    jq -nc --arg p "$c" --arg cwd "$hook_cwd" '{cwd: $cwd, tool_input: {file_path: $p}}' \
+      | PSF_SINGLE=1 bash "${BASH_SOURCE[0]}" || rc=$?
+    [ "$rc" -eq 0 ] || exit 2
+  done
+  exit 0
+fi
+
+# ── Single-path check (PSF_SINGLE=1): exactly one tool_input.file_path ──
 file_path=$(echo "$input" | jq -r '.tool_input.file_path // .tool_input.path // empty')
 
 # Exit if no file path
@@ -15,11 +100,22 @@ if [ -z "$file_path" ]; then
   exit 0
 fi
 
+# Every name comparison below ignores case: .GIT/ is .git/ on a case-insensitive
+# file system. Messages keep the path as written.
+lc_path=$(printf '%s' "$file_path" | tr '[:upper:]' '[:lower:]')
+lc_base=$(basename "$lc_path")
+
 # Protected directory names — blocked only when they appear as a full
 # path segment, so e.g. skills/docker-build/ is NOT mistaken for build/.
+# .git and node_modules are matched ignoring case (a case-insensitive file
+# system resolves .GIT/ to .git/). Generated-output dirs are matched as
+# written: they guard build output, not secrets, and a source folder such as
+# components/Coverage/ or a volume named Build/ must stay editable.
 protected_dirs=(
   ".git"
   "node_modules"
+)
+protected_output_dirs=(
   "dist"
   "build"
   ".next"
@@ -38,8 +134,10 @@ base_name=$(basename "$file_path")
 # Block edits to files inside a protected directory (path-segment match,
 # not substring — anchored by a leading "/" or the start of the path).
 # Block messages go to STDERR because only STDERR reaches the model.
-for dir in "${protected_dirs[@]}"; do
-  if [[ "$file_path" == "$dir/"* || "$file_path" == *"/$dir/"* ]]; then
+for dir in "${protected_dirs[@]}" "${protected_output_dirs[@]}"; do
+  match_path="$lc_path"
+  case " ${protected_output_dirs[*]} " in *" $dir "*) match_path="$file_path" ;; esac
+  if [[ "$match_path" == "$dir/"* || "$match_path" == *"/$dir/"* ]]; then
     echo "🚫 BLOCKED: Cannot modify file inside protected directory: $file_path" >&2
     echo "Protected directory: $dir/" >&2
     echo "" >&2
@@ -63,23 +161,7 @@ case "$file_path" in
     ;;
 esac
 
-# existing_dir <path> — the deepest directory of <path> that exists.
-existing_dir() {
-  local p="$1"
-  while [ ! -d "$p" ]; do p=$(dirname "$p"); done
-  printf '%s\n' "$p"
-}
-
-# physical <path> — <path> with its existing directory prefix resolved through
-# every symlink (cd -P / pwd -P: stock macOS has no readlink -f) and the part
-# that does not exist yet appended as written.
-physical() {
-  local dir rest phys
-  dir=$(existing_dir "$1")
-  rest="${1#"${dir%/}"}"
-  phys=$(cd -P "$dir" 2>/dev/null && pwd -P) || phys="$dir"
-  printf '%s%s\n' "${phys%/}" "$rest"
-}
+# (existing_dir and physical are defined above the dispatcher.)
 
 # A lock file in a scratch copy under the OS temp dir is not the project's lock
 # file. It is judged by where the write would LAND: a path with a ".." segment
@@ -91,7 +173,7 @@ physical() {
 under_os_tmp=0
 is_lock=0
 for f in "${protected_files[@]}"; do
-  [[ "$base_name" == "$f" ]] && is_lock=1
+  [[ "$lc_base" == "$f" ]] && is_lock=1
 done
 if [ "$is_lock" -eq 1 ] && [ ! -L "$abs_file_path" ]; then
   case "$abs_file_path" in
@@ -122,7 +204,7 @@ fi
 # loop, the credential block and every later rule apply there as everywhere else.
 if [ "$under_os_tmp" -eq 0 ]; then
   for f in "${protected_files[@]}"; do
-    if [[ "$base_name" == "$f" ]]; then
+    if [[ "$lc_base" == "$f" ]]; then
       echo "🚫 BLOCKED: Cannot modify protected file: $file_path" >&2
       echo "Protected pattern: $f" >&2
       echo "" >&2
@@ -137,15 +219,15 @@ fi
 # stderr and deferred to this list to decide what must never be echoed; the
 # hook is gone (the check is native now), but this list remains the single
 # place deciding what is both un-editable and un-quotable.
-if [[ "$base_name" == *.pem || "$base_name" == *.key || "$base_name" == *.p12 || \
-      "$base_name" == *.pfx || "$base_name" == *.jks || "$base_name" == *.keystore || \
-      "$base_name" == id_rsa* || "$base_name" == id_ed25519* || "$base_name" == id_ecdsa* || \
-      "$base_name" == id_dsa* || "$base_name" == .npmrc || "$base_name" == .netrc || \
-      "$base_name" == _netrc || "$base_name" == .pgpass || "$base_name" == .htpasswd || \
-      "$base_name" == credentials || "$base_name" == credentials.json || \
-      "$base_name" == service-account*.json || "$base_name" == kubeconfig || \
-      "$base_name" == .dockercfg || "$base_name" == .docker.json || \
-      "$base_name" == *.tfvars || "$base_name" == settings.local.json ]]; then
+if [[ "$lc_base" == *.pem || "$lc_base" == *.key || "$lc_base" == *.p12 || \
+      "$lc_base" == *.pfx || "$lc_base" == *.jks || "$lc_base" == *.keystore || \
+      "$lc_base" == id_rsa* || "$lc_base" == id_ed25519* || "$lc_base" == id_ecdsa* || \
+      "$lc_base" == id_dsa* || "$lc_base" == .npmrc || "$lc_base" == .netrc || \
+      "$lc_base" == _netrc || "$lc_base" == .pgpass || "$lc_base" == .htpasswd || \
+      "$lc_base" == credentials || "$lc_base" == credentials.json || \
+      "$lc_base" == service-account*.json || "$lc_base" == kubeconfig || \
+      "$lc_base" == .dockercfg || "$lc_base" == .docker.json || \
+      "$lc_base" == *.tfvars || "$lc_base" == settings.local.json ]]; then
   echo "🚫 BLOCKED: Cannot modify credential material: $file_path" >&2
   echo "Protected pattern: credential file ($base_name)" >&2
   echo "" >&2
@@ -156,14 +238,14 @@ fi
 
 # Template dotenv files document variable NAMES and are committed; they hold no
 # secrets. Only a TRAILING suffix counts: .env.example.local stays blocked.
-case "$base_name" in
+case "$lc_base" in
   .env*.example|.env*.sample|.env*.template) env_template=1 ;;
   *) env_template=0 ;;
 esac
 
 # Block edits to any other .env* file (basename prefix match — covers
 # .env, .env.local, .env.production, …). Only this rule reads env_template.
-if [[ "$env_template" -eq 0 && "$base_name" == .env* ]]; then
+if [[ "$env_template" -eq 0 && "$lc_base" == .env* ]]; then
   echo "🚫 BLOCKED: Cannot modify protected file: $file_path" >&2
   echo "Protected pattern: .env*" >&2
   echo "" >&2
@@ -173,7 +255,7 @@ fi
 
 # Block edits to production / populated values files. Documented in rules/NEVER.md.
 # Pattern matches values.prod.yaml, values.prod.yml, *.populated.yaml, *.populated.yml.
-if [[ "$base_name" == values.prod.yaml || "$base_name" == values.prod.yml ]]; then
+if [[ "$lc_base" == values.prod.yaml || "$lc_base" == values.prod.yml ]]; then
   echo "🚫 BLOCKED: Cannot modify production values file: $file_path" >&2
   echo "Protected pattern: values.prod.{yaml,yml}" >&2
   echo "" >&2
@@ -183,7 +265,7 @@ if [[ "$base_name" == values.prod.yaml || "$base_name" == values.prod.yml ]]; th
   exit 2
 fi
 
-if [[ "$base_name" == *.populated.yaml || "$base_name" == *.populated.yml ]]; then
+if [[ "$lc_base" == *.populated.yaml || "$lc_base" == *.populated.yml ]]; then
   echo "🚫 BLOCKED: Cannot modify populated (rendered-with-secrets) values file: $file_path" >&2
   echo "Protected pattern: *.populated.{yaml,yml}" >&2
   echo "" >&2
@@ -193,7 +275,7 @@ if [[ "$base_name" == *.populated.yaml || "$base_name" == *.populated.yml ]]; th
 fi
 
 # Block edits to generated router/network configs (may contain private keys + PSKs).
-if [[ "$file_path" == *"/output/"* && "$base_name" == *.rsc ]]; then
+if [[ "$lc_path" == *"/output/"* && "$lc_base" == *.rsc ]]; then
   echo "🚫 BLOCKED: Cannot modify generated network config: $file_path" >&2
   echo "Protected pattern: */output/*.rsc" >&2
   echo "" >&2
@@ -203,7 +285,7 @@ if [[ "$file_path" == *"/output/"* && "$base_name" == *.rsc ]]; then
 fi
 
 # Block edits to Terraform state files.
-if [[ "$base_name" == terraform.tfstate || "$base_name" == terraform.tfstate.backup || "$base_name" == *.tfstate || "$base_name" == *.tfstate.backup ]]; then
+if [[ "$lc_base" == terraform.tfstate || "$lc_base" == terraform.tfstate.backup || "$lc_base" == *.tfstate || "$lc_base" == *.tfstate.backup ]]; then
   echo "🚫 BLOCKED: Cannot modify Terraform state: $file_path" >&2
   echo "Protected pattern: *.tfstate(.backup)?" >&2
   echo "" >&2
@@ -226,8 +308,11 @@ if [[ ("$file_path" == *"agents/docs/generated/"* || "$file_path" == *".claude/d
     metrics_dir="${CLAUDE_PROJECT_DIR:-.}/.claude-workspace/metrics"
   fi
   mkdir -p "$metrics_dir" 2>/dev/null || true
-  printf '{"ts":"%s","hook":"protect-sensitive-files","stanza":"generated-wiki","mode":"warn","file":"%s"}\n' \
-    "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$file_path" >> "$metrics_dir/gate-bypasses.jsonl" 2>/dev/null || true
+  # jq encodes the file name, so a quote or backslash in it cannot break the
+  # line or add fields to the audit record.
+  jq -nc --arg ts "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --arg file "$file_path" \
+    '{ts:$ts,hook:"protect-sensitive-files",stanza:"generated-wiki",mode:"warn",file:$file}' \
+    >> "$metrics_dir/gate-bypasses.jsonl" 2>/dev/null || true
   exit 0
 fi
 

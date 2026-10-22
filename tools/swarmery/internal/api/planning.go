@@ -28,6 +28,7 @@ import (
 
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/ingest"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/planning"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/store"
 )
 
 // planningSvc is attached once at daemon startup (nil ⇒ planning endpoints 503
@@ -294,7 +295,9 @@ func wizardResumeOrigin(db *sql.DB, svc *planning.Service, uuid string) resumeOr
 	o := lookupResumeOrigin(db, uuid)
 	o.Model = svc.Model(uuid)
 	o.Effort = svc.Effort(uuid)
-	return o
+	// The PROCEED turn writes the plan (or stages the revision): it gets the
+	// first turn's least-privilege shape, Edit rule included.
+	return withPlannerWritable(o, svc.WritableDirs(uuid))
 }
 
 func (h *Handler) spawnWizardResume(w http.ResponseWriter, svc *planning.Service, uuid, text, okStatus string) {
@@ -444,4 +447,78 @@ func (h *Handler) proceedPlanning(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.spawnWizardResume(w, svc, uuid, text, "proceeding")
+}
+
+// PATCH /api/planning/sessions/{id}/turns/{seq}/cost {cost, reason?} → 200
+// {question}. requireLocalOrigin. Flips one interview question's cost-to-change
+// (cheap | expensive) — answered or not, before or after PROCEED; after PROCEED
+// the recorded D-n row and its README line follow. 400 bad ids / body / cost;
+// 404 no such turn; 503 not attached.
+func (h *Handler) patchPlanningTurnCost(w http.ResponseWriter, r *http.Request) {
+	svc := planningSvc
+	if svc == nil {
+		writeClientErr(w, http.StatusServiceUnavailable, "planning not attached")
+		return
+	}
+	sessionID, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		writeClientErr(w, http.StatusBadRequest, "invalid planning session id")
+		return
+	}
+	seq, err := strconv.Atoi(r.PathValue("seq"))
+	if err != nil || seq <= 0 {
+		writeClientErr(w, http.StatusBadRequest, "invalid turn seq")
+		return
+	}
+	var body struct {
+		Cost   string `json:"cost"`
+		Reason string `json:"reason"`
+	}
+	if err := json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&body); err != nil {
+		writeClientErr(w, http.StatusBadRequest, "invalid JSON body")
+		return
+	}
+	q, err := svc.SetTurnCost(sessionID, seq, body.Cost, body.Reason)
+	switch {
+	case errors.Is(err, planning.ErrBadCost):
+		writeClientErr(w, http.StatusBadRequest, err.Error())
+	case errors.Is(err, planning.ErrTurnNotFound):
+		writeClientErr(w, http.StatusNotFound, err.Error())
+	case err != nil:
+		writeErr(w, err)
+	default:
+		writeJSON(w, map[string]any{"question": q}, nil)
+	}
+}
+
+// epicDecisionsResponse is GET /api/epics/{taskId}/decisions. ProjectID lets the
+// client link a decision to its planning session's page.
+type epicDecisionsResponse struct {
+	ProjectID int64            `json:"projectId"`
+	Decisions []store.Decision `json:"decisions"`
+}
+
+// GET /api/epics/{taskId}/decisions → 200 {projectId, decisions:[…]} in D-n
+// order (empty for a plan written before decision ids). 404 unknown task.
+func (h *Handler) getEpicDecisions(w http.ResponseWriter, r *http.Request) {
+	taskID, ok := parseTaskIDParam(w, r)
+	if !ok {
+		return
+	}
+	var projectID int64
+	err := h.DB.QueryRow(`SELECT project_id FROM tasks WHERE id = ? AND source = 'workspace'`, taskID).Scan(&projectID)
+	if errors.Is(err, sql.ErrNoRows) {
+		writeClientErr(w, http.StatusNotFound, "workspace task not found")
+		return
+	}
+	if err != nil {
+		writeErr(w, err)
+		return
+	}
+	ds, err := store.ListTaskDecisions(h.DB, taskID)
+	if err != nil {
+		writeErr(w, err)
+		return
+	}
+	writeJSON(w, epicDecisionsResponse{ProjectID: projectID, Decisions: ds}, nil)
 }

@@ -107,6 +107,9 @@ type epicPhase struct {
 	// into review_blocks / review_findings by applyReviewBlocks.
 	reviews    []mdfence.Review
 	reviewErrs int
+	// decisionDeps are the `D-n` ids the doc's `**Depends on decisions:**` header
+	// declares (ParseDecisionDeps, migration 0122); nil when absent.
+	decisionDeps []string
 }
 
 var (
@@ -842,6 +845,7 @@ func parsePlan(planDir string, warn func(string, ...any)) []epicPhase {
 		// Same single read of the doc body as every extraction above it — the doc is
 		// opened once per scan and each parser is handed the bytes, never the path.
 		phases[i].docModel = ParseModel(string(body))
+		phases[i].decisionDeps = ParseDecisionDeps(string(body))
 		// A prior written into a doc that ALREADY reports its work done is not a
 		// prediction; ParseCompletionReport above has the only fact that can say so,
 		// which is why it is threaded in rather than re-read.
@@ -962,11 +966,17 @@ func parseSpec(planDir string, warn func(string, ...any)) []SpecCriterion {
 // existed would otherwise keep the column's default 'off' until some other byte of
 // the plan changed, and its runs would silently skip the review stage.
 //
-// v11: review_blocks / review_findings / epic_phases.legacy_review — the doc's
-// `kind: review` blocks (review_blocks.go, migration 0122). Without the bump an
+// v11: phase_decisions + epic_phases.decision_deps — the README's `## Decisions`
+// section and the `**Depends on decisions:**` header line (decisions.go, migration
+// 0120). Without the bump an indexed plan that already carries either keeps no
+// decision rows and an empty decision_deps, and the start gate never holds it.
+//
+// v12: review_blocks / review_findings / epic_phases.legacy_review — the doc's
+// `kind: review` blocks (review_blocks.go, migration 0123). Without the bump an
 // already-indexed plan keeps zero findings and legacy_review = 0 until some other
-// byte of it changes.
-const parserVersion = "v11"
+// byte of it changes. Both landed as v11 on separate branches; v12 rescans a plan
+// indexed under either v11 so it picks up the other's rows too.
+const parserVersion = "v12"
 
 // planHash combines every plan file's bytes into one content hash, so the gate
 // re-parses when the README OR any phase doc changes (a checkbox flip lives in a
@@ -1059,6 +1069,11 @@ func (s *Scanner) scanEpics(taskID int64, dir string, warn func(string, ...any))
 	if err := applySpec(tx, taskID, crits); err != nil {
 		tx.Rollback()
 		warn("epics task#%d (%s): spec: %v", taskID, planDir, err)
+		return
+	}
+	if err := applyDecisions(tx, taskID, planDir, parseDecisionsFile(planDir)); err != nil {
+		tx.Rollback()
+		warn("epics task#%d (%s): decisions: %v", taskID, planDir, err)
 		return
 	}
 	if _, err := tx.Exec(`
@@ -1228,6 +1243,9 @@ func applyEpics(tx *sql.Tx, taskID int64, phases []epicPhase, readmePresent bool
 		if err := applyReviewBlocks(tx, taskID, p, cutoff, haveCutoff); err != nil {
 			return err
 		}
+		if err := applyDecisionDeps(tx, taskID, p); err != nil {
+			return err
+		}
 	}
 
 	// A plan dir with no README is not a plan with no phases — it is a plan we
@@ -1323,7 +1341,7 @@ func applyEpics(tx *sql.Tx, taskID int64, phases []epicPhase, readmePresent bool
 			  WHERE phase_id NOT IN (SELECT id FROM epic_phases)`); err != nil {
 			return err
 		}
-		// review_blocks / review_findings (0122) are keyed by doc_path, not phase
+		// review_blocks / review_findings (0123) are keyed by doc_path, not phase
 		// id; a doc that left the plan takes its review rows with it.
 		if err := sweepOrphanReviewRows(tx, taskID); err != nil {
 			return err

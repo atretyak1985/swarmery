@@ -454,9 +454,19 @@ func RedactedTail(stderr string, err error, max int) string {
 	return s
 }
 
-// tokenShapes are the token formats GitHub and GitLab issue.
-var tokenShapes = regexp.MustCompile(
-	`gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|glpat-[A-Za-z0-9_-]{20,}`)
+// TokenPatterns are the token formats GitHub and GitLab issue, one RE2
+// expression each, written so they also read as POSIX extended regexps.
+// tools/swarmery/scripts/lib/redact-patterns.txt carries the same list for
+// the shell side (scripts/guard-trap.sh scrubs trap evidence with it), and
+// TestRedactPatternsFileMatches keeps the two equal.
+var TokenPatterns = []string{
+	`gh[pousr]_[A-Za-z0-9]{20,}`,
+	`github_pat_[A-Za-z0-9_]{20,}`,
+	`glpat-[A-Za-z0-9_-]{20,}`,
+}
+
+// tokenShapes matches any of TokenPatterns.
+var tokenShapes = regexp.MustCompile(strings.Join(TokenPatterns, "|"))
 
 var (
 	literalsMu sync.RWMutex

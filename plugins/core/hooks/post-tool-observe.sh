@@ -5,8 +5,9 @@
 # matcher this slot runs on EVERY tool call (500-2000 per session), so it must
 # be one process, not two, and do the minimum. Two jobs:
 #
-#   1. Append one compact JSONL line per tool call to the shared session file
-#      (/tmp/claude-session-YYYYMMDD.jsonl) — the substrate the statusline,
+#   1. Append one compact JSONL line per tool call to the per-day session file
+#      in the private run dir (lib/session-file.sh: ~/.swarmery/run/
+#      claude-session-YYYYMMDD.jsonl, 0600 in a 0700 dir) — the substrate the statusline,
 #      /dashboard, session-summary.sh, notify-completion.sh and the subagent
 #      hooks all read. Agent dispatches also record requested-vs-observed
 #      model, and a DOWNGRADE logs a ModelFallback event for the routing
@@ -40,7 +41,15 @@
 # observation and advice never block a tool call.
 set -u
 
-SESSION_FILE="${SWARMERY_SESSION_FILE:-/tmp/claude-session-$(date +%Y%m%d).jsonl}"
+# Session log path: SWARMERY_SESSION_FILE when set, else the private run dir.
+# An unusable run dir degrades to /dev/null — never to a shared location.
+SESSION_LIB="$(dirname "${BASH_SOURCE[0]}")/lib/session-file.sh"
+# shellcheck source=lib/session-file.sh
+[ -r "$SESSION_LIB" ] && . "$SESSION_LIB"
+command -v swarmery_session_file >/dev/null 2>&1 || swarmery_session_file() { return 1; }
+SESSION_FILE=$(swarmery_session_file) || SESSION_FILE=/dev/null
+# The logged command is capped: one pasted heredoc must not bloat a per-day log.
+CMD_LOG_MAX=500
 BUDGET_TOKENS="${SWARMERY_SESSION_BUDGET_TOKENS:-240000}"
 
 # Family/generation comparison, shared with the two model-switch hooks. Sourced
@@ -80,7 +89,7 @@ EOF
     --arg ts "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" \
     --arg tool "$tool_name" \
     --arg file "$file_path" \
-    --arg cmd "$command_str" \
+    --arg cmd "${command_str:0:$CMD_LOG_MAX}" \
     --arg model_requested "$model_requested" \
     --arg model_observed "$model_observed" \
     '{ts: $ts, tool: $tool, file: $file, cmd: $cmd}

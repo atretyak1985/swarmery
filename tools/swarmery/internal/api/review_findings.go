@@ -7,7 +7,7 @@ import (
 	"net/http"
 )
 
-// Review findings as data (migration 0122): the `kind: review` blocks of a phase
+// Review findings as data (migration 0123): the `kind: review` blocks of a phase
 // doc, projected by wsingest (review_blocks.go) into review_blocks and
 // review_findings. Read-only here — md is the truth and the scan owns the rows.
 //

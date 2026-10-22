@@ -143,5 +143,52 @@ else
   bad "a requested-vs-observed model mismatch did not log a ModelFallback event"
 fi
 
+# ── the default log lives in a private run dir ────────────────────
+# Without SWARMERY_SESSION_FILE the log goes to SWARMERY_RUN_DIR (default
+# ~/.swarmery/run): a 0700 directory and a 0600 file, never the shared /tmp.
+# The legacy /tmp path is only READ here, never planted: a live session on an
+# older plugin may be appending to it, so the check looks for this run's own
+# unique command string rather than for an unchanged file.
+mode_of() {
+  local m
+  m=$(stat -c '%a' "$1" 2>/dev/null)
+  case "$m" in ''|*[!0-7]*) m=$(stat -f '%Lp' "$1" 2>/dev/null) ;; esac
+  printf '%s' "$m"
+}
+RUN_SANDBOX="$TESTDIR/run-private"
+marker_cmd="observe-run-dir-probe-$$-$RANDOM"
+today=$(date +%Y%m%d)
+out=$(jq -nc --arg c "$marker_cmd" '{tool_name:"Bash",tool_input:{command:$c},session_id:"sess-rundir"}' \
+  | ( unset SWARMERY_SESSION_FILE; SWARMERY_RUN_DIR="$RUN_SANDBOX" "$HOOK" ) 2>/dev/null)
+run_log="$RUN_SANDBOX/claude-session-${today}.jsonl"
+if [ -f "$run_log" ] && grep -qF "$marker_cmd" "$run_log"; then ok
+else bad "without SWARMERY_SESSION_FILE the log line did not land in the run dir"; fi
+if [ "$(mode_of "$RUN_SANDBOX")" = "700" ]; then ok
+else bad "run dir mode is $(mode_of "$RUN_SANDBOX"), want 700"; fi
+if [ "$(mode_of "$run_log")" = "600" ]; then ok
+else bad "session log mode is $(mode_of "$run_log"), want 600"; fi
+if grep -qF "$marker_cmd" "/tmp/claude-session-${today}.jsonl" 2>/dev/null; then
+  bad "the hook still appended to the shared /tmp/claude-session-${today}.jsonl"
+else
+  ok
+fi
+
+# A pre-existing, loosely-permissioned run dir is tightened, not trusted as-is.
+LOOSE="$TESTDIR/run-loose"
+mkdir -p "$LOOSE"; chmod 755 "$LOOSE"
+jq -nc '{tool_name:"Read",tool_input:{file_path:"/x"},session_id:"sess-loose"}' \
+  | ( unset SWARMERY_SESSION_FILE; SWARMERY_RUN_DIR="$LOOSE" "$HOOK" ) >/dev/null 2>&1
+if [ "$(mode_of "$LOOSE")" = "700" ]; then ok
+else bad "a 0755 run dir was left at $(mode_of "$LOOSE")"; fi
+
+# The logged command is capped so one huge command cannot bloat the log.
+LONG_RUN="$TESTDIR/run-long"
+long_cmd=$(printf 'x%.0s' $(seq 1 2000))
+jq -nc --arg c "$long_cmd" '{tool_name:"Bash",tool_input:{command:$c},session_id:"sess-long"}' \
+  | ( unset SWARMERY_SESSION_FILE; SWARMERY_RUN_DIR="$LONG_RUN" "$HOOK" ) >/dev/null 2>&1
+logged_len=$(jq -r '.cmd | length' "$LONG_RUN/claude-session-${today}.jsonl" 2>/dev/null | tail -1)
+if [ -n "$logged_len" ] && [ "$logged_len" -le 500 ] && [ "$logged_len" -gt 0 ]; then ok
+else bad "a 2000-char command was logged with length '${logged_len:-none}', want 1..500"; fi
+
 printf 'post-tool-observe: %d passed, %d failed\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]

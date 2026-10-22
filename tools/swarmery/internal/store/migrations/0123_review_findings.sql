@@ -1,4 +1,4 @@
--- 0122: review findings become data. wsingest projects every `kind: review` block
+-- 0123: review findings become data. wsingest projects every `kind: review` block
 -- of a phase doc's `## Review` section (mdfence.ParseReviews, D7/D42) — whether
 -- the daemon's reviewer or an interactive run-plan wrote it, or an operator
 -- backfilled it — into one review_blocks row per (doc, round) and one

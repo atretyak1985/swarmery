@@ -542,7 +542,11 @@ one of exactly three ways:
 | `SWARMERY_AUTOVERIFY` | on | Automatic verification after a run; manual verify still works when off |
 | `SWARMERY_VERIFY_MAX_DIFF_FILES` | `40` | Diff-size bound above which verification returns inconclusive |
 | `SWARMERY_VERIFY_TIMEOUT_MIN` | `15` | Minutes before a verification run is abandoned |
-| `SWARMERY_VERIFY_PERMISSION_MODE` | `bypassPermissions` | Permission mode of the read-only verifier (falls back to `SWARMERY_PERMISSION_MODE`); the edit tools stay disallowed in every mode, `off` omits the flag |
+| `SWARMERY_VERIFY_PERMISSION_MODE` | `dontAsk` when the phase doc declares a Verify block, else `bypassPermissions` | Permission mode of the read-only verifier (falls back to `SWARMERY_PERMISSION_MODE`). With a Verify block it may run only the declared commands plus read-only git, and a denied check is graded `inconclusive`; the edit tools stay disallowed in every mode, `off` omits the flag |
+| `SWARMERY_REVIEW_PERMISSION_MODE` | `dontAsk` | Permission mode of the phase and plan reviewers; they get Read/Grep/Glob only |
+| `SWARMERY_PLANNING_PERMISSION_MODE` | `dontAsk` | Permission mode of the planner, which runs in your primary checkout: it reads anything, runs only `git log`/`git show`, and writes only under the workspace root |
+| `SWARMERY_AGENT_DENY_RULES` | on | `0` drops the deny list (no `git push`, no mutating `gh pr`/`glab mr` subcommands, no daemon API — routines keep the daemon API) that every `bypassPermissions` agent carries |
+| `SWARMERY_AGENT_SCRUB_VCS_TOKENS` | on | `0` lets agents keep the daemon's `GH_TOKEN`/`GLAB_TOKEN`-style variables; the daemon's own landing is unaffected either way |
 | `SWARMERY_WORKTREE_LEND` | `node_modules`, `.venv`, `vendor` + nested `<dir>/node_modules` | Directories lent into a fresh worktree so builds work immediately; setting it replaces the defaults and turns off nested discovery |
 
 > [!NOTE]

@@ -729,6 +729,17 @@ func (s *Service) StartWith(phaseID int64, opts StartOptions) (sessionUUID strin
 	if err != nil {
 		return "", err
 	}
+	// The decision hold (verify-not-trust phase 2): a phase whose doc declares
+	// `**Depends on decisions:**` on a decision still undecided AND expensive to
+	// change must not be built on a guess. Right after deps-unmerged — both answer
+	// "is what this phase stands on settled?" — and, like it, read-only and ahead of
+	// the slot, the worktree and every stamp. (The model gate cannot come after it:
+	// resolveModel runs first by design, see above.) Force does not lift it.
+	if hold, err := DecisionHold(s.DB, phaseID); err != nil {
+		return "", err
+	} else if hold != nil {
+		return "", hold
+	}
 	// The blocked re-run guard: a phase whose last run ended blocked, re-run with
 	// nothing changed, reaches the same block at the price of a full run. Refused
 	// here — after base resolution, because where the run would start is one of the

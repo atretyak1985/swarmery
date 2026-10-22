@@ -1,0 +1,25 @@
+{
+  "source": "workspace plan 2026-10-09-phase-landing-repo-provider, phase 4 (Return to agent with feedback): the assistant text blocks and SubagentHandback reports of its two run-plan executors (\"Phase 4 return to agent\", \"Phase 4 review fixes\") in session e2e20c6f-5357-42a1-9ea2-6a7816b0640a, read from the subagent JSONL because ingest never stores sidechain prose in turns.text. Paths scrubbed to <repo>/<workspace>/~.",
+  "mustFind": {
+    "word": "instead",
+    "sentenceContains": "planned task instead of a mid-phase discovery",
+    "contextContains": "worktree"
+  },
+  "falsePositiveBudget": 3,
+  "hits": [
+    {
+      "turn": 9,
+      "word": "instead",
+      "sentence": "That would have turned the continuation into a planned task instead of a mid-phase discovery.",
+      "verdict": "true",
+      "why": "the worktree case: teardown removes the worktree but keeps the branch, so a returned run hit the dirty-branch reclaim and the executor added own-branch continuation mid-phase"
+    },
+    {
+      "turn": 19,
+      "word": "instead",
+      "sentence": "- **Push from `returned`:** I also changed `landPhase`'s push update so a `returned` phase that has a `pr_url` goes to `pr_open` instead of `pushed`.",
+      "verdict": "true",
+      "why": "listed under the executor's own ### Deviations: a change outside the review's fix list"
+    }
+  ]
+}

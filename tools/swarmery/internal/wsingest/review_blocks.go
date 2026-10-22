@@ -1,4 +1,4 @@
-// Review findings as data (migration 0122). Every `kind: review` block of a phase
+// Review findings as data (migration 0123). Every `kind: review` block of a phase
 // doc's `## Review` section (mdfence.ParseReviews, D7/D42) — whoever wrote it: the
 // daemon's review stage, run-plan's orchestrator, or an operator backfilling an
 // old plan — is projected into one review_blocks row per (doc, round) and one
@@ -86,7 +86,7 @@ func phaseDone(p epicPhase) bool {
 	return p.docStatus == "done" || (p.checkboxesTotal > 0 && p.checkboxesDone == p.checkboxesTotal)
 }
 
-// reviewCutoff is D21's cutoff — migration 0122's applied_at. ok=false when the
+// reviewCutoff is D21's cutoff — migration 0123's applied_at. ok=false when the
 // migration is not recorded (a test database built below it): then no phase is
 // legacy, because nothing can be dated before a cutoff that does not exist.
 func reviewCutoff(tx *sql.Tx) (time.Time, bool) {

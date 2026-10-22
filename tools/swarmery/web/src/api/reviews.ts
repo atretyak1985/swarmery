@@ -53,7 +53,7 @@ const FINDING_LINE = /^\s*(?:[-*•]|\d+[.)])?\s*(?:\*\*|\[)?P[01]\b/;
 
 /**
  * The entries of the `findings:` list of a `kind: review` yaml block (the
- * machine copy the review stage stores since migration 0122), or null when the
+ * machine copy the review stage stores since migration 0123), or null when the
  * text carries no such block. An entry is a `- ` line at the list's own indent.
  */
 function countBlockFindings(text: string): number | null {

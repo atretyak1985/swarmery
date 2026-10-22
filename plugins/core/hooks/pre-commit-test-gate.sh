@@ -207,6 +207,16 @@ fi
 failed=()
 ran_any=0
 
+# Check output goes to one private mktemp dir, removed on every exit path —
+# never to fixed, guessable names in the shared /tmp. A gate that cannot
+# create its scratch dir cannot run its checks, so it blocks (strict mode).
+PCG_WORK=$(mktemp -d "${TMPDIR:-/tmp}/pcg.XXXXXX" 2>/dev/null) || PCG_WORK=""
+if [ -z "$PCG_WORK" ] || [ ! -d "$PCG_WORK" ]; then
+  echo "🚫 BLOCKED: pre-commit-test-gate could not create a private scratch dir"
+  exit 2
+fi
+trap 'rm -rf "$PCG_WORK"' EXIT
+
 # Cross-platform timeout wrapper.
 # Linux ships GNU `timeout`; macOS does not unless `brew install coreutils` adds `gtimeout`.
 # Strict mode is preserved: if neither binary is available, we run the command unguarded
@@ -232,25 +242,25 @@ if echo "$staged" | grep -qE '\.(ts|tsx)$|^package\.json$' \
   ran_any=1
   echo "  • TypeScript stack: running typecheck + tests"
 
-  if ! NODE_ENV=production _timeout 180 npm run typecheck >/tmp/_pcg_tc.$$ 2>&1; then
+  if ! NODE_ENV=production _timeout 180 npm run typecheck >"$PCG_WORK/tc.log" 2>&1; then
     echo "    ✗ typecheck FAILED:"
-    tail -25 /tmp/_pcg_tc.$$
+    tail -25 "$PCG_WORK/tc.log"
     failed+=("typecheck")
   else
     echo "    ✓ typecheck"
   fi
-  rm -f /tmp/_pcg_tc.$$
+  rm -f "$PCG_WORK/tc.log"
 
   # Only run tests if a `test` script exists in package.json
   if grep -q '"test"\s*:' "$REPO/package.json"; then
-    if ! _timeout 300 npm test --silent -- --passWithNoTests >/tmp/_pcg_test.$$ 2>&1; then
+    if ! _timeout 300 npm test --silent -- --passWithNoTests >"$PCG_WORK/test.log" 2>&1; then
       echo "    ✗ npm test FAILED:"
-      tail -25 /tmp/_pcg_test.$$
+      tail -25 "$PCG_WORK/test.log"
       failed+=("npm test")
     else
       echo "    ✓ npm test"
     fi
-    rm -f /tmp/_pcg_test.$$
+    rm -f "$PCG_WORK/test.log"
   fi
 fi
 
@@ -267,25 +277,25 @@ if echo "$staged" | grep -qE '\.py$' \
   [ -x "$REPO/venv/bin/pytest" ] && PYTEST_BIN="$REPO/venv/bin/pytest"
 
   if command -v "$MYPY_BIN" >/dev/null 2>&1 && [ -d "$REPO/src" ]; then
-    if ! _timeout 90 "$MYPY_BIN" src/ >/tmp/_pcg_my.$$ 2>&1; then
+    if ! _timeout 90 "$MYPY_BIN" src/ >"$PCG_WORK/my.log" 2>&1; then
       echo "    ✗ mypy FAILED:"
-      tail -15 /tmp/_pcg_my.$$
+      tail -15 "$PCG_WORK/my.log"
       failed+=("mypy")
     else
       echo "    ✓ mypy"
     fi
-    rm -f /tmp/_pcg_my.$$
+    rm -f "$PCG_WORK/my.log"
   fi
 
   if command -v "$PYTEST_BIN" >/dev/null 2>&1 && [ -d "$REPO/test" ]; then
-    if ! _timeout 300 "$PYTEST_BIN" test/ -x --tb=short -q >/tmp/_pcg_pt.$$ 2>&1; then
+    if ! _timeout 300 "$PYTEST_BIN" test/ -x --tb=short -q >"$PCG_WORK/pt.log" 2>&1; then
       echo "    ✗ pytest FAILED:"
-      tail -25 /tmp/_pcg_pt.$$
+      tail -25 "$PCG_WORK/pt.log"
       failed+=("pytest")
     else
       echo "    ✓ pytest"
     fi
-    rm -f /tmp/_pcg_pt.$$
+    rm -f "$PCG_WORK/pt.log"
   fi
 fi
 
@@ -296,14 +306,14 @@ if echo "$staged" | grep -qE '^(Chart\.yaml|values.*\.ya?ml|templates/)' \
   echo "  • Helm chart: running helm lint"
 
   if command -v helm >/dev/null 2>&1; then
-    if ! _timeout 30 helm lint . >/tmp/_pcg_hl.$$ 2>&1; then
+    if ! _timeout 30 helm lint . >"$PCG_WORK/hl.log" 2>&1; then
       echo "    ✗ helm lint FAILED:"
-      tail -15 /tmp/_pcg_hl.$$
+      tail -15 "$PCG_WORK/hl.log"
       failed+=("helm lint")
     else
       echo "    ✓ helm lint"
     fi
-    rm -f /tmp/_pcg_hl.$$
+    rm -f "$PCG_WORK/hl.log"
   fi
 fi
 
@@ -313,25 +323,25 @@ if echo "$staged" | grep -qE '\.(tf|tfvars)$'; then
   echo "  • Terraform stack: running fmt + validate"
 
   if command -v terraform >/dev/null 2>&1; then
-    if ! _timeout 30 terraform fmt -check -recursive -diff >/tmp/_pcg_tf.$$ 2>&1; then
+    if ! _timeout 30 terraform fmt -check -recursive -diff >"$PCG_WORK/tf.log" 2>&1; then
       echo "    ✗ terraform fmt -check FAILED (run 'terraform fmt -recursive' to fix):"
-      tail -15 /tmp/_pcg_tf.$$
+      tail -15 "$PCG_WORK/tf.log"
       failed+=("terraform fmt")
     else
       echo "    ✓ terraform fmt"
     fi
-    rm -f /tmp/_pcg_tf.$$
+    rm -f "$PCG_WORK/tf.log"
 
     # validate requires init; skip if .terraform missing (don't auto-init in a hook)
     if [ -d "$REPO/.terraform" ]; then
-      if ! _timeout 30 terraform validate >/tmp/_pcg_tfv.$$ 2>&1; then
+      if ! _timeout 30 terraform validate >"$PCG_WORK/tfv.log" 2>&1; then
         echo "    ✗ terraform validate FAILED:"
-        tail -15 /tmp/_pcg_tfv.$$
+        tail -15 "$PCG_WORK/tfv.log"
         failed+=("terraform validate")
       else
         echo "    ✓ terraform validate"
       fi
-      rm -f /tmp/_pcg_tfv.$$
+      rm -f "$PCG_WORK/tfv.log"
     else
       echo "    ⚠ terraform validate skipped (.terraform not initialised; run 'terraform init' once)"
     fi
@@ -346,16 +356,23 @@ if echo "$staged" | grep -qE '\.sh$'; then
     ran_any=1
     echo "  • Shell scripts: running shellcheck"
     sh_files=$(echo "$staged" | grep -E '\.sh$' || true)
-    # `[ ! -f ] ||` (not `[ -f ] &&`): staged DELETIONS must be skipped
-    # silently, not reported as a shellcheck failure with empty output.
-    if ! echo "$sh_files" | xargs -I{} sh -c "[ ! -f '$REPO/{}' ] || shellcheck '$REPO/{}'" >/tmp/_pcg_sc.$$ 2>&1; then
+    # Staged DELETIONS are skipped here, in bash, so they are not reported as
+    # a shellcheck failure with empty output. File names (and the repo path)
+    # reach shellcheck as NUL-separated argv — no shell re-parses them.
+    sh_paths=()
+    while IFS= read -r f; do
+      [ -n "$f" ] && [ -f "$REPO/$f" ] && sh_paths+=("$REPO/$f")
+    done <<< "$sh_files"
+    if [ ${#sh_paths[@]} -eq 0 ]; then
+      echo "    ✓ shellcheck (no staged scripts left to check)"
+    elif ! printf '%s\0' "${sh_paths[@]}" | xargs -0 shellcheck -- >"$PCG_WORK/sc.log" 2>&1; then
       echo "    ✗ shellcheck FAILED:"
-      tail -25 /tmp/_pcg_sc.$$
+      tail -25 "$PCG_WORK/sc.log"
       failed+=("shellcheck")
     else
       echo "    ✓ shellcheck"
     fi
-    rm -f /tmp/_pcg_sc.$$
+    rm -f "$PCG_WORK/sc.log"
   fi
   # If shellcheck not installed, silently skip — not a hard requirement
 fi

@@ -61,6 +61,10 @@ msgstr "(питання не вдалося розібрати)"
 msgid "{archivedCount} archived"
 msgstr "{archivedCount} в архіві"
 
+#: src/pages/plans/WorkaroundHits.tsx
+msgid "{capped} more past the per-session cap — counted, not stored."
+msgstr "Ще {capped} понад ліміт сесії — пораховано, але не збережено."
+
 #: src/pages/plans/landingModel.ts
 msgid "{changeShort} open"
 msgstr "{changeShort} відкрито"
@@ -533,9 +537,17 @@ msgstr "ніхто не впіймав"
 msgid "change request"
 msgstr "пул-реквест"
 
+#: src/pages/plans/WorkaroundHits.tsx
+msgid "Changed the plan · {count}"
+msgstr "Відступ від плану · {count}"
+
 #: src/pages/plans/LandingStatus.tsx
 msgid "changes requested"
 msgstr "запитано зміни"
+
+#: src/pages/planning/CostBadge.tsx
+msgid "cheap to change"
+msgstr "дешево змінити"
 
 #: src/pages/plans/LandingStatus.tsx
 msgid "checked {checkedAgo}"
@@ -659,6 +671,11 @@ msgstr "вирішено {decided}"
 #: src/pages/Plans.tsx
 msgid "decided {decided} by {by}"
 msgstr "вирішено {decided} ({by})"
+
+#. placeholder {0}: linkedTurn.seq
+#: src/pages/PlanningMode.tsx
+msgid "decision D-{0}"
+msgstr "рішення D-{0}"
 
 #: src/pages/Routines.tsx
 msgid "Delete"
@@ -865,6 +882,10 @@ msgstr "запис виконання"
 #: src/pages/plans/ForecastStory.tsx
 msgid "expected"
 msgstr "очікувалось"
+
+#: src/pages/planning/CostBadge.tsx
+msgid "expensive to change"
+msgstr "дорого змінити"
 
 #: src/pages/PlanningMode.tsx
 #: src/pages/Plans.tsx
@@ -1169,6 +1190,22 @@ msgstr "Позначити [LAND]"
 #: src/pages/plans/CriterionLint.tsx
 msgid "Mark [MANUAL]"
 msgstr "Позначити [MANUAL]"
+
+#: src/pages/planning/CostBadge.tsx
+msgid "Mark {decisionId} cheap to change"
+msgstr "Позначити {decisionId} як дешеве для зміни"
+
+#: src/pages/planning/CostBadge.tsx
+msgid "Mark {decisionId} expensive to change"
+msgstr "Позначити {decisionId} як дороге для зміни"
+
+#: src/pages/planning/CostBadge.tsx
+msgid "mark cheap"
+msgstr "позначити дешевим"
+
+#: src/pages/planning/CostBadge.tsx
+msgid "mark expensive"
+msgstr "позначити дорогим"
 
 #: src/pages/PlanningMode.tsx
 #: src/pages/Plans.tsx
@@ -1496,6 +1533,10 @@ msgstr "відкрити Плани →"
 msgid "open session →"
 msgstr "відкрити сесію →"
 
+#: src/pages/plans/PhaseCard.tsx
+msgid "open the question →"
+msgstr "відкрити питання →"
+
 #: src/pages/plans/LandCriterionAction.tsx
 #: src/pages/plans/PhaseReview.tsx
 msgid "Opening…"
@@ -1601,6 +1642,10 @@ msgstr "оберіть усе, що підходить"
 #: src/pages/planning/QuestionCard.tsx
 msgid "pick one"
 msgstr "оберіть одне"
+
+#: src/pages/plans/WorkaroundHits.tsx
+msgid "Places where the agent changed the plan"
+msgstr "Місця, де агент відступив від плану"
 
 #: src/pages/Plans.tsx
 #: src/pages/Plans.tsx
@@ -2218,6 +2263,14 @@ msgstr "shell-команда (напр. curl -fsS -X POST …)"
 msgid "Show AI Reasoning"
 msgstr "Показати міркування ШІ"
 
+#: src/pages/plans/WorkaroundHits.tsx
+msgid "Show all {allCount}"
+msgstr "Показати всі {allCount}"
+
+#: src/pages/plans/WorkaroundHits.tsx
+msgid "Show fewer"
+msgstr "Показати менше"
+
 #: src/pages/plans/ForecastStory.tsx
 msgid "show the score breakdown"
 msgstr "показати розбивку оцінки"
@@ -2386,6 +2439,10 @@ msgstr "tech-lead (типово)"
 #: src/pages/plans/ReviewFindings.tsx
 msgid "test caught"
 msgstr "спіймав тест"
+
+#: src/pages/plans/WorkaroundHits.tsx
+msgid "The agent's own words where it went around something. Read these first; each is a place to check, not a verdict."
+msgstr "Власні слова агента там, де він щось обійшов. Прочитайте їх першими: кожне — місце для перевірки, а не вирок."
 
 #: src/pages/plans/ForecastVsActual.tsx
 msgid "the Completion Report carries no “Where reality diverged” paragraph"
@@ -2612,6 +2669,11 @@ msgstr "зачепила {count} {areas}{offNote}"
 msgid "Transform your idea into a plan"
 msgstr "Перетворіть ідею на план"
 
+#. placeholder {0}: h.turnSeq
+#: src/pages/plans/WorkaroundHits.tsx
+msgid "turn {0}"
+msgstr "хід {0}"
+
 #: src/pages/plans/ReviewFindings.tsx
 msgid "type"
 msgstr "тип"
@@ -2679,6 +2741,10 @@ msgstr "перевіряється…"
 #: src/pages/Plans.tsx
 msgid "waiting on phase {waitingOn}"
 msgstr "чекає на фазу {waitingOn}"
+
+#: src/pages/plans/PhaseCard.tsx
+msgid "waits on {id}"
+msgstr "чекає на {id}"
 
 #: src/pages/Routines.tsx
 msgid "webhook"

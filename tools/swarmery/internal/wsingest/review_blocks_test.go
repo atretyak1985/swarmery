@@ -11,7 +11,7 @@ import (
 	"time"
 )
 
-// The projection of `kind: review` blocks (review_blocks.go, migration 0122),
+// The projection of `kind: review` blocks (review_blocks.go, migration 0123),
 // end to end: parsePlan over a real plan dir, applyEpics into a real schema.
 
 const reviewFixtures = "../../testdata/fixtures/review-blocks"
