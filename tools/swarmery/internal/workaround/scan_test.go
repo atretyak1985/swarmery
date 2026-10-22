@@ -60,6 +60,13 @@ func TestScanWholeWords(t *testing.T) {
 		{"fenced block", "Run it:\n```\ngo test -skip flaky\n```\nDone.", []string{}},
 		{"prose around code", "Use `x` instead of `y`.", []string{"instead"}},
 		{"unclosed backtick is prose", "a ` stray tick, then instead", []string{"instead"}},
+		// A tally of nothing is not a workaround; a non-zero one is.
+		{"zero tally before", "Tests: 40 passed, 0 skipped.", []string{}},
+		{"zero tally upper", "9 PASS / 0 FAIL / 0 SKIPPED", []string{}},
+		{"zero tally after", "flaky: 0, skipped 0", []string{}},
+		{"non-zero tally", "5392 passed, 1 skipped", []string{"skipped"}},
+		{"ten is not zero", "10 skipped, 2.0 flaky", []string{"skipped", "flaky"}},
+		{"zero then more digits", "skipped 05 times", []string{"skipped"}},
 		// Mixed language in one text.
 		{"mixed", "Flaky test. Пропускаю його.", []string{"flaky", "пропускаю"}},
 	}

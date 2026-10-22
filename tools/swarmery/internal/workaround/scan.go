@@ -81,7 +81,7 @@ func (m *Matcher) Scan(text string) []Hit {
 	var found []match
 	for i, re := range m.res {
 		for _, loc := range re.FindAllStringIndex(masked, -1) {
-			if wholeWord(masked, loc[0], loc[1]) {
+			if wholeWord(masked, loc[0], loc[1]) && !zeroCount(masked, loc[0], loc[1]) {
 				found = append(found, match{m.words[i], loc[0], loc[1]})
 			}
 		}
@@ -137,6 +137,36 @@ func wholeWord(s string, start, end int) bool {
 		}
 	}
 	return true
+}
+
+// zeroCount reports a tally of nothing — "0 skipped", "0 SKIPPED", "skipped: 0",
+// "flaky 0" — which says the opposite of a workaround. A non-zero tally ("1
+// skipped") stays a hit: a skipped test is exactly what a reviewer should see.
+func zeroCount(s string, start, end int) bool {
+	before := strings.TrimRight(s[:start], " \t")
+	if len(before) < len(s[:start]) && strings.HasSuffix(before, "0") {
+		rest := before[:len(before)-1]
+		if r, _ := utf8.DecodeLastRuneInString(rest); rest == "" || !(unicode.IsDigit(r) || r == '.' || r == ',') {
+			return true
+		}
+	}
+	after := strings.TrimLeft(s[end:], " \t:=")
+	if len(after) < len(s[end:]) && strings.HasPrefix(after, "0") && !numberGoesOn(after[1:]) {
+		return true
+	}
+	return false
+}
+
+// numberGoesOn reports whether rest continues a number: a digit, or a '.' / ','
+// followed by a digit ("0.5", "0,5" — but not "0, next").
+func numberGoesOn(rest string) bool {
+	if rest == "" {
+		return false
+	}
+	if c := rest[0]; c >= '0' && c <= '9' {
+		return true
+	}
+	return (rest[0] == '.' || rest[0] == ',') && len(rest) > 1 && rest[1] >= '0' && rest[1] <= '9'
 }
 
 // maskCode blanks code — fenced blocks and `inline spans` — byte for byte, so
