@@ -20,6 +20,10 @@ PARSER="$REPO/plugins/core/hooks/lib/guard-parse.sh"
 FIX="$REPO/tools/swarmery/testdata/fixtures/guard-blocks"
 READ_GREP_MSG="read it with Read/Grep, changes to it are outside this phase's scope (see .swarmery/plan/)"
 
+# The hook also walks up from $CLAUDE_PROJECT_DIR; a session running this suite
+# may export one that points at a real run root. Every case sets its own.
+unset CLAUDE_PROJECT_DIR
+
 pass=0
 fail=0
 TMP=$(mktemp -d)
@@ -211,6 +215,15 @@ N=$(mkroot none -)
 run_hook "$(payload "$N" Edit "$N/pkg/trap_test.go")"
 if [ "$RC" -eq 0 ] && [ -z "$ERR" ] && [ ! -e "$N/.swarmery" ]; then ok "no plan dir: exit 0, silent, nothing written"
 else bad "no plan dir: rc=$RC stderr='$ERR'"; fi
+
+# ── a session that cd'd out of the worktree still meets the guard ──
+mkdir -p "$TMP/outside"
+ERR=$(payload "$TMP/outside" Bash "cat $R/pkg/trap_test.go" | CLAUDE_PROJECT_DIR="$R" "$HOOK" 2>&1 >/dev/null); RC=$?
+if [ "$RC" -eq 2 ] && [[ "$ERR" == *"pkg/trap_test.go is protected"* ]]; then ok "cwd outside the run, CLAUDE_PROJECT_DIR inside: still blocked"
+else bad "cwd outside the run with CLAUDE_PROJECT_DIR: rc=$RC ($ERR)"; fi
+ERR=$(payload "$TMP/outside" Bash "cat $R/pkg/trap_test.go" | "$HOOK" 2>&1 >/dev/null); RC=$?
+if [ "$RC" -eq 0 ]; then ok "cwd outside the run, no CLAUDE_PROJECT_DIR: not a run, allowed"
+else bad "cwd outside the run without CLAUDE_PROJECT_DIR: rc=$RC ($ERR)"; fi
 
 # ── fail closed: bad input, jq missing ────────────────────────────
 ERR=$(printf 'not json' | (cd "$R" && "$HOOK") 2>&1 >/dev/null); RC=$?

@@ -52,8 +52,9 @@ stop_if: [protected path]
 ```
 
 - **Where it looks.** The daemon lends the phase doc into the run's worktree
-  at `.swarmery/plan/<doc>.md`; the hook walks up from the session cwd to the
-  first such dir and parses every doc in it with `hooks/lib/guard-parse.sh`
+  at `.swarmery/plan/<doc>.md`; the hook walks up from the session cwd (then
+  from `$CLAUDE_PROJECT_DIR`, so a session that `cd`'d out still meets it) to
+  the first such dir and parses every doc in it with `hooks/lib/guard-parse.sh`
   (the bash twin of the daemon's Go parser, held to the same fixtures). No dir
   → exit 0 at once, so interactive sessions never pay for it.
 - **What it blocks.** Edit / Write / MultiEdit / NotebookEdit by target path

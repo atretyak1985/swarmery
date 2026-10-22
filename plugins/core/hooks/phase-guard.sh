@@ -22,8 +22,8 @@
 # Exit codes (house protocol, see protect-sensitive-files.sh): 2 blocks the
 # call and the reason goes to STDERR, which is the only stream that reaches the
 # model; 0 allows it.
-#   - No .swarmery/plan/ above the session cwd: exit 0 at once, silently — an
-#     interactive session outside a run never pays for this hook.
+#   - No .swarmery/plan/ at or above the session cwd or $CLAUDE_PROJECT_DIR:
+#     exit 0 at once, silently — a session outside a run never pays for this.
 #   - No guard block in the doc: only the implicit protection applies.
 #   - An unparsable guard block, a payload that is not JSON, or jq missing:
 #     every call is blocked with the reason (fail closed — the hook cannot know
@@ -69,14 +69,20 @@ case "$hook_cwd" in
   *) hook_cwd="$PWD" ;;
 esac
 
-# The run root: the first directory at or above the cwd holding .swarmery/plan/.
+# The run root: the first directory at or above the cwd holding .swarmery/plan/
+# — or at or above $CLAUDE_PROJECT_DIR, so a session that cd'd out of its
+# worktree still meets the guard when it reaches back in by absolute path.
 root=""
-d="$hook_cwd"
-while :; do
-  if [ -d "$d/.swarmery/plan" ]; then root="$d"; break; fi
-  [ "$d" = "/" ] && break
-  d="${d%/*}"
-  [ -n "$d" ] || d="/"
+for start in "$hook_cwd" "${CLAUDE_PROJECT_DIR:-}"; do
+  case "$start" in /*) ;; *) continue ;; esac
+  d="$start"
+  while :; do
+    if [ -d "$d/.swarmery/plan" ]; then root="$d"; break; fi
+    [ "$d" = "/" ] && break
+    d="${d%/*}"
+    [ -n "$d" ] || d="/"
+  done
+  [ -n "$root" ] && break
 done
 [ -n "$root" ] || exit 0
 root="${root%/}"
