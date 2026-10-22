@@ -200,9 +200,9 @@ func TestUpsertByLabelNeverTodo(t *testing.T) {
 func TestUpsertByLabelValidation(t *testing.T) {
 	db, projectID, _ := testDB(t)
 	bad := []taskcap.LabelInput{
-		{ProjectID: projectID, Title: "t", Description: "d"},                                  // no label
-		{ProjectID: projectID, Label: ghLabel, Description: "d"},                              // no title
-		{ProjectID: projectID, Label: ghLabel, Title: "t"},                                    // no description
+		{ProjectID: projectID, Title: "t", Description: "d"},                                   // no label
+		{ProjectID: projectID, Label: ghLabel, Description: "d"},                               // no title
+		{ProjectID: projectID, Label: ghLabel, Title: "t"},                                     // no description
 		{ProjectID: projectID, Label: ghLabel, Title: "t", Description: "d", Origin: "manual"}, // not an upsert origin
 	}
 	for i, in := range bad {
