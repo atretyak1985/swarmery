@@ -107,9 +107,15 @@ lc_base=$(basename "$lc_path")
 
 # Protected directory names — blocked only when they appear as a full
 # path segment, so e.g. skills/docker-build/ is NOT mistaken for build/.
+# .git and node_modules are matched ignoring case (a case-insensitive file
+# system resolves .GIT/ to .git/). Generated-output dirs are matched as
+# written: they guard build output, not secrets, and a source folder such as
+# components/Coverage/ or a volume named Build/ must stay editable.
 protected_dirs=(
   ".git"
   "node_modules"
+)
+protected_output_dirs=(
   "dist"
   "build"
   ".next"
@@ -128,8 +134,10 @@ base_name=$(basename "$file_path")
 # Block edits to files inside a protected directory (path-segment match,
 # not substring — anchored by a leading "/" or the start of the path).
 # Block messages go to STDERR because only STDERR reaches the model.
-for dir in "${protected_dirs[@]}"; do
-  if [[ "$lc_path" == "$dir/"* || "$lc_path" == *"/$dir/"* ]]; then
+for dir in "${protected_dirs[@]}" "${protected_output_dirs[@]}"; do
+  match_path="$lc_path"
+  case " ${protected_output_dirs[*]} " in *" $dir "*) match_path="$file_path" ;; esac
+  if [[ "$match_path" == "$dir/"* || "$match_path" == *"/$dir/"* ]]; then
     echo "🚫 BLOCKED: Cannot modify file inside protected directory: $file_path" >&2
     echo "Protected directory: $dir/" >&2
     echo "" >&2

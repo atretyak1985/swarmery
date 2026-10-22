@@ -187,6 +187,13 @@ assert 2 "case: Package-Lock.json"           "$(jp '/repo/Package-Lock.json')"
 assert 2 "case: relative .ENV, cwd /repo"    "$(jpc '.ENV' '/repo')"
 assert 0 "case: mixed-case source stays ok"  "$(jp '/repo/src/App.tsx')"
 assert 0 "case: .ENV.EXAMPLE is a template"  "$(jp '/repo/.ENV.EXAMPLE')"
+# Output dirs (dist, build, .next, coverage) match only as written: a source
+# folder or a volume that merely shares the name in another case stays editable.
+assert 0 "case: components/Coverage/ is source"  "$(jp '/repo/src/components/Coverage/CoverageCard.tsx')"
+assert 0 "case: a volume named Build/ is fine"    "$(jp '/Volumes/Build/app/src/main.ts')"
+assert 0 "case: Dist/ source folder is fine"      "$(jp '/repo/src/Dist/index.ts')"
+assert 2 "case: lower-case coverage/ still blocks" "$(jp '/repo/coverage/lcov.info')"
+assert 2 "case: lower-case dist/ still blocks"     "$(jp '/repo/dist/main.js')"
 
 # ── Symlinks: judged by where the write lands ─────────────────────
 ln -s "$scratch/repo/.git/hooks" "$scratch/hooks-alias"
