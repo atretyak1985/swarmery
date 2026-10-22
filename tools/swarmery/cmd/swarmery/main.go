@@ -2818,6 +2818,9 @@ func cmdServe(args []string) error {
 	// (GET /api/sessions/{id}/context-hogs resolves uuid→transcript under them,
 	// searching every configured root the way the ingest heal does).
 	api.AttachProjectsRoots(cfg.ProjectsRoots)
+	// The latest weekly skill-audit report lives in the same workspace the
+	// workspace scanner watches (--workspace-root).
+	api.AttachWorkspaceRoot(wsCfg.WorkspaceRoot)
 	bootLog.Info(logbuf.Phasef("api.build", time.Since(buildStart)))
 	addr := net.JoinHostPort(*bind, strconv.Itoa(*port))
 	log.Printf("swarmery serving on http://%s (db: %s)", addr, *dbPath)

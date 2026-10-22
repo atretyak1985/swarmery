@@ -36,6 +36,7 @@ import { Routines } from './Routines';
 import { SystemHub } from './SystemHub';
 import { ModsTab } from './system/ModsTab';
 import { FiltersRow } from './system/shared';
+import { SkillsToExtendHint } from './system/SkillsToExtendHint';
 
 /** Origin scope of a catalog row — where the component is DEFINED (the user's
  * ~/.claude + the plugin cache = global; a project's own .claude/ = project).
@@ -310,14 +311,21 @@ function SystemTabPanel({
 }): JSX.Element {
   const { t } = useLingui();
   if (tab === 'agents') {
+    // The skills-to-extend hint sits above the roster: the moment someone
+    // browses agents is the moment to ask whether a skill already does it.
     return (
-      <AgentHub
-        embedded
-        routeBase={`${base}/agents`}
-        scopeSlug={scopeRef}
-        projectScoped={projectScoped}
-        originScope={originScope}
-      />
+      <div className="flex h-full min-h-0 flex-col">
+        <SkillsToExtendHint insightsHref={`${base}/insights#skill-audit`} />
+        <div className="min-h-0 flex-1">
+          <AgentHub
+            embedded
+            routeBase={`${base}/agents`}
+            scopeSlug={scopeRef}
+            projectScoped={projectScoped}
+            originScope={originScope}
+          />
+        </div>
+      </div>
     );
   }
   if (tab === 'routines') {

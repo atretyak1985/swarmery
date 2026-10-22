@@ -22,6 +22,7 @@ import type {
   SystemOverlays,
   SystemRestoreResponse,
   SystemRollbackRequest,
+  SystemSkillAuditReportBody,
   SystemSummary,
   SystemVersion,
   SystemWriteRequest,
@@ -829,6 +830,39 @@ export const mockSystemOverlays: SystemOverlays = {
 
 // --- GET /api/system/insights ---------------------------------------------------
 
+const DEAD_HINT =
+  'no use in 30 days, matched by name (advisory — a component used only outside recorded sessions looks dead too); before deleting or archiving, check it is not the one a new agent should extend';
+
+const MOCK_SKILL_AUDIT_PATH = '~/swarmery-workspace/swarmery/workspace/retro/skill-audit-2026-10-26.md';
+
+const MOCK_SKILL_AUDIT_MARKDOWN = `# Skill audit 2026-10-26
+
+Window 30 days; similarity >= 0.80; skills per session p95 limit 12.
+
+## Unused agents
+
+- legacy-deploy-bot (global) — ~/.claude/agents/legacy-deploy-bot.md
+
+## Unused skills
+
+- release-notes (global) — ~/.claude/skills/release-notes
+
+## Similar descriptions
+
+- pdf-export ↔ pdf-exporter — 0.86
+
+## Skills per session
+
+| project | sessions | p95 | max | |
+|---|---|---|---|---|
+| -work-shop | 41 | 14 | 19 | over limit |
+
+## Before a new agent, extend one of these
+
+- workspace-plans — used in 23 sessions; covers plan writing and revision.
+- pdf-export — absorbs pdf-exporter (0.86 overlap).
+`;
+
 export const mockSystemInsights: SystemInsights = {
   promotionCandidates: [
     {
@@ -898,10 +932,40 @@ export const mockSystemInsights: SystemInsights = {
       name: 'legacy-deploy-bot',
       scope: 'global',
       projectSlug: null,
-      message: 'agent "legacy-deploy-bot": 0 event mentions in the last 30 days by available telemetry',
-      hint: '0 telemetry mentions in 30 days (advisory — events.agent_id is only partially attributed); consider deleting or archiving',
+      message:
+        'agent "legacy-deploy-bot": no subagent run named it in the last 30 days (matched by name — events.agent_id is not populated; advisory)',
+      hint: DEAD_HINT,
+    },
+    {
+      kind: 'skill',
+      id: 104,
+      name: 'release-notes',
+      scope: 'global',
+      projectSlug: null,
+      message:
+        'skill "release-notes": no Skill tool call or slash command named it in the last 30 days (matched by name — events.skill_id is not populated; advisory)',
+      hint: DEAD_HINT,
     },
   ],
+  skillAudit: [
+    {
+      rule: 'skill_desc_similar',
+      severity: 'warn',
+      message:
+        'skills "pdf-export" and "pdf-exporter": descriptions overlap 0.86 (token Jaccard, threshold 0.80) — extend one instead of keeping both',
+      skills: ['pdf-export', 'pdf-exporter'],
+      projectSlug: null,
+    },
+    {
+      rule: 'session_skill_load_high',
+      severity: 'warn',
+      message:
+        'project "-work-shop": p95 of 14 distinct skills per session over the last 30 days (41 skill-loading sessions, max 19) exceeds the limit of 12',
+      skills: [],
+      projectSlug: '-work-shop',
+    },
+  ],
+  skillAuditReport: { date: '2026-10-26', path: MOCK_SKILL_AUDIT_PATH },
   // Both guide rules, so the section renders each shape: agent 2 has a guide
   // with a hole (docs_incomplete — matches STALE_DOCS below), skill 103 has no
   // guide at all (docs_missing). Kept short on purpose; the real list is long.
@@ -1059,6 +1123,11 @@ export const mockSystemApi = {
   async insights(): Promise<SystemInsights> {
     await delay(110);
     return structuredClone(mockSystemInsights);
+  },
+
+  async skillAuditReport(): Promise<SystemSkillAuditReportBody | null> {
+    await delay(90);
+    return { date: '2026-10-26', path: MOCK_SKILL_AUDIT_PATH, markdown: MOCK_SKILL_AUDIT_MARKDOWN };
   },
 
   // --- Stage 2 write surface (step-12) — mutates the in-memory state above ----

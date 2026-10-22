@@ -357,6 +357,7 @@ func Routes(root *http.ServeMux, h *Handler) {
 	// promotion & drift detector — read-only analysis over the registry
 	// (system_insights.go). Display-only: promotion stays a manual flow.
 	mux.HandleFunc("GET /api/system/insights", h.systemInsights)
+	mux.HandleFunc("GET /api/system/skill-audit/report", h.systemSkillAuditReport)
 
 	// phase 4: system, Stage 2 write surface (step-09) — agents/skills PUT +
 	// rollback through internal/sysedit. Same D4 origin hardening as the
