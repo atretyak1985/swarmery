@@ -61,8 +61,9 @@ func TestLintMCPServerUnused30d(t *testing.T) {
 	mustExec(t, db, `INSERT INTO projects (path, slug, name, first_seen) VALUES ('/elsewhere', 'elsewhere', 'elsewhere', '2026-07-13T00:00:00Z')`)
 	other := intQuery(t, db, `SELECT id FROM projects WHERE slug = 'elsewhere'`)
 
-	// cfg.ClaudeDir is <root>/claude, so the global config is <root>/.claude.json.
-	writeTestFile(t, filepath.Join(root, ".claude.json"), `{
+	// cfg.ClaudeDir is <root>/claude — a relocated config dir by layout (not
+	// named .claude), so its global config lives inside it.
+	writeTestFile(t, filepath.Join(cfg.ClaudeDir, ".claude.json"), `{
 	  "mcpServers": {"used-user": {}, "idle-user": {}},
 	  "projects": {"`+projectPath+`": {"mcpServers": {"used-local": {}, "idle-local": {}, "elsewhere-local": {}}}}
 	}`)

@@ -36,16 +36,18 @@ type ConfiguredServer struct {
 	Source string `json:"source"`
 }
 
-// GlobalConfigPath returns the Claude Code global config file for claudeDir.
-// With CLAUDE_CONFIG_DIR set the file lives INSIDE that dir; for the stock
-// ~/.claude it is the sibling ~/.claude.json. The in-dir file wins when both
-// exist, which is the CLI's own precedence for a relocated config dir.
+// GlobalConfigPath returns the Claude Code global config file for claudeDir,
+// by the CLI's own rule: the stock ~/.claude keeps it as the SIBLING
+// ~/.claude.json, while a relocated CLAUDE_CONFIG_DIR keeps it inside itself.
+// The rule is by layout, not by which file exists: a stray .claude.json inside
+// the stock dir (an old CLI left one behind on this very machine) is not read
+// by the CLI and must not shadow the real one here.
 func GlobalConfigPath(claudeDir string) string {
-	inside := filepath.Join(claudeDir, ".claude.json")
-	if _, err := os.Stat(inside); err == nil {
-		return inside
+	clean := filepath.Clean(claudeDir)
+	if filepath.Base(clean) == ".claude" {
+		return filepath.Join(filepath.Dir(clean), ".claude.json")
 	}
-	return filepath.Join(filepath.Dir(claudeDir), ".claude.json")
+	return filepath.Join(clean, ".claude.json")
 }
 
 // globalConfig is the subset of the global config file this reader needs.

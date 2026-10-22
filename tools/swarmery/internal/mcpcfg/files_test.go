@@ -59,14 +59,15 @@ func TestReadConfiguredToleratesMissingAndMalformed(t *testing.T) {
 	}
 }
 
-func TestGlobalConfigPathPrefersRelocatedDir(t *testing.T) {
+func TestGlobalConfigPathFollowsTheCLILayout(t *testing.T) {
 	home := t.TempDir()
 	stock := filepath.Join(home, ".claude")
+	// A stray in-dir file must not shadow the stock sibling.
+	writeFile(t, filepath.Join(stock, ".claude.json"), `{}`)
 	if got, want := GlobalConfigPath(stock), filepath.Join(home, ".claude.json"); got != want {
 		t.Fatalf("stock dir: %s, want %s", got, want)
 	}
-	relocated := filepath.Join(home, "acct-2")
-	writeFile(t, filepath.Join(relocated, ".claude.json"), `{}`)
+	relocated := filepath.Join(home, ".claude-acct-2")
 	if got, want := GlobalConfigPath(relocated), filepath.Join(relocated, ".claude.json"); got != want {
 		t.Fatalf("relocated dir: %s, want %s", got, want)
 	}
