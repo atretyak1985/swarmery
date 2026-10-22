@@ -293,8 +293,8 @@ func Attach(cfg AttachConfig) (*Result, error) {
 	}
 	if settingsChanged {
 		if existed {
-			if err := os.WriteFile(sPath+".bak", orig, 0o644); err != nil {
-				return nil, fmt.Errorf("write backup %s.bak: %w", sPath, err)
+			if err := writeBackup(sPath, orig); err != nil {
+				return nil, err
 			}
 			res.step("✓ .claude/settings.json merged (backup: .claude/settings.json.bak)")
 		} else {

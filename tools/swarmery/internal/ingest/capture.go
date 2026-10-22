@@ -41,6 +41,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/redact"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/taskcap"
 )
 
@@ -157,11 +158,14 @@ func (in *ingester) captureTodos(b contentBlock, sidechain bool, recordUUID stri
 		if content == "" {
 			continue
 		}
+		// The key hashes the todo as written (it is a digest, and must stay
+		// stable across the redaction change); the stored text is redacted.
 		key := todoCaptureKey(in.sessionUUID, content)
+		shown := redact.All(content)
 		id, inserted, err := taskcap.InsertCapturedTask(in.tx, taskcap.Input{
 			ProjectID:       in.projectID,
-			Title:           clip(content, captureTitleLimit),
-			Prompt:          content + footer,
+			Title:           clip(shown, captureTitleLimit),
+			Prompt:          shown + footer,
 			Origin:          "session",
 			OriginSessionID: &sessionID,
 			OriginTurnUUID:  recordUUID,
