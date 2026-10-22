@@ -393,8 +393,10 @@ func Routes(root *http.ServeMux, h *Handler) {
 	// specific and win) + the graphify/architecture static jails. The jails
 	// register method-less so the handler can 405 non-GET/HEAD itself: a
 	// "GET …" pattern would let other methods fall through to the "/" SPA
-	// catch-all instead.
-	mux.HandleFunc("/api/projects/{id}/serena/{rest...}", h.serenaProxy)
+	// catch-all instead. The proxy relays any method to serena's own API, which
+	// has state-changing endpoints, so every non-read (and any upgrade) carries
+	// the D4 origin fence; GET/HEAD stay unfenced like every other read.
+	mux.HandleFunc("/api/projects/{id}/serena/{rest...}", requireLocalOriginUnlessRead(h.serenaProxy))
 	mux.HandleFunc("/api/projects/{id}/graphify/{rest...}", h.graphifyStatic)
 	mux.HandleFunc("/api/projects/{id}/architecture/{rest...}", h.architectureStatic)
 	// More specific than the static jail, so POST …/rebuild wins over {rest...}.

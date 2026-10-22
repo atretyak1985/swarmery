@@ -64,8 +64,10 @@ func (h *Handler) patchProject(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var patch projectMetaPatch
-	if err := json.NewDecoder(r.Body).Decode(&patch); err != nil {
-		writeClientErr(w, http.StatusBadRequest, "invalid JSON body")
+	if err := decodeJSONLimited(w, r, &patch, maxJSONBody); err != nil {
+		if !isBodyTooLarge(err) {
+			writeClientErr(w, http.StatusBadRequest, "invalid JSON body")
+		}
 		return
 	}
 	if patch.Pinned == nil && patch.Tags == nil {
