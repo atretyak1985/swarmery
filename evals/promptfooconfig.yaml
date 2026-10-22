@@ -60,6 +60,7 @@ tests:
   - file://agents/security-auditor.yaml
   - file://agents/git-commit.yaml
   - file://agents/forecast.yaml
+  - file://agents/doc-blocks.yaml
   - file://agents/debugger.yaml
   - file://agents/guardrails.yaml
   - file://agents/jira-task-runner.yaml
