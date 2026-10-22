@@ -132,7 +132,7 @@ test('ask + POST 204 (excluded project): the verdict stands, no poll', ON, async
   expect(w.permissionPolls).toHaveLength(0)
 })
 
-test('ask + POST allow by rule: allow, "approved in Swarmery"; the request carries the call and the bearer token', ON, async ($, on) => {
+test('ask + POST allow by rule: allow, "approved in Swarmery"; the request carries the call, signed with the token', ON, async ($, on) => {
   const w = await begin($, on, { ...ASK, permissionReplies: [decided({ decision: 'allow', via: 'rule' })] })
   const verdict = await $.tool.check(CALL)
   expect(verdict).toMatchObject({ decision: 'allow', reason: APPROVED_REASON })
@@ -140,7 +140,7 @@ test('ask + POST allow by rule: allow, "approved in Swarmery"; the request carri
   const [post] = w.permissionPosts
   expect(post?.url).toBe(POST_URL)
   expect(post?.method).toBe('POST')
-  expect(post?.authorization).toBe(`Bearer ${TOKEN}`)
+  expect(post?.signedWith).toBe(TOKEN)
   expect(post?.body).toEqual({
     sessionId: SESSION_ID,
     cwd: CWD,
@@ -177,7 +177,7 @@ test('ask + 202, then 204, 204, 200 allow: allow after 3 polls; the status line 
   expect(call.isDone()).toBe(true)
   expect(await pendingCheck).toMatchObject({ decision: 'allow', reason: APPROVED_REASON })
   expect(w.permissionPolls.map(p => p.url)).toEqual([pollUrl(41), pollUrl(41), pollUrl(41)])
-  expect(w.permissionPolls.every(p => p.method === 'GET' && p.authorization === `Bearer ${TOKEN}`)).toBe(true)
+  expect(w.permissionPolls.every(p => p.method === 'GET' && p.signedWith === TOKEN)).toBe(true)
   expect(w.statuses).toEqual([WAITING_STATUS, undefined])
 })
 
@@ -210,6 +210,40 @@ test('200 local (production deploy): the verdict stands and the dialog says to c
   const w = await begin($, on, { ...ASK, permissionReplies: [decided({ decision: 'local' })] })
   expect((await $.tool.check(CALL)).decision).toBe('ask')
   expect(w.notices).toEqual([{ toolUseId: 'toolu_01', text: LOCAL_NOTICE }])
+})
+
+// Signed link: a decision counts only when the daemon's response signature
+// verifies, and the request proves the key without carrying it.
+test('an unsigned 200 allow is not honoured: the verdict stands; the request is signed and carries no bearer token', ON, async ($, on) => {
+  const w = await begin($, on, { ...ASK, responseSig: 'none', permissionReplies: [decided({ decision: 'allow' })] })
+  expect((await $.tool.check(CALL)).decision).toBe('ask')
+  expect(w.permissionPosts).toHaveLength(1)
+  const authorization = w.permissionPosts[0]?.authorization ?? ''
+  expect(authorization.startsWith('Swarmery-HMAC ')).toBe(true)
+  expect(authorization.includes(TOKEN)).toBe(false)
+})
+
+test('a 200 signed under another key is not honoured, allow or deny, posted or polled: the verdict stands', ON, async ($, on) => {
+  const w = await begin($, on, {
+    ...ASK,
+    responseSig: 'wrong',
+    permissionReplies: [decided({ decision: 'allow' }), decided({ decision: 'deny', message: 'forged' }), pending(8, 600_000)],
+    permissionPollReplies: [decided({ decision: 'allow' })],
+  })
+  expect((await $.tool.check(CALL)).decision).toBe('ask')
+  expect((await $.tool.check({ ...CALL, tool_use_id: 'toolu_05' })).decision).toBe('ask')
+  expect((await $.tool.check({ ...CALL, tool_use_id: 'toolu_06' })).decision).toBe('ask')
+  expect(w.permissionPosts).toHaveLength(3)
+  expect(w.permissionPolls).toHaveLength(0)
+})
+
+test('a production deploy is never put to the daemon: no request, the verdict stands, the dialog says to confirm it here', ON, async ($, on) => {
+  const w = await begin($, on, { ...ASK, permissionReplies: [decided({ decision: 'allow' })] })
+  const verdict = await $.tool.check({ tool: 'Bash', input: { command: 'npm run deploy -- --env prod' }, tool_use_id: 'toolu_07' })
+  expect(verdict.decision).toBe('ask')
+  expect(w.permissionPosts).toHaveLength(0)
+  expect(w.permissionPolls).toHaveLength(0)
+  expect(w.notices).toEqual([{ toolUseId: 'toolu_07', text: LOCAL_NOTICE }])
 })
 
 test('the deadline (expiresAt + 5 s) bounds a poll that never answers: the verdict stands', ON, async ($, on) => {
@@ -288,7 +322,7 @@ test('401: the token is re-read once and the request retried with it', ON, async
   await w.clock.advance(1_100)
   expect((await pendingCheck).decision).toBe('allow')
   expect(w.tokenReads()).toBe(2)
-  expect(w.permissionPosts.map(p => p.authorization)).toEqual(['Bearer old-token', 'Bearer new-token'])
+  expect(w.permissionPosts.map(p => p.signedWith)).toEqual(['old-token', 'new-token'])
 })
 
 test('401 twice: the verdict stands after the one re-read', ON, async ($, on) => {
@@ -351,7 +385,7 @@ test(
     const [cancel] = w.permissionCancels
     expect(cancel?.url).toBe(cancelUrl(9))
     expect(cancel?.method).toBe('DELETE')
-    expect(cancel?.authorization).toBe(`Bearer ${TOKEN}`)
+    expect(cancel?.signedWith).toBe(TOKEN)
     expect(cancel?.at).toBe(NOW + 3_000)
     await w.clock.advance(120_000)
     expect(w.permissionPolls).toHaveLength(1)
@@ -503,10 +537,17 @@ test('shouldAsk: only an ask, on a real call, for a tool the person does not dec
 
 test('replies: what each status means; an unreadable 200 or a 202 without an id is a failure', () => {
   const now = NOW
-  expect(postAnswer({ status: 200, text: '{"id":1,"decision":"allow","via":"rule"}' }, now)).toEqual({ kind: 'allow' })
-  expect(postAnswer({ status: 200, text: 'not json' }, now)).toEqual({ kind: 'fail' })
-  expect(postAnswer({ status: 202, text: '{"status":"pending"}' }, now)).toEqual({ kind: 'fail' })
-  expect(postAnswer({ status: 202, text: '{"id":"12","expiresAt":"2026-10-13T10:10:00.000Z"}' }, now)).toEqual({
+  const signed = { isVerified: true } as const
+  expect(postAnswer({ status: 200, text: '{"id":1,"decision":"allow","via":"rule"}', ...signed }, now)).toEqual({ kind: 'allow' })
+  expect(postAnswer({ status: 200, text: 'not json', ...signed }, now)).toEqual({ kind: 'fail' })
+  expect(postAnswer({ status: 202, text: '{"status":"pending"}', ...signed }, now)).toEqual({ kind: 'fail' })
+  // the daemon did not sign it: whatever it says, a pass
+  expect(postAnswer({ status: 200, text: '{"id":1,"decision":"allow"}' }, now)).toEqual({ kind: 'pass' })
+  expect(postAnswer({ status: 200, text: '{"id":1,"decision":"deny"}', isVerified: false }, now)).toEqual({ kind: 'pass' })
+  expect(postAnswer({ status: 202, text: '{"id":"12"}' }, now)).toEqual({ kind: 'pass' })
+  expect(pollAnswer({ status: 200, text: '{"decision":"allow"}' })).toEqual({ kind: 'pass' })
+  expect(pollAnswer({ status: 200, text: '{"decision":"allow"}', ...signed })).toEqual({ kind: 'allow' })
+  expect(postAnswer({ status: 202, text: '{"id":"12","expiresAt":"2026-10-13T10:10:00.000Z"}', ...signed }, now)).toEqual({
     kind: 'pending',
     id: '12',
     deadline: Date.parse('2026-10-13T10:10:00.000Z') + DEADLINE_GRACE_MS,
