@@ -151,6 +151,8 @@ func main() {
 		err = cmdMemory(os.Args[2:])
 	case "worktrees":
 		err = cmdWorktrees(os.Args[2:])
+	case "wtcleanup":
+		err = cmdWtcleanup(os.Args[2:])
 	case "wscan":
 		err = cmdWscan(os.Args[2:])
 	case "evals-import":
@@ -277,6 +279,13 @@ func usage() {
                                    --all reads the non-archived project list from it (read-only,
                                    no migrations). The same report R13 and the Memory page show.
   swarmery wscan    [--db <path>] [--workspace-root <dir>]   one-shot workspace scan
+  swarmery wtcleanup scan [--db <path>] [--json] [--out <file>]
+                                   read-only: the janitor's keep-unmerged worktrees whose phase or
+                                   card is closed, with a proof (landing merged / content diff)
+  swarmery wtcleanup propose [--db <path>] [--json]
+                                   store them as the Needs-you "Worktree cleanup" card
+  swarmery wtcleanup apply --id <proposal> --path <worktree> [--path ...] [--db <path>]
+                                   remove selected worktrees (proof required, salvage branch first)
   swarmery evals-import [--db <path>] --agent <name> <results.json>
                                    import a promptfoo results.json as an eval run for a
                                    registry agent (idempotent per suite + started_at)
