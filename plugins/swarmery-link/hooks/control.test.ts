@@ -13,12 +13,12 @@ const prompt = (id: number, text: string, asUser?: boolean): PollReply => ({
 /** The gaps between consecutive polls, in mock-clock milliseconds. */
 const gaps = (times: readonly number[]): number[] => times.slice(1).map((t, i) => t - (times[i] ?? 0))
 
-test('204: the next poll follows, a GET with the bearer token on the session URL', ON, async ($, on) => {
+test('204: the next poll follows, a GET signed with the token on the session URL', ON, async ($, on) => {
   const w = world(on, { tokens: [TOKEN], polls: [204, 204, 'hang'] })
   await $.session.start(START)
   await w.clock.settle()
   expect(w.polls).toHaveLength(1)
-  expect(w.polls[0]).toMatchObject({ url: POLL_URL, method: 'GET', authorization: `Bearer ${TOKEN}` })
+  expect(w.polls[0]).toMatchObject({ url: POLL_URL, method: 'GET', signedWith: TOKEN })
   // an empty reply that came back at once waits out the 1 s floor, no longer
   await w.clock.advance(999)
   expect(w.polls).toHaveLength(1)
@@ -43,6 +43,21 @@ test('stop: turn.abort runs exactly once per commandId, a re-delivery is acked d
   expect(w.polls).toHaveLength(3)
   await $.session.end(END)
 })
+
+for (const responseSig of ['none', 'wrong'] as const) {
+  test(`a command the daemon did not sign (${responseSig}) never runs: no abort, no submit, no ack`, ON, async ($, on) => {
+    const keys = [TOKEN]
+    const w = world(on, { tokens: keys, responseSig, polls: [stop(7), prompt(8, 'go on'), 'hang'] })
+    await $.session.start(START)
+    await $.turn.start(TURN)
+    await w.clock.advance(10_000)
+    expect(w.polls.length).toBeGreaterThanOrEqual(2)
+    expect(w.aborts).toEqual([])
+    expect(w.submits).toEqual([])
+    expect(w.acks).toEqual([])
+    await $.session.end(END)
+  })
+}
 
 test('a lost ack does not run the command twice when the daemon delivers it again', ON, async ($, on) => {
   const w = world(on, { tokens: [TOKEN], polls: [stop(5), stop(5), 'hang'], ackReplies: ['throw', 204] })
@@ -208,7 +223,7 @@ test('401: the token is re-read once and the poll retried with it', ON, async ($
   await w.clock.advance(1_099)
   expect(w.polls).toHaveLength(1)
   await w.clock.advance(1)
-  expect(w.polls[1]?.authorization).toBe('Bearer new-token')
+  expect(w.polls[1]?.signedWith).toBe('new-token')
   await w.clock.advance(1_000)
   expect(w.polls).toHaveLength(3)
   await $.session.end(END)

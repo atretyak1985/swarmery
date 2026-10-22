@@ -62,6 +62,12 @@ func syncUntrackedConfig(repoRoot, worktreePath string) {
 	for _, rel := range configFilesToSync {
 		src := filepath.Join(repoRoot, rel)
 		dst := filepath.Join(worktreePath, rel)
+		// The worktree's tree is the repository's: a .claude that is a symlink
+		// would carry the copy (and MkdirAll) to wherever it points. Refused.
+		if err := checkNoSymlink(worktreePath, rel); err != nil {
+			log.Printf("warning: worktree: not lending %s into %s: %v", rel, worktreePath, err)
+			continue
+		}
 		var filter func([]byte) ([]byte, bool)
 		if rel == localSettings {
 			filter = stripBindingNamespace
@@ -119,7 +125,17 @@ func copyMissingFiltered(src, dst string, filter func([]byte) ([]byte, bool)) (c
 	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
 		return false, err
 	}
-	if err := os.WriteFile(dst, data, srcInfo.Mode().Perm()); err != nil {
+	// dst was just proven absent, so create it exclusively: O_EXCL never follows
+	// a symlink that appeared at dst in the meantime.
+	f, err := os.OpenFile(dst, os.O_WRONLY|os.O_CREATE|os.O_EXCL, srcInfo.Mode().Perm())
+	if err != nil {
+		return false, err
+	}
+	if _, err := f.Write(data); err != nil {
+		f.Close()
+		return false, err
+	}
+	if err := f.Close(); err != nil {
 		return false, err
 	}
 	return true, nil
@@ -189,6 +205,10 @@ func (m *Manager) StripLentBindings() (int, error) {
 var errNothingToStrip = errors.New("nothing to strip")
 
 func (m *Manager) stripOne(wt, path string) error {
+	// A symlinked .claude points the rewrite at a file outside the worktree.
+	if err := checkNoSymlink(wt, filepath.Dir(localSettings)); err != nil {
+		return err
+	}
 	fi, err := os.Lstat(path)
 	if err != nil {
 		return err

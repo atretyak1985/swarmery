@@ -13,6 +13,7 @@ import { Trans, useLingui } from '@lingui/react/macro';
 import { useState } from 'react';
 import { landPhase } from '../../api';
 import type { EpicPhase, ProviderTerms } from '../../api/types';
+import { safeHref } from '../../lib/safeHref';
 import { branchToPhaseId, prLinkText } from './landingModel';
 import { LandFailure } from './PhaseReview';
 
@@ -83,7 +84,7 @@ export function DepsUnmergedActions({
               </span>
               {result?.kind === 'opened' ? (
                 result.url !== null && result.url !== '' ? (
-                  <a href={result.url} target="_blank" rel="noreferrer" className="text-brand hover:underline">
+                  <a href={safeHref(result.url) ?? undefined} target="_blank" rel="noreferrer" className="text-brand hover:underline">
                     {result.text}
                   </a>
                 ) : (

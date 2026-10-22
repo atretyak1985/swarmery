@@ -84,13 +84,10 @@ export const permissionPollUrl = (origin: string, id: string, sessionId: string)
 
 export type PermissionPoll = {
   readonly method: 'GET'
-  readonly headers: Record<string, string>
 }
 
-export const permissionPoll = (token: string): PermissionPoll => ({
-  method: 'GET',
-  headers: { authorization: `Bearer ${token}` },
-})
+/** A poll; signedFetch (../signed.ts) adds its signature. */
+export const permissionPoll = (): PermissionPoll => ({ method: 'GET' })
 
 /** The DELETE that gives up on request `id` (the dispatch was abandoned mid-wait). */
 export const permissionCancelUrl = (origin: string, id: string, sessionId: string): string =>
@@ -98,16 +95,23 @@ export const permissionCancelUrl = (origin: string, id: string, sessionId: strin
 
 export type PermissionCancel = {
   readonly method: 'DELETE'
-  readonly headers: Record<string, string>
 }
 
-export const permissionCancel = (token: string): PermissionCancel => ({
-  method: 'DELETE',
-  headers: { authorization: `Bearer ${token}` },
-})
+/** The give-up; signedFetch (../signed.ts) adds its signature. */
+export const permissionCancel = (): PermissionCancel => ({ method: 'DELETE' })
 
-/** One request's end: a status and body, or an error (`'timeout'` for the mod's own bound). */
-export type HttpReply = { readonly status?: number; readonly text?: string; readonly error?: unknown }
+/**
+ * One request's end: a status and body, or an error (`'timeout'` for the
+ * mod's own bound). `isVerified`: the answer carries the daemon's signature
+ * over this request (../signed.ts); absent counts as not signed.
+ */
+export type HttpReply = { readonly status?: number; readonly text?: string; readonly error?: unknown; readonly isVerified?: boolean }
+
+/**
+ * A 200 or 202 that the daemon did not sign is not the daemon's: whatever it
+ * says (allow, deny, local, a request to wait on), the engine's verdict stands.
+ */
+const isUnsigned = (reply: HttpReply): boolean => (reply.status === 200 || reply.status === 202) && reply.isVerified !== true
 
 /**
  * What a reply means:
@@ -171,8 +175,9 @@ export const deadlineOf = (expiresAt: unknown, now: number): number => {
   return Number.isFinite(at) ? at + DEADLINE_GRACE_MS : now + DEFAULT_WINDOW_MS + DEADLINE_GRACE_MS
 }
 
-/** What the POST's reply means. */
+/** What the POST's reply means; an unsigned 200/202 is a `pass`. */
 export const postAnswer = (reply: HttpReply, now: number): Answer => {
+  if (isUnsigned(reply)) return { kind: 'pass' }
   switch (reply.status) {
     case 200:
       return decisionOf(reply.text)
@@ -190,8 +195,9 @@ export const postAnswer = (reply: HttpReply, now: number): Answer => {
   }
 }
 
-/** What a poll's reply means. */
+/** What a poll's reply means; an unsigned 200 is a `pass`. */
 export const pollAnswer = (reply: HttpReply): Answer => {
+  if (isUnsigned(reply)) return { kind: 'pass' }
   switch (reply.status) {
     case 200:
       return decisionOf(reply.text)

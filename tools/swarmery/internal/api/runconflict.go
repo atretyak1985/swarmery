@@ -319,6 +319,11 @@ const (
 	// codeNotYetEarliest: the phase doc's `Earliest:` date is still in the
 	// future. The body adds `earliest` (YYYY-MM-DD, as written).
 	codeNotYetEarliest = "not-yet-earliest"
+	// codeDecisionUndecided: the phase doc's `**Depends on decisions:**` names a
+	// decision still undecided and expensive to change (migration 0122). The body
+	// adds `decisions` (the holding D-n ids) and `detail`
+	// (`decision-undecided: D-3 (<question>)`).
+	codeDecisionUndecided = "decision-undecided"
 )
 
 // Hints for the two doc gates — the sentence that tells the operator what to do.
@@ -327,6 +332,8 @@ const (
 		"tick them in the phase doc's Criteria; any [LAND] criteria are ticked when the branch lands. No run is needed."
 	hintNotYetEarliest = "This phase is date-gated by its doc's Earliest: line. Run it on or after that date, " +
 		"or edit the line in the phase doc if the gate no longer applies."
+	hintDecisionUndecided = "This phase builds on a decision that is still open and expensive to change. " +
+		"Answer it in the plan's ## Decisions (or mark it cheap to change in the planning session), then run the phase."
 )
 
 // writeBlockedUnchanged renders that refusal: 409 {"error":"blocked-unchanged",

@@ -2,6 +2,7 @@ package hookshim
 
 import (
 	"bytes"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -25,35 +26,37 @@ type authStub struct {
 	srv       *httptest.Server
 	mu        sync.Mutex
 	auth      []string
+	signed    []string // the key each request's signature verified under ("" = none)
+	keys      []string // the keys the stub tries (default tokenA, tokenB)
 	onRequest func(i int)
 }
 
 func newAuthStub(t *testing.T, script ...[2]string) *authStub {
 	t.Helper()
-	s := &authStub{}
+	s := &authStub{keys: []string{tokenA, tokenB}}
 	s.srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
 		s.mu.Lock()
 		i := len(s.auth)
+		key, nonce := verifiedKey(r, body, s.keys...)
 		s.auth = append(s.auth, r.Header.Get("Authorization"))
+		s.signed = append(s.signed, key)
 		hook := s.onRequest
 		s.mu.Unlock()
 		if hook != nil {
 			hook(i)
 		}
 		step := script[min(i, len(script)-1)]
+		status := http.StatusUnauthorized
 		switch step[0] {
 		case "200":
-			w.WriteHeader(http.StatusOK)
+			status = http.StatusOK
 		case "202":
-			w.WriteHeader(http.StatusAccepted)
+			status = http.StatusAccepted
 		case "204":
-			w.WriteHeader(http.StatusNoContent)
-		default:
-			w.WriteHeader(http.StatusUnauthorized)
+			status = http.StatusNoContent
 		}
-		if step[1] != "" {
-			w.Write([]byte(step[1]))
-		}
+		answerSigned(w, key, nonce, status, step[1])
 	}))
 	t.Cleanup(s.srv.Close)
 	return s
@@ -63,6 +66,13 @@ func (s *authStub) headers() []string {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return append([]string(nil), s.auth...)
+}
+
+// signedWith is the key each request was signed with, "" for an unsigned one.
+func (s *authStub) signedWith() []string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return append([]string(nil), s.signed...)
 }
 
 // fastAuthRetry shortens the post-401 wait for the test.
@@ -116,9 +126,9 @@ func TestTokenHeaderSent(t *testing.T) {
 	if len(got) != 3 {
 		t.Fatalf("requests = %d, want 3 (one per event, no retry)", len(got))
 	}
-	for i, h := range got {
-		if h != "Bearer "+tokenA {
-			t.Errorf("request %d Authorization = %q, want the file's token", i, h)
+	for i, key := range stub.signedWith() {
+		if key != tokenA || strings.Contains(got[i], tokenA) {
+			t.Errorf("request %d: signed with %q (Authorization %q), want signed with the file's token, the token itself not sent", i, key, got[i])
 		}
 	}
 	if strings.Contains(logged, tokenA) {
@@ -199,9 +209,8 @@ func TestUnauthorizedRetryPicksUpRotatedToken(t *testing.T) {
 	if !strings.Contains(stdout, `"behavior":"allow"`) {
 		t.Errorf("stdout = %q, want the allow decision after the retry", stdout)
 	}
-	got := stub.headers()
-	if len(got) != 2 || got[0] != "Bearer "+tokenA || got[1] != "Bearer "+tokenB {
-		t.Errorf("Authorization headers = %q, want old then rotated token", got)
+	if got := stub.signedWith(); len(got) != 2 || got[0] != tokenA || got[1] != tokenB {
+		t.Errorf("signed with = %q, want the old then the rotated token", got)
 	}
 	if strings.Contains(logged, tokenA) || strings.Contains(logged, tokenB) {
 		t.Errorf("a token leaked into the log: %q", logged)
@@ -255,8 +264,9 @@ func TestTokenAtTheCapIsAccepted(t *testing.T) {
 	tok := strings.Repeat("c", maxTokenFile-1) // + "\n" = maxTokenFile bytes
 	writeToken(t, path, tok)
 	stub := newAuthStub(t, [2]string{"202", ""})
+	stub.keys = []string{tok}
 	runAuthShim(t, EventStop, stub.srv.URL, path, filepath.Join(dir, "hook.log"), `{}`)
-	if got := stub.headers(); len(got) != 1 || got[0] != "Bearer "+tok {
+	if got := stub.signedWith(); len(got) != 1 || got[0] != tok {
 		t.Errorf("Authorization headers = %d entries, want the at-cap token sent once", len(got))
 	}
 }
@@ -285,8 +295,8 @@ func TestNoTokenThenTokenAppearsRetries(t *testing.T) {
 	if elapsed := time.Since(start); elapsed > 5*time.Second {
 		t.Errorf("took %s: the no-token re-read must not wait", elapsed)
 	}
-	got := stub.headers()
-	if len(got) != 2 || got[0] != "" || got[1] != "Bearer "+tokenA {
+	got, signed := stub.headers(), stub.signedWith()
+	if len(got) != 2 || got[0] != "" || signed[1] != tokenA {
 		t.Errorf("Authorization headers = %q, want none then the new token", got)
 	}
 	if !strings.Contains(logged, "outcome=http-202") {

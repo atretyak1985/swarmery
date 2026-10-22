@@ -5,7 +5,8 @@
 // command for a fresh session.
 
 import { Trans, useLingui } from '@lingui/react/macro';
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import { fetchSessionHandoff } from '../../api';
 import type { SessionHandoffResponse } from '../../api/types';
 import { Markdown } from '../../lib/markdown';
@@ -25,24 +26,39 @@ export function HandoffCard({
   handoffPath: string;
 }): JSX.Element {
   const { t } = useLingui();
+  const { hash } = useLocation();
+  const ref = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
   const [data, setData] = useState<SessionHandoffResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
+  const load = useCallback(() => {
+    if (data !== null || loading) return;
+    setLoading(true);
+    setError(null);
+    fetchSessionHandoff(sessionId)
+      .then((d) => setData(d))
+      .catch((e: unknown) => setError(e instanceof Error ? e.message : t`failed to load handoff`))
+      .finally(() => setLoading(false));
+  }, [data, loading, sessionId, t]);
+
   const toggle = useCallback(() => {
     const next = !open;
     setOpen(next);
-    if (next && data === null && !loading) {
-      setLoading(true);
-      setError(null);
-      fetchSessionHandoff(sessionId)
-        .then((d) => setData(d))
-        .catch((e: unknown) => setError(e instanceof Error ? e.message : t`failed to load handoff`))
-        .finally(() => setLoading(false));
-    }
-  }, [open, data, loading, sessionId, t]);
+    if (next) load();
+  }, [open, load]);
+
+  // «continue from handoff» (CacheColdBadge) lands here as #handoff: open the
+  // brief and bring it into view.
+  useEffect(() => {
+    if (hash !== '#handoff') return;
+    setOpen(true);
+    load();
+    ref.current?.scrollIntoView?.({ block: 'nearest' });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- once per arrival, not per load state
+  }, [hash]);
 
   const copyResume = useCallback(() => {
     const cmd = resumeCommand(data?.path ?? handoffPath);
@@ -53,7 +69,7 @@ export function HandoffCard({
   }, [data, handoffPath]);
 
   return (
-    <div className="rounded-xl border border-violet-500/30 bg-surface px-4 py-3.5">
+    <div id="handoff" ref={ref} className="rounded-xl border border-violet-500/30 bg-surface px-4 py-3.5">
       <button
         type="button"
         onClick={toggle}

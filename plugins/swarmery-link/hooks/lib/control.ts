@@ -29,16 +29,14 @@ export const ackUrl = (origin: string, id: string): string => `${origin}${COMMAN
 
 export type PollRequest = {
   readonly method: 'GET'
-  readonly headers: Record<string, string>
 }
 
-export const pollRequest = (token: string): PollRequest => ({
-  method: 'GET',
-  headers: { authorization: `Bearer ${token}` },
-})
+/** A poll; signedFetch (../signed.ts) adds its signature. */
+export const pollRequest = (): PollRequest => ({ method: 'GET' })
 
 /**
- * What a poll's reply means for the loop:
+ * What a poll's reply means for the loop (a 200 the daemon did not sign is a
+ * `retry` in register.ts, never a command):
  * - `command`: 200, a command to execute and ack, then poll again at once.
  * - `idle`: 204, nothing deliverable; poll again.
  * - `auth`: 401; re-read the token once, else stop.

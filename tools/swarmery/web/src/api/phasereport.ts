@@ -4,7 +4,7 @@
 
 import { t } from '@lingui/core/macro';
 import { MOCK } from '../api';
-import type { PhaseReopen, ReopenCaughtBy } from './types';
+import type { PhaseFindings, PhaseReopen, ReopenCaughtBy } from './types';
 
 export interface PhaseRunsRow {
   /** Stable key — runs, runs_noop, noop_push_pr, reopens_operator, verifier_class:<c> … */
@@ -125,4 +125,15 @@ async function errorText(res: Response, fallback: string): Promise<string> {
     // not JSON — fall through
   }
   return `${fallback}: ${String(res.status)}`;
+}
+
+/** GET /api/epics/{taskId}/phases/{phaseId}/findings — the doc's review rounds
+ *  as data (migration 0123). The epic payload carries the same rounds
+ *  (`phase.reviewBlocks`); this is the per-phase read for consumers outside it. */
+export async function fetchPhaseFindings(taskId: number, phaseId: number): Promise<PhaseFindings> {
+  if (MOCK) return { legacyReview: false, blocks: [] };
+  const path = phasePath(taskId, phaseId, 'findings');
+  const res = await fetch(path);
+  if (!res.ok) throw new Error(await errorText(res, `GET ${path}`));
+  return (await res.json()) as PhaseFindings;
 }

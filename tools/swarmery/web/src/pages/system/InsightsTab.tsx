@@ -6,7 +6,8 @@
 // descriptions, skills loaded per session, the latest weekly report),
 // undocumented components (active docs_missing /
 // docs_incomplete findings — the docs axis is kept out of lintMax, so this
-// list is where it surfaces in bulk), plugin drift. Each item expands to
+// list is where it surfaces in bulk), plugin drift, session-start cost
+// (CLAUDE.md size rules + unused MCP servers). Each item expands to
 // copies + a redacted unified
 // diff (DiffBlock, shared with the detail panel) + a copyable next-step
 // hint. Display-only by design — promotion itself stays a manual flow.
@@ -24,6 +25,7 @@ import type {
   SystemSkillAuditReport,
   SystemSkillAuditReportBody,
   SystemStaleOverride,
+  SystemStartCost,
   SystemUndocumentedItem,
 } from '../../api/types';
 import { fetchSkillAuditReport, fetchSystemInsights } from '../../api/system';
@@ -438,6 +440,47 @@ function PluginDriftRow({ d }: { d: SystemPluginDrift }): JSX.Element {
   );
 }
 
+// Session-start cost rows are flat like plugin drift: the finding is its own
+// message. Warn = a CLAUDE.md over the size rules; info = an MCP server whose
+// tools are offered to every session and nobody called in 30 days.
+function StartCostRow({ d }: { d: SystemStartCost }): JSX.Element {
+  const names = useContext(NamesCtx);
+  return (
+    <div className="flex flex-col gap-1 border-b border-line-soft px-3.5 py-2 last:border-b-0">
+      <div className="flex items-center gap-2">
+        <span
+          className={`shrink-0 rounded-full border px-2 py-px font-mono text-[10px] whitespace-nowrap ${
+            d.severity === 'warn'
+              ? 'border-amber/40 bg-amber/10 text-amber'
+              : 'border-blue/40 bg-blue/10 text-blue'
+          }`}
+        >
+          {d.rule}
+        </span>
+        <span className="min-w-0 truncate font-mono text-[12px] font-semibold text-ink" data-tip-mono data-tip={d.target}>
+          {d.target.replace(/^(claude_md|mcp):/, '').replace(/\|.*$/, '')}
+        </span>
+        <span className="ml-auto shrink-0">
+          {d.projectSlug !== null ? (
+            <Link
+              to={`/p/${d.projectSlug}`}
+              className="rounded-full border border-blue/40 px-2 py-px font-mono text-[10px] whitespace-nowrap text-blue hover:underline"
+              data-tip-mono data-tip={d.projectPath}
+            >
+              {names[d.projectSlug] ?? d.projectSlug}
+            </Link>
+          ) : (
+            <span className="font-mono text-[10px] whitespace-nowrap text-ink-faint">
+              {d.projectPath === '' ? <Trans>every project</Trans> : d.projectPath}
+            </span>
+          )}
+        </span>
+      </div>
+      <div className="font-mono text-[11px] text-ink-dim">{d.message}</div>
+    </div>
+  );
+}
+
 /* ----- the tab ----- */
 
 export function InsightsTab({
@@ -578,6 +621,20 @@ export function InsightsTab({
           insights.pluginDrift.map((d) => (
             <PluginDriftRow key={`${d.rule}:${d.pluginId}:${d.projectPath}`} d={d} />
           ))
+        )}
+      </InsightSection>
+
+      <InsightSection
+        title={t`Session-start cost`}
+        count={insights.startCost?.length ?? 0}
+        subtitle={t`loaded into every session's first request — CLAUDE.md size, unused MCP servers`}
+      >
+        {insights.startCost === undefined || insights.startCost.length === 0 ? (
+          <Empty>
+            <Trans>no oversized CLAUDE.md and no idle MCP server</Trans>
+          </Empty>
+        ) : (
+          insights.startCost.map((d) => <StartCostRow key={`${d.rule}:${d.target}`} d={d} />)
         )}
       </InsightSection>
     </div>

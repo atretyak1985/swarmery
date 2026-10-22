@@ -4,6 +4,8 @@ import (
 	"errors"
 	"strings"
 	"testing"
+
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/mdfence"
 )
 
 func TestParseDocReview(t *testing.T) {
@@ -37,43 +39,119 @@ func TestParseDocReview(t *testing.T) {
 	}
 }
 
-// TestAppendReviewFindingsBeforeReport: same place and shape as operator feedback —
-// above the report, findings quoted (so their checkboxes and headings stay inert),
-// the instruction outside the quote, the report untouched.
-func TestAppendReviewFindingsBeforeReport(t *testing.T) {
-	p := writeFeedbackDoc(t, "# Phase 6\n\n## Acceptance Criteria\n- [x] a\n\n## Completion Report\n\nShipped a.\n")
-	findings := "P0 internal/x.go:12 — the error is swallowed.\n- [ ] not a criterion\n## Not a heading\n\nVERDICT: FAIL"
+// failBlock is a reviewer's FAIL block, as mdfence.ParseReviews returns it.
+func failBlock(t *testing.T) *mdfence.Review {
+	t.Helper()
+	rs, errs := mdfence.ParseReviews("```yaml\nkind: review\nround: 7\nverdict: FAIL\nfindings:\n" +
+		"  - id: R1-1\n    type: silent-failure\n    file: internal/x.go\n    line: 12\n" +
+		"    criterion: \"errors: are reported\"\n    evidence: \"catch {} # swallows it\"\n    note: \"- [ ] not a criterion\\n## not a heading\"\n" +
+		"  - type: quality\n    file: internal/y.go\nchecked_callers: [internal/z.go:3]\n```\n")
+	if len(errs) != 0 || len(rs) != 1 {
+		t.Fatalf("fixture block: %+v %+v", rs, errs)
+	}
+	return &rs[0]
+}
 
-	if err := AppendReviewFindings(p, findings, feedbackClock); err != nil {
+// TestAppendReviewFindingsWritesParsableBlock: a FAIL round lands as one
+// parsable kind: review block under a NEW `## Review` section placed before
+// `## Forecast`; the daemon's round, verdict and source win; inert text stays inert.
+func TestAppendReviewFindingsWritesParsableBlock(t *testing.T) {
+	doc := "# Phase 6\n\n## Acceptance Criteria\n- [x] a\n\n## Forecast\n\n```yaml\nkind: prior\n```\n\n## Completion Report\n\nShipped a.\n"
+	p := writeFeedbackDoc(t, doc)
+	if err := AppendReviewFindings(p, ReviewBlock{Review: failBlock(t), Verdict: "FAIL", Prose: "ignored"}, 1, feedbackClock); err != nil {
 		t.Fatalf("AppendReviewFindings: %v", err)
 	}
 	got := readFeedbackDoc(t, p)
-	want := "# Phase 6\n\n## Acceptance Criteria\n- [x] a\n\n" +
-		"## Review findings (2026-10-09 11:40)\n\n" +
-		"> P0 internal/x.go:12 — the error is swallowed.\n> - [ ] not a criterion\n> ## Not a heading\n>\n> VERDICT: FAIL\n\n" +
-		reviewFindingsInstruction + "\n\n" +
-		"## Completion Report\n\nShipped a.\n"
-	if got != want {
-		t.Fatalf("doc =\n%s\nwant\n%s", got, want)
+	if !strings.HasPrefix(got, "# Phase 6\n\n## Acceptance Criteria\n- [x] a\n\n## Review\n\n```yaml\nkind: review\nround: 1\nverdict: FAIL\n") {
+		t.Fatalf("section not created before ## Forecast:\n%s", got)
+	}
+	if !strings.HasSuffix(got, "```\n\n## Forecast\n\n```yaml\nkind: prior\n```\n\n## Completion Report\n\nShipped a.\n") {
+		t.Fatalf("forecast / report disturbed:\n%s", got)
+	}
+	if strings.Contains(got, "ignored") {
+		t.Error("the prose was written although the reviewer produced a block")
+	}
+	rs, errs := mdfence.ParseReviews(got)
+	if len(errs) != 0 || len(rs) != 1 {
+		t.Fatalf("written block does not parse: %+v %+v\n%s", rs, errs, got)
+	}
+	r := rs[0]
+	if r.Round != "1" || r.Verdict != mdfence.ReviewFail || !r.Complete || r.Unparsable || r.Source != ReviewSourceDaemon ||
+		r.WrittenAt != "2026-10-09T11:40:00Z" || len(r.CheckedCallers) != 1 {
+		t.Errorf("block = %+v", r)
+	}
+	if len(r.Findings) != 2 || r.Findings[0].ID != "R1-1" || r.Findings[0].Criterion != "errors: are reported" ||
+		r.Findings[0].Evidence != "catch {} # swallows it" || r.Findings[0].Line != 12 || r.Findings[1].ID != "R1-2" {
+		t.Errorf("findings = %+v", r.Findings)
 	}
 	if done, total := CountCheckboxes(got); done != 1 || total != 1 {
-		t.Errorf("checkboxes = %d/%d, want 1/1 — a quoted finding must not become a criterion", done, total)
+		t.Errorf("checkboxes = %d/%d, want 1/1 — a finding's text must not become a criterion", done, total)
 	}
 }
 
-func TestAppendReviewFindingsAtEOFAndRefusal(t *testing.T) {
+// TestAppendReviewFindingsPassAndSecondRound: a PASS round is written too (zero
+// findings, complete), after the earlier round inside the existing section, which
+// is never rewritten.
+func TestAppendReviewFindingsPassAndSecondRound(t *testing.T) {
+	p := writeFeedbackDoc(t, "# Phase 6\n\n- [x] a\n\n## Completion Report\n")
+	if err := AppendReviewFindings(p, ReviewBlock{Review: failBlock(t), Verdict: "FAIL"}, 1, feedbackClock); err != nil {
+		t.Fatal(err)
+	}
+	first := readFeedbackDoc(t, p)
+	pass := &mdfence.Review{Round: "2", Verdict: mdfence.ReviewPass, Complete: true, Resolves: []string{"R1-1", "R1-2"}}
+	if err := AppendReviewFindings(p, ReviewBlock{Review: pass, Verdict: "PASS"}, 2, feedbackClock); err != nil {
+		t.Fatal(err)
+	}
+	got := readFeedbackDoc(t, p)
+	head := first[:strings.Index(first, "## Completion Report")]
+	if !strings.HasPrefix(got, strings.TrimRight(head, "\n")) {
+		t.Errorf("round 1 was rewritten:\n%s", got)
+	}
+	if c := strings.Count(got, "## Review\n"); c != 1 {
+		t.Errorf("%d ## Review sections, want 1:\n%s", c, got)
+	}
+	if !strings.HasSuffix(got, "```\n\n## Completion Report\n") {
+		t.Errorf("report not kept last:\n%s", got)
+	}
+	rs, errs := mdfence.ParseReviews(got)
+	if len(errs) != 0 || len(rs) != 2 {
+		t.Fatalf("blocks = %+v %+v", rs, errs)
+	}
+	if l := mdfence.Latest(rs); l.Round != "2" || l.Verdict != mdfence.ReviewPass || len(l.Findings) != 0 || !l.Complete ||
+		len(l.Resolves) != 2 {
+		t.Errorf("latest = %+v", l)
+	}
+	if !strings.Contains(got, "findings: []") {
+		t.Error("a PASS block must keep `findings: []`")
+	}
+}
+
+// TestAppendReviewFindingsProseFallback: no readable block ⇒ a minimal block
+// marked unparsable / incomplete, then the prose quoted; at EOF without a report.
+func TestAppendReviewFindingsProseFallback(t *testing.T) {
 	p := writeFeedbackDoc(t, "# Phase 6\n\n- [ ] a\n")
-	if err := AppendReviewFindings(p, "  \n ", feedbackClock); !errors.Is(err, ErrFindingsEmpty) {
-		t.Fatalf("empty findings: err = %v, want ErrFindingsEmpty", err)
+	if err := AppendReviewFindings(p, ReviewBlock{Verdict: "FAIL", Prose: "  \n "}, 1, feedbackClock); !errors.Is(err, ErrFindingsEmpty) {
+		t.Fatalf("empty: err = %v, want ErrFindingsEmpty", err)
 	}
 	if got := readFeedbackDoc(t, p); got != "# Phase 6\n\n- [ ] a\n" {
 		t.Fatalf("a refused append changed the doc:\n%s", got)
 	}
-	if err := AppendReviewFindings(p, "P1 a.go:1 — wrong.", feedbackClock); err != nil {
+	if err := AppendReviewFindings(p, ReviewBlock{Verdict: "FAIL", Prose: "P1 a.go:1 — wrong.\n- [ ] not a criterion\n\nVERDICT: FAIL"}, 1, feedbackClock); err != nil {
 		t.Fatal(err)
 	}
-	if got := readFeedbackDoc(t, p); !strings.HasSuffix(got, "## Review findings (2026-10-09 11:40)\n\n> P1 a.go:1 — wrong.\n\n"+reviewFindingsInstruction+"\n") {
-		t.Fatalf("doc without a report: section not appended at the end:\n%s", got)
+	got := readFeedbackDoc(t, p)
+	if !strings.HasSuffix(got, "```\n\n> P1 a.go:1 — wrong.\n> - [ ] not a criterion\n>\n> VERDICT: FAIL\n") {
+		t.Fatalf("prose not quoted after the block at the end:\n%s", got)
+	}
+	rs, errs := mdfence.ParseReviews(got)
+	if len(errs) != 0 || len(rs) != 1 {
+		t.Fatalf("fallback block = %+v %+v", rs, errs)
+	}
+	if r := rs[0]; !r.Unparsable || r.Complete || r.Verdict != mdfence.ReviewFail || len(r.ScopeLeft) != 1 || len(r.Findings) != 0 {
+		t.Errorf("fallback = %+v, want unparsable, incomplete, FAIL", r)
+	}
+	if done, total := CountCheckboxes(got); done != 0 || total != 1 {
+		t.Errorf("checkboxes = %d/%d, want 0/1", done, total)
 	}
 }
 
@@ -109,7 +187,7 @@ func TestApplyEpics_ReviewModeIsDocOwnedFixRoundIsNot(t *testing.T) {
 
 func TestAppendReviewFindingsTruncates(t *testing.T) {
 	p := writeFeedbackDoc(t, "# Phase 6\n")
-	if err := AppendReviewFindings(p, strings.Repeat("x", ReviewFindingsMax+500), feedbackClock); err != nil {
+	if err := AppendReviewFindings(p, ReviewBlock{Verdict: "FAIL", Prose: strings.Repeat("x", ReviewFindingsMax+500)}, 1, feedbackClock); err != nil {
 		t.Fatal(err)
 	}
 	got := readFeedbackDoc(t, p)

@@ -35,7 +35,7 @@ const resumePermEnv = "SWARMERY_RESUME_PERMISSION_MODE"
 // engine had pinned to Opus. The planning wizard always passed its own model and
 // so never had that bug; now neither does the composer.
 func resumeArgs(sessionUUID, text string, o resumeOrigin) []string {
-	args := []string{"-r", sessionUUID, "-p", text, "--output-format", "json"}
+	args := []string{"-r", sessionUUID, "-p", "--output-format", "json"}
 	if m := strings.TrimSpace(o.Model); m != "" {
 		args = append(args, "--model", m)
 	}
@@ -62,7 +62,20 @@ func resumeArgs(sessionUUID, text string, o resumeOrigin) []string {
 	if f := strings.TrimSpace(o.SettingsFile); f != "" {
 		args = append(args, "--settings", f)
 	}
-	return append(args, claudeflags.PermissionModeArgs(resumePermEnv)...)
+	// The mode and lists of the run being continued (resumeOrigin.Site): an
+	// executor keeps bypass plus its deny list, a reader or the planner gets
+	// dontAsk plus its allow-list, a foreign session gets no flag.
+	// The origin site's knob first, then this site's, then the global; a foreign
+	// session is clamped to no flag / dontAsk / plan whatever a knob says.
+	args = append(args, claudeflags.ModeArgsFor(o.Site, o.PermEnv, resumePermEnv)...)
+	args = append(args, claudeflags.AllowedToolsArgs(o.AllowedTools)...)
+	// The origin's deny list: --disallowedTools is variadic, so it is the last
+	// flag before the end-of-options marker.
+	args = append(args, o.DenyArgs...)
+	// The message is the CLI's positional prompt (-p is the boolean --print):
+	// last, after the end-of-options marker, so a message that begins with a
+	// dash is data rather than a flag — the same rule as runcore.Args.
+	return append(args, "--", text)
 }
 
 // resumeSettings resolves the resume spawn ONCE and composes its settings file

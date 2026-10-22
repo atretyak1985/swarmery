@@ -15,7 +15,7 @@ import { useEffect, useId, useLayoutEffect, useRef, type ReactNode } from 'react
 import type { Epic, EpicPhase } from '../../api/types';
 import { type TabItem, Tabs } from '../../components/Tabs';
 import { modelShortName } from '../../lib/sessionModelChip';
-import { hasReviewTab } from './landingModel';
+import { showsReviewTab } from './landingModel';
 
 export type PhaseTab = 'story' | 'plain' | 'criteria' | 'runs' | 'review' | 'report' | 'edit';
 
@@ -121,8 +121,9 @@ export function PhasePanel({
     };
   }, []);
 
-  // A phase that never ran has no branch to review, so no Review tab.
-  const reviewable = hasReviewTab(phase);
+  // A phase that never ran has no branch to review — and, unless its doc carries
+  // review findings (or the legacy badge), no Review tab.
+  const reviewable = showsReviewTab(phase);
   const tabs = PHASE_TABS.filter(
     (def) => (editable || def.id !== 'edit') && (reviewable || def.id !== 'review'),
   ).map((def): TabItem<PhaseTab> => ({

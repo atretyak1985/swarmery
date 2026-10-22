@@ -18,7 +18,7 @@ export const AUTH_RETRY_MS = 1_100
 /**
  * A loopback http origin: scheme, one of the three loopback hosts, an optional
  * port, then nothing or a path/query/fragment (dropped). No userinfo, no other
- * host, no https: the bearer token goes nowhere else.
+ * host, no https: the signed requests go nowhere else.
  */
 const LOOPBACK_ORIGIN = /^http:\/\/(127\.0\.0\.1|\[::1\]|localhost)(?::(\d{1,5}))?(?:[/?#].*)?$/i
 
@@ -51,9 +51,10 @@ export type LinkRequest = {
   readonly body: string
 }
 
-export const linkRequest = (token: string, body: string): LinkRequest => ({
+/** A POST of `body`; signedFetch (../signed.ts) adds its signature, so no credential is in it. */
+export const linkRequest = (body: string): LinkRequest => ({
   method: 'POST',
-  headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
+  headers: { 'content-type': 'application/json' },
   body,
 })
 

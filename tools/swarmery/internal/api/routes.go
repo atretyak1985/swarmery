@@ -59,6 +59,9 @@ func Routes(root *http.ServeMux, h *Handler) {
 	mux.HandleFunc("POST /api/projects/{id}/config/{key}/probe", requireLocalOrigin(h.probeProjectConfig))
 	// canvas v2 parity: project editorial aggregate (rightNow + thisWeek + attention).
 	mux.HandleFunc("GET /api/projects/{id}/overview", h.projectOverview)
+	// session-start cost: the measured first-request size + its estimated
+	// CLAUDE.md / MCP / skills split (first_request.go, internal/firstreq).
+	mux.HandleFunc("GET /api/projects/{id}/first-request", h.projectFirstRequest)
 	// phase landing: the project's code host, its vocabulary and the daemon's
 	// sign-in state (vcs.go; cached 60s per project).
 	mux.HandleFunc("GET /api/projects/{id}/vcs", h.projectVcs)
@@ -79,6 +82,9 @@ func Routes(root *http.ServeMux, h *Handler) {
 	mux.HandleFunc("GET /api/sessions", h.listSessions)
 	mux.HandleFunc("GET /api/sessions/{id}", h.getSession)
 	mux.HandleFunc("GET /api/sessions/{id}/handoff", h.getSessionHandoff)
+	// «continue from handoff» on a cache-cold session (handoff_generate.go):
+	// the existing brief, or one generation through the candidate rules.
+	mux.HandleFunc("POST /api/sessions/{id}/handoff", requireLocalOrigin(h.postSessionHandoff))
 	// …and the same brief keyed by PROJECT instead of session: the newest one
 	// for the project a cwd resolves to, for the SessionStart context bridge
 	// (handoff_latest.go). 204 when there is nothing to inject.
@@ -261,6 +267,8 @@ func Routes(root *http.ServeMux, h *Handler) {
 	mux.HandleFunc("POST /api/projects/{id}/planning/answer", requireLocalOrigin(h.answerPlanning))
 	mux.HandleFunc("POST /api/projects/{id}/planning/refine", requireLocalOrigin(h.refinePlanning))
 	mux.HandleFunc("POST /api/projects/{id}/planning/proceed", requireLocalOrigin(h.proceedPlanning))
+	// decision ids (verify-not-trust phase 2): flip a question's cost-to-change.
+	mux.HandleFunc("PATCH /api/planning/sessions/{id}/turns/{seq}/cost", requireLocalOrigin(h.patchPlanningTurnCost))
 
 	// phase 2: approvals (frozen contract — docs/hooks-protocol.md).
 	// All write endpoints reject foreign browser Origins (D4). The shim's
@@ -394,8 +402,10 @@ func Routes(root *http.ServeMux, h *Handler) {
 	// specific and win) + the graphify/architecture static jails. The jails
 	// register method-less so the handler can 405 non-GET/HEAD itself: a
 	// "GET …" pattern would let other methods fall through to the "/" SPA
-	// catch-all instead.
-	mux.HandleFunc("/api/projects/{id}/serena/{rest...}", h.serenaProxy)
+	// catch-all instead. The proxy relays any method to serena's own API, which
+	// has state-changing endpoints, so every non-read (and any upgrade) carries
+	// the D4 origin fence; GET/HEAD stay unfenced like every other read.
+	mux.HandleFunc("/api/projects/{id}/serena/{rest...}", requireLocalOriginUnlessRead(h.serenaProxy))
 	mux.HandleFunc("/api/projects/{id}/graphify/{rest...}", h.graphifyStatic)
 	mux.HandleFunc("/api/projects/{id}/architecture/{rest...}", h.architectureStatic)
 	// More specific than the static jail, so POST …/rebuild wins over {rest...}.
@@ -461,6 +471,9 @@ func Routes(root *http.ServeMux, h *Handler) {
 	// phase-run mechanism. Route is intentionally absent (→ 404).
 	mux.HandleFunc("GET /api/epics", h.listEpics)
 	mux.HandleFunc("POST /api/epics/{taskId}/lifecycle", requireLocalOrigin(h.epicLifecycle))
+	mux.HandleFunc("GET /api/epics/{taskId}/decisions", h.getEpicDecisions)
+	// verify-not-trust phase 4: answer a guard decision (needs-you phase_decision).
+	mux.HandleFunc("POST /api/epics/{taskId}/phases/{phaseId}/decisions/{decisionId}", requireLocalOrigin(h.answerPhaseDecision))
 	mux.HandleFunc("GET /api/epics/{taskId}/docs", h.getPlanDoc)
 	mux.HandleFunc("PUT /api/epics/{taskId}/docs", requireLocalOrigin(h.putPlanDoc))
 	mux.HandleFunc("PATCH /api/epics/{taskId}/docs", requireLocalOrigin(h.patchPlanDoc))
@@ -489,6 +502,8 @@ func Routes(root *http.ServeMux, h *Handler) {
 	// The review stage's rows (reviews.go): a phase's own reviews, the plan branch
 	// reviews the Inbox lists, and their acknowledgement.
 	mux.HandleFunc("GET /api/epics/{taskId}/phases/{phaseId}/reviews", h.listPhaseReviews)
+	// Review findings as data (migration 0123): the doc's kind: review rounds.
+	mux.HandleFunc("GET /api/epics/{taskId}/phases/{phaseId}/findings", h.listPhaseFindings)
 	mux.HandleFunc("GET /api/reviews", h.listReviews)
 	mux.HandleFunc("POST /api/reviews/{id}/ack", requireLocalOrigin(h.ackReview))
 	// Read the phase's change-request status now (phase_landing_refresh.go) — the
@@ -498,6 +513,9 @@ func Routes(root *http.ServeMux, h *Handler) {
 	// criteria in the doc; the GET serves the history and the ticked labels.
 	mux.HandleFunc("POST /api/epics/{taskId}/phases/{phaseId}/reopen", requireLocalOrigin(h.reopenPhase))
 	mux.HandleFunc("GET /api/epics/{taskId}/phases/{phaseId}/reopens", h.listPhaseReopens)
+	// Where the phase's agent said it changed course (workaround_hits.go) — a
+	// plain read; the epic payload carries the same list per phase.
+	mux.HandleFunc("GET /api/epics/{taskId}/phases/{phaseId}/workaround-hits", h.listWorkaroundHits)
 	// The cleanup action behind phasediag's orphan-branch blocker: a swarm/phase-<id>
 	// branch whose id matches no phase row — work stranded under a previous id
 	// generation, which the phase-scoped route above structurally cannot name. Kept a

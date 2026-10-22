@@ -190,10 +190,11 @@ func scanFunc(fn *ast.FuncDecl) (lits map[string]bool, calls map[string]bool) {
 	return lits, calls
 }
 
-// decidesPermissionMode: the function asks claudeflags for its mode, in either
-// spelling (PermissionModeArgs for flat argv, Mode for a runcore.Spec value).
+// decidesPermissionMode: the function asks claudeflags for its mode, in any
+// spelling (PermissionModeArgs / ModeArgsFor for flat argv, Mode / ModeFor for a
+// runcore.Spec value).
 func decidesPermissionMode(calls map[string]bool) bool {
-	return calls["PermissionModeArgs"] || calls["Mode"]
+	return calls["PermissionModeArgs"] || calls["Mode"] || calls["ModeFor"] || calls["ModeArgsFor"]
 }
 
 // decidesEffort: the function asks claudeflags for its reasoning depth, in any

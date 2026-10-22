@@ -3,7 +3,13 @@
 // stream (lib/useNeedsYou). One row per blocker:
 //
 //   approval / question  the existing Approvals PendingCard (approve / deny /
-//                        answer), joined by requestId to the pending row
+//                        answer), joined by requestId to the pending row; when
+//                        a plan phase is stalled on that very request, the
+//                        server folds the stall in and the row adds an
+//                        «open phase» link to it
+//   stalled_phase        a plan phase whose active stage (executor, reviewer,
+//                        verifier) stopped working: a link to the phase's Runs
+//                        tab. Notification only — nothing here restarts it
 //   prod_deploy_local    "Confirm locally" — no allow and no deny: the daemon
 //                        hands a production deploy to the session's terminal
 //   awaiting_reply       "Copy reply" puts `[<session>] Re: <question>` on the
@@ -18,6 +24,9 @@
 //                        whose run branch is ready, pushed or under an open
 //                        PR: a link to the phase's Review tab (push / open PR)
 //                        and, once a PR is open, a link to that PR
+//   phase_decision       a phase run touched protected paths: the guard badge,
+//                        one button per option (allow into scope / reject) and
+//                        a free-text note, answered in place
 //
 // Nothing here delivers a reply to a session: the operator pastes it.
 
@@ -25,8 +34,10 @@ import { Trans, useLingui } from '@lingui/react/macro';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { fetchApprovals, resolveApproval, type ApprovalAction } from '../api';
+import { answerGuardDecision } from '../api/guard';
 import type { NeedsYouItem, NeedsYouKind, PermissionRequest } from '../api/types';
 import { PendingCard } from './Approvals';
+import type { PhaseTab } from './plans/PhasePanel';
 import { ChannelBadge } from '../components/ChannelBadge';
 import { ProjectName } from '../components/ProjectName';
 import { Empty, ErrorBox, Loading } from '../components/ui';
@@ -34,16 +45,20 @@ import type { AnswerMap } from '../lib/approvals';
 import { fmtSpan } from '../lib/format';
 import { kindLabel, replyPrefix, replyWithOption } from '../lib/needsYou';
 import { findProject } from '../lib/projectSlug';
+import { safeHref } from '../lib/safeHref';
 import { useScope } from '../lib/scope';
 import { useSessionHref } from '../lib/sessionHref';
 import { useNowMs } from '../lib/sessionState';
 import { useNeedsYou } from '../lib/useNeedsYou';
+import { GuardBadge } from './plans/GuardBadge';
 import { plansPath } from './plans/plansUrl';
 
 /** Kind badge tones — the label always carries the meaning, colour only echoes it. */
 const KIND_BADGE: Record<NeedsYouKind, string> = {
   approval: 'border-amber/40 text-amber',
+  stalled_phase: 'border-amber/60 bg-amber/10 text-amber',
   question: 'border-brand/50 text-brand',
+  phase_decision: 'border-red/45 bg-red/10 text-red',
   prod_deploy_local: 'border-amber/60 bg-amber/10 text-amber',
   awaiting_reply: 'border-amber/40 text-amber',
   failed: 'border-red/40 text-red',
@@ -55,6 +70,8 @@ const FOCUS = 'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visi
 const BTN = `rounded-lg border px-3 py-1.5 font-mono text-[11.5px] transition-colors disabled:opacity-50 ${FOCUS}`;
 const LINK = `font-mono text-[11px] text-ink-dim transition-colors hover:text-brand ${FOCUS}`;
 const COPIED_MS = 2_000;
+/** The deep-link schemes a terminal's focus URL may use (Warp's WARP_FOCUS_URL). */
+const TERM_FOCUS_SCHEMES: readonly string[] = ['warp:'];
 
 async function copyText(text: string): Promise<boolean> {
   try {
@@ -163,6 +180,9 @@ function AwaitingReply({
 function ConfirmLocally({ item, sessionTo }: { item: NeedsYouItem; sessionTo: string }): JSX.Element {
   const { t } = useLingui();
   const sessionName = item.sessionName;
+  // The focus URL is whatever the session's terminal reported (Warp's deep
+  // link): only that app scheme is a link, anything else renders no button.
+  const focusHref = safeHref(item.termFocusUrl, TERM_FOCUS_SCHEMES);
   return (
     <>
       <p className="mt-2 text-[13px] leading-[1.55] text-ink-2">
@@ -174,9 +194,9 @@ function ConfirmLocally({ item, sessionTo }: { item: NeedsYouItem; sessionTo: st
         </code>
       )}
       <div className="mt-3 flex flex-wrap items-center gap-3">
-        {item.termFocusUrl !== null && item.termFocusUrl !== '' && (
+        {focusHref !== null && (
           <a
-            href={item.termFocusUrl}
+            href={focusHref}
             aria-label={t`Focus the terminal of ${sessionName}`}
             className={`${BTN} border-amber/50 text-amber hover:bg-amber/10`}
           >
@@ -198,7 +218,7 @@ function ConfirmLocally({ item, sessionTo }: { item: NeedsYouItem; sessionTo: st
  * [MANUAL] criteria are ticked by hand), Review for an awaiting_merge one
  * (where the run branch is pushed and its PR opened).
  */
-function phaseHref(item: NeedsYouItem, tab: 'criteria' | 'review'): string | null {
+function phaseHref(item: NeedsYouItem, tab: PhaseTab): string | null {
   if (item.phase === undefined || item.phase.planExternalId === '') return null;
   return plansPath(item.projectSlug, {
     plan: item.phase.planExternalId,
@@ -209,8 +229,115 @@ function phaseHref(item: NeedsYouItem, tab: 'criteria' | 'review'): string | nul
 /** The phase link a phase item's title and body open; null for a session item. */
 function phaseItemHref(item: NeedsYouItem): string | null {
   if (item.kind === 'manual_phase') return phaseHref(item, 'criteria');
-  if (item.kind === 'awaiting_merge') return phaseHref(item, 'review');
+  if (item.kind === 'awaiting_merge' || item.kind === 'phase_decision') return phaseHref(item, 'review');
+  if (item.kind === 'stalled_phase') return phaseHref(item, 'runs');
   return null;
+}
+
+/** A stalled phase: what stopped and for how long (the server's preview), and a
+ *  link to the phase's Runs tab. Notification only — no restart action, by design. */
+function StalledPhase({ item, phaseTo }: { item: NeedsYouItem; phaseTo: string | null }): JSX.Element {
+  return (
+    <div className="mt-2 flex flex-wrap items-center gap-3">
+      <span className="min-w-0 flex-1 text-[12.5px] text-ink-3">{item.preview}</span>
+      {phaseTo !== null && (
+        <Link to={phaseTo} className={`ml-auto ${LINK}`}>
+          <Trans>open phase →</Trans>
+        </Link>
+      )}
+    </div>
+  );
+}
+
+/** The «open phase» second action of an approval a stalled phase waits on. */
+function StalledOn({ item }: { item: NeedsYouItem }): JSX.Element | null {
+  const to = item.stall !== undefined ? phaseHref(item, 'runs') : null;
+  if (to === null || item.phase === undefined) return null;
+  const { planTitle, seq, name } = item.phase;
+  return (
+    <div data-testid="needs-you-stalled-on" className="mt-2 flex flex-wrap items-center gap-3">
+      <span className="min-w-0 flex-1 truncate text-[12px] text-ink-3">
+        <Trans>
+          stalls {planTitle} · Phase {seq}: {name}
+        </Trans>
+      </span>
+      <Link to={to} className={`ml-auto ${LINK}`}>
+        <Trans>open phase →</Trans>
+      </Link>
+    </div>
+  );
+}
+
+/** A guard decision: what the run touched, the options as buttons, a note. */
+export function PhaseDecision({
+  item,
+  reviewTo,
+  onAnswered,
+}: {
+  item: NeedsYouItem;
+  reviewTo: string | null;
+  onAnswered: () => void;
+}): JSX.Element | null {
+  const { t } = useLingui();
+  const [note, setNote] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const decision = item.decision;
+  if (decision === undefined) return null;
+  const answer = (option: string): void => {
+    setBusy(true);
+    setError(null);
+    answerGuardDecision(decision.taskId, decision.phaseId, decision.decisionId, option, note.trim())
+      .then(onAnswered)
+      .catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)))
+      .finally(() => setBusy(false));
+  };
+  const decisionId = decision.decisionId;
+  return (
+    <>
+      <div className="mt-2 flex flex-wrap items-center gap-2">
+        <span className="font-mono text-[11px] font-semibold text-ink-2">{decisionId}</span>
+        <GuardBadge guard={decision.guard} />
+      </div>
+      <p className="mt-1.5 text-[13px] leading-[1.55] text-ink-2 [text-wrap:pretty]">{decision.question}</p>
+      <label className="mt-2.5 block">
+        <span className="font-mono text-[10.5px] text-ink-dim">
+          <Trans>note (optional) — recorded with the answer in the phase doc</Trans>
+        </span>
+        <input
+          type="text"
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+          disabled={busy}
+          maxLength={2000}
+          className={`mt-1 block w-full rounded-lg border border-line bg-bg px-2.5 py-1.5 text-[12.5px] text-ink ${FOCUS}`}
+        />
+      </label>
+      <div className="mt-3 flex flex-wrap items-center gap-2" role="group" aria-label={t`answer ${decisionId}`}>
+        {decision.options.map((opt) => (
+          <button
+            key={opt.id}
+            type="button"
+            disabled={busy}
+            onClick={() => answer(opt.id)}
+            className={`${BTN} ${opt.id === 'reject' ? 'border-line-strong text-ink-3 hover:bg-surface2' : 'border-brand/50 bg-brand/10 font-semibold text-brand hover:bg-brand/20'}`}
+          >
+            {opt.id === 'allow-add-to-scope' ? t`Allow (add to scope)` : opt.id === 'reject' ? t`Reject` : opt.label}
+          </button>
+        ))}
+        {error !== null && (
+          <span role="alert" className="font-mono text-[11px] text-red">
+            {error}
+          </span>
+        )}
+        {reviewTo !== null && (
+          <Link to={reviewTo} className={`ml-auto ${LINK}`}>
+            <Trans>open review →</Trans>
+          </Link>
+        )}
+      </div>
+    </>
+  );
 }
 
 function ManualPhase({ item, phaseTo }: { item: NeedsYouItem; phaseTo: string | null }): JSX.Element {
@@ -228,7 +355,7 @@ function ManualPhase({ item, phaseTo }: { item: NeedsYouItem; phaseTo: string | 
 
 /** Only the merge is left: Review pushes and opens the PR; an open PR merges on the host. */
 function AwaitingMerge({ item, reviewTo }: { item: NeedsYouItem; reviewTo: string | null }): JSX.Element {
-  const prUrl = item.phase?.landingState === 'pr_open' ? (item.phase.prUrl ?? '') : '';
+  const prUrl = item.phase?.landingState === 'pr_open' ? (safeHref(item.phase.prUrl) ?? '') : '';
   return (
     <div className="mt-2 flex flex-wrap items-center gap-3">
       <span className="min-w-0 flex-1 text-[12.5px] text-ink-3">{item.preview}</span>
@@ -258,6 +385,7 @@ function Row({
   sessionTo,
   onResolve,
   onDismiss,
+  onAnswered,
 }: {
   item: NeedsYouItem;
   /** The pending permission row behind an approval / question item, once loaded. */
@@ -269,6 +397,7 @@ function Row({
   sessionTo: string;
   onResolve: (request: PermissionRequest, action: ApprovalAction, reason?: string, answers?: AnswerMap) => void;
   onDismiss: () => void;
+  onAnswered: () => void;
 }): JSX.Element {
   const age = fmtSpan(item.blockingSince, new Date(nowMs).toISOString());
 
@@ -276,24 +405,28 @@ function Row({
   switch (item.kind) {
     case 'approval':
     case 'question':
-      body =
-        request !== null ? (
-          <PendingCard
-            request={request}
-            session={null}
-            nowMs={nowMs}
-            busy={busy}
-            onResolve={(action, reason, answers) => onResolve(request, action, reason, answers)}
-          />
-        ) : (
-          <div className="mt-2 flex flex-wrap items-center gap-3">
-            <ChannelBadge channel={item.channel} />
-            <code className="min-w-0 flex-1 truncate font-mono text-[11.5px] text-ink-3">{item.preview}</code>
-            <Link to={inboxHref} className={LINK}>
-              <Trans>review in Inbox →</Trans>
-            </Link>
-          </div>
-        );
+      body = (
+        <>
+          {request !== null ? (
+            <PendingCard
+              request={request}
+              session={null}
+              nowMs={nowMs}
+              busy={busy}
+              onResolve={(action, reason, answers) => onResolve(request, action, reason, answers)}
+            />
+          ) : (
+            <div className="mt-2 flex flex-wrap items-center gap-3">
+              <ChannelBadge channel={item.channel} />
+              <code className="min-w-0 flex-1 truncate font-mono text-[11.5px] text-ink-3">{item.preview}</code>
+              <Link to={inboxHref} className={LINK}>
+                <Trans>review in Inbox →</Trans>
+              </Link>
+            </div>
+          )}
+          <StalledOn item={item} />
+        </>
+      );
       break;
     case 'prod_deploy_local':
       body = <ConfirmLocally item={item} sessionTo={sessionTo} />;
@@ -316,6 +449,12 @@ function Row({
       break;
     case 'awaiting_merge':
       body = <AwaitingMerge item={item} reviewTo={phaseItemHref(item)} />;
+      break;
+    case 'stalled_phase':
+      body = <StalledPhase item={item} phaseTo={phaseItemHref(item)} />;
+      break;
+    case 'phase_decision':
+      body = <PhaseDecision item={item} reviewTo={phaseItemHref(item)} onAnswered={onAnswered} />;
       break;
   }
   // A phase row names a plan phase, not a session: its title opens the phase.
@@ -427,6 +566,7 @@ export function NeedsYou(): JSX.Element {
               sessionTo={sessionHref(item.sessionId)}
               onResolve={resolve}
               onDismiss={() => dismiss(item)}
+              onAnswered={reload}
             />
           ))}
         </ul>

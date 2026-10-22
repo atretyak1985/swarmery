@@ -48,6 +48,7 @@ import { useProjectWorkspace } from '../workspace/ProjectContext';
 import { Card, Empty, ErrorBox, ExpandButton, ExpandableSection, Loading } from '../components/ui';
 import { Explain } from '../components/Explain';
 import { HowItWorks } from '../components/HowItWorks';
+import { CostBadge } from './planning/CostBadge';
 import { QuestionCard } from './planning/QuestionCard';
 import { RunningPlanPanel } from './planning/RunningPlanPanel';
 import { HistoryDrawer } from './planning/HistoryDrawer';
@@ -521,6 +522,25 @@ export function PlanningMode(): JSX.Element {
   const projectLabel = useMemo(() => project?.name ?? project?.slug ?? slug, [project, slug]);
   const lastReasoning = history.length > 0 ? (history[history.length - 1]?.reasoning ?? '') : '';
 
+  // Decision ids: the seq of the turn that holds the current question (its D-n),
+  // and the turn a phase card's "waits on D-n" link points at (?turn=, scoped by
+  // ?planningSession= to the wizard that asked it).
+  const currentSeq = useMemo((): number | null => {
+    const q = status?.currentQuestion;
+    if (q == null || status == null) return null;
+    for (let i = status.history.length - 1; i >= 0; i--) {
+      if (status.history[i]?.question?.id === q.id) return status.history[i]?.seq ?? null;
+    }
+    return null;
+  }, [status]);
+  const linkedTurn = useMemo(() => {
+    const seq = Number(searchParams.get('turn'));
+    const sid = Number(searchParams.get('planningSession'));
+    if (status == null || !Number.isInteger(seq) || seq <= 0 || sid !== status.planningSessionId) return null;
+    return status.history.find((h) => h.seq === seq && h.question !== null) ?? null;
+  }, [searchParams, status]);
+
+
   if (loading && status === null) {
     return (
       <div className="px-4 pt-6 pb-10 desk:px-8">
@@ -649,6 +669,31 @@ export function PlanningMode(): JSX.Element {
         <div className="mt-3">
           <ErrorBox message={error} onRetry={() => setError(null)} />
         </div>
+      )}
+
+      {/* LINKED DECISION — where a phase card's "waits on D-n" lands: the
+          question that decision came from, inline, with its cost toggle. */}
+      {linkedTurn?.question != null && status !== null && (
+        <section
+          id={`planning-turn-${String(linkedTurn.seq)}`}
+          data-testid="linked-decision"
+          className="mt-3 rounded-xl border border-amber/40 bg-amber/5 px-4 py-3"
+        >
+          <div className="font-mono text-[10.5px] tracking-[0.1em] text-ink-faint uppercase">
+            <Trans>decision D-{linkedTurn.seq}</Trans>
+          </div>
+          <div className="mt-1 text-[14px] font-medium text-ink">{linkedTurn.question.question}</div>
+          <div className="mt-2">
+            <CostBadge
+              key={`${String(linkedTurn.seq)}-${linkedTurn.question.costToChange ?? 'cheap'}`}
+              planningSessionId={status.planningSessionId}
+              seq={linkedTurn.seq}
+              cost={linkedTurn.question.costToChange}
+              reason={linkedTurn.question.costReason}
+              onChanged={loadStatus}
+            />
+          </div>
+        </section>
       )}
 
       {/* LAST ERROR — the reply that never reached the planner. The wizard is
@@ -1039,6 +1084,18 @@ export function PlanningMode(): JSX.Element {
                   interviewExpanded ? 'desk:min-h-0 desk:overflow-y-auto' : ''
                 }`}
               >
+                {currentSeq !== null && status.planningSessionId > 0 && (
+                  <div className="mb-2">
+                    <CostBadge
+                      key={`${status.currentQuestion.id}-${status.currentQuestion.costToChange ?? 'cheap'}`}
+                      planningSessionId={status.planningSessionId}
+                      seq={currentSeq}
+                      cost={status.currentQuestion.costToChange}
+                      reason={status.currentQuestion.costReason}
+                      onChanged={loadStatus}
+                    />
+                  </div>
+                )}
                 <QuestionCard
                   key={status.currentQuestion.id}
                   question={status.currentQuestion}

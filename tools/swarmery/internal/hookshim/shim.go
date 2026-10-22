@@ -12,6 +12,8 @@ package hookshim
 
 import (
 	"bytes"
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -23,6 +25,7 @@ import (
 	"time"
 
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/ingest"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/linksig"
 )
 
 // Hook event names (the `swarmery hook <event>` argument = URL path suffix).
@@ -64,9 +67,10 @@ type Config struct {
 	Stderr         io.Writer     // operator notices (spinner hint)
 	LogPath        string        // one-line-per-call audit log; "" disables
 	// TokenPath is the link token file (link.TokenPath(home)), read on every
-	// call and sent as the Authorization header the /api/hooks/* routes
-	// require. "" or a missing/unreadable file sends no header: the daemon
-	// then answers 401 and the shim fails open like on any non-200.
+	// call: every request is signed with it (internal/linksig) and an answer
+	// counts only when the daemon's signature on it verifies. "" or a
+	// missing/unreadable file sends no Authorization: the daemon then answers
+	// 401 and the shim fails open like on any non-200.
 	TokenPath string
 }
 
@@ -237,7 +241,7 @@ func post(cfg Config, event string, body []byte, timeout time.Duration, onResp f
 	}
 	url := cfg.BaseURL + "/api/hooks/" + event
 	tok := readLinkToken(cfg.TokenPath)
-	resp, outcome := send(client, url, body, tok)
+	resp, nonce, outcome := send(client, url, body, tok)
 	if resp == nil {
 		return outcome
 	}
@@ -249,33 +253,62 @@ func post(cfg Config, event string, body []byte, timeout time.Duration, onResp f
 		if tok = readLinkToken(cfg.TokenPath); tok == "" {
 			return "auth-missing"
 		}
-		if resp, outcome = send(client, url, body, tok); resp == nil {
+		if resp, nonce, outcome = send(client, url, body, tok); resp == nil {
 			return outcome
 		}
 	}
 	defer resp.Body.Close()
+	answer, err := io.ReadAll(io.LimitReader(resp.Body, maxAnswer))
 	if onResp == nil {
-		io.Copy(io.Discard, io.LimitReader(resp.Body, 1<<20))
 		return fmt.Sprintf("http-%d", resp.StatusCode)
 	}
+	if err != nil {
+		return "read-error"
+	}
+	// Only the daemon's own answer is acted on: it signs it over this
+	// request's nonce, its status and its body. Anything else that holds the
+	// port gets the fail-open path (the native dialog), whatever it says.
+	if !linksig.VerifyResponse(tok, nonce, resp.StatusCode, answer, resp.Header.Get(linksig.ResponseHeader)) {
+		return fmt.Sprintf("unsigned-http-%d", resp.StatusCode)
+	}
+	resp.Body = io.NopCloser(bytes.NewReader(answer))
 	return onResp(resp)
 }
 
-// send POSTs one attempt. A nil response comes with its transport outcome.
-func send(client *http.Client, url string, body []byte, tok string) (*http.Response, string) {
+// maxAnswer bounds the daemon answer the shim reads (and verifies).
+const maxAnswer = 1 << 20
+
+// send POSTs one attempt, signed with tok (Swarmery-HMAC: the token itself
+// never goes on the wire), and returns the nonce the answer must be signed
+// over. With no token the request carries no Authorization. A nil response
+// comes with its transport outcome.
+func send(client *http.Client, url string, body []byte, tok string) (*http.Response, string, string) {
 	req, err := http.NewRequest(http.MethodPost, url, bytes.NewReader(body))
 	if err != nil {
-		return nil, "request-error"
+		return nil, "", "request-error"
 	}
 	req.Header.Set("Content-Type", "application/json")
+	var nonce string
 	if tok != "" {
-		req.Header.Set("Authorization", "Bearer "+tok)
+		if nonce, err = newNonce(); err != nil {
+			return nil, "", "nonce-error"
+		}
+		req.Header.Set("Authorization", linksig.Authorization(tok, http.MethodPost, req.URL.RequestURI(), time.Now().Unix(), nonce, body))
 	}
 	resp, err := client.Do(req)
 	if err != nil {
-		return nil, "unreachable" // connect refused / timeout / poll deadline
+		return nil, "", "unreachable" // connect refused / timeout / poll deadline
 	}
-	return resp, ""
+	return resp, nonce, ""
+}
+
+// newNonce is 16 random bytes, hex-encoded.
+func newNonce() (string, error) {
+	b := make([]byte, 16)
+	if _, err := rand.Read(b); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(b), nil
 }
 
 // discard drains and closes a response the shim does not classify.

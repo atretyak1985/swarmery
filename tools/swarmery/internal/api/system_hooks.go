@@ -47,7 +47,9 @@ func (h *Handler) toggleSystemHook(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var req hookToggleRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Enabled == nil || req.BaseHash == "" {
+	if err := decodeJSONLimited(w, r, &req, maxJSONBody); isBodyTooLarge(err) {
+		return
+	} else if err != nil || req.Enabled == nil || req.BaseHash == "" {
 		hookErrJSON(w, http.StatusBadRequest, "want JSON body {enabled: bool, base_hash: string}")
 		return
 	}
@@ -65,7 +67,9 @@ func (h *Handler) updateSystemHook(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var req hookUpdateRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Command == "" || req.BaseHash == "" {
+	if err := decodeJSONLimited(w, r, &req, maxJSONBody); isBodyTooLarge(err) {
+		return
+	} else if err != nil || req.Command == "" || req.BaseHash == "" {
 		hookErrJSON(w, http.StatusBadRequest, "want JSON body {command: string, timeout?: number, base_hash: string}")
 		return
 	}

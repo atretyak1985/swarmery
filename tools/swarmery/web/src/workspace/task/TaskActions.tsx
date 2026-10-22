@@ -32,6 +32,7 @@ import {
   laneOf,
   LANE_TITLES,
 } from '../boardModel';
+import { safeHref } from '../../lib/safeHref';
 import { FieldLabel } from '../TaskFields';
 
 const BTN = 'rounded-lg px-3 py-1.5 text-[12px] transition-colors disabled:opacity-40';
@@ -179,6 +180,7 @@ export function TaskActions({
   const taskBranch = task.branch ?? '—';
   const taskTitle = task.title;
   const togglePause = (): void => run({ userPaused: !task.userPaused });
+  const resultHref = safeHref(task.resultNote);
 
   return (
     <div className="flex flex-col gap-2 border-t border-line px-4 py-3">
@@ -368,9 +370,9 @@ export function TaskActions({
             * line on a no-op exit, so it is only linked when it IS a URL. */}
           {task.resultNote !== null && task.resultNote !== '' && (
             <div className="font-mono text-[10.5px] break-all text-ink-dim">
-              {task.resultNote.startsWith('http') ? (
+              {resultHref !== null ? (
                 <a
-                  href={task.resultNote}
+                  href={resultHref}
                   target="_blank"
                   rel="noreferrer"
                   className="underline transition-colors hover:text-ink"

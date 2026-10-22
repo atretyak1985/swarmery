@@ -86,6 +86,10 @@ msgstr "{classifierCalls, plural, one {The classifier labelled {count} session �
 msgid "{commands, plural, one {ran {count} command} few {ran {count} commands} many {ran {count} commands} other {ran {count} commands}}"
 msgstr "{commands, plural, one {ran {count} command} few {ran {count} commands} many {ran {count} commands} other {ran {count} commands}}"
 
+#: src/pages/sessions/ModelSwitchBadge.tsx
+msgid "{count, plural, one {# model} few {# models} many {# models} other {# models}}"
+msgstr "{count, plural, one {# model} few {# models} many {# models} other {# models}}"
+
 #: src/pages/Overview.tsx
 msgid "{count, plural, one {one agent is idle until you answer} few {# agents are idle until you answer} many {# agents are idle until you answer} other {# agents are idle until you answer}}"
 msgstr "{count, plural, one {one agent is idle until you answer} few {# agents are idle until you answer} many {# agents are idle until you answer} other {# agents are idle until you answer}}"
@@ -190,6 +194,10 @@ msgstr "{scoredRuns, plural, one {run scored} few {runs scored} many {runs score
 msgid "{sessionCount} sessions · {costLabel}"
 msgstr "{sessionCount} sessions · {costLabel}"
 
+#: src/pages/projects/FirstRequestCard.tsx
+msgid "{sessions, plural, one {measured: median of # session over {days} days · cache write {writeLabel}} few {measured: median of # sessions over {days} days · cache write {writeLabel}} many {measured: median of # sessions over {days} days · cache write {writeLabel}} other {measured: median of # sessions over {days} days · cache write {writeLabel}}}"
+msgstr "{sessions, plural, one {measured: median of # session over {days} days · cache write {writeLabel}} few {measured: median of # sessions over {days} days · cache write {writeLabel}} many {measured: median of # sessions over {days} days · cache write {writeLabel}} other {measured: median of # sessions over {days} days · cache write {writeLabel}}}"
+
 #: src/pages/Sessions.tsx
 msgid "{shownRuns, plural, one {# plan runs} few {# plan runs} many {# plan runs} other {# plan runs}}"
 msgstr "{shownRuns, plural, one {# plan runs} few {# plan runs} many {# plan runs} other {# plan runs}}"
@@ -217,6 +225,10 @@ msgstr "{stopTotal, plural, one {across # stop} few {across # stops} many {acros
 #: src/pages/detail/Timeline.tsx
 msgid "{tool} · awaiting approval"
 msgstr "{tool} · awaiting approval"
+
+#: src/pages/projects/FirstRequestCard.tsx
+msgid "{toolCount, plural, one {MCP: {nameOnly} of # tool counted by name only — its schema is readable only from the running server.} few {MCP: {nameOnly} of # tools counted by name only — their schemas are readable only from the running server.} many {MCP: {nameOnly} of # tools counted by name only — their schemas are readable only from the running server.} other {MCP: {nameOnly} of # tools counted by name only — their schemas are readable only from the running server.}}"
+msgstr "{toolCount, plural, one {MCP: {nameOnly} of # tool counted by name only — its schema is readable only from the running server.} few {MCP: {nameOnly} of # tools counted by name only — their schemas are readable only from the running server.} many {MCP: {nameOnly} of # tools counted by name only — their schemas are readable only from the running server.} other {MCP: {nameOnly} of # tools counted by name only — their schemas are readable only from the running server.}}"
 
 #: src/pages/detail/Chat.tsx
 msgid "{tools, plural, one {used {count} tool} few {used {count} tools} many {used {count} tools} other {used {count} tools}}"
@@ -333,6 +345,10 @@ msgstr "all recommendations in Retro →"
 msgid "all sessions →"
 msgstr "all sessions →"
 
+#: src/pages/NeedsYou.tsx
+msgid "Allow (add to scope)"
+msgstr "Allow (add to scope)"
+
 #: src/pages/Approvals.tsx
 msgid "always allow…"
 msgstr "always allow…"
@@ -354,6 +370,10 @@ msgctxt "verb: the button that opens the question"
 msgid "answer"
 msgstr "answer"
 
+#: src/pages/NeedsYou.tsx
+msgid "answer {decisionId}"
+msgstr "answer {decisionId}"
+
 #: src/pages/Approvals.tsx
 msgid "answer in terminal →"
 msgstr "answer in terminal →"
@@ -361,6 +381,10 @@ msgstr "answer in terminal →"
 #: src/pages/Overview.tsx
 msgid "answer required"
 msgstr "answer required"
+
+#: src/pages/sessions/CacheColdBadge.tsx
+msgid "API-key"
+msgstr "API-key"
 
 #: src/pages/today/loopModel.ts
 msgid "Appears after the first finished phase run."
@@ -399,6 +423,10 @@ msgstr "approximate — sampled"
 #: src/pages/Projects.tsx
 msgid "archived"
 msgstr "archived"
+
+#: src/pages/sessions/CacheColdBadge.tsx
+msgid "Ask the daemon to write a handoff brief for this session"
+msgstr "Ask the daemon to write a handoff brief for this session"
 
 #: src/pages/Approvals.tsx
 msgid "Auto-approve rules"
@@ -444,6 +472,10 @@ msgstr "blocked {age}"
 msgid "Blocked on you · {count}"
 msgstr "Blocked on you · {count}"
 
+#: src/pages/sessions/CacheColdBadge.tsx
+msgid "cache cold"
+msgstr "cache cold"
+
 #: src/pages/detail/ContextHogsCard.tsx
 msgid "cache-write per turn"
 msgstr "cache-write per turn"
@@ -482,6 +514,14 @@ msgstr "Choose a session…"
 msgid "claims…"
 msgstr "claims…"
 
+#: src/pages/projects/FirstRequestCard.tsx
+msgid "CLAUDE.md"
+msgstr "CLAUDE.md"
+
+#: src/pages/projects/FirstRequestCard.tsx
+msgid "CLAUDE.md files, MCP tools and skill descriptions are sized from disk at ~4 bytes per token; “other parts” are the measured first request minus them (system prompt, built-in tools, agent list)."
+msgstr "CLAUDE.md files, MCP tools and skill descriptions are sized from disk at ~4 bytes per token; “other parts” are the measured first request minus them (system prompt, built-in tools, agent list)."
+
 #: src/pages/SessionDetail.tsx
 msgid "click to rename"
 msgstr "click to rename"
@@ -494,6 +534,14 @@ msgstr "close"
 #: src/pages/detail/LiveActivity.tsx
 msgid "Cogitating"
 msgstr "Cogitating"
+
+#: src/pages/detail/Chat.tsx
+msgid "cold restart · {at} · re-wrote {k}k tokens of context · {cost}"
+msgstr "cold restart · {at} · re-wrote {k}k tokens of context · {cost}"
+
+#: src/pages/SessionDetail.tsx
+msgid "cold restarts"
+msgstr "cold restarts"
 
 #: src/pages/detail/Chat.tsx
 msgid "Collapse activity"
@@ -539,6 +587,10 @@ msgstr "conflict"
 #: src/pages/detail/ContextHogsCard.tsx
 msgid "context hogs"
 msgstr "context hogs"
+
+#: src/pages/sessions/CacheColdBadge.tsx
+msgid "continue from handoff"
+msgstr "continue from handoff"
 
 #: src/pages/Sessions.tsx
 msgid "continue phase…"
@@ -693,6 +745,14 @@ msgstr "errors"
 msgid "Errors · {scopeName} · {day}"
 msgstr "Errors · {scopeName} · {day}"
 
+#: src/pages/projects/FirstRequestCard.tsx
+msgid "estimate (~bytes/4)"
+msgstr "estimate (~bytes/4)"
+
+#: src/pages/projects/FirstRequestCard.tsx
+msgid "estimated split: {barLabel}"
+msgstr "estimated split: {barLabel}"
+
 #: src/pages/Overview.tsx
 msgid "Every rule you add here removes a stop from tomorrow. Rules stay per-tool and per-project — narrow or revoke them in Approvals."
 msgstr "Every rule you add here removes a stop from tomorrow. Rules stay per-tool and per-project — narrow or revoke them in Approvals."
@@ -772,6 +832,14 @@ msgstr "File claims"
 msgid "files changed"
 msgstr "files changed"
 
+#: src/pages/ProjectDetail.tsx
+msgid "first request"
+msgstr "first request"
+
+#: src/pages/projects/FirstRequestCard.tsx
+msgid "first request…"
+msgstr "first request…"
+
 #: src/pages/NeedsYou.tsx
 msgid "Focus terminal"
 msgstr "Focus terminal"
@@ -791,6 +859,10 @@ msgstr "handed to the session's mod"
 #: src/pages/detail/HandoffCard.tsx
 msgid "handoff"
 msgstr "handoff"
+
+#: src/pages/sessions/CacheColdBadge.tsx
+msgid "handoff request failed"
+msgstr "handoff request failed"
 
 #: src/pages/Approvals.tsx
 msgid "hangs {hangs}"
@@ -935,6 +1007,10 @@ msgstr "manage plugins + detach in <0>Settings →</0>"
 #: src/pages/ProjectSettings.tsx
 msgid "marketplace: {marketplace}"
 msgstr "marketplace: {marketplace}"
+
+#: src/pages/projects/FirstRequestCard.tsx
+msgid "MCP tools"
+msgstr "MCP tools"
 
 #: src/pages/today/loopModel.ts
 #: src/pages/today/loopModel.ts
@@ -1085,6 +1161,10 @@ msgstr "no requests yet"
 msgid "no rules — matching requests auto-approve with <0>via rule</0> and stay in History for audit"
 msgstr "no rules — matching requests auto-approve with <0>via rule</0> and stay in History for audit"
 
+#: src/pages/projects/FirstRequestCard.tsx
+msgid "no session in the last {days} days to measure"
+msgstr "no session in the last {days} days to measure"
+
 #: src/pages/Sessions.tsx
 msgid "no sessions from the {account} account — clear the account filter to see the rest"
 msgstr "no sessions from the {account} account — clear the account filter to see the rest"
@@ -1153,6 +1233,10 @@ msgstr "not sent: {msg}"
 #: src/pages/Approvals.tsx
 msgid "note (optional)"
 msgstr "note (optional)"
+
+#: src/pages/NeedsYou.tsx
+msgid "note (optional) — recorded with the answer in the phase doc"
+msgstr "note (optional) — recorded with the answer in the phase doc"
 
 #: src/pages/ProjectOverview.tsx
 msgid "nothing flagged"
@@ -1231,9 +1315,15 @@ msgid "open in System"
 msgstr "open in System"
 
 #: src/pages/NeedsYou.tsx
+#: src/pages/NeedsYou.tsx
+msgid "open phase →"
+msgstr "open phase →"
+
+#: src/pages/NeedsYou.tsx
 msgid "open PR ↗"
 msgstr "open PR ↗"
 
+#: src/pages/NeedsYou.tsx
 #: src/pages/NeedsYou.tsx
 msgid "open review →"
 msgstr "open review →"
@@ -1245,6 +1335,14 @@ msgstr "open review →"
 #: src/pages/Overview.tsx
 msgid "open session →"
 msgstr "open session →"
+
+#: src/pages/sessions/CacheColdBadge.tsx
+msgid "Open the handoff brief and its resume command"
+msgstr "Open the handoff brief and its resume command"
+
+#: src/pages/projects/FirstRequestCard.tsx
+msgid "other parts"
+msgstr "other parts"
 
 #: src/pages/detail/Diffs.tsx
 msgid "out of scope"
@@ -1264,6 +1362,10 @@ msgstr "Percolating"
 #: src/pages/detail/Timeline.tsx
 msgid "Permission"
 msgstr "Permission"
+
+#: src/pages/detail/PendingRunNotice.tsx
+msgid "phase review"
+msgstr "phase review"
 
 #: src/pages/detail/PendingRunNotice.tsx
 msgid "phase run"
@@ -1387,6 +1489,10 @@ msgstr "Recipient"
 #: src/pages/SessionDetail.tsx
 msgid "recovered"
 msgstr "recovered"
+
+#: src/pages/NeedsYou.tsx
+msgid "Reject"
+msgstr "Reject"
 
 #: src/pages/Approvals.tsx
 msgid "release with no decision — the native selector renders in the terminal (E12d/E12e)"
@@ -1599,6 +1705,7 @@ msgstr "Skill"
 #: src/pages/detail/SummaryChips.tsx
 #: src/pages/ProjectDetail.tsx
 #: src/pages/ProjectOverview.tsx
+#: src/pages/projects/FirstRequestCard.tsx
 msgid "skills"
 msgstr "skills"
 
@@ -1610,6 +1717,10 @@ msgstr "some assistant prose is not ingested yet — run <0>swarmery backfill --
 #: src/pages/ProjectOverview.tsx
 msgid "source: {source}"
 msgstr "source: {source}"
+
+#: src/pages/NeedsYou.tsx
+msgid "stalls {planTitle} · Phase {seq}: {name}"
+msgstr "stalls {planTitle} · Phase {seq}: {name}"
 
 #: src/pages/detail/CallTree.tsx
 msgid "started"
@@ -1668,6 +1779,10 @@ msgstr "subagents"
 msgid "submit answers"
 msgstr "submit answers"
 
+#: src/pages/sessions/CacheColdBadge.tsx
+msgid "subscription"
+msgstr "subscription"
+
 #: src/pages/NeedsYou.tsx
 msgid "suggested replies"
 msgstr "suggested replies"
@@ -1681,6 +1796,11 @@ msgstr "Swarm"
 #: src/pages/sessions/SwarmPanel.tsx
 msgid "Swarm messages"
 msgstr "Swarm messages"
+
+#: src/pages/sessions/ModelSwitchBadge.tsx
+#: src/pages/sessions/ModelSwitchBadge.tsx
+msgid "switched model mid-session: {list}"
+msgstr "switched model mid-session: {list}"
 
 #: src/pages/detail/LiveActivity.tsx
 msgid "Synthesizing"
@@ -1707,6 +1827,10 @@ msgstr "telemetry-only — no .claude/settings.json, the swarmery plugin is not 
 msgid "Tests"
 msgstr "Tests"
 
+#: src/pages/sessions/CacheColdBadge.tsx
+msgid "The {channel} prompt cache of this {k}k-token session expired at {at}: the next message re-writes the whole context. Continue from the handoff brief in a fresh session instead."
+msgstr "The {channel} prompt cache of this {k}k-token session expired at {at}: the next message re-writes the whole context. Continue from the handoff brief in a fresh session instead."
+
 #: src/pages/detail/PendingRunNotice.tsx
 msgid "the {kind} “{label}” ended without writing a transcript — the session never started or its transcript is gone"
 msgstr "the {kind} “{label}” ended without writing a transcript — the session never started or its transcript is gone"
@@ -1727,6 +1851,10 @@ msgstr "The loop, this week"
 #: src/pages/detail/LiveActivity.tsx
 msgid "the OS process is alive (procwatch, 30s resolution); nothing written to the transcript during this stretch — typical for long builds/tests"
 msgstr "the OS process is alive (procwatch, 30s resolution); nothing written to the transcript during this stretch — typical for long builds/tests"
+
+#: src/pages/detail/Chat.tsx
+msgid "The prompt cache expired during the pause before this turn, so it re-wrote the whole context instead of reading it from cache."
+msgstr "The prompt cache expired during the pause before this turn, so it re-wrote the whole context instead of reading it from cache."
 
 #: src/pages/sessions/SwarmPanel.tsx
 msgid "The sending session's permission mode let the engine's classifier refuse the send. Relay from a session in another mode (e.g. acceptEdits or bypassPermissions)."
@@ -1784,6 +1912,10 @@ msgstr "Today in detail"
 #: src/pages/SessionDetail.tsx
 msgid "tokens"
 msgstr "tokens"
+
+#: src/pages/projects/FirstRequestCard.tsx
+msgid "tokens in a session's first request"
+msgstr "tokens in a session's first request"
 
 #: src/pages/detail/ContextHogsCard.tsx
 msgid "tool"
@@ -1924,6 +2056,10 @@ msgstr "working · {lastActive}"
 #: src/pages/ProjectSettings.tsx
 msgid "workspace…"
 msgstr "workspace…"
+
+#: src/pages/sessions/CacheColdBadge.tsx
+msgid "writing handoff…"
+msgstr "writing handoff…"
 
 #: src/pages/detail/CallTree.tsx
 msgid "Σ tokens"
