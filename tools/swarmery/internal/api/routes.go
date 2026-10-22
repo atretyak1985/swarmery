@@ -354,6 +354,10 @@ func Routes(root *http.ServeMux, h *Handler) {
 	// journal. Read-only on purpose — the janitor owns the decision, this shows
 	// what it decided.
 	mux.HandleFunc("GET /api/worktrees", h.listWorktrees)
+	// worktree cleanup (worktree_cleanup.go): the operator's click on the
+	// Needs-you card, the ONLY way a keep-unmerged worktree is removed, salvage
+	// branch first. Local-origin only: it deletes checkouts.
+	mux.HandleFunc("POST /api/worktree-cleanup/{id}/apply", requireLocalOrigin(h.applyWorktreeCleanup))
 	// promotion & drift detector — read-only analysis over the registry
 	// (system_insights.go). Display-only: promotion stays a manual flow.
 	mux.HandleFunc("GET /api/system/insights", h.systemInsights)

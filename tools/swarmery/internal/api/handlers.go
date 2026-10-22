@@ -20,6 +20,7 @@ import (
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/provision"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/retroanalysis"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/worktree"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/wtcleanup"
 )
 
 // Handler bundles the API dependencies.
@@ -95,6 +96,11 @@ type Handler struct {
 	// Plain retells plan docs in plain words for the Plans page's "In plain
 	// words" tabs (plain.go). Nil disables the endpoints with a 503.
 	Plain *plainsum.Service
+	// wtCleanupForce / wtCleanupGit replace the janitor and git behind
+	// POST /api/worktree-cleanup/{id}/apply: test seams, nil in the daemon
+	// (worktree_cleanup.go builds the real ones per call).
+	wtCleanupForce wtcleanup.Forcer
+	wtCleanupGit   wtcleanup.Git
 }
 
 // PlanReviewHook starts the plan branch review of a phase's plan when the plan

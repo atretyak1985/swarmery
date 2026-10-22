@@ -1,7 +1,7 @@
 // GET /api/needs-you — the one list of everything currently blocked on the
 // operator, oldest blocker first (needs-you queue, phase 3).
 //
-// Read-only. Five sources, each one query, each honouring ?project= through
+// Read-only. Its sources are one query each, each honouring ?project= through
 // scopeFilter (scope.go). Archived projects are deliberately NOT filtered —
 // same invariant as listApprovals: a live agent blocked in an archived project
 // must never be invisible.
@@ -39,6 +39,7 @@ var needsYouKindRank = map[string]int{
 	needsYouFailed:          4,
 	needsYouManualPhase:     5,
 	needsYouAwaitingMerge:   6,
+	needsYouWorktreeCleanup: 7,
 }
 
 const (
@@ -65,7 +66,7 @@ type replySuggestion struct {
 
 // needsYouItem is one blocker. Mirrors NeedsYouItem in web/src/api/types.ts.
 type needsYouItem struct {
-	Kind string `json:"kind"` // approval | question | prod_deploy_local | awaiting_reply | failed | manual_phase | awaiting_merge
+	Kind string `json:"kind"` // approval | question | prod_deploy_local | awaiting_reply | failed | manual_phase | awaiting_merge | worktree_cleanup
 	// SessionID / SessionUUID are 0 / "" for a phase item (manual_phase,
 	// awaiting_merge): a plan phase blocks, not a session.
 	SessionID   int64  `json:"sessionId"`
@@ -95,6 +96,9 @@ type needsYouItem struct {
 	Suggestion      *replySuggestion `json:"suggestion"`
 	// Phase names the plan phase of a phase item; absent otherwise.
 	Phase *needsYouPhase `json:"phase,omitempty"`
+	// Cleanup carries a worktree_cleanup item's proposals; absent otherwise
+	// (worktree_cleanup.go). SessionName is then the repository's directory name.
+	Cleanup *needsYouCleanup `json:"cleanup,omitempty"`
 
 	at time.Time // parsed BlockingSince; zero when unparseable
 }
@@ -171,14 +175,19 @@ func collectNeedsYou(db *sql.DB, r *http.Request, now time.Time) ([]needsYouItem
 	if err != nil {
 		return nil, err
 	}
+	cleanup, err := queryNeedsYouWorktreeCleanup(db, scope, projArgs)
+	if err != nil {
+		return nil, err
+	}
 
-	all := make([]needsYouItem, 0, len(pending)+len(local)+len(awaiting)+len(failed)+len(manual)+len(merge))
+	all := make([]needsYouItem, 0, len(pending)+len(local)+len(awaiting)+len(failed)+len(manual)+len(merge)+len(cleanup))
 	all = append(all, pending...)
 	all = append(all, local...)
 	all = append(all, awaiting...)
 	all = append(all, failed...)
 	all = append(all, manual...)
 	all = append(all, merge...)
+	all = append(all, cleanup...)
 	items := dedupeNeedsYou(all)
 	for i := range items {
 		items[i].BlockingSeconds = blockingSeconds(items[i].at, now)
@@ -386,8 +395,8 @@ func dedupeNeedsYou(items []needsYouItem) []needsYouItem {
 
 // sortNeedsYou orders items oldest blocker first; ties break on kind
 // (approval < question < prod_deploy_local < awaiting_reply < failed <
-// manual_phase < awaiting_merge), then on the item id (request id, else phase
-// id, else session id).
+// manual_phase < awaiting_merge < worktree_cleanup), then on the item id
+// (request id, else phase id, else cleanup proposal id, else session id).
 func sortNeedsYou(items []needsYouItem) {
 	sort.SliceStable(items, func(i, j int) bool {
 		a, b := items[i], items[j]
@@ -409,6 +418,9 @@ func needsYouItemID(it needsYouItem) int64 {
 	}
 	if it.Phase != nil {
 		return it.Phase.PhaseID
+	}
+	if it.Cleanup != nil {
+		return it.Cleanup.ID
 	}
 	return it.SessionID
 }
