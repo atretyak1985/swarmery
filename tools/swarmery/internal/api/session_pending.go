@@ -42,7 +42,7 @@ var pendingSessionSources = []pendingSessionSource{
 		  LEFT JOIN tasks t ON t.id = e.workspace_task_id
 		  LEFT JOIN projects p ON p.id = t.project_id
 		 WHERE e.run_session_uuid = ?`},
-	// The reviewer of a phase run (migration 0125): parked at spawn, running until
+	// The reviewer of a phase run (migration 0128): parked at spawn, running until
 	// the phase_reviews row recording its verdict lands.
 	{Table: "epic_phases", Column: "review_session_uuid", Kind: "review", query: `
 		SELECT NOT EXISTS (SELECT 1 FROM phase_reviews r WHERE r.session_uuid = e.review_session_uuid),
@@ -104,9 +104,10 @@ var pendingSessionExempt = map[string]string{
 	"route_decisions.session_uuid":         "a copy of the run's uuid (tasks.dispatch_session_uuid for a card, epic_phases.run_session_uuid for a phase) stamped on the complexity-routing decision at spawn (internal/route); those run rows are the sources and answer for the uuid while the run is live",
 	"lesson_uses.session_uuid":             "a copy of the run's uuid (epic_phases.run_session_uuid / plan_runs.run_session_uuid) stamped on each lesson a run's prompt carried (internal/lessons, phase 15); written in the same Start that stamps the run row, so those two run rows are the sources",
 	"account_limit_hits.session_uuid":      "an observation about an ALREADY-INGESTED transcript (or '' for a run verdict), never a daemon-minted uuid awaiting its first record",
-	"phase_reviews.session_uuid":           "the reviewer session of the phase review stage (internal/phaserun/review.go, migration 0106); the row is inserted only AFTER the reviewer's `claude -p` exited, and epic_phases.review_session_uuid (migration 0125) is the source that answers for the uuid while the review is live",
+	"phase_reviews.session_uuid":           "the reviewer session of the phase review stage (internal/phaserun/review.go, migration 0106); the row is inserted only AFTER the reviewer's `claude -p` exited, and epic_phases.review_session_uuid (migration 0128) is the source that answers for the uuid while the review is live",
 	"phase_reviews.run_session_uuid":       "scope=phase: a copy of epic_phases.run_session_uuid naming the run a review graded, written after that run ended, so the phase row is the source; scope=plan: not a session at all but the plan branch review's dedupe key, `branchset:<sha256>` (internal/phaserun/plan_review.go)",
-	"stall_notices.session_uuid":           "a copy of the stalled stage's session (epic_phases.run_session_uuid / review_session_uuid, verification_runs.verify_session_uuid) on a derived stall notice (internal/stall, migration 0125); those rows are the sources and answer for the uuid while the stage is live",
+	"session_cache_cold.session_uuid":      "the cache-cold prediction (internal/cachecold, migration 0127) is upserted only for a session that already has ingested turns — it is computed FROM them — so the sessions row answers for the uuid",
+	"stall_notices.session_uuid":           "a copy of the stalled stage's session (epic_phases.run_session_uuid / review_session_uuid, verification_runs.verify_session_uuid) on a derived stall notice (internal/stall, migration 0128); those rows are the sources and answer for the uuid while the stage is live",
 	"triage_runs.session_uuids":            "uuids of headless judge calls (internal/triage), read from the CLI's JSON envelope only AFTER each `claude -p` exited, so the uuid is never daemon-minted ahead of its transcript; the ingested sessions row answers for it",
 	"workaround_hits.session_uuid":         "a copy of an INGESTED session's uuid (internal/workaround, migration 0120): a hit is written only from a turn the tail already stored, so the sessions row answers for the uuid",
 }

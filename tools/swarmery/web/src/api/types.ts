@@ -457,6 +457,22 @@ export interface Session {
    * session; optional only for an older daemon that predates the field.
    */
   link?: SessionLink | null;
+  /**
+   * The «cache cold» prediction (migration 0127): this live fat session sat
+   * idle past its prompt-cache TTL, so its next message re-writes the whole
+   * context. Explicit null while warm; optional only for an older daemon.
+   */
+  cacheCold?: SessionCacheCold | null;
+}
+
+/** Go: sessionCacheColdDTO — the open session_cache_cold row of a session. */
+export interface SessionCacheCold {
+  /** RFC3339 instant the cache expired: the last turn's end + the TTL of `kind`. */
+  since: string;
+  /** The billing channel the TTL came from: `api` (5 min) or `subscription` (1 h). */
+  kind: 'api' | 'subscription';
+  /** Context tokens the next message re-writes. */
+  footprint: number;
 }
 
 /** Go: turnDTO */
@@ -492,6 +508,12 @@ export interface Turn {
    * thinking-only turn, or one a safeguard cut off) rather than a backfill gap.
    */
   stopReason: string | null;
+  /**
+   * The turn paid for a cold prompt cache after a pause (migration 0127): it
+   * re-wrote the session's context instead of reading it. Optional only for an
+   * older daemon.
+   */
+  coldRestart?: boolean;
 }
 
 /** Go: eventDTO — payload is raw JSON (json.RawMessage), decoded client-side. */
@@ -529,6 +551,17 @@ export interface SessionDetail extends Session {
    * (the "auto-recovered" header stat). Always present; 0 when none.
    */
   recovered: number;
+  /** Count of cold-restart turns (migration 0127). Optional only for an older daemon. */
+  coldRestarts?: number;
+}
+
+/**
+ * POST /api/sessions/{id}/handoff — «continue from handoff»: `ready` with the
+ * existing brief's path, or `generating` while the daemon writes one.
+ */
+export interface SessionHandoffRequest {
+  status: 'ready' | 'generating';
+  path?: string;
 }
 
 // --- Endpoint response shapes ------------------------------------------------

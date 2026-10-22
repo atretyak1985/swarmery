@@ -215,7 +215,8 @@ type epicPhaseDTO struct {
 	Forecasts []phaseForecastDTO `json:"forecasts"`
 	// ForecastLints is what is wrong with those blocks — an unknown band, a
 	// confidence outside 0..1, a forecast naming no areas, a posterior with no
-	// prior to score against.
+	// prior to score against — plus blast_radius_missing, a forecast listing
+	// files in a doc with no `Blast radius:` line (wsingest.LintBlastRadius).
 	//
 	// Computed in the READ path from the stored rows, exactly like the spec
 	// rollup's `unknownRefs` beside it, and for the same reason: a lint is a thing
@@ -793,6 +794,7 @@ func (h *Handler) epicPhases(taskID int64, planDir string) ([]epicPhaseDTO, epic
 		       e.doc_model,
 		       se.model,
 		       COALESCE(e.run_branch, ''),
+		       e.blast_radius,
 		       e.decision_deps,
 		       `+landingColumns+`
 		FROM epic_phases e
@@ -810,6 +812,7 @@ func (h *Handler) epicPhases(taskID int64, planDir string) ([]epicPhaseDTO, epic
 
 	phases := []epicPhaseDTO{}
 	covers := []phaseCovers{}
+	blastRadii := map[int64]string{}
 	decisionDeps := map[int64][]string{}
 	var rollup epicRollupDTO
 	for rows.Next() {
@@ -846,6 +849,9 @@ func (h *Handler) epicPhases(taskID int64, planDir string) ([]epicPhaseDTO, epic
 			// epic_phases.run_branch (0043): served as p.RunBranch and read
 			// for canReverify.
 			runBranch string
+			// epic_phases.blast_radius (0126): the doc's `Blast radius:` line,
+			// read only to lint its absence beside the forecast lints.
+			blastRadius string
 			// The landing columns (0103), daemon-owned.
 			landing landingRow
 			// epic_phases.decision_deps (0122), doc-owned JSON list of D-n.
@@ -859,13 +865,15 @@ func (h *Handler) epicPhases(taskID int64, planDir string) ([]epicPhaseDTO, epic
 			&completion, &p.ActivatedAt, &boardTaskID, &boardExtID, &boardCol,
 			&p.RunState, &runUUID, &runStartedAt, &runError,
 			&runEndedAt, &runCheckboxesBefore, &runCheckboxesAfter,
-			&p.VerifyMode, &verifyVerdict, &verifyDetail, &docModel, &runModel, &runBranch, &decisionDepsJSON}
+			&p.VerifyMode, &verifyVerdict, &verifyDetail, &docModel, &runModel, &runBranch, &blastRadius,
+			&decisionDepsJSON}
 		if err := rows.Scan(append(dest, landing.dest()...)...); err != nil {
 			return nil, epicRollupDTO{}, nil, err
 		}
 		p.Landing = landing.dto(p.RunState)
 		decisionDeps[p.ID] = decodeStrList(decisionDepsJSON)
 		p.RunBranch = runBranch
+		blastRadii[p.ID] = blastRadius
 		p.DependsOn = decodeIntList(depsJSON)
 		covers = append(covers, phaseCovers{seq: p.Seq, cids: decodeStrList(coversJSON)})
 		p.DocRelPath = relToPlan(planDir, p.DocPath)
@@ -1006,7 +1014,11 @@ func (h *Handler) epicPhases(taskID int64, planDir string) ([]epicPhaseDTO, epic
 		phases[i].RunModels, phases[i].RunModelFellBack = used, fellBack(used)
 		fs := forecasts[phases[i].ID]
 		phases[i].Forecasts = forecastDTOs(fs)
-		phases[i].ForecastLints = wsingest.LintForecasts(forecastsOnly(fs))
+		only := forecastsOnly(fs)
+		// The blast-radius lint rides the forecast channel: it judges the forecast's
+		// files against the doc's `Blast radius:` line, and is as advisory.
+		phases[i].ForecastLints = append(wsingest.LintForecasts(only),
+			wsingest.LintBlastRadius(only, blastRadii[phases[i].ID])...)
 		phases[i].Surprise = surprises[phases[i].ID]
 		phases[i].Reopens = reopens[phases[i].ID]
 		if phases[i].Reopens == nil {

@@ -1,4 +1,4 @@
--- 0125: the stalled-phase detector (verify-not-trust phase 11, D15/D34/D35/D41).
+-- 0128: the stalled-phase detector (verify-not-trust phase 11, D15/D34/D35/D41).
 --
 -- A phase that says it is running while nobody works on it is DERIVED on the
 -- daemon's 60 s tick (internal/stall.Detect) from epic_phases, sessions, turns,

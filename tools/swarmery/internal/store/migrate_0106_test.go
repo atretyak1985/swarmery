@@ -25,7 +25,7 @@ func TestMigrate0106ReviewColumnsOwnership(t *testing.T) {
 		t.Helper()
 		if _, err := db.Exec(wsingest.PhaseUpsertSQL,
 			1, 6, "Phase six", doc, "[]", 3, 0, "in_progress", nil,
-			nil, nil, "[]", "off", nil, 0, 0, reviewMode); err != nil {
+			nil, nil, "[]", "off", nil, 0, 0, reviewMode, ""); err != nil {
 			t.Fatalf("PhaseUpsertSQL: %v", err)
 		}
 	}

@@ -631,7 +631,7 @@ func phaseDocAndState(t *testing.T, db *sql.DB, id int64) (doc, state string, uu
 	return string(b), state, uuid, runErr
 }
 
-// The reviewer's session is parked on the phase row at spawn (migration 0125), so
+// The reviewer's session is parked on the phase row at spawn (migration 0128), so
 // the review stage is visible while it runs — the stalled-phase detector resolves
 // the reviewer through it — and it is the same uuid the phase_reviews row records.
 func TestReviewParksItsSessionOnThePhase(t *testing.T) {

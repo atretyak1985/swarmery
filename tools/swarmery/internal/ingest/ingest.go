@@ -18,6 +18,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/cachecold"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/cost" // metrics hook (wave C)
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/redact"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/workaround"
@@ -232,6 +233,10 @@ type ingester struct {
 	// contributes neither.
 	skipCapture     *bool
 	capturedTaskIDs []int64
+
+	// coldKind memoizes the session's billing channel for the cold-restart
+	// rule (cachecold.go); "" until the first new assistant turn asks.
+	coldKind cachecold.Kind
 
 	// pendingAuthTrips collects auth-kind breaker openings this batch deferred
 	// until a confirming probe (see limits.go's tripBreaker / pendingAuthTrip).
@@ -562,6 +567,10 @@ func (in *ingester) processRecords(recs []record, path string, sidechain bool, s
 			}
 			if created {
 				seq++
+				// A new prompt ends any «cache cold» spell (cachecold.go).
+				if err := in.clearCacheCold(r.Timestamp); err != nil {
+					return err
+				}
 			}
 			curTurnID, curMsgID = turnID, ""
 			in.addTurnText(turnID, promptText)
@@ -597,12 +606,24 @@ func (in *ingester) processRecords(recs []record, path string, sidechain bool, s
 			// main-only.
 			if m.ID != curMsgID {
 				// New API message → new assistant turn; usage counted ONCE (C1).
+				turnSeq := seq
 				turnID, created, err := in.upsertTurn(seq, "assistant", m.ID, m.Model, r.Timestamp, m.Usage)
 				if err != nil {
 					return err
 				}
 				if created {
 					seq++
+					// Cache-cold fact + prediction (cachecold.go): main thread only —
+					// a subagent runs on its own cache, and the main thread's context
+					// is what a pause makes the next message re-write.
+					if !sidechain {
+						if err := in.markColdRestart(turnID, turnSeq, r.Timestamp, m.Usage); err != nil {
+							return err
+						}
+						if err := in.clearCacheCold(r.Timestamp); err != nil {
+							return err
+						}
+					}
 					// metrics hook (wave C): price the turn from its usage +
 					// per-message model — the single cost integration point.
 					if u := m.Usage; u != nil {

@@ -42,6 +42,7 @@ import type {
   ContextHogsReport,
   Session,
   SessionDetail,
+  SessionHandoffRequest,
   SessionHandoffResponse,
   SessionsResponse,
   StatsOverview,
@@ -2578,6 +2579,13 @@ export const mockApi = {
       path: found.handoff.path,
       createdAt: found.handoff.createdAt,
     };
+  },
+
+  async requestSessionHandoff(id: number): Promise<SessionHandoffRequest> {
+    await delay(120);
+    const found = mockSessions.find((s) => s.id === id);
+    // Mock mode never spends tokens: no brief yet reads as "generating".
+    return found?.handoff ? { status: 'ready', path: found.handoff.path } : { status: 'generating' };
   },
 
   async sessionContextHogs(id: number | string): Promise<ContextHogsReport> {

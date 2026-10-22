@@ -75,6 +75,17 @@ carries the full format; honor it precisely:
   `out-of-scope change`, `protected path`, `access or login error`,
   `criterion impossible`. You never write `## Review` — the review engines
   append it.
+- A `## Risks` section in every phase doc, after `## Acceptance Criteria`,
+  whose first bullet is the phase's `Blast radius:` line. Before writing that
+  section, run the blast-radius step on every file in the phase's Forecast
+  `files`: the `/impact` chain's shell equivalents (Graft, then Graphify, then
+  the ripgrep sweep) plus Serena `find_referencing_symbols` when lsp-pack is
+  enabled — never building an index. List at most 20 callers as `file:line`,
+  otherwise the count and the packages; when the chain cannot run, write
+  `Blast radius: not computed — <reason>`.
+  `workspace-plans/resources/blast-radius.md` carries the procedure and the
+  exact line format — cite it, never re-copy it. The reviewer's `kind: review`
+  block lists the callers it read in `checked_callers`.
 - `plan/manifest.json` — the machine-readable phase DAG the plan runner
   consumes (must pass `python3 -m json.tool`).
 - Optional `plan/spec.md` with `- [ ] **SC-n** — …` criteria; then each phase

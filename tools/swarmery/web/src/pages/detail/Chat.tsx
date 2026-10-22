@@ -11,7 +11,7 @@ import { Trans, useLingui } from '@lingui/react/macro';
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import type { Event, SessionDetail, Turn } from '../../api/types';
-import { fmtAgo, fmtTime } from '../../lib/format';
+import { fmtAgo, fmtCost, fmtTime } from '../../lib/format';
 import { Markdown } from '../../lib/markdown';
 import { pickString } from '../../lib/payload';
 import { buildSubtree } from '../../lib/timeline';
@@ -210,7 +210,8 @@ function turnText(turn: Turn, events: readonly Event[]): string | null {
 type ChatItem =
   | { key: string; kind: 'user'; turn: Turn; text: string | null }
   | { key: string; kind: 'assistant'; text: string }
-  | { key: string; kind: 'tools'; counts: ToolCounts; events: Event[] };
+  | { key: string; kind: 'tools'; counts: ToolCounts; events: Event[] }
+  | { key: string; kind: 'cold'; turn: Turn };
 
 /** Flatten sorted turns into renderable items. Tool activity accumulates across
  * consecutive assistant turns and flushes as ONE summary line right before the
@@ -239,6 +240,11 @@ function buildItems(turns: readonly Turn[], eventsByTurn: ReadonlyMap<number, Ev
       items.push({ key: `turn-${String(turn.id)}`, kind: 'user', turn, text: turnText(turn, events) });
       continue;
     }
+    if (turn.coldRestart === true) {
+      // The mark sits where the pause ended — before the turn that paid for it.
+      flush();
+      items.push({ key: `cold-${String(turn.id)}`, kind: 'cold', turn });
+    }
     if (events.length > 0) {
       accEvents = accEvents.concat(events);
       accKey ??= turn.id;
@@ -251,6 +257,25 @@ function buildItems(turns: readonly Turn[], eventsByTurn: ReadonlyMap<number, Ev
   }
   flush();
   return items;
+}
+
+/** Inline mark on a turn that paid for a cold prompt cache (migration 0127):
+ * after the pause it re-wrote the session's context instead of reading it. */
+function ColdRestartMark({ turn }: { turn: Turn }): JSX.Element {
+  const { t } = useLingui();
+  const k = Math.round((turn.tokensCacheWrite ?? 0) / 1000);
+  const cost = fmtCost(turn.costUsd);
+  const at = fmtTime(turn.startedAt);
+  return (
+    <div
+      data-tip={t`The prompt cache expired during the pause before this turn, so it re-wrote the whole context instead of reading it from cache.`}
+      className="my-3 rounded-[10px] border border-dashed border-blue/40 px-3 py-1.5 text-center font-mono text-[10.5px] text-blue"
+    >
+      <Trans>
+        cold restart · {at} · re-wrote {k}k tokens of context · {cost}
+      </Trans>
+    </div>
+  );
 }
 
 function UserBubble({ turn, text }: { turn: Turn; text: string | null }): JSX.Element {
@@ -405,6 +430,8 @@ export function Chat({
       {items.map((item) =>
         item.kind === 'tools' ? (
           <ToolGroup key={item.key} counts={item.counts} events={item.events} />
+        ) : item.kind === 'cold' ? (
+          <ColdRestartMark key={item.key} turn={item.turn} />
         ) : item.kind === 'user' ? (
           <UserBubble key={item.key} turn={item.turn} text={item.text} />
         ) : (
