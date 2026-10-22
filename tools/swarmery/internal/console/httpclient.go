@@ -7,11 +7,14 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/coder/websocket"
+
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/linksig"
 )
 
 // HTTPClient talks to a running swarmery daemon over its localhost HTTP + WS
@@ -24,11 +27,14 @@ type HTTPClient struct {
 }
 
 // NewHTTPClient builds a client for the daemon at baseURL. A short default
-// timeout keeps `swarmery status` snappy when the daemon is down.
+// timeout keeps `swarmery status` snappy when the daemon is down. Every
+// request is signed with the link token in ~/.swarmery/link-token
+// (internal/linksig): the daemon takes a write or a WS upgrade that carries no
+// Origin only with link auth.
 func NewHTTPClient(baseURL string) *HTTPClient {
 	return &HTTPClient{
 		base: strings.TrimRight(baseURL, "/"),
-		hc:   &http.Client{Timeout: 4 * time.Second},
+		hc:   linksig.NewClient("", 4*time.Second),
 	}
 }
 
@@ -93,7 +99,17 @@ func (c *HTTPClient) DispatchStatus(ctx context.Context) (Dispatch, error) {
 // or expected — the daemon streams the frozen envelope and we never write.
 func (c *HTTPClient) StreamEvents(ctx context.Context, out chan<- WSEvent) error {
 	wsURL := "ws" + strings.TrimPrefix(c.base, "http") + "/api/ws"
-	conn, _, err := websocket.Dial(ctx, wsURL, nil)
+	u, err := url.Parse(wsURL)
+	if err != nil {
+		return err
+	}
+	// The upgrade is signed like a write; a fresh signature per dial, so a
+	// reconnect never replays a spent nonce.
+	hdr, err := linksig.Header("", http.MethodGet, u.RequestURI(), nil)
+	if err != nil {
+		return err
+	}
+	conn, _, err := websocket.Dial(ctx, wsURL, &websocket.DialOptions{HTTPHeader: hdr})
 	if err != nil {
 		return err
 	}

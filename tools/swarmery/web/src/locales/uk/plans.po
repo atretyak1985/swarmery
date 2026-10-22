@@ -2337,8 +2337,8 @@ msgid "sessions"
 msgstr "сесії"
 
 #: src/pages/Routines.tsx
-msgid "shell command (e.g. curl -fsS -X POST …)"
-msgstr "shell-команда (напр. curl -fsS -X POST …)"
+msgid "shell command (e.g. swarmery api POST /api/… --data @body.json)"
+msgstr "shell-команда (напр. swarmery api POST /api/… --data @body.json)"
 
 #: src/pages/planning/HistoryDrawer.tsx
 msgid "Show AI Reasoning"

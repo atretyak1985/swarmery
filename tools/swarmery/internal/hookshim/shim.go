@@ -12,8 +12,6 @@ package hookshim
 
 import (
 	"bytes"
-	"crypto/rand"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -21,7 +19,6 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"strings"
 	"time"
 
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/ingest"
@@ -56,7 +53,7 @@ var authRetryDelay = 1100 * time.Millisecond
 
 // maxTokenFile caps the token file read. A token is 64 hex characters and a
 // newline; anything larger is not a token the daemon minted.
-const maxTokenFile = 256
+const maxTokenFile = linksig.MaxKeyFile
 
 // Config wires the shim; zero values fall back to the frozen defaults.
 type Config struct {
@@ -304,11 +301,7 @@ func send(client *http.Client, url string, body []byte, tok string) (*http.Respo
 
 // newNonce is 16 random bytes, hex-encoded.
 func newNonce() (string, error) {
-	b := make([]byte, 16)
-	if _, err := rand.Read(b); err != nil {
-		return "", err
-	}
-	return hex.EncodeToString(b), nil
+	return linksig.NewNonce()
 }
 
 // discard drains and closes a response the shim does not classify.
@@ -323,28 +316,9 @@ func discard(resp *http.Response) {
 // bytes. The file is Lstat-ed before the open and the opened file must be that
 // same file, so a swap to a symlink in between is refused too. The shim never
 // mints or chmods the file: that is the daemon's job (link.EnsureToken).
+// It is linksig.ReadKeyFile, the reader every signing client shares.
 func readLinkToken(path string) string {
-	if path == "" {
-		return ""
-	}
-	before, err := os.Lstat(path)
-	if err != nil || !before.Mode().IsRegular() {
-		return ""
-	}
-	f, err := os.Open(path)
-	if err != nil {
-		return ""
-	}
-	defer f.Close()
-	opened, err := f.Stat()
-	if err != nil || !os.SameFile(before, opened) {
-		return ""
-	}
-	b, err := io.ReadAll(io.LimitReader(f, maxTokenFile+1))
-	if err != nil || len(b) > maxTokenFile {
-		return ""
-	}
-	return strings.TrimSpace(string(b))
+	return linksig.ReadKeyFile(path)
 }
 
 func toolNameOf(body []byte) string {

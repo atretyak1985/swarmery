@@ -133,12 +133,37 @@ expect() {
   if [ "$got" = "$want" ]; then pass "$label ($got)"; else fail "$label (got $got, want $want)"; fi
 }
 backend_posts() { grep -c '"POST ' "$SCRATCH/backend.log" || true; }
+# sign_hdr <METHOD> <target> [body-file] — the Swarmery-HMAC Authorization value
+# for one request (internal/linksig), keyed by the token the daemon minted in
+# the scratch HOME. A write without an Origin needs it.
+TOKEN_FILE="$SCRATCH/home/.swarmery/link-token"
+sign_hdr() {
+  python3 -I - "$TOKEN_FILE" "$@" <<'PY'
+import hashlib, hmac, os, sys, time
+key = open(sys.argv[1]).read().strip()
+method, target = sys.argv[2].upper(), sys.argv[3]
+body = open(sys.argv[4], "rb").read() if len(sys.argv) > 4 else b""
+ts, nonce = str(int(time.time())), os.urandom(16).hex()
+msg = "\n".join(["swarmery-hmac-v1", method, target, ts, nonce, hashlib.sha256(body).hexdigest()])
+sig = hmac.new(key.encode(), msg.encode(), hashlib.sha256).hexdigest()
+print("Swarmery-HMAC ts=%s,nonce=%s,sig=%s" % (ts, nonce, sig))
+PY
+}
+printf '{}' >"$SCRATCH/empty-object.json"
 
 # ── slow checks first, in the background: they only need the daemon up ──
-python3 -I - "$PORT" >"$SCRATCH/timeouts.out" 2>&1 <<'PY' &
-import base64, os, socket, sys, threading, time
+python3 -I - "$PORT" "$TOKEN_FILE" >"$SCRATCH/timeouts.out" 2>&1 <<'PY' &
+import base64, hashlib, hmac, os, socket, sys, threading, time
 port = int(sys.argv[1])
 res = {}
+
+def ws_auth():
+    # An Origin-less upgrade needs link auth (Swarmery-HMAC, internal/linksig).
+    key = open(sys.argv[2]).read().strip()
+    ts, nonce = str(int(time.time())), os.urandom(16).hex()
+    msg = "\n".join(["swarmery-hmac-v1", "GET", "/api/ws", ts, nonce, hashlib.sha256(b"").hexdigest()])
+    sig = hmac.new(key.encode(), msg.encode(), hashlib.sha256).hexdigest()
+    return "Swarmery-HMAC ts=%s,nonce=%s,sig=%s" % (ts, nonce, sig)
 
 def slow_header():
     s = socket.create_connection(("127.0.0.1", port))
@@ -172,8 +197,9 @@ def idle_ws():
     s = socket.create_connection(("127.0.0.1", port))
     key = base64.b64encode(os.urandom(16)).decode()
     s.sendall(("GET /api/ws HTTP/1.1\r\nHost: 127.0.0.1:%d\r\nConnection: Upgrade\r\n"
-               "Upgrade: websocket\r\nSec-WebSocket-Version: 13\r\nSec-WebSocket-Key: %s\r\n\r\n"
-               % (port, key)).encode())
+               "Upgrade: websocket\r\nSec-WebSocket-Version: 13\r\nSec-WebSocket-Key: %s\r\n"
+               "Authorization: %s\r\n\r\n"
+               % (port, key, ws_auth())).encode())
     s.settimeout(5)
     head = s.recv(4096)
     if not head.startswith(b"HTTP/1.1 101"):
@@ -218,7 +244,8 @@ PY
 TIMEOUTS_PID=$!
 
 # ── serena proxy ──
-expect "serena start" 200 -X POST "$BASE/api/projects/$PROJECT_ID/serena/start"
+expect "serena start" 200 -X POST -H "Authorization: $(sign_hdr POST "/api/projects/$PROJECT_ID/serena/start")" \
+  "$BASE/api/projects/$PROJECT_ID/serena/start"
 running=0
 for _ in $(seq 1 100); do
   if [ "$(curl -s -o /dev/null -w '%{http_code}' "$BASE/api/projects/$PROJECT_ID/serena/dashboard/index.html")" = 200 ]; then
@@ -247,14 +274,18 @@ after="$(backend_posts)"
 if [ "$before" = "$after" ]; then pass "refused writes never reached the backend"; else fail "backend saw $((after - before)) refused POST(s)"; fi
 # The stand-in backend (python http.server) answers POST with 501: reaching it
 # is the point, not its answer.
-expect "proxy POST without an Origin reaches the backend" 501 -X POST -d '{}' "$sp/clear_logs"
+expect "proxy POST without an Origin reaches the backend" 501 -X POST \
+  -H "Authorization: $(sign_hdr POST "/api/projects/$PROJECT_ID/serena/clear_logs" "$SCRATCH/empty-object.json")" \
+  --data-binary "@$SCRATCH/empty-object.json" "$sp/clear_logs"
 expect "proxy POST from the daemon's own origin reaches the backend" 501 -X POST -H "Origin: $BASE" -d '{}' "$sp/clear_logs"
 
 # ── body limits ──
 { printf '{"tags":"'; head -c 2097152 /dev/zero | tr '\0' a; printf '"}'; } >"$SCRATCH/big.json"
 expect "2 MiB body on PATCH /api/projects/{id}" 413 -X PATCH -H "Content-Type: application/json" \
+  -H "Authorization: $(sign_hdr PATCH "/api/projects/$PROJECT_ID" "$SCRATCH/big.json")" \
   --data-binary "@$SCRATCH/big.json" "$BASE/api/projects/$PROJECT_ID"
 expect "2 MiB body on POST /api/sessions/{id}/kill" 413 -X POST -H "Content-Type: application/json" \
+  -H "Authorization: $(sign_hdr POST /api/sessions/1/kill "$SCRATCH/big.json")" \
   --data-binary "@$SCRATCH/big.json" "$BASE/api/sessions/1/kill"
 
 # ── connector redaction ──

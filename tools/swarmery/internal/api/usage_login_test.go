@@ -43,6 +43,10 @@ func TestMain(m *testing.M) {
 	}
 	os.Setenv("SWARMERY_CREDENTIALS_DIR", dir)
 	os.Unsetenv("SWARMERY_USAGE_OAUTH")
+	// The tests written before the Origin-less gate drive the write routes
+	// with no Origin and no credential; the gate's own tests turn it back on
+	// (enableOriginlessAuth, originless_auth_test.go).
+	originlessAuthRequired = false
 
 	code := m.Run()
 	os.RemoveAll(dir)

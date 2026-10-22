@@ -36,6 +36,7 @@ import (
 
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/decide"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/ingest"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/linksig"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/store"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/triage"
 )
@@ -75,7 +76,9 @@ func cmdTriage(args []string) int {
 	case "run":
 		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 		defer stop()
-		return triageRun(ctx, args[1:], os.Stdout, os.Stderr, &http.Client{Timeout: 30 * time.Second})
+		// Signed with the link token: the daemon takes a write without an
+		// Origin only with link auth (internal/api origin.go).
+		return triageRun(ctx, args[1:], os.Stdout, os.Stderr, linksig.NewClient("", 30*time.Second))
 	case "check":
 		return triageCheck(args[1:], os.Stdout, os.Stderr)
 	case "-h", "--help", "help":

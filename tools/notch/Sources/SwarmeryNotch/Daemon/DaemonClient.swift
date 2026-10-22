@@ -44,11 +44,15 @@ public struct DaemonClient: Sendable {
     public let baseURL: URL
     private let session: URLSession
     private let decoder: JSONDecoder
+    /// Signs every POST with the link token: the daemon takes a write that
+    /// carries no browser Origin only with link auth.
+    public let signer: LinkSigner
 
-    public init(baseURL: URL? = nil, session: URLSession = .shared) {
+    public init(baseURL: URL? = nil, session: URLSession = .shared, signer: LinkSigner = LinkSigner()) {
         self.baseURL = Self.normalize(baseURL ?? Self.resolveBaseURL())
         self.session = session
         self.decoder = JSONDecoder()
+        self.signer = signer
     }
 
     /// `SWARMERY_URL` overrides the default `http://127.0.0.1:7777` — the
@@ -177,6 +181,7 @@ public struct DaemonClient: Sendable {
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
+        signer.sign(&request)
         let (data, response) = try await session.data(for: request)
         try Self.checkHTTPStatus(response)
         return data

@@ -59,7 +59,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         setUpMenuBar()
         setUpPresenters(actions: actions)
 
-        let stream = WSStream(url: client.baseURL.appendingPathComponent("api/ws"))
+        let stream = WSStream(url: client.baseURL.appendingPathComponent("api/ws"), signer: client.signer)
         let coordinator = AppCoordinator(client: client, stream: stream, usageRefreshInterval: config.usageRefreshInterval)
         coordinator.onStateChange = { [weak self] state in
             self?.render(state)

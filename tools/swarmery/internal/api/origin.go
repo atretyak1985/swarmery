@@ -21,18 +21,27 @@
 // as full origins (scheme://host[:port]); a trusted origin's host[:port] is an
 // accepted Host as well. There is no built-in trust of any other name or port.
 //
-// Requests without an Origin header (the hook shim, curl, `swarmery console`,
-// the notch companion) keep passing the origin fence: a non-browser client
-// cannot be driven by a web page, and localhost trust is the v1 model. They
-// still have to name the daemon in Host, which every HTTP client does by
-// default from the URL it dials.
+// Requests without an Origin header come from non-browser clients (the hook
+// shim, `swarmery api`, `swarmery console`, the notch companion). A browser
+// always sends Origin on a write and on a WebSocket upgrade, so a missing one
+// says nothing about where a request came from — any local process, or anyone
+// on the network when the daemon is bound beyond loopback, can omit it.
+// Non-browser clients therefore authenticate to the daemon: an Origin-less
+// write or upgrade behind requireLocalOrigin must carry link auth (a request
+// signed with the link token, internal/linksig, or during the transition the
+// legacy bearer scheme), the same credential the /api/link/* routes take.
+// Plain reads (GET/HEAD without an upgrade) stay open: a same-origin browser
+// GET carries no Origin either. Every request still has to name the daemon in
+// Host, which every HTTP client does by default from the URL it dials.
 package api
 
 import (
+	"log"
 	"net"
 	"net/http"
 	"net/url"
 	"strings"
+	"sync"
 )
 
 // trustedOrigins is the OPT-IN allow-list of extra browser origins that pass
@@ -202,6 +211,9 @@ func isTrustedOrigin(r *http.Request, origin string) bool {
 // into a shell. The daemon's own origin and the opt-in list apply as everywhere
 // else — a dashboard reached by a trusted alias must not get working writes and
 // a dead terminal.
+//
+// It says nothing on an exposed listener (isExposedListener): there any client
+// can send the daemon's own Origin, so a caller must refuse first (term.go).
 func isStrictLocalOrigin(r *http.Request) bool {
 	o := r.Header.Get("Origin")
 	return o != "" && isTrustedOrigin(r, o)
@@ -219,19 +231,104 @@ func isTrustedHost(r *http.Request) bool {
 	return trustedHosts[h] || isSelfHost(r, h)
 }
 
-// requireLocalOrigin rejects state-changing requests (and WebSocket upgrades)
-// that carry a browser Origin other than the daemon's own or an opted-in one
-// (CSRF hardening, D4). Requests without an Origin header (the shim, curl, the
-// console, notch) pass — localhost trust is the v1 model.
+// originlessAuthRequired gates Origin-less writes and upgrades on link auth.
+// Always on in the daemon; the api package's TestMain turns it off for the
+// tests written before the gate, which drive the routes without a credential.
+var originlessAuthRequired = true
+
+// isPlainRead is a GET or HEAD that asks for no protocol upgrade.
+func isPlainRead(r *http.Request) bool {
+	return (r.Method == http.MethodGet || r.Method == http.MethodHead) && r.Header.Get("Upgrade") == ""
+}
+
+// requireLocalOrigin guards state-changing requests (and WebSocket upgrades).
+// A request that carries a browser Origin must carry the daemon's own or an
+// opted-in one (CSRF hardening, D4), or it is 403. A request without an Origin
+// comes from a non-browser client and must carry link auth (authenticateLink:
+// signed, or the legacy bearer scheme), or it is 401 — 503 while the daemon has
+// no link token. A plain GET without an Origin passes: a same-origin browser
+// read carries none, and reads are not what this fence is for.
+//
+// An Origin header is only evidence of a browser when nothing else can reach
+// the listener: any non-browser client may send whatever Origin it likes. So on
+// an EXPOSED listener (D7: the daemon was started with a non-loopback --bind,
+// or this connection arrived on a non-loopback address) every gated request
+// that is not a plain read needs link auth, Origin or not; a dashboard opened
+// over the network then reads but cannot write (401 with a clear error). On a
+// loopback listener the browser-Origin model stands.
 func requireLocalOrigin(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if o := r.Header.Get("Origin"); o != "" && !isTrustedOrigin(r, o) {
+		o := r.Header.Get("Origin")
+		if o != "" && !isTrustedOrigin(r, o) {
 			writeJSONStatus(w, http.StatusForbidden,
 				map[string]string{"error": "cross-origin request rejected"})
 			return
 		}
+		if !originlessAuthRequired || isPlainRead(r) {
+			next(w, r)
+			return
+		}
+		exposed := isExposedListener(r)
+		if o != "" && !exposed {
+			next(w, r)
+			return
+		}
+		if o != "" && r.Header.Get("Authorization") == "" {
+			writeJSONStatus(w, http.StatusUnauthorized, map[string]string{
+				"error": "this daemon listens beyond loopback: writes need link auth " +
+					"(`swarmery api`, signed with the link token); the browser dashboard is read-only here",
+			})
+			noteOriginlessRefusal(r, "an exposed listener")
+			return
+		}
+		r, _, ok := authenticateLink(w, r)
+		if !ok {
+			noteOriginlessRefusal(r, "no Origin")
+			return
+		}
 		next(w, r)
 	}
+}
+
+// exposedBind is set when the daemon was started with a non-loopback --bind
+// (AttachExposedBind, startup). A wildcard bind is exposed even for a
+// connection that happens to arrive on 127.0.0.1.
+var exposedBind bool
+
+// AttachExposedBind records whether the daemon listens beyond loopback.
+func AttachExposedBind(exposed bool) { exposedBind = exposed }
+
+// isExposedListener reports whether this request arrived on a listener others
+// can reach: the configured bind is not loopback, or the connection's local
+// address is not a loopback address. Decided per listener, never from the
+// Host header (which the client writes). A request with no listener in its
+// context (a handler invoked directly in a test) is judged by the bind alone.
+func isExposedListener(r *http.Request) bool {
+	if exposedBind {
+		return true
+	}
+	host, _, ok := listenerAddr(r)
+	if !ok {
+		return false
+	}
+	ip := net.ParseIP(host)
+	return ip == nil || !ip.IsLoopback()
+}
+
+// refusalLogged remembers the routes whose first refused unauthenticated
+// write was logged, so the hint appears once per route per process.
+var refusalLogged sync.Map
+
+func noteOriginlessRefusal(r *http.Request, why string) {
+	key := r.Pattern
+	if key == "" {
+		key = r.Method + " " + r.URL.Path
+	}
+	if _, seen := refusalLogged.LoadOrStore(key, true); seen {
+		return
+	}
+	log.Printf("api: refused %s %s without link auth (%s); non-browser clients sign their requests: use `swarmery api` (signs with the link token)",
+		r.Method, r.URL.Path, why)
 }
 
 // requireLocalOriginUnlessRead applies requireLocalOrigin to every request that
@@ -242,8 +339,7 @@ func requireLocalOrigin(next http.HandlerFunc) http.HandlerFunc {
 func requireLocalOriginUnlessRead(next http.HandlerFunc) http.HandlerFunc {
 	fenced := requireLocalOrigin(next)
 	return func(w http.ResponseWriter, r *http.Request) {
-		read := r.Method == http.MethodGet || r.Method == http.MethodHead
-		if read && r.Header.Get("Upgrade") == "" {
+		if isPlainRead(r) {
 			next(w, r)
 			return
 		}
