@@ -51,6 +51,35 @@ repo's gates, rebuts the rest with `file:line` evidence, and replies in the thre
   cannot know: framework-specific false-positive patterns, which migrations hold
   `UNIQUE` constraints, known CI flake signatures. The command reads it in full.
 
+## GitHub inbox (swarmery daemon)
+
+The same `prReview` block also feeds the swarmery daemon's **github-inbox** routine
+(`tools/swarmery/config/routines/github-inbox.json`, seeded with
+`swarmery routine seed --from config/routines/github-inbox.json`). Every two hours,
+for every project with a `prReview` block, it reads each repo in `prReview.repos`
+(`<owner>/<name>`) and keeps **one triage card per open issue or PR** that is new or
+got a comment since the routine's last successful run (24 hours back on the first run):
+
+- The card is labelled `github:<owner>/<repo>#<n>`; on the board that chip links to
+  the item. The description quotes the item's opening text and its newest 10 comments
+  as `<ts> @author: … — <link>` lines; older history stays on GitHub.
+- A new comment rewrites the card and returns it to **triage** with a «new comment»
+  marker — from `todo`, `in_review`, `done` or `archived` alike. A card the dispatcher
+  is running keeps its column and only gets the text and the marker.
+- Cards are drafts: they are never written to `todo`, so nothing starts on its own.
+  Closed items are left as they are. Bot comments (CI and coverage reports) do not
+  count as new comments.
+- **Token requirement:** it reads with the GitHub token stored in the daemon's
+  credential store (the project banner's *Sign in* on the dashboard), through an
+  isolated `GH_CONFIG_DIR`, with GET requests only. It never uses your own `gh` login;
+  a project whose host has no stored token is skipped, and the run says so.
+
+Preview what a run would write, without writing anything:
+
+```bash
+swarmery ghinbox sync --project <id|slug> --dry-run
+```
+
 ## Commands
 
 | Command | What it does |

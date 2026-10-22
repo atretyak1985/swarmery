@@ -256,7 +256,7 @@ func Sync(ctx context.Context, db store.DB, p Project, since time.Time, opt Opti
 	if err != nil {
 		rep.Skipped = true
 		if errors.Is(err, repoprovider.ErrNoStoredToken) {
-			rep.Reason = "no GitHub token stored for " + Host + " — connect one on the Accounts page (it is read from the daemon's store, never from your gh login)"
+			rep.Reason = "no GitHub token stored for " + Host + " — sign the daemon in from the project banner (docs/vcs-login.md); your own gh login is never used"
 		} else {
 			rep.Reason = "no GitHub reader: " + repoprovider.RedactedTail("", err)
 		}

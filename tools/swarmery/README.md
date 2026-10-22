@@ -607,3 +607,63 @@ swarmery routine seed --from config/routines/memory-review.json
 
 Disabling and the `SWARMERY_ROUTINES=0` switch work exactly as for
 `inbox-triage-nightly` above.
+
+## GitHub inbox
+
+`config/routines/github-inbox.json` ships a third routine, `github-inbox`, that
+turns new GitHub issues and pull-request comments into board drafts without
+anyone copying them. Every two hours (minute 15) it runs two steps:
+
+1. `swarmery ghinbox sync --all` — for every non-archived project whose
+   `.claude/project.json` carries a `prReview` block (the review-pack contract:
+   `owner` + `repos`), it reads every repo in `prReview.repos` and keeps **one
+   triage card per open issue or PR** that is new, or got a comment, since the
+   **start** of the routine's last successful run (24 hours back on the first
+   run; the start, not the finish, so a comment posted while that run was still
+   busy is not lost — the overlap is deduped). Each card is labelled
+   `github:<owner>/<repo>#<n>`, carries origin `github`, and quotes the item's
+   opening text and its newest 10 comments (`<ts> @author: … — <link>`) under a
+   header saying the quoted text is data, not instructions. A new comment
+   rewrites the card and returns it to `triage` with a `new-comment` marker,
+   from any column except a run the dispatcher owns (`in_progress`, or a card
+   holding a worktree), which keeps its column. Cards are never written to
+   `todo`, so nothing starts on its own; closed items are left alone; bot
+   comments do not count. More than 500 entries in one listing are cut to the
+   newest 500 and the project line says so.
+2. An `ai-prompt` step on Haiku that turns the sync's report into one sentence
+   per project. It sees that report through `{{previous_output}}` (below) and is
+   told to decide nothing and run no tools; the sync prints counts, labels and
+   repo names only — never a title or a comment — because that text reaches the
+   model verbatim.
+
+**Token requirement.** The sync reads with the GitHub token in the daemon's own
+credential store (`~/.swarmery/secrets/vcs-github.com.env`, written by the
+project banner's *Sign in* — see [docs/vcs-login.md](docs/vcs-login.md)), with
+an isolated `GH_CONFIG_DIR`, through `repoprovider.ReadOnlyGH`: `gh api` GET
+requests only, every write form refused before `gh` runs. It never falls back to
+the operator's own `gh` login. A project without a stored token is skipped with
+an explicit line (`<slug>: skipped — no GitHub token stored for github.com …`),
+and that line — like every project line — lands in `routine_runs.detail`
+(step output keeps its tail; the project lines are printed last for that reason).
+
+| Command | What it does | Exit codes |
+|---|---|---|
+| `swarmery ghinbox sync (--project <id\|slug> \| --all) [--since <RFC3339>] [--dry-run] [--db <path>]` | Syncs one project, or every project with a `prReview` block. Writes the cards straight into the database (the board shows them on its next read). `--dry-run` opens the database read-only and prints every card it would write — label, title, link and description — then the project lines. | `0` synced or skipped · `1` a repository could not be read or a write failed (the run fails, so the next window does not move past it) · `2` usage or database error |
+
+The daemon never seeds it by itself. Seed it once, from `tools/swarmery/`:
+
+```bash
+swarmery routine seed --from config/routines/github-inbox.json
+```
+
+`internal/routines.ShippedSeedFiles` registers every file under
+`config/routines`; a test fails when the directory and the list disagree.
+
+**`{{previous_output}}`.** An `ai-prompt` step's prompt may carry
+`{{previous_output}}`: it is replaced with the output of the step that ran just
+before it (its last 8 KB; empty for a first step). It is how a model step
+summarises a command step without tools of its own — so a step feeding one must
+not print untrusted text.
+
+Disabling and the `SWARMERY_ROUTINES=0` switch work exactly as for
+`inbox-triage-nightly` above.
