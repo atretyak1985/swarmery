@@ -79,6 +79,9 @@ func Routes(root *http.ServeMux, h *Handler) {
 	mux.HandleFunc("GET /api/sessions", h.listSessions)
 	mux.HandleFunc("GET /api/sessions/{id}", h.getSession)
 	mux.HandleFunc("GET /api/sessions/{id}/handoff", h.getSessionHandoff)
+	// «continue from handoff» on a cache-cold session (handoff_generate.go):
+	// the existing brief, or one generation through the candidate rules.
+	mux.HandleFunc("POST /api/sessions/{id}/handoff", requireLocalOrigin(h.postSessionHandoff))
 	// …and the same brief keyed by PROJECT instead of session: the newest one
 	// for the project a cwd resolves to, for the SessionStart context bridge
 	// (handoff_latest.go). 204 when there is nothing to inject.
