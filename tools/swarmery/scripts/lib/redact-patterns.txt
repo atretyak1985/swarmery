@@ -1,0 +1,11 @@
+# Token shapes scrubbed from evidence before it leaves a machine — one POSIX
+# extended regexp per line (also valid RE2). Blank lines and lines starting
+# with "#" are ignored. Every match is replaced with "***".
+#
+# This is a MIRROR of credstore.TokenPatterns
+# (tools/swarmery/internal/repoprovider/credstore/credstore.go), the list the
+# daemon's Redact uses; TestRedactPatternsFileMatches fails when the two drift.
+# Edit both together.
+gh[pousr]_[A-Za-z0-9]{20,}
+github_pat_[A-Za-z0-9_]{20,}
+glpat-[A-Za-z0-9_-]{20,}

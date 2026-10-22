@@ -28,8 +28,10 @@ func scrubFixture() []string {
 	}
 }
 
-func TestScrubVCSTokensFlagOffIsIdentity(t *testing.T) {
-	for _, v := range []string{"", "0", "true", "yes"} {
+// The opt-out (scrubbing is ON by default since the least-privilege defaults):
+// only an explicit "0"/"off"/"false"/"no" keeps the env, byte-identical.
+func TestScrubVCSTokensOptOutIsIdentity(t *testing.T) {
+	for _, v := range []string{"0", "off", "false", "no", " OFF "} {
 		t.Run("flag="+v, func(t *testing.T) {
 			t.Setenv(ScrubVCSTokensEnv, v)
 			in := scrubFixture()
@@ -46,7 +48,16 @@ func TestScrubVCSTokensFlagOffIsIdentity(t *testing.T) {
 }
 
 func TestScrubVCSTokensFlagOnDropsEveryKey(t *testing.T) {
-	t.Setenv(ScrubVCSTokensEnv, "1")
+	for _, v := range []string{"", "1", "yes", "anything-else"} {
+		t.Run("flag="+v, func(t *testing.T) { assertScrubbed(t, v) })
+	}
+}
+
+// assertScrubbed runs the scrub with the knob at v and asserts every VCS key is
+// gone while every other entry survives in order. "" is the default: unset.
+func assertScrubbed(t *testing.T, v string) {
+	t.Helper()
+	t.Setenv(ScrubVCSTokensEnv, v)
 	in := scrubFixture()
 	snapshot := append([]string(nil), in...)
 	out := scrubVCSTokens(in)
@@ -96,8 +107,14 @@ func TestStart_ScrubFlagReachesTheChild(t *testing.T) {
 	}
 	t.Setenv("GH_TOKEN", "fake-daemon-token")
 
-	t.Run("off", func(t *testing.T) {
+	t.Run("default", func(t *testing.T) {
 		t.Setenv(ScrubVCSTokensEnv, "")
+		if got := child(t); got != absent {
+			t.Errorf("knob unset: child saw a GH_TOKEN (%d bytes), want it absent — scrubbing is on by default", len(got))
+		}
+	})
+	t.Run("opt-out", func(t *testing.T) {
+		t.Setenv(ScrubVCSTokensEnv, "0")
 		if got := child(t); got != "fake-daemon-token" {
 			t.Errorf("flag off: child GH_TOKEN = %q, want the inherited value", got)
 		}
@@ -111,7 +128,7 @@ func TestStart_ScrubFlagReachesTheChild(t *testing.T) {
 }
 
 func TestScrubVCSTokensNilEnv(t *testing.T) {
-	t.Setenv(ScrubVCSTokensEnv, "1")
+	t.Setenv(ScrubVCSTokensEnv, "")
 	if out := scrubVCSTokens(nil); len(out) != 0 {
 		t.Errorf("scrub(nil) = %v, want empty", out)
 	}

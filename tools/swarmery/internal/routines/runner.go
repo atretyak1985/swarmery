@@ -106,7 +106,17 @@ func (r ClaudeRunner) Run(ctx context.Context, cwd, prompt, model string) (strin
 	}
 	args = append(args, "--model", m)
 	args = append(args, claudeflags.EffortArgs(effortEnv, DefaultEffort)...)
+	// Still bypassPermissions, deliberately. An ai-prompt step is operator
+	// authored with no fixed contract, so no single allow-list fits it, and a list
+	// too narrow for the prompt fails SILENTLY: the run exits 0 with its writes
+	// denied (measured on 2.1.308). What it does get is the executor deny list —
+	// no remote writes, no PR/MR changes (the daemon API stays reachable: an operator routine may drive it), which bypass still honours. The
+	// next step is a per-routine declared mode and allow-list; until then
+	// SWARMERY_ROUTINES_PERMISSION_MODE pins one for every routine.
 	args = append(args, claudeflags.PermissionModeArgs(permEnv)...)
+	// Last: --disallowedTools is variadic, and the prompt travels on stdin, so
+	// nothing positional follows it.
+	args = append(args, claudeflags.RoutineDenyArgs()...)
 	// launchd hands the daemon a minimal PATH (/usr/bin:/bin:/usr/sbin:/sbin) that
 	// omits every usual install dir, so a bare exec of "claude" fails with ENOENT
 	// under the service while working in the operator's shell. Resolve explicitly.

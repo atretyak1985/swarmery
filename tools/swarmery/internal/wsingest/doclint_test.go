@@ -10,7 +10,7 @@ import (
 
 const effortFixture = "testdata/effort-plan"
 
-func readFixture(t *testing.T, name string) string {
+func readEffortFixture(t *testing.T, name string) string {
 	t.Helper()
 	raw, err := os.ReadFile(filepath.Join(effortFixture, name))
 	if err != nil {
@@ -31,7 +31,7 @@ func TestLintPhaseDocEffortMissing(t *testing.T) {
 		{"phase-3-done.md", nil}, // has a Completion Report: history
 	} {
 		var codes []string
-		for _, l := range LintPhaseDoc(readFixture(t, tc.doc)) {
+		for _, l := range LintPhaseDoc(readEffortFixture(t, tc.doc)) {
 			codes = append(codes, l.Code)
 			if !strings.Contains(l.Message, "**Effort:**") {
 				t.Errorf("%s: message %q does not say what to write", tc.doc, l.Message)

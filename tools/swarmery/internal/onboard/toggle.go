@@ -73,8 +73,8 @@ func TogglePlugin(projectDir, pack string, enabled bool) (*ToggleResult, error) 
 	if !res.Changed {
 		return res, nil
 	}
-	if err := os.WriteFile(sPath+".bak", orig, 0o644); err != nil {
-		return nil, fmt.Errorf("write backup %s.bak: %w", sPath, err)
+	if err := writeBackup(sPath, orig); err != nil {
+		return nil, err
 	}
 	res.Backup = ".claude/settings.json.bak"
 	if err := writeJSON(sPath, settings); err != nil {

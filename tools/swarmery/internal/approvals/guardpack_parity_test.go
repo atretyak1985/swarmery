@@ -45,6 +45,16 @@ func TestGuardPackTestkitProdMirrorParity(t *testing.T) {
 	assertTestkitMirror(t, root, guardPackTestkitRel, "hooks/patterns/prod.json", guardPackProdRel)
 }
 
+// swarmery-link matches production deploys on its own side, before a call
+// can reach the daemon (plugins/swarmery-link/hooks/lib/prod.ts): its vendored
+// copy must stay guard-pack's list.
+const swarmeryLinkProdRel = "plugins/swarmery-link/hooks/lib/prod.ts"
+
+func TestSwarmeryLinkProdMirrorParity(t *testing.T) {
+	root := repoRoot(t)
+	assertTestkitMirror(t, root, swarmeryLinkProdRel, guardPackProdRel, guardPackProdRel)
+}
+
 // assertTestkitMirror decodes the String.raw literal between testkit.ts's
 // `// BEGIN mirror: <name>` and `// END mirror: <name>` markers and fails
 // unless it equals the JSON file at fileRel. Both sides are decoded, so

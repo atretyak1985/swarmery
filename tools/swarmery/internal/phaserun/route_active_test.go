@@ -274,19 +274,36 @@ func TestRouteOffGolden(t *testing.T) {
 	quietKnobs(t)
 	// Re-pinned when the prompt gained the [LAND]/[MANUAL] bullet (phase-run
 	// outcomes plan, phase 3): the hash covers the prompt, the flag tail is unchanged.
-	const golden = "acd14a3e5a13fb4a0c56fc4f4019efed0d5be0b7c845accbc31ba058192dadc9"
+	//
+	// Re-pinned again when the prompt moved last, after `--` (daemon API
+	// hardening): golden is today's argv, captured from this test's own builder
+	// output; legacyGolden is the previous pin, which the argv put back into the
+	// old `-p <prompt> --session-id …` order must still match — proof that the
+	// move changed the prompt's position and nothing else.
+	const golden = "2dff8fdaca68df140fee92bfb2d3660e35c3dd9c4422c9b032583bf211841928"
+	const legacyGolden = "acd14a3e5a13fb4a0c56fc4f4019efed0d5be0b7c845accbc31ba058192dadc9"
 	wantTail := []string{"--session-id", "uuid-1", "--model", "claude-opus-5-5", "--effort", "high"}
 	specs, db, _ := startOnce(t, "off", "", "")
 	if len(specs) != 1 {
 		t.Fatalf("spawned %d times, want 1", len(specs))
 	}
 	a := argvOf(specs[0])
+	n := len(a)
+	if n < 3 || a[0] != "-p" || a[n-2] != "--" {
+		t.Fatalf("off argv %q is not `-p … -- <prompt>`", a)
+	}
+	flags := a[1 : n-2]
 	sum := sha256.Sum256([]byte(strings.Join(a, "\x00")))
 	if got := hex.EncodeToString(sum[:]); got != golden {
-		t.Errorf("off argv drifted from the pre-router golden: sha %s, tail %q", got, a[2:])
+		t.Errorf("off argv drifted from the pre-router golden: sha %s, flags %q", got, flags)
 	}
-	if strings.Join(a[2:], " ") != strings.Join(wantTail, " ") {
-		t.Errorf("off flags = %q, want %q", a[2:], wantTail)
+	legacy := append([]string{"-p", a[n-1]}, flags...)
+	legacySum := sha256.Sum256([]byte(strings.Join(legacy, "\x00")))
+	if got := hex.EncodeToString(legacySum[:]); got != legacyGolden {
+		t.Errorf("off argv in the old prompt order no longer matches the previous pin: sha %s", got)
+	}
+	if strings.Join(flags, " ") != strings.Join(wantTail, " ") {
+		t.Errorf("off flags = %q, want %q", flags, wantTail)
 	}
 	if n := routeRowCount(t, db); n != 0 {
 		t.Errorf("off wrote %d route rows", n)

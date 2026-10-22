@@ -157,10 +157,10 @@ func TestClaudeRunner_Start_ArgvPin(t *testing.T) {
 		model string
 		want  []string
 	}{
-		{"default model", "", []string{"-p", "plan it", "--session-id", "u-argv",
-			"--permission-mode", claudeflags.DefaultMode, "--model", DefaultModel, "--effort", DefaultEffort}},
-		{"model override", "claude-sonnet-5", []string{"-p", "plan it", "--session-id", "u-argv",
-			"--permission-mode", claudeflags.DefaultMode, "--model", "claude-sonnet-5", "--effort", DefaultEffort}},
+		{"default model", "", []string{"-p", "--session-id", "u-argv",
+			"--permission-mode", "dontAsk", "--model", DefaultModel, "--effort", DefaultEffort, "--allowedTools", "Read,Grep,Glob,Bash(git log*),Bash(git show*)", "--", "plan it"}},
+		{"model override", "claude-sonnet-5", []string{"-p", "--session-id", "u-argv",
+			"--permission-mode", "dontAsk", "--model", "claude-sonnet-5", "--effort", DefaultEffort, "--allowedTools", "Read,Grep,Glob,Bash(git log*),Bash(git show*)", "--", "plan it"}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			if err := os.Remove(argFile); err != nil && !os.IsNotExist(err) {

@@ -376,13 +376,18 @@ window.addEventListener('resize', () => { cancelAnimationFrame(raf); raf = reque
 requestAnimationFrame(draw);
 
 // ---- theme ----
-const saved = localStorage.getItem('am-theme');
-if (saved) document.documentElement.dataset.theme = saved;
+// Storage is guarded: embedded in the dashboard this document runs in a CSP
+// sandbox with an opaque origin, where touching localStorage throws — an
+// unguarded read here would stop the rest of this script.
+try {
+  const saved = localStorage.getItem('am-theme');
+  if (saved) document.documentElement.dataset.theme = saved;
+} catch (_) { /* storage blocked */ }
 syncThemeGlyph();
 $('theme').addEventListener('click', () => {
   const next = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
   document.documentElement.dataset.theme = next;
-  localStorage.setItem('am-theme', next);
+  try { localStorage.setItem('am-theme', next); } catch (_) { /* storage blocked */ }
   syncThemeGlyph();
 });
 function syncThemeGlyph() { $('theme').textContent = document.documentElement.dataset.theme === 'dark' ? '☀' : '☾'; }
@@ -476,23 +481,68 @@ function syncThemeGlyph() { $('theme').textContent = document.documentElement.da
   }
 })();
 
-// ---- embed channel: blast highlight ----
-// The dashboard that frames this map posts {type:'swarmery:highlight',
-// moduleIds:[...]} to say "these are the modules the current branch touches".
-// An empty (or absent) moduleIds clears the highlight, so one message shape
-// covers both select and deselect.
+// ---- embed channel ----
+// The dashboard frames this map in a sandbox (opaque origin), so it cannot
+// reach into this document; it posts messages instead, and this listener is
+// the whole contract:
+//
+//   {type:'swarmery:highlight', moduleIds:[...]} — "these are the modules the
+//     current branch touches". An empty (or absent) moduleIds clears the
+//     highlight, so one shape covers both select and deselect.
+//   {type:'swarmery:theme', theme:'light'|'dark', vars:{'--name':value}, css?}
+//     — follow the dashboard theme: data-theme, the app tokens as inline custom
+//     properties (inline wins over this file's own :root/[data-theme] values),
+//     and embed-only CSS in one <style id="swarmery-embed-style">.
+//   {type:'swarmery:expanded', expanded:boolean} — mirror the dashboard pane's
+//     expanded state onto <html data-swarmery-expanded>, which that CSS keys on.
 //
 // Opened standalone (file:// straight from architecture-out/) nothing ever
 // posts, so this listener costs nothing and changes nothing. The origin is NOT
-// checked on purpose: the payload is a list of module ids that only ever
-// toggles a CSS class on cards this document already rendered — an id that
-// matches nothing is a no-op, and nothing here is injected as markup.
+// checked on purpose: every branch only sets attributes, classes, custom
+// properties or stylesheet text on this document — nothing is parsed as markup
+// (the CSS goes in via textContent, never innerHTML), and a custom property is
+// applied only when its name is a plain --[a-z0-9-]+ token.
+const EMBED_STYLE_ID = 'swarmery-embed-style';
+const CSS_VAR_NAME = /^--[a-z0-9-]+$/;
 window.addEventListener('message', (e) => {
+  // Only the embedding page speaks this protocol; a message from any other
+  // window (an opener, a nested frame) is ignored.
+  if (e.source !== window.parent) return;
   const d = e.data;
-  if (!d || d.type !== 'swarmery:highlight') return;
-  const wanted = new Set(Array.isArray(d.moduleIds) ? d.moduleIds : []);
-  for (const [mid, el] of cardEls) el.classList.toggle('blast', wanted.has(mid));
-  for (const [mid, el] of readerEls) el.classList.toggle('blast', wanted.has(mid));
+  if (!d || typeof d.type !== 'string') return;
+  if (d.type === 'swarmery:highlight') {
+    const wanted = new Set(Array.isArray(d.moduleIds) ? d.moduleIds : []);
+    for (const [mid, el] of cardEls) el.classList.toggle('blast', wanted.has(mid));
+    for (const [mid, el] of readerEls) el.classList.toggle('blast', wanted.has(mid));
+    return;
+  }
+  const root = document.documentElement;
+  if (d.type === 'swarmery:theme') {
+    if (d.theme === 'light' || d.theme === 'dark') {
+      root.dataset.theme = d.theme;
+      syncThemeGlyph();
+    }
+    if (d.vars && typeof d.vars === 'object') {
+      for (const [k, v] of Object.entries(d.vars)) {
+        if (CSS_VAR_NAME.test(k) && typeof v === 'string') root.style.setProperty(k, v);
+      }
+    }
+    if (typeof d.css === 'string') {
+      let style = document.getElementById(EMBED_STYLE_ID);
+      if (style === null) {
+        style = document.createElement('style');
+        style.id = EMBED_STYLE_ID;
+        // Appended last, so equal-specificity embed rules win over this file's
+        // own <style> earlier in the head without needing !important.
+        document.head.appendChild(style);
+      }
+      style.textContent = d.css;
+    }
+    return;
+  }
+  if (d.type === 'swarmery:expanded') {
+    root.toggleAttribute('data-swarmery-expanded', d.expanded === true);
+  }
 });
 
 function name(id) { const m = modById.get(id); return m ? m.name : id; }

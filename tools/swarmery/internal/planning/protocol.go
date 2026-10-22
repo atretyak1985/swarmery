@@ -35,6 +35,51 @@ type PlanningQuestion struct {
 	Description string           `json:"description,omitempty"`
 	Options     []PlanningOption `json:"options"`
 	RunningPlan *PlanningSummary `json:"runningPlan,omitempty"`
+	// CostToChange is the planner's judgement of what reversing this decision
+	// later would cost: cheap | expensive (CostCheap / CostExpensive). An
+	// unanswered expensive question becomes an `undecided` D-n at PROCEED and
+	// holds every phase that depends on it; an unanswered cheap one is taken at
+	// the recommended option. The operator may flip it from the dashboard.
+	CostToChange string `json:"costToChange"`
+	// CostReason is the planner's one-line why behind CostToChange.
+	CostReason string `json:"costReason,omitempty"`
+	// Lints are what normalisation had to repair (LintQuestionCostMissing, …) —
+	// data for the dashboard, never a reason to drop the question.
+	Lints []string `json:"lints,omitempty"`
+}
+
+// Cost-to-change values — the closed set of PlanningQuestion.CostToChange.
+const (
+	CostCheap     = "cheap"
+	CostExpensive = "expensive"
+)
+
+// Question lint codes.
+const (
+	// LintQuestionCostMissing: the question carried no costToChange; it was read
+	// as cheap.
+	LintQuestionCostMissing = "question_cost_missing"
+	// LintQuestionCostInvalid: costToChange was outside {cheap, expensive}; it
+	// was read as cheap.
+	LintQuestionCostInvalid = "question_cost_invalid"
+)
+
+// normalizeCost validates CostToChange against the closed set. A missing or
+// unknown value degrades to cheap with a lint rather than failing the parse:
+// rejecting the question would drop the operator into the raw fallback over a
+// field that only tunes how a SKIPPED answer is recorded.
+func normalizeCost(q *PlanningQuestion) {
+	c := strings.ToLower(strings.TrimSpace(q.CostToChange))
+	switch c {
+	case CostCheap, CostExpensive:
+		q.CostToChange = c
+		return
+	case "":
+		q.Lints = append(q.Lints, LintQuestionCostMissing)
+	default:
+		q.Lints = append(q.Lints, LintQuestionCostInvalid)
+	}
+	q.CostToChange = CostCheap
 }
 
 // protocolEnvelope is the wire shape the agent must emit.
@@ -78,6 +123,8 @@ func ParseTurn(text string) ParsedTurn {
 	}
 
 	q := env.Data
+	q.Lints = nil // never trust a lint the model wrote itself
+	normalizeCost(&q)
 	return ParsedTurn{
 		Question:  &q,
 		Reasoning: strings.TrimSpace(remaining),

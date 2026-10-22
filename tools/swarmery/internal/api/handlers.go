@@ -268,6 +268,13 @@ type sessionDTO struct {
 	// switched without changing. See session_model.go.
 	ModelSwitched bool     `json:"modelSwitched"`
 	Models        []string `json:"models"`
+
+	// CacheCold is the «cache cold» prediction (migration 0127): the session's
+	// prompt cache expired while it sat idle and its next message re-writes the
+	// whole context. Always present as an explicit "cacheCold": null when the
+	// session is warm, ended, or under the handoff threshold. See
+	// internal/cachecold and session_cache_cold.go.
+	CacheCold *sessionCacheColdDTO `json:"cacheCold"`
 }
 
 // handoffDTO is the latest handoffs row projected onto a session, without the
@@ -293,6 +300,9 @@ type turnDTO struct {
 	TokensCacheWrite *int64   `json:"tokensCacheWrite"`
 	CostUSD          *float64 `json:"costUsd"`
 	Text             *string  `json:"text"`
+	// ColdRestart marks a turn that paid for a cold prompt cache after a pause
+	// (migration 0127, internal/cachecold.IsColdRestart).
+	ColdRestart bool `json:"coldRestart"`
 	// StopReason is why the turn ended (migration 0078): end_turn, tool_use,
 	// max_tokens, stop_sequence, refusal. Null on user turns and on every turn
 	// ingested before that migration — which makes it double as the marker the
@@ -334,6 +344,10 @@ type sessionDetailDTO struct {
 	// success cleared — the "auto-recovered" count in the detail header.
 	// Always present (0 when nothing errored or nothing recovered).
 	Recovered int64 `json:"recovered"`
+	// ColdRestarts counts the session's turns marked cold_restart (migration
+	// 0127) — main thread and subagents alike, though only the main thread is
+	// ever marked. Always present.
+	ColdRestarts int64 `json:"coldRestarts"`
 }
 
 // projectSelect projects the registry row plus per-project session/token/cost
@@ -578,7 +592,7 @@ const sessionCols = `
 	         WHERE t.session_id = s.id AND t.role = 'user'
 	           AND t.text IS NOT NULL AND TRIM(t.text) != ''
 	         ORDER BY t.seq LIMIT 1),
-	       ho.path, ho.created_at, ho.context_tokens` + sessionPlanGroupCols + sessionTerminalCols + sessionModelCols + sessionLinkCols
+	       ho.path, ho.created_at, ho.context_tokens` + sessionPlanGroupCols + sessionTerminalCols + sessionModelCols + sessionLinkCols + sessionCacheColdCols
 
 // sessionFrom is the FROM/JOIN tail shared by sessionSelect and the page CTE
 // built in listSessions, so both resolve rows — and the ?planTask predicate's
@@ -815,7 +829,7 @@ func (h *Handler) getSession(w http.ResponseWriter, r *http.Request) {
 	rows, err := h.rdb().Query(`
 		SELECT id, seq, role, message_id, model, started_at, ended_at,
 		       tokens_in, tokens_out, tokens_cache_read, tokens_cache_write, cost_usd, text,
-		       stop_reason
+		       stop_reason, cold_restart
 		FROM turns WHERE session_id = ? AND agent_name IS NULL ORDER BY seq`, d.ID)
 	if err != nil {
 		writeErr(w, err)
@@ -825,7 +839,7 @@ func (h *Handler) getSession(w http.ResponseWriter, r *http.Request) {
 		var t turnDTO
 		if err := rows.Scan(&t.ID, &t.Seq, &t.Role, &t.MessageID, &t.Model, &t.StartedAt, &t.EndedAt,
 			&t.TokensIn, &t.TokensOut, &t.TokensCacheRead, &t.TokensCacheWrite, &t.CostUSD, &t.Text,
-			&t.StopReason); err != nil {
+			&t.StopReason, &t.ColdRestart); err != nil {
 			rows.Close()
 			writeErr(w, err)
 			return
@@ -907,6 +921,13 @@ func (h *Handler) getSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// coldRestarts rides the partial index idx_turns_cold_restart.
+	if err := h.rdb().QueryRow(
+		`SELECT COUNT(*) FROM turns WHERE session_id = ? AND cold_restart = 1`, d.ID).Scan(&d.ColdRestarts); err != nil {
+		writeErr(w, err)
+		return
+	}
+
 	writeJSON(w, d, nil)
 }
 
@@ -915,12 +936,13 @@ func scanSession(scan func(...any) error, s *sessionDTO) error {
 	var hoPath, hoCreatedAt sql.NullString
 	var hoContextTokens sql.NullInt64
 	// Plan-group, terminal-identity, model and link tails (sessionPlanGroupCols,
-	// sessionTerminalCols, sessionModelCols, sessionLinkCols), each scanned as one unit so the column order lives
+	// sessionTerminalCols, sessionModelCols, sessionLinkCols, sessionCacheColdCols), each scanned as one unit so the column order lives
 	// next to the projection that produced it.
 	var group sessionPlanGroupScan
 	var term sessionTerminalScan
 	var models sessionModelScan
 	var link sessionLinkScan
+	var cold sessionCacheColdScan
 	dest := append([]any{&s.ID, &s.ProjectID, &s.ProjectSlug, &s.ProjectName, &s.SessionUUID, &s.Model,
 		&s.GitBranch, &s.CWD, &s.Status, &s.StartedAt, &s.EndedAt, &s.Title, &s.Source,
 		&s.Account, &s.LaunchAccount,
@@ -932,12 +954,14 @@ func scanSession(scan func(...any) error, s *sessionDTO) error {
 	dest = append(dest, term.dest()...)
 	dest = append(dest, models.dest()...)
 	dest = append(dest, link.dest()...)
+	dest = append(dest, cold.dest()...)
 	if err := scan(dest...); err != nil {
 		return err
 	}
 	s.PlanGroup = group.dto()
 	s.Terminal = term.dto()
 	s.Link = link.dto(time.Now(), s.SessionUUID)
+	s.CacheCold = cold.dto()
 	models.apply(s)
 	if whyRaw.Valid {
 		if w := summarizeWhy(whyRaw.String); w != "" {

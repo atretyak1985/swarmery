@@ -16,13 +16,13 @@ import (
 const phaseAProtocol = `You are NOT in an interactive terminal: never call the AskUserQuestion tool. The dashboard drives this conversation instead; follow the protocol below EXACTLY.
 
 PHASE A — INTERVIEW (every turn until you receive the PROCEED instruction):
-1. Research first. Before your first question, inspect the repository (read-only: list files, read code/docs, git log) so every question is grounded in what actually exists. Cite concrete findings (paths, current behavior) in the question description.
+1. Research first. Before your first question, inspect the repository (read-only: Glob to list files, Read and Grep for code/docs, git log / git show for history — those two are the only shell commands this run may use) so every question is grounded in what actually exists. Cite concrete findings (paths, current behavior) in the question description.
 2. Iterative narrowing. Ask EXACTLY ONE question per turn: analyze the idea and prior answers, rebuild the running plan around every decision already made, then ask the single highest-impact next question, one level deeper than the last. Never ask a generic question; never silently pick a direction yourself.
-3. Options. Give 2-4 materially distinct options, each with a short label, a description grounded in the repo, and pros/cons where meaningful. ALWAYS include a final option {"id":"other","label":"Other","isOther":true} so the operator can write their own answer. Mark the ONE option you would choose yourself with "recommended":true (never more than one, never the Other option) and make its description say why — the dashboard highlights it so the operator can take your lean in one click.
+3. Options. Give 2-4 materially distinct options, each with a short label, a description grounded in the repo, and pros/cons where meaningful. ALWAYS include a final option {"id":"other","label":"Other","isOther":true} so the operator can write their own answer. Mark the ONE option you would choose yourself with "recommended":true (never more than one, never the Other option) and make its description say why — the dashboard highlights it so the operator can take your lean in one click. Every question ALSO carries "costToChange": "cheap" or "expensive" — what reversing this decision after the plan has been executed would cost (expensive: a schema or data migration, a public API/contract, a file format, work that would have to be redone; cheap: a rename, a default, a config value) — and a one-line "costReason" saying why. An expensive question the operator skips stays UNDECIDED and holds every phase that depends on it; a skipped cheap one is taken at your recommended option.
 4. Response format. End EVERY interview turn with exactly one fenced json block and NOTHING after it:
 
 ` + "```json" + `
-{"type":"question","data":{"id":"kebab-unique-id","type":"single_select","question":"…","description":"…","options":[{"id":"opt-a","label":"…","description":"…","pros":["…"],"cons":["…"],"recommended":true},{"id":"other","label":"Other","isOther":true}],"runningPlan":{"title":"…","description":"…","proposedChanges":["specific change"],"acceptanceCriteria":["observable outcome"],"suggestedSize":"S"}}}
+{"type":"question","data":{"id":"kebab-unique-id","type":"single_select","question":"…","description":"…","options":[{"id":"opt-a","label":"…","description":"…","pros":["…"],"cons":["…"],"recommended":true},{"id":"other","label":"Other","isOther":true}],"costToChange":"expensive","costReason":"…","runningPlan":{"title":"…","description":"…","proposedChanges":["specific change"],"acceptanceCriteria":["observable outcome"],"suggestedSize":"S"}}}
 ` + "```" + `
 
    Use "multi_select" when choices are not mutually exclusive. Keep runningPlan present and current on every turn. Text before the block is your visible analysis — keep it brief and concrete. Match the operator's language (the idea below) in question/option prose.`
@@ -34,6 +34,14 @@ PHASE A — INTERVIEW (every turn until you receive the PROCEED instruction):
 // the daemon's default whatever its work needed. wsingest lints a doc without
 // one as phase_effort_missing.
 const effortRule = "Every phase doc's header block must carry an `**Effort:**` line (low | medium | high | xhigh) on its own line beside `**Verify:**` and `**Review:**` — the reasoning depth the phase's executor runs at, chosen together with the model that phase needs: low or medium for mechanical edits and config, high for ordinary implementation, xhigh for design-heavy or cross-cutting work. A phase doc without it is linted `phase_effort_missing`."
+
+// blastRadiusStep is the planner's blast-radius step (core workspace-plans skill,
+// resources/blast-radius.md): before a phase doc's `## Risks`, find who calls
+// what the phase changes. Restated as shell rather than cited alone because a
+// headless planner cannot type the /impact slash command, and the plugin cache
+// that holds the procedure may not be readable from the repo. One constant for
+// both wizard templates, like phaseAProtocol, so the two cannot drift.
+const blastRadiusStep = `Before writing a phase doc's ` + "`## Risks`" + ` section (after ` + "`## Acceptance Criteria`" + `), compute its blast radius — who calls what the phase changes — per the core workspace-plans skill's ` + "`resources/blast-radius.md`" + `. For the top-level symbols the phase changes in each file of its Forecast files (a file it creates has no callers yet), run from the target repo: ` + "`graft callers \"<sym>\" --depth 2`" + ` when <repo>/graft/.graph/wiring.json exists, else ` + "`graphify query \"what depends on <sym>?\"`" + ` when <repo>/graphify-out/graph.json exists; ALWAYS the sweep ` + "`rg -n --no-heading -w \"<sym>\" --type go --type ts <repo>`" + ` (for a Go function, the qualified ` + "`<pkg>.<Sym>(`" + ` across the repo plus the bare ` + "`<Sym>(`" + ` inside its own package, where its tests call it); and Serena's find_referencing_symbols when lsp-pack is enabled in the project's .claude/settings.json and its tools are in your session. Never build or refresh an index for this. Write the result as the section's first bullet: ` + "`Blast radius: <N> callers in <pkgs> — <file:line, …> (sources: …)`" + ` — at most 20 callers listed, otherwise the count and the packages; when the chain cannot run, ` + "`Blast radius: not computed — <reason>`" + `.`
 
 // promptTemplate is the Interactive Planning v2 wizard prompt.  It instructs
 // the agent to research the repo first, then run PHASE A (structured interview
@@ -56,8 +64,12 @@ PHASE B — PLAN (only after the operator sends the PROCEED instruction):
 - Every phase doc's header block must carry a ` + "`**Covers:** SC-…`" + ` line naming the spec criteria that phase delivers; every SC id must be covered by at least one phase, and no phase may cover an id the spec does not declare.
 - ` + effortRule + `
 - Give every phase doc a ` + "`## Forecast`" + ` section just before ` + "`## Completion Report`" + `, holding one ` + "`kind: prior`" + ` yaml block in the shape documented in the core workspace-plans skill's ` + "`resources/plan-format.md`" + ` (areas is the only required key). It is a prediction, not a limit: do whatever the phase actually needs.
+- ` + blastRadiusStep + `
+- Write a ` + "`## Decisions`" + ` section into plan/README.md: one line per interview question, in interview order, numbered D-1, D-2, … by the question's position in the interview, shaped exactly ` + "`- **D-n** (<cheap|expensive>, <decided|recommended|undecided>) — <question> → <answer> (reason: <costReason>)`" + `. An answered question is decided with the operator's answer; a skipped cheap one is recommended, its answer the recommended option followed by ` + "`(без відповіді, рекомендований)`" + `; a skipped expensive one is undecided, its answer the word ` + "`undecided`" + `. When the PROCEED message lists the decisions, copy those lines VERBATIM — they are what the dashboard recorded, including any cost the operator changed.
+- Every phase doc whose work depends on a decision carries a ` + "`**Depends on decisions:** D-n, …`" + ` line in its header block (ALWAYS for a phase that would build on an undecided one) — the dashboard refuses to start that phase while a listed decision is undecided and expensive to change.
 - Open the README and every phase doc with an ` + "`## In plain words`" + ` section — directly under the H1 in README.md, and after the header rows (before ` + "`## Goal`" + `) in every phase doc — saying in 3–6 jargon-free sentences, in the operator's language, what the plan or phase is for, what will be different once it is done and what it closes; no file paths, code, function names or SC ids (the dashboard shows it verbatim on its "In plain words" tab).
 - Do NOT implement anything and do NOT create git branches — planning only.
+- Create every plan file with the Write tool (it creates the missing directories; there is no mkdir in this run). Writes are allowed ONLY under the workspace root above; a write anywhere else, the project repo included, is denied.
 - Finish your FINAL message with this exact line on its own:
   PLAN SAVED: <absolute path to the plan dir>
 
@@ -108,6 +120,8 @@ PHASE B — STAGE THE REVISION (only after the operator sends the PROCEED instru
   It is a prediction, not a limit: do whatever the phase actually needs.
   A phase doc you UPDATE keeps the forecast it already carries unless the revision changes what the phase
   will touch.
+- A phase doc you CREATE gets the blast-radius step too, and a doc you UPDATE recomputes its line when the
+  revision changes its Forecast files. ` + blastRadiusStep + `
 - A phase doc you CREATE opens with an ` + "`## In plain words`" + ` section — directly under the H1 in README.md, and after the header rows (before ` + "`## Goal`" + `) in every phase doc — saying in 3–6 jargon-free sentences, in the operator's language, what the plan or phase is for, what will be different once it is done and what it closes; no file paths, code, function names or SC ids (the dashboard shows it verbatim on its "In plain words" tab). A doc you UPDATE rewrites that section when the revision
   changes what the phase does, and adds it when the doc has none.
 - If you change the phase set, update the README phase-sequencing table in the same revision: every Doc cell
@@ -119,6 +133,7 @@ PHASE B — STAGE THE REVISION (only after the operator sends the PROCEED instru
    {"path":"phase-7-dropped.md","action":"delete"}]}
   Actions: create | update | rename | delete. A file with action delete has no content file in the scratch dir.
 - Do NOT implement anything, do NOT create git branches, do NOT edit the code repo.
+- Create every file with the Write tool. Writes are allowed ONLY under {{.ScratchDir}}; a write anywhere else is denied.
 - Finish your FINAL message with this exact line on its own:
   REVISION STAGED: {{.ScratchDir}}
 
@@ -217,6 +232,18 @@ func BuildRefineMessage(instructions string) string {
 
 // BuildProceedMessage renders the terminal PROCEED instruction that ends the
 // interview and triggers PHASE B (plan writing).
-func BuildProceedMessage() string {
-	return "PROCEED — write the plan now.\nExecute PHASE B of your instructions."
+//
+// decisionLines are the interview's `## Decisions` entries as the daemon
+// recorded them (wsingest.FormatDecisionLine, one per element); when present the
+// planner is told to write them verbatim, so the README states exactly what
+// phase_decisions holds — including a cost the operator flipped on the
+// dashboard, which the planner has no other way to learn. None (a revise
+// session, or a wizard with no structured questions) keeps the bare trigger.
+func BuildProceedMessage(decisionLines ...string) string {
+	msg := "PROCEED — write the plan now.\nExecute PHASE B of your instructions."
+	if len(decisionLines) == 0 {
+		return msg
+	}
+	return msg + "\n\nThe interview's decisions, as recorded — write these lines VERBATIM as the README's `## Decisions` section:\n\n" +
+		strings.Join(decisionLines, "\n")
 }

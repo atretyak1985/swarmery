@@ -43,6 +43,8 @@ import {
 } from './lib/approvals'
 import { linkRequest } from './lib/client'
 import { toolInput } from './lib/hash'
+import { matchProd } from './lib/prod'
+import { type LinkInit, signedFetch } from './signed'
 
 /** What the channel reads of the link, as of the call it decides. */
 export type Gate = {
@@ -50,7 +52,7 @@ export type Gate = {
   readonly origin: string
   readonly sessionId: string
   readonly cwd: string
-  /** The link's current bearer token. */
+  /** The link's current token: the key every request is signed with (never sent). */
   readonly token: () => string
   /** Re-reads the token file into the link (after a 401). */
   readonly reread: () => Promise<void>
@@ -87,16 +89,21 @@ async function bounded<T>($: EngineInterface, pending: Promise<T>, ms: number, a
   }
 }
 
-/** One request, bounded by `ms` on `$.clock` (HttpInit has no timeout or signal) and by the dispatch's abort. */
+/**
+ * One signed request, bounded by `ms` on `$.clock` (HttpInit has no timeout or
+ * signal) and by the dispatch's abort. The reply says whether the daemon
+ * signed it; only a signed decision counts (lib/approvals.ts postAnswer).
+ */
 async function request(
   $: EngineInterface,
+  gate: Gate,
   url: string,
-  init: ReturnType<typeof linkRequest> | ReturnType<typeof permissionPoll>,
+  init: LinkInit,
   ms: number,
   aborted: Promise<'aborted'>,
 ): Promise<HttpReply | 'aborted'> {
-  const pending = $.http.fetch(url, init).then(
-    (r): HttpReply => ({ status: r.status, text: r.text }),
+  const pending = signedFetch($, gate.token(), url, init).then(
+    (r): HttpReply => ({ status: r.status, text: r.text, isVerified: r.isVerified }),
     (error: unknown): HttpReply => ({ error }),
   )
   const reply = await bounded($, pending, ms, aborted)
@@ -137,7 +144,7 @@ function showNotice($: EngineInterface, toolUseId: string, text: string): void {
  */
 function cancelRequest($: EngineInterface, gate: Gate, id: string): void {
   try {
-    const sent = $.http.fetch(permissionCancelUrl(gate.origin, id, gate.sessionId), permissionCancel(gate.token())).catch(() => undefined)
+    const sent = signedFetch($, gate.token(), permissionCancelUrl(gate.origin, id, gate.sessionId), permissionCancel()).catch(() => undefined)
     // the dispatch is already abandoned, so the race runs against a wait that never ends rather than its abort
     bounded($, sent, PERMISSION_CANCEL_TIMEOUT_MS, new Promise<never>(() => undefined)).catch(() => undefined)
   } catch {
@@ -165,7 +172,7 @@ async function pollDecision(
     const bound = pollBound(deadline, startedAt)
     if (signal.aborted) return 'aborted'
     if (bound <= 0) return PASS
-    const reply = await request($, permissionPollUrl(gate.origin, id, gate.sessionId), permissionPoll(gate.token()), bound, aborted)
+    const reply = await request($, gate, permissionPollUrl(gate.origin, id, gate.sessionId), permissionPoll(), bound, aborted)
     if (reply === 'aborted' || signal.aborted) return 'aborted'
     const answer = pollAnswer(reply)
     switch (answer.kind) {
@@ -232,7 +239,7 @@ async function askSwarmery($: EngineInterface, gate: Gate, permission: Permissio
     let isRetried = false
     for (;;) {
       if (signal.aborted) return PASS
-      const reply = await request($, permissionUrl(gate.origin), linkRequest(gate.token(), body), PERMISSION_POST_TIMEOUT_MS, aborted)
+      const reply = await request($, gate, permissionUrl(gate.origin), linkRequest(body), PERMISSION_POST_TIMEOUT_MS, aborted)
       if (reply === 'aborted' || signal.aborted) return PASS
       const answer = postAnswer(reply, await $.clock.now())
       if (answer.kind === 'auth') {
@@ -252,10 +259,12 @@ async function askSwarmery($: EngineInterface, gate: Gate, permission: Permissio
 
 /**
  * tool.check: the engine's `ask` for a real call goes to the dashboard first.
- * An allow or a deny from it answers; anything else (an excluded project, a
- * pass, a failure, the deadline, an interrupt) returns the engine's verdict
- * untouched, so the shim or the native dialog takes over. A production deploy
- * (`local`) is confirmed in the terminal, and its dialog says so.
+ * An allow or a deny the daemon signed answers; anything else (an excluded
+ * project, a pass, a failure, an unsigned answer, the deadline, an interrupt)
+ * returns the engine's verdict untouched, so the shim or the native dialog
+ * takes over. A production deploy is confirmed in the terminal, and its
+ * dialog says so: one the mod matches itself (lib/prod.ts) never goes to the
+ * daemon at all, and one the daemon matches comes back `local`.
  */
 export async function checkWithSwarmery(
   $: EngineInterface,
@@ -266,6 +275,10 @@ export async function checkWithSwarmery(
 ): Promise<ResultOf['tool.check']> {
   const toolUseId = e.tool_use_id
   if (!shouldAsk(verdict, e) || toolUseId === undefined) return verdict
+  if (matchProd(e.tool, e.input) !== undefined) {
+    showNotice($, toolUseId, LOCAL_NOTICE)
+    return verdict
+  }
   const answer = await askSwarmery(
     $,
     gate,

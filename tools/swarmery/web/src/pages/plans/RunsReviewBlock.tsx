@@ -17,6 +17,7 @@ import { countFindings, fetchPhaseReviews } from '../../api/reviews';
 import type { PhaseReviewSummary } from '../../api/types';
 import { fmtAgo } from '../../lib/format';
 import { ReviewVerdictBadge } from '../inbox/ReviewItem';
+import { GuardBadge } from './GuardBadge';
 
 /** "first review" / "review of the fix re-run". */
 function roundLabel(round: number): string {
@@ -86,6 +87,7 @@ export function RunsReviewBlock({
         <ReviewVerdictBadge verdict={latest.verdict} detail={latest.detail} />
         <span>{roundLabel(latest.fixRound)}</span>
         <span>· {fmtAgo(latest.startedAt)}</span>
+        <GuardBadge guard={latest.guard} />
       </div>
       {latest.detail !== '' && (
         <div className="mt-1.5 font-mono text-[10.5px] break-words text-ink-dim">{latest.detail}</div>

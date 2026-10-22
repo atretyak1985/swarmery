@@ -3,9 +3,10 @@
 //
 // Unlike every other write in this API the /api/link/* routes are NOT behind
 // requireLocalOrigin: the mod sends no Origin, and the routes carry their own
-// credential instead — `Authorization: Bearer <link-token>` checked by
-// link.Holder.Require. The Host fence (requireLocalHost, routes.go) still
-// applies, because it wraps the whole inner mux.
+// credential instead — a request signed with the link token (linkAuth below),
+// or the legacy bearer form checked by link.Holder.Require. The Host fence
+// (requireLocalHost, routes.go) still applies, because it wraps the whole
+// inner mux.
 //
 // The link is attached as package state (same pattern as AttachApprovals /
 // AttachBus) so a bare &Handler{DB: db} in tests keeps working: with nothing
@@ -13,15 +14,19 @@
 package api
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"log"
 	"net/http"
+	"strings"
+	"sync"
 	"time"
 
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/ingest"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/link"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/linksig"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/version"
 )
 
@@ -61,9 +66,18 @@ func AttachLink(h *link.Holder, exclude ingest.ExcludeList) {
 	linkExclude = exclude
 }
 
-// linkAuth guards a link handler: 503 while the link is not attached, then the
-// holder's bearer-token check (401 {"error":"link token required"}, with one
-// reload of the token file on a mismatch so a rotation needs no restart).
+// linkAuth guards a link handler: 503 while the link is not attached, then
+// one of two schemes (docs/mods-link-protocol.md "Auth"):
+//
+//   - Swarmery-HMAC (internal/linksig): the request is signed with the token,
+//     checked within the allowed skew and once per nonce, and the answer
+//     carries X-Swarmery-Sig, the daemon's signature over the request's nonce,
+//     the status and the body. Every in-repo client signs.
+//   - the legacy bearer token, still accepted during the transition; its
+//     answer is not signed. The first one a process sees is logged once.
+//
+// Either way a failure is 401 {"error":"link token required"}. The token is
+// read through the holder's throttled reload, so a rotation needs no restart.
 func linkAuth(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		h := linkHolder
@@ -71,7 +85,77 @@ func linkAuth(next http.HandlerFunc) http.HandlerFunc {
 			writeJSONStatus(w, http.StatusServiceUnavailable, map[string]string{"error": "link disabled"})
 			return
 		}
-		h.Require()(next)(w, r)
+		if !linksig.IsSigned(r) {
+			noteLegacyBearer(r)
+			h.Require()(next)(w, r)
+			return
+		}
+		key := h.Current()
+		nonce, err := linkVerifier.VerifyRequest(r, key, time.Now())
+		switch {
+		case errors.Is(err, linksig.ErrBodyTooLarge):
+			writeClientErr(w, http.StatusRequestEntityTooLarge, "body exceeds 4 MiB")
+			return
+		case err != nil:
+			link.WriteUnauthorized(w)
+			return
+		}
+		sw := &signingWriter{ResponseWriter: w}
+		next(sw, r)
+		sw.finish(key, nonce)
+	}
+}
+
+// linkVerifier remembers the nonces of the signed requests this process
+// accepted, so none is served twice.
+var linkVerifier = linksig.NewVerifier()
+
+// legacyBearerOnce logs the first bearer-authenticated link request of the
+// process: a client that has not moved to signed requests yet.
+var legacyBearerOnce sync.Once
+
+func noteLegacyBearer(r *http.Request) {
+	if !strings.HasPrefix(strings.ToLower(r.Header.Get("Authorization")), "bearer ") {
+		return
+	}
+	legacyBearerOnce.Do(func() {
+		log.Printf("link: a client used the legacy bearer token on %s %s; signed requests (Swarmery-HMAC) replace it", r.Method, r.URL.Path)
+	})
+}
+
+// signingWriter holds a link handler's answer so it can be signed: the status
+// and body are buffered, then written once with X-Swarmery-Sig. Link answers
+// are small JSON bodies written once (no streaming, no Flush).
+type signingWriter struct {
+	http.ResponseWriter
+	status int
+	body   bytes.Buffer
+}
+
+func (s *signingWriter) WriteHeader(status int) {
+	if s.status == 0 {
+		s.status = status
+	}
+}
+
+func (s *signingWriter) Write(p []byte) (int, error) {
+	if s.status == 0 {
+		s.status = http.StatusOK
+	}
+	return s.body.Write(p)
+}
+
+// finish signs and writes what the handler answered (200 with an empty body
+// when it wrote nothing, as net/http would).
+func (s *signingWriter) finish(key, nonce string) {
+	if s.status == 0 {
+		s.status = http.StatusOK
+	}
+	body := s.body.Bytes()
+	s.ResponseWriter.Header().Set(linksig.ResponseHeader, linksig.SignResponse(key, nonce, s.status, body))
+	s.ResponseWriter.WriteHeader(s.status)
+	if len(body) > 0 {
+		_, _ = s.ResponseWriter.Write(body)
 	}
 }
 

@@ -65,6 +65,8 @@ migrations at landing.
 
 - `resources/plan-format.md` — the full field-by-field format, examples, the
   manifest schema, and the engine-facing criterion rules.
+- `resources/blast-radius.md` — the planner's blast-radius step: who calls
+  what a phase changes, and the `Blast radius:` line its `## Risks` opens with.
 - `resources/config-channels.md` — which settings tier Claude Code reads for
   `pluginConfigs`, plugin `env` and `${VAR}`, with the CLI version measured.
 - `templates/spike-matrix.md` (plugin root) — the permission mode × surface

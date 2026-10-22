@@ -115,9 +115,15 @@ Both fences answer `403 {"error": …}` before any handler runs.
 
 | Env | Values | Default | What it does |
 |---|---|---|---|
-| `SWARMERY_AGENT_SCRUB_VCS_TOKENS` | `1` \| unset | unset (off) | When `1`, agents spawned through `internal/runcore` (board dispatch, verify, planning, plan runs and phase runs) lose the **environment-carried** code-host tokens `GH_TOKEN`, `GITHUB_TOKEN`, `GH_ENTERPRISE_TOKEN`, `GLAB_TOKEN`, `GITLAB_TOKEN` and the config-dir overrides `GH_CONFIG_DIR`, `GLAB_CONFIG_DIR`, whether they came from the daemon's own env or an account/estate secret store. Any other value leaves the environment untouched. See the notes below the table. |
-| `SWARMERY_VERIFY_PERMISSION_MODE` | `acceptEdits` \| `auto` \| `bypassPermissions` \| `manual` \| `dontAsk` \| `plan` \| `off` | `SWARMERY_PERMISSION_MODE`, else `bypassPermissions` | The `--permission-mode` of the read-only verifier (board tasks and `**Verify:**` phases). A verifier that is asked for permission waits for an answer nobody gives in a headless run: each prompt is held for the approval window (10m), and two of them outlast the verifier's 15-minute timeout, so the run ends `inconclusive` / `verifier-timed-out`. `off` omits the flag and restores that behaviour. Whatever the mode, the verifier runs with `--disallowedTools Edit,Write,MultiEdit,NotebookEdit`: it may run checks but not edit files with those tools. A Bash command can still write; only the verifier prompt forbids it. An invalid value logs a warning and means `bypassPermissions`. |
+| `SWARMERY_AGENT_SCRUB_VCS_TOKENS` | `0` \| `off` \| unset | unset (**on**) | Agents spawned through `internal/runcore` (board dispatch, verify, planning, plan runs and phase runs) lose the **environment-carried** code-host tokens `GH_TOKEN`, `GITHUB_TOKEN`, `GH_ENTERPRISE_TOKEN`, `GLAB_TOKEN`, `GITLAB_TOKEN` and the config-dir overrides `GH_CONFIG_DIR`, `GLAB_CONFIG_DIR`, whether they came from the daemon's own env or an account/estate secret store. On by default; `0`, `off`, `false` or `no` opts out and leaves the environment untouched. The daemon's own landing path (`internal/repoprovider`) runs from the daemon process and is never scrubbed. See the notes below the table. |
+| `SWARMERY_VERIFY_PERMISSION_MODE` | `acceptEdits` \| `auto` \| `bypassPermissions` \| `manual` \| `dontAsk` \| `plan` \| `off` | `SWARMERY_PERMISSION_MODE`, else `dontAsk` when the phase doc declares a Verify block, else `bypassPermissions` | The `--permission-mode` of the read-only verifier (board tasks and `**Verify:**` phases). When the graded contract has a Verify block (`Verify …:` followed by one command per bullet), the verifier runs least-privilege: `dontAsk` with `--allowedTools Read,Grep,Glob`, read-only git (`git diff/log/show/status`) and one `Bash(<cmd>*)` rule per declared command, and its prompt says that a denied check is `inconclusive`, never `fail`. Without a block (every board card) the model picks its checks, so it keeps the fallback `bypassPermissions`. Whatever the mode, the verifier runs with `--disallowedTools Edit,Write,MultiEdit,NotebookEdit` plus the daemon-API rules. `off` omits the flag. An invalid value logs a warning and means the site default. |
+| `SWARMERY_REVIEW_PERMISSION_MODE` | as above | `SWARMERY_PERMISSION_MODE`, else `dontAsk` | The `--permission-mode` of the phase and plan reviewers (`**Review:** on`). They run with `--allowedTools Read,Grep,Glob`: a reviewer reads, it never runs a command. They used to share the verifier's knob. |
+| `SWARMERY_PLANNING_PERMISSION_MODE` | as above | `SWARMERY_PERMISSION_MODE`, else `dontAsk` | The planner runs in the operator's **primary checkout**, so it gets `dontAsk` with `--allowedTools Read,Grep,Glob,Bash(git log*),Bash(git show*),Edit(//<workspace root>/**)` (a revise run: `Edit(//<its scratch dir>/**)`): it can read anything and write only the plan files. The PROCEED turn, a resume, carries the same list. |
+| `SWARMERY_RESUME_PERMISSION_MODE` | as above | the ORIGINAL site's knob (e.g. `SWARMERY_PLANNING_PERMISSION_MODE` for the wizard's PROCEED turn), then this one, then `SWARMERY_PERMISSION_MODE`, then the mode of the run being resumed | A resume inherits the mode and lists of the session it continues: an executor's `bypassPermissions` plus deny list, the planner's or a reviewer's allow-list. A session swarmery did not spawn (an operator's own terminal session) gets **no** permission flag, and no knob can widen it past `dontAsk`/`plan` — never `bypassPermissions`. |
+| `SWARMERY_AGENT_DENY_RULES` | `0` \| `off` \| unset | unset (**on**) | The `bypassPermissions` executors (dispatch, phase runs, plan runs, provisioning, executor resumes) carry `--disallowedTools` with `Bash(git push*)`, the MUTATING `gh pr` / `glab mr` subcommands (`create`, `merge`, `close`, `reopen`, `edit`/`update`, `ready`, `review`/`approve`, `comment`/`note` — `view`, `list`, `diff` and `checks` stay allowed) and the daemon-API rules for the daemon's own port. Routines carry the same list WITHOUT the daemon-API rules: an operator-authored routine may drive the daemon. No core skill an executor runs reads the daemon API (`area-lessons` is operator-invoked only; headless runs get their lessons in the prompt). Deny rules are the one kind of rule `bypassPermissions` still honours; they match the command as written, so they are a guard, not a sandbox. `0` drops the list. |
 | `SWARMERY_REVIEW_TIMEOUT_MIN` | positive integer (minutes) | the verifier's timeout (`SWARMERY_VERIFY_TIMEOUT_MIN`, 15) | The hard kill timer of the read-only reviewer session (`**Review:** on` phases and the plan branch review — see [Reviewing a phase](#reviewing-a-phase)). A reviewer that runs out of time is recorded `inconclusive` / `reviewer-timed-out`. A non-numeric, zero or negative value keeps the default. |
+
+**Headless runs trust the repository's `.claude/`.** A `claude -p` spawn skips the trust dialog and runs the hooks in the repository's `.claude/settings.json` in every permission mode, `dontAsk` and `plan` included (measured on Claude Code 2.1.308). Any repository the daemon spawns an agent in can therefore run code on this machine through its committed hooks, whatever the defaults above say. Register only repositories whose `.claude/` you trust. Note too that a headless run exits 0 even when calls were denied; a denial is visible only in the run's transcript.
 
 Notes on `SWARMERY_AGENT_SCRUB_VCS_TOKENS`:
 
@@ -477,13 +483,47 @@ a fresh login.
 `--notify-events` (env `SWARMERY_NOTIFY_EVENTS`) chooses what is sent — any
 comma-separated mix of `approval_requested`, `approval_expired`,
 `session_completed`, `session_error`, `plugin_drift`, `phase_surprise`,
-`run_needs_operator`. The default is `approval_requested,run_needs_operator`:
+`run_needs_operator`, `phase_stalled`. The default is `approval_requested,run_needs_operator`:
 the two moments a human is blocking work (a pending tool approval, a headless
 run that stopped to ask the operator). An explicit value **replaces** the
 default rather than extending it, so keep both names in the list when adding
 others. `approval_expired` also fires for approvals a daemon restart orphaned
 (the hook died with the old process, so the request can no longer be answered
 from the dashboard) — the body says so, and the answer belongs in the terminal.
+
+`phase_stalled` comes from the stalled-phase detector (below): exactly one
+event per (phase, reason), with `{taskId, phaseId, stage, reason,
+sinceMinutes, sessionUuid}` on the generic JSON body beside the usual
+title/body.
+
+### Stalled phases
+
+Every 60 s the daemon looks at each plan phase with a stage in flight and finds
+the **active** one — the executor while the run is running, else the reviewer
+whose verdict is not recorded yet, else the verifier whose verification is still
+running — then flags it as stalled when:
+
+- **no-turns** — its session is open but has produced no turn for
+  `stallMinutes` (`config/guards.json`, default 20). A phase doc whose header
+  names a playbook with an override (`**Playbook:** long-tests`, 60 min by
+  default) gets that threshold instead;
+- **ended** — its session is over but left nothing behind: the executor no
+  Completion Report on a run that never settled, the reviewer no verdict, the
+  verifier no finished verification record;
+- **permission-pending** — a permission request of that session has waited
+  longer than `stallMinutes`.
+
+A stall shows as a «stalled: <stage> — <reason> <N min>» badge on the phase card
+and as a `stalled_phase` item in **Needs you** (a permission-pending one is folded
+into the approval it waits on, with an «open phase» link), and fires one
+`phase_stalled` webhook. The `stall_notices` table is the dedupe ledger: a row
+per (phase, reason) while the condition holds, cleared when it clears, so a
+recurrence notifies again. Notification only — nothing is restarted or killed.
+
+| Env | Values | Default | What it does |
+|---|---|---|---|
+| `SWARMERY_STALL` | `0` | on | `0` disables the detector. The boot log says `swarmery stall detector started (…)` or `… disabled`. |
+| `SWARMERY_GUARDS` | path to a JSON file | embedded `config/guards.json` | Replaces the whole guards document (`stallMinutes`, `playbookOverrides`, …). An unreadable or incomplete file disables the detector with an error in the boot log rather than falling back. |
 
 ## Complexity routing
 

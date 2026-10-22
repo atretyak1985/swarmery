@@ -232,6 +232,10 @@ func (r ClaudeRunner) Start(ctx context.Context, spec RunSpec) (*Run, error) {
 		// 0, so the task is stamped done over an empty diff. See internal/claudeflags
 		// (knob: SWARMERY_DISPATCH_PERMISSION_MODE).
 		PermissionMode: permissionMode(spec.PermissionMode),
+		// Deny rules hold in every mode, bypassPermissions included: no remote
+		// writes, no PR/MR, no daemon API (claudeflags.AgentDenyArgs). The prompt
+		// forbids them; this enforces it for the commands a model writes.
+		ExtraArgs: claudeflags.AgentDenyArgs(0),
 		// --setting-sources project,local: skip user-level settings (global plugin
 		// stack) — headless runs don't need them; project plugins and OAuth are
 		// unaffected.

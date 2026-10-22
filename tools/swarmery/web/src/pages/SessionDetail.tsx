@@ -34,6 +34,7 @@ import { ProjectName } from '../components/ProjectName';
 import { ErrorBox, Loading } from '../components/ui';
 import { Timeline } from './detail/Timeline';
 import { Diffs } from './detail/Diffs';
+import { CacheColdBadge } from './sessions/CacheColdBadge';
 import { SwarmPanel } from './sessions/SwarmPanel';
 import { scrollToDiffGroup } from './detail/diffJump';
 import { Chat, type PendingSend } from './detail/Chat';
@@ -639,6 +640,7 @@ export function SessionDetailPage(): JSX.Element {
                 />
               )}
               <SessionLabelChips uuid={detail.sessionUuid} />
+              <CacheColdBadge session={detail} />
               <ExplainPair id="session-outcome">
                 <OutcomePicker value={detail.outcome ?? null} onChange={setOutcome} />
               </ExplainPair>
@@ -687,6 +689,14 @@ export function SessionDetailPage(): JSX.Element {
             {detail.recovered > 0 && (
               /* errors a later same-tool success cleared (backend heuristic). */
               <HeadStat value={String(detail.recovered)} label={t`recovered`} tone="text-green" />
+            )}
+            {(detail.coldRestarts ?? 0) > 0 && (
+              /* turns that re-wrote the context after the prompt cache expired. */
+              <HeadStat
+                value={String(detail.coldRestarts)}
+                label={t`cold restarts`}
+                tone="text-blue"
+              />
             )}
           </div>
         </div>
