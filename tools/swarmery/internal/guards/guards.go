@@ -28,7 +28,8 @@ const EnvOverride = "SWARMERY_GUARDS"
 // Config is config/guards.json.
 type Config struct {
 	// WorkaroundWords mark an executor's text as a workaround rather than a fix
-	// (D23); matched case-insensitively as substrings.
+	// (D23, en + uk in one array); internal/workaround matches each as a whole
+	// word or phrase, case-insensitively, in assistant prose only.
 	WorkaroundWords []string `json:"workaroundWords"`
 	// StallMinutes is how long a run may produce nothing before it counts as
 	// stalled.

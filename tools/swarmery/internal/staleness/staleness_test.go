@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/procwatch"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/store"
 )
 
@@ -247,4 +248,24 @@ func itoa(n int64) string {
 		n /= 10
 	}
 	return string(b)
+}
+
+// SessionEnded reads the status and the process, never ended_at (ingest stamps
+// that with the last record's time on a session that is still writing).
+func TestSessionEnded(t *testing.T) {
+	for _, tc := range []struct {
+		status, proc string
+		want         bool
+	}{
+		{"active", "running", false},
+		{"idle", "", false},
+		{"waiting_approval", "running", false},
+		{"completed", "", true},
+		{"killed", "running", true},
+		{"idle", procwatch.StateDead, true},
+	} {
+		if got := SessionEnded(tc.status, tc.proc); got != tc.want {
+			t.Errorf("SessionEnded(%q, %q) = %v, want %v", tc.status, tc.proc, got, tc.want)
+		}
+	}
 }

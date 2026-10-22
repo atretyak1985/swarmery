@@ -205,6 +205,12 @@ type Service struct {
 	// reviewRun). nil ⇒ the review stage is not wired: every unit test's state, and
 	// a valid production state. Runs BEFORE verifyRun, both before removeWorktree.
 	Review verify.Runner
+	// ReviewDecisions opens the operator decision a review cycle that could not
+	// settle on its own asks for — an incomplete review, or one still failing
+	// after the automatic rounds (D20/D42; review_rounds.go). nil ⇒ the daemon's
+	// own: a source='review' phase_decisions row (raiseReviewDecision). Tests
+	// replace it to observe the hand-over.
+	ReviewDecisions ReviewDecider
 	// DaemonPort is the port this daemon's HTTP API listens on. Reviewers (phase and
 	// plan branch) are denied curl/wget/http to it and told not to call it, like the
 	// verifier. 0 ⇒ verify.DefaultDaemonPort.
@@ -341,6 +347,9 @@ type phaseInfo struct {
 	RunBranch string
 	// Name is the phase's title, which is what the verifier is told it is grading.
 	Name string
+	// LentDoc is the doc's text as Start lent it into the worktree — the guard
+	// check's canonical copy (guardcheck.go). "" for a run Start did not lend.
+	LentDoc string
 	// VerifyMode is the phase DOC's opt-in to post-run verification
 	// (`**Verify:** strict`, wsingest.ParseDocVerify), off|normal|strict. Read at
 	// ADMISSION, not at exit: the mode that was in effect when the operator pressed
@@ -407,7 +416,7 @@ type StartOptions struct {
 	// ReviewFix: this run is the ONE fix re-run the review stage starts after a
 	// FAIL verdict (reviewRun). It implies Returned — the same continuation of the
 	// phase's own branch and the same blocked-guard bypass — but points the prompt
-	// at the doc's `## Review findings` section (ReviewFixNote) instead of the
+	// at the doc's latest `kind: review` block (ReviewFixNote) instead of the
 	// operator's feedback, and it is the only kind of run that keeps
 	// review_fix_round: every other run resets it to 0 when it opens, so a later
 	// review may again start one fix.
@@ -729,6 +738,17 @@ func (s *Service) StartWith(phaseID int64, opts StartOptions) (sessionUUID strin
 	if err != nil {
 		return "", err
 	}
+	// The decision hold (verify-not-trust phase 2): a phase whose doc declares
+	// `**Depends on decisions:**` on a decision still undecided AND expensive to
+	// change must not be built on a guess. Right after deps-unmerged — both answer
+	// "is what this phase stands on settled?" — and, like it, read-only and ahead of
+	// the slot, the worktree and every stamp. (The model gate cannot come after it:
+	// resolveModel runs first by design, see above.) Force does not lift it.
+	if hold, err := DecisionHold(s.DB, phaseID); err != nil {
+		return "", err
+	} else if hold != nil {
+		return "", hold
+	}
 	// The blocked re-run guard: a phase whose last run ended blocked, re-run with
 	// nothing changed, reaches the same block at the price of a full run. Refused
 	// here — after base resolution, because where the run would start is one of the
@@ -951,6 +971,8 @@ func (s *Service) StartWith(phaseID int64, opts StartOptions) (sessionUUID strin
 	docRel, lendErr := worktree.LendPlanDoc(acq.Path, info.DocPath)
 	if lendErr != nil {
 		log.Printf("warning: phaserun: phase=%d could not lend the plan doc into %s: %v", phaseID, acq.Path, lendErr)
+	} else if lent, err := os.ReadFile(filepath.Join(acq.Path, docRel)); err == nil {
+		info.LentDoc = string(lent)
 	}
 	if base.StackedOn != "" {
 		log.Printf("phaserun: phase=%d stacked on %s at %s (its dependency is not merged into %q)",
@@ -1062,7 +1084,11 @@ func (s *Service) runAndHandle(ctx context.Context, cancel context.CancelFunc, r
 		// the verifier grades the tree the executor left. A FAIL that asks for a
 		// fix re-run is acted on at the very END of this defer — the re-run needs
 		// this run's slot, which is released only below.
-		_, reviewFix := s.guardedReviewRun(phaseID, info, acq, endState)
+		// The guard check before the review: the reviewer's prompt opens with what
+		// it found, and a run that touched protected paths raises its decision
+		// whatever it reported (D25 — no kill mid-run, the decision comes after).
+		guard := s.guardStage(phaseID, info, acq.StartPoint, acq.Path)
+		_, reviewFix := s.guardedReviewRun(phaseID, info, acq, endState, guard)
 		// Verify BEFORE the worktree goes away — the worktree IS the thing being
 		// graded, and removeWorktree below deletes the only copy of it. This is the
 		// same ordering argument as worktree-before-slot, one step earlier in the
@@ -1915,7 +1941,8 @@ func (s *Service) depSatisfied(taskID int64, seq int) (bool, error) {
 		       COALESCE(bt.board_column,''), bt.archived_at IS NOT NULL,
 		       EXISTS (SELECT 1 FROM retro_lessons l
 		                 JOIN task_retros r ON r.id = l.retro_id
-		                WHERE r.task_id = e.workspace_task_id)
+		                WHERE r.task_id = e.workspace_task_id),
+		       `+phasegate.ReviewHoldSQL+`, e.legacy_review, `+phasegate.ReviewDecisionSQL+`
 		  FROM epic_phases e
 		  LEFT JOIN tasks bt ON bt.id = e.activated_board_task_id
 		 WHERE e.workspace_task_id = ? AND e.seq = ?`, taskID, seq)
@@ -1931,9 +1958,12 @@ func (s *Service) depSatisfied(taskID int64, seq int) (bool, error) {
 			done, total         int
 			dispatched          bool
 			archived, lesson    bool
+			reviewHold          string
+			legacyReview        bool
+			reviewDecision      string
 		)
 		if err := rows.Scan(&done, &total, &verifyMode, &verdict, &report, &dispatched,
-			&boardCol, &archived, &lesson); err != nil {
+			&boardCol, &archived, &lesson, &reviewHold, &legacyReview, &reviewDecision); err != nil {
 			return false, err
 		}
 		// ClosureRequired is deliberately FALSE here, and this is the one place
@@ -1951,6 +1981,7 @@ func (s *Service) depSatisfied(taskID int64, seq int) (bool, error) {
 		// report and lesson are still SELECTed above so this decision is visible
 		// beside the data it declines to use, rather than hidden as an absent column.
 		_, _ = report, lesson
+		openDecision, accepted := phasegate.ParseReviewDecision(reviewDecision)
 		gate := phasegate.Check(phasegate.Input{
 			CriteriaDone:    done,
 			CriteriaTotal:   total,
@@ -1959,6 +1990,12 @@ func (s *Service) depSatisfied(taskID int64, seq int) (bool, error) {
 			Dispatched:      dispatched,
 			LegacyDone:      boardCol == "done" || archived,
 			ClosureRequired: false,
+			// An incomplete review is unconfirmed work, like a missing verdict:
+			// it gates what may start on top of it.
+			ReviewHold:         reviewHold,
+			ReviewAccepted:     accepted,
+			ReviewDecisionOpen: openDecision,
+			LegacyReview:       legacyReview,
 		})
 		if gate.Complete() {
 			return true, nil

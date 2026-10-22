@@ -204,8 +204,12 @@ func (r ClaudeRunner) Start(ctx context.Context, spec RunSpec) (*Run, error) {
 		// Without a permission mode the orchestrator cannot write, run or commit —
 		// and it still exits 0. See internal/claudeflags.
 		PermissionMode: claudeflags.Mode(permEnv),
-		Agent:          spec.Agent,
-		Model:          DefaultModel(),
+		// bypassPermissions honours deny rules, and these are the executor's: no
+		// remote writes, no PR/MR, no daemon API (claudeflags.AgentDenyArgs). A
+		// resume copies this Spec, so a continuation carries them too.
+		ExtraArgs: claudeflags.AgentDenyArgs(0),
+		Agent:     spec.Agent,
+		Model:     DefaultModel(),
 		// Without --effort the orchestrator thinks at the CLI's xhigh for every
 		// turn of an 8-hour window. Resolved through internal/claudeflags:
 		// SWARMERY_PLANRUN_EFFORT → SWARMERY_EFFORT → DefaultEffort.

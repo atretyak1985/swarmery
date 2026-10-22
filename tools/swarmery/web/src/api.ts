@@ -68,11 +68,14 @@ import type {
   PlanRevision,
   TerminalSession,
   PlanRunMode,
+  PlanningCost,
+  PlanningQuestion,
   PlanningStart,
   PlanningStatus,
   RevisionConflict,
   RevisionFile,
   ProjectDetail,
+  FirstRequest,
   RunConflictCode,
   ProjectMeta,
   ProjectMetaPatch,
@@ -108,6 +111,7 @@ import type {
   ContextHogsReport,
   PendingSession,
   SessionDetailResponse,
+  SessionHandoffRequest,
   SessionHandoffResponse,
   SessionOutcome,
   SessionsResponse,
@@ -162,6 +166,11 @@ export function fetchProjects(includeArchived = false): Promise<ProjectsResponse
 export function fetchProject(id: number | string): Promise<ProjectDetail> {
   if (MOCK) return mockApi.project(id);
   return get(`/api/projects/${encodeURIComponent(id)}`);
+}
+
+/** GET /api/projects/{id}/first-request — measured first-request size + its estimated split. */
+export function fetchProjectFirstRequest(id: number | string): Promise<FirstRequest> {
+  return get(`/api/projects/${encodeURIComponent(id)}/first-request`);
 }
 
 /** GET /api/projects/{id}/overview — Canvas v2 editorial aggregate (rightNow / thisWeek / attention). */
@@ -520,6 +529,19 @@ export function fetchSession(id: number | string): Promise<SessionDetailResponse
 export function fetchSessionHandoff(id: number | string): Promise<SessionHandoffResponse> {
   if (MOCK) return mockApi.sessionHandoff(id);
   return get(`/api/sessions/${encodeURIComponent(id)}/handoff`);
+}
+
+/**
+ * POST /api/sessions/{id}/handoff — «continue from handoff» on a cache-cold
+ * session. Resolves `ready` with the existing brief, or `generating` when the
+ * daemon started one (a session_updated frame announces it). Rejects with the
+ * server's sentence on 409 (not a handoff candidate) and 503 (generation off).
+ */
+export async function requestSessionHandoff(id: number): Promise<SessionHandoffRequest> {
+  if (MOCK) return mockApi.requestSessionHandoff(id);
+  const res = await fetch(`/api/sessions/${String(id)}/handoff`, { method: 'POST' });
+  if (!res.ok) throw new Error(await errText(res));
+  return (await res.json()) as SessionHandoffRequest;
 }
 
 export function fetchSessionContextHogs(id: number | string): Promise<ContextHogsReport> {
@@ -1606,6 +1628,30 @@ export async function proceedPlanning(projectId: number): Promise<{ status: stri
   return (await res.json()) as { status: string };
 }
 
+/** PATCH /api/planning/sessions/{id}/turns/{seq}/cost — flip one interview
+ *  question's cost-to-change. Returns the updated question. */
+export async function setPlanningTurnCost(
+  planningSessionId: number,
+  seq: number,
+  cost: PlanningCost,
+  reason?: string,
+): Promise<PlanningQuestion> {
+  if (MOCK) return mockApi.setPlanningTurnCost(planningSessionId, seq, cost);
+  const res = await fetch(
+    `/api/planning/sessions/${String(planningSessionId)}/turns/${String(seq)}/cost`,
+    {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(reason !== undefined ? { cost, reason } : { cost }),
+    },
+  );
+  if (!res.ok) {
+    const data = (await res.json().catch(() => ({}))) as { error?: string };
+    throw new Error(data.error ?? t`changing the cost failed: ${{ status: res.status }}`);
+  }
+  return ((await res.json()) as { question: PlanningQuestion }).question;
+}
+
 // --- plan revisions (plan-revision phase 4) -----------------------------------
 
 /** startRevision 409: when a staged revision is already open, the server names
@@ -2512,6 +2558,9 @@ export const RUN_CONFLICT_HINTS: Partial<Record<RunConflictCode, string>> = {
   get 'not-yet-earliest'() {
     return t`This phase is date-gated by its doc's Earliest: line. Run it on or after that date, or edit the line if the gate no longer applies.`;
   },
+  get 'decision-undecided'() {
+    return t`This phase builds on a decision that is still open and expensive to change. Answer it in the plan's Decisions, or mark it cheap to change in the planning session, then run the phase.`;
+  },
 };
 
 /**
@@ -2549,7 +2598,7 @@ function runConflictError(
   fallback: string,
 ): PhaseRunBranchError {
   const hint =
-    body.code === 'manual-only' || body.code === 'not-yet-earliest'
+    body.code === 'manual-only' || body.code === 'not-yet-earliest' || body.code === 'decision-undecided'
       ? (body.hint ?? RUN_CONFLICT_HINTS[body.code])
       : undefined;
   const text = body.message ?? body.error ?? fallback;

@@ -58,6 +58,7 @@ import { PageSearchInput } from '../components/PageSearchInput';
 import { PlanRunCard } from '../components/PlanRunCard';
 import { ScopeChip } from '../components/ScopeChip';
 import { SessionCard } from '../components/SessionCard';
+import { ModelSwitchBadge } from './sessions/ModelSwitchBadge';
 import { Empty, ErrorBox, GroupHeader, Loading } from '../components/ui';
 
 const PAGE_LIMIT = 100;
@@ -517,6 +518,7 @@ function SessionsList(): JSX.Element {
                       now={nowById[item.session.id] ?? null}
                       flat
                       hideProject={effectiveScope !== null}
+                      badges={<ModelSwitchBadge session={item.session} />}
                     />
                   </div>
                 </div>

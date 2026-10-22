@@ -20,6 +20,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/claudeflags"
 )
 
 // Config bounds the verifier.
@@ -70,7 +72,7 @@ const (
 	DefaultMaxDiffFiles = 40
 	// DefaultDaemonPort is the daemon's own default port (cmd/swarmery's
 	// defaultPort), used when nothing set Config.DaemonPort.
-	DefaultDaemonPort = 7777
+	DefaultDaemonPort = claudeflags.DefaultDaemonPort
 )
 
 // ConfigFromEnv builds a Config from SWARMERY_* env, falling back to the

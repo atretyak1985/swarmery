@@ -278,3 +278,68 @@ func TestUnreportedIsDistinctFromUnverified(t *testing.T) {
 		t.Errorf("states are swapped: %q / %q", unverified.State, unreported.State)
 	}
 }
+
+// D20: the latest review round incomplete ⇒ unverified with the review-incomplete
+// reason, whoever ran the phase; accepted as is, or a D21 legacy phase ⇒ no hold.
+func TestReviewIncompleteHold(t *testing.T) {
+	base := Input{CriteriaDone: 3, CriteriaTotal: 3, ReviewHold: "round 2: review-incomplete: reviewer-timed-out"}
+	r := Check(base)
+	if r.State != StateUnverified || len(r.Reasons) != 1 || !strings.HasPrefix(r.Reasons[0], "review-incomplete: ") ||
+		!strings.Contains(r.Reasons[0], "reviewer-timed-out") {
+		t.Fatalf("incomplete review = %+v, want unverified with the review-incomplete reason", r)
+	}
+	if !r.HoldsPlanBack(base) {
+		t.Error("an incomplete review does not hold the plan back")
+	}
+
+	accepted := base
+	accepted.ReviewAccepted = true
+	if r := Check(accepted); !r.Complete() {
+		t.Errorf("accepted as is = %+v, want complete", r)
+	}
+	legacy := base
+	legacy.LegacyReview = true
+	if r := Check(legacy); !r.Complete() {
+		t.Errorf("legacy review = %+v, want complete", r)
+	}
+	none := base
+	none.ReviewHold = "  "
+	if r := Check(none); !r.Complete() {
+		t.Errorf("no hold = %+v, want complete", r)
+	}
+	// Criteria still open: incomplete wins, the review reason is not reached.
+	open := base
+	open.CriteriaDone = 1
+	if r := Check(open); r.State != StateIncomplete {
+		t.Errorf("open criteria = %+v, want incomplete", r)
+	}
+}
+
+// An open review decision holds a phase even when its latest round is complete
+// (a FAIL at round 2 waits on the operator); legacy is exempt; the SQL value
+// decodes into the two fields.
+func TestReviewDecisionOpenHolds(t *testing.T) {
+	in := Input{CriteriaDone: 1, CriteriaTotal: 1, ReviewDecisionOpen: "D-4"}
+	r := Check(in)
+	if r.State != StateUnverified || len(r.Reasons) != 1 || !strings.Contains(r.Reasons[0], "review decision D-4 is open") {
+		t.Fatalf("open decision = %+v", r)
+	}
+	in.LegacyReview = true
+	if !Check(in).Complete() {
+		t.Error("a legacy phase is held by a review decision")
+	}
+	held := Input{CriteriaDone: 1, CriteriaTotal: 1, ReviewHold: "round 1: x", ReviewDecisionOpen: "D-4"}
+	if r := Check(held); len(r.Reasons) != 1 || !strings.Contains(r.Reasons[0], "(decision D-4 is open)") {
+		t.Errorf("hold + open decision = %+v, want one reason naming the decision", r)
+	}
+	for v, want := range map[string]struct {
+		open     string
+		accepted bool
+	}{
+		"open:D-4": {"D-4", false}, "accepted:D-4": {"", true}, "answered:D-4": {"", false}, "": {"", false},
+	} {
+		if open, accepted := ParseReviewDecision(v); open != want.open || accepted != want.accepted {
+			t.Errorf("ParseReviewDecision(%q) = (%q, %v), want (%q, %v)", v, open, accepted, want.open, want.accepted)
+		}
+	}
+}

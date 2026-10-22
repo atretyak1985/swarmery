@@ -139,6 +139,25 @@ func confidenceOf(in Input) Confidence {
 	}
 }
 
+// SessionEnded reports whether one sessions row is over: a terminal status
+// (completed | killed) or a backing process procwatch observed dead. Exported for
+// internal/stall, which asks the same question of a single stage session.
+//
+// sessions.ended_at is deliberately not consulted: ingest stamps it with the
+// transcript's LAST record timestamp on every batch, so it is set on a session
+// that is still writing. The status column is what the ticker and procwatch move
+// to a terminal value, and proc_state=dead is the strongest evidence available
+// (the same rule order Classify follows).
+func SessionEnded(status, procState string) bool {
+	return status == SessionCompleted || status == SessionKilled || procState == procwatch.StateDead
+}
+
+// The terminal sessions.status values.
+const (
+	SessionCompleted = "completed"
+	SessionKilled    = "killed"
+)
+
 // Row is one task with its derived verdict, as returned by Load.
 type Row struct {
 	TaskID  int64

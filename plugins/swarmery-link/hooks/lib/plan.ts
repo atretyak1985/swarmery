@@ -133,9 +133,10 @@ export type PlanAction = 'select' | 'tick' | 'run' | 'drift'
 /** POST /api/link/plan/<action>. */
 export const planActionUrl = (origin: string, action: PlanAction): string => `${origin}/api/link/plan/${action}`
 
-export type PlanGet = { readonly method: 'GET'; readonly headers: Record<string, string> }
+export type PlanGet = { readonly method: 'GET' }
 
-export const planGetRequest = (token: string): PlanGet => ({ method: 'GET', headers: { authorization: `Bearer ${token}` } })
+/** The plan read; signedFetch (../signed.ts) adds its signature. */
+export const planGetRequest = (): PlanGet => ({ method: 'GET' })
 
 /** The plan's dashboard URL, absolute: a path the daemon gave is put under its origin. */
 export const absoluteUrl = (url: string, origin: string): string => (url.startsWith('/') ? `${origin}${url}` : url)

@@ -55,9 +55,17 @@ func matches(presented, want string) bool {
 	return subtle.ConstantTimeCompare([]byte(presented), []byte(want)) == 1
 }
 
+// WriteUnauthorized answers the exact 401 of every link route; the signed
+// scheme (internal/linksig) answers a request that does not verify with it.
+func WriteUnauthorized(w http.ResponseWriter) {
+	writeUnauthorized(w)
+}
+
 func writeUnauthorized(w http.ResponseWriter) {
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("WWW-Authenticate", `Bearer realm="swarmery-link"`)
+	// the signed scheme (internal/linksig) every in-repo client now uses
+	w.Header().Add("WWW-Authenticate", `Swarmery-HMAC realm="swarmery-link"`)
 	w.WriteHeader(http.StatusUnauthorized)
 	_, _ = w.Write([]byte(unauthorizedBody))
 }

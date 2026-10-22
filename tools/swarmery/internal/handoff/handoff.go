@@ -21,6 +21,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/cachecold"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/ingest"
 )
 
@@ -75,19 +76,63 @@ type Runner interface {
 // second return is the overflow count (candidates dropped by the cap) so the
 // caller can log it — no silent caps.
 func Candidates(db *sql.DB, now time.Time) ([]Candidate, int, error) {
-	sysDir := ingest.SystemDir()
-	if sysDir == "" {
-		// A sentinel that no real cwd equals, so the exclusion is a no-op rather
-		// than accidentally matching "" and excluding everything.
-		sysDir = "\x00unresolvable"
+	return candidatesWithSysDir(db, now, systemDir())
+}
+
+// systemDir is the System project's cwd the candidate rules exclude.
+func systemDir() string {
+	if d := ingest.SystemDir(); d != "" {
+		return d
 	}
-	return candidatesWithSysDir(db, now, sysDir)
+	// A sentinel that no real cwd equals, so the exclusion is a no-op rather
+	// than accidentally matching "" and excluding everything.
+	return "\x00unresolvable"
 }
 
 // candidatesWithSysDir is the testable core of Candidates with the System dir
 // injected (production derives it from ingest.SystemDir()).
 func candidatesWithSysDir(db *sql.DB, now time.Time, sysDir string) ([]Candidate, int, error) {
-	cutoff := now.Add(-ActivityWin).UTC().Format(time.RFC3339)
+	all, err := queryCandidates(db, now.Add(-ActivityWin).UTC().Format(time.RFC3339), sysDir, 0)
+	if err != nil {
+		return nil, 0, err
+	}
+	dropped := 0
+	if len(all) > MaxPerTick {
+		dropped = len(all) - MaxPerTick
+		all = all[:MaxPerTick]
+	}
+	return all, dropped, nil
+}
+
+// Eligible reports whether one session passes the candidate rules — the very
+// query Candidates runs, filtered to that session and WITHOUT the activity
+// window. It gates an explicit request (the «continue from handoff» action of
+// a cache-cold session, internal/cachecold): such a session is idle by
+// definition, and the operator asking now is the activity. Everything else —
+// the threshold, the System/archived/hidden/pruned exclusions, the regrowth
+// cooldown — holds exactly as on the tick.
+func Eligible(db *sql.DB, sessionID int64) (bool, error) {
+	return eligibleWithSysDir(db, sessionID, systemDir())
+}
+
+func eligibleWithSysDir(db *sql.DB, sessionID int64, sysDir string) (bool, error) {
+	// "" is below every stored timestamp, so the activity predicate holds for
+	// any turn that has an ended_at.
+	all, err := queryCandidates(db, "", sysDir, sessionID)
+	return len(all) == 1, err
+}
+
+// Footprint is the context footprint Threshold is compared against —
+// tokens_in + cache_read + cache_write of one assistant turn, the measure the
+// candidate query computes in SQL. The formula itself lives in internal/cachecold
+// (a leaf the ingest tail can import; this package imports ingest), so the
+// handoff threshold and the cache-cold prediction can never measure two
+// different things.
+func Footprint(t cachecold.Turn) int64 { return cachecold.Footprint(t) }
+
+// queryCandidates runs the candidate selection: activity cutoff as an RFC3339
+// lower bound on the newest turn's end, sessionID 0 for every session.
+func queryCandidates(db *sql.DB, cutoff, sysDir string, sessionID int64) ([]Candidate, error) {
 	// ctx: newest assistant turn's footprint per session (same window pass and
 	// formula as sessionDTO.ContextTokens / advisor.r9FatSessions). last: that
 	// turn's ended_at, for the activity window. ho: latest handoff footprint,
@@ -118,10 +163,11 @@ func candidatesWithSysDir(db *sql.DB, now time.Time, sysDir string) ([]Candidate
 		  AND ctx.ended_at IS NOT NULL
 		  AND ctx.ended_at >= ?
 		  AND (ho.context_tokens IS NULL OR ho.context_tokens + ? <= ctx.context_tokens)
+		  AND (? = 0 OR s.id = ?)
 		ORDER BY ctx.context_tokens DESC, s.id`,
-		sysDir, Threshold, cutoff, RegrowthDelta)
+		sysDir, Threshold, cutoff, RegrowthDelta, sessionID, sessionID)
 	if err != nil {
-		return nil, 0, err
+		return nil, err
 	}
 	defer rows.Close()
 
@@ -129,20 +175,11 @@ func candidatesWithSysDir(db *sql.DB, now time.Time, sysDir string) ([]Candidate
 	for rows.Next() {
 		var c Candidate
 		if err := rows.Scan(&c.SessionID, &c.SessionUUID, &c.ContextTokens); err != nil {
-			return nil, 0, err
+			return nil, err
 		}
 		all = append(all, c)
 	}
-	if err := rows.Err(); err != nil {
-		return nil, 0, err
-	}
-
-	dropped := 0
-	if len(all) > MaxPerTick {
-		dropped = len(all) - MaxPerTick
-		all = all[:MaxPerTick]
-	}
-	return all, dropped, nil
+	return all, rows.Err()
 }
 
 // Digest builds the generator input from the DB (never the transcript). Layout:

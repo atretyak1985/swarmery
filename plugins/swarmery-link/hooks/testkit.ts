@@ -2,8 +2,10 @@
 // network beneath the plugin, so the token file and the daemon are answered
 // here. Not imported by register.ts, so it never loads in a session.
 
-import type { On } from 'claude-code'
+import type { Args, On } from 'claude-code'
 import { type MockClock, mock } from 'claude-code/testing'
+import { parseToken } from './lib/client'
+import { SIG_HEADER, requestTarget, signRequest, signResponse } from './lib/sig'
 
 export const HOME = '/home/dev'
 export const TOKEN_PATH = `${HOME}/.swarmery/link-token`
@@ -27,6 +29,8 @@ export type Request = {
   readonly url: string
   readonly method: string | undefined
   readonly headers: Readonly<Record<string, string>>
+  /** The token the request's signature verifies under (one of the world's token reads), or undefined. */
+  readonly signedWith: string | undefined
   readonly body: { readonly events: ReadonlyArray<Readonly<Record<string, unknown>>> }
 }
 
@@ -99,6 +103,12 @@ export type World = {
   readonly asks?: readonly string[]
   /** False: `$.ui.open` leaves the pane waiting undrawn (a narrow terminal). Default: placed. */
   readonly isPanePlaced?: boolean
+  /**
+   * How the fake daemon signs its responses: `valid` with the key the request
+   * was signed with, `none` (no signature header: a listener that is not the
+   * daemon), `wrong` (a signature under another key). Default: `valid`.
+   */
+  readonly responseSig?: 'valid' | 'none' | 'wrong'
 }
 
 /** A status alone (empty body), a status with a JSON body, a failed connection, or a daemon that never answers. */
@@ -108,6 +118,8 @@ export type PermissionCall = {
   readonly url: string
   readonly method: string | undefined
   readonly authorization: string | undefined
+  /** The token the request's signature verifies under, or undefined. */
+  readonly signedWith: string | undefined
   readonly body: Readonly<Record<string, unknown>> | undefined
   readonly at: number
 }
@@ -130,6 +142,8 @@ export type PlanCall = {
   readonly url: string
   readonly method: string | undefined
   readonly authorization: string | undefined
+  /** The token the request's signature verifies under, or undefined. */
+  readonly signedWith: string | undefined
   readonly body: Readonly<Record<string, unknown>> | undefined
 }
 
@@ -158,7 +172,14 @@ export type WireCommand = { readonly id: number; readonly kind: string; readonly
 
 export type PollReply = number | 'throw' | 'hang' | { readonly command: WireCommand }
 
-export type Poll = { readonly url: string; readonly method: string | undefined; readonly authorization: string | undefined; readonly at: number }
+export type Poll = {
+  readonly url: string
+  readonly method: string | undefined
+  readonly authorization: string | undefined
+  /** The token the request's signature verifies under, or undefined. */
+  readonly signedWith: string | undefined
+  readonly at: number
+}
 
 export type AckSent = { readonly url: string; readonly body: { readonly result: string; readonly message?: string } }
 
@@ -218,6 +239,8 @@ export type Recorded = {
 }
 
 const PLAN = '/api/link/plan'
+
+type FetchEvent = Args<'http.fetch'>
 
 /**
  * What `next(e)` resolves to on `ui.render` beneath the plugins: the engine's
@@ -283,7 +306,31 @@ export const world = (on: On, w: World = {}): Recorded => {
     reads += 1
     return text === undefined ? { deny: `ENOENT: ${e.path}` } : { value: text }
   })
-  on('http.fetch', ($, e) => {
+  /** A signed request's parameters, or undefined for any other Authorization. */
+  const signature = (authorization: string | undefined): { readonly ts: number; readonly nonce: string; readonly sig: string } | undefined => {
+    const m = /^Swarmery-HMAC ts=(\d+),nonce=([0-9A-Za-z_-]+),sig=([0-9a-f]{64})$/.exec(authorization ?? '')
+    return m === null || m[1] === undefined || m[2] === undefined || m[3] === undefined ? undefined : { ts: Number(m[1]), nonce: m[2], sig: m[3] }
+  }
+  /** Which of the world's tokens the request was signed with (the daemon holds whichever the file had). */
+  const keyOf = (e: FetchEvent): string | undefined => {
+    const p = signature(e.init?.headers?.authorization)
+    if (p === undefined) return undefined
+    const keys = [...new Set((w.tokens ?? []).map(parseToken).filter((k): k is string => k !== undefined))]
+    const target = requestTarget(e.url)
+    return keys.find(k => signRequest(k, e.init?.method ?? 'GET', target, p.ts, p.nonce, e.init?.body ?? '') === p.sig)
+  }
+  /** The daemon's signature on an answer, as `responseSig` stages it. */
+  const signed = (e: FetchEvent, result: unknown): unknown => {
+    const r = result as { readonly value?: { readonly status: number; readonly text: string; readonly headers: Readonly<Record<string, string>> } }
+    const p = signature(e.init?.headers?.authorization)
+    const mode = w.responseSig ?? 'valid'
+    if (r?.value === undefined || p === undefined || mode === 'none') return result
+    const key = mode === 'wrong' ? 'w'.repeat(64) : keyOf(e)
+    if (key === undefined) return result
+    return { value: { ...r.value, headers: { ...r.value.headers, [SIG_HEADER]: signResponse(key, p.nonce, r.value.status, r.value.text) } } }
+  }
+  on('http.fetch', ($, e) => signed(e, serve(e)) as ReturnType<typeof serve>)
+  const serve = (e: FetchEvent) => {
     if (e.url.includes(PERMISSION)) {
       const isCancel = e.init?.method === 'DELETE'
       const isPoll = !isCancel && e.url.includes(`${PERMISSION}/`)
@@ -297,6 +344,7 @@ export const world = (on: On, w: World = {}): Recorded => {
         url: e.url,
         method: e.init?.method,
         authorization: e.init?.headers?.authorization,
+        signedWith: keyOf(e),
         body: e.init?.body === undefined ? undefined : JSON.parse(e.init.body),
         at: clock.now(),
       })
@@ -314,7 +362,7 @@ export const world = (on: On, w: World = {}): Recorded => {
     }
     if (e.url.includes(`${COMMANDS}?`)) {
       const reply = pick<PollReply>(w.polls, polls.length, 'hang')
-      polls.push({ url: e.url, method: e.init?.method, authorization: e.init?.headers?.authorization, at: clock.now() })
+      polls.push({ url: e.url, method: e.init?.method, authorization: e.init?.headers?.authorization, signedWith: keyOf(e), at: clock.now() })
       if (reply === 'hang') return new Promise<never>(() => undefined)
       if (reply === 'throw') return { deny: 'connect ECONNREFUSED 127.0.0.1:7777' }
       if (typeof reply === 'number') return { value: { status: reply, ok: reply >= 200 && reply < 300, headers: {}, text: '' } }
@@ -322,7 +370,7 @@ export const world = (on: On, w: World = {}): Recorded => {
     }
     if (e.url.includes(PLAN)) {
       const body = e.init?.body === undefined ? undefined : (JSON.parse(e.init.body) as Readonly<Record<string, unknown>>)
-      planCalls.push({ url: e.url, method: e.init?.method, authorization: e.init?.headers?.authorization, body })
+      planCalls.push({ url: e.url, method: e.init?.method, authorization: e.init?.headers?.authorization, signedWith: keyOf(e), body })
       const respond = (status: number, json?: unknown) => ({
         value: { status, ok: status >= 200 && status < 300, headers: {}, text: json === undefined ? '' : JSON.stringify(json) },
       })
@@ -350,12 +398,13 @@ export const world = (on: On, w: World = {}): Recorded => {
       url: e.url,
       method: e.init?.method,
       headers: e.init?.headers ?? {},
+      signedWith: keyOf(e),
       body: JSON.parse(e.init?.body ?? '{"events":[]}'),
     })
     if (reply === 'hang') return new Promise<never>(() => undefined)
     if (reply === 'throw') return { deny: 'connect ECONNREFUSED 127.0.0.1:7777' }
     return { value: { status: reply, ok: reply >= 200 && reply < 300, headers: {}, text: '{}' } }
-  })
+  }
   on('ui.log', ($, e) => {
     logs.push(e.text)
     if (e.to !== 'debug') shown.push(e.text)

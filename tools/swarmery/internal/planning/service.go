@@ -23,6 +23,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -229,9 +230,40 @@ func (s *Service) Start(projectID int64, idea, model, effort string) (sessionUUI
 	log.Printf("planning: start project=%d uuid=%s cwd=%q model=%s effort=%s (%d chars idea)", projectID, uuid, path.String, modelID, effortID, len(idea))
 	s.notify(projectID) // active=true → page shows the run
 
-	spec := RunSpec{Prompt: BuildPrompt(idea, s.WorkspaceRoot), SessionUUID: uuid, Cwd: path.String, Model: modelID, Effort: effortID}
+	spec := RunSpec{Prompt: BuildPrompt(idea, s.WorkspaceRoot), SessionUUID: uuid, Cwd: path.String, Model: modelID, Effort: effortID,
+		WritableDirs: s.planWritable()}
 	s.spawn(func() { s.runAndHandle(ctx, cancel, projectID, spec) })
 	return uuid, nil
+}
+
+// planWritable is what a PLAN-mode run may write under: the workspace root this
+// daemon scans, or nothing when none is configured (bare unit tests) — a
+// missing root must not widen the planner to the whole disk.
+func (s *Service) planWritable() []string {
+	if root := strings.TrimSpace(s.WorkspaceRoot); root != "" {
+		return []string{root}
+	}
+	return nil
+}
+
+// WritableDirs is the writable set of the wizard behind sessionUUID, for a
+// resume of it: the PROCEED turn that writes the plan (or stages the revision)
+// is a resume, so it must carry the same Edit rules as the first turn.
+// plan-mode → the workspace root; revise-mode → its scratch dir; an unknown
+// uuid → none.
+func (s *Service) WritableDirs(sessionUUID string) []string {
+	var mode string
+	err := s.DB.QueryRow(`SELECT mode FROM planning_sessions WHERE session_uuid = ?`, sessionUUID).Scan(&mode)
+	if err != nil {
+		if !errors.Is(err, sql.ErrNoRows) {
+			log.Printf("error: planning: read mode uuid=%s: %v", sessionUUID, err)
+		}
+		return nil
+	}
+	if mode == ModeRevise {
+		return []string{filepath.Join(s.scratchRoot(), sessionUUID)}
+	}
+	return s.planWritable()
 }
 
 // scratchRoot resolves the staging root for revise sessions.
@@ -384,7 +416,10 @@ func (s *Service) StartRevise(taskID int64, reason string, triggerPhaseID *int64
 		taskID, projectID, uuid, planDir, scratchDir)
 	s.notify(projectID)
 
-	spec := RunSpec{Prompt: prompt, SessionUUID: uuid, Cwd: projPath.String, Model: DefaultModel, Effort: reviseEffort}
+	// The revise run stages into its scratch dir and writes nothing else — the
+	// plan dir included (Apply is a later, separate decision).
+	spec := RunSpec{Prompt: prompt, SessionUUID: uuid, Cwd: projPath.String, Model: DefaultModel, Effort: reviseEffort,
+		WritableDirs: []string{scratchDir}}
 	s.spawn(func() { s.runAndHandle(ctx, cancel, projectID, spec) })
 	return uuid, nil
 }

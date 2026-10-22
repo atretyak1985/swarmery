@@ -9,7 +9,6 @@ package api
 // the same D4 requireLocalOrigin hardening.
 
 import (
-	"encoding/json"
 	"net/http"
 	"strconv"
 	"strings"
@@ -32,8 +31,10 @@ func (h *Handler) patchSession(w http.ResponseWriter, r *http.Request) {
 	// map[string]*string distinguishes {"field": null} (clear) from an absent
 	// key (skip) and rejects non-string values at decode time.
 	var body map[string]*string
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		http.Error(w, `{"error":"invalid JSON body"}`, http.StatusBadRequest)
+	if err := decodeJSONLimited(w, r, &body, maxJSONBody); err != nil {
+		if !isBodyTooLarge(err) {
+			http.Error(w, `{"error":"invalid JSON body"}`, http.StatusBadRequest)
+		}
 		return
 	}
 

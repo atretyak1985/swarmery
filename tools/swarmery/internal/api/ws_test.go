@@ -33,6 +33,8 @@ var (
 		"tokens", "costUsd",
 		// fat-session wave: last-assistant-turn context occupancy (nullable).
 		"contextTokens",
+		// cache-cold prediction (migration 0127): explicit null while warm.
+		"cacheCold",
 		// phase 3.5: workspaces — additive best-task-link fields (nullable).
 		"taskId", "taskExternalId", "taskLinkSource", "taskConfidence",
 		// phase 4 step-07+: process liveness (nullable).
@@ -59,6 +61,9 @@ var (
 		// mods-swarmery-link phase 3: the link mod's live view (migration 0107,
 		// explicit null when no mod reported on the session).
 		"link",
+		// verify-not-trust phase 14: the session's own turns ran on more than
+		// one model, and which (session_model.go). ADDITIVE.
+		"modelSwitched", "models",
 	}
 	eventKeys = []string{
 		"id", "turnId", "ts", "type", "toolName", "parentEventId",

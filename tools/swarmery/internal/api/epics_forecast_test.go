@@ -36,6 +36,11 @@ func TestListEpicsPhaseForecasts(t *testing.T) {
 		  FROM epic_phases WHERE workspace_task_id = ? AND seq = 1`, taskID); err != nil {
 		t.Fatal(err)
 	}
+	// A clean phase whose forecast lists files also carries its blast radius.
+	if _, err := db.Exec(`UPDATE epic_phases SET blast_radius = 'Blast radius: 0 callers (sources: rg)'
+		WHERE workspace_task_id = ? AND seq = 1`, taskID); err != nil {
+		t.Fatal(err)
+	}
 	// Phase 2: a malformed one — unknown band, confidence out of range, no areas.
 	if _, err := db.Exec(`
 		INSERT INTO phase_forecasts
