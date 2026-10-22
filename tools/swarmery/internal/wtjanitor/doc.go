@@ -46,6 +46,22 @@
 // salvage commit. A salvage that fails degrades the verdict and leaves the
 // worktree alone. Nothing this package does can be the reason work was lost.
 //
+// # Operator-approved removal of keep-unmerged worktrees (force.go)
+//
+// keep-unmerged is never removed by a sweep. Service.ForceUnmerged is the one
+// other path to removal, and it is operator-triggered ONLY: it is reachable
+// from the worktree-cleanup apply action (POST
+// /api/worktree-cleanup/{id}/apply, `swarmery wtcleanup apply`), after the
+// operator ticked the paths on a Needs-you card that showed a proof the
+// branch's content is already in main (internal/wtcleanup). Nothing on a timer
+// calls it, and Sweep's verdicts and veto order are untouched by it.
+//
+// The same invariant holds there: per path it re-checks ownership, the
+// `git worktree lock` and liveness at the moment of destruction, then writes a
+// salvage branch salvage/<branch>-<ts> that reaches every commit of the branch
+// and every uncommitted file, and only after that salvage SUCCEEDED removes the
+// checkout. Each attempt is journalled with verdict force-unmerged.
+//
 // # Plugin install records
 //
 // A worktree where Claude Code installed or updated a plugin at project scope
