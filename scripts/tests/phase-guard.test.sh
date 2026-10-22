@@ -232,9 +232,9 @@ if [ "$RC" -eq 2 ]; then ok "inside a run: a payload that is not JSON blocks"; e
 NOJQ="$TMP/nojq-bin"
 mkdir -p "$NOJQ"
 for b in cat dirname date tr awk readlink pwd; do ln -s "$(command -v "$b")" "$NOJQ/$b"; done
-ERR=$(printf '{}' | (cd "$R" && PATH="$NOJQ" /bin/bash "$HOOK") 2>&1 >/dev/null); RC=$?
+ERR=$(printf '{}' | (cd "$R" && PATH="$NOJQ" "$HOOK") 2>&1 >/dev/null); RC=$?
 if [ "$RC" -eq 2 ] && [[ "$ERR" == *"jq is missing"* ]]; then ok "inside a run: jq missing blocks"; else bad "jq missing in a run: rc=$RC ($ERR)"; fi
-ERR=$(printf '{}' | (cd "$N" && PATH="$NOJQ" /bin/bash "$HOOK") 2>&1 >/dev/null); RC=$?
+ERR=$(printf '{}' | (cd "$N" && PATH="$NOJQ" "$HOOK") 2>&1 >/dev/null); RC=$?
 if [ "$RC" -eq 0 ] && [ -z "$ERR" ]; then ok "outside a run: jq missing stays silent"; else bad "jq missing outside a run: rc=$RC ($ERR)"; fi
 
 # ── guard.log: one line per block, <ts>\t<tool>\t<path>\t<reason> ──
