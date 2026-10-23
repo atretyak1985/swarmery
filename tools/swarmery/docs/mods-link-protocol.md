@@ -232,9 +232,10 @@ Every accepted event also advances `sessions.link_seen_at` to the newest `at` se
 (`inputHash`, e.g. hex SHA-256 of the canonical JSON) and the subagent's `agentId`
 when the call runs inside one. It never sends the input itself. The full input is in
 the JSONL transcript already, and a second copy over HTTP is a second place for file
-contents and secrets to leak. The daemon does not check this. It masks secret-shaped
-values in every stored payload (the transcript ingest's redaction), but the rule is
-the mod's to keep.
+contents and secrets to leak. The daemon does not check this. It masks the values the
+transcript ingest's redaction recognizes (token shapes, credential-named JSON keys) in
+every event payload it stores in `link_events`, but a secret of no known shape is
+stored as sent, so the rule is the mod's to keep.
 
 **`session.measure` units are optional (M2).** An absent `context.percent` (before
 the first response) or an empty `rateLimits` (off a subscription) leaves the previous
@@ -439,6 +440,12 @@ Table `link_commands` (migration `0108`): `id, session_id, kind, payload, state,
 attempts, created_at, delivered_at, acked_at, result, message, wait_turn`, indexed on
 `(session_id, state, created_at)`. There is no foreign key, for the reason `0107`
 gives.
+
+`payload` is stored exactly as the dashboard sent it, secrets included: it is what the
+mod receives on its poll (and again on a re-delivery), so a masked copy would hand the
+session a different prompt or message than the operator wrote. The row's lifetime is
+bounded by retention (below). The `link_messages` row a `message` command writes is
+masked like every other message body.
 
 ## Permission
 
@@ -871,7 +878,9 @@ path, a payload that is absent or not an object) rejects **that one event** with
 reason `<kind> payload: <why>`, inside the usual `202`.
 
 **Privacy.** `text` is message text the user's sessions exchanged, which the
-transcripts hold anyway. The mod cuts it at 4096 characters; the daemon cuts again.
+transcripts hold anyway. The mod cuts it at 4096 characters; the daemon masks its
+secret-shaped values (in `link_messages.body` and `reason` as in `link_events`), then
+cuts again.
 
 ### Correlation
 
@@ -1192,7 +1201,8 @@ It adds `404` for an unknown plan or phase, `400` for a missing field, and
 The mod's judgement of whether the session's recent work matches its open phase.
 `verdict` is `off-phase`, `adjacent` or `on-phase`. `reason` is cut to 200 characters.
 The daemon stores it as a `link_events` row of kind `drift` for that session, with the
-body minus `session` as the payload, and answers `202 {"stored": true}`. A second report
+body minus `session` as the payload (secret-shaped values masked, as for every
+`link_events` payload), and answers `202 {"stored": true}`. A second report
 in the same millisecond is a duplicate (`"stored": false`). It touches no `link_status`
 and never runs through `POST /api/link/events`, which rejects the kind.
 
