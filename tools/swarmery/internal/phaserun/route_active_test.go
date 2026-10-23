@@ -280,8 +280,11 @@ func TestRouteOffGolden(t *testing.T) {
 	// output; legacyGolden is the previous pin, which the argv put back into the
 	// old `-p <prompt> --session-id …` order must still match — proof that the
 	// move changed the prompt's position and nothing else.
-	const golden = "2dff8fdaca68df140fee92bfb2d3660e35c3dd9c4422c9b032583bf211841928"
-	const legacyGolden = "acd14a3e5a13fb4a0c56fc4f4019efed0d5be0b7c845accbc31ba058192dadc9"
+	//
+	// Re-pinned (both) when the prompt gained the D-n / SC-n citation bullet
+	// (verify-not-trust phase 12): the flag tail is unchanged.
+	const golden = "b52f21d3462d4f2b76312a9e2644173fe9272d6b1be652e6cbabebe161656e3f"
+	const legacyGolden = "cedd7c3f90274c8424f214efdfdc9282043dc5dd592b0eafa3898e768db11857"
 	wantTail := []string{"--session-id", "uuid-1", "--model", "claude-opus-5-5", "--effort", "high"}
 	specs, db, _ := startOnce(t, "off", "", "")
 	if len(specs) != 1 {
