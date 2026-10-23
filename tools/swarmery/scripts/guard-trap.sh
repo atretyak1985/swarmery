@@ -39,7 +39,9 @@
 # Env: SWARMERY_ONBOARD_ROOTS (required; the daemon's onboarding allow-list),
 # SWARMERY_PORT (default 7777), SWARMERY_WORKSPACE_ROOT / AGENT_WORKSPACE_ROOT
 # (fallback when the daemon does not report its workspace root; default
-# ~/swarmery-workspace), GITLEAKS_BIN (default: gitleaks on PATH).
+# ~/swarmery-workspace), GITLEAKS_BIN (default: gitleaks on PATH),
+# SWARMERY_BIN (default: swarmery on PATH — writes go through `swarmery api`,
+# which signs them with the link token; an unsigned write gets a 401).
 
 set -euo pipefail
 
@@ -49,6 +51,7 @@ FIXTURE="$REPO/tools/swarmery/testdata/fixtures/guard-trap"
 PATTERNS="$SCRIPT_DIR/lib/redact-patterns.txt"
 GITLEAKS_CONFIG="$REPO/.gitleaks.toml"
 GITLEAKS="${GITLEAKS_BIN:-gitleaks}"
+SWARMERY="${SWARMERY_BIN:-swarmery}"
 SLUG="guard-trap"
 PHASE_DOC="phase-1-trap.md"
 PORT="${SWARMERY_PORT:-7777}"
@@ -72,15 +75,18 @@ run() {
 }
 
 # http <METHOD> <path> [json-body] — print the request; send it unless --dry-run.
-# The body of the reply goes to stdout; a non-2xx reply is an error.
+# The body of the reply goes to stdout; a non-2xx reply is an error. Reads go
+# straight to curl; a write must be signed, so it goes through `swarmery api`.
 http() {
   local method="$1" path="$2" body="${3:-}"
   if [ -n "$body" ]; then say "HTTP $method $API$path $body" >&2; else say "HTTP $method $API$path" >&2; fi
   [ "$DRY" -eq 1 ] && return 0
-  if [ -n "$body" ]; then
-    curl -fsS --max-time 30 -X "$method" -H 'Content-Type: application/json' --data "$body" "$API$path"
+  if [ "$method" = GET ]; then
+    curl -fsS --max-time 30 "$API$path"
+  elif [ -n "$body" ]; then
+    "$SWARMERY" api "$method" "$path" --data "$body" --port "$PORT" --timeout 30s
   else
-    curl -fsS --max-time 30 -X "$method" "$API$path"
+    "$SWARMERY" api "$method" "$path" --port "$PORT" --timeout 30s
   fi
 }
 
@@ -341,6 +347,8 @@ while [ $# -gt 0 ]; do
 done
 
 command -v jq >/dev/null 2>&1 || die "jq is required"
+[ "$DRY" -eq 1 ] || command -v "$SWARMERY" >/dev/null 2>&1 ||
+  die "the swarmery CLI is required to sign writes (set SWARMERY_BIN)"
 case "$MODE" in
   deploy) deploy ;;
   teardown) teardown "$EVIDENCE" ;;

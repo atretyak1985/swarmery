@@ -141,9 +141,27 @@ case "$method ${url#http://localhost:*/}" in
   *) exit 22 ;;
 esac
 EOF
+# swarmery stand-in: `swarmery api METHOD path [--data body] [--port n] …` →
+# the curl stub, so writes land in the same request log.
+cat > "$STUB/swarmery" <<'EOF'
+#!/bin/bash
+[ "$1" = api ] || exit 2
+method="$2" path="$3" body="" port=7777
+shift 3
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --data) body="$2"; shift ;;
+    --port) port="$2"; shift ;;
+    --timeout) shift ;;
+  esac
+  shift
+done
+if [ -n "$body" ]; then exec curl -X "$method" --data "$body" "http://localhost:$port$path"; fi
+exec curl -X "$method" "http://localhost:$port$path"
+EOF
 printf '#!/bin/bash\nexit 0\n' > "$STUB/gitleaks-clean"
 printf '#!/bin/bash\necho "leak found" >&2\nexit 1\n' > "$STUB/gitleaks-leak"
-chmod +x "$STUB/curl" "$STUB/gitleaks-clean" "$STUB/gitleaks-leak"
+chmod +x "$STUB/curl" "$STUB/swarmery" "$STUB/gitleaks-clean" "$STUB/gitleaks-leak"
 mkdir -p "$ROOTS"
 export SWARMERY_ONBOARD_ROOTS="$ROOTS"
 
