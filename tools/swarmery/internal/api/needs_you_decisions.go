@@ -12,6 +12,12 @@
 // still failing after its automatic rounds) — repeat the review or accept it as
 // is — answered through the same endpoint.
 //
+// Since verify-not-trust phase 10 a source='stop' row may also be an
+// AGENT-declared stop: the run hit one of its guard's stop triggers and wrote a
+// `kind: stop` block instead of working around it. The item then carries the
+// block (trigger, reason, the executor's two options) and offers those options
+// plus free text.
+//
 // Read-only, one query over phase_decisions, honouring ?project= through the
 // same scopeFilter as the other sources; an archived plan is skipped.
 package api
@@ -22,6 +28,7 @@ import (
 	"fmt"
 	"log"
 
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/mdfence"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/phaserun"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/store"
 )
@@ -46,8 +53,33 @@ type needsYouDecision struct {
 	Source   string                   `json:"source"`
 	Question string                   `json:"question"`
 	Options  []needsYouDecisionOption `json:"options"`
-	// Guard is the run's guard check (phaserun.GuardResult as stored).
+	// Guard is the run's guard check (phaserun.GuardResult as stored); "{}" for
+	// an agent-declared stop.
 	Guard json.RawMessage `json:"guard"`
+	// Stop is an agent-declared stop's block (verify-not-trust phase 10): the
+	// trigger, the reason and the executor's two options; Options then lists
+	// those plus the free-text `other`. Absent for a guard or review decision.
+	Stop *mdfence.Stop `json:"stop,omitempty"`
+}
+
+// stopOptionOtherLabel labels the free-text answer of an agent stop.
+const stopOptionOtherLabel = "Other (free text)"
+
+// withStop fills dec's Stop and Options from an agent-declared stop's
+// guard_json, and reports whether it was one.
+func (dec *needsYouDecision) withStop(guardJSON string) bool {
+	st := phaserun.AgentStop(store.Decision{Source: dec.Source, GuardJSON: guardJSON})
+	if st == nil {
+		return false
+	}
+	dec.Stop = st
+	dec.Guard = json.RawMessage("{}")
+	dec.Options = make([]needsYouDecisionOption, 0, len(st.Options)+1)
+	for _, o := range st.Options {
+		dec.Options = append(dec.Options, needsYouDecisionOption{ID: o.ID, Label: o.Label})
+	}
+	dec.Options = append(dec.Options, needsYouDecisionOption{ID: phaserun.StopOptionOther, Label: stopOptionOtherLabel})
+	return true
 }
 
 // guardOptionLabels are the operator-facing labels of the guard options.
@@ -92,6 +124,7 @@ func queryNeedsYouPhaseDecisions(db *sql.DB, scope string, projArgs []any) ([]ne
 		if !json.Valid(dec.Guard) {
 			dec.Guard = json.RawMessage("{}")
 		}
+		dec.withStop(guardJS)
 		it.Kind = needsYouPhaseDecision
 		it.SessionName = manualPhaseTitle(ph)
 		it.Question = clipTail(dec.Question, needsYouQuestionMax)
@@ -127,18 +160,24 @@ func decisionOptions(optJSON string) []needsYouDecisionOption {
 // the newest one, should a phase hold several. Best-effort, like the other
 // per-plan reads: a failed read leaves every phase without one.
 func (h *Handler) phaseGuardDecisions(taskID int64) map[int64]*needsYouDecision {
-	return h.phaseOpenDecisions(taskID, store.DecisionSourceStop)
+	return h.phaseOpenDecisions(taskID, store.DecisionSourceStop, func(d *needsYouDecision) bool { return d.Stop == nil })
+}
+
+// phaseStopDecisions maps each phase of a plan to its open AGENT-declared stop
+// decision (verify-not-trust phase 10) — the phase card answers it inline.
+func (h *Handler) phaseStopDecisions(taskID int64) map[int64]*needsYouDecision {
+	return h.phaseOpenDecisions(taskID, store.DecisionSourceStop, func(d *needsYouDecision) bool { return d.Stop != nil })
 }
 
 // phaseReviewDecisions maps each phase of a plan to its open review decision
 // (verify-not-trust phase 9) — the Review tab answers it inline.
 func (h *Handler) phaseReviewDecisions(taskID int64) map[int64]*needsYouDecision {
-	return h.phaseOpenDecisions(taskID, store.DecisionSourceReview)
+	return h.phaseOpenDecisions(taskID, store.DecisionSourceReview, nil)
 }
 
 // phaseOpenDecisions maps each phase of a plan to its newest open decision of
-// source.
-func (h *Handler) phaseOpenDecisions(taskID int64, source string) map[int64]*needsYouDecision {
+// source that keep admits (nil keeps every one).
+func (h *Handler) phaseOpenDecisions(taskID int64, source string, keep func(*needsYouDecision) bool) map[int64]*needsYouDecision {
 	out := map[int64]*needsYouDecision{}
 	ds, err := store.ListTaskDecisions(h.DB, taskID)
 	if err != nil {
@@ -153,8 +192,13 @@ func (h *Handler) phaseOpenDecisions(taskID int64, source string) map[int64]*nee
 		if !json.Valid(g) {
 			g = json.RawMessage("{}")
 		}
-		out[*d.PhaseID] = &needsYouDecision{TaskID: taskID, PhaseID: *d.PhaseID, DecisionID: d.DecisionID, Source: d.Source,
+		dec := &needsYouDecision{TaskID: taskID, PhaseID: *d.PhaseID, DecisionID: d.DecisionID, Source: d.Source,
 			Question: d.Question, Options: decisionOptions(mustJSON(d.OptionIDs)), Guard: g}
+		dec.withStop(d.GuardJSON)
+		if keep != nil && !keep(dec) {
+			continue
+		}
+		out[*d.PhaseID] = dec
 	}
 	return out
 }

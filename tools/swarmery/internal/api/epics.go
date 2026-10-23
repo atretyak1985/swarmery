@@ -63,6 +63,12 @@ type decisionHoldRefDTO struct {
 	Question          string `json:"question"`
 	Seq               int    `json:"seq"`
 	PlanningSessionID *int64 `json:"planningSessionId"`
+	// TurnHref is the "decide now" link: the planning turn that asked it
+	// (phasegate.PlanningTurnLink); "" for a README-born decision.
+	TurnHref string `json:"turnHref"`
+	// Answer is the recorded answer — for a recommended decision, the planner's
+	// recommended option the run builds on; "" (or "undecided") for a held one.
+	Answer string `json:"answer"`
 }
 
 type epicPhaseDTO struct {
@@ -77,6 +83,10 @@ type epicPhaseDTO struct {
 	// DecisionHold is non-null while the phase's `**Depends on decisions:**` names
 	// a decision still undecided and expensive — the run would be refused.
 	DecisionHold *decisionHoldDTO `json:"decisionHold"`
+	// DecisionsRecommended are the declared decisions nobody answered that were
+	// cheap to change and so taken at the planner's recommended option — the
+	// phase card marks them «no answer». nil (omitted) when there are none.
+	DecisionsRecommended []decisionHoldRefDTO `json:"decisionsRecommended,omitempty"`
 	// LandOpen / ManualOpen: how many of the UNTICKED criteria carry a `[LAND]` /
 	// `[MANUAL]` class marker (migration 0105, wsingest/classes.go). Both are
 	// still inside CheckboxesTotal — the completion gate counts every criterion —
@@ -269,6 +279,11 @@ type epicPhaseDTO struct {
 	// 9): its review cycle did not settle on its own — repeat the review or accept
 	// it as is. null otherwise. The Review tab answers it inline.
 	ReviewDecision *needsYouDecision `json:"reviewDecision"`
+	// StopDecision is the phase's OPEN agent-declared stop (verify-not-trust phase
+	// 10): its last run hit one of its guard's stop triggers and asked instead of
+	// working around it — trigger, reason, two options plus free text. null
+	// otherwise. The phase card shows "waits on decision D-n" and answers it inline.
+	StopDecision *needsYouDecision `json:"stopDecision"`
 	// Stalled is the phase's current stall — the active stage (executor, reviewer
 	// or verifier) stopped working (internal/stall, phase_stall.go). Null when the
 	// phase is not stalled. Notification only: nothing in CompletionState or
@@ -1001,6 +1016,7 @@ func (h *Handler) epicPhases(taskID int64, planDir string) ([]epicPhaseDTO, epic
 	verifying := h.phasesVerifying(phases)            // and again
 	workarounds := h.phaseWorkaroundHits(taskID)      // and again
 	guards := h.phaseGuardDecisions(taskID)           // and again
+	stops := h.phaseStopDecisions(taskID)             // and again
 	reviewDecs := h.phaseReviewDecisions(taskID)      // and again
 	stalls := h.phaseStalls(taskID, time.Now().UTC()) // and again
 	for i := range phases {
@@ -1038,6 +1054,7 @@ func (h *Handler) epicPhases(taskID int64, planDir string) ([]epicPhaseDTO, epic
 			phases[i].WorkaroundHits = []workaround.Stored{} // [] not null: the UI maps over it
 		}
 		phases[i].GuardDecision = guards[phases[i].ID]
+		phases[i].StopDecision = stops[phases[i].ID]
 		phases[i].ReviewDecision = reviewDecs[phases[i].ID]
 	}
 	if rollup.Total > 0 {
@@ -1692,22 +1709,43 @@ func (h *Handler) attachDecisionHolds(taskID int64, phases []epicPhaseDTO, deps 
 		log.Printf("warn: api: decisions for task %d: %v", taskID, err)
 		return
 	}
+	// The project slug the "decide now" links are built under; "" (no links)
+	// when it cannot be read.
+	var slug string
+	_ = h.DB.QueryRow(`SELECT COALESCE(p.slug, '') FROM tasks t JOIN projects p ON p.id = t.project_id WHERE t.id = ?`,
+		taskID).Scan(&slug)
 	judged := make([]phasegate.Decision, 0, len(ds))
 	byID := make(map[string]store.Decision, len(ds))
 	for _, d := range ds {
 		judged = append(judged, phasegate.Decision{ID: d.DecisionID, Question: d.Question, Cost: d.Cost, Status: d.Status})
-		byID[d.DecisionID] = d
+		if d.PlanningSessionID != nil {
+			judged[len(judged)-1].Link = phasegate.PlanningTurnLink(slug, *d.PlanningSessionID, d.Seq)
+		}
+		byID[strings.ToUpper(d.DecisionID)] = d
+	}
+	refFor := func(d store.Decision) decisionHoldRefDTO {
+		ref := decisionHoldRefDTO{DecisionID: d.DecisionID, Question: d.Question, Seq: d.Seq,
+			PlanningSessionID: d.PlanningSessionID, Answer: d.Answer}
+		if d.PlanningSessionID != nil {
+			ref.TurnHref = phasegate.PlanningTurnLink(slug, *d.PlanningSessionID, d.Seq)
+		}
+		return ref
 	}
 	for i := range phases {
+		// The «no answer» mark: a declared decision skipped as cheap and taken at
+		// the planner's recommendation — it never holds, the run builds on it.
+		for _, id := range deps[phases[i].ID] {
+			if d, ok := byID[strings.ToUpper(strings.TrimSpace(id))]; ok && d.Status == store.DecisionRecommended {
+				phases[i].DecisionsRecommended = append(phases[i].DecisionsRecommended, refFor(d))
+			}
+		}
 		hold := phaserun.HoldFor(deps[phases[i].ID], judged)
 		if hold == nil {
 			continue
 		}
 		dto := &decisionHoldDTO{Detail: hold.Detail, Decisions: []decisionHoldRefDTO{}}
 		for _, id := range hold.Decisions {
-			d := byID[id]
-			dto.Decisions = append(dto.Decisions, decisionHoldRefDTO{
-				DecisionID: id, Question: d.Question, Seq: d.Seq, PlanningSessionID: d.PlanningSessionID})
+			dto.Decisions = append(dto.Decisions, refFor(byID[id]))
 		}
 		phases[i].DecisionHold = dto
 	}

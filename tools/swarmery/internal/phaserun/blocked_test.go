@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/store"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/worktree"
 )
 
@@ -571,3 +572,45 @@ func TestBlockedGuardIgnoresOtherStates(t *testing.T) {
 
 // compile-time: the real manager is what the daemon wires, and it can stack.
 var _ StackingWorktrees = (*worktree.Manager)(nil)
+
+// TestBlockedLiftedByAnsweredStop: a run blocked with a stop block is refused
+// while its decision is open and admitted once the operator answered it — the
+// answer is the change since the block (its D-n line is in the fingerprinted
+// doc, and the answered decision is checked on its own as well).
+func TestBlockedLiftedByAnsweredStop(t *testing.T) {
+	db, taskID, p1, _ := fixture(t)
+	doc := phaseDocPath(t, db, p1)
+	mustWriteDoc(t, doc, stopDoc)
+	r := &stubRunner{runFn: func(spec RunSpec) (*Run, error) {
+		seedTranscript(t, db, spec.SessionUUID, stopFinal)
+		return &Run{SessionUUID: spec.SessionUUID, ExitCode: 0}, nil
+	}}
+	s := newTestService(db, r, &stubWt{})
+	if _, err := s.StartWith(p1, StartOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.StartWith(p1, StartOptions{}); !errors.Is(err, ErrBlockedUnchanged) {
+		t.Fatalf("open decision: err = %v, want ErrBlockedUnchanged", err)
+	}
+	stops, _ := store.ListPhaseAgentStops(db, taskID, p1)
+	if len(stops) != 1 {
+		t.Fatalf("agent stops = %d", len(stops))
+	}
+	if _, err := AnswerGuardDecision(db, taskID, p1, stops[0].DecisionID, GuardAnswer{Option: "skip"},
+		time.Date(2026, 7, 29, 0, 0, 0, 0, time.UTC)); err != nil {
+		t.Fatal(err)
+	}
+	info, err := s.loadPhase(p1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !s.stopAnsweredSince(info, p1) {
+		t.Error("stopAnsweredSince = false after the answer")
+	}
+	if _, err := s.StartWith(p1, StartOptions{}); errors.Is(err, ErrBlockedUnchanged) {
+		t.Fatalf("answered decision: still refused: %v", err)
+	}
+	if n := r.specCount(); n != 2 {
+		t.Errorf("spawned %d runs, want the blocked one and the re-run", n)
+	}
+}

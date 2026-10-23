@@ -206,7 +206,34 @@ func orDefault(v, def string) string {
 // task's D-n sequence (MAX(seq)+1), undecided and expensive. Returns the row and
 // whether it was created.
 func UpsertStopDecision(q Querier, taskID, phaseID int64, question string, optionIDs []string, guardJSON, now string) (Decision, bool, error) {
-	return upsertPhaseDecision(q, DecisionSourceStop, taskID, phaseID, question, optionIDs, guardJSON, now)
+	return upsertPhaseDecision(q, DecisionSourceStop, `AND `+notAgentStop, taskID, phaseID, question, optionIDs, guardJSON, now)
+}
+
+// agentStopSQL / notAgentStop tell the two kinds of source='stop' decision
+// apart: an AGENT-declared stop (verify-not-trust phase 10 — the executor wrote
+// a `kind: stop` block) carries that block under guard_json's "stop" key; a
+// guard decision (phase 4 — the daemon's after-the-fact guard check) carries a
+// GuardResult, which has no such key. One column, no migration: guard_json is
+// already "what this stop decision is about".
+const (
+	agentStopSQL = `json_extract(guard_json, '$.stop') IS NOT NULL`
+	notAgentStop = `json_extract(guard_json, '$.stop') IS NULL`
+)
+
+// UpsertAgentStopDecision records the open agent-declared stop decision of one
+// phase — stopJSON is `{"stop": <mdfence.Stop>}` — with UpsertStopDecision's
+// refresh-or-mint rule, scoped to agent stops: a re-run that stops again
+// refreshes its own question and never overwrites an open guard decision (nor
+// the other way round).
+func UpsertAgentStopDecision(q Querier, taskID, phaseID int64, question string, optionIDs []string, stopJSON, now string) (Decision, bool, error) {
+	return upsertPhaseDecision(q, DecisionSourceStop, `AND `+agentStopSQL, taskID, phaseID, question, optionIDs, stopJSON, now)
+}
+
+// ListPhaseAgentStops returns one phase's agent-declared stop decisions, in D-n
+// order, answered or not.
+func ListPhaseAgentStops(q Querier, taskID, phaseID int64) ([]Decision, error) {
+	return queryDecisions(q, `workspace_task_id = ? AND phase_id = ? AND source = ? AND `+agentStopSQL,
+		taskID, phaseID, DecisionSourceStop)
 }
 
 // UpsertReviewDecision records the open review decision of one phase (source
@@ -215,13 +242,14 @@ func UpsertStopDecision(q Querier, taskID, phaseID int64, question string, optio
 // asks the operator to repeat the review or accept it as is. Same refresh-or-mint
 // rule as UpsertStopDecision: one open review decision per phase.
 func UpsertReviewDecision(q Querier, taskID, phaseID int64, question string, optionIDs []string, now string) (Decision, bool, error) {
-	return upsertPhaseDecision(q, DecisionSourceReview, taskID, phaseID, question, optionIDs, "{}", now)
+	return upsertPhaseDecision(q, DecisionSourceReview, "", taskID, phaseID, question, optionIDs, "{}", now)
 }
 
 // upsertPhaseDecision is the shared body of the per-phase decisions (stop,
 // review): refresh the phase's open decision of that source, else mint the next
-// D-n, undecided and expensive.
-func upsertPhaseDecision(q Querier, source string, taskID, phaseID int64, question string, optionIDs []string, guardJSON, now string) (Decision, bool, error) {
+// D-n, undecided and expensive. match narrows which open decision is "the
+// phase's" ("" for every decision of that source).
+func upsertPhaseDecision(q Querier, source, match string, taskID, phaseID int64, question string, optionIDs []string, guardJSON, now string) (Decision, bool, error) {
 	opt, err := json.Marshal(nonNilStrings(optionIDs))
 	if err != nil {
 		return Decision{}, false, err
@@ -229,7 +257,7 @@ func upsertPhaseDecision(q Querier, source string, taskID, phaseID int64, questi
 	if strings.TrimSpace(guardJSON) == "" {
 		guardJSON = "{}"
 	}
-	open, err := queryDecisions(q, `workspace_task_id = ? AND phase_id = ? AND source = ? AND status = ?`,
+	open, err := queryDecisions(q, `workspace_task_id = ? AND phase_id = ? AND source = ? AND status = ? `+match,
 		taskID, phaseID, source, DecisionUndecided)
 	if err != nil {
 		return Decision{}, false, err

@@ -1,6 +1,10 @@
 package phasegate
 
-import "strings"
+import (
+	"fmt"
+	"net/url"
+	"strings"
+)
 
 // Decision is the slice of a phase_decisions row (migration 0122) the decision
 // hold judges. Callers load it; this package stays pure (no DB, no clock).
@@ -9,6 +13,23 @@ type Decision struct {
 	Question string
 	Cost     string // cheap | expensive
 	Status   string // decided | undecided | recommended
+	// Link is where the operator decides it — the planning session turn that
+	// asked the question (PlanningTurnLink); "" for a decision born in the
+	// README, which has no interview turn to open.
+	Link string
+}
+
+// PlanningTurnLink is the dashboard path that opens a planning session on the
+// turn that asked decision seq — the same URL the phase card's "waits on D-n"
+// link builds (web Plans.tsx decisionTurnHref): the plans page's New tab,
+// scoped by ?planningSession= and ?turn=, scrolled to the turn. "" when the
+// slug or the session is unknown.
+func PlanningTurnLink(projectSlug string, planningSessionID int64, seq int) string {
+	if projectSlug == "" || planningSessionID <= 0 || seq <= 0 {
+		return ""
+	}
+	return fmt.Sprintf("/p/%s/plans?tab=new&planningSession=%d&turn=%d#planning-turn-%d",
+		url.PathEscape(projectSlug), planningSessionID, seq, seq)
 }
 
 // DecisionHoldCode prefixes the hold detail, so every surface (the 409 body, the
@@ -45,7 +66,8 @@ func DecisionsHolding(deps []string, decisions []Decision) []Decision {
 // HoldsForDecisions is the phase-run start gate's decision condition: whether a
 // phase whose doc declares `**Depends on decisions:** deps` must wait, and the
 // hold detail — `decision-undecided: D-3 (<question>)`, one entry per holding
-// decision, comma-joined.
+// decision, comma-joined. A decision that carries a Link adds where to take it:
+// `D-3 (<question>) — decide now: /p/<slug>/plans?…`.
 //
 // It is a START gate, not part of Check: a decision taken late does not make
 // finished work incomplete, it only stops new work being built on a guess.
@@ -56,12 +78,14 @@ func HoldsForDecisions(deps []string, decisions []Decision) (hold bool, reason s
 	}
 	parts := make([]string, 0, len(waiting))
 	for _, d := range waiting {
-		q := strings.Join(strings.Fields(d.Question), " ")
-		if q == "" {
-			parts = append(parts, d.ID)
-			continue
+		part := d.ID
+		if q := strings.Join(strings.Fields(d.Question), " "); q != "" {
+			part += " (" + q + ")"
 		}
-		parts = append(parts, d.ID+" ("+q+")")
+		if d.Link != "" {
+			part += " — decide now: " + d.Link
+		}
+		parts = append(parts, part)
 	}
 	return true, DecisionHoldCode + ": " + strings.Join(parts, ", ")
 }

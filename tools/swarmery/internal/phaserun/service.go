@@ -27,6 +27,7 @@ import (
 
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/claudeflags"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/decide"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/mdfence"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/phasegate"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/planning"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/repopath"
@@ -767,7 +768,11 @@ func (s *Service) StartWith(phaseID int64, opts StartOptions) (sessionUUID strin
 	// has lapsed (blocked.go).
 	// A returned phase bypasses it like a forced one: the operator's feedback IS
 	// the change since the block.
-	if err := s.checkBlockedUnchanged(info, base, string(doc), opts.Force || opts.Returned); err != nil {
+	// An answered stop decision (stopdecision.go) is the operator's change since
+	// the block, like a return: it bypasses the guard (the D-n line it appended
+	// changes the fingerprint anyway) and the run continues on its own branch.
+	stopAnswered := s.stopAnsweredSince(info, phaseID)
+	if err := s.checkBlockedUnchanged(info, base, string(doc), opts.Force || opts.Returned || stopAnswered); err != nil {
 		return "", err
 	}
 	// Account quota: the last admission verdict before the slot. A fresh reading
@@ -840,7 +845,7 @@ func (s *Service) StartWith(phaseID int64, opts StartOptions) (sessionUUID strin
 	// them (continueOwnBranch). Every other run still refuses. No Git seam ⇒ no tip
 	// to continue from ⇒ the refusal stands.
 	ownTip := ""
-	if ahead > 0 && opts.Returned {
+	if ahead > 0 && (opts.Returned || stopAnswered) {
 		ownTip = s.branchTip(info.RepoRoot, branch)
 	}
 	if ahead > 0 && ownTip == "" {
@@ -908,7 +913,7 @@ func (s *Service) StartWith(phaseID int64, opts StartOptions) (sessionUUID strin
 		acq.StartPoint = info.RunStartPoint
 	}
 	if ownTip != "" {
-		log.Printf("phaserun: phase=%d returned by the operator: continuing on its own branch %s at %s (%d commit(s) of earlier work)",
+		log.Printf("phaserun: phase=%d returned by the operator (feedback or a stop decision): continuing on its own branch %s at %s (%d commit(s) of earlier work)",
 			phaseID, branch, ownTip, ahead)
 	}
 
@@ -989,7 +994,8 @@ func (s *Service) StartWith(phaseID int64, opts StartOptions) (sessionUUID strin
 		log.Printf("phaserun: phase=%d stacked on %s at %s (its dependency is not merged into %q)",
 			phaseID, base.StackedOn, acq.StartPoint, base.BaseBranch)
 	}
-	prompt := buildPromptNoted(docRel, filepath.Base(info.DocPath), string(doc), info.RepoRoot, info.ProjectPath, acq.Path, base.StackedOn, runNote(opts), budget)
+	prompt := buildPromptDecided(docRel, filepath.Base(info.DocPath), string(doc), info.RepoRoot, info.ProjectPath, acq.Path,
+		base.StackedOn, runNote(opts), s.promptDecisions(info, phaseID), budget)
 	// After run_session_uuid is stamped (so every lesson_uses row names a run the
 	// pending-session registry already answers for) and before the spawn.
 	if s.InjectLessons != nil {
@@ -1098,7 +1104,13 @@ func (s *Service) runAndHandle(ctx context.Context, cancel context.CancelFunc, r
 		// The guard check before the review: the reviewer's prompt opens with what
 		// it found, and a run that touched protected paths raises its decision
 		// whatever it reported (D25 — no kill mid-run, the decision comes after).
-		guard := s.guardStage(phaseID, info, acq.StartPoint, acq.Path)
+		// A run that stopped on one of its guard's triggers asks through its own
+		// `kind: stop` block (stopdecision.go); only a blocked run is read for one.
+		var stop *mdfence.Stop
+		if endState == "blocked" {
+			stop = s.stopBlockOf(phaseID, spec.SessionUUID)
+		}
+		guard := s.guardStage(phaseID, info, acq.StartPoint, acq.Path, stop)
 		_, reviewFix := s.guardedReviewRun(phaseID, info, acq, endState, guard)
 		// Verify BEFORE the worktree goes away — the worktree IS the thing being
 		// graded, and removeWorktree below deletes the only copy of it. This is the

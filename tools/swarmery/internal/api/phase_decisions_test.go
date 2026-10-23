@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"testing"
 
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/phasegate"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/planning"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/store"
 )
@@ -128,9 +129,23 @@ func TestEpicPhasesCarryDecisionHold(t *testing.T) {
 		t.Fatalf("phases = %d", len(phases))
 	}
 	hold := phases[0].DecisionHold
-	if hold == nil || hold.Detail != "decision-undecided: D-3 (Which store?)" || len(hold.Decisions) != 1 ||
+	if hold == nil || len(hold.Decisions) != 1 ||
 		hold.Decisions[0].Seq != 3 || hold.Decisions[0].PlanningSessionID == nil || *hold.Decisions[0].PlanningSessionID != 44 {
 		t.Fatalf("phase 1 hold = %+v", hold)
+	}
+	// The hold names the question and links the planning turn that asked it —
+	// the card's "decide now" action and the 409's detail say the same.
+	var slug string
+	_ = db.QueryRow(`SELECT slug FROM projects WHERE id = ?`, projectID).Scan(&slug)
+	link := phasegate.PlanningTurnLink(slug, 44, 3)
+	if link == "" || hold.Decisions[0].TurnHref != link {
+		t.Errorf("turnHref = %q, want %q", hold.Decisions[0].TurnHref, link)
+	}
+	if want := "decision-undecided: D-3 (Which store?) — decide now: " + link; hold.Detail != want {
+		t.Errorf("detail = %q, want %q", hold.Detail, want)
+	}
+	if len(phases[0].DecisionsRecommended) != 0 {
+		t.Errorf("recommended = %+v, want none while D-3 is undecided", phases[0].DecisionsRecommended)
 	}
 	if phases[1].DecisionHold != nil {
 		t.Errorf("phase 2 declares nothing but holds: %+v", phases[1].DecisionHold)
@@ -140,5 +155,16 @@ func TestEpicPhasesCarryDecisionHold(t *testing.T) {
 	phases, _, _, _ = h.epicPhases(21, "/p/plan")
 	if phases[0].DecisionHold != nil {
 		t.Errorf("cheap undecided decision holds: %+v", phases[0].DecisionHold)
+	}
+
+	// Skipped as cheap ⇒ recommended: never held, marked «no answer» with the
+	// recommended option on the card.
+	mustExecAPI(`UPDATE phase_decisions SET status = 'recommended', answer = 'sqlite'`)
+	phases, _, _, _ = h.epicPhases(21, "/p/plan")
+	if phases[0].DecisionHold != nil {
+		t.Errorf("recommended decision holds: %+v", phases[0].DecisionHold)
+	}
+	if rec := phases[0].DecisionsRecommended; len(rec) != 1 || rec[0].DecisionID != "D-3" || rec[0].Answer != "sqlite" || rec[0].TurnHref != link {
+		t.Errorf("recommended = %+v", rec)
 	}
 }

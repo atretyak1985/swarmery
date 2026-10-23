@@ -6,6 +6,7 @@ import (
 	"strings"
 	"text/template"
 
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/mdfence"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/repopath"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/runcore"
 )
@@ -53,7 +54,7 @@ var promptTemplate = template.Must(template.New("phaserun").Parse(
 
 {{.TurnContract}}
 
-{{.RepoNote}}PHASE DOCUMENT ({{.DocRelPath}}):
+{{.StopContract}}{{.DecisionsNote}}{{.RepoNote}}PHASE DOCUMENT ({{.DocRelPath}}):
 ----------------------------------------
 {{.DocContent}}
 ----------------------------------------`))
@@ -143,20 +144,30 @@ func runNote(opts StartOptions) string {
 // buildPromptNoted renders the phase-run prompt with note ("" ⇒ none) placed right
 // after the first paragraph.
 func buildPromptNoted(docPath, docRelPath, docContent, repoRoot, projectPath, worktreePath, stackedOn, note string, budget runcore.Budget) string {
+	return buildPromptDecided(docPath, docRelPath, docContent, repoRoot, projectPath, worktreePath, stackedOn, note, nil, budget)
+}
+
+// buildPromptDecided is buildPromptNoted with the decisions the run inherits
+// (decisionsNote): the stop decisions the operator answered for this phase and
+// the cheap interview decisions it depends on that were taken at the planner's
+// recommendation. nil renders nothing.
+func buildPromptDecided(docPath, docRelPath, docContent, repoRoot, projectPath, worktreePath, stackedOn, note string, decisions []PromptDecision, budget runcore.Budget) string {
 	if note != "" {
 		note += "\n\n"
 	}
 	var b strings.Builder
 	_ = promptTemplate.Execute(&b, struct {
-		DocPath      string
-		DocRelPath   string
-		DocContent   string
-		RepoNote     string
-		TurnContract string
-		ReturnedNote string
+		DocPath       string
+		DocRelPath    string
+		DocContent    string
+		RepoNote      string
+		TurnContract  string
+		ReturnedNote  string
+		StopContract  string
+		DecisionsNote string
 	}{docPath, docRelPath, docContent,
 		repoNote(repoRoot, projectPath, worktreePath) + stackNote(stackedOn),
-		runcore.TurnContract(budget), note})
+		runcore.TurnContract(budget), note, stopContract(docContent), decisionsNote(decisions)})
 	return b.String()
 }
 
@@ -200,4 +211,82 @@ func multiRepoNote(repoRoot, projectPath string) string {
 			"Paths in this document may be written from the project root (e.g. `%s/src/...`); inside your worktree that same file is `src/...`. "+
 			"Do NOT create a `%s/` directory to make such a path resolve.\n\n",
 		name, repoRoot, projectPath, name, name)
+}
+
+// stopContract is the guard's `stop_if` list, verbatim, and the structured
+// `PHASE BLOCKED` contract that goes with it (verify-not-trust phase 10, D4/D28):
+// when a trigger fires the executor stops and asks — a `kind: stop` block with
+// exactly two options — instead of working around it. The daemon turns that block
+// into a phase_decision the operator answers (stopdecision.go).
+//
+// "" when the doc carries no parseable guard block or the guard lists no stop
+// trigger, so a prompt for a doc without one is byte-identical to before.
+func stopContract(doc string) string {
+	g, perr := mdfence.ParseGuard(doc)
+	if perr != nil || len(g.StopIf) == 0 {
+		return ""
+	}
+	var b strings.Builder
+	b.WriteString("STOP TRIGGERS: this phase's guard names the conditions under which you stop and ask instead of working around them:\n")
+	for _, s := range g.StopIf {
+		if id := mdfence.StopTriggerFor(s); id != "" {
+			fmt.Fprintf(&b, "- %s (trigger: %s)\n", s, id)
+		} else {
+			fmt.Fprintf(&b, "- %s\n", s)
+		}
+	}
+	b.WriteString("When a trigger fires, STOP: write the kind: stop block with exactly two options, then end with PHASE BLOCKED: <trigger>. " +
+		"Put the block in your final message, in this shape:\n")
+	b.WriteString("```yaml\nkind: stop\ntrigger: <" + strings.Join(mdfence.StopTriggers, " | ") + ">\n" +
+		"reason: <one line: what you hit and why you cannot go on without the operator>\n" +
+		"paths: [\"<file>\"]  # protected-path only: the protected files the work needs\n" +
+		"options:\n" +
+		"  - id: <short-id>\n    label: <what the operator chooses>\n    consequence: <what the re-run does if they choose it>\n" +
+		"  - id: <short-id>\n    label: <the other choice>\n    consequence: <what the re-run does then>\n```\n")
+	b.WriteString("For protected-path, give the option that lets those files into scope the id `allow`. " +
+		"The operator's answer is written to the document's `## Decisions` and the phase is re-run on your branch, so commit what you have before you stop.\n\n")
+	return b.String()
+}
+
+// PromptDecision is one decision a run inherits, as its prompt states it.
+type PromptDecision struct {
+	ID       string // "D-4"
+	Question string
+	Answer   string
+	// Recommended: a cheap interview decision nobody answered, taken at the
+	// planner's recommended option (status `recommended`). Otherwise an answered
+	// stop decision of this phase.
+	Recommended bool
+	// Trigger is an answered stop decision's trigger ("" for the rest).
+	Trigger string
+}
+
+// decisionsNote lists the decisions a run inherits — "" for none:
+//
+//	DECISIONS this run builds on:
+//	- Decision D-4: allow: Allow editing scripts/tests/run.sh (stop: protected-path — <reason>)
+//	- D-2 (recommended, no operator answer): Which cache? → in-memory
+func decisionsNote(ds []PromptDecision) string {
+	if len(ds) == 0 {
+		return ""
+	}
+	var b strings.Builder
+	b.WriteString("DECISIONS this run builds on (also under the document's `## Decisions`):\n")
+	for _, d := range ds {
+		q, a := strings.Join(strings.Fields(d.Question), " "), strings.Join(strings.Fields(d.Answer), " ")
+		if d.Recommended {
+			fmt.Fprintf(&b, "- %s (recommended, no operator answer): %s → %s\n", d.ID, q, a)
+			continue
+		}
+		line := fmt.Sprintf("- Decision %s: %s", d.ID, a)
+		switch {
+		case d.Trigger != "" && q != "":
+			line += fmt.Sprintf(" (stop: %s — %s)", d.Trigger, q)
+		case q != "":
+			line += " (" + q + ")"
+		}
+		b.WriteString(line + "\n")
+	}
+	b.WriteString("\n")
+	return b.String()
 }

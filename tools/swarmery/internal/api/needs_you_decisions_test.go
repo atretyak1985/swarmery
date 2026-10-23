@@ -189,3 +189,79 @@ func TestAnswerPhaseDecisionEndpoint(t *testing.T) {
 		t.Errorf("second answer: %d, want 409", c)
 	}
 }
+
+// An agent-declared stop (verify-not-trust phase 10) is a phase_decision item
+// carrying its block — trigger, reason, the executor's two options — with the
+// options as buttons plus the free-text `other`, and an empty guard. The
+// endpoint answers it with those options.
+func TestNeedsYouAgentStopDecision(t *testing.T) {
+	srv, db := needsYouServerDB(t)
+	alphaPhase, _, _ := manualPhaseFixture(t, db)
+	var alphaTask int64
+	_ = db.QueryRow(`SELECT workspace_task_id FROM epic_phases WHERE id = ?`, alphaPhase).Scan(&alphaTask)
+	_, doc := seedGuardDecision(t, db, alphaTask, alphaPhase, time.Now().UTC().Add(-time.Hour).Format(time.RFC3339))
+	stop := `{"stop":{"trigger":"access-error","reason":"the staging console refuses the stored login",` +
+		`"options":[{"id":"relogin","label":"Log in again","consequence":"the re-run does the check"},` +
+		`{"id":"skip","label":"Skip the check","consequence":"the criterion stays open"}]}}`
+	d, created, err := store.UpsertAgentStopDecision(db, alphaTask, alphaPhase, "the staging console refuses the stored login",
+		[]string{"relogin", "skip", phaserun.StopOptionOther}, stop, time.Now().UTC().Format(time.RFC3339))
+	if err != nil || !created {
+		t.Fatalf("seed stop: %v (created %v)", err, created)
+	}
+
+	var it *needsYouItem
+	for _, x := range decisionItems(getNeedsYou(t, srv.URL+"/api/needs-you").Items) {
+		if x.Decision != nil && x.Decision.DecisionID == d.DecisionID {
+			x := x
+			it = &x
+		}
+	}
+	if it == nil {
+		t.Fatal("the agent stop is not listed")
+	}
+	dec := it.Decision
+	if dec.Source != "stop" || dec.Stop == nil || dec.Stop.Trigger != mdfence.StopAccessError || len(dec.Stop.Options) != 2 {
+		t.Fatalf("decision = %+v / stop %+v", dec, dec.Stop)
+	}
+	want := []needsYouDecisionOption{{ID: "relogin", Label: "Log in again"}, {ID: "skip", Label: "Skip the check"},
+		{ID: phaserun.StopOptionOther, Label: stopOptionOtherLabel}}
+	if len(dec.Options) != 3 || dec.Options[0] != want[0] || dec.Options[1] != want[1] || dec.Options[2] != want[2] {
+		t.Errorf("options = %+v, want %+v", dec.Options, want)
+	}
+	if string(dec.Guard) != "{}" {
+		t.Errorf("guard = %s, want {}", dec.Guard)
+	}
+
+	// The plan DTO carries it on the phase as stopDecision, apart from the guard's.
+	h := &Handler{DB: db}
+	stops, guards := h.phaseStopDecisions(alphaTask), h.phaseGuardDecisions(alphaTask)
+	if stops[alphaPhase] == nil || stops[alphaPhase].DecisionID != d.DecisionID {
+		t.Errorf("phaseStopDecisions = %+v", stops)
+	}
+	if guards[alphaPhase] == nil || guards[alphaPhase].Stop != nil {
+		t.Errorf("phaseGuardDecisions = %+v, want the guard decision only", guards)
+	}
+
+	u := srv.URL + "/api/epics/" + strconv.FormatInt(alphaTask, 10) + "/phases/" + strconv.FormatInt(alphaPhase, 10) +
+		"/decisions/" + d.DecisionID
+	resp, err := http.Post(u, "application/json", strings.NewReader(`{"option":"allow-add-to-scope"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Errorf("a guard option on a stop: %d, want 400", resp.StatusCode)
+	}
+	resp, err = http.Post(u, "application/json", strings.NewReader(`{"option":"other","note":"use the read-only token"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("free-text answer: %d, want 200", resp.StatusCode)
+	}
+	body, _ := os.ReadFile(doc)
+	if !strings.Contains(string(body), "- **"+d.DecisionID+"** (stop: access-error) — the staging console refuses the stored login → other: use the read-only token") {
+		t.Errorf("doc lacks the stop line:\n%s", body)
+	}
+}

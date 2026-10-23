@@ -53,7 +53,11 @@ func guardQuestion(r GuardResult) string {
 // PHASE DONE is exactly the one whose report must not be the only word. A panic
 // is logged and read as "no result": the review, the verifier and the worktree
 // removal after it still run.
-func (s *Service) guardStage(phaseID int64, info phaseInfo, base string, worktreePath string) (res GuardResult) {
+//
+// stop is the run's own `kind: stop` block (nil for none, stopdecision.go). It
+// raises its own decision; a protected-path stop absorbs the guard's flagged
+// paths instead of a second, overlapping guard decision being asked.
+func (s *Service) guardStage(phaseID int64, info phaseInfo, base string, worktreePath string, stop *mdfence.Stop) (res GuardResult) {
 	defer func() {
 		if r := recover(); r != nil {
 			log.Printf("error: phaserun: phase=%d guard check panicked: %v", phaseID, r)
@@ -61,6 +65,9 @@ func (s *Service) guardStage(phaseID int64, info phaseInfo, base string, worktre
 		}
 	}()
 	if worktreePath == "" {
+		if stop != nil {
+			s.raiseStopDecision(phaseID, info, stop, nil)
+		}
 		return GuardResult{}
 	}
 	if strings.TrimSpace(base) == "" {
@@ -71,7 +78,12 @@ func (s *Service) guardStage(phaseID int64, info phaseInfo, base string, worktre
 		log.Printf("warning: phaserun: phase=%d guard check: changed=%v blocks=%d docCopyMismatch=%v parseError=%v",
 			phaseID, res.ProtectedChanged, res.GuardBlocksTotal, res.DocCopyMismatch, res.ParseError)
 	}
-	if res.Flagged() {
+	absorbed := false
+	if stop != nil {
+		s.raiseStopDecision(phaseID, info, stop, res.Paths())
+		absorbed = stop.Trigger == mdfence.StopProtectedPath
+	}
+	if res.Flagged() && !absorbed {
 		s.raiseGuardDecision(phaseID, info, res)
 	}
 	return res
@@ -150,7 +162,10 @@ func AnswerGuardDecision(db *sql.DB, taskID, phaseID int64, decisionID string, a
 		return store.Decision{}, ErrDecisionNotOpen
 	}
 	ans.Option = strings.TrimSpace(ans.Option)
-	if ans.Option != GuardOptionAllow && ans.Option != GuardOptionReject {
+	// An agent-declared stop (verify-not-trust phase 10) answers with the options
+	// its own block offered; stopdecision.go owns it.
+	st := AgentStop(d)
+	if st == nil && ans.Option != GuardOptionAllow && ans.Option != GuardOptionReject {
 		return store.Decision{}, fmt.Errorf("%w %q (want %s or %s)", ErrDecisionBadOption, ans.Option, GuardOptionAllow, GuardOptionReject)
 	}
 	var docPath string
@@ -160,6 +175,9 @@ func AnswerGuardDecision(db *sql.DB, taskID, phaseID int64, decisionID string, a
 			return store.Decision{}, ErrDecisionNotFound
 		}
 		return store.Decision{}, err
+	}
+	if st != nil {
+		return answerStopDecision(db, d, st, docPath, ans, now)
 	}
 	var guard GuardResult
 	_ = json.Unmarshal([]byte(d.GuardJSON), &guard)

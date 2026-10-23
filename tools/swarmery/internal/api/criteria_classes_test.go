@@ -85,3 +85,24 @@ func TestWritePhaseStartRefusal_DocGates(t *testing.T) {
 		}
 	}
 }
+
+// The decision refusal carries each holding question with its "decide now" link.
+func TestWritePhaseStartRefusal_DecisionQuestions(t *testing.T) {
+	link := "/p/p/plans?tab=new&planningSession=4&turn=3#planning-turn-3"
+	rec := httptest.NewRecorder()
+	writePhaseStartRefusal(rec, &phaserun.DecisionUndecidedError{
+		Detail:    "decision-undecided: D-3 (Which store?) — decide now: " + link,
+		Decisions: []string{"D-3"},
+		Questions: []phaserun.HeldQuestion{{DecisionID: "D-3", Question: "Which store?", Link: link}},
+	})
+	var body struct {
+		Code      string                  `json:"code"`
+		Questions []phaserun.HeldQuestion `json:"questions"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+		t.Fatal(err)
+	}
+	if body.Code != codeDecisionUndecided || len(body.Questions) != 1 || body.Questions[0].Link != link {
+		t.Errorf("body = %+v", body)
+	}
+}

@@ -226,6 +226,7 @@ func writePhaseStartRefusal(w http.ResponseWriter, err error) {
 	case errors.As(err, &decisionErr):
 		writeConflictFields(w, codeDecisionUndecided, decisionErr.Error(), map[string]any{
 			"decisions": decisionErr.Decisions,
+			"questions": decisionErr.Questions,
 			"detail":    decisionErr.Detail,
 			"hint":      hintDecisionUndecided,
 		})

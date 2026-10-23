@@ -321,8 +321,9 @@ const (
 	codeNotYetEarliest = "not-yet-earliest"
 	// codeDecisionUndecided: the phase doc's `**Depends on decisions:**` names a
 	// decision still undecided and expensive to change (migration 0122). The body
-	// adds `decisions` (the holding D-n ids) and `detail`
-	// (`decision-undecided: D-3 (<question>)`).
+	// adds `decisions` (the holding D-n ids), `questions` ({decisionId, question,
+	// link} — link opens the planning turn that asked it, "" for a README-born
+	// one) and `detail` (`decision-undecided: D-3 (<question>) — decide now: <link>`).
 	codeDecisionUndecided = "decision-undecided"
 )
 

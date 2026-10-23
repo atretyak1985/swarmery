@@ -30,6 +30,14 @@ const maxDecisionNoteLen = 2000
 // allow-add-to-scope, the decision's paths to the guard block's `allow:` list so
 // the next run may edit them; then stamps the row decided (phaserun.AnswerGuardDecision).
 //
+// Answers an AGENT-declared stop (verify-not-trust phase 10 — the run's own
+// `kind: stop` block) with {option: <one of the block's option ids>|"other",
+// note?}; "other" needs its text in note. Appends `- **D-n** (stop: <trigger>) —
+// <reason> → <answer>` and, for a protected-path stop answered with an allow
+// option, the stop's paths to the guard's `allow:` list; the next run of the
+// phase continues on its own branch and its prompt states the decision
+// (phaserun.AnswerGuardDecision → answerStopDecision).
+//
 // 200 the decided row; 400 a bad body or an unknown option; 404 an unknown
 // phase or decision; 409 a decision already answered (or not a guard decision),
 // or a phase whose run is still in flight — the run edits its own doc.

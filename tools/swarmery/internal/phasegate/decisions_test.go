@@ -31,3 +31,22 @@ func TestHoldsForDecisions(t *testing.T) {
 		}
 	}
 }
+
+// A holding decision that knows its planning turn names it in the hold detail —
+// the "decide now" link every surface shows.
+func TestHoldsForDecisionsCarriesTheTurnLink(t *testing.T) {
+	link := PlanningTurnLink("my proj", 7, 3)
+	if link != "/p/my%20proj/plans?tab=new&planningSession=7&turn=3#planning-turn-3" {
+		t.Fatalf("PlanningTurnLink = %q", link)
+	}
+	for _, bad := range []string{PlanningTurnLink("", 7, 3), PlanningTurnLink("p", 0, 3), PlanningTurnLink("p", 7, 0)} {
+		if bad != "" {
+			t.Errorf("an unknown slug/session/seq built a link: %q", bad)
+		}
+	}
+	ds := []Decision{{ID: "D-3", Question: "Which store?", Cost: "expensive", Status: "undecided", Link: link}}
+	hold, reason := HoldsForDecisions([]string{"D-3"}, ds)
+	if want := "decision-undecided: D-3 (Which store?) — decide now: " + link; !hold || reason != want {
+		t.Errorf("(%v, %q), want (true, %q)", hold, reason, want)
+	}
+}

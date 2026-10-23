@@ -3,6 +3,7 @@ package phaserun
 import (
 	"database/sql"
 	"encoding/json"
+	"strings"
 
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/phasegate"
 )
@@ -17,6 +18,17 @@ type DecisionUndecidedError struct {
 	Detail string
 	// Decisions are the holding `D-n` ids, in the order the doc lists them.
 	Decisions []string
+	// Questions are the same decisions with their question and where to take
+	// them (the planning turn link, "" for a README-born one) — the "decide now"
+	// action of every surface that shows the refusal.
+	Questions []HeldQuestion
+}
+
+// HeldQuestion is one decision holding a phase, as the refusal names it.
+type HeldQuestion struct {
+	DecisionID string `json:"decisionId"`
+	Question   string `json:"question"`
+	Link       string `json:"link"`
 }
 
 func (e *DecisionUndecidedError) Error() string { return e.Detail }
@@ -56,18 +68,28 @@ func DecisionHold(q querier, phaseID int64) (*DecisionUndecidedError, error) {
 
 // TaskDecisions loads a plan's decisions in the shape phasegate judges.
 func TaskDecisions(q querier, taskID int64) ([]phasegate.Decision, error) {
-	rows, err := q.Query(`SELECT decision_id, question, cost, status FROM phase_decisions
-		WHERE workspace_task_id = ? ORDER BY seq, id`, taskID)
+	rows, err := q.Query(`SELECT d.decision_id, d.question, d.cost, d.status, d.seq,
+		       COALESCE(d.planning_session_id, 0), COALESCE(p.slug, '')
+		  FROM phase_decisions d
+		  LEFT JOIN tasks t ON t.id = d.workspace_task_id
+		  LEFT JOIN projects p ON p.id = t.project_id
+		 WHERE d.workspace_task_id = ? ORDER BY d.seq, d.id`, taskID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 	var out []phasegate.Decision
 	for rows.Next() {
-		var d phasegate.Decision
-		if err := rows.Scan(&d.ID, &d.Question, &d.Cost, &d.Status); err != nil {
+		var (
+			d    phasegate.Decision
+			seq  int
+			sess int64
+			slug string
+		)
+		if err := rows.Scan(&d.ID, &d.Question, &d.Cost, &d.Status, &seq, &sess, &slug); err != nil {
 			return nil, err
 		}
+		d.Link = phasegate.PlanningTurnLink(slug, sess, seq)
 		out = append(out, d)
 	}
 	return out, rows.Err()
@@ -82,6 +104,8 @@ func HoldFor(deps []string, decisions []phasegate.Decision) *DecisionUndecidedEr
 	e := &DecisionUndecidedError{Detail: reason}
 	for _, d := range phasegate.DecisionsHolding(deps, decisions) {
 		e.Decisions = append(e.Decisions, d.ID)
+		e.Questions = append(e.Questions, HeldQuestion{DecisionID: d.ID,
+			Question: strings.Join(strings.Fields(d.Question), " "), Link: d.Link})
 	}
 	return e
 }
