@@ -2931,10 +2931,11 @@ export interface SystemStaleOverride {
   hint: string;
 }
 
-/** Go: deadComponentDTO — an active agent_dead lint finding, insight framing. */
+/** Go: deadComponentDTO — an active agent_dead / skill_dead lint finding,
+ * insight framing (usage matched by name over 30 days; advisory). */
 export interface SystemDeadComponent {
-  /** Always 'agent' today — agent_dead is the only telemetry-dead rule. */
-  kind: 'agent';
+  /** agent (agent_dead) | skill (skill_dead). */
+  kind: 'agent' | 'skill';
   id: number;
   name: string;
   scope: 'global' | 'project';
@@ -2975,11 +2976,43 @@ export interface SystemInsights {
    * drift scanner.
    */
   pluginDrift?: SystemPluginDrift[];
+  /** Active skill_desc_similar / session_skill_load_high findings. Additive
+   * optional: absent on a daemon older than the skill audit. */
+  skillAudit?: SystemSkillAuditFinding[];
+  /** The newest weekly skill-audit report; null before the routine wrote one,
+   * absent on an older daemon. */
+  skillAuditReport?: SystemSkillAuditReport | null;
   /**
    * Active session-start cost findings — claude_md_oversized,
    * claude_md_over_200_lines, mcp_server_unused_30d. Additive optional.
    */
   startCost?: SystemStartCost[];
+}
+
+/** Go: skillAuditFindingDTO — one active skill_desc_similar or
+ * session_skill_load_high finding (sysscan/skillaudit.go). */
+export interface SystemSkillAuditFinding {
+  rule: 'skill_desc_similar' | 'session_skill_load_high';
+  severity: LintSeverity;
+  message: string;
+  /** skill_desc_similar: the pair's two names; [] for a project finding. */
+  skills: string[];
+  /** session_skill_load_high: the flagged project; null for a pair. */
+  projectSlug: string | null;
+}
+
+/** Go: skillAuditReportDTO — the newest weekly skill-audit report on disk
+ * (<workspace>/swarmery/workspace/retro/skill-audit-<date>.md). */
+export interface SystemSkillAuditReport {
+  /** YYYY-MM-DD, from the file name. */
+  date: string;
+  path: string;
+}
+
+/** Go: skillAuditReportBodyDTO — GET /api/system/skill-audit/report. */
+export interface SystemSkillAuditReportBody extends SystemSkillAuditReport {
+  /** Redacted. */
+  markdown: string;
 }
 
 /** One active session-start cost finding (Go: startCostDTO). */

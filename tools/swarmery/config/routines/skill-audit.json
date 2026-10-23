@@ -1,0 +1,28 @@
+{
+  "name": "skill-audit-weekly",
+  "cron": "0 9 * * 1",
+  "enabled": true,
+  "catchUp": "run_one",
+  "timeoutSec": 900,
+  "steps": [
+    {
+      "type": "command",
+      "name": "skill audit",
+      "command": "swarmery skill-audit --json",
+      "timeoutSec": 120
+    },
+    {
+      "type": "ai-prompt",
+      "name": "write the report",
+      "prompt": "You are writing this week's skill-audit report for an agent framework. Below is the JSON printed by `swarmery skill-audit --json`: the telemetry window, the thresholds, unusedAgents, unusedSkills, usedSkills (registered skills with the number of sessions that loaded them), similarPairs and skillLoad (per project: sessions, p95 and max distinct skills per session, overLimit).\n\nWrite ONLY the markdown report: no preamble, no code fences. Start with `# Skill audit <the date part of generatedAt>` and one line stating the window and both thresholds. Then exactly these five level-2 headings, in this order, spelled exactly like this:\n## Unused agents\n## Unused skills\n## Similar descriptions\n## Skills per session\n## Before a new agent, extend one of these\n\nUnder the first four headings list EVERY item from the JSON — never summarise, sample, merge or drop one: unused agents and skills as `- name (scope, project when set) — path`; similar pairs as `- a ↔ b — similarity`; skills per session as a table with project, sessions, p95, max and `over limit` where overLimit is true. Write `none` under a heading whose list is empty.\n\nUnder the fifth heading, for a planner about to propose a new agent or skill: name up to ten existing skills to extend first, one line each with the reason. Draw them from usedSkills (most sessions first) and from the skills that appear in similarPairs, where one skill could absorb the other. Name only skills that appear in the JSON. This report is advice only: never recommend deleting or merging anything automatically, and say plainly when the data is too thin to recommend anything.\n\nJSON:\n\n{{prev_output}}\n",
+      "model": "haiku",
+      "timeoutSec": 600
+    },
+    {
+      "type": "command",
+      "name": "save to the workspace retro dir",
+      "command": "set -eu; root=\"${AGENT_WORKSPACE_ROOT:-${SWARMERY_WORKSPACE_ROOT:-$HOME/swarmery-workspace}}\"; dir=\"$root/swarmery/workspace/retro\"; mkdir -p \"$dir\"; f=\"$dir/skill-audit-$(date +%F).md\"; cp \"$SWARMERY_PREV_OUTPUT\" \"$f\"; echo \"wrote $f\"; missing=0; for s in 'Unused agents' 'Unused skills' 'Similar descriptions' 'Skills per session' 'Before a new agent, extend one of these'; do grep -q \"^## $s\" \"$f\" || { echo \"missing section: $s\" >&2; missing=1; }; done; exit $missing",
+      "timeoutSec": 60
+    }
+  ]
+}
