@@ -21,28 +21,20 @@ type SeedFile struct {
 	Steps      []Step `json:"steps"`
 }
 
-// ShippedSeed registers one routine definition shipped under config/routines/.
-// The daemon never seeds them by itself; `swarmery routine seed --from
-// config/routines/<File>` does, once per machine.
-type ShippedSeed struct {
-	File string // file name under config/routines/
-	Name string // the routine's name: seeding's identity
-	// Model is the model every ai-prompt step of the routine must pin; "" = no
-	// ai-prompt step, or the runner's DefaultModel.
-	Model string
-}
-
-// ShippedSeeds is the registry of shipped routines. A file in config/routines/
-// that is not listed here — or a listed one that is missing, renamed, or pins a
-// different model — fails TestShippedSeedsAreRegistered.
-var ShippedSeeds = []ShippedSeed{
-	{File: "inbox-triage.json", Name: "inbox-triage-nightly"},
-	{File: "memory-review.json", Name: "memory-review-weekly"},
-	{File: "model-upgrade.json", Name: "model-upgrade"},
-	// Daily: narrows the janitor's keep-unmerged pile to closed phases/cards
-	// with a proof and posts the Needs-you card; a haiku step summarises the
-	// scan. Never removes anything — removal is the operator's click.
-	{File: "worktree-cleanup.json", Name: "worktree-cleanup-daily", Model: "haiku"},
+// ShippedSeedFiles are the routine definitions under config/routines/, by file
+// name. `swarmery routine seed --from config/routines/<file>` installs one. The
+// seed tests load every file named here and fail on a file missing from it, so
+// a shipped routine cannot drift out of the validated set unnoticed.
+var ShippedSeedFiles = []string{
+	"github-inbox.json",  // every 2h: GitHub issues/PR comments into triage cards
+	"inbox-triage.json",  // nightly: label the classifier queue
+	"memory-review.json", // Friday: memory lint + consolidation dry-run
+	"model-upgrade.json", // monthly: changelog, prompt audit, model eval
+	"skill-audit.json",   // Monday: skill audit report (haiku) into the workspace retro/ dir
+	// Daily: narrows the janitor's keep-unmerged pile to closed phases/cards with
+	// a proof and posts the Needs-you card; a haiku step summarises the scan.
+	// Never removes anything — removal is the operator's click.
+	"worktree-cleanup.json",
 }
 
 // LoadSeedFile reads and validates a definition, including its steps.

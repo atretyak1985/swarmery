@@ -5,6 +5,8 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"os"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -263,5 +265,77 @@ func TestMissingRunnerAndTasks(t *testing.T) {
 	}
 	if results[1].Status != "failed" || !strings.Contains(results[1].Error, "task creator") {
 		t.Errorf("create-task without creator: %+v", results[1])
+	}
+}
+
+// A command step reads the previous step's FULL output from the file named in
+// SWARMERY_PREV_OUTPUT; the first step has no such variable, and the file is
+// gone once the step ends.
+func TestPrevOutputHandedToCommandStep(t *testing.T) {
+	s, _ := newTestSvc(t, &stubRunner{}, &stubTasks{})
+	long := strings.Repeat("x", stepOutputCap*3)
+	r := mustCreate(t, s, CreateParams{Name: "chain", TimeoutSec: 30, Steps: mkSteps(
+		Step{Type: StepCommand, Name: "first", Command: `test -z "${SWARMERY_PREV_OUTPUT:-}" && printf 'head-` + long + `'`},
+		Step{Type: StepCommand, Name: "second", Command: `echo "$SWARMERY_PREV_OUTPUT"; wc -c < "$SWARMERY_PREV_OUTPUT"; head -c 5 "$SWARMERY_PREV_OUTPUT"`},
+	)})
+	run, results := runInline(t, s, r, "manual")
+	if run.Status != "ok" {
+		t.Fatalf("run = %q, results = %+v", run.Status, results)
+	}
+	lines := strings.Split(strings.TrimSpace(results[1].Output), "\n")
+	if len(lines) != 3 {
+		t.Fatalf("second step output = %q", results[1].Output)
+	}
+	if n := strings.TrimSpace(lines[1]); n != strconv.Itoa(len("head-"+long)) {
+		t.Errorf("handed-over size = %s, want the full %d bytes, not the clipped detail", n, len("head-"+long))
+	}
+	if lines[2] != "head-" {
+		t.Errorf("handed-over head = %q, want head-", lines[2])
+	}
+	if _, err := os.Stat(lines[0]); !os.IsNotExist(err) {
+		t.Errorf("temp file %s survived the step: %v", lines[0], err)
+	}
+}
+
+// An ai-prompt step gets the previous output where its prompt says
+// {{prev_output}}; a prompt without the placeholder is passed unchanged.
+func TestPrevOutputSplicedIntoPrompt(t *testing.T) {
+	sr := &stubRunner{out: "reply"}
+	s, _ := newTestSvc(t, sr, &stubTasks{})
+	r := mustCreate(t, s, CreateParams{Name: "chain", TimeoutSec: 30, Steps: mkSteps(
+		Step{Type: StepAIPrompt, Name: "first", Prompt: "start [" + PrevOutputPlaceholder + "]"},
+		Step{Type: StepCommand, Name: "data", Command: "echo audit-data"},
+		Step{Type: StepAIPrompt, Name: "use", Prompt: "summarise:\n" + PrevOutputPlaceholder},
+		Step{Type: StepAIPrompt, Name: "plain", Prompt: "no placeholder here"},
+	)})
+	if run, results := runInline(t, s, r, "manual"); run.Status != "ok" {
+		t.Fatalf("run = %q, results = %+v", run.Status, results)
+	}
+	want := []string{"start []", "summarise:\naudit-data\n", "no placeholder here"}
+	for i, w := range want {
+		if sr.calls[i].prompt != w {
+			t.Errorf("prompt %d = %q, want %q", i, sr.calls[i].prompt, w)
+		}
+	}
+}
+
+// A step that failed under ContinueOnFailure still hands its output on: the
+// next ai-prompt step's {{prev_output}} is what the failed command printed.
+func TestPrevOutputAfterFailedStep(t *testing.T) {
+	sr := &stubRunner{out: "summary"}
+	s, _ := newTestSvc(t, sr, &stubTasks{})
+	r := mustCreate(t, s, CreateParams{Name: "chain", TimeoutSec: 60, Steps: mkSteps(
+		Step{Type: StepCommand, Name: "report", Command: "echo 'proj-a: created 2'; exit 1", ContinueOnFailure: true},
+		Step{Type: StepAIPrompt, Name: "sum", Prompt: "Report:\n" + PrevOutputPlaceholder + "end"},
+	)})
+	run, results := runInline(t, s, r, "manual")
+	if run.Status != "failed" || len(results) != 2 {
+		t.Fatalf("run = %s with %d results, want failed (the command failed) with both steps run", run.Status, len(results))
+	}
+	if sr.callCount() != 1 {
+		t.Fatalf("runner calls = %d, want 1", sr.callCount())
+	}
+	if got := sr.calls[0].prompt; got != "Report:\nproj-a: created 2\nend" {
+		t.Errorf("summary prompt = %q, want the failed command's output in place of the placeholder", got)
 	}
 }

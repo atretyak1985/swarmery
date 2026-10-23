@@ -1046,6 +1046,10 @@ msgstr "причина"
 msgid "change the plan — interview + staged diff, applied only on your approval"
 msgstr "змінити план — інтерв’ю + підготований дифф, застосовується лише після вашого схвалення"
 
+#: src/api.ts
+msgid "changing the cost failed: {status}"
+msgstr "не вдалося змінити вартість: {status}"
+
 #: src/components/ProjectPlugins.tsx
 msgid "check"
 msgstr "перевірити"
@@ -1903,6 +1907,10 @@ msgid "from a session"
 msgstr "із сесії"
 
 #: src/workspace/boardModel.ts
+msgid "from GitHub"
+msgstr "з GitHub"
+
+#: src/workspace/boardModel.ts
 msgid "from session #{id}"
 msgstr "із сесії #{id}"
 
@@ -1941,6 +1949,10 @@ msgstr "Git push ніколи не погоджується автоматичн
 #: src/components/PermissionPresets.tsx
 msgid "Git writes (add, commit, checkout, worktree)"
 msgstr "Записи git (add, commit, checkout, worktree)"
+
+#: src/lib/needsYou.ts
+msgid "Guard decision"
+msgstr "Рішення guard"
 
 #: src/pages/docsRail.ts
 msgid "Guides"
@@ -2093,6 +2105,10 @@ msgstr "лише kebab-case ([a-z0-9-])"
 #: src/components/PlanBranchDirtyModal.tsx
 msgid "keep the work"
 msgstr "залишити роботу"
+
+#: src/workspace/boardModel.ts
+msgid "kept in step with a GitHub issue or pull request"
+msgstr "синхронізується з issue або pull request на GitHub"
 
 #: src/components/KillButton.tsx
 msgid "Kill"
@@ -2356,6 +2372,10 @@ msgstr "нейтральний холодний сірий"
 msgid "never run"
 msgstr "не запускали"
 
+#: src/workspace/TaskCard.tsx
+msgid "new comment"
+msgstr "новий коментар"
+
 #: src/components/NewProjectButton.tsx
 msgid "New project"
 msgstr "Новий проєкт"
@@ -2580,6 +2600,11 @@ msgstr "Одне надсилання охоплює щонайбільше {max
 #: src/api.ts
 msgid "Only a human can close the open criteria of this phase. Do the [MANUAL] checks and tick them in the Criteria tab — the phase is listed in Needs you."
 msgstr "Відкриті критерії цієї фази може закрити лише людина. Виконайте перевірки [MANUAL] і відмітьте їх у вкладці Criteria — фаза є у «Потребує вас»."
+
+#: src/workspace/TaskCard.tsx
+#: src/workspace/TaskCard.tsx
+msgid "open {ref} on GitHub"
+msgstr "відкрити {ref} на GitHub"
 
 #: src/components/VcsSignInDialog.tsx
 msgid "Open {verificationUri}"
@@ -3663,6 +3688,10 @@ msgstr "пропущено: {skippedCount}"
 msgid "slug"
 msgstr "slug"
 
+#: src/workspace/TaskCard.tsx
+msgid "someone commented on GitHub since this card was last handled — the newest comments are in its description"
+msgstr "на GitHub з’явився коментар після того, як картку востаннє розібрали, — найновіші коментарі в її описі"
+
 #: src/main.tsx
 msgid "something broke"
 msgstr "щось зламалось"
@@ -3678,6 +3707,10 @@ msgstr "створено перевіркою для виправлення {ext
 #: src/workspace/boardModel.ts
 msgid "stale"
 msgstr "застаріло"
+
+#: src/lib/needsYou.ts
+msgid "Stalled phase"
+msgstr "Фаза застрягла"
 
 #: src/workspace/NewTaskModal.tsx
 msgid "start immediately — the dispatcher picks it up"
@@ -4046,6 +4079,10 @@ msgstr "Це тестове пояснення простими словами. 
 #: src/components/PluginConfigModal.tsx
 msgid "this pack's config schema is missing or malformed"
 msgstr "схема конфігурації цього пакета відсутня або пошкоджена"
+
+#: src/api.ts
+msgid "This phase builds on a decision that is still open and expensive to change. Answer it in the plan's Decisions, or mark it cheap to change in the planning session, then run the phase."
+msgstr "Ця фаза спирається на рішення, яке ще не ухвалене і яке дорого змінити. Дайте відповідь у розділі Decisions плану або позначте його дешевим для зміни в сесії планування, а тоді запустіть фазу."
 
 #: src/components/RunOutcomeModal.tsx
 msgid "this phase has not been run"

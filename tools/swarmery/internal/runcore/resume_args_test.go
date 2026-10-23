@@ -25,8 +25,8 @@ func TestArgsResumeSwapsTheHeadAndKeepsEveryFlag(t *testing.T) {
 	}
 	got := strings.Join(Args(spec), " ")
 
-	if !strings.HasPrefix(got, "-r uuid-1 -p carry on") {
-		t.Errorf("resume argv head = %q, want `-r <uuid> -p <prompt>`", got)
+	if !strings.HasPrefix(got, "-r uuid-1 -p ") || !strings.HasSuffix(got, " -- carry on") {
+		t.Errorf("resume argv = %q, want `-r <uuid> -p … -- <prompt>`", got)
 	}
 	if strings.Contains(got, "--session-id") {
 		t.Errorf("a resume must not pass --session-id (it would mint a new session): %s", got)
@@ -49,7 +49,7 @@ func TestArgsResumeSwapsTheHeadAndKeepsEveryFlag(t *testing.T) {
 // byte-identical to what it emitted before Resume existed.
 func TestArgsWithoutResumeIsUnchanged(t *testing.T) {
 	got := Args(Spec{Prompt: "do it", SessionUUID: "uuid-1", Model: "m"})
-	want := []string{"-p", "do it", "--session-id", "uuid-1", "--model", "m"}
+	want := []string{"-p", "--session-id", "uuid-1", "--model", "m", "--", "do it"}
 	if len(got) != len(want) {
 		t.Fatalf("argv = %v, want %v", got, want)
 	}

@@ -100,6 +100,10 @@ func blockedCooldown() time.Duration {
 //     Report` sections. A blocked run rewrites both — it adds a posterior, and it
 //     writes how far it got and what stopped it — so hashing them would make every
 //     blocked run look like a change to itself and the guard would never fire.
+//     The `## Guard` block and `## Decisions` are deliberately IN the hashed
+//     body: answering a guard decision (guard_decision.go) appends a `D-n` line
+//     and, on allow, an `allow:` list — the operator changed what the next run
+//     may do, so the phase is no longer the one that blocked.
 //
 // Each part is length-prefixed, so no two different inputs can concatenate to the
 // same bytes.

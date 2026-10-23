@@ -551,10 +551,6 @@ msgstr "✓ always allowed"
 msgid "$ Cost"
 msgstr "$ Cost"
 
-#: src/pages/system/InsightsTab.tsx
-msgid "0 telemetry mentions in 30 days (advisory)"
-msgstr "0 telemetry mentions in 30 days (advisory)"
-
 #: src/pages/inbox/InboxDetail.tsx
 msgid "A change to {agent}, drafted from its evidence"
 msgstr "A change to {agent}, drafted from its evidence"
@@ -956,6 +952,10 @@ msgstr "because of you"
 #: src/pages/learning/Proof.tsx
 msgid "Because of you"
 msgstr "Because of you"
+
+#: src/pages/system/SkillsToExtendHint.tsx
+msgid "Before proposing a new agent, extend an existing skill."
+msgstr "Before proposing a new agent, extend an existing skill."
 
 #: src/pages/Retro.tsx
 msgid "behavior {behavior}"
@@ -1637,8 +1637,8 @@ msgid "events"
 msgstr "events"
 
 #: src/pages/system/InsightsTab.tsx
-msgid "every agent has recent telemetry mentions"
-msgstr "every agent has recent telemetry mentions"
+msgid "every agent and skill was used in the last 30 days"
+msgstr "every agent and skill was used in the last 30 days"
 
 #: src/pages/system/InsightsTab.tsx
 msgid "every component carries a complete usage guide"
@@ -1656,6 +1656,10 @@ msgstr "Every future run touching {areas} gets this sentence in its brief. We th
 #: src/pages/inbox/ReviewItem.tsx
 msgid "Every phase of this plan finished. A read-only reviewer read all of their run branches together, looking at the seams between phases — what one phase hands over and another expects. Nothing was blocked or re-run."
 msgstr "Every phase of this plan finished. A read-only reviewer read all of their run branches together, looking at the seams between phases — what one phase hands over and another expects. Nothing was blocked or re-run."
+
+#: src/pages/system/InsightsTab.tsx
+msgid "every project"
+msgstr "every project"
 
 #: src/pages/Analytics.tsx
 msgid "every series is hidden — click a legend chip to show one"
@@ -2238,6 +2242,10 @@ msgstr "last used <0>{lastUsed}</0>"
 msgid "latest eval run, finished {evalFinished}"
 msgstr "latest eval run, finished {evalFinished}"
 
+#: src/pages/system/InsightsTab.tsx
+msgid "Latest report · {date}"
+msgstr "Latest report · {date}"
+
 #: src/pages/learning/Learning.tsx
 #: src/pages/learning/Learning.tsx
 msgid "Learning"
@@ -2304,6 +2312,10 @@ msgstr "lint…"
 #: src/pages/Retro.tsx
 msgid "LLM-judge trajectory score"
 msgstr "LLM-judge trajectory score"
+
+#: src/pages/system/InsightsTab.tsx
+msgid "loaded into every session's first request — CLAUDE.md size, unused MCP servers"
+msgstr "loaded into every session's first request — CLAUDE.md size, unused MCP servers"
 
 #: src/pages/health/PhaseRunsTab.tsx
 #: src/pages/inbox/Inbox.tsx
@@ -2717,6 +2729,10 @@ msgstr "no open recommendations — the advisor found nothing to flag"
 msgid "no overlays found — the daemon's working copy has no overlays/ directory, or it is empty on this machine"
 msgstr "no overlays found — the daemon's working copy has no overlays/ directory, or it is empty on this machine"
 
+#: src/pages/system/InsightsTab.tsx
+msgid "no oversized CLAUDE.md and no idle MCP server"
+msgstr "no oversized CLAUDE.md and no idle MCP server"
+
 #: src/pages/Analytics.tsx
 msgid "no priced tasks"
 msgstr "no priced tasks"
@@ -2766,6 +2782,14 @@ msgstr "no runs recorded in the last {days, plural, one {# days} few {# days} ma
 msgid "No scored turns in this window."
 msgstr "No scored turns in this window."
 
+#: src/pages/system/InsightsTab.tsx
+msgid "no similar skill descriptions, and no project above the skills-per-session limit"
+msgstr "no similar skill descriptions, and no project above the skills-per-session limit"
+
+#: src/pages/system/SkillsToExtendHint.tsx
+msgid "No skill-audit report yet — seed config/routines/skill-audit.json."
+msgstr "No skill-audit report yet — seed config/routines/skill-audit.json."
+
 #: src/pages/Retro.tsx
 msgid "no SKILL.md was resolved from the lesson; dismissing frees the slot so the rule can re-propose"
 msgstr "no SKILL.md was resolved from the lesson; dismissing frees the slot so the rule can re-propose"
@@ -2806,9 +2830,17 @@ msgstr "no usable `# How to use` guide (system-docs-format.md)"
 msgid "no usage guide yet — <0>{name}</0> has no <1># How to use</1> section in its source file"
 msgstr "no usage guide yet — <0>{name}</0> has no <1># How to use</1> section in its source file"
 
+#: src/pages/system/InsightsTab.tsx
+msgid "no use in 30 days, matched by name (advisory)"
+msgstr "no use in 30 days, matched by name (advisory)"
+
 #: src/pages/system/ItemDetail.tsx
 msgid "no versions captured yet"
 msgstr "no versions captured yet"
+
+#: src/pages/system/InsightsTab.tsx
+msgid "No weekly report yet — seed config/routines/skill-audit.json to write one every Monday."
+msgstr "No weekly report yet — seed config/routines/skill-audit.json to write one every Monday."
 
 #: src/pages/Retro.tsx
 msgid "noise"
@@ -3329,6 +3361,10 @@ msgstr "remove tool {tool}"
 msgid "replaced by a newer lesson"
 msgstr "replaced by a newer lesson"
 
+#: src/pages/system/InsightsTab.tsx
+msgid "report…"
+msgstr "report…"
+
 #: src/pages/system/ModsTab.tsx
 msgid "Rescan"
 msgstr "Rescan"
@@ -3644,6 +3680,10 @@ msgstr "session {sessionId}"
 msgid "Session {sessionId} asked {askedAgo} ago and is waiting on you. Nothing runs until you answer."
 msgstr "Session {sessionId} asked {askedAgo} ago and is waiting on you. Nothing runs until you answer."
 
+#: src/pages/system/InsightsTab.tsx
+msgid "Session-start cost"
+msgstr "Session-start cost"
+
 #: src/pages/Retro.tsx
 #: src/pages/system-hub/Profiles.tsx
 msgid "sessions"
@@ -3685,12 +3725,24 @@ msgstr "show the validate report of {name}"
 msgid "sign-in or access"
 msgstr "sign-in or access"
 
+#: src/pages/system/InsightsTab.tsx
+msgid "similar skill descriptions and skills loaded per session — extend a skill before adding one"
+msgstr "similar skill descriptions and skills loaded per session — extend a skill before adding one"
+
+#: src/pages/system/InsightsTab.tsx
+msgid "similar skills"
+msgstr "similar skills"
+
 #: src/pages/Analytics.tsx
 #: src/pages/Analytics.tsx
 #: src/pages/Retro.tsx
 #: src/pages/SystemHub.tsx
 msgid "skill"
 msgstr "skill"
+
+#: src/pages/system/InsightsTab.tsx
+msgid "Skill audit"
+msgstr "Skill audit"
 
 #: src/pages/Analytics.tsx
 msgid "skill invocations"
@@ -3711,9 +3763,17 @@ msgstr "skills"
 msgid "Skills"
 msgstr "Skills"
 
+#: src/pages/system/InsightsTab.tsx
+msgid "skills per session"
+msgstr "skills per session"
+
 #: src/pages/Analytics.tsx
 msgid "skills run inside a turn, not as their own — no independent $ to attribute."
 msgstr "skills run inside a turn, not as their own — no independent $ to attribute."
+
+#: src/pages/system/SkillsToExtendHint.tsx
+msgid "Skills to extend first — skill audit {date}"
+msgstr "Skills to extend first — skill audit {date}"
 
 #: src/pages/Analytics.tsx
 msgid "skills…"
@@ -4035,6 +4095,10 @@ msgstr "The proposal is marked approved; applying it opens a pull request you re
 #: src/pages/inbox/inboxModel.ts
 msgid "The recommendation is closed. It reopens on its own if the rule keeps firing."
 msgstr "The recommendation is closed. It reopens on its own if the rule keeps firing."
+
+#: src/pages/system/InsightsTab.tsx
+msgid "the report is gone from the workspace"
+msgstr "the report is gone from the workspace"
 
 #: src/pages/inbox/InboxDetail.tsx
 msgid "The review leaves the Inbox. It stays on record; nothing else changes."

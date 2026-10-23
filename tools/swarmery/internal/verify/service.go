@@ -331,13 +331,26 @@ func (s *Service) VerifyTarget(ctx context.Context, t Target) error {
 		model = DefaultModel
 	}
 	resolution := claudeacct.Resolve(t.ProjectPath)
+	// Least privilege when the contract declares its checks (a phase doc's Verify
+	// block): dontAsk, the read tools, read-only git and exactly those commands.
+	// No block (every board card today) keeps the measured fallback — bypass plus
+	// the deny list — because the model picks the checks and a list that missed
+	// one would deny it silently. The verdict retry copies this spec, lists and
+	// all, so the resumed session runs under the same scope.
+	var allowed []string
+	contract := t.Prompt
+	if cmds, ok := ParseVerifyCommands(t.Prompt); ok {
+		allowed = VerifierAllowList(cmds, t.ProjectPath, t.WorktreePath)
+		contract = WithRunScope(contract, cmds, t.ProjectPath, t.WorktreePath)
+	}
 	spec := RunSpec{
 		// base, not the branch: BuildPrompt's third parameter has always been named
 		// startPoint (prompt.go) — we are finally passing what it asked for.
-		Prompt:      BuildPromptForPort(t.Title, WithFocusHint(t.Prompt, t.FocusHint), base, t.Strictness, s.Cfg.DaemonPort),
-		SessionUUID: uuid,
-		Cwd:         t.WorktreePath,
-		Model:       model,
+		Prompt:       BuildPromptForPort(t.Title, WithFocusHint(contract, t.FocusHint), base, t.Strictness, s.Cfg.DaemonPort),
+		AllowedTools: allowed,
+		SessionUUID:  uuid,
+		Cwd:          t.WorktreePath,
+		Model:        model,
 		// Resolved from the PROJECT path, never from Cwd: Cwd is the run's
 		// worktree and says nothing about the project. Account and estate both
 		// come from the project's walk; an unbound project adds no env delta.
@@ -345,9 +358,10 @@ func (s *Service) VerifyTarget(ctx context.Context, t Target) error {
 		// The admitted estate's EstateKeys through --settings, composed from the
 		// SAME resolution; no admitted estate ⇒ "" ⇒ no flag, exactly as before.
 		SettingsFile: runsettings.Compose("verify", resolution, runsettings.Inputs{}),
-		// The run is bypassPermissions and may run Bash; the daemon's own API is
-		// the one place a check could write daemon state from. The verdict retry
-		// copies this spec, so the resumed session carries the same denial.
+		// The run may run Bash (all of it on the fallback, the declared commands on
+		// the least-privilege path); the daemon's own API is the one place a check
+		// could write daemon state from. The verdict retry copies this spec, so the
+		// resumed session carries the same denial.
 		DisallowedTools: DaemonDenyPatterns(s.Cfg.DaemonPort),
 	}
 	run, rerr := s.Run.Run(ctx, spec)

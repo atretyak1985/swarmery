@@ -9,7 +9,6 @@ package api
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"net/http"
 	"time"
@@ -81,8 +80,10 @@ func toConnectorDTOs(servers []mcpcfg.Server) []connectorDTO {
 			Transport: string(s.Transport),
 			Scope:     string(s.Scope),
 			Status:    string(s.Status),
-			Detail:    s.Detail,
-			Source:    s.Source,
+			// The command line or URL `claude mcp list` prints routinely
+			// embeds credentials (an --api-key flag, a token query, userinfo).
+			Detail: redact(s.Detail),
+			Source: s.Source,
 		})
 	}
 	return out
@@ -117,8 +118,10 @@ func (h *Handler) addConnector(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var req addConnectorRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeClientErr(w, http.StatusBadRequest, "malformed request body")
+	if err := decodeJSONLimited(w, r, &req, maxJSONBody); err != nil {
+		if !isBodyTooLarge(err) {
+			writeClientErr(w, http.StatusBadRequest, "malformed request body")
+		}
 		return
 	}
 	spec := mcpcfg.AddSpec{

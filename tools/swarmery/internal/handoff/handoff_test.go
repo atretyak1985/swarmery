@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/cachecold"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/store"
 )
 
@@ -270,7 +271,9 @@ func TestGenerateWritesFileAndRow(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read handoff file: %v", err)
 	}
-	want := canned + "\n" + anchorHeading + "\n- unknown (cwd no longer exists)\n"
+	// The model left the required Rejected section out and no Non-goals/Open
+	// risks anchor exists, so the generator appends it at the end.
+	want := canned + "\n" + rejectedHeading + "\n" + noneRecorded + "\n\n" + anchorHeading + "\n- unknown (cwd no longer exists)\n"
 	if string(body) != want {
 		t.Errorf("file body = %q, want %q", body, want)
 	}
@@ -304,7 +307,7 @@ func TestGenerateAppendsAnchor(t *testing.T) {
 	seedSession(t, db, 1, "anchor-uuid", repo, time.Hour)
 	seedAssistantTurn(t, db, 1, 1, Threshold+5_000, 10*time.Minute, "did the thing")
 
-	fr := &fakeRunner{out: "# Handoff: x\n"}
+	fr := &fakeRunner{out: "# Handoff: x\n" + rejectedHeading + "\n" + noneRecorded + "\n"}
 	path, err := generateInto(db, fr, 1, testNow, t.TempDir())
 	if err != nil {
 		t.Fatalf("generateInto: %v", err)
@@ -320,7 +323,7 @@ func TestGenerateAppendsAnchor(t *testing.T) {
 	if idx < 0 {
 		t.Fatalf("file must contain the anchor heading; body=%q", body)
 	}
-	if !strings.HasPrefix(body, "# Handoff: x\n\n"+anchorHeading) {
+	if !strings.HasPrefix(body, "# Handoff: x\n"+rejectedHeading+"\n"+noneRecorded+"\n\n"+anchorHeading) {
 		t.Errorf("anchor must follow the model output after one blank line; body=%q", body)
 	}
 	tail := body[idx:]
@@ -341,6 +344,7 @@ func TestGenerateAppendsAnchor(t *testing.T) {
 	// Prompt sections.
 	for _, want := range []string{
 		"## Non-goals",
+		"## Rejected —",
 		"## Open risks & failed checks",
 		"Do not restate the repository anchor; it is appended automatically.",
 		"≤120 lines",
@@ -349,5 +353,60 @@ func TestGenerateAppendsAnchor(t *testing.T) {
 		if !strings.Contains(fr.gotPrompt, want) {
 			t.Errorf("prompt missing %q", want)
 		}
+	}
+}
+
+// TestEligible: the explicit request runs the candidate rules for ONE session
+// and drops only the activity window — a fat session idle for a day passes, a
+// thin one, a System one and one inside the regrowth cooldown do not.
+func TestEligible(t *testing.T) {
+	db := testDB(t)
+	const sys = "/home/dev/.swarmery"
+	seedSession(t, db, 1, "fat-idle", "/work/alpha", 30*time.Hour)
+	seedAssistantTurn(t, db, 1, 0, 200_000, 24*time.Hour, "")
+	seedSession(t, db, 2, "thin", "/work/alpha", time.Hour)
+	seedAssistantTurn(t, db, 2, 0, 90_000, time.Minute, "")
+	seedSession(t, db, 3, "system", sys, time.Hour)
+	seedAssistantTurn(t, db, 3, 0, 200_000, time.Minute, "")
+	seedSession(t, db, 4, "cooldown", "/work/alpha", time.Hour)
+	seedAssistantTurn(t, db, 4, 0, 200_000, time.Minute, "")
+	mustExec(t, db, `INSERT INTO handoffs (session_id, path, context_tokens, created_at) VALUES (4, '/h/4.md', 180000, ?)`,
+		fmtTS(testNow))
+
+	for id, want := range map[int64]bool{1: true, 2: false, 3: false, 4: false, 99: false} {
+		got, err := eligibleWithSysDir(db, id, sys)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got != want {
+			t.Errorf("session %d eligible = %v, want %v", id, got, want)
+		}
+	}
+	// The tick still applies the activity window to the same idle session.
+	cands, _, err := candidatesWithSysDir(db, testNow, sys)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range cands {
+		if c.SessionID == 1 {
+			t.Error("a session idle for 24 h became a tick candidate")
+		}
+	}
+}
+
+func TestFootprintIsTheCandidateMeasure(t *testing.T) {
+	db := testDB(t)
+	seedSession(t, db, 1, "s", "/work/alpha", time.Hour)
+	seedAssistantTurn(t, db, 1, 0, 160_000, time.Minute, "")
+	cands, _, err := candidatesWithSysDir(db, testNow, "/nowhere")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(cands) != 1 {
+		t.Fatalf("candidates = %+v", cands)
+	}
+	// seedAssistantTurn splits the footprint into tokens_in + cache_read.
+	if fp := Footprint(cachecold.Turn{TokensIn: 80_000, CacheRead: 80_000}); fp != cands[0].ContextTokens {
+		t.Errorf("Footprint = %d, candidate context = %d", fp, cands[0].ContextTokens)
 	}
 }

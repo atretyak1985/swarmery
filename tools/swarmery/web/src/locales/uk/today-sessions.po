@@ -86,6 +86,10 @@ msgstr "{classifierCalls, plural, one {Класифікатор позначив
 msgid "{commands, plural, one {ran {count} command} few {ran {count} commands} many {ran {count} commands} other {ran {count} commands}}"
 msgstr "{commands, plural, one {виконано {count} команду} few {виконано {count} команди} many {виконано {count} команд} other {виконано {count} команди}}"
 
+#: src/pages/sessions/ModelSwitchBadge.tsx
+msgid "{count, plural, one {# model} few {# models} many {# models} other {# models}}"
+msgstr "{count, plural, one {# модель} few {# моделі} many {# моделей} other {# моделі}}"
+
 #: src/pages/Overview.tsx
 msgid "{count, plural, one {one agent is idle until you answer} few {# agents are idle until you answer} many {# agents are idle until you answer} other {# agents are idle until you answer}}"
 msgstr "{count, plural, one {один агент простоює, доки ви не відповісте} few {# агенти простоюють, доки ви не відповісте} many {# агентів простоюють, доки ви не відповісте} other {# агента простоює, доки ви не відповісте}}"
@@ -194,6 +198,10 @@ msgstr "вибрано: {selectedCount}"
 msgid "{sessionCount} sessions · {costLabel}"
 msgstr "сесій: {sessionCount} · {costLabel}"
 
+#: src/pages/projects/FirstRequestCard.tsx
+msgid "{sessions, plural, one {measured: median of # session over {days} days · cache write {writeLabel}} few {measured: median of # sessions over {days} days · cache write {writeLabel}} many {measured: median of # sessions over {days} days · cache write {writeLabel}} other {measured: median of # sessions over {days} days · cache write {writeLabel}}}"
+msgstr "{sessions, plural, one {виміряно: медіана за # сесією за {days} днів · запис у кеш {writeLabel}} few {виміряно: медіана за # сесіями за {days} днів · запис у кеш {writeLabel}} many {виміряно: медіана за # сесіями за {days} днів · запис у кеш {writeLabel}} other {виміряно: медіана за # сесії за {days} днів · запис у кеш {writeLabel}}}"
+
 #: src/pages/Sessions.tsx
 msgid "{shownRuns, plural, one {# plan runs} few {# plan runs} many {# plan runs} other {# plan runs}}"
 msgstr "{shownRuns, plural, one {# запуск плану} few {# запуски плану} many {# запусків плану} other {# запуску плану}}"
@@ -221,6 +229,10 @@ msgstr "{stopTotal, plural, one {за # зупинку} few {за # зупинк
 #: src/pages/detail/Timeline.tsx
 msgid "{tool} · awaiting approval"
 msgstr "{tool} · чекає погодження"
+
+#: src/pages/projects/FirstRequestCard.tsx
+msgid "{toolCount, plural, one {MCP: {nameOnly} of # tool counted by name only — its schema is readable only from the running server.} few {MCP: {nameOnly} of # tools counted by name only — their schemas are readable only from the running server.} many {MCP: {nameOnly} of # tools counted by name only — their schemas are readable only from the running server.} other {MCP: {nameOnly} of # tools counted by name only — their schemas are readable only from the running server.}}"
+msgstr "{toolCount, plural, one {MCP: {nameOnly} з # інструмента пораховано лише за назвою — його схему можна прочитати тільки із запущеного сервера.} few {MCP: {nameOnly} з # інструментів пораховано лише за назвою — їхні схеми можна прочитати тільки із запущеного сервера.} many {MCP: {nameOnly} з # інструментів пораховано лише за назвою — їхні схеми можна прочитати тільки із запущеного сервера.} other {MCP: {nameOnly} з # інструмента пораховано лише за назвою — їхні схеми можна прочитати тільки із запущеного сервера.}}"
 
 #: src/pages/detail/Chat.tsx
 msgid "{tools, plural, one {used {count} tool} few {used {count} tools} many {used {count} tools} other {used {count} tools}}"
@@ -337,6 +349,10 @@ msgstr "усі рекомендації в ретро →"
 msgid "all sessions →"
 msgstr "усі сесії →"
 
+#: src/pages/NeedsYou.tsx
+msgid "Allow (add to scope)"
+msgstr "Дозволити (додати до обсягу)"
+
 #: src/pages/Approvals.tsx
 msgid "always allow…"
 msgstr "завжди дозволяти…"
@@ -358,6 +374,10 @@ msgctxt "verb: the button that opens the question"
 msgid "answer"
 msgstr "відповісти"
 
+#: src/pages/NeedsYou.tsx
+msgid "answer {decisionId}"
+msgstr "відповісти на {decisionId}"
+
 #: src/pages/Approvals.tsx
 msgid "answer in terminal →"
 msgstr "відповісти в терміналі →"
@@ -365,6 +385,10 @@ msgstr "відповісти в терміналі →"
 #: src/pages/Overview.tsx
 msgid "answer required"
 msgstr "потрібна відповідь"
+
+#: src/pages/sessions/CacheColdBadge.tsx
+msgid "API-key"
+msgstr "API-ключ"
 
 #: src/pages/today/loopModel.ts
 msgid "Appears after the first finished phase run."
@@ -403,6 +427,10 @@ msgstr "приблизно — за вибіркою"
 #: src/pages/Projects.tsx
 msgid "archived"
 msgstr "в архіві"
+
+#: src/pages/sessions/CacheColdBadge.tsx
+msgid "Ask the daemon to write a handoff brief for this session"
+msgstr "Попросити демон написати бриф передачі для цієї сесії"
 
 #: src/pages/Approvals.tsx
 msgid "Auto-approve rules"
@@ -452,6 +480,10 @@ msgstr "Чекають на вас · {count}"
 msgid "Branch"
 msgstr "Гілка"
 
+#: src/pages/sessions/CacheColdBadge.tsx
+msgid "cache cold"
+msgstr "кеш вистиг"
+
 #: src/pages/detail/ContextHogsCard.tsx
 msgid "cache-write per turn"
 msgstr "запис у кеш за хід"
@@ -490,6 +522,14 @@ msgstr "Оберіть сесію…"
 msgid "claims…"
 msgstr "зайняті файли…"
 
+#: src/pages/projects/FirstRequestCard.tsx
+msgid "CLAUDE.md"
+msgstr "CLAUDE.md"
+
+#: src/pages/projects/FirstRequestCard.tsx
+msgid "CLAUDE.md files, MCP tools and skill descriptions are sized from disk at ~4 bytes per token; “other parts” are the measured first request minus them (system prompt, built-in tools, agent list)."
+msgstr "Файли CLAUDE.md, інструменти MCP та описи скілів оцінено з диска з розрахунку ~4 байти на токен; «решта» — це виміряний перший запит мінус вони (системний промпт, вбудовані інструменти, список агентів)."
+
 #: src/pages/SessionDetail.tsx
 msgid "click to rename"
 msgstr "клацніть, щоб перейменувати"
@@ -502,6 +542,14 @@ msgstr "закрити"
 #: src/pages/detail/LiveActivity.tsx
 msgid "Cogitating"
 msgstr "Роздумує"
+
+#: src/pages/detail/Chat.tsx
+msgid "cold restart · {at} · re-wrote {k}k tokens of context · {cost}"
+msgstr "холодний перезапуск · {at} · перезаписано {k}k токенів контексту · {cost}"
+
+#: src/pages/SessionDetail.tsx
+msgid "cold restarts"
+msgstr "холодні перезапуски"
 
 #: src/pages/detail/Chat.tsx
 msgid "Collapse activity"
@@ -551,6 +599,10 @@ msgstr "вміст у main"
 #: src/pages/detail/ContextHogsCard.tsx
 msgid "context hogs"
 msgstr "пожирачі контексту"
+
+#: src/pages/sessions/CacheColdBadge.tsx
+msgid "continue from handoff"
+msgstr "продовжити з передачі"
 
 #: src/pages/Sessions.tsx
 msgid "continue phase…"
@@ -705,6 +757,14 @@ msgstr "помилки"
 msgid "Errors · {scopeName} · {day}"
 msgstr "Помилки · {scopeName} · {day}"
 
+#: src/pages/projects/FirstRequestCard.tsx
+msgid "estimate (~bytes/4)"
+msgstr "оцінка (~байти/4)"
+
+#: src/pages/projects/FirstRequestCard.tsx
+msgid "estimated split: {barLabel}"
+msgstr "оцінений розподіл: {barLabel}"
+
 #: src/pages/Overview.tsx
 msgid "Every rule you add here removes a stop from tomorrow. Rules stay per-tool and per-project — narrow or revoke them in Approvals."
 msgstr "Кожне правило тут — на одну зупинку менше завтра. Правила діють на інструмент і проєкт — звузити чи скасувати їх можна в «Погодженнях»."
@@ -784,6 +844,14 @@ msgstr "Зайняті файли"
 msgid "files changed"
 msgstr "змінені файли"
 
+#: src/pages/ProjectDetail.tsx
+msgid "first request"
+msgstr "перший запит"
+
+#: src/pages/projects/FirstRequestCard.tsx
+msgid "first request…"
+msgstr "перший запит…"
+
 #: src/pages/NeedsYou.tsx
 msgid "Focus terminal"
 msgstr "До термінала"
@@ -803,6 +871,10 @@ msgstr "передано моду сесії"
 #: src/pages/detail/HandoffCard.tsx
 msgid "handoff"
 msgstr "передача"
+
+#: src/pages/sessions/CacheColdBadge.tsx
+msgid "handoff request failed"
+msgstr "запит передачі не вдався"
 
 #: src/pages/Approvals.tsx
 msgid "hangs {hangs}"
@@ -953,6 +1025,10 @@ msgstr "керування плагінами й від’єднання — у 
 msgid "marketplace: {marketplace}"
 msgstr "маркетплейс: {marketplace}"
 
+#: src/pages/projects/FirstRequestCard.tsx
+msgid "MCP tools"
+msgstr "інструменти MCP"
+
 #: src/pages/today/loopModel.ts
 #: src/pages/today/loopModel.ts
 msgid "Measure"
@@ -1102,6 +1178,10 @@ msgstr "запитів ще немає"
 msgid "no rules — matching requests auto-approve with <0>via rule</0> and stay in History for audit"
 msgstr "правил немає — відповідні запити автопогоджуються з позначкою <0>через правило</0> і лишаються в Історії для аудиту"
 
+#: src/pages/projects/FirstRequestCard.tsx
+msgid "no session in the last {days} days to measure"
+msgstr "за останні {days} днів немає сесії для вимірювання"
+
 #: src/pages/Sessions.tsx
 msgid "no sessions from the {account} account — clear the account filter to see the rest"
 msgstr "немає сесій з акаунта {account} — зніміть фільтр акаунта, щоб побачити решту"
@@ -1170,6 +1250,10 @@ msgstr "не надіслано: {msg}"
 #: src/pages/Approvals.tsx
 msgid "note (optional)"
 msgstr "нотатка (необов’язково)"
+
+#: src/pages/NeedsYou.tsx
+msgid "note (optional) — recorded with the answer in the phase doc"
+msgstr "примітка (необов'язково) — записується з відповіддю в документ фази"
 
 #: src/pages/ProjectOverview.tsx
 msgid "nothing flagged"
@@ -1248,9 +1332,15 @@ msgid "open in System"
 msgstr "відкрити у Системі"
 
 #: src/pages/NeedsYou.tsx
+#: src/pages/NeedsYou.tsx
+msgid "open phase →"
+msgstr "відкрити фазу →"
+
+#: src/pages/NeedsYou.tsx
 msgid "open PR ↗"
 msgstr "відкрити PR ↗"
 
+#: src/pages/NeedsYou.tsx
 #: src/pages/NeedsYou.tsx
 msgid "open review →"
 msgstr "відкрити рев’ю →"
@@ -1262,6 +1352,14 @@ msgstr "відкрити рев’ю →"
 #: src/pages/Overview.tsx
 msgid "open session →"
 msgstr "відкрити сесію →"
+
+#: src/pages/sessions/CacheColdBadge.tsx
+msgid "Open the handoff brief and its resume command"
+msgstr "Відкрити бриф передачі та його команду продовження"
+
+#: src/pages/projects/FirstRequestCard.tsx
+msgid "other parts"
+msgstr "решта"
 
 #: src/pages/detail/Diffs.tsx
 msgid "out of scope"
@@ -1289,6 +1387,10 @@ msgstr "Дозвіл"
 #: src/pages/NeedsYou.tsx
 msgid "Phase / card"
 msgstr "Фаза / картка"
+
+#: src/pages/detail/PendingRunNotice.tsx
+msgid "phase review"
+msgstr "рев’ю фази"
 
 #: src/pages/detail/PendingRunNotice.tsx
 msgid "phase run"
@@ -1420,6 +1522,10 @@ msgstr "Отримувач"
 #: src/pages/SessionDetail.tsx
 msgid "recovered"
 msgstr "відновлено"
+
+#: src/pages/NeedsYou.tsx
+msgid "Reject"
+msgstr "Відхилити"
 
 #: src/pages/Approvals.tsx
 msgid "release with no decision — the native selector renders in the terminal (E12d/E12e)"
@@ -1648,6 +1754,7 @@ msgstr "Скіл"
 #: src/pages/detail/SummaryChips.tsx
 #: src/pages/ProjectDetail.tsx
 #: src/pages/ProjectOverview.tsx
+#: src/pages/projects/FirstRequestCard.tsx
 msgid "skills"
 msgstr "скіли"
 
@@ -1659,6 +1766,10 @@ msgstr "частина тексту асистента ще не проінде�
 #: src/pages/ProjectOverview.tsx
 msgid "source: {source}"
 msgstr "джерело: {source}"
+
+#: src/pages/NeedsYou.tsx
+msgid "stalls {planTitle} · Phase {seq}: {name}"
+msgstr "тримає {planTitle} · Фаза {seq}: {name}"
 
 #: src/pages/detail/CallTree.tsx
 msgid "started"
@@ -1717,6 +1828,10 @@ msgstr "субагенти"
 msgid "submit answers"
 msgstr "надіслати відповіді"
 
+#: src/pages/sessions/CacheColdBadge.tsx
+msgid "subscription"
+msgstr "підписка"
+
 #: src/pages/NeedsYou.tsx
 msgid "suggested replies"
 msgstr "пропоновані відповіді"
@@ -1730,6 +1845,11 @@ msgstr "Swarm"
 #: src/pages/sessions/SwarmPanel.tsx
 msgid "Swarm messages"
 msgstr "Повідомлення Swarm"
+
+#: src/pages/sessions/ModelSwitchBadge.tsx
+#: src/pages/sessions/ModelSwitchBadge.tsx
+msgid "switched model mid-session: {list}"
+msgstr "змінила модель посеред сесії: {list}"
 
 #: src/pages/detail/LiveActivity.tsx
 msgid "Synthesizing"
@@ -1756,6 +1876,10 @@ msgstr "лише телеметрія — немає .claude/settings.json, пл
 msgid "Tests"
 msgstr "Тести"
 
+#: src/pages/sessions/CacheColdBadge.tsx
+msgid "The {channel} prompt cache of this {k}k-token session expired at {at}: the next message re-writes the whole context. Continue from the handoff brief in a fresh session instead."
+msgstr "Кеш промптів ({channel}) цієї сесії на {k}k токенів сплив о {at}: наступне повідомлення перезапише весь контекст. Краще продовжте з брифу передачі в новій сесії."
+
 #: src/pages/detail/PendingRunNotice.tsx
 msgid "the {kind} “{label}” ended without writing a transcript — the session never started or its transcript is gone"
 msgstr "{kind} «{label}» завершено без запису транскрипту — сесія так і не стартувала або її транскрипт зник"
@@ -1776,6 +1900,10 @@ msgstr "Цикл цього тижня"
 #: src/pages/detail/LiveActivity.tsx
 msgid "the OS process is alive (procwatch, 30s resolution); nothing written to the transcript during this stretch — typical for long builds/tests"
 msgstr "процес ОС живий (procwatch, крок 30 с); за цей час у транскрипт нічого не записано — типово для довгих збірок і тестів"
+
+#: src/pages/detail/Chat.tsx
+msgid "The prompt cache expired during the pause before this turn, so it re-wrote the whole context instead of reading it from cache."
+msgstr "Під час паузи перед цим ходом кеш промптів сплив, тож хід перезаписав увесь контекст замість прочитати його з кешу."
 
 #: src/pages/sessions/SwarmPanel.tsx
 msgid "The sending session's permission mode let the engine's classifier refuse the send. Relay from a session in another mode (e.g. acceptEdits or bypassPermissions)."
@@ -1833,6 +1961,10 @@ msgstr "Сьогодні докладно"
 #: src/pages/SessionDetail.tsx
 msgid "tokens"
 msgstr "токени"
+
+#: src/pages/projects/FirstRequestCard.tsx
+msgid "tokens in a session's first request"
+msgstr "токенів у першому запиті сесії"
 
 #: src/pages/detail/ContextHogsCard.tsx
 msgid "tool"
@@ -1985,6 +2117,10 @@ msgstr "Worktree завершених фаз і карток, чий вміст 
 #: src/pages/NeedsYou.tsx
 msgid "Worktrees ready to remove in {repoRoot}"
 msgstr "Worktree, готові до видалення, у {repoRoot}"
+
+#: src/pages/sessions/CacheColdBadge.tsx
+msgid "writing handoff…"
+msgstr "пишу передачу…"
 
 #: src/pages/detail/CallTree.tsx
 msgid "Σ tokens"

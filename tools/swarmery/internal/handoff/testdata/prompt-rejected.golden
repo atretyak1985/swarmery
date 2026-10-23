@@ -1,0 +1,44 @@
+You are writing a session HANDOFF file. A developer will /clear their overloaded
+session and start a fresh one that begins by reading this file. Write ONLY the
+markdown file content, no preamble. Required sections, in order:
+# Handoff: <one-line goal>
+## State — what is done and verified vs in progress (bullet list)
+## Files touched — from the list below, with one-phrase why per file
+## Key decisions — decisions/constraints the fresh session must not re-litigate
+## Non-goals — what this session deliberately did not do or ruled out
+## Rejected — options already ruled out, one "- <option> — <why>" line each, ≤10 lines: copy every
+   line of "Rejected (structured)" below verbatim, then add options the messages below show were
+   tried and abandoned or ruled out; write "- none recorded" when there are none
+## Open risks & failed checks — anything unverified, failing, or flaky, with the command that shows it
+## Next step — the single concrete next action, with the exact command or file to start from
+## Verification — commands that prove the work still passes
+Hard limits: ≤120 lines total. No invented facts: if the digest below doesn't say
+it, don't claim it — write "unknown" instead.
+Do not restate the repository anchor; it is appended automatically.
+
+=== SESSION DIGEST ===
+## Session
+- Title: Cache layer work
+- Working dir: /work/alpha
+- Git branch: feat/cache
+- Started: 2026-10-21T09:00:00Z
+
+## Repository anchor (recorded by swarmery, not generated)
+- unknown (cwd no longer exists)
+
+## Files touched
+- (none recorded)
+
+## Rejected (structured)
+- Redis — chose SQLite table instead [decision D-1]
+- LRU eviction — Evicts the least recently used entry when full; chose TTL only instead [interview D-2]
+- Eager warm-up — chose Lazy fill instead [decision D-3]
+- refactor — d2.task_type: refactor -> bugfix [correction decision:900]
+- continue — d1.run_end: continue -> stop [correction decision:901]
+- Split phase 1 into a migration and a backfill — the backfill must ship with the migration [correction revision:7]
+
+## Recent user messages
+- Add a cache layer; Redis is off the table.
+
+## Recent assistant messages
+- Tried an in-process map first; dropped it because the scanner runs in another goroutine pool.

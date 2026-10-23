@@ -60,6 +60,14 @@ recording an undo, any failure rolling all of them back and stamping `failed`.
 Renames move `epic_phases.doc_path` explicitly so daemon-owned run state
 survives; one rescan runs after all writes.
 
+After a successful apply the daemon **re-lends** every doc the revision
+created, updated or renamed (`phaserun.Service.RelendDocs` →
+`worktree.RelendPlanDoc`): a phase worktree that still holds a lent copy at
+`.swarmery/plan/<doc>.md` gets the revised text, so nothing graded or guarded
+later reads the pre-revision doc. A worktree without a copy is left alone —
+nothing is planted. Apply already refuses a running phase, so the re-lend never
+races an executor; the next run lends the doc afresh anyway.
+
 ## Endpoints
 
 | Method/path | Purpose |

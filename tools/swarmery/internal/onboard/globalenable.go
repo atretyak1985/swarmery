@@ -144,8 +144,8 @@ func (g *GlobalEnable) Restore() error {
 		delete(epMap, g.key)
 	}
 
-	if err := os.WriteFile(g.path+".bak", raw, 0o644); err != nil {
-		return fmt.Errorf("write backup %s.bak: %w", g.path, err)
+	if err := writeBackup(g.path, raw); err != nil {
+		return err
 	}
 	return writeJSON(g.path, settings)
 }

@@ -39,10 +39,13 @@ import {
   BOARD_COLUMNS,
   BOARD_LANES,
   COLUMN_LABELS,
+  githubItem,
+  hasNewComment,
   isStale,
   laneOf,
   LANE_TITLES,
   labelColor,
+  NEW_COMMENT_LABEL,
   sourceLine,
   staleLabel,
   visibleLabels,
@@ -168,19 +171,52 @@ function SignalRow({ signal }: { signal: AttentionSignal }): JSX.Element {
 /** One label chip: a small colored pill, no icon. Color is a pure hash of the
  * label text (see `labelColor`) so e.g. "jira-ticket" always reads the same
  * accent everywhere it appears — stable across renders because nothing but
- * the label string feeds it. */
+ * the label string feeds it. A `github:<owner>/<repo>#<n>` label (the GitHub
+ * inbox's) is a link to that issue or pull request, opened in a new tab. */
 function LabelBadge({ label }: { label: string }): JSX.Element {
+  const { t } = useLingui();
   const hsl = labelColor(label);
+  const style = {
+    borderColor: `hsl(${hsl} / 0.4)`,
+    backgroundColor: `hsl(${hsl} / 0.12)`,
+    color: `hsl(${hsl})`,
+  };
+  const item = githubItem(label);
+  if (item !== null) {
+    const ref = `${item.slug}#${item.number}`;
+    return (
+      <a
+        href={item.url}
+        target="_blank"
+        rel="noopener noreferrer"
+        onClick={(e) => e.stopPropagation()}
+        onKeyDown={(e) => e.stopPropagation()}
+        data-tip={t`open ${ref} on GitHub`}
+        aria-label={t`open ${ref} on GitHub`}
+        className="rounded-full border px-1.5 py-[1px] font-mono text-[9px] underline-offset-2 hover:underline"
+        style={style}
+      >
+        {label}
+      </a>
+    );
+  }
+  return (
+    <span className="rounded-full border px-1.5 py-[1px] font-mono text-[9px]" style={style}>
+      {label}
+    </span>
+  );
+}
+
+/** The «new comment» marker: a GitHub inbox card that came back to the inbox
+ * because someone commented on its item again (see `hasNewComment`). */
+function NewCommentMarker(): JSX.Element {
+  const { t } = useLingui();
   return (
     <span
-      className="rounded-full border px-1.5 py-[1px] font-mono text-[9px]"
-      style={{
-        borderColor: `hsl(${hsl} / 0.4)`,
-        backgroundColor: `hsl(${hsl} / 0.12)`,
-        color: `hsl(${hsl})`,
-      }}
+      data-tip={t`someone commented on GitHub since this card was last handled — the newest comments are in its description`}
+      className="rounded-full border border-amber/40 bg-amber/10 px-1.5 py-[1px] font-mono text-[9px] text-amber"
     >
-      {label}
+      ● <Trans>new comment</Trans>
     </span>
   );
 }
@@ -576,7 +612,8 @@ export function TaskCard({
           </span>
         )}
         {verdict !== null && <VerdictBadge verdict={verdict} />}
-        <LabelBadges labels={task.labels} />
+        {hasNewComment(task) && <NewCommentMarker />}
+        <LabelBadges labels={task.labels.filter((l) => l !== NEW_COMMENT_LABEL)} />
         {blocked && (
           <span className="rounded-full border border-amber/40 bg-amber/10 px-1.5 py-[1px] font-mono text-[9px] text-amber">
             <Trans>paused</Trans>

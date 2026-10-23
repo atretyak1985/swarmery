@@ -115,9 +115,15 @@ Both fences answer `403 {"error": …}` before any handler runs.
 
 | Env | Values | Default | What it does |
 |---|---|---|---|
-| `SWARMERY_AGENT_SCRUB_VCS_TOKENS` | `1` \| unset | unset (off) | When `1`, agents spawned through `internal/runcore` (board dispatch, verify, planning, plan runs and phase runs) lose the **environment-carried** code-host tokens `GH_TOKEN`, `GITHUB_TOKEN`, `GH_ENTERPRISE_TOKEN`, `GLAB_TOKEN`, `GITLAB_TOKEN` and the config-dir overrides `GH_CONFIG_DIR`, `GLAB_CONFIG_DIR`, whether they came from the daemon's own env or an account/estate secret store. Any other value leaves the environment untouched. See the notes below the table. |
-| `SWARMERY_VERIFY_PERMISSION_MODE` | `acceptEdits` \| `auto` \| `bypassPermissions` \| `manual` \| `dontAsk` \| `plan` \| `off` | `SWARMERY_PERMISSION_MODE`, else `bypassPermissions` | The `--permission-mode` of the read-only verifier (board tasks and `**Verify:**` phases). A verifier that is asked for permission waits for an answer nobody gives in a headless run: each prompt is held for the approval window (10m), and two of them outlast the verifier's 15-minute timeout, so the run ends `inconclusive` / `verifier-timed-out`. `off` omits the flag and restores that behaviour. Whatever the mode, the verifier runs with `--disallowedTools Edit,Write,MultiEdit,NotebookEdit`: it may run checks but not edit files with those tools. A Bash command can still write; only the verifier prompt forbids it. An invalid value logs a warning and means `bypassPermissions`. |
+| `SWARMERY_AGENT_SCRUB_VCS_TOKENS` | `0` \| `off` \| unset | unset (**on**) | Agents spawned through `internal/runcore` (board dispatch, verify, planning, plan runs and phase runs) lose the **environment-carried** code-host tokens `GH_TOKEN`, `GITHUB_TOKEN`, `GH_ENTERPRISE_TOKEN`, `GLAB_TOKEN`, `GITLAB_TOKEN` and the config-dir overrides `GH_CONFIG_DIR`, `GLAB_CONFIG_DIR`, whether they came from the daemon's own env or an account/estate secret store. On by default; `0`, `off`, `false` or `no` opts out and leaves the environment untouched. The daemon's own landing path (`internal/repoprovider`) runs from the daemon process and is never scrubbed. See the notes below the table. |
+| `SWARMERY_VERIFY_PERMISSION_MODE` | `acceptEdits` \| `auto` \| `bypassPermissions` \| `manual` \| `dontAsk` \| `plan` \| `off` | `SWARMERY_PERMISSION_MODE`, else `dontAsk` when the phase doc declares a Verify block, else `bypassPermissions` | The `--permission-mode` of the read-only verifier (board tasks and `**Verify:**` phases). When the graded contract has a Verify block (`Verify …:` followed by one command per bullet), the verifier runs least-privilege: `dontAsk` with `--allowedTools Read,Grep,Glob`, read-only git (`git diff/log/show/status`) and one `Bash(<cmd>*)` rule per declared command, and its prompt says that a denied check is `inconclusive`, never `fail`. Without a block (every board card) the model picks its checks, so it keeps the fallback `bypassPermissions`. Whatever the mode, the verifier runs with `--disallowedTools Edit,Write,MultiEdit,NotebookEdit` plus the daemon-API rules. `off` omits the flag. An invalid value logs a warning and means the site default. |
+| `SWARMERY_REVIEW_PERMISSION_MODE` | as above | `SWARMERY_PERMISSION_MODE`, else `dontAsk` | The `--permission-mode` of the phase and plan reviewers (`**Review:** on`). They run with `--allowedTools Read,Grep,Glob`: a reviewer reads, it never runs a command. They used to share the verifier's knob. |
+| `SWARMERY_PLANNING_PERMISSION_MODE` | as above | `SWARMERY_PERMISSION_MODE`, else `dontAsk` | The planner runs in the operator's **primary checkout**, so it gets `dontAsk` with `--allowedTools Read,Grep,Glob,Bash(git log*),Bash(git show*),Edit(//<workspace root>/**)` (a revise run: `Edit(//<its scratch dir>/**)`): it can read anything and write only the plan files. The PROCEED turn, a resume, carries the same list. |
+| `SWARMERY_RESUME_PERMISSION_MODE` | as above | the ORIGINAL site's knob (e.g. `SWARMERY_PLANNING_PERMISSION_MODE` for the wizard's PROCEED turn), then this one, then `SWARMERY_PERMISSION_MODE`, then the mode of the run being resumed | A resume inherits the mode and lists of the session it continues: an executor's `bypassPermissions` plus deny list, the planner's or a reviewer's allow-list. A session swarmery did not spawn (an operator's own terminal session) gets **no** permission flag, and no knob can widen it past `dontAsk`/`plan` — never `bypassPermissions`. |
+| `SWARMERY_AGENT_DENY_RULES` | `0` \| `off` \| unset | unset (**on**) | The `bypassPermissions` executors (dispatch, phase runs, plan runs, provisioning, executor resumes) carry `--disallowedTools` with `Bash(git push*)`, the MUTATING `gh pr` / `glab mr` subcommands (`create`, `merge`, `close`, `reopen`, `edit`/`update`, `ready`, `review`/`approve`, `comment`/`note` — `view`, `list`, `diff` and `checks` stay allowed) and the daemon-API rules for the daemon's own port. Routines carry the same list WITHOUT the daemon-API rules: an operator-authored routine may drive the daemon. No core skill an executor runs reads the daemon API (`area-lessons` is operator-invoked only; headless runs get their lessons in the prompt). Deny rules are the one kind of rule `bypassPermissions` still honours; they match the command as written, so they are a guard, not a sandbox. `0` drops the list. |
 | `SWARMERY_REVIEW_TIMEOUT_MIN` | positive integer (minutes) | the verifier's timeout (`SWARMERY_VERIFY_TIMEOUT_MIN`, 15) | The hard kill timer of the read-only reviewer session (`**Review:** on` phases and the plan branch review — see [Reviewing a phase](#reviewing-a-phase)). A reviewer that runs out of time is recorded `inconclusive` / `reviewer-timed-out`. A non-numeric, zero or negative value keeps the default. |
+
+**Headless runs trust the repository's `.claude/`.** A `claude -p` spawn skips the trust dialog and runs the hooks in the repository's `.claude/settings.json` in every permission mode, `dontAsk` and `plan` included (measured on Claude Code 2.1.308). Any repository the daemon spawns an agent in can therefore run code on this machine through its committed hooks, whatever the defaults above say. Register only repositories whose `.claude/` you trust. Note too that a headless run exits 0 even when calls were denied; a denial is visible only in the run's transcript.
 
 Notes on `SWARMERY_AGENT_SCRUB_VCS_TOKENS`:
 
@@ -477,13 +483,47 @@ a fresh login.
 `--notify-events` (env `SWARMERY_NOTIFY_EVENTS`) chooses what is sent — any
 comma-separated mix of `approval_requested`, `approval_expired`,
 `session_completed`, `session_error`, `plugin_drift`, `phase_surprise`,
-`run_needs_operator`. The default is `approval_requested,run_needs_operator`:
+`run_needs_operator`, `phase_stalled`. The default is `approval_requested,run_needs_operator`:
 the two moments a human is blocking work (a pending tool approval, a headless
 run that stopped to ask the operator). An explicit value **replaces** the
 default rather than extending it, so keep both names in the list when adding
 others. `approval_expired` also fires for approvals a daemon restart orphaned
 (the hook died with the old process, so the request can no longer be answered
 from the dashboard) — the body says so, and the answer belongs in the terminal.
+
+`phase_stalled` comes from the stalled-phase detector (below): exactly one
+event per (phase, reason), with `{taskId, phaseId, stage, reason,
+sinceMinutes, sessionUuid}` on the generic JSON body beside the usual
+title/body.
+
+### Stalled phases
+
+Every 60 s the daemon looks at each plan phase with a stage in flight and finds
+the **active** one — the executor while the run is running, else the reviewer
+whose verdict is not recorded yet, else the verifier whose verification is still
+running — then flags it as stalled when:
+
+- **no-turns** — its session is open but has produced no turn for
+  `stallMinutes` (`config/guards.json`, default 20). A phase doc whose header
+  names a playbook with an override (`**Playbook:** long-tests`, 60 min by
+  default) gets that threshold instead;
+- **ended** — its session is over but left nothing behind: the executor no
+  Completion Report on a run that never settled, the reviewer no verdict, the
+  verifier no finished verification record;
+- **permission-pending** — a permission request of that session has waited
+  longer than `stallMinutes`.
+
+A stall shows as a «stalled: <stage> — <reason> <N min>» badge on the phase card
+and as a `stalled_phase` item in **Needs you** (a permission-pending one is folded
+into the approval it waits on, with an «open phase» link), and fires one
+`phase_stalled` webhook. The `stall_notices` table is the dedupe ledger: a row
+per (phase, reason) while the condition holds, cleared when it clears, so a
+recurrence notifies again. Notification only — nothing is restarted or killed.
+
+| Env | Values | Default | What it does |
+|---|---|---|---|
+| `SWARMERY_STALL` | `0` | on | `0` disables the detector. The boot log says `swarmery stall detector started (…)` or `… disabled`. |
+| `SWARMERY_GUARDS` | path to a JSON file | embedded `config/guards.json` | Replaces the whole guards document (`stallMinutes`, `playbookOverrides`, …). An unreadable or incomplete file disables the detector with an error in the boot log rather than falling back. |
 
 ## Complexity routing
 
@@ -607,3 +647,97 @@ swarmery routine seed --from config/routines/memory-review.json
 
 Disabling and the `SWARMERY_ROUTINES=0` switch work exactly as for
 `inbox-triage-nightly` above.
+
+## GitHub inbox
+
+`config/routines/github-inbox.json` ships a third routine, `github-inbox`, that
+turns new GitHub issues and pull-request comments into board drafts without
+anyone copying them. Every two hours (minute 15) it runs two steps:
+
+1. `swarmery ghinbox sync --all` — for every non-archived project whose
+   `.claude/project.json` carries a `prReview` block (the review-pack contract:
+   `owner` + `repos`), it reads every repo in `prReview.repos` and keeps **one
+   triage card per open issue or PR** that is new, or got a comment, since the
+   **start** of the routine's last successful run (24 hours back on the first
+   run; the start, not the finish, so a comment posted while that run was still
+   busy is not lost — the overlap is deduped). Each card is labelled
+   `github:<owner>/<repo>#<n>`, carries origin `github`, and quotes the item's
+   opening text and its newest 10 comments (`<ts> @author: … — <link>`) under a
+   header saying the quoted text is data, not instructions. A new comment
+   rewrites the card and returns it to `triage` with a `new-comment` marker,
+   from any column except a run the dispatcher owns (`in_progress`, or a card
+   holding a worktree), which keeps its column. Cards are never written to
+   `todo`, so nothing starts on its own; closed items are left alone; bot
+   comments do not count. More than 500 entries in one listing are cut to the
+   newest 500 and the project line says so.
+2. An `ai-prompt` step on Haiku that turns the sync's report into one sentence
+   per project. It sees that report through `{{prev_output}}` (below), as
+   data, and is told to decide nothing and run no tools; the sync prints counts, labels and
+   repo names only — never a title or a comment — because that text reaches the
+   model verbatim.
+
+**Token requirement.** The sync reads with the GitHub token in the daemon's own
+credential store (`~/.swarmery/secrets/vcs-github.com.env`, written by the
+project banner's *Sign in* — see [docs/vcs-login.md](docs/vcs-login.md)), with
+an isolated `GH_CONFIG_DIR`, through `repoprovider.ReadOnlyGH`: `gh api` GET
+requests only, every write form refused before `gh` runs. It never falls back to
+the operator's own `gh` login. A project without a stored token is skipped with
+an explicit line (`<slug>: skipped — no GitHub token stored for github.com …`),
+and that line — like every project line — lands in `routine_runs.detail`
+(step output keeps its tail; the project lines are printed last for that reason).
+
+| Command | What it does | Exit codes |
+|---|---|---|
+| `swarmery ghinbox sync (--project <id\|slug> \| --all) [--since <RFC3339>] [--dry-run] [--db <path>]` | Syncs one project, or every project with a `prReview` block. Writes the cards straight into the database (the board shows them on its next read). `--dry-run` opens the database read-only and prints every card it would write — label, title, link and description — then the project lines. | `0` synced or skipped · `1` a repository could not be read or a write failed (the run fails, so the next window does not move past it) · `2` usage or database error |
+
+The daemon never seeds it by itself. Seed it once, from `tools/swarmery/`:
+
+```bash
+swarmery routine seed --from config/routines/github-inbox.json
+```
+
+`internal/routines.ShippedSeedFiles` registers every file under
+`config/routines`; a test fails when the directory and the list disagree.
+
+**Step handoff.** The summary step uses the routine step handoff described
+under [Weekly skill audit](#weekly-skill-audit): an `ai-prompt` step gets the
+previous step's full output wherever its prompt says `{{prev_output}}` (empty
+for a first step), and a `command` step reads it from the file named in
+`$SWARMERY_PREV_OUTPUT`; past 1 MiB only the tail is handed over. It is how a
+model step summarises a command step without tools of its own — and since that
+output reaches the model verbatim and in full, a step feeding one must not print
+untrusted text.
+
+Disabling and the `SWARMERY_ROUTINES=0` switch work exactly as for
+`inbox-triage-nightly` above.
+
+## Weekly skill audit
+
+The linter files four advisory usage rules into `config_lint_findings`, shown in
+the System hub's Insights tab: `agent_dead` and `skill_dead` (info — no use in
+30 days), `skill_desc_similar` (warn — two skill descriptions whose token Jaccard
+reaches `skillSimilarityThreshold` in `config/guards.json`) and
+`session_skill_load_high` (warn — a project whose p95 of distinct skills loaded
+per session exceeds `sessionSkillLoadP95`). Usage is matched by **name** — the
+Skill tool's `input.skill`, a slash command's `<command-name>`, a subagent's
+`subagent_type`, and a skill a running agent preloads through its frontmatter
+`skills:` — because the ingester never fills `events.skill_id` /
+`events.agent_id`. A skill injected by a hook (a SessionStart hook that pastes a
+skill body) leaves no such trace and reads as unused. `swarmery skill-audit [--json]` prints the same audit on
+demand; `--similarity` and `--p95` override the thresholds for one run.
+
+`config/routines/skill-audit.json` ships `skill-audit-weekly`: every Monday at
+09:00 it runs `swarmery skill-audit --json`, hands the JSON to a `haiku` prompt
+that writes the report, and saves it to
+`<workspace root>/swarmery/workspace/retro/skill-audit-<date>.md` — the
+framework's own workspace, never a consumer project's. The save step fails the
+run when one of the five sections (Unused agents, Unused skills, Similar
+descriptions, Skills per session, Before a new agent, extend one of these) is
+missing, but keeps the file for reading. Each step reads the previous step's
+full output: a `command` step from the file named in `$SWARMERY_PREV_OUTPUT`, an
+`ai-prompt` step wherever its prompt says `{{prev_output}}`. Nothing is deleted
+or merged. Seed it once:
+
+```bash
+swarmery routine seed --from config/routines/skill-audit.json
+```

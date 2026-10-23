@@ -40,6 +40,7 @@ vi.mock('../../api/systemHub', () => ({
 }));
 vi.mock('../../api/system', () => ({
   fetchSystemSummary: vi.fn(() => new Promise(() => undefined)),
+  fetchSkillAuditReport: vi.fn(() => new Promise(() => undefined)),
 }));
 vi.mock('../../lib/ws', () => ({ useLiveUpdates: vi.fn() }));
 vi.mock('../../lib/scope', () => ({

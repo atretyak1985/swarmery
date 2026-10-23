@@ -296,7 +296,8 @@ func (h *Handler) phasesAllComplete(taskID int64) (bool, error) {
 		       COALESCE(e.verify_mode,''), COALESCE(e.verify_verdict,''),
 		       COALESCE(e.completion_report,''), e.run_ended_at IS NOT NULL,
 		       e.run_started_at IS NOT NULL,
-		       COALESCE(bt.board_column,''), bt.archived_at IS NOT NULL
+		       COALESCE(bt.board_column,''), bt.archived_at IS NOT NULL,
+		       `+phasegate.ReviewHoldSQL+`, e.legacy_review, `+phasegate.ReviewDecisionSQL+`
 		  FROM epic_phases e
 		  LEFT JOIN tasks bt ON bt.id = e.activated_board_task_id
 		 WHERE e.workspace_task_id = ?`, taskID)
@@ -313,8 +314,12 @@ func (h *Handler) phasesAllComplete(taskID int64) (bool, error) {
 			ran, dispatched     bool
 			boardCol            string
 			archived            bool
+			reviewHold          string
+			legacyReview        bool
+			reviewDecision      string
 		)
-		if err := rows.Scan(&done, &total, &verifyMode, &verdict, &report, &ran, &dispatched, &boardCol, &archived); err != nil {
+		if err := rows.Scan(&done, &total, &verifyMode, &verdict, &report, &ran, &dispatched, &boardCol, &archived,
+			&reviewHold, &legacyReview, &reviewDecision); err != nil {
 			return false, err
 		}
 		in := phasegate.Input{
@@ -327,7 +332,10 @@ func (h *Handler) phasesAllComplete(taskID int64) (bool, error) {
 			Ran:              ran,
 			Dispatched:       dispatched,
 			ClosureRequired:  closureRequired,
+			ReviewHold:       reviewHold,
+			LegacyReview:     legacyReview,
 		}
+		in.ReviewDecisionOpen, in.ReviewAccepted = phasegate.ParseReviewDecision(reviewDecision)
 		if phasegate.Check(in).HoldsPlanBack(in) {
 			all = false
 		}

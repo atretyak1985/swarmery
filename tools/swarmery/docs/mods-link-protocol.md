@@ -60,7 +60,7 @@ before merging), and 0114 is an unrelated routing migration that landed first.
 | Mode | `0600`. A wider mode found on disk is narrowed back to `0600` before the file is read. A missing `~/.swarmery` is created `0700` |
 | Content | 32 random bytes, hex-encoded (64 chars), one trailing newline. Readers trim whitespace |
 | Minted | by the daemon at start (`swarmery serve`, next to the DB open) or by the first `swarmery link token`, whichever comes first. A missing or empty file is replaced by a fresh token |
-| Header | `Authorization: Bearer <token>`. The scheme is case-insensitive, the comparison constant-time (`crypto/subtle`) |
+| Header | `Authorization: Swarmery-HMAC ts=…,nonce=…,sig=…`, a request **signed** with the token (see "Signed requests" below), so the token never goes on the wire. The legacy `Authorization: Bearer <token>` is still accepted during the transition. Schemes are case-insensitive, comparisons constant-time |
 | Logged | the **path** only (`swarmery link token at …` at daemon start). The value never reaches a log, a response body or an error message |
 
 **Reading the token in the mod (M7).** `~` is not expanded by `$.fs.read`, which
@@ -110,6 +110,64 @@ A mod that gets `401` should re-read the token file once and retry once, no soon
 than 1 s after the `401` so the retry lands past the throttle window, then treat
 the link as off for the rest of the session. A re-read and retry on every event
 would hammer the disk and the daemon.
+
+### Signed requests
+
+Every in-repo link client signs: the mod (`plugins/swarmery-link/hooks/lib/sig.ts`,
+`signed.ts`) and the `swarmery hook` shim (`internal/hookshim`). The daemon side is
+`internal/linksig`, applied by `linkAuth`/`hookAuth` (`internal/api/link.go`) on every
+`/api/link/*` and `/api/hooks/{permission-request,stop,session-start}` route.
+
+**Request.** HMAC-SHA256 with the token (its UTF-8 bytes) as the key, hex-encoded, over
+six lines joined with `\n`:
+
+```
+swarmery-hmac-v1
+<METHOD, upper-case>
+<request-target: path and query exactly as on the request line>
+<ts: unix seconds>
+<nonce>
+<hex SHA-256 of the body; of the empty string when there is none>
+```
+
+sent as `Authorization: Swarmery-HMAC ts=<ts>,nonce=<nonce>,sig=<hex>`. The nonce is
+16 random bytes, hex-encoded (the daemon accepts 16–128 characters of
+`[0-9A-Za-z_-]`). The daemon accepts a request whose `ts` is within **±60 s** of its
+clock, whose signature verifies under the current token (read through the same
+throttled `link.Holder` reload as the bearer, so rotation works the same way), and
+whose nonce it has not accepted before. Nonces are remembered in an LRU of 4096
+entries for 2 minutes (a nonce is recorded only after its signature verified). A
+failure of any kind is the same `401` as above. A body over 4 MiB is `413`.
+
+**Response.** The answer to a signed request carries
+
+```
+X-Swarmery-Sig: <hex HMAC-SHA256(token, "swarmery-hmac-v1-response\n<nonce>\n<status>\n<hex SHA-256 of the body>")>
+```
+
+with the request's own nonce. A client acts on an answer only when that signature
+verifies:
+
+| Client | Unsigned or wrongly signed answer |
+|---|---|
+| mod, permission `200`/`202` | `pass`: the engine's own verdict stands (shim or native dialog) |
+| mod, command poll `200` | not run, not acked; the poll backs off as on a failure |
+| shim, `permission-request` / `session-start` | fail open: no stdout (native dialog, no injected context); logged `outcome=unsigned-http-<status>` |
+
+Answers to legacy bearer requests are not signed. The `401` itself is never signed.
+Status-only answers (events `202`, a `503 link disabled`, a `401`) are taken by status as
+before. A listener that holds the port without the token can therefore say only "no
+decision", which falls back to the terminal.
+
+**Production deploys never reach the port.** Before it asks, the mod matches the call
+against guard-pack's production-deploy list (vendored in `hooks/lib/prod.ts`, pinned to
+`plugins/guard-pack/hooks/patterns/prod.json` by
+`internal/approvals/guardpack_parity_test.go`). A match returns the engine's verdict
+with the "confirm it here" notice and sends nothing. The daemon's own `local` answer
+for project patterns still applies.
+
+**Transition.** The bearer form is still accepted, and the daemon logs the first one a
+process sees. Origin-less non-link clients move later.
 
 ## Events: POST /api/link/events
 

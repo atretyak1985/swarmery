@@ -326,6 +326,72 @@ describe('NeedsYou page', () => {
     expect(within(prOpen).queryByRole('button', { name: /copy reply|dismiss/i })).toBeNull();
   });
 
+  it('renders a stalled_phase row that links to the phase Runs tab and offers no restart', async () => {
+    const stalled = item({
+      kind: 'stalled_phase',
+      sessionId: 0,
+      sessionUuid: 'exec-1',
+      sessionName: 'Line items · Phase 4: Sync',
+      question: '',
+      asksQuestion: false,
+      preview: 'executor — no new turn for 25 min',
+      blockingSince: iso(-25),
+      phase: {
+        taskId: 7,
+        planExternalId: '2026-10-01-line-items',
+        planTitle: 'Line items',
+        phaseId: 44,
+        seq: 4,
+        name: 'Sync',
+        manualOpen: 0,
+      },
+      stall: { stage: 'executor', reason: 'no-turns', sinceMinutes: 25 },
+    });
+    serve([AWAITING, stalled]);
+    await renderPage();
+    expect(rows().map((r) => r.dataset.kind)).toEqual(['stalled_phase', 'awaiting_reply']);
+    const row = rowOf('Line items · Phase 4: Sync');
+    expect(within(row).getByText('Stalled phase')).toBeTruthy();
+    expect(within(row).getByText('executor — no new turn for 25 min')).toBeTruthy();
+    const want = '/p/shop/plans/2026-10-01-line-items/phase/4/runs';
+    expect(within(row).getByRole('link', { name: 'open phase →' }).getAttribute('href')).toBe(want);
+    expect(within(row).getByRole('link', { name: 'Line items · Phase 4: Sync' }).getAttribute('href')).toBe(want);
+    expect(within(row).queryByRole('button')).toBeNull();
+  });
+
+  it('adds «open phase» to an approval a stalled phase waits on, and keeps the decision there', async () => {
+    const held = item({
+      kind: 'approval',
+      sessionId: 4,
+      sessionName: 'verifier of sync',
+      requestId: 101,
+      toolName: 'Bash',
+      phase: {
+        taskId: 7,
+        planExternalId: '2026-10-01-line-items',
+        planTitle: 'Line items',
+        phaseId: 44,
+        seq: 4,
+        name: 'Sync',
+        manualOpen: 0,
+      },
+      stall: { stage: 'verifier', reason: 'permission-pending', sinceMinutes: 25 },
+    });
+    const plain = item({ kind: 'approval', sessionId: 5, sessionName: 'lint fix', requestId: 102, toolName: 'Bash' });
+    vi.mocked(api.fetchApprovals).mockResolvedValue([pending(101, { sessionId: 4 }), pending(102, { sessionId: 5 })]);
+    serve([held, plain]);
+    await renderPage();
+
+    const row = rowOf('verifier of sync');
+    expect(await within(row).findByRole('button', { name: /^approve$/i })).toBeTruthy();
+    const open = within(row).getByRole('link', { name: 'open phase →' });
+    expect(open.getAttribute('href')).toBe('/p/shop/plans/2026-10-01-line-items/phase/4/runs');
+    expect(within(row).getByText('stalls Line items · Phase 4: Sync')).toBeTruthy();
+    // The title still opens the session that asked, not the phase.
+    expect(within(row).getByRole('link', { name: 'verifier of sync' }).getAttribute('href')).not.toContain('/plans/');
+    expect(within(rowOf('lint fix')).queryByTestId('needs-you-stalled-on')).toBeNull();
+  });
+
   const CLEANUP = item({
     kind: 'worktree_cleanup',
     sessionId: 0,

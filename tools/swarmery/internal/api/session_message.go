@@ -93,8 +93,10 @@ func (h *Handler) PostSessionMessage(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		Text string `json:"text"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		http.Error(w, `{"error":"invalid body"}`, http.StatusBadRequest)
+	if err := decodeJSONLimited(w, r, &body, maxJSONBody); err != nil {
+		if !isBodyTooLarge(err) {
+			http.Error(w, `{"error":"invalid body"}`, http.StatusBadRequest)
+		}
 		return
 	}
 	text := strings.TrimSpace(body.Text)

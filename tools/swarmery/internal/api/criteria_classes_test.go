@@ -55,6 +55,8 @@ func TestWritePhaseStartRefusal_DocGates(t *testing.T) {
 	}{
 		{&phaserun.ManualOnlyError{ManualOpen: 2}, codeManualOnly, "manualOpen", 2.0},
 		{&phaserun.NotYetEarliestError{Earliest: "2026-11-03"}, codeNotYetEarliest, "earliest", "2026-11-03"},
+		{&phaserun.DecisionUndecidedError{Detail: "decision-undecided: D-3 (Which store?)", Decisions: []string{"D-3"}},
+			codeDecisionUndecided, "detail", "decision-undecided: D-3 (Which store?)"},
 		// Wrapped still maps: errors.As is what the arm uses.
 		{fmt.Errorf("admission: %w", &phaserun.ManualOnlyError{ManualOpen: 1}), codeManualOnly, "manualOpen", 1.0},
 	}

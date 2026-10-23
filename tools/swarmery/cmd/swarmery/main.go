@@ -18,6 +18,7 @@
 //	swarmery onboard <slug>        bootstrap a consumer project (.claude + workspace)
 //	swarmery agents sync           regenerate the project-local agent overrides
 //	swarmery link token            print / rotate the swarmery link token
+//	swarmery ghinbox sync          prReview repos' new issues/PRs/comments → triage cards
 package main
 
 import (
@@ -50,12 +51,14 @@ import (
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/automode"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/calibration"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/claudeacct"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/claudeflags"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/cost"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/decide"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/dispatch"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/economics"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/evals"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/extract"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/guards"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/handoff"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/hookcfg"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/hookshim"
@@ -79,6 +82,7 @@ import (
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/procwatch"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/prune"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/quota"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/redact"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/replyextract"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/repopath"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/route"
@@ -89,6 +93,7 @@ import (
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/settingsoverlay"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/spawnpath"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/staleness"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/stall"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/store"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/surprise"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/sysedit"
@@ -127,6 +132,8 @@ func main() {
 		err = cmdBackfill(os.Args[2:])
 	case "serve":
 		err = cmdServe(os.Args[2:])
+	case "cachecold-backfill":
+		err = cmdCacheColdBackfill(os.Args[2:], os.Stdout)
 	case "recost":
 		err = cmdRecost(os.Args[2:])
 	case "modeleval":
@@ -159,6 +166,8 @@ func main() {
 		err = cmdEvalsImport(os.Args[2:])
 	case "sysscan":
 		err = cmdSysscan(os.Args[2:])
+	case "skill-audit":
+		err = skillAudit(os.Args[2:], os.Stdout)
 	case "install":
 		err = installer.CmdInstall(os.Args[2:])
 	case "uninstall":
@@ -202,6 +211,15 @@ func main() {
 		os.Exit(cmdTriage(os.Args[2:]))
 	case "link":
 		err = cmdLink(os.Args[2:], os.Stdout)
+	case "ghinbox":
+		// Exit code is the contract (ghinbox_cli.go): the github-inbox routine
+		// runs `ghinbox sync --all` as a command step, and a 1 there is what
+		// keeps the next run's window from moving past an unread repository.
+		os.Exit(cmdGhinbox(os.Args[2:]))
+	case "rescrub":
+		err = cmdRescrub(os.Args[2:], os.Stdout)
+	case "workaround-backfill":
+		err = cmdWorkaroundBackfill(os.Args[2:], os.Stdout)
 	case "-h", "--help", "help":
 		usage()
 	default:
@@ -232,6 +250,10 @@ func usage() {
                     [--notify-telegram-chat <id>]
                     [--reply-extract] [--reply-extract-daily-cap <n>]  (off by default; sends the waiting question to the Claude API)
   swarmery recost   [--db <path>]
+  swarmery cachecold-backfill [--db <path>] [--since 30d]
+                                   re-derive turns.cold_restart (a turn that re-wrote its whole
+                                   context after the prompt cache expired) over the window and
+                                   print what factors 0.7 / 0.8 / 0.9 would mark; idempotent
   swarmery stale [--db <path>] [--project <id>] [--all]
   swarmery actuals backfill [--db <path>] [--force] [--dry-run] [--verbose]
                                    best-effort: record phase_actuals for past phase runs whose
@@ -254,6 +276,11 @@ func usage() {
                                    the model-upgrade routine's comparison column). Groups under
                                    20 non-post-hoc samples are hidden. Read-only.
   swarmery backup   [--db <path>] [--out <path>]   VACUUM-INTO snapshot (safe while serving)
+  swarmery rescrub  --count --db <copy.db>          per-class counts of secret-shaped values the
+                                   background rescrub would mask (values never printed; read-only)
+  swarmery workaround-backfill [--db <path>] [--since <Nd>] [--plan <yyyy-mm-dd-slug>]
+                                   scan phase-linked sessions since --since (default 30d) for
+                                   guards.json workaroundWords; idempotent; prints per-phase counts
   swarmery prune    [--db <path>] --older-than <Nd> [--dry-run]
                                    retention: write daily_rollups for sessions ended > Nd ago,
                                    delete their events/file_changes/turns (headers kept, pruned=1),
@@ -278,6 +305,13 @@ func usage() {
                                    nothing is edited. --project never opens the database;
                                    --all reads the non-archived project list from it (read-only,
                                    no migrations). The same report R13 and the Memory page show.
+  swarmery skill-audit [--db <path>] [--json] [--similarity <0..1>] [--p95 <n>] [--window <days>]
+                                   unused agents and skills, similar skill descriptions and the
+                                   per-project p95 of skills loaded per session, computed now from
+                                   the registry and the last 30 days of events (usage matched by
+                                   name). Thresholds default to guards.json; the flags override them
+                                   for one run (calibration). Read-only, never migrates; exit 0
+                                   whatever it finds. The weekly skill-audit routine's first step.
   swarmery wscan    [--db <path>] [--workspace-root <dir>]   one-shot workspace scan
   swarmery wtcleanup scan [--db <path>] [--json] [--out <file>]
                                    read-only: the janitor's keep-unmerged worktrees whose phase or
@@ -311,6 +345,11 @@ func usage() {
                                    minted on first use): no flag prints it, --print-path prints the
                                    file path, --rotate mints a new one (a running daemon picks it up
                                    on the next request that presents it). Never opens the database
+  swarmery ghinbox sync (--project <id|slug> | --all) [--since <RFC3339>] [--dry-run] [--db <path>]
+                                   GitHub inbox: one triage card per open issue / PR of the
+                                   prReview repos that is new or got a comment since the last
+                                   ok github-inbox run (else 24h); read with the daemon's stored
+                                   token only; never writes todo; --dry-run writes nothing
   swarmery hook <permission-request|stop>          Claude Code hook shim (reads stdin)
   swarmery hooks <install|uninstall|status> [--project <path>] [--all] [--port <n>]
   swarmery agents sync [--project <name|dir>] [--check] [--claude-dir <dir>] [--marketplace <name>]
@@ -1322,6 +1361,8 @@ func cmdBackfill(args []string) error {
 	// before the pipeline touches the DB, or a manual backfill could re-merge
 	// projects into an onboard-root row (the exact bug SetOnboardRoots fixes).
 	ingest.SetOnboardRoots(onboardRoots())
+	// New turns get their cold_restart mark at the account's real TTL.
+	ingest.SetCacheCold(cacheColdConfig())
 
 	// Same tolerate-some / refuse-all rule the daemon applies (ingest.Run): a
 	// roots list is shared across machines and may name a config dir this one
@@ -1766,7 +1807,7 @@ func cmdServe(args []string) error {
 	notifyURL := fs.String("notify-url", os.Getenv("SWARMERY_NOTIFY_URL"),
 		"webhook URL to POST notifications to (env: SWARMERY_NOTIFY_URL; empty disables). NOTE: bodies include project names and tool arguments — point this only at receivers you trust")
 	notifyEvents := fs.String("notify-events", notify.EventsSetting(os.Getenv),
-		"comma-separated events to send: approval_requested, approval_expired, session_completed, session_error, plugin_drift, phase_surprise, run_needs_operator (default: approval_requested,run_needs_operator; env: SWARMERY_NOTIFY_EVENTS replaces the default)")
+		"comma-separated events to send: approval_requested, approval_expired, session_completed, session_error, plugin_drift, phase_surprise, run_needs_operator, phase_stalled (default: approval_requested,run_needs_operator; env: SWARMERY_NOTIFY_EVENTS replaces the default)")
 	notifyTemplate := fs.String("notify-template", envOr("SWARMERY_NOTIFY_TEMPLATE", notify.TemplateGeneric),
 		"webhook body template: generic (raw JSON) | ntfy (text body + Title/Priority/Tags headers) | telegram (Bot API sendMessage JSON) (env: SWARMERY_NOTIFY_TEMPLATE)")
 	notifyTelegramChat := fs.String("notify-telegram-chat", os.Getenv("SWARMERY_NOTIFY_TELEGRAM_CHAT"),
@@ -1784,6 +1825,9 @@ func cmdServe(args []string) error {
 	wsCfg := wsingestFlags(fs)
 	sysCfg := sysscanFlags(fs)
 	fs.Parse(args)
+	// The executor sites' deny list keeps agents off THIS daemon's API; record the
+	// port it serves before anything can spawn (claudeflags.AgentDenyArgs).
+	claudeflags.SetDaemonPort(*port)
 	if *answerDelivery != approvals.DeliveryUpdatedInput && *answerDelivery != approvals.DeliveryDenyMessage {
 		return fmt.Errorf("--answer-delivery must be %q or %q, got %q",
 			approvals.DeliveryUpdatedInput, approvals.DeliveryDenyMessage, *answerDelivery)
@@ -1852,6 +1896,15 @@ func cmdServe(args []string) error {
 	// internal/spawnpath; SWARMERY_SPAWN_PATH prepends extra dirs verbatim.
 	spawnpath.Apply()
 	bootLog := logbuf.Tagged(slog.Default(), "boot")
+
+	// The store directory (~/.swarmery) and its backup trees hold transcripts
+	// and config copies: private to the user. Fixes modes an older build left
+	// open; best-effort, a failure is logged and never stops the daemon.
+	if def, derr := store.DefaultDBPath(); derr == nil {
+		if perr := store.TightenPerms(filepath.Dir(def)); perr != nil {
+			log.Printf("warning: store: tighten file modes: %v", perr)
+		}
+	}
 
 	migrateStart := time.Now()
 	db, err := store.Open(*dbPath)
@@ -1925,6 +1978,13 @@ func cmdServe(args []string) error {
 	// onboarding endpoint with the same list — same source, wired twice
 	// because the ingest package must not import api.
 	ingest.SetOnboardRoots(onboardRoots())
+
+	// cache-cold (internal/cachecold): the TTLs and the account billing-kind
+	// resolver go to ingest before the pipeline starts, so the cold_restart mark
+	// of the very first tail uses the real API/subscription split — the ingest
+	// package must not import claudeacct (claudeacct imports ingest).
+	ccCfg := cacheColdConfig()
+	ingest.SetCacheCold(ccCfg)
 
 	var bus *ingest.Bus
 	var sys *sysscan.Scanner
@@ -2128,6 +2188,9 @@ func cmdServe(args []string) error {
 			// main.go knows is one the defaults table test cannot see.
 			handoffModel = handoff.DefaultModel
 		}
+		// The «continue from handoff» action of a cache-cold session generates
+		// through the same runner and model (api/handoff_generate.go).
+		api.AttachHandoff(handoff.ClaudeRunner{Model: handoffModel})
 		go func() {
 			runHandoff := func() {
 				cands, dropped, err := handoff.Candidates(db, time.Now())
@@ -2161,6 +2224,10 @@ func cmdServe(args []string) error {
 		}()
 		log.Printf("swarmery handoff started (interval 30m, model %s)", handoffModel)
 	}
+
+	// cache-cold prediction: every minute, flag live fat sessions whose prompt
+	// cache expired (session_cache_cold) and clear the ones that moved on.
+	startCacheColdTick(db, bus, ccCfg)
 
 	// board inbox lifecycle: a captured card is a suggestion, not a commitment,
 	// so one that sat untouched in Triage past SWARMERY_INBOX_TTL is archived
@@ -2606,6 +2673,9 @@ func cmdServe(args []string) error {
 		log.Printf("warning: phaserun heal on startup: %v", err)
 	}
 	api.AttachPhaseRun(phaserunSvc)
+	// verify-not-trust phase 4: an applied plan revision re-lends the docs it
+	// wrote into any phase worktree that still holds a copy.
+	api.AttachRevisionRelend(phaserunSvc.RelendDocs)
 	// Opt-in post-run verification for phases (execution-engine unification phase 5):
 	// a phase doc carrying `**Verify:** strict` gets graded by the SAME read-only
 	// engine board cards go through, before its worktree is reclaimed. Wired here
@@ -2818,6 +2888,9 @@ func cmdServe(args []string) error {
 	// (GET /api/sessions/{id}/context-hogs resolves uuid→transcript under them,
 	// searching every configured root the way the ingest heal does).
 	api.AttachProjectsRoots(cfg.ProjectsRoots)
+	// The latest weekly skill-audit report lives in the same workspace the
+	// workspace scanner watches (--workspace-root).
+	api.AttachWorkspaceRoot(wsCfg.WorkspaceRoot)
 	bootLog.Info(logbuf.Phasef("api.build", time.Since(buildStart)))
 	addr := net.JoinHostPort(*bind, strconv.Itoa(*port))
 	log.Printf("swarmery serving on http://%s (db: %s)", addr, *dbPath)
@@ -2843,6 +2916,18 @@ func cmdServe(args []string) error {
 	go runStoreOptimize(ctx, func(ctx context.Context, startup bool) error {
 		return store.Optimize(ctx, db, startup)
 	}, storeOptimizeFirstDelay, storeOptimizeEvery, log.Printf)
+
+	// Background rescrub (internal/redact/rescrub.go): masks secret-shaped
+	// values in rows stored before ingest redacted them — small batches,
+	// a persisted cursor, a pause between batches, stopped by shutdown and
+	// resumed on the next start. Started here, never by store.Open, so
+	// `swarmery backup` and the CLI never run it. SWARMERY_RESCRUB=off
+	// disables it; _BATCH / _SLEEP_MS tune it.
+	rescrubCfg, rescrubWarns := redact.RescrubConfigFromEnv(os.Getenv)
+	for _, w := range rescrubWarns {
+		log.Printf("warn: %s", w)
+	}
+	go redact.RunRescrub(ctx, db, rescrubCfg, log.Printf)
 
 	// fusion phase 3: run the dispatcher poll-fallback ticker under the shutdown
 	// context. It runs an initial Schedule immediately (drains any Todo backlog
@@ -2956,7 +3041,46 @@ func cmdServe(args []string) error {
 			wtjCfg.TickInterval, wtjCfg.MinIdle)
 	}
 
-	srv := &http.Server{Addr: addr, Handler: handler}
+	// verify-not-trust phase 11: the stalled-phase detector. Every 60 s it
+	// derives which running phases' active stage (executor → reviewer → verifier)
+	// stopped working — no turn for stallMinutes (a `**Playbook:**` override such
+	// as long-tests stretches it), a session that ended without its report /
+	// verdict / record, or a permission request pending past stallMinutes — and
+	// reconciles the stall_notices ledger: a new stall emits ONE phase_stalled
+	// webhook and nudges the plan page and the Needs-you queue (plan_updated); a
+	// cleared one leaves the ledger, so a recurrence notifies again. Notification
+	// only: nothing is restarted or killed. Thresholds come from guards.json
+	// (SWARMERY_GUARDS overrides it whole); a broken override disables the
+	// detector loudly rather than guessing. Kill-switch SWARMERY_STALL=0.
+	if os.Getenv("SWARMERY_STALL") == "0" {
+		log.Printf("swarmery stall detector disabled (SWARMERY_STALL=0)")
+	} else if g, err := guards.Load(); err != nil {
+		log.Printf("error: swarmery stall detector disabled: %v", err)
+	} else {
+		stallTicker := &stall.Ticker{
+			DB:     db,
+			Config: stall.Config{Guards: g},
+			Emit: func(st stall.Stalled) {
+				minutes := st.Minutes(time.Now())
+				notifier.Emit(notify.PhaseStalledEvent(notify.PhaseStalled{
+					TaskID: st.TaskID, PhaseID: st.PhaseID, PhaseSeq: st.PhaseSeq, PhaseName: st.PhaseName,
+					PlanTitle: st.PlanTitle, Project: st.Project, Stage: string(st.Stage), Reason: string(st.Reason),
+					SinceMinutes: minutes, SessionUUID: st.SessionUUID,
+					Detail: stall.Describe(st.Stage, st.Reason, minutes),
+				}))
+			},
+			Changed: func(taskID int64) {
+				if bus != nil {
+					bus.Publish(ingest.Notification{Type: ingest.NotePlanUpdated, TaskID: taskID})
+				}
+			},
+		}
+		go stallTicker.Run(ctx)
+		log.Printf("swarmery stall detector started (interval %s, stallMinutes %d, playbook overrides %v)",
+			stall.DefaultInterval, g.StallMinutes, g.PlaybookOverrides)
+	}
+
+	srv := api.NewHTTPServer(addr, handler)
 	errCh := make(chan error, 1)
 	go func() { errCh <- srv.ListenAndServe() }()
 	select {
