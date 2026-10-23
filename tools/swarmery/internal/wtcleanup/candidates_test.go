@@ -287,7 +287,11 @@ func TestCandidates_LiveWorktreeIsActive(t *testing.T) {
 		t.Errorf("candidates = %v, want none while live", scan.Candidates)
 	}
 	_, skipped := byPath(scan)
-	if r := skipped[canon(t, p)] + skipped[p]; r != SkipActive {
+	r, ok := skipped[canon(t, p)]
+	if !ok {
+		r = skipped[p]
+	}
+	if r != SkipActive {
 		t.Errorf("skip reason = %q, want active", r)
 	}
 }
