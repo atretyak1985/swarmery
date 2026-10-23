@@ -641,6 +641,10 @@ msgstr "не вдалося завантажити знахідки: {error}"
 msgid "counting…"
 msgstr "підрахунок…"
 
+#: src/pages/plans/DecisionTable.tsx
+msgid "counts per chip"
+msgstr "кількість за статусами"
+
 #: src/pages/Plans.tsx
 msgid "coverage"
 msgstr "покриття"
@@ -677,6 +681,10 @@ msgstr "критерій"
 msgid "Cron (5-field, blank = manual/webhook only)"
 msgstr "Cron (5 полів, порожньо = лише вручну/вебхук)"
 
+#: src/pages/plans/DecisionTable.tsx
+msgid "daemon plan review"
+msgstr "рев’ю плану демоном"
+
 #: src/pages/plans/ReviewFindings.tsx
 msgid "daemon review"
 msgstr "рев’ю демона"
@@ -697,6 +705,15 @@ msgstr "вирішено {decided} ({by})"
 #: src/pages/PlanningMode.tsx
 msgid "decision D-{0}"
 msgstr "рішення D-{0}"
+
+#: src/pages/plans/DecisionTable.tsx
+#: src/pages/plans/DecisionTable.tsx
+msgid "Decisions and criteria"
+msgstr "Рішення й критерії"
+
+#: src/pages/plans/DecisionTable.tsx
+msgid "Decisions and criteria: {total} ids"
+msgstr "Рішення й критерії: {total} ідентифікаторів"
 
 #: src/pages/Routines.tsx
 msgid "Delete"
@@ -739,6 +756,10 @@ msgstr "опишіть власний варіант"
 #: src/pages/planning/QuestionCard.tsx
 msgid "describe your own direction…"
 msgstr "опишіть власний варіант…"
+
+#: src/pages/plans/DecisionTable.tsx
+msgid "details"
+msgstr "подробиці"
 
 #: src/pages/planning/RevisionReview.tsx
 #: src/pages/Routines.tsx
@@ -903,6 +924,8 @@ msgstr "епіки…"
 msgid "every minute"
 msgstr "щохвилини"
 
+#: src/pages/plans/DecisionTable.tsx
+#: src/pages/plans/DecisionTable.tsx
 #: src/pages/plans/ReviewFindings.tsx
 msgid "evidence"
 msgstr "докази"
@@ -1067,6 +1090,10 @@ msgstr "триває фоновий запуск"
 msgid "held"
 msgstr "справдилась"
 
+#: src/pages/plans/DecisionTable.tsx
+msgid "hide {id}"
+msgstr "сховати {id}"
+
 #: src/pages/Plans.tsx
 msgid "high — implementation"
 msgstr "high — реалізація"
@@ -1099,6 +1126,7 @@ msgstr "наскільки глибоко думає кожен «Запусти
 msgid "how hard the planning interview thinks, on every turn of this wizard — the first spawn and each resume. Leave it on the default to let the daemon's knob and the planner's pinned default decide. Note that NO effort is not the cheap end — an unpinned claude run thinks at xhigh, the deepest setting."
 msgstr "наскільки глибоко думає інтерв’ю планування на кожному ході цього майстра — при першому запуску й кожному відновленні. Лишіть типове значення, щоб вирішували налаштування демона й закріплений типовий рівень планувальника. Зауважте: БЕЗ effort — це не найдешевший варіант: незакріплений запуск claude думає на xhigh, найглибшому рівні."
 
+#: src/pages/plans/DecisionTable.tsx
 #: src/pages/plans/ReviewFindings.tsx
 msgid "id"
 msgstr "id"
@@ -1283,6 +1311,10 @@ msgstr "злито {mergedAt}"
 msgid "missed"
 msgstr "пропущено"
 
+#: src/pages/plans/DecisionTable.tsx
+msgid "missing"
+msgstr "бракує"
+
 #: src/pages/Plans.tsx
 msgid "mode"
 msgstr "режим"
@@ -1413,9 +1445,17 @@ msgstr "документ фази давно не редагувався — в�
 msgid "No plan file changes. The note (optional) is recorded on the revision."
 msgstr "Файли плану без змін. Нотатка (необов’язкова) записується в ревізію."
 
+#: src/pages/plans/DecisionTable.tsx
+msgid "no plan review yet"
+msgstr "рев’ю плану ще не було"
+
 #: src/pages/Playbooks.tsx
 msgid "no playbooks"
 msgstr "немає плейбуків"
+
+#: src/pages/plans/DecisionTable.tsx
+msgid "no reason recorded"
+msgstr "причину не записано"
 
 #: src/pages/Plans.tsx
 msgid "no revisions — \"Revise plan\" in the action row starts one"
@@ -1469,6 +1509,11 @@ msgstr "жодного з {total} критеріїв не відмічено"
 msgid "not delivered"
 msgstr "не доставлено"
 
+#: src/pages/plans/DecisionTable.tsx
+#: src/pages/plans/DecisionTable.tsx
+msgid "not implemented"
+msgstr "не реалізовано"
+
 #: src/pages/plans/landingModel.ts
 msgid "not landed"
 msgstr "не здано"
@@ -1493,6 +1538,15 @@ msgstr "Ще не запускалась."
 #: src/pages/plans/ForecastVsActual.tsx
 msgid "not scored — the run’s actuals are not recorded yet, or nothing about it was measurable"
 msgstr "без оцінки — фактичні показники запуску ще не записані або нічого не вдалося виміряти"
+
+#: src/pages/plans/DecisionTable.tsx
+#: src/pages/plans/DecisionTable.tsx
+msgid "not verified"
+msgstr "не перевірено"
+
+#: src/pages/plans/DecisionTable.tsx
+msgid "Not verified: {reason}"
+msgstr "Не перевірено: {reason}"
 
 #: src/pages/planning/RevisionReview.tsx
 msgid "note (optional)"
@@ -1688,6 +1742,10 @@ msgstr "зусилля запуску фази"
 msgid "phase run model"
 msgstr "модель запуску фази"
 
+#: src/pages/plans/DecisionTable.tsx
+msgid "phases"
+msgstr "фази"
+
 #: src/pages/planning/QuestionCard.tsx
 msgid "pick any that apply"
 msgstr "оберіть усе, що підходить"
@@ -1737,6 +1795,14 @@ msgstr "план не активний"
 #: src/pages/PlanningMode.tsx
 msgid "Plan ready"
 msgstr "План готовий"
+
+#: src/pages/plans/DecisionTable.tsx
+msgid "plan review failed"
+msgstr "рев’ю плану не пройдено"
+
+#: src/pages/plans/DecisionTable.tsx
+msgid "plan review passed"
+msgstr "рев’ю плану пройдено"
 
 #: src/pages/plans/ReviewFindings.tsx
 msgid "Plan round"
@@ -1844,6 +1910,10 @@ msgstr "плейбуки…"
 msgid "post hoc"
 msgstr "post hoc"
 
+#: src/pages/plans/DecisionTable.tsx
+msgid "PR"
+msgstr "PR"
+
 #: src/pages/plans/ForecastVsActual.tsx
 msgid "prior → posterior"
 msgstr "prior → posterior"
@@ -1932,6 +2002,10 @@ msgstr "readme…"
 msgid "ready to land"
 msgstr "готово до здачі"
 
+#: src/pages/plans/DecisionTable.tsx
+msgid "reason: {rowReason}"
+msgstr "причина: {rowReason}"
+
 #: src/pages/planning/QuestionCard.tsx
 msgid "recommended"
 msgstr "рекомендовано"
@@ -1986,6 +2060,10 @@ msgstr "Перезавантажити"
 msgid "Reload review"
 msgstr "Перезавантажити перегляд"
 
+#: src/pages/plans/DecisionTable.tsx
+msgid "remaining"
+msgstr "залишилось"
+
 #: src/pages/Routines.tsx
 msgid "remove step"
 msgstr "прибрати крок"
@@ -2017,6 +2095,10 @@ msgstr "перевідкриваємо…"
 #: src/pages/PlanningMode.tsx
 msgid "reply"
 msgstr "відповідь"
+
+#: src/pages/plans/DecisionTable.tsx
+msgid "report"
+msgstr "звіт"
 
 #: src/pages/plans/PhasePanel.tsx
 msgid "Report"
@@ -2063,6 +2145,7 @@ msgstr "повернуто агенту"
 msgid "revert"
 msgstr "відкотити"
 
+#: src/pages/plans/DecisionTable.tsx
 #: src/pages/plans/PhaseReopens.tsx
 #: src/pages/plans/RunsReviewBlock.tsx
 msgid "review"
@@ -2340,6 +2423,10 @@ msgstr "сесії"
 msgid "shell command (e.g. curl -fsS -X POST …)"
 msgstr "shell-команда (напр. curl -fsS -X POST …)"
 
+#: src/pages/plans/DecisionTable.tsx
+msgid "show {id}"
+msgstr "показати {id}"
+
 #: src/pages/planning/HistoryDrawer.tsx
 msgid "Show AI Reasoning"
 msgstr "Показати міркування ШІ"
@@ -2464,6 +2551,7 @@ msgstr "почато {startedAgo}"
 msgid "starting…"
 msgstr "запуск…"
 
+#: src/pages/plans/DecisionTable.tsx
 #: src/pages/plans/ReviewFindings.tsx
 msgid "status"
 msgstr "статус"
@@ -2528,6 +2616,10 @@ msgstr "tech-lead (типово)"
 #: src/pages/plans/ReviewFindings.tsx
 msgid "test caught"
 msgstr "спіймав тест"
+
+#: src/pages/plans/DecisionTable.tsx
+msgid "text"
+msgstr "текст"
 
 #: src/pages/plans/StalledBadge.tsx
 msgid "The {stage} of this phase has stopped working. Notification only — nothing was restarted."
@@ -2642,6 +2734,10 @@ msgstr "сканування робочого простору підхоплю�
 msgid "The plan names the branch <0>{headerBranch}</0>, but the daemon will land <1>{runBranch}</1>. Push and the change request always use the run's branch; the header's branch is a reference only."
 msgstr "План називає гілку <0>{headerBranch}</0>, але демон посадить <1>{runBranch}</1>. Push і пул-реквест завжди йдуть із гілки запуску; гілка із заголовка — лише довідка."
 
+#: src/pages/plans/DecisionTable.tsx
+msgid "The plan review could not check the code. An id without a cited report reads \"not verified\" — nobody could check it, which is not the same as nobody did it."
+msgstr "Рев’ю плану не змогло перевірити код. Ідентифікатор без посилання у звіті позначено «не перевірено» — ніхто не зміг це перевірити, а це не те саме, що ніхто цього не зробив."
+
 #: src/pages/planning/RunningPlanPanel.tsx
 msgid "The plan takes shape here as you answer — each reply rebuilds it."
 msgstr "План формується тут, поки ви відповідаєте — кожна відповідь перебудовує його."
@@ -2753,6 +2849,10 @@ msgstr "Фаза не запускалась демоном — гілки дл�
 #: src/pages/plans/TerminalBadge.tsx
 msgid "this plan"
 msgstr "цей план"
+
+#: src/pages/plans/DecisionTable.tsx
+msgid "This plan declares no decisions and no spec criteria in the machine shape — there is nothing to trace to evidence."
+msgstr "Цей план не оголошує ні рішень, ні критеріїв специфікації в машинному форматі — немає чого простежувати до доказів."
 
 #: src/pages/plans/PhaseReview.tsx
 msgid "This project sets vcs.forkRemote, and landing through a fork is not supported yet — remove it to land to origin, or push and open the {change} by hand."
@@ -2921,6 +3021,10 @@ msgstr "чому не зрушило"
 #: src/pages/planning/RevisionReview.tsx
 msgid "Why this proposal does not fit…"
 msgstr "Чому ця пропозиція не підходить…"
+
+#: src/pages/plans/DecisionTable.tsx
+msgid "why: {why}"
+msgstr "чому: {why}"
 
 #: src/pages/plans/forecastStoryModel.ts
 msgid "with only part of the work done"
