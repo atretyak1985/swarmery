@@ -16,10 +16,19 @@
 //     board card (tasks.branch / tasks.worktree_path / swarm/<external-id>) —
 //     and drops every worktree whose owner is unknown, still open or active;
 //  3. for the closed ones only (the git work is bounded by that), it computes a
-//     PROOF that the branch's content is already in main: the phase's landing
-//     is merged, or a merge of the branch into main changes nothing
-//     (`git merge-tree --write-tree` + `git diff --stat`, objects written to a
-//     scratch directory so the repository is never written).
+//     PROOF that the checkout's HEAD is already in main: the phase's landing is
+//     merged AND HEAD is an ancestor of main (`git merge-base --is-ancestor`),
+//     or a merge of the branch into main changes nothing (`git merge-tree
+//     --write-tree` + `git diff --stat`, objects written to a scratch directory
+//     so the repository is never written).
+//
+// Every proof is tied to the HEAD it was computed for (Candidate.HeadSHA, stored
+// as worktree_cleanup_proposals.head_sha); Apply refuses a checkout whose HEAD
+// moved since. The landing record carries no commit id (epic_phases stores the
+// state and the PR, not the merged SHA), so "landing merged" alone proves
+// nothing about later commits on the same branch — hence the ancestry check. A
+// squash-merged landing fails that check by construction and falls through to
+// the content diff, which is what proves the squash case.
 //
 // A candidate without proof is counted, never offered for deletion. Proposals
 // (proposals.go) store the result for the Needs-you card; removal happens only
@@ -29,6 +38,7 @@ package wtcleanup
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -82,7 +92,10 @@ type Candidate struct {
 	// Owner is a human label: "<plan> · Phase <seq>: <name>", "<plan> (plan run)"
 	// or "<external-id>: <title>".
 	Owner string `json:"owner"`
-	Proof Proof  `json:"proof"`
+	// HeadSHA is the checkout's HEAD when the proof was computed ("" when it
+	// could not be read — such a candidate never has a proof).
+	HeadSHA string `json:"headSha"`
+	Proof   Proof  `json:"proof"`
 }
 
 // Skipped is a keep-unmerged worktree that is not a candidate, and why.
@@ -110,6 +123,11 @@ type Git interface {
 	ContentInMain(repoRoot, branch string) (bool, string, error)
 	// Dirty counts the checkout's modified and untracked paths.
 	Dirty(worktreePath string) (int, error)
+	// Head is the checkout's HEAD commit id.
+	Head(worktreePath string) (string, error)
+	// InMain reports whether commit sha is reachable from the repository's
+	// main line, with a one-line detail either way.
+	InMain(repoRoot, sha string) (bool, string, error)
 }
 
 // Candidates scans the journal and returns every keep-unmerged worktree whose
@@ -195,43 +213,74 @@ func Candidates(db *sql.DB, g Git, live wtjanitor.Liveness) (Scan, error) {
 				continue
 			}
 		}
+		head, _ := g.Head(wt.Path) // "" => no proof (proveOne)
 		scan.Candidates = append(scan.Candidates, Candidate{
 			RepoRoot: e.repoRoot, ProjectID: e.projectID, ProjectSlug: e.slug,
 			Path: wt.Path, Branch: wt.Branch, PhaseID: own.phaseID, TaskID: own.taskID,
-			Owner: own.label, Proof: proveOne(g, e.repoRoot, wt, own),
+			Owner: own.label, HeadSHA: head, Proof: proveOne(g, e.repoRoot, wt, own, head),
 		})
 	}
 	return scan, nil
 }
 
-// proveOne computes the proof for a closed candidate: landing first (no git
-// work), else the content diff. Uncommitted paths are named in the detail —
-// they are not part of either proof, and ForceUnmerged salvages them anyway.
-func proveOne(g Git, repoRoot string, wt wtjanitor.Worktree, own owner) Proof {
-	var p Proof
-	switch {
-	case own.landing == "merged":
-		p = Proof{Kind: ProofLanding, Detail: "phase landing merged"}
-		if own.prURL != "" {
-			p.Detail += " · " + own.prURL
-		}
-	case wt.Branch == "":
-		p = Proof{Kind: ProofNone, Detail: "detached HEAD"}
-	default:
-		ok, detail, err := g.ContentInMain(repoRoot, wt.Branch)
-		switch {
-		case err != nil:
-			p = Proof{Kind: ProofNone, Detail: "content diff failed: " + err.Error()}
-		case ok:
-			p = Proof{Kind: ProofContentDiff, Detail: detail}
-		default:
-			p = Proof{Kind: ProofNone, Detail: detail}
+// proveOne computes the proof for a closed candidate at HEAD head: a merged
+// landing whose HEAD is in main first, else the content diff. Uncommitted
+// paths are named in the detail — they are not part of either proof, and
+// ForceUnmerged salvages them anyway.
+func proveOne(g Git, repoRoot string, wt wtjanitor.Worktree, own owner, head string) Proof {
+	p, landed := landingProof(g, repoRoot, own, head)
+	if !landed {
+		note := p.Detail
+		p = contentProof(g, repoRoot, wt.Branch, head)
+		if note != "" {
+			p.Detail += " · " + note
 		}
 	}
 	if n, err := g.Dirty(wt.Path); err == nil && n > 0 {
 		p.Detail += fmt.Sprintf(" · %d uncommitted path(s), salvaged on removal", n)
 	}
 	return p
+}
+
+// landingProof: the phase's landing merged AND the checkout's HEAD is in main.
+// The landing row records no commit id, so a later run's commits on the same
+// branch would otherwise ride on an old merge. When the landing merged but the
+// check fails, ok=false and the Detail is a note for the fallback proof.
+func landingProof(g Git, repoRoot string, own owner, head string) (Proof, bool) {
+	if own.landing != "merged" || head == "" {
+		return Proof{}, false
+	}
+	in, detail, err := g.InMain(repoRoot, head)
+	switch {
+	case err != nil:
+		return Proof{Detail: "landing merged, ancestry check failed: " + err.Error()}, false
+	case !in:
+		return Proof{Detail: "landing merged, but " + detail}, false
+	}
+	p := Proof{Kind: ProofLanding, Detail: "phase landing merged · " + detail}
+	if own.prURL != "" {
+		p.Detail += " · " + own.prURL
+	}
+	return p, true
+}
+
+// contentProof: merging the branch into main changes nothing.
+func contentProof(g Git, repoRoot, branch, head string) Proof {
+	switch {
+	case head == "":
+		return Proof{Kind: ProofNone, Detail: "HEAD unreadable"}
+	case branch == "":
+		return Proof{Kind: ProofNone, Detail: "detached HEAD"}
+	}
+	ok, detail, err := g.ContentInMain(repoRoot, branch)
+	switch {
+	case err != nil:
+		return Proof{Kind: ProofNone, Detail: "content diff failed: " + err.Error()}
+	case ok:
+		return Proof{Kind: ProofContentDiff, Detail: detail}
+	default:
+		return Proof{Kind: ProofNone, Detail: detail}
+	}
 }
 
 /* ---------- owner resolution ---------- */
@@ -444,6 +493,35 @@ func mainRefs(repoRoot string) []string {
 		return out
 	}
 	return existing("origin/master", "master")
+}
+
+func (ExecGit) Head(worktreePath string) (string, error) {
+	return gitOut(worktreePath, nil, "rev-parse", "--verify", "--quiet", "HEAD^{commit}")
+}
+
+// InMain reports whether sha is an ancestor of (or equal to) a main ref — the
+// remote's default branch, then the local one. Exit status 1 is "not an
+// ancestor"; anything else is an error.
+func (ExecGit) InMain(repoRoot, sha string) (bool, string, error) {
+	mains := mainRefs(repoRoot)
+	if len(mains) == 0 {
+		return false, "no main branch found", nil
+	}
+	short := sha
+	if len(short) > 12 {
+		short = short[:12]
+	}
+	for _, m := range mains {
+		_, err := gitOut(repoRoot, nil, "merge-base", "--is-ancestor", sha, m)
+		if err == nil {
+			return true, "HEAD " + short + " in " + m, nil
+		}
+		var ee *exec.ExitError
+		if !errors.As(err, &ee) || ee.ExitCode() != 1 {
+			return false, "", fmt.Errorf("merge-base --is-ancestor %s %s: %w", short, m, err)
+		}
+	}
+	return false, "HEAD " + short + " not in " + strings.Join(mains, ", "), nil
 }
 
 func (ExecGit) Dirty(worktreePath string) (int, error) {

@@ -72,9 +72,21 @@ starts with `"<KEY>: "`.
 
 # 3. Create the card
 
-`POST http://127.0.0.1:7777/api/board/tasks` (route: `tools/swarmery/internal/api/routes.go:122`,
-wrapped in `requireLocalOrigin` — a same-host call that sends no `Origin` header, e.g. `curl` or an
-agent's own HTTP client, passes `isLocalOrigin` unchallenged; `approvals.go:80-105`).
+`POST /api/board/tasks` (route: `tools/swarmery/internal/api/routes.go`, wrapped in
+`requireLocalOrigin`). The daemon takes a write that carries no browser `Origin` only with link
+auth, so send every POST and PATCH in this skill through the daemon's own signed client — never a
+raw `curl`, which now gets `401`:
+
+```bash
+swarmery api POST /api/board/tasks --data @card.json      # or: --data @- (JSON on stdin)
+swarmery api PATCH /api/board/tasks/<id> --data '{"boardColumn":"in_progress"}'
+```
+
+`swarmery api` signs the request with the link token in `~/.swarmery/link-token` (the token
+itself never goes on the wire), prints the answer body on stdout, and exits `0` on a 2xx answer,
+`1` on any other status, `2` when the daemon did not answer. `swarmery` not on `PATH`, exit `2`,
+or exit `1` with a `401` all fold into "5. Fallback: daemon unavailable". The read-only `GET`s in
+§1 and §2 need no credential and may stay plain `curl`.
 
 Request body:
 
@@ -120,8 +132,8 @@ The response is `201` with the full `boardTaskDTO` (`tasks_board.go:218-257`). K
 
 # 4. Transitions (PATCH)
 
-`PATCH http://127.0.0.1:7777/api/board/tasks/{id}` (route: `routes.go:123`), body
-`{"boardColumn": "..."}` plus whatever else that moment also updates:
+`swarmery api PATCH /api/board/tasks/{id} --data '<body>'` (route: `routes.go`; signed, as in §3),
+body `{"boardColumn": "..."}` plus whatever else that moment also updates:
 
 | Moment | `boardColumn` | Also updates |
 |---|---|---|

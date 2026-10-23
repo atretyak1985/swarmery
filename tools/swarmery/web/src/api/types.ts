@@ -1986,7 +1986,7 @@ export interface NeedsYouCleanup {
 /** One path's outcome of an apply (Go wtcleanup.PathOutcome). */
 export interface WorktreeCleanupPathOutcome {
   path: string;
-  /** removed | gone | refused | failed | already-decided | not-proposed | no-proof | branch-changed */
+  /** removed | gone | refused | failed | already-decided | not-proposed | no-proof | branch-changed | head-changed | owner-active | repo-error */
   outcome: string;
   salvageBranch?: string;
   reason?: string;

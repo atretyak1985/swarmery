@@ -193,6 +193,30 @@ func TestForceUnmerged_FailedSalvageKeepsTheWorktree(t *testing.T) {
 	}
 }
 
+// An existing ref under the salvage name is never overwritten: the salvage
+// fails, the worktree stays, and the earlier rescue still points where it did.
+func TestForceUnmerged_SalvageRefCollisionFailsInsteadOfOverwriting(t *testing.T) {
+	f := newForceFixture(t)
+	name := ForceSalvageBranchName(f.wtPath, "swarm/phase-7", f.now)
+	f.run("branch", name, "HEAD") // the main checkout's commit: an unrelated earlier rescue
+	before := f.run("rev-parse", name)
+	rem := &recordingRemover{}
+
+	r := f.service(rem, idleLive{}).ForceUnmerged(f.repo, []string{f.wtPath})[0]
+	if r.Outcome != ForceFailed {
+		t.Fatalf("outcome = %q (%s), want failed", r.Outcome, r.Reason)
+	}
+	if rem.calls() != 0 {
+		t.Errorf("remover called %d times after a refused salvage ref", rem.calls())
+	}
+	if _, err := os.Stat(f.wtPath); err != nil {
+		t.Errorf("worktree gone after a refused salvage ref: %v", err)
+	}
+	if after := f.run("rev-parse", name); after != before {
+		t.Errorf("existing salvage ref %s overwritten: %s → %s", name, before, after)
+	}
+}
+
 func TestForceSalvageBranchName(t *testing.T) {
 	now := time.Date(2026, 10, 22, 9, 8, 7, 0, time.UTC)
 	cases := map[[2]string]string{

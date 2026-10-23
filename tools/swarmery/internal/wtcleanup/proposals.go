@@ -23,6 +23,9 @@ const (
 	OutcomeNotProposed   = "not-proposed"    // no proposal for this path in this repository
 	OutcomeNoProof       = "no-proof"        // proof_kind none: counted, never removed
 	OutcomeBranchChanged = "branch-changed"  // the checkout holds another branch than proposed
+	OutcomeHeadChanged   = "head-changed"    // the checkout's HEAD moved since the proof was computed
+	OutcomeOwnerActive   = "owner-active"    // the owner is running again, reopened, or no longer known
+	OutcomeRepoError     = "repo-error"      // git could not list the repository's worktrees: nothing done
 )
 
 // ErrNotFound: the proposal id named in an apply does not exist.
@@ -127,18 +130,18 @@ func proposeRepo(db *sql.DB, repoRoot string, cands []Candidate, now time.Time) 
 		}
 		if id, ok := open[c.Path]; ok {
 			if _, err := tx.Exec(`UPDATE worktree_cleanup_proposals
-				   SET project_id = ?, branch = ?, phase_id = ?, task_id = ?, proof_kind = ?, proof_detail = ?
+				   SET project_id = ?, branch = ?, head_sha = ?, phase_id = ?, task_id = ?, proof_kind = ?, proof_detail = ?
 				 WHERE id = ?`,
-				nullID(c.ProjectID), c.Branch, nullID(c.PhaseID), nullID(c.TaskID), c.Proof.Kind, c.Proof.Detail, id); err != nil {
+				nullID(c.ProjectID), c.Branch, c.HeadSHA, nullID(c.PhaseID), nullID(c.TaskID), c.Proof.Kind, c.Proof.Detail, id); err != nil {
 				return sum, fmt.Errorf("wtcleanup: refresh %s: %w", c.Path, err)
 			}
 			sum.Refreshed++
 			continue
 		}
 		if _, err := tx.Exec(`INSERT INTO worktree_cleanup_proposals
-			   (repo_root, project_id, path, branch, phase_id, task_id, proof_kind, proof_detail, proposed_at)
-			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-			repoRoot, nullID(c.ProjectID), c.Path, c.Branch, nullID(c.PhaseID), nullID(c.TaskID),
+			   (repo_root, project_id, path, branch, head_sha, phase_id, task_id, proof_kind, proof_detail, proposed_at)
+			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			repoRoot, nullID(c.ProjectID), c.Path, c.Branch, c.HeadSHA, nullID(c.PhaseID), nullID(c.TaskID),
 			c.Proof.Kind, c.Proof.Detail, ts); err != nil {
 			return sum, fmt.Errorf("wtcleanup: propose %s: %w", c.Path, err)
 		}
@@ -197,7 +200,14 @@ var applyMu sync.Mutex
 //   - a path already decided → already-decided (idempotent per proposal);
 //   - a path never proposed in this repository → not-proposed;
 //   - a proof-less proposal → no-proof;
-//   - a checkout now on another branch than proposed → branch-changed.
+//   - the repository's worktrees cannot be listed → repo-error, for every pick
+//     (fail closed: nothing reaches the Forcer);
+//   - a checkout now on another branch than proposed → branch-changed;
+//   - an owner that is running again, reopened or no longer known → owner-active
+//     (a phase re-run reuses the same path AND branch, so only the owner's state
+//     can tell a re-acquired checkout apart);
+//   - a checkout whose HEAD is not the one the proof was computed for →
+//     head-changed.
 //
 // Removed and gone paths are decided; refused and failed ones stay open with
 // the reason in `error`, so the same card can retry them.
@@ -214,9 +224,11 @@ func Apply(db *sql.DB, g Git, f Forcer, id int64, paths []string, now time.Time)
 	}
 
 	type pick struct {
-		idx    int
-		rowID  int64
-		branch string
+		idx       int
+		rowID     int64
+		projectID int64
+		branch    string
+		head      string
 	}
 	var picks []pick
 	seen := map[string]bool{}
@@ -226,12 +238,12 @@ func Apply(db *sql.DB, g Git, f Forcer, id int64, paths []string, now time.Time)
 		}
 		seen[p] = true
 		out := PathOutcome{Path: p}
-		var rowID int64
-		var branch, proof string
+		var rowID, projectID int64
+		var branch, head, proof string
 		var decided sql.NullString
-		err := db.QueryRow(`SELECT id, branch, proof_kind, decided FROM worktree_cleanup_proposals
+		err := db.QueryRow(`SELECT id, COALESCE(project_id, 0), branch, head_sha, proof_kind, decided FROM worktree_cleanup_proposals
 			 WHERE repo_root = ? AND path = ?
-			 ORDER BY decided IS NULL DESC, id DESC LIMIT 1`, res.RepoRoot, p).Scan(&rowID, &branch, &proof, &decided)
+			 ORDER BY decided IS NULL DESC, id DESC LIMIT 1`, res.RepoRoot, p).Scan(&rowID, &projectID, &branch, &head, &proof, &decided)
 		switch {
 		case errors.Is(err, sql.ErrNoRows):
 			out.Outcome = OutcomeNotProposed
@@ -242,7 +254,7 @@ func Apply(db *sql.DB, g Git, f Forcer, id int64, paths []string, now time.Time)
 		case proof == ProofNone:
 			out.Outcome, out.Reason = OutcomeNoProof, "no proof the content is in main"
 		default:
-			picks = append(picks, pick{idx: len(res.Paths), rowID: rowID, branch: branch})
+			picks = append(picks, pick{idx: len(res.Paths), rowID: rowID, projectID: projectID, branch: branch, head: head})
 		}
 		res.Paths = append(res.Paths, out)
 	}
@@ -250,21 +262,55 @@ func Apply(db *sql.DB, g Git, f Forcer, id int64, paths []string, now time.Time)
 		return res, nil
 	}
 
-	// The proof was computed for the proposed branch. A checkout that now holds
-	// another one (the path reused by a later run) is not what the operator saw.
-	if wts, err := g.Worktrees(res.RepoRoot); err == nil {
-		kept := picks[:0]
+	// Everything below re-checks, at click time, what the scan saw. Without the
+	// worktree list none of it can be checked, so nothing is removed.
+	wts, err := g.Worktrees(res.RepoRoot)
+	if err != nil {
 		for _, pk := range picks {
-			wt, found := findWorktree(wts, res.Paths[pk.idx].Path)
-			if found && wt.Branch != pk.branch {
-				res.Paths[pk.idx].Outcome = OutcomeBranchChanged
-				res.Paths[pk.idx].Reason = fmt.Sprintf("proposed %q, now %q", pk.branch, wt.Branch)
-				continue
-			}
-			kept = append(kept, pk)
+			res.Paths[pk.idx].Outcome = OutcomeRepoError
+			res.Paths[pk.idx].Reason = "cannot list worktrees: " + err.Error()
 		}
-		picks = kept
+		return res, nil
 	}
+	kept := picks[:0]
+	for _, pk := range picks {
+		out := &res.Paths[pk.idx]
+		wt, found := findWorktree(wts, out.Path)
+		if !found {
+			kept = append(kept, pk) // gone since: the Forcer reports it and the row is decided gone
+			continue
+		}
+		// The proof was computed for the proposed branch. A checkout that now
+		// holds another one (the path reused by a later run) is not what the
+		// operator saw.
+		if wt.Branch != pk.branch {
+			out.Outcome, out.Reason = OutcomeBranchChanged, fmt.Sprintf("proposed %q, now %q", pk.branch, wt.Branch)
+			continue
+		}
+		// Same path, same branch is exactly what a phase re-run looks like: only
+		// the owner's state tells a re-acquired checkout apart.
+		own, known, oerr := resolveOwner(db, pk.projectID, wt.Branch, wt.Path)
+		if oerr != nil {
+			return res, oerr
+		}
+		if reason := ownerVeto(own, known); reason != "" {
+			out.Outcome, out.Reason = OutcomeOwnerActive, reason
+			continue
+		}
+		// The proof is for one commit; a checkout that moved since carries
+		// commits nobody proved are in main.
+		head, herr := g.Head(wt.Path)
+		switch {
+		case herr != nil:
+			out.Outcome, out.Reason = OutcomeHeadChanged, "HEAD unreadable: "+herr.Error()
+			continue
+		case pk.head == "" || head != pk.head:
+			out.Outcome, out.Reason = OutcomeHeadChanged, fmt.Sprintf("proposed at %s, now %s", shortSHA(pk.head), shortSHA(head))
+			continue
+		}
+		kept = append(kept, pk)
+	}
+	picks = kept
 	if len(picks) == 0 {
 		return res, nil
 	}
@@ -300,6 +346,30 @@ func Apply(db *sql.DB, g Git, f Forcer, id int64, paths []string, now time.Time)
 		}
 	}
 	return res, nil
+}
+
+// ownerVeto is why an owner no longer allows removal ("" when it does): the
+// same closed-and-idle rule Candidates applied at scan time.
+func ownerVeto(own owner, known bool) string {
+	switch {
+	case !known:
+		return "no phase, plan or card owns the branch any more"
+	case own.active:
+		return "a run is in flight for " + own.label
+	case !own.closed:
+		return own.label + " is open again"
+	}
+	return ""
+}
+
+func shortSHA(s string) string {
+	if s == "" {
+		return "(none)"
+	}
+	if len(s) > 12 {
+		return s[:12]
+	}
+	return s
 }
 
 func nullStr(s string) any {

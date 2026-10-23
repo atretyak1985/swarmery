@@ -19,6 +19,7 @@
 //	swarmery agents sync           regenerate the project-local agent overrides
 //	swarmery link token            print / rotate the swarmery link token
 //	swarmery ghinbox sync          prReview repos' new issues/PRs/comments → triage cards
+//	swarmery api <METHOD> <path>   one signed request to the daemon's HTTP API
 package main
 
 import (
@@ -66,6 +67,7 @@ import (
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/installer"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/lessons"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/link"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/linksig"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/logbuf"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/mcpcfg"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/memconsolidate"
@@ -220,6 +222,10 @@ func main() {
 		err = cmdRescrub(os.Args[2:], os.Stdout)
 	case "workaround-backfill":
 		err = cmdWorkaroundBackfill(os.Args[2:], os.Stdout)
+	case "api":
+		// Exit code is the contract (api_cli.go): scripts tell a refused
+		// request (1) from a usage or transport error (2).
+		os.Exit(cmdAPI(os.Args[2:], os.Stdin, os.Stdout, os.Stderr))
 	case "-h", "--help", "help":
 		usage()
 	default:
@@ -350,6 +356,12 @@ func usage() {
                                    prReview repos that is new or got a comment since the last
                                    ok github-inbox run (else 24h); read with the daemon's stored
                                    token only; never writes todo; --dry-run writes nothing
+  swarmery api <METHOD> <path> [--data <json>|@file|@-] [--port <n>] [--url <base>]
+                                   one request to the daemon's HTTP API, signed with the link
+                                   token (Swarmery-HMAC; the token never goes on the wire). The
+                                   way scripts write to the daemon: a write without an Origin
+                                   needs link auth. Body to stdout; exit 0 on 2xx, 1 on another
+                                   status, 2 on a usage or transport error
   swarmery hook <permission-request|stop>          Claude Code hook shim (reads stdin)
   swarmery hooks <install|uninstall|status> [--project <path>] [--all] [--port <n>]
   swarmery agents sync [--project <name|dir>] [--check] [--claude-dir <dir>] [--marketplace <name>]
@@ -1742,7 +1754,43 @@ func attachLink(exclude ingest.ExcludeList) {
 	}
 	path := link.TokenPath(home)
 	api.AttachLink(link.NewHolder(path, tok), exclude)
-	log.Printf("swarmery link token at %s (/api/link/* require it as a Bearer token)", path)
+	log.Printf("swarmery link token at %s (non-browser clients sign their requests with it: /api/link/*, /api/hooks/*, and every write without an Origin)", path)
+}
+
+// checkBindAuth refuses a --bind beyond loopback while no link token exists.
+// Bound wider, the daemon is reachable by anyone on that network, and an
+// Origin-less write is accepted only with link auth (internal/api origin.go):
+// without a token on disk nothing could authenticate. serve does not mint one
+// for this case — exposing the daemon is a decision the operator makes by
+// running `swarmery link token` first. Loopback (127.0.0.0/8, ::1, localhost)
+// needs nothing: attachLink mints the token on start as before.
+func checkBindAuth(bind string) error {
+	if isLoopbackBind(bind) {
+		return nil
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return fmt.Errorf("--bind %q reaches beyond this machine and needs a link token, but the home dir does not resolve: %w", bind, err)
+	}
+	path := link.TokenPath(home)
+	if linksig.ReadKeyFile(path) != "" {
+		return nil
+	}
+	return fmt.Errorf("--bind %q makes the daemon reachable beyond this machine, and no link token exists at %s: "+
+		"non-browser clients would have no credential to authenticate with. Run `swarmery link token` once to mint it, then start serve again",
+		bind, path)
+}
+
+// isLoopbackBind reports whether a --bind value listens on loopback only. An
+// empty value or 0.0.0.0/:: is every interface; a host name other than
+// localhost is not trusted to resolve to loopback.
+func isLoopbackBind(bind string) bool {
+	h := strings.Trim(strings.TrimSpace(bind), "[]")
+	if strings.EqualFold(h, "localhost") {
+		return true
+	}
+	ip := net.ParseIP(h)
+	return ip != nil && ip.IsLoopback()
 }
 
 // cmdLink is `swarmery link token [--rotate | --print-path]`. It touches only
@@ -1828,6 +1876,14 @@ func cmdServe(args []string) error {
 	// The executor sites' deny list keeps agents off THIS daemon's API; record the
 	// port it serves before anything can spawn (claudeflags.AgentDenyArgs).
 	claudeflags.SetDaemonPort(*port)
+	// Before anything opens or mints: a daemon reachable beyond this machine
+	// starts only when non-browser clients have a credential to sign with.
+	if err := checkBindAuth(*bind); err != nil {
+		return err
+	}
+	// Exposed, a browser Origin proves nothing (any client can send one): every
+	// gated write then needs link auth (internal/api origin.go, D7).
+	api.AttachExposedBind(!isLoopbackBind(*bind))
 	if *answerDelivery != approvals.DeliveryUpdatedInput && *answerDelivery != approvals.DeliveryDenyMessage {
 		return fmt.Errorf("--answer-delivery must be %q or %q, got %q",
 			approvals.DeliveryUpdatedInput, approvals.DeliveryDenyMessage, *answerDelivery)

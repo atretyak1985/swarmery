@@ -12,9 +12,9 @@
     "that used to cost a full context re-read now costs zero tokens. Read the answers in the routine's",
     "run history on the Routines page.",
     "",
-    "Install it against a project with:",
-    "  curl -s -X POST localhost:7777/api/routines -H 'content-type: application/json' \\",
-    "    -d @<this file with _comment removed and projectId set>",
+    "Install it against a project with (`swarmery api` signs the request with the link token:",
+    "the daemon takes a write that carries no browser Origin only with link auth):",
+    "  swarmery api POST /api/routines --data @<this file with _comment removed and projectId set>",
     "",
     "The cron is deliberately half-hourly rather than minute-by-minute: this replaces a human-paced",
     "'is it green yet?', and a tighter schedule would recreate the polling it is meant to remove."

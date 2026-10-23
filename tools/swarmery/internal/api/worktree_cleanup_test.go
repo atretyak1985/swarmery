@@ -41,6 +41,12 @@ func (g stubCleanupGit) Worktrees(string) ([]wtjanitor.Worktree, error) {
 func (stubCleanupGit) ContentInMain(string, string) (bool, string, error) { return false, "", nil }
 func (stubCleanupGit) Dirty(string) (int, error)                          { return 0, nil }
 
+// stubHead is every checkout's HEAD, the one the proposals were made at.
+const stubHead = "0123456789abcdef0123456789abcdef01234567"
+
+func (stubCleanupGit) Head(string) (string, error)                 { return stubHead, nil }
+func (stubCleanupGit) InMain(string, string) (bool, string, error) { return true, "", nil }
+
 // cleanupServer: two projects, a plan with a phase, a board card, and the
 // proposals `wtcleanup propose` would write for them.
 func cleanupServer(t *testing.T) (*httptest.Server, *sql.DB, *recordingCleanupForcer) {
@@ -70,9 +76,9 @@ func cleanupServer(t *testing.T) (*httptest.Server, *sql.DB, *recordingCleanupFo
 		VALUES (1, 'Fix the thing', 'p', 'done', '2026-10-01T00:00:00Z', 'queue', 'T-abc', 'done')`)
 
 	scan := wtcleanup.Scan{Candidates: []wtcleanup.Candidate{
-		{RepoRoot: "/work/alpha", ProjectID: 1, ProjectSlug: "-work-alpha", Path: "/wt/phase-4", Branch: "swarm/phase-4",
+		{RepoRoot: "/work/alpha", ProjectID: 1, ProjectSlug: "-work-alpha", Path: "/wt/phase-4", Branch: "swarm/phase-4", HeadSHA: stubHead,
 			PhaseID: phase, TaskID: plan, Proof: wtcleanup.Proof{Kind: wtcleanup.ProofLanding, Detail: "phase landing merged"}},
-		{RepoRoot: "/work/alpha", ProjectID: 1, ProjectSlug: "-work-alpha", Path: "/wt/T-abc", Branch: "swarm/T-abc",
+		{RepoRoot: "/work/alpha", ProjectID: 1, ProjectSlug: "-work-alpha", Path: "/wt/T-abc", Branch: "swarm/T-abc", HeadSHA: stubHead,
 			TaskID: card, Proof: wtcleanup.Proof{Kind: wtcleanup.ProofContentDiff, Detail: "merging into origin/main changes nothing"}},
 		{RepoRoot: "/work/alpha", ProjectID: 1, ProjectSlug: "-work-alpha", Path: "/wt/phase-9", Branch: "swarm/phase-9",
 			Proof: wtcleanup.Proof{Kind: wtcleanup.ProofNone, Detail: "conflicts with origin/main"}},

@@ -61,7 +61,7 @@ func DaemonAPINotice(port int) string {
 	if port <= 0 {
 		port = DefaultDaemonPort
 	}
-	return fmt.Sprintf("Do not call the HTTP API of the swarmery daemon that started this run (127.0.0.1:%d, localhost:%d) with curl, wget, http or any other client: judge the work in this worktree, not what the daemon reports about it.",
+	return fmt.Sprintf("Do not call the HTTP API of the swarmery daemon that started this run (127.0.0.1:%d, localhost:%d) with curl, wget, http, `swarmery api` or any other client: judge the work in this worktree, not what the daemon reports about it. Never read or use the link token (~/.swarmery/link-token).",
 		port, port)
 }
 

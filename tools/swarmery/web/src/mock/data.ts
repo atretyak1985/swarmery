@@ -3879,7 +3879,7 @@ const mockRoutines: Routine[] = [
     enabled: true,
     catchUp: 'skip',
     steps: [
-      { type: 'command', name: 'advise', command: 'curl -fsS -X POST http://localhost:7777/api/retro/advise' },
+      { type: 'command', name: 'advise', command: 'swarmery api POST /api/retro/advise' },
     ],
     hasWebhook: false,
     timeoutSec: 900,

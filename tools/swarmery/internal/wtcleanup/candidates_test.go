@@ -123,6 +123,13 @@ func (f *fixture) squashIntoMain(branch string) {
 	f.git(f.repo, "commit", "-qm", "squash "+branch)
 }
 
+// mergeIntoMain lands branch on main with a merge commit, the way a merged PR
+// that is not squashed does — the branch's HEAD becomes an ancestor of main.
+func (f *fixture) mergeIntoMain(branch string) {
+	f.t.Helper()
+	f.git(f.repo, "merge", "-q", "--no-ff", "-m", "land "+branch, branch)
+}
+
 func byPath(s Scan) (map[string]Candidate, map[string]string) {
 	cands := map[string]Candidate{}
 	for _, c := range s.Candidates {
@@ -153,9 +160,10 @@ func TestCandidates_ProofKinds(t *testing.T) {
 	pa := f.worktree("phase-a", "swarm/phase-"+itoa(squashed), "a.md", "landed by squash\n")
 	f.squashIntoMain("swarm/phase-" + itoa(squashed))
 
-	// (b) landing merged: the landing record is the proof, no git work needed.
+	// (b) landing merged and HEAD is in main: the landing record is the proof.
 	landed := f.phase(2, "done", "done", "merged")
 	pb := f.worktree("phase-b", "swarm/phase-"+itoa(landed), "b.md", "pr merged\n")
+	f.mergeIntoMain("swarm/phase-" + itoa(landed))
 
 	// (c) real unmerged work under a closed phase: no proof, counted only.
 	unmerged := f.phase(3, "done", "done", "none")
@@ -185,6 +193,9 @@ func TestCandidates_ProofKinds(t *testing.T) {
 		}
 		if c.PhaseID == 0 || c.TaskID != f.plan || !strings.Contains(c.Owner, "Cleanup plan · Phase") {
 			t.Errorf("%s: owner = phase %d task %d %q", filepath.Base(path), c.PhaseID, c.TaskID, c.Owner)
+		}
+		if head := f.git(path, "rev-parse", "HEAD"); c.HeadSHA != head {
+			t.Errorf("%s: head = %q, want the checkout's HEAD %q", filepath.Base(path), c.HeadSHA, head)
 		}
 	}
 
@@ -273,6 +284,36 @@ func TestCandidates_OnlyClosedOwnersAreCandidates(t *testing.T) {
 	}
 }
 
+// A merged landing proves only the commits it merged: a checkout whose HEAD
+// carries a commit that is in neither main nor the landed history is not
+// proven, whatever landing_state says.
+func TestCandidates_LandingProofNeedsHeadInMain(t *testing.T) {
+	f := newFixture(t)
+	ph := f.phase(1, "done", "done", "merged")
+	branch := "swarm/phase-" + itoa(ph)
+	p := f.worktree("phase-rerun", branch, "first.md", "landed\n")
+	f.mergeIntoMain(branch)
+	// A later run on the same branch adds work after the merge.
+	f.write(p, "second.md", "after the landing\n")
+	f.git(p, "add", "second.md")
+	f.git(p, "commit", "-qm", "later run")
+
+	scan, err := Candidates(f.db, ExecGit{}, nil)
+	if err != nil || len(scan.Candidates) != 1 {
+		t.Fatalf("Candidates = %v, %v", scan.Candidates, err)
+	}
+	c := scan.Candidates[0]
+	if c.Proof.Kind != ProofNone {
+		t.Errorf("proof = %s (%s), want none: HEAD has a commit not in main", c.Proof.Kind, c.Proof.Detail)
+	}
+	if !strings.Contains(c.Proof.Detail, "landing merged, but HEAD") {
+		t.Errorf("detail = %q, want the landing note", c.Proof.Detail)
+	}
+	if head := f.git(p, "rev-parse", "HEAD"); c.HeadSHA != head {
+		t.Errorf("head = %q, want %q", c.HeadSHA, head)
+	}
+}
+
 // Liveness is the last veto: a closed owner with a process inside is active.
 func TestCandidates_LiveWorktreeIsActive(t *testing.T) {
 	f := newFixture(t)
@@ -287,7 +328,11 @@ func TestCandidates_LiveWorktreeIsActive(t *testing.T) {
 		t.Errorf("candidates = %v, want none while live", scan.Candidates)
 	}
 	_, skipped := byPath(scan)
-	if r := skipped[canon(t, p)] + skipped[p]; r != SkipActive {
+	r, ok := skipped[canon(t, p)]
+	if !ok {
+		r = skipped[p]
+	}
+	if r != SkipActive {
 		t.Errorf("skip reason = %q, want active", r)
 	}
 }
