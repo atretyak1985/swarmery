@@ -9,11 +9,17 @@ package wsingest
 //
 // A row's chip, strongest first:
 //
-//  1. not-implemented — a report says `not implemented: <id> — <why>`; a
-//     deliberate, explained gap is never "remaining".
-//  2. the latest plan review's word on it — evidence, or remaining when it says
+//  1. the latest plan review's word on it — evidence, or remaining when it says
 //     missing: the review reads the code, the report is the executor's claim.
-//  3. evidence — a Completion Report cites it.
+//     Review evidence beats review missing for the same id. A missing on an id
+//     a report declared `not implemented:` stays not-implemented: the review
+//     confirms the declared gap.
+//  2. evidence — a Completion Report of a phase that did not itself mark the id
+//     `not implemented:` cites it (a deferral is overtaken by the later phase
+//     that did the work).
+//  3. not-implemented — a report says `not implemented: <id> — <why>` and
+//     nothing above proves it was done; a deliberate, explained gap is never
+//     "remaining".
 //  4. not-verified — nothing cites it and the latest plan review was
 //     INCONCLUSIVE: "nobody could check", not "nobody did it".
 //  5. remaining.
@@ -238,13 +244,23 @@ func LoadDecisionTable(db Querier, taskID int64) (DecisionTable, error) {
 	return t, nil
 }
 
-// rowChip applies the precedence in the file comment.
+// rowChip applies the precedence in the file comment. A `not implemented:` line
+// only says the id was not done in the phase that wrote it, so it yields to proof
+// from elsewhere: a review's evidence, or a report of another phase citing the id
+// (phase 3 defers D-5 to phase 6, phase 6 does it).
 func rowChip(ev []EvidenceItem, pr PlanReviewState) (chip, reason string) {
-	review, report := "", false
+	review := ""
+	notImpl, notImplReason := false, ""
+	deferredIn := map[int64]bool{} // phases whose report marked the id not-implemented
 	for _, e := range ev {
 		switch {
 		case e.Status == EvidenceStatusNotImplemented:
-			return ChipNotImplemented, e.Reason
+			if !notImpl {
+				notImpl, notImplReason = true, e.Reason
+			}
+			if e.PhaseID != nil {
+				deferredIn[*e.PhaseID] = true
+			}
 		case e.Kind == EvidenceKindReview && review != ChipEvidence:
 			// Any review saying evidence beats one saying missing for the same id
 			// (a doc's interactive round and the daemon's may both exist).
@@ -253,15 +269,35 @@ func rowChip(ev []EvidenceItem, pr PlanReviewState) (chip, reason string) {
 			} else {
 				review = ChipRemaining
 			}
-		case e.Kind != EvidenceKindReview && e.Status == EvidenceStatusEvidence:
+		}
+	}
+	// A report's evidence counts unless its own phase also marked the id
+	// not-implemented; a report row with no phase cannot be told apart from the
+	// deferring one, so it counts only when nothing deferred the id.
+	report := false
+	for _, e := range ev {
+		if e.Kind == EvidenceKindReview || e.Status != EvidenceStatusEvidence {
+			continue
+		}
+		if (e.PhaseID != nil && !deferredIn[*e.PhaseID]) || (e.PhaseID == nil && !notImpl) {
 			report = true
+			break
 		}
 	}
 	switch {
-	case review != "":
-		return review, ""
+	case review == ChipEvidence:
+		return ChipEvidence, ""
+	case review == ChipRemaining:
+		// The review found it missing: a declared deferral stays not-implemented
+		// (the review confirms the absence), never "remaining".
+		if notImpl {
+			return ChipNotImplemented, notImplReason
+		}
+		return ChipRemaining, ""
 	case report:
 		return ChipEvidence, ""
+	case notImpl:
+		return ChipNotImplemented, notImplReason
 	case pr.Status == PlanReviewNotVerified:
 		return ChipNotVerified, pr.Reason
 	}
@@ -320,11 +356,19 @@ func uniqueSorted(v []int) []int {
 // daemon's phase_reviews scope='plan' row or a doc's `round: plan` block
 // (review_blocks). INCONCLUSIVE is not-verified, with the daemon's reason class
 // (the detail's prefix before ':') or "incomplete"/"inconclusive" for a block.
+//
+// Of the daemon's rows the latest settled one wins — the one carrying the
+// branch-set key (run_session_uuid) — and a transient row (key "", e.g.
+// reviewer-not-started) counts only when no settled review exists. That is how
+// recordPlanReview treats them: a transient failure keeps the previous settled
+// review's evidence rows, so the verdict shown beside them must stay that
+// review's too, not flip a PASS to not-verified.
 func latestPlanReview(db Querier, taskID int64) (PlanReviewState, error) {
 	st := PlanReviewState{Status: PlanReviewNone}
 	var verdict, detail, at string
 	err := db.QueryRow(`SELECT verdict, COALESCE(detail, ''), COALESCE(finished_at, started_at, '') FROM phase_reviews
-		 WHERE scope = 'plan' AND workspace_task_id = ? ORDER BY id DESC LIMIT 1`,
+		 WHERE scope = 'plan' AND workspace_task_id = ?
+		 ORDER BY CASE WHEN COALESCE(run_session_uuid, '') <> '' THEN 0 ELSE 1 END, id DESC LIMIT 1`,
 		strconv.FormatInt(taskID, 10)).Scan(&verdict, &detail, &at)
 	switch {
 	case err == nil:

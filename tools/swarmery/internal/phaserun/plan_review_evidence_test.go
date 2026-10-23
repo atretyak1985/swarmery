@@ -4,6 +4,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/mdfence"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/verify"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/wsingest"
 )
 
@@ -115,5 +117,57 @@ func TestPlanReviewInconclusiveIsNotVerified(t *testing.T) {
 	}
 	if table.Counts.NotVerified != 2 || table.Counts.Evidence != 1 {
 		t.Errorf("counts = %+v", table.Counts)
+	}
+}
+
+// A transient plan review failure (no key: the reviewer never started) after a
+// settled PASS keeps the PASS on the table: recordPlanReview keeps that review's
+// evidence rows, and the verdict beside them must stay that review's too. With
+// no settled review at all the transient row is still shown, as not-verified.
+func TestPlanReviewTransientFailureKeepsSettledVerdict(t *testing.T) {
+	s, db, taskID, p1, p2, _, _, _, _ := planReviewFixture(t)
+	seedPlanIDs(t, s, taskID, p1, p2)
+	transient := reviewOutcome{verdict: string(verify.VerdictInconclusive),
+		detail: classReviewerNotStarted + ": could not acquire a review worktree"}
+
+	s.recordPlanReview(taskID, "", "2026-10-23T00:00:00Z", transient)
+	table, err := wsingest.LoadDecisionTable(db, taskID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if table.PlanReview.Status != wsingest.PlanReviewNotVerified || table.PlanReview.Reason != classReviewerNotStarted {
+		t.Errorf("only a transient review: plan review = %+v, want not-verified / %s", table.PlanReview, classReviewerNotStarted)
+	}
+
+	pass := reviewOutcome{verdict: string(verify.VerdictPass), block: &mdfence.Review{Round: mdfence.ReviewRoundPlan,
+		Verdict: mdfence.ReviewPass, IDs: []mdfence.IDEvidence{{ID: "D-2", Evidence: "phase 2 @ abc1234"}}}}
+	s.recordPlanReview(taskID, "branchset:one", "2026-10-23T00:01:00Z", pass)
+	s.recordPlanReview(taskID, "", "2026-10-23T00:02:00Z", transient)
+
+	table, err = wsingest.LoadDecisionTable(db, taskID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if table.PlanReview.Status != wsingest.PlanReviewPass {
+		t.Errorf("plan review = %+v, want the settled pass over the later transient failure", table.PlanReview)
+	}
+	for _, r := range table.Rows {
+		if r.ID == "D-2" && r.Chip != wsingest.ChipEvidence {
+			t.Errorf("D-2 = %+v, want the kept review evidence", r)
+		}
+		if r.Chip == wsingest.ChipNotVerified {
+			t.Errorf("%s = not-verified after a settled pass", r.ID)
+		}
+	}
+
+	// A later settled INCONCLUSIVE does replace the pass.
+	s.recordPlanReview(taskID, "branchset:two", "2026-10-23T00:03:00Z",
+		reviewOutcome{verdict: string(verify.VerdictInconclusive), detail: classReviewerNoVerdict + ": no VERDICT line"})
+	table, err = wsingest.LoadDecisionTable(db, taskID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if table.PlanReview.Status != wsingest.PlanReviewNotVerified || table.PlanReview.Reason != classReviewerNoVerdict {
+		t.Errorf("after a settled inconclusive: plan review = %+v", table.PlanReview)
 	}
 }

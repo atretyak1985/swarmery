@@ -27,8 +27,12 @@ func TestRenderDecisionTableTruncates(t *testing.T) {
 }
 
 func TestRowChipPrecedence(t *testing.T) {
+	phase := func(id int64) *int64 { return &id }
 	report := EvidenceItem{Kind: EvidenceKindReport, Status: EvidenceStatusEvidence}
 	notImpl := EvidenceItem{Kind: EvidenceKindReport, Status: EvidenceStatusNotImplemented, Reason: "out of scope"}
+	notImpl3 := EvidenceItem{Kind: EvidenceKindReport, Status: EvidenceStatusNotImplemented, Reason: "deferred to phase 6", PhaseID: phase(3)}
+	report3 := EvidenceItem{Kind: EvidenceKindReport, Status: EvidenceStatusEvidence, PhaseID: phase(3)}
+	report6 := EvidenceItem{Kind: EvidenceKindReport, Status: EvidenceStatusEvidence, PhaseID: phase(6)}
 	revOK := EvidenceItem{Kind: EvidenceKindReview, Status: EvidenceStatusEvidence}
 	revMissing := EvidenceItem{Kind: EvidenceKindReview, Status: EvidenceStatusMissing}
 	none := PlanReviewState{Status: PlanReviewNone}
@@ -42,7 +46,16 @@ func TestRowChipPrecedence(t *testing.T) {
 	}{
 		{"nothing", nil, none, ChipRemaining, ""},
 		{"report", []EvidenceItem{report}, none, ChipEvidence, ""},
-		{"not implemented wins", []EvidenceItem{report, revOK, notImpl}, none, ChipNotImplemented, "out of scope"},
+		{"not implemented alone", []EvidenceItem{notImpl}, none, ChipNotImplemented, "out of scope"},
+		{"not implemented, unverified", []EvidenceItem{notImpl}, nv, ChipNotImplemented, "out of scope"},
+		{"deferral overtaken by a later phase's report", []EvidenceItem{notImpl3, report6}, none, ChipEvidence, ""},
+		{"later phase's report, either order", []EvidenceItem{report6, notImpl3}, none, ChipEvidence, ""},
+		{"the deferring phase's own mention proves nothing", []EvidenceItem{notImpl3, report3}, none, ChipNotImplemented, "deferred to phase 6"},
+		{"phaseless report vs a deferral", []EvidenceItem{notImpl3, report}, none, ChipNotImplemented, "deferred to phase 6"},
+		{"review evidence beats a deferral", []EvidenceItem{notImpl3, revOK}, none, ChipEvidence, ""},
+		{"review missing confirms a deferral", []EvidenceItem{notImpl3, revMissing}, none, ChipNotImplemented, "deferred to phase 6"},
+		{"review missing confirms a deferral over a later report", []EvidenceItem{notImpl3, report6, revMissing}, none, ChipNotImplemented, "deferred to phase 6"},
+		{"review evidence beats missing on a deferral", []EvidenceItem{notImpl3, revMissing, revOK}, none, ChipEvidence, ""},
 		{"review missing beats a report claim", []EvidenceItem{report, revMissing}, none, ChipRemaining, ""},
 		{"review evidence", []EvidenceItem{revMissing, revOK}, none, ChipEvidence, ""},
 		{"inconclusive plan review", nil, nv, ChipNotVerified, "reviewer-timed-out"},
