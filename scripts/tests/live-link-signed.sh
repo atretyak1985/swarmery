@@ -173,8 +173,9 @@ rows=d if isinstance(d,list) else d.get("approvals", d.get("items", []))
 p=[r for r in rows if r.get("status")=="pending"]
 print(p[0]["id"] if p else "")' 2>/dev/null)"
   if [ -n "$id" ]; then
-    curl -s -o /dev/null --max-time 5 -H 'Content-Type: application/json' -d '{"action":"approve"}' \
-      "http://127.0.0.1:$PORT/api/approvals/$id" && approved="$id" && break
+    # A write without an Origin needs link auth: answer through the signed client.
+    HOME="$S" "$BIN" api POST "/api/approvals/$id" --port "$PORT" --data '{"action":"approve"}' >/dev/null &&
+      approved="$id" && break
   fi
   sleep 0.2
 done

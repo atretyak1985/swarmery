@@ -95,9 +95,25 @@ the service definition):
   port**. A page on `http://localhost:5173` (another dev server, an SSH
   port-forward) is as foreign as one on the internet; opt it in if it must
   drive the daemon (`make dev` does so for the vite dev server). The terminal
-  also refuses a request with no `Origin` at all. Elsewhere a request without
-  an `Origin` (the hook shim, `curl`, `swarmery console`, the notch companion)
-  passes: a non-browser client cannot be driven by a web page.
+  also refuses a request with no `Origin` at all.
+- **Non-browser clients authenticate.** A write or a `/api/ws` upgrade that
+  carries no `Origin` (the hook shim, `swarmery api`, `swarmery console`,
+  `swarmery triage run`, the notch companion) must be signed with the link
+  token in `~/.swarmery/link-token` (`Authorization: Swarmery-HMAC …`; the
+  token itself never goes on the wire, see `docs/mods-link-protocol.md`), or it
+  gets `401`. The legacy `Bearer <token>` form is still accepted during the
+  transition. Plain reads need no credential. Scripts write through
+  `swarmery api <METHOD> <path> [--data …]` instead of raw `curl`.
+- **Binding wider.** `serve --bind` with a non-loopback address refuses to
+  start until a link token exists (`swarmery link token` mints it): exposed,
+  the daemon must never fall back to trusting a missing `Origin`. Exposed (a
+  non-loopback `--bind`, or a connection that arrived on a non-loopback
+  address), an `Origin` header proves nothing either — any client can send
+  the daemon's own — so every write and the `/api/ws` live stream need link
+  auth even from a browser, and the terminal (`/api/term/ws`) is refused
+  outright. A dashboard opened over the network is therefore read-only, with
+  no live updates and no terminal; signed clients (`swarmery api`, the
+  console, the notch) keep working.
 - **Host.** Every route — reads included — refuses a `Host` header that does
   not name the daemon: a loopback name or address on the bound port, the
   listener's own address (`--bind 192.168.1.5` is reached as

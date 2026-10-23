@@ -33,7 +33,13 @@ public enum TerminalFocus {
             return .openDashboard(dashboardURL(base: dashboardBaseURL, sessionUuid: sessionUuid))
         }
         if let focusUrl = terminal.focusUrl, let url = URL(string: focusUrl) {
-            return .openURL(url)
+            if isAllowedFocusURL(url) {
+                return .openURL(url)
+            }
+            // Any other scheme would hand an unvalidated, daemon-reported
+            // string to NSWorkspace (file:, a custom app scheme, …): ignore it
+            // and fall through to the next strategy.
+            NSLog("swarmery-notch: ignoring focus URL with scheme %@", url.scheme ?? "(none)")
         }
         if let tty = terminal.tty, isValidTTY(tty) {
             switch terminal.program {
@@ -49,6 +55,16 @@ public enum TerminalFocus {
             return .activateApp(bundleID: bundleId)
         }
         return .openDashboard(dashboardURL(base: dashboardBaseURL, sessionUuid: sessionUuid))
+    }
+
+    /// `SessionTerminal.focusUrl` is an unvalidated string reported by the
+    /// daemon and goes straight to `NSWorkspace.open`. Only Warp's focus
+    /// links (`warp://…`) and plain `https` are opened.
+    static func isAllowedFocusURL(_ url: URL) -> Bool {
+        switch url.scheme?.lowercased() {
+        case "warp", "https": return true
+        default: return false
+        }
     }
 
     /// `SessionTerminal.tty` is an unvalidated string reported by the daemon

@@ -104,6 +104,9 @@ func (h *Handler) serenaProxy(w http.ResponseWriter, r *http.Request) {
 			pr.Out.URL.RawPath = ""
 			pr.Out.URL.RawQuery = r.URL.RawQuery
 			pr.Out.Host = target.Host
+			// The link credential an Origin-less client authenticated to
+			// the daemon with is the daemon's, never the upstream's.
+			pr.Out.Header.Del("Authorization")
 		},
 		ModifyResponse: func(res *http.Response) error {
 			res.Header.Set("Content-Security-Policy", serenaProxyCSP)

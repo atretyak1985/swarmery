@@ -78,32 +78,70 @@ func AttachLink(h *link.Holder, exclude ingest.ExcludeList) {
 //
 // Either way a failure is 401 {"error":"link token required"}. The token is
 // read through the holder's throttled reload, so a rotation needs no restart.
+//
+// A request the Origin-less gate (requireLocalOrigin) already authenticated is
+// not verified again — its nonce is spent — and its answer is still signed.
 func linkAuth(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		h := linkHolder
-		if h == nil {
-			writeJSONStatus(w, http.StatusServiceUnavailable, map[string]string{"error": "link disabled"})
+		r, auth, ok := authenticateLink(w, r)
+		if !ok {
 			return
 		}
-		if !linksig.IsSigned(r) {
-			noteLegacyBearer(r)
-			h.Require()(next)(w, r)
+		if !auth.signed {
+			next(w, r)
 			return
 		}
+		sw := &signingWriter{ResponseWriter: w}
+		next(sw, r)
+		sw.finish(auth.key, auth.nonce)
+	}
+}
+
+// linkAuthed is what authenticateLink proved about a request, carried in its
+// context so a second guard on the same route does not verify it twice.
+type linkAuthed struct {
+	signed bool
+	key    string // the key the request was signed with (signed only)
+	nonce  string // the request's nonce, the one its answer is signed over
+}
+
+type linkAuthedKey struct{}
+
+// authenticateLink checks r's link credential: a Swarmery-HMAC signature, or
+// the legacy bearer scheme. On success it returns r with the proof in its
+// context; on failure it has already answered — 503 {"error":"link disabled"}
+// with no holder attached, 413 for a signed body too large to hash, 401
+// {"error":"link token required"} otherwise.
+func authenticateLink(w http.ResponseWriter, r *http.Request) (*http.Request, linkAuthed, bool) {
+	if a, ok := r.Context().Value(linkAuthedKey{}).(linkAuthed); ok {
+		return r, a, true
+	}
+	h := linkHolder
+	if h == nil {
+		writeJSONStatus(w, http.StatusServiceUnavailable, map[string]string{"error": "link disabled"})
+		return r, linkAuthed{}, false
+	}
+	var a linkAuthed
+	if !linksig.IsSigned(r) {
+		noteLegacyBearer(r)
+		if !h.AcceptsBearer(r) {
+			link.WriteUnauthorized(w)
+			return r, linkAuthed{}, false
+		}
+	} else {
 		key := h.Current()
 		nonce, err := linkVerifier.VerifyRequest(r, key, time.Now())
 		switch {
 		case errors.Is(err, linksig.ErrBodyTooLarge):
 			writeClientErr(w, http.StatusRequestEntityTooLarge, "body exceeds 4 MiB")
-			return
+			return r, linkAuthed{}, false
 		case err != nil:
 			link.WriteUnauthorized(w)
-			return
+			return r, linkAuthed{}, false
 		}
-		sw := &signingWriter{ResponseWriter: w}
-		next(sw, r)
-		sw.finish(key, nonce)
+		a = linkAuthed{signed: true, key: key, nonce: nonce}
 	}
+	return r.WithContext(context.WithValue(r.Context(), linkAuthedKey{}, a)), a, true
 }
 
 // linkVerifier remembers the nonces of the signed requests this process
@@ -166,10 +204,10 @@ func (s *signingWriter) finish(key, nonce string) {
 // linkAuth: 503 {"error":"link disabled"} while no holder is attached, 401
 // {"error":"link token required"} on a missing or wrong token.
 //
-// Not behind it: answering an approval (POST /api/approvals/{id}), still
-// gated only by the Host/Origin fence (a known gap, tracked separately), and
-// the routine webhook (/api/hooks/routine/…), which carries its own
-// per-routine token.
+// Not behind it: answering an approval (POST /api/approvals/{id}), which is
+// behind requireLocalOrigin — the daemon's own browser Origin, or, with no
+// Origin, the same link credential (origin.go) — and the routine webhook
+// (/api/hooks/routine/…), which carries its own per-routine token.
 func hookAuth(next http.HandlerFunc) http.HandlerFunc {
 	return linkAuth(next)
 }
