@@ -1841,7 +1841,7 @@ export function getNeedsYou(project?: string | null): Promise<NeedsYouResponse> 
  */
 export async function applyWorktreeCleanup(id: number, paths: string[]): Promise<WorktreeCleanupApplyResult> {
   if (MOCK) return { id, repoRoot: '', paths: paths.map((path) => ({ path, outcome: 'removed' })) };
-  const res = await fetch(`/api/worktree-cleanup/${String(id)}/apply`, {
+  const res = await apiFetch(`/api/worktree-cleanup/${String(id)}/apply`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ paths }),
