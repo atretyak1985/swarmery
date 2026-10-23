@@ -1926,6 +1926,31 @@ export interface NeedsYouDecision {
   question: string;
   options: DecisionOption[];
   guard: GuardSummary;
+  /** An AGENT-declared stop (verify-not-trust phase 10): the run hit one of its
+   *  guard's stop triggers and wrote a `kind: stop` block instead of working
+   *  around it. `options` then holds the block's options plus `other` (free
+   *  text, answered with the note). Absent for a guard or review decision. */
+  stop?: StopBlock;
+}
+
+/** One option of a stop block (Go mdfence.StopOption). */
+export interface StopOptionDef {
+  id: string;
+  label: string;
+  consequence: string;
+}
+
+/** A run's `kind: stop` block (Go mdfence.Stop). */
+export interface StopBlock {
+  /** out-of-scope | protected-path | access-error | criterion-impossible — or an
+   *  unknown one, kept verbatim and linted `stop_trigger_unknown`. */
+  trigger: string;
+  reason: string;
+  options: StopOptionDef[];
+  /** A protected-path stop's files: an allow answer adds them to the guard. */
+  paths?: string[];
+  /** Contract slips: `stop_trigger_unknown`, `stop_options_count`. */
+  lints?: string[];
 }
 
 /** How a cleanup candidate's content is known to be in main (internal/wtcleanup). */
@@ -4184,6 +4209,11 @@ export interface DecisionHoldRef {
   seq: number;
   /** null for a decision born in the README rather than an interview. */
   planningSessionId: number | null;
+  /** The "decide now" link — the planning turn that asked it; '' for a
+   *  README-born decision. Absent from an older daemon. */
+  turnHref?: string;
+  /** The recorded answer; for a recommended decision, the planner's pick. */
+  answer?: string;
 }
 
 /** A phase's decision hold (Go `decisionHoldDTO`): non-null while a decision it
@@ -4208,6 +4238,9 @@ export interface EpicPhase {
   /** Optional on the type so fixtures predating migration 0122 stay valid; the
    *  daemon always sends it (null when nothing holds the phase). */
   decisionHold?: DecisionHold | null;
+  /** Declared decisions skipped as cheap and taken at the planner's recommended
+   *  option — never a hold; the card marks them «no answer». Absent when none. */
+  decisionsRecommended?: DecisionHoldRef[];
   /** Unticked `[LAND]` criteria (migration 0105): closed by landing — the daemon
    *  ticks them when the change request merges. Still inside checkboxesTotal. */
   landOpen: number;
@@ -4363,6 +4396,10 @@ export interface EpicPhase {
    *  did not settle on its own — repeat the review or accept it as is. null
    *  otherwise; absent from an older daemon. Answered inline on the Review tab. */
   reviewDecision?: NeedsYouDecision | null;
+  /** The phase's OPEN agent-declared stop (verify-not-trust phase 10): its last
+   *  run stopped on a guard trigger and asks — the card shows "waits on decision
+   *  D-n" and answers it inline. null otherwise; absent from an older daemon. */
+  stopDecision?: NeedsYouDecision | null;
   /** The phase's current stall — its active stage stopped working (Go
    *  phaseStallDTO, internal/stall). null when not stalled; absent from a daemon
    *  older than the stall detector — read it as `phase.stalled ?? null`.

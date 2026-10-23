@@ -3756,6 +3756,10 @@ msgstr "Stop"
 msgid "Stop {label} and mark done?"
 msgstr "Stop {label} and mark done?"
 
+#: src/lib/needsYou.ts
+msgid "Stop decision"
+msgstr "Stop decision"
+
 #: src/api.ts
 msgid "stop failed: {status}"
 msgstr "stop failed: {status}"

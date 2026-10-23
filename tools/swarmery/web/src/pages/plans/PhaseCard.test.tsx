@@ -136,8 +136,87 @@ describe('PhaseCard decision hold', () => {
     expect(note.textContent).toContain('waits on D-3');
     expect(note.textContent).toContain('Which store?');
     expect(note.textContent).toContain('waits on D-5');
-    const links = screen.getAllByRole('link', { name: 'open the question →' });
+    const links = screen.getAllByRole('link', { name: 'decide now →' });
     expect(links).toHaveLength(1);
     expect(links[0]?.getAttribute('href')).toBe('/plan?turn=3');
+  });
+});
+
+// verify-not-trust phase 10: an open agent stop is answered inline on the card,
+// and a decision skipped as cheap carries the «no answer» mark.
+describe('PhaseCard stop decision and recommended decisions', () => {
+  const stopDecision = {
+    taskId: 7,
+    phaseId: 12,
+    decisionId: 'D-6',
+    source: 'stop' as const,
+    question: 'the console refuses the stored login',
+    options: [
+      { id: 'relogin', label: 'Log in again' },
+      { id: 'skip', label: 'Skip the check' },
+      { id: 'other', label: 'Other (free text)' },
+    ],
+    guard: {},
+    stop: {
+      trigger: 'access-error',
+      reason: 'the console refuses the stored login',
+      options: [
+        { id: 'relogin', label: 'Log in again', consequence: 'the re-run does the check' },
+        { id: 'skip', label: 'Skip the check', consequence: 'the criterion stays open' },
+      ],
+    },
+  };
+
+  it('shows "waits on decision D-n" with the trigger, the reason and both options', () => {
+    render(<PhaseCard phase={phase({ stopDecision, runOutcome: 'partial', runState: 'blocked' })} />);
+    const box = screen.getByTestId('stop-decision');
+    expect(box.textContent).toContain('waits on decision D-6');
+    expect(box.textContent).toContain('stop: access or login error');
+    expect(box.textContent).toContain('the console refuses the stored login');
+    expect(screen.getByRole('button', { name: 'Log in again' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Skip the check' })).toBeTruthy();
+  });
+
+  it('renders no stop box for a guard decision or none', () => {
+    render(<PhaseCard phase={phase({ stopDecision: null })} />);
+    expect(screen.queryByTestId('stop-decision')).toBeNull();
+  });
+
+  it('flags an unknown trigger and an option count other than two', () => {
+    const odd = { ...stopDecision, stop: { ...stopDecision.stop, trigger: 'moon', options: [stopDecision.stop.options[0]!], lints: ['stop_trigger_unknown', 'stop_options_count'] } };
+    render(<PhaseCard phase={phase({ stopDecision: odd })} />);
+    const box = screen.getByTestId('stop-decision');
+    expect(box.textContent).toContain('stop: moon');
+    expect(box.textContent).toContain('unknown trigger');
+    expect(box.textContent).toContain('1 option(s), not 2');
+  });
+
+  it('marks a cheap skipped decision «no answer» with the recommended option', () => {
+    render(
+      <PhaseCard
+        phase={phase({
+          decisionsRecommended: [
+            { decisionId: 'D-2', question: 'TTL of an entry?', seq: 2, planningSessionId: 4, answer: '5 minutes' },
+          ],
+        })}
+      />,
+    );
+    const note = screen.getByTestId('decisions-recommended');
+    expect(note.textContent).toContain('D-2 · no answer');
+    expect(note.textContent).toContain('TTL of an entry? → 5 minutes');
+  });
+
+  it('links a held decision to the daemon\'s turnHref when the page passes no href', () => {
+    render(
+      <PhaseCard
+        phase={phase({
+          decisionHold: {
+            detail: 'decision-undecided: D-3 (Which store?) — decide now: /p/x/plans?turn=3',
+            decisions: [{ decisionId: 'D-3', question: 'Which store?', seq: 3, planningSessionId: 44, turnHref: '/p/x/plans?turn=3' }],
+          },
+        })}
+      />,
+    );
+    expect(screen.getByRole('link', { name: 'decide now →' }).getAttribute('href')).toBe('/p/x/plans?turn=3');
   });
 });

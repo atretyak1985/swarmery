@@ -1333,6 +1333,7 @@ msgstr "відкрити у Системі"
 
 #: src/pages/NeedsYou.tsx
 #: src/pages/NeedsYou.tsx
+#: src/pages/NeedsYou.tsx
 msgid "open phase →"
 msgstr "відкрити фазу →"
 

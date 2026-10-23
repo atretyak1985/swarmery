@@ -142,6 +142,10 @@ msgstr "{hours} год"
 msgid "{hours} h {minutes} min"
 msgstr "{hours} год {minutes} хв"
 
+#: src/pages/plans/PhaseCard.tsx
+msgid "{id} · no answer"
+msgstr "{id} · без відповіді"
+
 #: src/pages/Board.tsx
 msgid "{label} (no cards)"
 msgstr "{label} (без карток)"
@@ -161,6 +165,10 @@ msgstr "{m, plural, one {# хвилину} few {# хвилини} many {# хви
 #: src/pages/plans/forecastStoryModel.ts
 msgid "{n, plural, one {area} few {areas} many {areas} other {areas}}"
 msgstr "{n, plural, one {зону} few {зони} many {зон} other {зони}}"
+
+#: src/pages/plans/StopDecision.tsx
+msgid "{optionCount} option(s), not 2"
+msgstr "варіантів: {optionCount}, а не 2"
 
 #: src/pages/plans/ForecastStory.tsx
 msgid "{prior} vs {posterior}"
@@ -314,6 +322,10 @@ msgstr "цей план виконує запуск усього плану"
 msgid "acceptance criteria"
 msgstr "критерії приймання"
 
+#: src/pages/plans/StopDecision.tsx
+msgid "access or login error"
+msgstr "помилка доступу або входу"
+
 #: src/pages/Plans.tsx
 msgid "activated"
 msgstr "активовано"
@@ -369,6 +381,14 @@ msgstr "дуже мала"
 #: src/pages/plans/forecastStoryModel.ts
 msgid "an unmeasured time"
 msgstr "невиміряний час"
+
+#: src/pages/plans/StopDecision.tsx
+msgid "Answer"
+msgstr "Відповісти"
+
+#: src/pages/plans/StopDecision.tsx
+msgid "answer {id}"
+msgstr "відповідь на {id}"
 
 #: src/pages/PlanningMode.tsx
 msgid "answer the planner"
@@ -673,6 +693,10 @@ msgstr "критерії…"
 msgid "criterion"
 msgstr "критерій"
 
+#: src/pages/plans/StopDecision.tsx
+msgid "criterion impossible"
+msgstr "критерій неможливий"
+
 #: src/pages/Routines.tsx
 msgid "Cron (5-field, blank = manual/webhook only)"
 msgstr "Cron (5 полів, порожньо = лише вручну/вебхук)"
@@ -684,6 +708,10 @@ msgstr "рев’ю демона"
 #: src/pages/Routines.tsx
 msgid "daily at {time}"
 msgstr "щодня о {time}"
+
+#: src/pages/plans/PhaseCard.tsx
+msgid "decide now →"
+msgstr "вирішити зараз →"
 
 #: src/pages/Plans.tsx
 msgid "decided {decided}"
@@ -1582,10 +1610,6 @@ msgstr "відкрити Плани →"
 msgid "open session →"
 msgstr "відкрити сесію →"
 
-#: src/pages/plans/PhaseCard.tsx
-msgid "open the question →"
-msgstr "відкрити питання →"
-
 #: src/pages/plans/LandCriterionAction.tsx
 #: src/pages/plans/PhaseReview.tsx
 msgid "Opening…"
@@ -1606,6 +1630,14 @@ msgstr "opus 5.5"
 #: src/pages/PlanningMode.tsx
 msgid "opus 5.5 — default"
 msgstr "opus 5.5 — типово"
+
+#: src/pages/plans/StopDecision.tsx
+msgid "or answer in your own words — recorded as “other” in the phase doc"
+msgstr "або відповідайте своїми словами — запишеться як «other» у документі фази"
+
+#: src/pages/plans/StopDecision.tsx
+msgid "out of scope"
+msgstr "поза межами фази"
 
 #: src/pages/plans/ForecastVsActual.tsx
 #: src/pages/plans/ForecastVsActual.tsx
@@ -1863,6 +1895,10 @@ msgstr "запропоновані зміни"
 #: src/pages/planning/QuestionCard.tsx
 msgid "Pros / Cons"
 msgstr "Плюси / мінуси"
+
+#: src/pages/plans/StopDecision.tsx
+msgid "protected path"
+msgstr "захищений шлях"
 
 #: src/pages/plans/PhaseReview.tsx
 msgid "Push"
@@ -2480,6 +2516,10 @@ msgstr "назва кроку"
 msgid "Steps"
 msgstr "Кроки"
 
+#: src/pages/plans/StopDecision.tsx
+msgid "stop: {trigger}"
+msgstr "зупинка: {trigger}"
+
 #: src/pages/plans/PhasePanel.tsx
 msgid "Story"
 msgstr "Розповідь"
@@ -2540,6 +2580,10 @@ msgstr "Власні слова агента там, де він щось обі
 #: src/pages/plans/ForecastVsActual.tsx
 msgid "the Completion Report carries no “Where reality diverged” paragraph"
 msgstr "у Completion Report немає абзацу «Where reality diverged»"
+
+#: src/pages/plans/StopDecision.tsx
+msgid "the contract asks for exactly two options"
+msgstr "контракт вимагає рівно два варіанти"
 
 #: src/pages/Plans.tsx
 msgid "the controller implements the phases itself, no dispatch"
@@ -2690,6 +2734,10 @@ msgstr "запуск ще триває"
 msgid "the run is still live — land it once it finishes"
 msgstr "запуск ще триває — здайте, коли він завершиться"
 
+#: src/pages/plans/StopDecision.tsx
+msgid "the run named a trigger outside the closed list"
+msgstr "запуск назвав тригер поза закритим списком"
+
 #: src/pages/Plans.tsx
 msgid "the run ticked every acceptance criterion"
 msgstr "запуск відмітив усі критерії приймання"
@@ -2810,6 +2858,10 @@ msgstr "несподівані"
 msgid "unknown project — pick one from the switcher"
 msgstr "невідомий проєкт — оберіть у перемикачі"
 
+#: src/pages/plans/StopDecision.tsx
+msgid "unknown trigger"
+msgstr "невідомий тригер"
+
 #: src/pages/plans/ReviewFindings.tsx
 msgid "unparsable"
 msgstr "нечитабельне"
@@ -2855,6 +2907,10 @@ msgstr "чекає на фазу {waitingOn}"
 #: src/pages/plans/PhaseCard.tsx
 msgid "waits on {id}"
 msgstr "чекає на {id}"
+
+#: src/pages/plans/StopDecision.tsx
+msgid "waits on decision {id}"
+msgstr "чекає на рішення {id}"
 
 #: src/pages/Routines.tsx
 msgid "webhook"

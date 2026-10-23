@@ -3756,6 +3756,10 @@ msgstr "Зупинити"
 msgid "Stop {label} and mark done?"
 msgstr "Зупинити {label} і позначити готовим?"
 
+#: src/lib/needsYou.ts
+msgid "Stop decision"
+msgstr "Рішення про зупинку"
+
 #: src/api.ts
 msgid "stop failed: {status}"
 msgstr "зупинка не вдалася: {status}"

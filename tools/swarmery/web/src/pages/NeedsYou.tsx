@@ -56,7 +56,7 @@ import { ProjectName } from '../components/ProjectName';
 import { Empty, ErrorBox, Loading } from '../components/ui';
 import type { AnswerMap } from '../lib/approvals';
 import { fmtSpan } from '../lib/format';
-import { kindLabel, replyPrefix, replyWithOption } from '../lib/needsYou';
+import { itemLabel, replyPrefix, replyWithOption } from '../lib/needsYou';
 import { findProject } from '../lib/projectSlug';
 import { safeHref } from '../lib/safeHref';
 import { useScope } from '../lib/scope';
@@ -64,6 +64,7 @@ import { useSessionHref } from '../lib/sessionHref';
 import { useNowMs } from '../lib/sessionState';
 import { useNeedsYou } from '../lib/useNeedsYou';
 import { GuardBadge } from './plans/GuardBadge';
+import { StopDecision } from './plans/StopDecision';
 import { plansPath } from './plans/plansUrl';
 
 /** Kind badge tones — the label always carries the meaning, colour only echoes it. */
@@ -282,7 +283,8 @@ function StalledOn({ item }: { item: NeedsYouItem }): JSX.Element | null {
   );
 }
 
-/** A guard decision: what the run touched, the options as buttons, a note. */
+/** A guard decision: what the run touched, the options as buttons, a note — or
+ *  an agent stop: its trigger, reason, two options and a free-text answer. */
 export function PhaseDecision({
   item,
   reviewTo,
@@ -307,6 +309,21 @@ export function PhaseDecision({
       .finally(() => setBusy(false));
   };
   const decisionId = decision.decisionId;
+  // An agent-declared stop (verify-not-trust phase 10) brings its own options.
+  if (decision.stop !== undefined) {
+    return (
+      <>
+        <StopDecision decision={decision} onAnswered={onAnswered} />
+        {reviewTo !== null && (
+          <div className="mt-2 flex">
+            <Link to={reviewTo} className={`ml-auto ${LINK}`}>
+              <Trans>open phase →</Trans>
+            </Link>
+          </div>
+        )}
+      </>
+    );
+  }
   return (
     <>
       <div className="mt-2 flex flex-wrap items-center gap-2">
@@ -668,14 +685,14 @@ function Row({
     <li
       data-testid="needs-you-row"
       data-kind={item.kind}
-      aria-label={`${kindLabel(item.kind)}: ${item.sessionName}`}
+      aria-label={`${itemLabel(item)}: ${item.sessionName}`}
       className="rounded-[14px] border border-line bg-surface px-4 py-3.5"
     >
       <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
         <span
           className={`rounded-full border px-[9px] py-0.5 font-mono text-[10.5px] font-semibold whitespace-nowrap ${KIND_BADGE[item.kind]}`}
         >
-          {kindLabel(item.kind)}
+          {itemLabel(item)}
         </span>
         <Link to={titleTo} className={`min-w-0 truncate text-[13.5px] font-medium text-ink hover:text-brand ${FOCUS}`}>
           {item.sessionName}

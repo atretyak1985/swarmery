@@ -41,6 +41,15 @@ export function kindLabel(k: NeedsYouKind): string {
   return i18n._(KIND_LABELS[k]);
 }
 
+const STOP_DECISION_LABEL = msg`Stop decision`;
+
+/** One row's label: its kind's, except a phase_decision that is an agent-declared
+ *  stop (verify-not-trust phase 10) — the run asked, not the guard check. */
+export function itemLabel(item: Pick<NeedsYouItem, 'kind' | 'decision'>): string {
+  if (item.kind === 'phase_decision' && item.decision?.stop !== undefined) return i18n._(STOP_DECISION_LABEL);
+  return kindLabel(item.kind);
+}
+
 /**
  * Identity of one blocking episode. A dismissed item comes back when the same
  * session blocks again: a new episode carries a new `blockingSince`. A

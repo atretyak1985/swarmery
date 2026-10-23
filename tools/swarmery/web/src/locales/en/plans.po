@@ -142,6 +142,10 @@ msgstr "{hours} h"
 msgid "{hours} h {minutes} min"
 msgstr "{hours} h {minutes} min"
 
+#: src/pages/plans/PhaseCard.tsx
+msgid "{id} · no answer"
+msgstr "{id} · no answer"
+
 #: src/pages/Board.tsx
 msgid "{label} (no cards)"
 msgstr "{label} (no cards)"
@@ -161,6 +165,10 @@ msgstr "{m, plural, one {# minute} few {# minutes} many {# minutes} other {# min
 #: src/pages/plans/forecastStoryModel.ts
 msgid "{n, plural, one {area} few {areas} many {areas} other {areas}}"
 msgstr "{n, plural, one {area} few {areas} many {areas} other {areas}}"
+
+#: src/pages/plans/StopDecision.tsx
+msgid "{optionCount} option(s), not 2"
+msgstr "{optionCount} option(s), not 2"
 
 #: src/pages/plans/ForecastStory.tsx
 msgid "{prior} vs {posterior}"
@@ -314,6 +322,10 @@ msgstr "a whole-plan run is executing this plan"
 msgid "acceptance criteria"
 msgstr "acceptance criteria"
 
+#: src/pages/plans/StopDecision.tsx
+msgid "access or login error"
+msgstr "access or login error"
+
 #: src/pages/Plans.tsx
 msgid "activated"
 msgstr "activated"
@@ -369,6 +381,14 @@ msgstr "an extra-small"
 #: src/pages/plans/forecastStoryModel.ts
 msgid "an unmeasured time"
 msgstr "an unmeasured time"
+
+#: src/pages/plans/StopDecision.tsx
+msgid "Answer"
+msgstr "Answer"
+
+#: src/pages/plans/StopDecision.tsx
+msgid "answer {id}"
+msgstr "answer {id}"
 
 #: src/pages/PlanningMode.tsx
 msgid "answer the planner"
@@ -673,6 +693,10 @@ msgstr "criteria…"
 msgid "criterion"
 msgstr "criterion"
 
+#: src/pages/plans/StopDecision.tsx
+msgid "criterion impossible"
+msgstr "criterion impossible"
+
 #: src/pages/Routines.tsx
 msgid "Cron (5-field, blank = manual/webhook only)"
 msgstr "Cron (5-field, blank = manual/webhook only)"
@@ -684,6 +708,10 @@ msgstr "daemon review"
 #: src/pages/Routines.tsx
 msgid "daily at {time}"
 msgstr "daily at {time}"
+
+#: src/pages/plans/PhaseCard.tsx
+msgid "decide now →"
+msgstr "decide now →"
 
 #: src/pages/Plans.tsx
 msgid "decided {decided}"
@@ -1582,10 +1610,6 @@ msgstr "open Plans →"
 msgid "open session →"
 msgstr "open session →"
 
-#: src/pages/plans/PhaseCard.tsx
-msgid "open the question →"
-msgstr "open the question →"
-
 #: src/pages/plans/LandCriterionAction.tsx
 #: src/pages/plans/PhaseReview.tsx
 msgid "Opening…"
@@ -1606,6 +1630,14 @@ msgstr "opus 5.5"
 #: src/pages/PlanningMode.tsx
 msgid "opus 5.5 — default"
 msgstr "opus 5.5 — default"
+
+#: src/pages/plans/StopDecision.tsx
+msgid "or answer in your own words — recorded as “other” in the phase doc"
+msgstr "or answer in your own words — recorded as “other” in the phase doc"
+
+#: src/pages/plans/StopDecision.tsx
+msgid "out of scope"
+msgstr "out of scope"
 
 #: src/pages/plans/ForecastVsActual.tsx
 #: src/pages/plans/ForecastVsActual.tsx
@@ -1863,6 +1895,10 @@ msgstr "proposed changes"
 #: src/pages/planning/QuestionCard.tsx
 msgid "Pros / Cons"
 msgstr "Pros / Cons"
+
+#: src/pages/plans/StopDecision.tsx
+msgid "protected path"
+msgstr "protected path"
 
 #: src/pages/plans/PhaseReview.tsx
 msgid "Push"
@@ -2480,6 +2516,10 @@ msgstr "step name"
 msgid "Steps"
 msgstr "Steps"
 
+#: src/pages/plans/StopDecision.tsx
+msgid "stop: {trigger}"
+msgstr "stop: {trigger}"
+
 #: src/pages/plans/PhasePanel.tsx
 msgid "Story"
 msgstr "Story"
@@ -2540,6 +2580,10 @@ msgstr "The agent's own words where it went around something. Read these first; 
 #: src/pages/plans/ForecastVsActual.tsx
 msgid "the Completion Report carries no “Where reality diverged” paragraph"
 msgstr "the Completion Report carries no “Where reality diverged” paragraph"
+
+#: src/pages/plans/StopDecision.tsx
+msgid "the contract asks for exactly two options"
+msgstr "the contract asks for exactly two options"
 
 #: src/pages/Plans.tsx
 msgid "the controller implements the phases itself, no dispatch"
@@ -2690,6 +2734,10 @@ msgstr "the run is still live"
 msgid "the run is still live — land it once it finishes"
 msgstr "the run is still live — land it once it finishes"
 
+#: src/pages/plans/StopDecision.tsx
+msgid "the run named a trigger outside the closed list"
+msgstr "the run named a trigger outside the closed list"
+
 #: src/pages/Plans.tsx
 msgid "the run ticked every acceptance criterion"
 msgstr "the run ticked every acceptance criterion"
@@ -2810,6 +2858,10 @@ msgstr "unexpected"
 msgid "unknown project — pick one from the switcher"
 msgstr "unknown project — pick one from the switcher"
 
+#: src/pages/plans/StopDecision.tsx
+msgid "unknown trigger"
+msgstr "unknown trigger"
+
 #: src/pages/plans/ReviewFindings.tsx
 msgid "unparsable"
 msgstr "unparsable"
@@ -2855,6 +2907,10 @@ msgstr "waiting on phase {waitingOn}"
 #: src/pages/plans/PhaseCard.tsx
 msgid "waits on {id}"
 msgstr "waits on {id}"
+
+#: src/pages/plans/StopDecision.tsx
+msgid "waits on decision {id}"
+msgstr "waits on decision {id}"
 
 #: src/pages/Routines.tsx
 msgid "webhook"

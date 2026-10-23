@@ -27,6 +27,9 @@ import { ForecastVsActual, OFF_PLAN_LABEL } from './ForecastVsActual';
 import { GuardBadge } from './GuardBadge';
 import { landingChip, type LandingChip as LandingChipModel } from './landingModel';
 import { StalledBadge } from './StalledBadge';
+import { StopDecision } from './StopDecision';
+
+const noop = (): void => {};
 
 // OffPlanChip lives here so the story and the card share one band→tone mapping
 // (ForecastStory.tsx imports it from this file).
@@ -77,6 +80,9 @@ export interface PhaseCardProps {
   /** Where a "waits on D-n" hold links: the planning session turn that asked the
    *  decision. null (or absent) renders the hold without a link. */
   decisionHref?: (ref: DecisionHoldRef) => string | null;
+  /** Called once an inline decision (an agent stop) was answered — the page
+   *  refetches; the daemon also publishes a plan update. */
+  onDecisionAnswered?: () => void;
 }
 
 /** "waits on D-3 — <question>": the phase's decision hold, inline. The run gate
@@ -95,7 +101,8 @@ export function DecisionHoldNote({
     >
       {hold.decisions.map((d) => {
         const id = d.decisionId;
-        const href = hrefFor?.(d) ?? null;
+        // The page's own link first; else the daemon's (Go decisionHoldRefDTO.turnHref).
+        const href = hrefFor?.(d) ?? (d.turnHref !== undefined && d.turnHref !== '' ? d.turnHref : null);
         return (
           <div key={id} className="flex flex-wrap items-baseline gap-x-1.5">
             <span className="font-medium text-amber">
@@ -104,9 +111,34 @@ export function DecisionHoldNote({
             <span className="text-ink-3">— {d.question}</span>
             {href !== null && (
               <a href={href} className="font-mono text-[11px] text-ink-dim transition-colors hover:text-brand">
-                <Trans>open the question →</Trans>
+                <Trans>decide now →</Trans>
               </a>
             )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+/** «no answer»: the declared decisions skipped as cheap and taken at the
+ *  planner's recommended option. They never hold the phase — the run builds on
+ *  the recommendation — but the operator should see it was nobody's answer. */
+export function DecisionsRecommendedNote({ refs }: { refs: DecisionHoldRef[] }): JSX.Element {
+  return (
+    <div data-testid="decisions-recommended" className="mt-2 flex flex-col gap-0.5 text-[12px]">
+      {refs.map((d) => {
+        const id = d.decisionId;
+        const answer = d.answer ?? '';
+        return (
+          <div key={id} className="flex flex-wrap items-baseline gap-x-1.5">
+            <span className="rounded border border-line-strong px-1.5 py-px font-mono text-[10px] text-ink-3">
+              <Trans>{id} · no answer</Trans>
+            </span>
+            <span className="text-ink-3">
+              {d.question}
+              {answer !== '' && <> → {answer}</>}
+            </span>
           </div>
         );
       })}
@@ -211,6 +243,7 @@ export function PhaseCard({
   report,
   terms = null,
   decisionHref,
+  onDecisionAnswered,
 }: PhaseCardProps): JSX.Element {
   const { i18n, t } = useLingui();
   const story = forecastStory(phase);
@@ -269,6 +302,12 @@ export function PhaseCard({
 
       {phase.decisionHold != null && phase.decisionHold.decisions.length > 0 && (
         <DecisionHoldNote hold={phase.decisionHold} hrefFor={decisionHref} />
+      )}
+      {phase.stopDecision?.stop !== undefined && phase.stopDecision !== null && (
+        <StopDecision decision={phase.stopDecision} onAnswered={onDecisionAnswered ?? noop} compact />
+      )}
+      {phase.decisionsRecommended !== undefined && phase.decisionsRecommended.length > 0 && (
+        <DecisionsRecommendedNote refs={phase.decisionsRecommended} />
       )}
 
       <GuardBadge guard={phaseGuard(phase)} className="mt-2" />
