@@ -20,6 +20,7 @@
 //	swarmery link token            print / rotate the swarmery link token
 //	swarmery ghinbox sync          prReview repos' new issues/PRs/comments → triage cards
 //	swarmery api <METHOD> <path>   one signed request to the daemon's HTTP API
+//	swarmery open                  open the dashboard unlocked (one-use ticket)
 package main
 
 import (
@@ -226,6 +227,8 @@ func main() {
 		// Exit code is the contract (api_cli.go): scripts tell a refused
 		// request (1) from a usage or transport error (2).
 		os.Exit(cmdAPI(os.Args[2:], os.Stdin, os.Stdout, os.Stderr))
+	case "open":
+		os.Exit(cmdOpen(os.Args[2:], os.Stdout, os.Stderr))
 	case "-h", "--help", "help":
 		usage()
 	default:
@@ -362,6 +365,12 @@ func usage() {
                                    way scripts write to the daemon: a write without an Origin
                                    needs link auth. Body to stdout; exit 0 on 2xx, 1 on another
                                    status, 2 on a usage or transport error
+  swarmery open [--print] [--session <uuid>] [--port <n>] [--key-file <path>]
+                                   open the dashboard (or a session's page) unlocked: the
+                                   dashboard's writes need a session token, which the browser
+                                   gets by redeeming a ticket signed with the link token. The
+                                   ticket rides in the URL fragment and works once, within 2
+                                   minutes; --print prints the URL instead of opening it
   swarmery hook <permission-request|stop>          Claude Code hook shim (reads stdin)
   swarmery hooks <install|uninstall|status> [--project <path>] [--all] [--port <n>]
   swarmery agents sync [--project <name|dir>] [--check] [--claude-dir <dir>] [--marketplace <name>]
@@ -1754,7 +1763,7 @@ func attachLink(exclude ingest.ExcludeList) {
 	}
 	path := link.TokenPath(home)
 	api.AttachLink(link.NewHolder(path, tok), exclude)
-	log.Printf("swarmery link token at %s (non-browser clients sign their requests with it: /api/link/*, /api/hooks/*, and every write without an Origin)", path)
+	log.Printf("swarmery link token at %s (non-browser clients sign their requests with it: /api/link/*, /api/hooks/*, and every write without an Origin; the dashboard unlocks with `swarmery open`)", path)
 }
 
 // checkBindAuth refuses a --bind beyond loopback while no link token exists.
