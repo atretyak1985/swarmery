@@ -1095,7 +1095,7 @@ func (s *Scanner) scanEpics(taskID int64, dir string, warn func(string, ...any))
 		warn("epics task#%d (%s): decisions: %v", taskID, planDir, err)
 		return
 	}
-	if err := applyEvidence(tx, taskID, phases); err != nil {
+	if err := applyEvidence(tx, taskID, phases, readmePresent); err != nil {
 		tx.Rollback()
 		warn("epics task#%d (%s): decision evidence: %v", taskID, planDir, err)
 		return

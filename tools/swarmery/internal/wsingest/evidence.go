@@ -144,7 +144,11 @@ func ScanEvidence(report string) []EvidenceMention {
 // ids a report no longer cites, and drop the report rows of docs that left the
 // plan. A doc that did not resolve this scan keeps its rows ("could not read" is
 // not "cites nothing"). created_at keeps its first value.
-func applyEvidence(tx *sql.Tx, taskID int64, phases []epicPhase) error {
+//
+// readmePresent gates the sweep exactly as it gates applyEpics' prune: a plan dir
+// caught mid-`git checkout` or mid-archive-move lists no phases, and that instant
+// must not read as "every phase left the plan".
+func applyEvidence(tx *sql.Tx, taskID int64, phases []epicPhase, readmePresent bool) error {
 	now := time.Now().UTC().Format(time.RFC3339)
 	inPlan := map[string]bool{}
 	for _, p := range phases {
@@ -180,6 +184,9 @@ func applyEvidence(tx *sql.Tx, taskID int64, phases []epicPhase) error {
 		if err := deleteEvidenceExcept(tx, taskID, EvidenceKindReport, p.docPath, keep); err != nil {
 			return err
 		}
+	}
+	if !readmePresent {
+		return nil
 	}
 	if err := sweepEvidence(tx, taskID, EvidenceKindReview, inPlan); err != nil {
 		return err

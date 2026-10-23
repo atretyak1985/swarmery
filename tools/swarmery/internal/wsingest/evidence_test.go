@@ -84,7 +84,7 @@ func scanEvidencePlan(t *testing.T, db *sql.DB, planDir string) {
 		tx.Rollback()
 		t.Fatalf("applyEpics: %v", err)
 	}
-	if err := applyEvidence(tx, carryTaskID, phases); err != nil {
+	if err := applyEvidence(tx, carryTaskID, phases, true); err != nil {
 		tx.Rollback()
 		t.Fatalf("applyEvidence: %v", err)
 	}
@@ -339,4 +339,29 @@ func mustTable(t *testing.T, db *sql.DB) DecisionTable {
 		t.Fatal(err)
 	}
 	return tb
+}
+
+// A plan dir caught mid-checkout (no README, no phases) sweeps nothing.
+func TestApplyEvidenceKeepsRowsWithoutReadme(t *testing.T) {
+	db := carryFixture(t)
+	planDir := writePlan(t, map[string]string{
+		"README.md":  evidenceReadme,
+		"phase-1.md": evidenceFixture(t, "report-cites.md"),
+		"phase-2.md": evidenceFixture(t, "plan-review.md"),
+	})
+	scanEvidencePlan(t, db, planDir)
+	before := len(readEvidence(t, db))
+	tx, err := db.Begin()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := applyEvidence(tx, carryTaskID, nil, false); err != nil {
+		t.Fatal(err)
+	}
+	if err := tx.Commit(); err != nil {
+		t.Fatal(err)
+	}
+	if after := len(readEvidence(t, db)); after != before || before == 0 {
+		t.Errorf("rows %d → %d across a README-less scan, want unchanged", before, after)
+	}
 }
