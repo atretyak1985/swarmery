@@ -67,6 +67,35 @@ func TestPhasePRBodyGolden(t *testing.T) {
 	if !strings.HasSuffix(got, "Swarm-Phase: 41/207\nPlan: "+phasePRPlanRel+"\n") {
 		t.Errorf("body must end with the Swarm-Phase / Plan trailer, got tail %q", got[max(0, len(got)-120):])
 	}
+	// The fixture covers SC-3 (cited in its report) and SC-4 (not cited).
+	if !strings.Contains(got, "\n\n## Remaining\n\n- SC-4\n\n## Decisions honoured\n\n- SC-3\n\n---\n") {
+		t.Errorf("body lacks Remaining SC-4 / Decisions honoured SC-3:\n%s", got)
+	}
+}
+
+// TestPhasePRBodyIDSections: decision deps count as claims; a `not implemented:`
+// id is listed with its why and is never remaining; a doc that neither claims
+// nor cites an id gets no id sections at all.
+func TestPhasePRBodyIDSections(t *testing.T) {
+	doc := "# Phase 3 — Totals\n**Covers:** SC-1\n**Depends on decisions:** D-2, D-5\n\n## Goal\nTotals.\n\n" +
+		"## Acceptance Criteria\n- [x] totals\n\n## Completion Report\nDone per D-2.\nnot implemented: D-5 — moved to the pricing plan\n"
+	got := phasePRBody(doc, 1, 2, "p.md")
+	want := "\n\n## Remaining\n\n- SC-1\n\n## Decisions honoured\n\n- D-2\n\n## Not implemented\n\n- D-5 — moved to the pricing plan\n\n---\n"
+	if !strings.Contains(got, want) {
+		t.Errorf("id sections:\n--- got ---\n%s\n--- want (contained) ---\n%s", got, want)
+	}
+
+	all := "# Phase 1\n**Covers:** SC-1\n\n## Completion Report\nSC-1 shipped.\n"
+	if got := phasePRBody(all, 1, 2, "p.md"); !strings.Contains(got, "## Remaining\n\n"+phasePRNoRemain+"\n") {
+		t.Errorf("fully cited phase:\n%s", got)
+	}
+	claimOnly := "# Phase 1\n**Covers:** SC-1\n\n## Completion Report\n"
+	if got := phasePRBody(claimOnly, 1, 2, "p.md"); !strings.Contains(got, "## Decisions honoured\n\n"+phasePRNoHonoured+"\n") {
+		t.Errorf("unwritten report:\n%s", got)
+	}
+	if got := phasePRBody("# P\n\n## Completion Report\nShipped it.\n", 1, 2, "p.md"); strings.Contains(got, "## Remaining") {
+		t.Errorf("a doc without ids grew id sections:\n%s", got)
+	}
 }
 
 func TestPhasePRBodyPlaceholders(t *testing.T) {
