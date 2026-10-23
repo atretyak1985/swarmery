@@ -166,8 +166,12 @@ against guard-pack's production-deploy list (vendored in `hooks/lib/prod.ts`, pi
 with the "confirm it here" notice and sends nothing. The daemon's own `local` answer
 for project patterns still applies.
 
-**Transition.** The bearer form is still accepted, and the daemon logs the first one a
-process sees. Origin-less non-link clients move later.
+**Transition.** The bearer form is accepted on a loopback listener only: each answer
+carries `Deprecation: true`, the daemon logs the first one a process sees, and the form
+is removed in swarmery-v0.3.0. On an exposed listener (a non-loopback `--bind`, or a
+connection that arrived on a non-loopback address) it is refused with `401`, and every
+request except `GET /api/health` and the SPA's static files must be signed.
+Origin-less non-link clients move later.
 
 ## Events: POST /api/link/events
 
