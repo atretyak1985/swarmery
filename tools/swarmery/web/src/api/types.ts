@@ -1937,10 +1937,13 @@ export interface NeedsYouDecision {
   /** The stop block's one-sentence reason. */
   reason?: string;
   /** The stop block's lints: stop_trigger_unknown, stop_options_count,
-   *  stop_reason_missing, stop_option_invalid, stop_paths_rejected. */
+   *  stop_reason_missing, stop_option_invalid, stop_paths_rejected. A guard
+   *  decision carries stop_paths_rejected alone when vetting dropped a path. */
   flags?: string[];
-  /** A protected-path stop's vetted, repo-relative files: what answering
-   *  allow-add-to-scope adds to the guard's `allow:` list. */
+  /** Exactly the files answering allow-add-to-scope adds to the guard's
+   *  `allow:` list: literal repo-relative files under a protected glob, vetted
+   *  by the daemon whatever named them (the run's changed file names, guard.log,
+   *  a protected-path stop's `paths:`). Never a glob or a directory. */
   paths?: string[];
   /** The operator may answer in their own words: POST {option: "other", note}. */
   freeText?: boolean;

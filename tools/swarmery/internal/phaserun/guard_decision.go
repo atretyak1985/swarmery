@@ -48,10 +48,10 @@ func guardQuestion(r GuardResult) string {
 	case len(paths) > 0:
 		list = strings.Join(paths, ", ")
 		if n := raw - len(paths); n > 0 {
-			list += " (and " + plural(n, "path") + " that cannot be allowed — not a literal file path; see the Review tab)"
+			list += " (and " + plural(n, "path") + " that cannot be allowed — not a literal file under a protected glob; see the Review tab)"
 		}
 	case raw > 0:
-		list = "(" + plural(raw, "path") + ", none of which can be allowed — not a literal file path; see the Review tab)"
+		list = "(" + plural(raw, "path") + ", none of which can be allowed — not a literal file under a protected glob; see the Review tab)"
 	default:
 		list = "(the guard refused " + plural(r.GuardBlocksTotal, "attempt") + "; see guard.log)"
 	}
