@@ -59,8 +59,11 @@
 //     of the daemon's credentials. An executor is trusted as the user it runs
 //     as — it can write and run anything that user can. The deny list guards
 //     the commands a model writes, so a plan's prompt cannot talk it into a
-//     push or a daemon call; it is not a boundary against a process that means
-//     to get around it (a script, `sh -c`, a client it does not name).
+//     push or a daemon call. It is a speed bump, not a boundary: a Python or
+//     Node one-liner, `sh -c '…'`, a quoted word (`git 'push'`), a variable or
+//     a client the list does not name all get past it, and reads by a script
+//     the model runs never meet the Read rules. Those bypasses are known and
+//     deliberately not chased.
 //   - SiteReadOnly — the verifier when its task declares Verify commands, and
 //     the phase and plan reviewers: dontAsk plus an explicit --allowedTools.
 //   - SitePlanner — planning, and the resume of a planning session: dontAsk plus

@@ -99,7 +99,10 @@ func TestDaemonDenyRules(t *testing.T) {
 		"Bash(*/wget *127.0.0.1:7777*)", "Bash(*/wget *localhost:7777*)", "Bash(*/wget *[::1]:7777*)",
 		"Bash(*/http *127.0.0.1:7777*)", "Bash(*/http *localhost:7777*)", "Bash(*/http *[::1]:7777*)",
 		"Bash(swarmery api*)", "Bash(*/swarmery api*)", "Bash(command swarmery*)",
+		"Bash(swarmery link*)", "Bash(*/swarmery link*)",
 		"Read(~/.swarmery/link-token)", "Read(~/.swarmery/credentials/**)", "Read(~/.swarmery/secrets/**)",
+		"Read(~/.swarmery/swarmery.db*)",
+		"Read(~/.claude/.credentials.json)", "Read(~/.claude-*/.credentials.json)", "Read(~/.config/claude/.credentials.json)",
 	}
 	if got := DaemonDenyRules(0); strings.Join(got, "\n") != strings.Join(want, "\n") {
 		t.Errorf("DaemonDenyRules(0) =\n%s\nwant\n%s", strings.Join(got, "\n"), strings.Join(want, "\n"))
@@ -126,6 +129,7 @@ func TestDaemonDenyRules_Forms(t *testing.T) {
 		"curl -s http://127.0.0.1:7794/api/x", "/usr/bin/curl -s http://127.0.0.1:7794/api/x",
 		"/opt/homebrew/bin/wget -qO- localhost:7794/api", "curl -g http://[::1]:7794/api/x",
 		"http POST [::1]:7794/api/x", "command swarmery api POST /api/x", "/Users/u/.swarmery/bin/swarmery api GET /x",
+		"swarmery link token", "/Users/u/.swarmery/bin/swarmery link token --rotate",
 	} {
 		if hit(cmd) == "" {
 			t.Errorf("daemon deny list misses %q", cmd)

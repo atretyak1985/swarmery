@@ -99,10 +99,21 @@ var (
 // resolved against the spawned CLI's home, which is the daemon's (no spawn
 // sets HOME), and a deny rule also applies to a symlink's target, so no
 // `//<abs>` duplicate is needed.
+//
+// The daemon's database (and its -wal / -shm files) holds every stored
+// transcript and the approvals history, and the CLI's plaintext login lives in
+// <config dir>/.credentials.json: the default ~/.claude, an account's
+// ~/.claude-<key> (internal/claudeacct), and ~/.config/claude. No executor
+// flow reads any of them: a run's credentials reach the CLI process itself,
+// never a tool call, and no shipped skill opens the database.
 var daemonSecretReads = []string{
 	"Read(~/.swarmery/link-token)",
 	"Read(~/.swarmery/credentials/**)",
 	"Read(~/.swarmery/secrets/**)",
+	"Read(~/.swarmery/swarmery.db*)",
+	"Read(~/.claude/.credentials.json)",
+	"Read(~/.claude-*/.credentials.json)",
+	"Read(~/.config/claude/.credentials.json)",
 }
 
 // DaemonDenyRules are the deny rules that keep a run off this daemon's own HTTP
@@ -131,7 +142,7 @@ func DaemonDenyRules(port int) []string {
 	if port <= 0 {
 		port = DaemonPort()
 	}
-	out := make([]string, 0, 2*len(daemonClients)*len(daemonHosts)+3+len(daemonSecretReads))
+	out := make([]string, 0, 2*len(daemonClients)*len(daemonHosts)+5+len(daemonSecretReads))
 	for _, prefix := range []string{"", "*/"} {
 		for _, c := range daemonClients {
 			for _, h := range daemonHosts {
@@ -144,6 +155,9 @@ func DaemonDenyRules(port int) []string {
 	// installed-binary path, and behind `command` (stripped by current CLIs;
 	// the explicit rule covers one that does not).
 	out = append(out, "Bash(swarmery api*)", "Bash(*/swarmery api*)", "Bash(command swarmery*)")
+	// `swarmery link token` prints the link token, and `--rotate` replaces it
+	// under the running mod.
+	out = append(out, "Bash(swarmery link*)", "Bash(*/swarmery link*)")
 	return append(out, daemonSecretReads...)
 }
 
