@@ -365,7 +365,8 @@ func TestExposedListenerOwnOriginNeedsAuth(t *testing.T) {
 
 // TestExposedBindCoversLoopbackConnections: with a non-loopback --bind (a
 // wildcard bind also accepts 127.0.0.1) even a loopback connection's Origin is
-// not trusted for writes.
+// not trusted for writes, and its reads need link auth too
+// (exposed_listener_auth_test.go) — GET /api/health aside.
 func TestExposedBindCoversLoopbackConnections(t *testing.T) {
 	enableOriginlessAuth(t)
 	srv, _, _ := serverWithRoutines(t)
@@ -376,8 +377,11 @@ func TestExposedBindCoversLoopbackConnections(t *testing.T) {
 	if status, _ := exposedPost(t, srv, "127.0.0.1:7777", "http://127.0.0.1:7777", ""); status != http.StatusUnauthorized {
 		t.Errorf("exposed bind, loopback connection, own Origin, no auth = %d, want 401", status)
 	}
-	if status, _ := originlessDo(t, srv, http.MethodGet, "/api/routines", "", ""); status != http.StatusOK {
-		t.Errorf("exposed bind, plain GET = %d, want 200 (reads stay open)", status)
+	if status, _ := originlessDo(t, srv, http.MethodGet, "/api/routines", "", ""); status != http.StatusUnauthorized {
+		t.Errorf("exposed bind, unsigned plain GET = %d, want 401 (an exposed daemon serves only signed clients)", status)
+	}
+	if status, _ := originlessDo(t, srv, http.MethodGet, "/api/health", "", ""); status != http.StatusOK {
+		t.Errorf("exposed bind, GET /api/health = %d, want 200", status)
 	}
 }
 

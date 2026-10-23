@@ -15,6 +15,12 @@ const unauthorizedBody = `{"error":"link token required"}`
 // requests with a wrong token costs at most one file read per interval.
 const reloadInterval = time.Second
 
+// The legacy Bearer scheme below sends the link token itself in every request.
+// It is deprecated: the daemon refuses it on a listener beyond loopback, marks
+// every answer it still accepts on loopback with `Deprecation: true`, and it is
+// removed in swarmery-v0.3.0. Clients sign their requests instead
+// (internal/linksig, Swarmery-HMAC).
+
 // RequireToken guards a handler with `Authorization: Bearer <token>`, where the
 // expected token is whatever get returns at request time (a getter, so the
 // value can change without re-wiring routes). Comparison is constant-time. Any
@@ -43,6 +49,14 @@ func bearer(r *http.Request) (string, bool) {
 	}
 	tok := strings.TrimSpace(h[len(scheme):])
 	return tok, tok != ""
+}
+
+// UsesBearer reports whether r presents the legacy Bearer scheme at all, valid
+// token or not: a daemon that refuses the scheme outright (an exposed listener)
+// answers it without comparing anything.
+func UsesBearer(r *http.Request) bool {
+	_, ok := bearer(r)
+	return ok
 }
 
 // matches compares in constant time; an empty expected token never matches, so
@@ -135,6 +149,8 @@ func (h *Holder) reloadLocked() bool {
 // AcceptsBearer reports whether r carries `Authorization: Bearer <token>` with
 // this Holder's current token (the legacy scheme, refreshed through Current and
 // compared in constant time, exactly as Require does).
+//
+// Deprecated: removed in swarmery-v0.3.0 together with the Bearer scheme.
 func (h *Holder) AcceptsBearer(r *http.Request) bool {
 	presented, ok := bearer(r)
 	return ok && matches(presented, h.Current())

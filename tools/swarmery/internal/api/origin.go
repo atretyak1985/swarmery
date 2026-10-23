@@ -38,9 +38,17 @@
 // `swarmery open` and the notch hand to the browser — and link auth is
 // accepted wherever a session is.
 //
-// Plain reads (GET/HEAD without an upgrade) stay open: a same-origin browser
-// GET carries no Origin either. Every request still has to name the daemon in
-// Host, which every HTTP client does by default from the URL it dials.
+// On a loopback listener plain reads (GET/HEAD without an upgrade) stay open:
+// a same-origin browser GET carries no Origin either. Every request still has
+// to name the daemon in Host, which every HTTP client does by default from the
+// URL it dials.
+//
+// An exposed listener (isExposedListener: a non-loopback --bind, or a
+// connection that arrived on a non-loopback address) serves only signed
+// clients: every /api/* request, reads included, needs a Swarmery-HMAC
+// signature (requireSignedWhenExposed), except GET /api/health and the SPA's
+// static shell, which carry no data. A dashboard session authorises nothing
+// there, and the legacy Bearer scheme is refused (link.go).
 package api
 
 import (
@@ -267,9 +275,10 @@ func isPlainRead(r *http.Request) bool {
 //     bearer credential), else 401 — 503 while the daemon has no link token.
 //   - an EXPOSED listener (D7: the daemon was started with a non-loopback
 //     --bind, or this connection arrived on a non-loopback address): link
-//     auth, Origin or not. A dashboard session is not accepted there, so a
-//     dashboard opened over the network reads but cannot write (401 with a
-//     clear error).
+//     auth, Origin or not. A dashboard session is not accepted there. On the
+//     /api/ mux requireSignedWhenExposed has already demanded a signature for
+//     every request; this branch is the same rule for any route mounted
+//     outside it.
 func requireLocalOrigin(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		o := r.Header.Get("Origin")
@@ -300,8 +309,7 @@ func requireLocalOrigin(next http.HandlerFunc) http.HandlerFunc {
 		}
 		if o != "" && r.Header.Get("Authorization") == "" {
 			writeJSONStatus(w, http.StatusUnauthorized, map[string]string{
-				"error": "this daemon listens beyond loopback: writes need link auth " +
-					"(`swarmery api`, signed with the link token); the browser dashboard is read-only here",
+				"error": exposedUnauthenticatedMsg,
 			})
 			noteOriginlessRefusal(r, "an exposed listener")
 			return
@@ -340,8 +348,50 @@ func isExposedListener(r *http.Request) bool {
 	return ip == nil || !ip.IsLoopback()
 }
 
+// exposedUnauthenticatedMsg answers a request with no credential on an exposed
+// listener.
+const exposedUnauthenticatedMsg = "this daemon listens beyond loopback: every request needs link auth " +
+	"(`swarmery api`, signed with the link token); the browser dashboard cannot load data here"
+
+// openOnExposed reports whether r may pass an exposed listener unsigned: the
+// liveness probe GET /api/health, which carries no session data. The SPA's
+// static shell and assets are not on the /api/ mux at all (server.go), so
+// they never reach requireSignedWhenExposed.
+func openOnExposed(r *http.Request) bool {
+	return isPlainRead(r) && r.URL.Path == "/api/health"
+}
+
+// requireSignedWhenExposed is the exposed-listener gate on the whole /api/
+// mux: on a listener beyond loopback every request — reads included — must be
+// signed with the link token (authenticateLink; the Bearer scheme is refused
+// there), or it is 401 before the mux dispatches. A dashboard session
+// authorises nothing: the browser dashboard cannot load data from an exposed
+// daemon. The proof rides on in the request's context, so a route's own guard
+// (requireLocalOrigin, linkAuth) does not verify the spent nonce again.
+// GET /api/health stays open. On a loopback listener it does nothing.
+func requireSignedWhenExposed(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !isExposedListener(r) || openOnExposed(r) {
+			next.ServeHTTP(w, r)
+			return
+		}
+		if r.Header.Get("Authorization") == "" {
+			w.Header().Set("WWW-Authenticate", `Swarmery-HMAC realm="swarmery-link"`)
+			writeJSONStatus(w, http.StatusUnauthorized, map[string]string{"error": exposedUnauthenticatedMsg})
+			noteOriginlessRefusal(r, "an exposed listener")
+			return
+		}
+		r, _, ok := authenticateLink(w, r)
+		if !ok {
+			noteOriginlessRefusal(r, "an exposed listener")
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
 // refusalLogged remembers the routes whose first refused unauthenticated
-// write was logged, so the hint appears once per route per process.
+// request was logged, so the hint appears once per route per process.
 var refusalLogged sync.Map
 
 func noteOriginlessRefusal(r *http.Request, why string) {

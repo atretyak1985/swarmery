@@ -20,7 +20,6 @@ import (
 	"errors"
 	"log"
 	"net/http"
-	"strings"
 	"sync"
 	"time"
 
@@ -73,10 +72,13 @@ func AttachLink(h *link.Holder, exclude ingest.ExcludeList) {
 //     checked within the allowed skew and once per nonce, and the answer
 //     carries X-Swarmery-Sig, the daemon's signature over the request's nonce,
 //     the status and the body. Every in-repo client signs.
-//   - the legacy bearer token, still accepted during the transition; its
-//     answer is not signed. The first one a process sees is logged once.
+//   - the legacy Bearer scheme (the token itself), deprecated and removed in
+//     swarmery-v0.3.0: accepted on a loopback listener only, its answer is
+//     not signed and carries `Deprecation: true`, and the first one a
+//     process accepts is logged once. On an exposed listener it is 401
+//     {"error":"the Bearer scheme is refused on an exposed listener; …"}.
 //
-// Either way a failure is 401 {"error":"link token required"}. The token is
+// Otherwise a failure is 401 {"error":"link token required"}. The token is
 // read through the holder's throttled reload, so a rotation needs no restart.
 //
 // A request the Origin-less gate (requireLocalOrigin) already authenticated is
@@ -110,7 +112,8 @@ type linkAuthedKey struct{}
 // authenticateLink checks r's link credential: a Swarmery-HMAC signature, or
 // the legacy bearer scheme. On success it returns r with the proof in its
 // context; on failure it has already answered — 503 {"error":"link disabled"}
-// with no holder attached, 413 for a signed body too large to hash, 401
+// with no holder attached, 413 for a signed body too large to hash, 401 with
+// the Bearer refusal for a Bearer request on an exposed listener, 401
 // {"error":"link token required"} otherwise.
 func authenticateLink(w http.ResponseWriter, r *http.Request) (*http.Request, linkAuthed, bool) {
 	if a, ok := r.Context().Value(linkAuthedKey{}).(linkAuthed); ok {
@@ -123,11 +126,17 @@ func authenticateLink(w http.ResponseWriter, r *http.Request) (*http.Request, li
 	}
 	var a linkAuthed
 	if !linksig.IsSigned(r) {
-		noteLegacyBearer(r)
+		// The legacy Bearer scheme sends the token itself, in cleartext over
+		// plain HTTP: never accepted from beyond loopback, whatever it carries.
+		if link.UsesBearer(r) && isExposedListener(r) {
+			writeExposedBearerRefused(w)
+			return r, linkAuthed{}, false
+		}
 		if !h.AcceptsBearer(r) {
 			link.WriteUnauthorized(w)
 			return r, linkAuthed{}, false
 		}
+		noteLegacyBearer(w, r)
 	} else {
 		key := h.Current()
 		nonce, err := linkVerifier.VerifyRequest(r, key, time.Now())
@@ -148,17 +157,26 @@ func authenticateLink(w http.ResponseWriter, r *http.Request) (*http.Request, li
 // accepted, so none is served twice.
 var linkVerifier = linksig.NewVerifier()
 
-// legacyBearerOnce logs the first bearer-authenticated link request of the
+// legacyBearerOnce logs the first Bearer-authenticated request of the
 // process: a client that has not moved to signed requests yet.
 var legacyBearerOnce sync.Once
 
-func noteLegacyBearer(r *http.Request) {
-	if !strings.HasPrefix(strings.ToLower(r.Header.Get("Authorization")), "bearer ") {
-		return
-	}
+// noteLegacyBearer marks an answer to an accepted Bearer request as deprecated
+// (`Deprecation: true`) and logs the first one of the process. The scheme is
+// accepted on loopback only, and is removed in swarmery-v0.3.0.
+func noteLegacyBearer(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Deprecation", "true")
 	legacyBearerOnce.Do(func() {
-		log.Printf("link: a client used the legacy bearer token on %s %s; signed requests (Swarmery-HMAC) replace it", r.Method, r.URL.Path)
+		log.Printf("link: a client authenticated %s %s with the deprecated Bearer scheme; it is removed in swarmery-v0.3.0: sign requests instead (Swarmery-HMAC, `swarmery api`)", r.Method, r.URL.Path)
 	})
+}
+
+// exposedBearerRefusedMsg answers a Bearer request on an exposed listener.
+const exposedBearerRefusedMsg = "the Bearer scheme is refused on an exposed listener; sign the request (swarmery api)"
+
+func writeExposedBearerRefused(w http.ResponseWriter) {
+	w.Header().Set("WWW-Authenticate", `Swarmery-HMAC realm="swarmery-link"`)
+	writeJSONStatus(w, http.StatusUnauthorized, map[string]string{"error": exposedBearerRefusedMsg})
 }
 
 // signingWriter holds a link handler's answer so it can be signed: the status

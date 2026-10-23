@@ -82,8 +82,9 @@ the complexity router: with `SWARMERY_ROUTE_PHASERUN` and/or
 
 ## Security model
 
-The daemon binds loopback (`--bind 127.0.0.1`). Reads are open to whoever can
-reach it; every write and upgrade needs a credential — the link token for
+The daemon binds loopback (`--bind 127.0.0.1`). There, reads are open to
+whoever can reach it (bound wider, they are not: see **Binding wider**); every
+write and upgrade needs a credential — the link token for
 non-browser clients, a dashboard session for the browser (below). A browser
 also lends the user's loopback reach to every page it renders, so two fences
 stand in front of the API (`internal/api/origin.go`). Both derive "this
@@ -102,8 +103,10 @@ daemon" from the address it actually listens on, and both are extended only by
   `swarmery triage run`, the notch companion) must be signed with the link
   token in `~/.swarmery/link-token` (`Authorization: Swarmery-HMAC …`; the
   token itself never goes on the wire, see `docs/mods-link-protocol.md`), or it
-  gets `401`. The legacy `Bearer <token>` form is still accepted during the
-  transition. Plain reads need no credential. Scripts write through
+  gets `401`. The legacy `Bearer <token>` form sends the token itself; it is
+  deprecated, accepted on a loopback listener only (each answer carries
+  `Deprecation: true`, and the first use per process is logged), and removed
+  in swarmery-v0.3.0. On loopback, plain reads need no credential. Scripts write through
   `swarmery api <METHOD> <path> [--data …]` instead of raw `curl`.
 - **The dashboard authenticates with a session token.** The daemon's own
   `Origin` is no proof of a browser — any local process can send it — so a
@@ -159,12 +162,17 @@ daemon" from the address it actually listens on, and both are extended only by
   the daemon must never fall back to trusting a missing `Origin`. Exposed (a
   non-loopback `--bind`, or a connection that arrived on a non-loopback
   address), an `Origin` header proves nothing either — any client can send
-  the daemon's own — so every write and the `/api/ws` live stream need link
-  auth even from a browser (a dashboard session is not accepted there, and
-  `POST /api/session/unlock` mints none), and the terminal (`/api/term/ws`) is
-  refused outright. A dashboard opened over the network is therefore read-only, with
-  no live updates and no terminal; signed clients (`swarmery api`, the
-  console, the notch) keep working.
+  the daemon's own — so an exposed daemon serves only signed clients: every
+  `/api/*` request, reads included, must be signed with the link token
+  (`Swarmery-HMAC`), or it gets `401`. Only `GET /api/health` and the
+  dashboard's static shell (`/`, `/assets/*`, the client-side routes), which
+  carry no data, answer unsigned. The `Bearer <token>` form is refused there
+  outright (`401`: it would send the token in cleartext), a dashboard session
+  is not accepted (and `POST /api/session/unlock` mints none), and the
+  terminal (`/api/term/ws`) is refused even for a signed request. The browser
+  dashboard therefore cannot load data from an exposed daemon; signed clients
+  (`swarmery api`, `swarmery console`) keep working. The notch's reads are
+  unsigned today, so point it at a loopback daemon.
 - **Host.** Every route — reads included — refuses a `Host` header that does
   not name the daemon: a loopback name or address on the bound port, the
   listener's own address (`--bind 192.168.1.5` is reached as
