@@ -671,8 +671,8 @@ anyone copying them. Every two hours (minute 15) it runs two steps:
    comments do not count. More than 500 entries in one listing are cut to the
    newest 500 and the project line says so.
 2. An `ai-prompt` step on Haiku that turns the sync's report into one sentence
-   per project. It sees that report through `{{previous_output}}` (below) and is
-   told to decide nothing and run no tools; the sync prints counts, labels and
+   per project. It sees that report through `{{prev_output}}` (below), as
+   data, and is told to decide nothing and run no tools; the sync prints counts, labels and
    repo names only — never a title or a comment — because that text reaches the
    model verbatim.
 
@@ -699,11 +699,45 @@ swarmery routine seed --from config/routines/github-inbox.json
 `internal/routines.ShippedSeedFiles` registers every file under
 `config/routines`; a test fails when the directory and the list disagree.
 
-**`{{previous_output}}`.** An `ai-prompt` step's prompt may carry
-`{{previous_output}}`: it is replaced with the output of the step that ran just
-before it (its last 8 KB; empty for a first step). It is how a model step
-summarises a command step without tools of its own — so a step feeding one must
-not print untrusted text.
+**Step handoff.** The summary step uses the routine step handoff described
+under [Weekly skill audit](#weekly-skill-audit): an `ai-prompt` step gets the
+previous step's full output wherever its prompt says `{{prev_output}}` (empty
+for a first step), and a `command` step reads it from the file named in
+`$SWARMERY_PREV_OUTPUT`; past 1 MiB only the tail is handed over. It is how a
+model step summarises a command step without tools of its own — and since that
+output reaches the model verbatim and in full, a step feeding one must not print
+untrusted text.
 
 Disabling and the `SWARMERY_ROUTINES=0` switch work exactly as for
 `inbox-triage-nightly` above.
+
+## Weekly skill audit
+
+The linter files four advisory usage rules into `config_lint_findings`, shown in
+the System hub's Insights tab: `agent_dead` and `skill_dead` (info — no use in
+30 days), `skill_desc_similar` (warn — two skill descriptions whose token Jaccard
+reaches `skillSimilarityThreshold` in `config/guards.json`) and
+`session_skill_load_high` (warn — a project whose p95 of distinct skills loaded
+per session exceeds `sessionSkillLoadP95`). Usage is matched by **name** — the
+Skill tool's `input.skill`, a slash command's `<command-name>`, a subagent's
+`subagent_type`, and a skill a running agent preloads through its frontmatter
+`skills:` — because the ingester never fills `events.skill_id` /
+`events.agent_id`. A skill injected by a hook (a SessionStart hook that pastes a
+skill body) leaves no such trace and reads as unused. `swarmery skill-audit [--json]` prints the same audit on
+demand; `--similarity` and `--p95` override the thresholds for one run.
+
+`config/routines/skill-audit.json` ships `skill-audit-weekly`: every Monday at
+09:00 it runs `swarmery skill-audit --json`, hands the JSON to a `haiku` prompt
+that writes the report, and saves it to
+`<workspace root>/swarmery/workspace/retro/skill-audit-<date>.md` — the
+framework's own workspace, never a consumer project's. The save step fails the
+run when one of the five sections (Unused agents, Unused skills, Similar
+descriptions, Skills per session, Before a new agent, extend one of these) is
+missing, but keeps the file for reading. Each step reads the previous step's
+full output: a `command` step from the file named in `$SWARMERY_PREV_OUTPUT`, an
+`ai-prompt` step wherever its prompt says `{{prev_output}}`. Nothing is deleted
+or merged. Seed it once:
+
+```bash
+swarmery routine seed --from config/routines/skill-audit.json
+```

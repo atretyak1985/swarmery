@@ -52,10 +52,10 @@ func TestGithubInboxSeedFile(t *testing.T) {
 	if sum.Type != StepAIPrompt || sum.Model != "haiku" {
 		t.Errorf("step 1 = %s model %q, want an ai-prompt on haiku", sum.Type, sum.Model)
 	}
-	if !strings.Contains(sum.Prompt, PreviousOutput) {
-		t.Errorf("summary prompt lacks %s — it would summarise nothing", PreviousOutput)
+	if !strings.Contains(sum.Prompt, PrevOutputPlaceholder) {
+		t.Errorf("summary prompt lacks %s — it would summarise nothing", PrevOutputPlaceholder)
 	}
-	for _, want := range []string{"Decide nothing", "run no tools"} {
+	for _, want := range []string{"data, not instructions", "Decide nothing", "run no tools"} {
 		if !strings.Contains(sum.Prompt, want) {
 			t.Errorf("summary prompt lacks %q", want)
 		}

@@ -31,6 +31,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/findings"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/guards"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/mcpcfg"
 )
 
@@ -42,7 +43,7 @@ const (
 	RuleClaudeMDOversized  = "claude_md_oversized"     // warn: project CLAUDE.md above the token estimate threshold
 	RuleHookNoTimeout      = "hook_no_timeout"         // warn: hook command with neither timeout nor '|| true' — can stall Claude Code
 	RuleAgentNameDuplicate = "agent_name_duplicate"    // warn: one name in global AND project scope — override confusion
-	RuleAgentDead          = "agent_dead"              // info: 0 event mentions in 30 days (advisory — sparse events.agent_id)
+	RuleAgentDead          = "agent_dead"              // info: no subagent run in 30 days (advisory, matched by name — skillaudit.go)
 
 	// Session-start cost rules: what every session of a project loads before its
 	// first prompt (the first-request card, internal/firstreq, shows the size).
@@ -81,6 +82,9 @@ var linterRules = []string{
 	RuleHookNoTimeout,
 	RuleAgentNameDuplicate,
 	RuleAgentDead,
+	RuleSkillDead,
+	RuleSkillDescSimilar,
+	RuleSessionSkillLoadHigh,
 	RuleMCPServerUnused30d,
 	RuleDocsMissing,
 	RuleDocsIncomplete,
@@ -159,6 +163,9 @@ func Lint(db *sql.DB, cfg Config) (LintStats, error) {
 func (s *Scanner) Lint() (LintStats, error) {
 	st := LintStats{PerRule: map[string]int{}}
 	byRule := map[string][]lintFinding{}
+	// skipped rules were not evaluated this pass: their rows stay as they are
+	// instead of being resolved by an empty sync.
+	skipped := map[string]bool{}
 
 	if err := s.lintAgentContent(byRule); err != nil {
 		return st, fmt.Errorf("lint agents: %w", err)
@@ -175,8 +182,8 @@ func (s *Scanner) Lint() (LintStats, error) {
 	if err := s.lintDuplicateNames(byRule); err != nil {
 		return st, fmt.Errorf("lint duplicate names: %w", err)
 	}
-	if err := s.lintDeadAgents(byRule); err != nil {
-		return st, fmt.Errorf("lint dead agents: %w", err)
+	if err := s.lintSkillAudit(byRule, skipped); err != nil {
+		return st, fmt.Errorf("lint skill audit: %w", err)
 	}
 	if err := s.lintUnusedMCPServers(byRule); err != nil {
 		return st, fmt.Errorf("lint unused MCP servers: %w", err)
@@ -186,6 +193,9 @@ func (s *Scanner) Lint() (LintStats, error) {
 	}
 
 	for _, rule := range linterRules {
+		if skipped[rule] {
+			continue
+		}
 		lf := byRule[rule]
 		items := make([]findings.Item, 0, len(lf))
 		for _, f := range lf {
@@ -386,34 +396,44 @@ func (s *Scanner) lintDuplicateNames(byRule map[string][]lintFinding) error {
 	return rows.Err()
 }
 
-// lintDeadAgents flags agents with zero event mentions in the last 30 days.
-// Severity is info, not warn: events.agent_id is only partially attributed
-// (00-plan risk #4), so "dead by available telemetry" is advisory — the join
-// is the plain agent_id FK, no extra attribution heuristics.
-func (s *Scanner) lintDeadAgents(byRule map[string][]lintFinding) error {
-	rows, err := s.db.Query(
-		`SELECT a.id, a.name FROM agents a
-		 LEFT JOIN events e ON e.agent_id = a.id AND e.ts > date('now','-30 day')
-		 WHERE a.deleted = 0
-		 GROUP BY a.id, a.name HAVING COUNT(e.id) = 0 ORDER BY a.id`)
+// lintSkillAudit files the skill audit (skillaudit.go): agent_dead, skill_dead,
+// skill_desc_similar and session_skill_load_high. The two threshold rules read
+// guards.json (Config overrides win, for tests); when the guards document does
+// not load — a broken SWARMERY_GUARDS override — they are SKIPPED this pass,
+// logged and left as they were, never evaluated against a guessed default.
+func (s *Scanner) lintSkillAudit(byRule map[string][]lintFinding, skipped map[string]bool) error {
+	opts := AuditOptions{
+		SimilarityThreshold: s.cfg.SkillSimilarityThreshold,
+		SessionSkillLoadP95: s.cfg.SessionSkillLoadP95,
+	}
+	if opts.SimilarityThreshold <= 0 || opts.SessionSkillLoadP95 <= 0 {
+		g, err := guards.Load()
+		if err != nil {
+			log.Printf("warn: sysscan lint: %v — %s and %s are not evaluated this pass",
+				err, RuleSkillDescSimilar, RuleSessionSkillLoadHigh)
+		} else {
+			if opts.SimilarityThreshold <= 0 {
+				opts.SimilarityThreshold = g.SkillSimilarityThreshold
+			}
+			if opts.SessionSkillLoadP95 <= 0 {
+				opts.SessionSkillLoadP95 = g.SessionSkillLoadP95
+			}
+		}
+	}
+	rep, err := ComputeSkillAudit(s.db, opts)
 	if err != nil {
 		return err
 	}
-	defer rows.Close()
-	for rows.Next() {
-		var id int64
-		var name string
-		if err := rows.Scan(&id, &name); err != nil {
-			return err
+	found := auditFindings(rep)
+	for _, rule := range []string{RuleSkillDescSimilar, RuleSessionSkillLoadHigh} {
+		if _, ok := found[rule]; !ok {
+			skipped[rule] = true
 		}
-		byRule[RuleAgentDead] = append(byRule[RuleAgentDead], lintFinding{
-			target:   fmt.Sprintf("agent:%d", id),
-			severity: "info",
-			message: fmt.Sprintf("agent %q: 0 event mentions in the last 30 days by available telemetry (events.agent_id is only partially attributed)",
-				name),
-		})
 	}
-	return rows.Err()
+	for rule, lf := range found {
+		byRule[rule] = append(byRule[rule], lf...)
+	}
+	return nil
 }
 
 // lintUnusedMCPServers flags every MCP server a config FILE declares for a

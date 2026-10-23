@@ -7,12 +7,15 @@
 // decisions, next step) from its OWN DB (never the transcript — a 400k-context
 // transcript would make the fix as expensive as the disease) via a pinned
 // cheap-model headless run, and surfaces it on the session card + detail rail.
+// A `## Rejected` section (rejected.go) names the paths the work already ruled
+// out, so the fresh session does not walk them again.
 package handoff
 
 import (
 	"context"
 	"database/sql"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -180,25 +183,33 @@ func queryCandidates(db *sql.DB, cutoff, sysDir string, sessionID int64) ([]Cand
 }
 
 // Digest builds the generator input from the DB (never the transcript). Layout:
-// a session header, the repository anchor, the touched-files table, then the
-// recent user/assistant prose (truncated, empties skipped).
+// a session header, the repository anchor, the touched-files table, the
+// structured rejected paths, then the recent user/assistant prose (truncated,
+// empties skipped).
 func Digest(db *sql.DB, sessionID int64) (string, error) {
-	dig, _, err := digestWithAnchor(db, sessionID)
-	return dig, err
+	d, err := buildDigest(db, sessionID)
+	return d.text, err
 }
 
-// digestWithAnchor is Digest plus the repository anchor it embedded, so
-// generateInto appends the very same facts the model saw — computed once.
-func digestWithAnchor(db *sql.DB, sessionID int64) (string, anchor, error) {
+// digest is the generator input plus the Go-recorded facts it embedded, so
+// generateInto writes the very same facts the model saw — computed once.
+type digest struct {
+	text     string
+	anc      anchor
+	rejected []Rejected
+}
+
+func buildDigest(db *sql.DB, sessionID int64) (digest, error) {
 	var b strings.Builder
 
 	// Session header.
+	var uuid string
 	var title, cwd, branch, started sql.NullString
 	err := db.QueryRow(`
-		SELECT COALESCE(custom_title, title, ''), COALESCE(cwd, ''), COALESCE(git_branch, ''), started_at
-		FROM sessions WHERE id = ?`, sessionID).Scan(&title, &cwd, &branch, &started)
+		SELECT session_uuid, COALESCE(custom_title, title, ''), COALESCE(cwd, ''), COALESCE(git_branch, ''), started_at
+		FROM sessions WHERE id = ?`, sessionID).Scan(&uuid, &title, &cwd, &branch, &started)
 	if err != nil {
-		return "", anchor{}, err
+		return digest{}, err
 	}
 	fmt.Fprintf(&b, "## Session\n")
 	fmt.Fprintf(&b, "- Title: %s\n", nz(title.String, "unknown"))
@@ -226,7 +237,7 @@ func digestWithAnchor(db *sql.DB, sessionID int64) (string, anchor, error) {
 		ORDER BY (COALESCE(SUM(additions),0) + COALESCE(SUM(deletions),0)) DESC
 		LIMIT ?`, sessionID, maxFiles)
 	if err != nil {
-		return "", anchor{}, err
+		return digest{}, err
 	}
 	b.WriteString("## Files touched\n")
 	anyFile := false
@@ -235,24 +246,40 @@ func digestWithAnchor(db *sql.DB, sessionID int64) (string, anchor, error) {
 		var adds, dels int64
 		if err := fcRows.Scan(&path, &kinds, &adds, &dels); err != nil {
 			fcRows.Close()
-			return "", anchor{}, err
+			return digest{}, err
 		}
 		fmt.Fprintf(&b, "- %s (%s, +%d/-%d)\n", path, kinds, adds, dels)
 		anyFile = true
 	}
 	fcRows.Close()
 	if err := fcRows.Err(); err != nil {
-		return "", anchor{}, err
+		return digest{}, err
 	}
 	if !anyFile {
 		b.WriteString("- (none recorded)\n")
 	}
 	b.WriteString("\n")
 
+	// Rejected paths recorded in the DB (rejected.go). An optional input: a
+	// failed read is logged and the brief goes on with the turn text alone.
+	rejected, err := StructuredRejected(db, uuid)
+	if err != nil {
+		log.Printf("warning: handoff: session %d: structured rejected: %v", sessionID, err)
+		rejected = nil
+	}
+	b.WriteString(rejectedDigestHeading + "\n")
+	if len(rejected) == 0 {
+		b.WriteString("- (none)\n")
+	}
+	for _, r := range rejected {
+		b.WriteString(r.Line() + "\n")
+	}
+	b.WriteString("\n")
+
 	// Recent user prose (intent), oldest→newest for readability.
 	userTexts, err := recentTurns(db, sessionID, "user", maxUserTurns, userTextCap)
 	if err != nil {
-		return "", anchor{}, err
+		return digest{}, err
 	}
 	b.WriteString("## Recent user messages\n")
 	if len(userTexts) == 0 {
@@ -266,7 +293,7 @@ func digestWithAnchor(db *sql.DB, sessionID int64) (string, anchor, error) {
 	// Recent assistant prose (the work), oldest→newest.
 	asstTexts, err := recentTurns(db, sessionID, "assistant", maxAssistantTurns, assistantTextCap)
 	if err != nil {
-		return "", anchor{}, err
+		return digest{}, err
 	}
 	b.WriteString("## Recent assistant messages\n")
 	if len(asstTexts) == 0 {
@@ -276,7 +303,7 @@ func digestWithAnchor(db *sql.DB, sessionID int64) (string, anchor, error) {
 		fmt.Fprintf(&b, "- %s\n", t)
 	}
 
-	return b.String(), anc, nil
+	return digest{text: b.String(), anc: anc, rejected: rejected}, nil
 }
 
 // recentTurns returns up to `limit` non-empty turns of the given role, each
@@ -338,19 +365,21 @@ func generateInto(db *sql.DB, r Runner, sessionID int64, now time.Time, dir stri
 		return "", err
 	}
 
-	digest, anc, err := digestWithAnchor(db, sessionID)
+	dig, err := buildDigest(db, sessionID)
 	if err != nil {
 		return "", err
 	}
-	prompt := promptTemplate + digest
+	prompt := promptTemplate + dig.text
 
 	out, err := r.Run(context.Background(), prompt)
 	if err != nil {
 		return "", err
 	}
-	// The anchor is appended by Go, never by the model: the next session can
-	// check these facts against the repo instead of trusting a retelling.
-	body := strings.TrimRight(out, "\n") + "\n\n" + anc.Markdown()
+	// The Rejected section is held to what the digest promised (present, every
+	// structured line verbatim, capped), and the anchor is appended by Go, never
+	// by the model: the next session can check these facts against the repo
+	// instead of trusting a retelling.
+	body := strings.TrimRight(fitRejected(out, dig.rejected), "\n") + "\n\n" + dig.anc.Markdown()
 
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return "", err
@@ -388,6 +417,9 @@ markdown file content, no preamble. Required sections, in order:
 ## Files touched — from the list below, with one-phrase why per file
 ## Key decisions — decisions/constraints the fresh session must not re-litigate
 ## Non-goals — what this session deliberately did not do or ruled out
+## Rejected — options already ruled out, one "- <option> — <why>" line each, ≤10 lines: copy every
+   line of "Rejected (structured)" below verbatim, then add options the messages below show were
+   tried and abandoned or ruled out; write "- none recorded" when there are none
 ## Open risks & failed checks — anything unverified, failing, or flaky, with the command that shows it
 ## Next step — the single concrete next action, with the exact command or file to start from
 ## Verification — commands that prove the work still passes

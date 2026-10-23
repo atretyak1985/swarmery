@@ -79,6 +79,24 @@ export const LINT_TONES: Record<LintSeverity, string> = {
   info: 'text-blue',
 };
 
+/** Rule label on a finding row, toned by its severity (the LINT_TONES palette
+ * with a matching border). */
+export function SeverityChip({ severity, label }: { severity: LintSeverity; label: string }): JSX.Element {
+  const border: Record<LintSeverity, string> = {
+    error: 'border-red/40 bg-red/10',
+    warn: 'border-amber/40 bg-amber/10',
+    info: 'border-blue/40 bg-blue/10',
+  };
+  return (
+    <span
+      className={`shrink-0 rounded-full border px-2 py-px font-mono text-[10px] whitespace-nowrap ${border[severity]} ${LINT_TONES[severity]}`}
+      data-severity={severity}
+    >
+      {label}
+    </span>
+  );
+}
+
 /** Max-severity lint marker of a list row; null (clean) renders nothing. */
 export function LintDot({
   severity,
