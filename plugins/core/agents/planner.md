@@ -112,6 +112,16 @@ carries the full format; honor it precisely:
   hold links the planning turn that asked it. A listed `recommended` (cheap,
   skipped) decision does not hold the phase: it runs on your recommended
   option, and its prompt marks that option as having no operator answer.
+- Every phase prompt carries the citation rule, verbatim: "Cite the IDs you
+  satisfy (D-n, SC-n) in the Completion Report; a decision you deliberately do
+  not implement is written as `not implemented: D-n — <why>`." The dashboard
+  builds the plan's decision → phase → evidence table from those citations; an
+  id nobody cites shows as remaining, and a `not implemented:` line is an
+  explained gap, never remaining.
+- When the plan has a `## Decisions` section or a `plan/spec.md`, its Definition
+  of Done names the plan-end drift review: the orchestrator hands the reviewer
+  the decisions-and-criteria table and records its `round: plan` block (see
+  `run-plan`).
 
 # What makes criteria good
 

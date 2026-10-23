@@ -360,9 +360,16 @@ type epicDTO struct {
 	HasSpec bool `json:"hasSpec"`
 	// Spec is the per-epic spec coverage (criteria + coveredBy phase seqs +
 	// covered/total + unknown refs); null when the task has no spec_criteria rows.
-	Spec   *epicSpecDTO   `json:"spec"`
-	Phases []epicPhaseDTO `json:"phases"`
-	Rollup epicRollupDTO  `json:"rollup"`
+	Spec *epicSpecDTO `json:"spec"`
+	// Evidence is the decision → phase → evidence table (verify-not-trust phase
+	// 12, wsingest.LoadDecisionTable) — the same body GET …/evidence serves.
+	// Never null; rows is [] for a plan with no decisions or spec criteria.
+	Evidence wsingest.DecisionTable `json:"evidence"`
+	// PlanReviewStatus is Evidence.PlanReview.Status lifted onto the epic:
+	// none | pass | fail | not-verified (an INCONCLUSIVE plan review).
+	PlanReviewStatus string         `json:"planReviewStatus"`
+	Phases           []epicPhaseDTO `json:"phases"`
+	Rollup           epicRollupDTO  `json:"rollup"`
 	// Whole-plan run state (migration 0040), null until the plan has ever been
 	// run. Distinct from the per-phase RunState above: this is ONE agent handed
 	// the whole plan, so it never stamps individual phases.
@@ -549,6 +556,11 @@ func (h *Handler) listEpics(w http.ResponseWriter, r *http.Request) {
 		out[i].Phases = phases
 		out[i].Rollup = rollup
 		out[i].Spec = buildEpicSpec(specCriteria[out[i].TaskID], covers)
+		if out[i].Evidence, err = wsingest.LoadDecisionTable(h.DB, out[i].TaskID); err != nil {
+			writeErr(w, err)
+			return
+		}
+		out[i].PlanReviewStatus = out[i].Evidence.PlanReview.Status
 		if card, ok := microPlanCards[out[i].TaskID]; ok {
 			out[i].CardExternalID = &card
 		}

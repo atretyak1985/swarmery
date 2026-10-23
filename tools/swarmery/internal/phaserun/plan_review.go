@@ -17,6 +17,7 @@ import (
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/phasediag"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/runsettings"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/verify"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/wsingest"
 )
 
 // The plan branch review (decision D4, step 2). Each phase of a plan runs on its
@@ -62,7 +63,28 @@ const (
 	planReviewNameKeyLen = 12
 	// planReviewReadmeCap bounds the plan README in the prompt.
 	planReviewReadmeCap = 32 << 10
+	// planReviewDecisionsCap bounds the decisions-and-criteria table in the
+	// prompt (an argv element, like the diffs): past it the table is truncated
+	// with a marker rather than crowding out the diffs.
+	planReviewDecisionsCap = 24 << 10
 )
+
+// planRoundContract is what the plan round adds to the review block contract
+// (verify-not-trust phase 12, D19): every id of the decisions-and-criteria table
+// is answered in ids[], and every departure from a decision is a drift entry.
+// wsingest maps ids[] to decision_evidence (kind review) and drift[] to
+// plan-conformance findings (wsingest.ApplyPlanReview).
+const planRoundContract = `ON THE PLAN ROUND, the kind: review block's ids and drift lists answer the DECISIONS AND CRITERIA table below — one ids entry per row of the table, in table order:
+
+` + "```yaml" + `
+ids:                     # every id of the table
+  - {id: D-2, evidence: "phase 3 @ abc1234"}   # the phase (and commit) whose diff implements it
+  - {id: SC-4, evidence: missing}              # nothing in the diffs implements it
+drift:                   # where the code departed from what a decision says
+  - {id: D-4, where: "internal/x/y.go:42", how: "adds a second table where D-4 chose a column"}
+` + "```" + `
+
+Judge each id from the diffs, not from the reports: a phase that says it did something is a claim to check. A deliberate, explained gap (` + "`not implemented: D-n — <why>`" + ` in a phase's report) is not drift. A drift entry is a merge-blocking finding of the plan-conformance lens.`
 
 // planSeamFocus tells the reviewer what differs from a phase review. reviewerRole
 // still sets the role, the lenses and the verdict contract.
@@ -456,7 +478,7 @@ func (s *Service) planReview(taskID, phaseID int64, key string, branches []planB
 	o.sessionUUID = s.UUID()
 	resolution := claudeacct.Resolve(info.ProjectPath)
 	spec := verify.RunSpec{
-		Prompt:          planReviewPrompt(title, planReadme(info.DocPath), sections, s.DaemonPort),
+		Prompt:          planReviewPrompt(title, planReadme(info.DocPath), s.planDecisionTable(taskID), sections, s.DaemonPort),
 		SessionUUID:     o.sessionUUID,
 		Cwd:             acq.Path,
 		Model:           reviewModel,
@@ -482,6 +504,9 @@ func (s *Service) planReview(taskID, phaseID int64, key string, branches []planB
 		return inconclusive(o, ClassReviewerMutatedTree, o.treeBefore+"→"+o.treeAfter), true
 	}
 	o = concludeReview(o, run, rerr)
+	if run != nil {
+		o.block = planRoundBlock(run.Output)
+	}
 	// A reviewer that never started produced no outcome of its own.
 	return o, !strings.HasPrefix(o.detail, classReviewerNotStarted+":")
 }
@@ -588,14 +613,41 @@ func planReadme(docPath string) string {
 	return string(b)
 }
 
+// planDecisionTable renders the plan's decisions-and-criteria table for the
+// prompt (wsingest.LoadDecisionTable — the table the dashboard shows). "" when
+// the plan declares none or the store cannot be read: the review still runs.
+func (s *Service) planDecisionTable(taskID int64) string {
+	t, err := wsingest.LoadDecisionTable(s.DB, taskID)
+	if err != nil {
+		log.Printf("warning: phaserun: plan review task=%d: decision table unreadable: %v", taskID, err)
+		return ""
+	}
+	return wsingest.RenderDecisionTable(t.Rows, planReviewDecisionsCap)
+}
+
+// planRoundBlock is the last parsable `round: plan` block of the reviewer's
+// output, or nil.
+func planRoundBlock(output string) *mdfence.Review {
+	rs, _ := reviewerBlocks(output)
+	for i := len(rs) - 1; i >= 0; i-- {
+		if rs[i].Round == mdfence.ReviewRoundPlan {
+			return &rs[i]
+		}
+	}
+	return nil
+}
+
 // planReviewPrompt renders the plan branch review prompt: the phase reviewer's
-// role, contract and daemon-API rule, the seam focus, the plan README and the
-// per-phase diffs.
-func planReviewPrompt(title, readme, sections string, daemonPort int) string {
+// role, contract and daemon-API rule, the seam focus, the plan round's ids/drift
+// contract, the plan README, the decisions-and-criteria table (decisions; "" when
+// the plan declares none) and the per-phase diffs.
+func planReviewPrompt(title, readme, decisions, sections string, daemonPort int) string {
 	var b strings.Builder
 	b.WriteString(reviewerPreamble(daemonPort))
 	b.WriteString("\n\n")
 	b.WriteString(planSeamFocus)
+	b.WriteString("\n\n")
+	b.WriteString(planRoundContract)
 	b.WriteString("\n\nREVIEW ROUND: " + mdfence.ReviewRoundPlan)
 	b.WriteString("\n\nPLAN: ")
 	b.WriteString(title)
@@ -603,6 +655,12 @@ func planReviewPrompt(title, readme, sections string, daemonPort int) string {
 		b.WriteString("\n\nPLAN README:\n----------------------------------------\n")
 		b.WriteString(strings.TrimRight(readme, "\n"))
 		b.WriteString("\n----------------------------------------\n")
+	}
+	b.WriteString("\n\nDECISIONS AND CRITERIA (the plan's declared decisions D-n and spec criteria SC-n, and the phases whose docs claim them):\n")
+	if strings.TrimSpace(decisions) == "" {
+		b.WriteString("_The plan declares no decisions or spec criteria in the machine shape: write ids: [] and drift: []._\n")
+	} else {
+		b.WriteString(decisions)
 	}
 	b.WriteString("\n\nPHASE DIFFS (each phase's run branch against the commit its run started from):\n")
 	b.WriteString(sections)
@@ -624,5 +682,19 @@ func (s *Service) recordPlanReview(taskID int64, key, started string, o reviewOu
 		o.treeBefore, o.treeAfter, o.verdict, o.detail, o.findings,
 		started, s.ts()); err != nil {
 		log.Printf("error: phaserun: task=%d record plan review: %v", taskID, err)
+	}
+	// A settled outcome replaces the plan's review evidence and drift findings:
+	// the block of a PASS/FAIL, none for an INCONCLUSIVE — the table must not
+	// keep claiming what the latest review could not confirm. A transient failure
+	// (key "") leaves the previous review's rows alone.
+	if key == "" {
+		return
+	}
+	block := o.block
+	if o.verdict == string(verify.VerdictInconclusive) {
+		block = nil
+	}
+	if err := wsingest.ApplyPlanReview(s.DB, taskID, block); err != nil {
+		log.Printf("error: phaserun: task=%d record plan review evidence: %v", taskID, err)
 	}
 }

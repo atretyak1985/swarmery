@@ -645,6 +645,10 @@ msgstr "couldn't load the findings: {error}"
 msgid "counting…"
 msgstr "counting…"
 
+#: src/pages/plans/DecisionTable.tsx
+msgid "counts per chip"
+msgstr "counts per chip"
+
 #: src/pages/Plans.tsx
 msgid "coverage"
 msgstr "coverage"
@@ -681,6 +685,10 @@ msgstr "criterion"
 msgid "Cron (5-field, blank = manual/webhook only)"
 msgstr "Cron (5-field, blank = manual/webhook only)"
 
+#: src/pages/plans/DecisionTable.tsx
+msgid "daemon plan review"
+msgstr "daemon plan review"
+
 #: src/pages/plans/ReviewFindings.tsx
 msgid "daemon review"
 msgstr "daemon review"
@@ -701,6 +709,15 @@ msgstr "decided {decided} by {by}"
 #: src/pages/PlanningMode.tsx
 msgid "decision D-{0}"
 msgstr "decision D-{0}"
+
+#: src/pages/plans/DecisionTable.tsx
+#: src/pages/plans/DecisionTable.tsx
+msgid "Decisions and criteria"
+msgstr "Decisions and criteria"
+
+#: src/pages/plans/DecisionTable.tsx
+msgid "Decisions and criteria: {total} ids"
+msgstr "Decisions and criteria: {total} ids"
 
 #: src/pages/Routines.tsx
 msgid "Delete"
@@ -743,6 +760,10 @@ msgstr "describe your own direction"
 #: src/pages/planning/QuestionCard.tsx
 msgid "describe your own direction…"
 msgstr "describe your own direction…"
+
+#: src/pages/plans/DecisionTable.tsx
+msgid "details"
+msgstr "details"
 
 #: src/pages/planning/RevisionReview.tsx
 #: src/pages/Routines.tsx
@@ -907,6 +928,8 @@ msgstr "epics…"
 msgid "every minute"
 msgstr "every minute"
 
+#: src/pages/plans/DecisionTable.tsx
+#: src/pages/plans/DecisionTable.tsx
 #: src/pages/plans/ReviewFindings.tsx
 msgid "evidence"
 msgstr "evidence"
@@ -1071,6 +1094,10 @@ msgstr "headless run in progress"
 msgid "held"
 msgstr "held"
 
+#: src/pages/plans/DecisionTable.tsx
+msgid "hide {id}"
+msgstr "hide {id}"
+
 #: src/pages/Plans.tsx
 msgid "high — implementation"
 msgstr "high — implementation"
@@ -1103,6 +1130,7 @@ msgstr "how hard every Run phase / Retry run on this plan thinks. Leave it on th
 msgid "how hard the planning interview thinks, on every turn of this wizard — the first spawn and each resume. Leave it on the default to let the daemon's knob and the planner's pinned default decide. Note that NO effort is not the cheap end — an unpinned claude run thinks at xhigh, the deepest setting."
 msgstr "how hard the planning interview thinks, on every turn of this wizard — the first spawn and each resume. Leave it on the default to let the daemon's knob and the planner's pinned default decide. Note that NO effort is not the cheap end — an unpinned claude run thinks at xhigh, the deepest setting."
 
+#: src/pages/plans/DecisionTable.tsx
 #: src/pages/plans/ReviewFindings.tsx
 msgid "id"
 msgstr "id"
@@ -1287,6 +1315,10 @@ msgstr "merged {mergedAt}"
 msgid "missed"
 msgstr "missed"
 
+#: src/pages/plans/DecisionTable.tsx
+msgid "missing"
+msgstr "missing"
+
 #: src/pages/Plans.tsx
 msgid "mode"
 msgstr "mode"
@@ -1417,9 +1449,17 @@ msgstr "no phase-doc edits for a while — the executor may be stuck"
 msgid "No plan file changes. The note (optional) is recorded on the revision."
 msgstr "No plan file changes. The note (optional) is recorded on the revision."
 
+#: src/pages/plans/DecisionTable.tsx
+msgid "no plan review yet"
+msgstr "no plan review yet"
+
 #: src/pages/Playbooks.tsx
 msgid "no playbooks"
 msgstr "no playbooks"
+
+#: src/pages/plans/DecisionTable.tsx
+msgid "no reason recorded"
+msgstr "no reason recorded"
 
 #: src/pages/Plans.tsx
 msgid "no revisions — \"Revise plan\" in the action row starts one"
@@ -1473,6 +1513,11 @@ msgstr "none of the {total} criteria ticked"
 msgid "not delivered"
 msgstr "not delivered"
 
+#: src/pages/plans/DecisionTable.tsx
+#: src/pages/plans/DecisionTable.tsx
+msgid "not implemented"
+msgstr "not implemented"
+
 #: src/pages/plans/landingModel.ts
 msgid "not landed"
 msgstr "not landed"
@@ -1497,6 +1542,15 @@ msgstr "Not run yet."
 #: src/pages/plans/ForecastVsActual.tsx
 msgid "not scored — the run’s actuals are not recorded yet, or nothing about it was measurable"
 msgstr "not scored — the run’s actuals are not recorded yet, or nothing about it was measurable"
+
+#: src/pages/plans/DecisionTable.tsx
+#: src/pages/plans/DecisionTable.tsx
+msgid "not verified"
+msgstr "not verified"
+
+#: src/pages/plans/DecisionTable.tsx
+msgid "Not verified: {reason}"
+msgstr "Not verified: {reason}"
 
 #: src/pages/planning/RevisionReview.tsx
 msgid "note (optional)"
@@ -1692,6 +1746,10 @@ msgstr "phase run effort"
 msgid "phase run model"
 msgstr "phase run model"
 
+#: src/pages/plans/DecisionTable.tsx
+msgid "phases"
+msgstr "phases"
+
 #: src/pages/planning/QuestionCard.tsx
 msgid "pick any that apply"
 msgstr "pick any that apply"
@@ -1741,6 +1799,14 @@ msgstr "plan is not active"
 #: src/pages/PlanningMode.tsx
 msgid "Plan ready"
 msgstr "Plan ready"
+
+#: src/pages/plans/DecisionTable.tsx
+msgid "plan review failed"
+msgstr "plan review failed"
+
+#: src/pages/plans/DecisionTable.tsx
+msgid "plan review passed"
+msgstr "plan review passed"
 
 #: src/pages/plans/ReviewFindings.tsx
 msgid "Plan round"
@@ -1848,6 +1914,10 @@ msgstr "playbooks…"
 msgid "post hoc"
 msgstr "post hoc"
 
+#: src/pages/plans/DecisionTable.tsx
+msgid "PR"
+msgstr "PR"
+
 #: src/pages/plans/ForecastVsActual.tsx
 msgid "prior → posterior"
 msgstr "prior → posterior"
@@ -1936,6 +2006,10 @@ msgstr "readme…"
 msgid "ready to land"
 msgstr "ready to land"
 
+#: src/pages/plans/DecisionTable.tsx
+msgid "reason: {rowReason}"
+msgstr "reason: {rowReason}"
+
 #: src/pages/planning/QuestionCard.tsx
 msgid "recommended"
 msgstr "recommended"
@@ -1990,6 +2064,10 @@ msgstr "Reload"
 msgid "Reload review"
 msgstr "Reload review"
 
+#: src/pages/plans/DecisionTable.tsx
+msgid "remaining"
+msgstr "remaining"
+
 #: src/pages/Routines.tsx
 msgid "remove step"
 msgstr "remove step"
@@ -2021,6 +2099,10 @@ msgstr "reopening…"
 #: src/pages/PlanningMode.tsx
 msgid "reply"
 msgstr "reply"
+
+#: src/pages/plans/DecisionTable.tsx
+msgid "report"
+msgstr "report"
 
 #: src/pages/plans/PhasePanel.tsx
 msgid "Report"
@@ -2067,6 +2149,7 @@ msgstr "returned to agent"
 msgid "revert"
 msgstr "revert"
 
+#: src/pages/plans/DecisionTable.tsx
 #: src/pages/plans/PhaseReopens.tsx
 #: src/pages/plans/RunsReviewBlock.tsx
 msgid "review"
@@ -2344,6 +2427,10 @@ msgstr "sessions"
 msgid "shell command (e.g. swarmery api POST /api/… --data @body.json)"
 msgstr "shell command (e.g. swarmery api POST /api/… --data @body.json)"
 
+#: src/pages/plans/DecisionTable.tsx
+msgid "show {id}"
+msgstr "show {id}"
+
 #: src/pages/planning/HistoryDrawer.tsx
 msgid "Show AI Reasoning"
 msgstr "Show AI Reasoning"
@@ -2468,6 +2555,7 @@ msgstr "started {startedAgo}"
 msgid "starting…"
 msgstr "starting…"
 
+#: src/pages/plans/DecisionTable.tsx
 #: src/pages/plans/ReviewFindings.tsx
 msgid "status"
 msgstr "status"
@@ -2536,6 +2624,10 @@ msgstr "tech-lead (default)"
 #: src/pages/plans/ReviewFindings.tsx
 msgid "test caught"
 msgstr "test caught"
+
+#: src/pages/plans/DecisionTable.tsx
+msgid "text"
+msgstr "text"
 
 #: src/pages/plans/StalledBadge.tsx
 msgid "The {stage} of this phase has stopped working. Notification only — nothing was restarted."
@@ -2650,6 +2742,10 @@ msgstr "the plan directory is being picked up by the workspace scan…"
 msgid "The plan names the branch <0>{headerBranch}</0>, but the daemon will land <1>{runBranch}</1>. Push and the change request always use the run's branch; the header's branch is a reference only."
 msgstr "The plan names the branch <0>{headerBranch}</0>, but the daemon will land <1>{runBranch}</1>. Push and the change request always use the run's branch; the header's branch is a reference only."
 
+#: src/pages/plans/DecisionTable.tsx
+msgid "The plan review could not check the code. An id without a cited report reads \"not verified\" — nobody could check it, which is not the same as nobody did it."
+msgstr "The plan review could not check the code. An id without a cited report reads \"not verified\" — nobody could check it, which is not the same as nobody did it."
+
 #: src/pages/planning/RunningPlanPanel.tsx
 msgid "The plan takes shape here as you answer — each reply rebuilds it."
 msgstr "The plan takes shape here as you answer — each reply rebuilds it."
@@ -2761,6 +2857,10 @@ msgstr "This phase was not run by the daemon — there is no branch to land. Tic
 #: src/pages/plans/TerminalBadge.tsx
 msgid "this plan"
 msgstr "this plan"
+
+#: src/pages/plans/DecisionTable.tsx
+msgid "This plan declares no decisions and no spec criteria in the machine shape — there is nothing to trace to evidence."
+msgstr "This plan declares no decisions and no spec criteria in the machine shape — there is nothing to trace to evidence."
 
 #: src/pages/plans/PhaseReview.tsx
 msgid "This project sets vcs.forkRemote, and landing through a fork is not supported yet — remove it to land to origin, or push and open the {change} by hand."
@@ -2930,6 +3030,10 @@ msgstr "why it did not move"
 #: src/pages/planning/RevisionReview.tsx
 msgid "Why this proposal does not fit…"
 msgstr "Why this proposal does not fit…"
+
+#: src/pages/plans/DecisionTable.tsx
+msgid "why: {why}"
+msgstr "why: {why}"
 
 #: src/pages/plans/forecastStoryModel.ts
 msgid "with only part of the work done"
