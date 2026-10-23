@@ -149,9 +149,14 @@ func AnswerGuardDecision(db *sql.DB, taskID, phaseID int64, decisionID string, a
 	if d.Source != store.DecisionSourceStop || d.Status != store.DecisionUndecided {
 		return store.Decision{}, ErrDecisionNotOpen
 	}
-	ans.Option = strings.TrimSpace(ans.Option)
-	if ans.Option != GuardOptionAllow && ans.Option != GuardOptionReject {
-		return store.Decision{}, fmt.Errorf("%w %q (want %s or %s)", ErrDecisionBadOption, ans.Option, GuardOptionAllow, GuardOptionReject)
+	// An agent-declared stop (stopdecision.go) offers the agent's own options and
+	// free text; only a guard decision is allow/reject.
+	rec := decodeStopRecord(d.GuardJSON)
+	if rec.Stop == nil {
+		ans.Option = strings.TrimSpace(ans.Option)
+		if ans.Option != GuardOptionAllow && ans.Option != GuardOptionReject {
+			return store.Decision{}, fmt.Errorf("%w %q (want %s or %s)", ErrDecisionBadOption, ans.Option, GuardOptionAllow, GuardOptionReject)
+		}
 	}
 	var docPath string
 	if err := db.QueryRow(`SELECT doc_path FROM epic_phases WHERE id = ? AND workspace_task_id = ?`, phaseID, taskID).
@@ -160,6 +165,9 @@ func AnswerGuardDecision(db *sql.DB, taskID, phaseID int64, decisionID string, a
 			return store.Decision{}, ErrDecisionNotFound
 		}
 		return store.Decision{}, err
+	}
+	if rec.Stop != nil {
+		return answerStopDecision(db, d, rec, docPath, ans, now)
 	}
 	var guard GuardResult
 	_ = json.Unmarshal([]byte(d.GuardJSON), &guard)
