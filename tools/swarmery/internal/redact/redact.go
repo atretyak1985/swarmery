@@ -86,11 +86,70 @@ var privateKeyRule = redactRule{
 	"${1}" + redactedMark + "${2}",
 }
 
-// storageRules / storageLiteralRules are what All and Literal apply.
+// Storage-only token shapes, matched by their own prefix: they join Literal.
+// Like privateKeyRule they are not response-layer classes (guard-pack's port
+// keeps exactly those 11).
+var storageLiteralExtra = []redactRule{
+	// OpenAI-shaped keys (sk-proj-…, sk-…). The word boundary keeps words
+	// such as risk-… and task-… out; an Anthropic key is masked earlier.
+	{"openai_key", regexp.MustCompile(`\bsk-[A-Za-z0-9_-]{20,}`), redactedMark},
+	// Stripe live secret and restricted keys.
+	{"stripe_key", regexp.MustCompile(`\b[rs]k_live_[A-Za-z0-9]{10,}`), redactedMark},
+}
+
+// Storage-only contextual shapes: a scheme word or a flag next to a value.
+// Like bearer and generic_key_value they stay out of Literal (code).
+var storageContextExtra = []redactRule{
+	// An Authorization header with the Basic scheme, plain or JSON-quoted —
+	// keep the header, the scheme word and the separator.
+	{"basic_auth", regexp.MustCompile(`(?i)(authorization["']?\s*[:=]\s*["']?basic\s+)[A-Za-z0-9+/]+={0,2}`), "${1}" + redactedMark},
+	// A password passed on a command line (--password <v>, --password=<v>,
+	// --passwd …). A value that starts with "-" is the next flag, and
+	// --password-file names a file.
+	{"cli_password", regexp.MustCompile(`(?i)(--pass(?:word|wd)(?:=|\s+))[^\s-]\S*`), "${1}" + redactedMark},
+}
+
+// storageGenericKeyValue is the storage form of generic_key_value: the same
+// keys, but a token-named key followed by a number is a count, not a
+// credential — tokens: 1234, max_tokens=4096, input_tokens: 1,234 stay as
+// they are. A token-named key masks a value only when the value holds a
+// character other than digits and . , ; : ) ] } " '. The other keys
+// (password, secret, …) mask any value, digits included.
+var storageGenericKeyValue = redactRule{
+	"generic_key_value",
+	regexp.MustCompile(`(?i)((?:secret|passwd|password|api[_-]?key|credential)[A-Za-z0-9_-]*\s*[=:]\s*)\S+` +
+		`|(token[A-Za-z0-9_-]*\s*[=:]\s*)\S*[^\s0-9.,;:)\]}"']\S*`),
+	"${1}${2}" + redactedMark,
+}
+
+// storageRules / storageLiteralRules are what All and Literal apply: the
+// response-layer classes (with storageGenericKeyValue in generic_key_value's
+// place), PEM blocks, then the storage-only shapes.
 var (
-	storageRules        = append(append([]redactRule{}, redactRules...), privateKeyRule)
-	storageLiteralRules = append(append([]redactRule{}, literalRules...), privateKeyRule)
+	storageRules = concatRules(swapGeneric(redactRules), []redactRule{privateKeyRule},
+		storageLiteralExtra, storageContextExtra)
+	storageLiteralRules = concatRules(literalRules, []redactRule{privateKeyRule}, storageLiteralExtra)
 )
+
+func concatRules(lists ...[]redactRule) []redactRule {
+	var out []redactRule
+	for _, l := range lists {
+		out = append(out, l...)
+	}
+	return out
+}
+
+// swapGeneric returns rules with generic_key_value replaced by its storage
+// form.
+func swapGeneric(rules []redactRule) []redactRule {
+	out := append([]redactRule(nil), rules...)
+	for i, r := range out {
+		if r.name == "generic_key_value" {
+			out[i] = storageGenericKeyValue
+		}
+	}
+	return out
+}
 
 func apply(rules []redactRule, s string) string {
 	for _, r := range rules {
@@ -100,13 +159,13 @@ func apply(rules []redactRule, s string) string {
 }
 
 // All masks every secret-shaped value in s before it is stored: the 11 classes
-// plus PEM private-key blocks (value side only). It is idempotent:
-// All(All(s)) == All(s).
+// (counts after a token-named key excepted), PEM private-key blocks and the
+// storage-only shapes (value side only). It is idempotent: All(All(s)) == All(s).
 func All(s string) string { return apply(storageRules, s) }
 
-// Literal masks only the literal token shapes (classes 1–8 and 11, plus PEM
-// private-key blocks). It is the redactor for code: Write/Edit content and
-// file-change diffs.
+// Literal masks only the literal token shapes (classes 1–8 and 11, PEM
+// private-key blocks, and the storage-only OpenAI and Stripe shapes). It is
+// the redactor for code: Write/Edit content and file-change diffs.
 func Literal(s string) string { return apply(storageLiteralRules, s) }
 
 // Response is the API's response-layer redaction: exactly the 11 classes.

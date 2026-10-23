@@ -27,7 +27,11 @@ import (
 
 // RulesVersion identifies the rule set a rescrub pass ran with. Bump it when
 // the rules change so that stored rows are scanned again.
-const RulesVersion = 1
+//
+//	1  the 11 classes, PEM blocks, code fields literal-only
+//	2  key-cued payload masking, Basic auth, --password, OpenAI and Stripe
+//	   shapes, counts after a token-named key kept; link_events covered
+const RulesVersion = 2
 
 // Rescrub defaults: a batch is small enough to hold the writer for
 // milliseconds, the pause long enough to let the ingest in between.

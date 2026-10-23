@@ -88,7 +88,8 @@ func TestRuleNamesOrder(t *testing.T) {
 	if len(literalRules) != 9 {
 		t.Errorf("literalRules = %d, want 9 (classes 1–8 and 11)", len(literalRules))
 	}
-	if c := CountClasses(); len(c) != 12 || c[11] != "private_key" {
-		t.Errorf("CountClasses = %v, want the 11 classes then private_key", c)
+	want := []string{"private_key", "openai_key", "stripe_key", "basic_auth", "cli_password"}
+	if c := CountClasses(); len(c) != 16 || strings.Join(c[11:], ",") != strings.Join(want, ",") {
+		t.Errorf("CountClasses = %v, want the 11 classes then %v", c, want)
 	}
 }
