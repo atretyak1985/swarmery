@@ -91,7 +91,8 @@ case "$(run "$BIN" link token --print-path)" in
 esac
 
 echo "→ starting isolated daemon on :$PORT (db $DB, HOME $SCRATCH/home)"
-run "$BIN" serve --db "$DB" --port "$PORT" >"$LOG" 2>&1 &
+# Not via run(): a backgrounded function is a subshell, so $! would be the subshell's PID and cleanup would miss the daemon.
+env -i "$SCRATCH/launch.sh" "$BIN" serve --db "$DB" --port "$PORT" >"$LOG" 2>&1 &
 PID=$!
 
 up=0
