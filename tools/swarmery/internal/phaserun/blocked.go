@@ -103,7 +103,10 @@ func blockedCooldown() time.Duration {
 //     The `## Guard` block and `## Decisions` are deliberately IN the hashed
 //     body: answering a guard decision (guard_decision.go) appends a `D-n` line
 //     and, on allow, an `allow:` list — the operator changed what the next run
-//     may do, so the phase is no longer the one that blocked.
+//     may do, so the phase is no longer the one that blocked. The same holds for
+//     the answer to an agent-declared stop (stopdecision.go,
+//     TestBlockedStopAnsweredLiftsCooldown): its `- **D-n** (stop: <trigger>)`
+//     line alone lifts the refusal.
 //
 // Each part is length-prefixed, so no two different inputs can concatenate to the
 // same bytes.
