@@ -160,13 +160,12 @@ func countTree(v any, fields map[string]bool, literal bool, acc map[string]int) 
 		}
 	case map[string]any:
 		for k, e := range x {
-			if s, ok := e.(string); ok && !literal && secretKey(k) {
-				if _, masked := keyCued(s); masked {
-					acc[KeyCuedClass]++
-				}
+			sub := literal || fields[k]
+			rec := func(v any) { countTree(v, fields, sub, acc) }
+			if c := keyCue(k); c != noCue && !literal && countCued(c, e, acc, rec) {
 				continue
 			}
-			countTree(e, fields, literal || fields[k], acc)
+			rec(e)
 		}
 	case []any:
 		for _, e := range x {

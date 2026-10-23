@@ -145,10 +145,10 @@ func storageSamples() []storageSample {
 	stripe := fake("sk", "_live_", strings.Repeat("C", 24))
 	restricted := fake("rk", "_live_", strings.Repeat("D", 24))
 	return []storageSample{
-		{"basic_auth", "Authorization: " + "Ba" + "sic " + basic, basic, false},
-		{"basic_auth", `"Authorization": "` + "Ba" + "sic " + basic + `"`, basic, false},
-		{"cli_password", "mysql -u root --pass" + "word " + cliPw + " db", cliPw, false},
-		{"cli_password", "mysql -u root --pass" + "word=" + cliPw + " db", cliPw, false},
+		{"auth_header", "Authorization: " + "Ba" + "sic " + basic, basic, false},
+		{"auth_header", `"Authorization": "` + "Ba" + "sic " + basic + `"`, basic, false},
+		{"cli_secret", "mysql -u root --pass" + "word " + cliPw + " db", cliPw, false},
+		{"cli_secret", "mysql -u root --pass" + "word=" + cliPw + " db", cliPw, false},
 		{"openai_key", "OPENAI " + proj, proj, true},
 		{"openai_key", "key " + plain + " end", plain, true},
 		{"stripe_key", "stripe " + stripe, stripe, true},
@@ -179,8 +179,8 @@ func TestStorageRulesMaskNewShapes(t *testing.T) {
 			}
 		}
 	}
-	if c := Count(storageSamples()[0].value); c["basic_auth"] != 1 {
-		t.Errorf("Count(basic) = %v, want basic_auth 1", c)
+	if c := Count(storageSamples()[0].value); c["auth_header"] != 1 {
+		t.Errorf("Count(basic) = %v, want auth_header 1", c)
 	}
 	// Keeping the scheme word and the flag visible keeps the row diagnosable.
 	if got := All("Authorization: " + "Ba" + "sic " + fake("YWxp", "Y2U6", "cGFzc3dvcmQ=")); got != "Authorization: Basic "+Mark {

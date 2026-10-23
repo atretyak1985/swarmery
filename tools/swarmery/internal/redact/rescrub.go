@@ -134,6 +134,8 @@ var targets = []target{
 		out, _ := PayloadJSON("", doc)
 		return out
 	})},
+	// Swarm messages the sessions exchanged (internal/link swarm.go): text.
+	{table: "link_messages", cols: []string{"body", "reason"}, fix: fixWith(All)},
 }
 
 // PermissionEventsProgress is the redaction_progress key of the pass over the

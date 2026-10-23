@@ -78,12 +78,15 @@ func tree(v any, fields map[string]bool, literal bool) (any, bool) {
 	case map[string]any:
 		var out map[string]any
 		for k, e := range x {
+			sub := literal || fields[k]
+			rec := func(v any) (any, bool) { return tree(v, fields, sub) }
 			var ne any
-			var changed bool
-			if s, ok := e.(string); ok && !literal && secretKey(k) {
-				ne, changed = keyCued(s)
-			} else {
-				ne, changed = tree(e, fields, literal || fields[k])
+			var changed, cued bool
+			if c := keyCue(k); c != noCue && !literal {
+				ne, changed, cued = cuedValue(c, e, rec)
+			}
+			if !cued {
+				ne, changed = rec(e)
 			}
 			if !changed {
 				continue

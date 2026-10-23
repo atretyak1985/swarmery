@@ -100,13 +100,16 @@ var storageLiteralExtra = []redactRule{
 // Storage-only contextual shapes: a scheme word or a flag next to a value.
 // Like bearer and generic_key_value they stay out of Literal (code).
 var storageContextExtra = []redactRule{
-	// An Authorization header with the Basic scheme, plain or JSON-quoted —
-	// keep the header, the scheme word and the separator.
-	{"basic_auth", regexp.MustCompile(`(?i)(authorization["']?\s*[:=]\s*["']?basic\s+)[A-Za-z0-9+/]+={0,2}`), "${1}" + redactedMark},
-	// A password passed on a command line (--password <v>, --password=<v>,
-	// --passwd …). A value that starts with "-" is the next flag, and
-	// --password-file names a file.
-	{"cli_password", regexp.MustCompile(`(?i)(--pass(?:word|wd)(?:=|\s+))[^\s-]\S*`), "${1}" + redactedMark},
+	// An Authorization header with the Basic or Token scheme, plain or
+	// JSON-quoted — keep the header, the scheme word and the separator.
+	{"auth_header", regexp.MustCompile(`(?i)(authorization["']?\s*[:=]\s*["']?(?:basic|token)\s+)[^\s"',;]+`), "${1}" + redactedMark},
+	// A secret passed on a command line, as `--flag <v>` or `--flag=<v>`:
+	// --password / --passwd with any value, --token / --api-key / --secret
+	// unless the value is a plain number (an id or a count). A value that
+	// starts with "-" is the next flag, and --password-file or --token-file
+	// names a file.
+	{"cli_secret", regexp.MustCompile(`(?i)(--pass(?:word|wd)(?:=|\s+))[^\s-]\S*` +
+		`|(--(?:token|api[-_]?key|secret)(?:=|\s+))(?:[^\s0-9-]\S*|[0-9]+[^\s0-9]\S*)`), "${1}${2}" + redactedMark},
 }
 
 // storageGenericKeyValue is the storage form of generic_key_value: the same
