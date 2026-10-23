@@ -4688,6 +4688,10 @@ export interface Epic {
   /** Set when this plan is a MICRO-PLAN: the external id of the board card whose
    * dispatch materialized it. The two are one unit of work seen from two pages. */
   cardExternalId: string | null;
+  /** The plan's latest plan-level review (verify-not-trust phase 12): `not-verified`
+   * when it was INCONCLUSIVE. Null before any plan review ran; absent from an
+   * older daemon. The decision table itself is GET /api/epics/{taskId}/evidence. */
+  planReview?: PlanReviewState | null;
   /** Every session task_sessions attaches to this plan: the daemon's own runs
    * (explicit) and the interactive sessions inferred from the plan files they
    * edited (heuristic). Never null — [] means nothing has worked on this plan,
@@ -5184,4 +5188,15 @@ export interface FirstRequest {
   measured: FirstRequestMeasured;
   estimate: FirstRequestEstimate;
   mcpServers: ConfiguredMcpServer[];
+}
+
+/** The latest plan-level review of a plan (Go wsingest.PlanReviewState,
+ * verify-not-trust phase 12). */
+export interface PlanReviewState {
+  /** "" before any plan review; "not-verified" when it was INCONCLUSIVE. */
+  status: '' | 'verified' | 'not-verified';
+  verdict: string;
+  /** The INCONCLUSIVE reason class (`reviewer-timed-out`, …); "" otherwise. */
+  reasonClass: string;
+  at: string;
 }

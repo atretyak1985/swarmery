@@ -693,10 +693,23 @@ msgstr "вирішено {decided}"
 msgid "decided {decided} by {by}"
 msgstr "вирішено {decided} ({by})"
 
+#: src/pages/plans/DecisionTable.tsx
+msgid "decision / criterion"
+msgstr "рішення / критерій"
+
 #. placeholder {0}: linkedTurn.seq
 #: src/pages/PlanningMode.tsx
 msgid "decision D-{0}"
 msgstr "рішення D-{0}"
+
+#: src/pages/plans/DecisionTable.tsx
+msgid "decision table unavailable: {error}"
+msgstr "таблиця рішень недоступна: {error}"
+
+#: src/pages/plans/DecisionTable.tsx
+#: src/pages/plans/DecisionTable.tsx
+msgid "decisions and criteria"
+msgstr "рішення й критерії"
 
 #: src/pages/Routines.tsx
 msgid "Delete"
@@ -903,6 +916,8 @@ msgstr "епіки…"
 msgid "every minute"
 msgstr "щохвилини"
 
+#: src/pages/plans/DecisionTable.tsx
+#: src/pages/plans/DecisionTable.tsx
 #: src/pages/plans/ReviewFindings.tsx
 msgid "evidence"
 msgstr "докази"
@@ -1099,6 +1114,7 @@ msgstr "наскільки глибоко думає кожен «Запусти
 msgid "how hard the planning interview thinks, on every turn of this wizard — the first spawn and each resume. Leave it on the default to let the daemon's knob and the planner's pinned default decide. Note that NO effort is not the cheap end — an unpinned claude run thinks at xhigh, the deepest setting."
 msgstr "наскільки глибоко думає інтерв’ю планування на кожному ході цього майстра — при першому запуску й кожному відновленні. Лишіть типове значення, щоб вирішували налаштування демона й закріплений типовий рівень планувальника. Зауважте: БЕЗ effort — це не найдешевший варіант: незакріплений запуск claude думає на xhigh, найглибшому рівні."
 
+#: src/pages/plans/DecisionTable.tsx
 #: src/pages/plans/ReviewFindings.tsx
 msgid "id"
 msgstr "id"
@@ -1469,6 +1485,10 @@ msgstr "жодного з {total} критеріїв не відмічено"
 msgid "not delivered"
 msgstr "не доставлено"
 
+#: src/pages/plans/DecisionTable.tsx
+msgid "not implemented"
+msgstr "не реалізовано"
+
 #: src/pages/plans/landingModel.ts
 msgid "not landed"
 msgstr "не здано"
@@ -1493,6 +1513,10 @@ msgstr "Ще не запускалась."
 #: src/pages/plans/ForecastVsActual.tsx
 msgid "not scored — the run’s actuals are not recorded yet, or nothing about it was measurable"
 msgstr "без оцінки — фактичні показники запуску ще не записані або нічого не вдалося виміряти"
+
+#: src/pages/plans/DecisionTable.tsx
+msgid "not verified"
+msgstr "не перевірено"
 
 #: src/pages/planning/RevisionReview.tsx
 msgid "note (optional)"
@@ -1688,6 +1712,10 @@ msgstr "зусилля запуску фази"
 msgid "phase run model"
 msgstr "модель запуску фази"
 
+#: src/pages/plans/DecisionTable.tsx
+msgid "phases"
+msgstr "фази"
+
 #: src/pages/planning/QuestionCard.tsx
 msgid "pick any that apply"
 msgstr "оберіть усе, що підходить"
@@ -1737,6 +1765,10 @@ msgstr "план не активний"
 #: src/pages/PlanningMode.tsx
 msgid "Plan ready"
 msgstr "План готовий"
+
+#: src/pages/plans/DecisionTable.tsx
+msgid "plan review not verified ({reasonClass}) — ids without evidence are not verified, not remaining"
+msgstr "рев’ю плану не перевірене ({reasonClass}) — id без доказів не перевірені, а не залишені"
 
 #: src/pages/plans/ReviewFindings.tsx
 msgid "Plan round"
@@ -1985,6 +2017,10 @@ msgstr "Перезавантажити"
 #: src/pages/planning/RevisionReview.tsx
 msgid "Reload review"
 msgstr "Перезавантажити перегляд"
+
+#: src/pages/plans/DecisionTable.tsx
+msgid "remaining"
+msgstr "залишилось"
 
 #: src/pages/Routines.tsx
 msgid "remove step"
@@ -2464,6 +2500,7 @@ msgstr "почато {startedAgo}"
 msgid "starting…"
 msgstr "запуск…"
 
+#: src/pages/plans/DecisionTable.tsx
 #: src/pages/plans/ReviewFindings.tsx
 msgid "status"
 msgstr "статус"

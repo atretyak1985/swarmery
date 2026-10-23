@@ -374,6 +374,11 @@ type epicDTO struct {
 	// two pages, and the chip is what makes that navigable instead of a coincidence
 	// of names.
 	CardExternalID *string `json:"cardExternalId"`
+	// PlanReview is the plan's latest plan-level review (verify-not-trust phase
+	// 12): status "verified" (PASS/FAIL) or "not-verified" (INCONCLUSIVE, with the
+	// reason class); null before any plan review ran. The decision table itself is
+	// GET /api/epics/{taskId}/evidence.
+	PlanReview *wsingest.PlanReviewState `json:"planReview"`
 }
 
 // linkedSessionDTO is one task_sessions row joined to its session, as the Plans
@@ -547,6 +552,14 @@ func (h *Handler) listEpics(w http.ResponseWriter, r *http.Request) {
 		out[i].Spec = buildEpicSpec(specCriteria[out[i].TaskID], covers)
 		if card, ok := microPlanCards[out[i].TaskID]; ok {
 			out[i].CardExternalID = &card
+		}
+		pr, err := wsingest.LoadPlanReviewState(h.DB, out[i].TaskID)
+		if err != nil {
+			writeErr(w, err)
+			return
+		}
+		if pr.Status != "" {
+			out[i].PlanReview = &pr
 		}
 		out[i].LinkedSessions = linkedSessions[out[i].TaskID]
 		if out[i].LinkedSessions == nil {

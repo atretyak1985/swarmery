@@ -113,6 +113,7 @@ import { PhaseReopens } from './plans/PhaseReopens';
 import { TerminalBadge, useTerminalSessions } from './plans/TerminalBadge';
 import { PhaseReview } from './plans/PhaseReview';
 import { ReviewFindings } from './plans/ReviewFindings';
+import { DecisionTable } from './plans/DecisionTable';
 import { PlainSummary } from './plans/PlainSummary';
 import { RunsReviewBlock } from './plans/RunsReviewBlock';
 import { VerifyVerdictChip } from './plans/VerifyVerdictChip';
@@ -3631,7 +3632,13 @@ function PlanDetailPanel({
       {activeTab === 'edit' ? (
         <DocEditor taskId={epic.taskId} path="README.md" version={null} onSaved={onDocChanged} />
       ) : activeTab === 'plan' ? (
-        <PlanReadme epic={epic} />
+        <>
+          <DecisionTable
+            taskId={epic.taskId}
+            version={`${String(epic.rollup.done)}/${String(epic.rollup.total)}:${epic.planReview?.at ?? ''}`}
+          />
+          <PlanReadme epic={epic} />
+        </>
       ) : activeTab === 'plain' ? (
         <PlainSummary taskId={epic.taskId} kind="plan" />
       ) : activeTab === 'spec' ? (

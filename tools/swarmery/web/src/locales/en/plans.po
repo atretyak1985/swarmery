@@ -693,10 +693,23 @@ msgstr "decided {decided}"
 msgid "decided {decided} by {by}"
 msgstr "decided {decided} by {by}"
 
+#: src/pages/plans/DecisionTable.tsx
+msgid "decision / criterion"
+msgstr "decision / criterion"
+
 #. placeholder {0}: linkedTurn.seq
 #: src/pages/PlanningMode.tsx
 msgid "decision D-{0}"
 msgstr "decision D-{0}"
+
+#: src/pages/plans/DecisionTable.tsx
+msgid "decision table unavailable: {error}"
+msgstr "decision table unavailable: {error}"
+
+#: src/pages/plans/DecisionTable.tsx
+#: src/pages/plans/DecisionTable.tsx
+msgid "decisions and criteria"
+msgstr "decisions and criteria"
 
 #: src/pages/Routines.tsx
 msgid "Delete"
@@ -903,6 +916,8 @@ msgstr "epics…"
 msgid "every minute"
 msgstr "every minute"
 
+#: src/pages/plans/DecisionTable.tsx
+#: src/pages/plans/DecisionTable.tsx
 #: src/pages/plans/ReviewFindings.tsx
 msgid "evidence"
 msgstr "evidence"
@@ -1099,6 +1114,7 @@ msgstr "how hard every Run phase / Retry run on this plan thinks. Leave it on th
 msgid "how hard the planning interview thinks, on every turn of this wizard — the first spawn and each resume. Leave it on the default to let the daemon's knob and the planner's pinned default decide. Note that NO effort is not the cheap end — an unpinned claude run thinks at xhigh, the deepest setting."
 msgstr "how hard the planning interview thinks, on every turn of this wizard — the first spawn and each resume. Leave it on the default to let the daemon's knob and the planner's pinned default decide. Note that NO effort is not the cheap end — an unpinned claude run thinks at xhigh, the deepest setting."
 
+#: src/pages/plans/DecisionTable.tsx
 #: src/pages/plans/ReviewFindings.tsx
 msgid "id"
 msgstr "id"
@@ -1469,6 +1485,10 @@ msgstr "none of the {total} criteria ticked"
 msgid "not delivered"
 msgstr "not delivered"
 
+#: src/pages/plans/DecisionTable.tsx
+msgid "not implemented"
+msgstr "not implemented"
+
 #: src/pages/plans/landingModel.ts
 msgid "not landed"
 msgstr "not landed"
@@ -1493,6 +1513,10 @@ msgstr "Not run yet."
 #: src/pages/plans/ForecastVsActual.tsx
 msgid "not scored — the run’s actuals are not recorded yet, or nothing about it was measurable"
 msgstr "not scored — the run’s actuals are not recorded yet, or nothing about it was measurable"
+
+#: src/pages/plans/DecisionTable.tsx
+msgid "not verified"
+msgstr "not verified"
 
 #: src/pages/planning/RevisionReview.tsx
 msgid "note (optional)"
@@ -1688,6 +1712,10 @@ msgstr "phase run effort"
 msgid "phase run model"
 msgstr "phase run model"
 
+#: src/pages/plans/DecisionTable.tsx
+msgid "phases"
+msgstr "phases"
+
 #: src/pages/planning/QuestionCard.tsx
 msgid "pick any that apply"
 msgstr "pick any that apply"
@@ -1737,6 +1765,10 @@ msgstr "plan is not active"
 #: src/pages/PlanningMode.tsx
 msgid "Plan ready"
 msgstr "Plan ready"
+
+#: src/pages/plans/DecisionTable.tsx
+msgid "plan review not verified ({reasonClass}) — ids without evidence are not verified, not remaining"
+msgstr "plan review not verified ({reasonClass}) — ids without evidence are not verified, not remaining"
 
 #: src/pages/plans/ReviewFindings.tsx
 msgid "Plan round"
@@ -1985,6 +2017,10 @@ msgstr "Reload"
 #: src/pages/planning/RevisionReview.tsx
 msgid "Reload review"
 msgstr "Reload review"
+
+#: src/pages/plans/DecisionTable.tsx
+msgid "remaining"
+msgstr "remaining"
 
 #: src/pages/Routines.tsx
 msgid "remove step"
@@ -2464,6 +2500,7 @@ msgstr "started {startedAgo}"
 msgid "starting…"
 msgstr "starting…"
 
+#: src/pages/plans/DecisionTable.tsx
 #: src/pages/plans/ReviewFindings.tsx
 msgid "status"
 msgstr "status"

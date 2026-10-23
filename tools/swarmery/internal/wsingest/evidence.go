@@ -471,7 +471,7 @@ func LoadDecisionTable(db *sql.DB, taskID int64) (DecisionTable, error) {
 		return t, err
 	}
 
-	if t.PlanReview, err = loadPlanReviewState(db, taskID); err != nil {
+	if t.PlanReview, err = LoadPlanReviewState(db, taskID); err != nil {
 		return t, err
 	}
 	if len(t.Rows) == 0 {
@@ -585,10 +585,10 @@ func containsInt(xs []int, x int) bool {
 	return false
 }
 
-// loadPlanReviewState reads the newest plan-level review: the daemon's
+// LoadPlanReviewState reads the newest plan-level review: the daemon's
 // (phase_reviews, scope 'plan') or an interactive one (a `round: plan` block in a
 // phase doc, review_blocks), whichever is later.
-func loadPlanReviewState(db *sql.DB, taskID int64) (PlanReviewState, error) {
+func LoadPlanReviewState(db *sql.DB, taskID int64) (PlanReviewState, error) {
 	type cand struct{ verdict, reason, at string }
 	var cs []cand
 

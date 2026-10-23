@@ -7,6 +7,7 @@
 // `npx vitest run src/pages/detail/HandoffCard.test.tsx`.
 
 import { cleanup, fireEvent, render, screen, waitFor } from '../../test/render';
+import { MemoryRouter } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { HandoffCard } from './HandoffCard';
 
@@ -34,7 +35,12 @@ afterEach(cleanup);
 
 describe('HandoffCard', () => {
   it('renders the Rejected section between Non-goals and Open risks', async () => {
-    render(<HandoffCard sessionId={7} handoffPath="/home/u/.swarmery/handoffs/abc.md" />);
+    // HandoffCard reads the URL hash (useLocation), so it needs a router.
+    render(
+      <MemoryRouter>
+        <HandoffCard sessionId={7} handoffPath="/home/u/.swarmery/handoffs/abc.md" />
+      </MemoryRouter>,
+    );
     fireEvent.click(screen.getByRole('button', { name: /handoff/i }));
 
     const rejected = await waitFor(() => screen.getByRole('heading', { name: 'Rejected' }));
