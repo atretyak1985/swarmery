@@ -75,6 +75,10 @@ function lesson(id: number, createdAt: string): Lesson {
     retireReason: null,
     promotedBranch: '',
     matches: [],
+    source: 'surprise',
+    reviewType: '',
+    reviewArea: '',
+    findings: [],
   };
 }
 

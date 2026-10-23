@@ -1,0 +1,13 @@
+Look first — the agent changed course here:
+(the executor's own words, matched against the workaround-words list; each is a place to check in the diff, not a finding by itself)
+- "instead" — That would have turned the continuation into a planned task instead of a mid-phase discovery.
+    before: A plan doc that knew the run teardown removes the worktree, so a returned branch always reaches the dirty-branch reclaim.
+    after: PHASE DONE
+- "pre-existing" — The gofmt hits are pre-existing.
+- … and 1 more on the phase card.
+
+Check first — accepted lessons for the areas this phase works in (each names a mistake that recurred here; look for it in the diff first, and cite the id when a finding confirms it):
+- [L-7] Single-flight every cold read of the /vcs cache in internal/api.
+- [L-3] Redact a tool's output before truncating it in internal/repoprovider.
+
+DIFF STAT: one file

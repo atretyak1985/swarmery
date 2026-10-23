@@ -88,6 +88,10 @@ function lesson(id: number): lessons.Lesson {
     retireReason: null,
     promotedBranch: '',
     matches: [],
+    source: 'surprise',
+    reviewType: '',
+    reviewArea: '',
+    findings: [],
     effectiveness: null,
   };
 }

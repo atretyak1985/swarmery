@@ -567,6 +567,10 @@ msgstr "a phase run lands off its plan"
 msgid "a plan phase run ends and the rules can't tell"
 msgstr "a plan phase run ends and the rules can't tell"
 
+#: src/pages/Lessons.tsx
+msgid "A review finding type that repeats in one area across two or more phases is proposed here too, marked review and citing its findings; dismissing it mutes that area for 30 days."
+msgstr "A review finding type that repeats in one area across two or more phases is proposed here too, marked review and citing its findings; dismissing it mutes that area for 30 days."
+
 #: src/pages/learning/classifierModel.ts
 #: src/pages/learning/classifierModel.ts
 msgid "a session finishes"
@@ -3249,6 +3253,10 @@ msgid "proposals"
 msgstr "proposals"
 
 #: src/pages/Lessons.tsx
+msgid "proposed because reviewers raised the same finding type in this area in several phases"
+msgstr "proposed because reviewers raised the same finding type in this area in several phases"
+
+#: src/pages/Lessons.tsx
 msgid "Proposed retirements"
 msgstr "Proposed retirements"
 
@@ -3430,6 +3438,10 @@ msgstr "retry"
 #: src/pages/Retro.tsx
 msgid "Retry"
 msgstr "Retry"
+
+#: src/pages/Lessons.tsx
+msgid "review"
+msgstr "review"
 
 #: src/pages/inbox/ReviewItem.tsx
 msgid "review {verdictWord}"

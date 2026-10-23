@@ -42,7 +42,7 @@ func TestReviewPromptLookFirstGolden(t *testing.T) {
 	}
 
 	// In the prompt it sits after the phase document and before the diff.
-	p := reviewPrompt("", "Phase 4 — X", "# doc", "DIFF STAT: one file", 7777, 1, lookFirstHits)
+	p := reviewPrompt("", "Phase 4 — X", "# doc", "DIFF STAT: one file", 7777, 1, lookFirstHits, "")
 	doc := strings.Index(p, "# doc\n----------------------------------------")
 	look := strings.Index(p, "Look first — the agent changed course here:")
 	diff := strings.Index(p, "DIFF STAT: one file")
@@ -50,7 +50,7 @@ func TestReviewPromptLookFirstGolden(t *testing.T) {
 		t.Errorf("order doc=%d look=%d diff=%d — want doc < look first < diff", doc, look, diff)
 	}
 	// Without hits the prompt is the prompt it was before the section existed.
-	if p0 := reviewPrompt("", "Phase 4 — X", "# doc", "DIFF", 7777, 1, workaround.PhaseHits{}); strings.Contains(p0, "Look first") ||
+	if p0 := reviewPrompt("", "Phase 4 — X", "# doc", "DIFF", 7777, 1, workaround.PhaseHits{}, ""); strings.Contains(p0, "Look first") ||
 		!strings.Contains(p0, "----------------------------------------\n\nDIFF") {
 		t.Errorf("a run without hits must not carry the section:\n%s", p0)
 	}

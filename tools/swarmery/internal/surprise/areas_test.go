@@ -89,3 +89,47 @@ func TestDiffAreasOnAnEmptyChangeSet(t *testing.T) {
 		t.Errorf("empty diff: unexpected %v missed %v", d.unexpected, d.missed)
 	}
 }
+
+func TestAreaOf(t *testing.T) {
+	for in, want := range map[string]string{
+		"tools/app/internal/api/vcs.go":    "tools/app/internal/api",
+		"./internal/store/store.go":        "internal/store",
+		"README.md":                        ".",
+		"`tools/app/README.md`":            "tools/app",
+		"tools/app/internal/repoprovider/": "tools/app/internal/repoprovider",
+		"":                                 "",
+		"  ":                               "",
+	} {
+		if got := AreaOf(in); got != want {
+			t.Errorf("AreaOf(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+func TestAreaApart(t *testing.T) {
+	cases := []struct {
+		x, y   string
+		levels int
+		ok     bool
+	}{
+		{"tools/app/internal/api", "tools/app/internal/api", 0, true},
+		{"internal/api", "tools/app/internal/api", 0, true}, // sub-module strip
+		{"tools/app/internal/repoprovider", "tools/app/internal/repoprovider/credstore", 1, true},
+		{"tools/app/internal/repoprovider/credstore", "tools/app/internal/repoprovider", 1, true}, // symmetric
+		{"tools/app", "tools/app/internal/api", 2, true},                                          // a module root is far from its packages
+		{"tools/app/internal/api", "tools/app/internal/apix", 0, false},                           // segments, not substrings
+		{"tools/app/internal/api", "tools/app/internal/wsingest", 0, false},
+		{".", ".", 0, true},
+		{".", "tools/app", 0, false},
+		{"", "tools/app", 0, false},
+	}
+	for _, c := range cases {
+		levels, ok := AreaApart(c.x, c.y)
+		if levels != c.levels || ok != c.ok {
+			t.Errorf("AreaApart(%q, %q) = %d, %t; want %d, %t", c.x, c.y, levels, ok, c.levels, c.ok)
+		}
+		if ok != AreaOverlap(c.x, c.y) {
+			t.Errorf("AreaApart(%q, %q) ok=%t disagrees with AreaOverlap", c.x, c.y, ok)
+		}
+	}
+}

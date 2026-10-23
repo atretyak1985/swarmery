@@ -2780,6 +2780,24 @@ func cmdServe(args []string) error {
 	phaserunSvc.InjectLessons = lessonInjector.ForPhase
 	phaserunSvc.LessonCitations = lessonInjector.AfterPhaseRun
 	log.Printf("lesson injection: budget=%d tokens", lessonBudget)
+	// verify-not-trust phase 8: the reviewer reads the same active lessons as a
+	// «Check first» list, and a finding type that recurs in one area across two
+	// or more phases becomes ONE lesson candidate (source 'review') — never a
+	// rule: the operator accepts it like any other. Kicked after every phase
+	// review (it runs once the next workspace scan has projected the review
+	// block), and hourly for reviews written outside the daemon (run-plan,
+	// backfills). SWARMERY_LESSONS=off turns it off with the surprise path.
+	phaserunSvc.CheckFirst = lessonInjector.ForReviewer
+	reviewLessons := lessons.NewReviewProposer(db, lessonCfg)
+	phaserunSvc.ReviewRecorded = func(int64) { reviewLessons.Kick() }
+	go func() {
+		ticker := time.NewTicker(time.Hour)
+		defer ticker.Stop()
+		for {
+			reviewLessons.RunLogged()
+			<-ticker.C
+		}
+	}()
 	// Learning loop phase 16: re-measure every active lesson's effectiveness
 	// (median area surprise before vs after activation) and PROPOSE retirements
 	// (ineffective, stale, unused 60 days, superseded) into the Lessons page's

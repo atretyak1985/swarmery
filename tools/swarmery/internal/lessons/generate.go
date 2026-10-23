@@ -165,16 +165,43 @@ func (g *Generator) Generate(ctx context.Context, phaseID int64, uuid string) (O
 	return out, nil
 }
 
+// runParsed runs one generation prompt and decodes the model's lessons. Shared
+// by the surprise path and the review path, so both read the model the same way.
+func runParsed(ctx context.Context, r Runner, prompt string) ([]Candidate, error) {
+	if r == nil {
+		return nil, fmt.Errorf("no runner configured")
+	}
+	raw, err := r.Run(ctx, prompt)
+	if err != nil {
+		return nil, fmt.Errorf("generation run: %w", err)
+	}
+	return ParseOutput(raw)
+}
+
+// DraftReview drafts the lesson of one repeated-finding group (verify-not-trust
+// phase 8): the review input shape, under the same validation as a surprise
+// lesson — above all the fabrication check, so a lesson citing a finding id the
+// input never offered is rejected. The group's own area globs replace whatever
+// the model returned: a review lesson applies where its findings are, no wider.
+// ok=false (no error) when the model returned no valid lesson; rejected says why.
+func DraftReview(ctx context.Context, r Runner, in ReviewInput) (c Candidate, ok bool, rejected []Rejection, err error) {
+	parsed, err := runParsed(ctx, r, BuildReviewPrompt(in))
+	if err != nil {
+		return c, false, nil, err
+	}
+	for i := range parsed {
+		parsed[i].AreaGlobs = in.AreaGlobs
+	}
+	valid, rejected := Validate(parsed, in.Allowed)
+	if len(valid) == 0 {
+		return c, false, rejected, nil
+	}
+	return valid[0], true, rejected, nil
+}
+
 func (g *Generator) generate(ctx context.Context, in Input) (Outcome, error) {
 	var out Outcome
-	if g.Runner == nil {
-		return out, fmt.Errorf("no runner configured")
-	}
-	raw, err := g.Runner.Run(ctx, BuildPrompt(in))
-	if err != nil {
-		return out, fmt.Errorf("generation run: %w", err)
-	}
-	parsed, err := ParseOutput(raw)
+	parsed, err := runParsed(ctx, g.Runner, BuildPrompt(in))
 	if err != nil {
 		return out, err
 	}

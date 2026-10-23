@@ -258,6 +258,17 @@ type Service struct {
 	// cited ("[L-12]") in its transcript or in the returned doc's Completion
 	// Report. ADVISORY: it logs and returns, never failing the run. nil ⇒ off.
 	LessonCitations func(phaseID int64, sessionUUID, docPath string)
+	// CheckFirst returns the reviewer's «Check first» list: the active lessons
+	// whose areas overlap the phase's forecasts (internal/lessons ForReviewer,
+	// verify-not-trust phase 8), inserted into the review prompt after the
+	// workaround hits. "" ⇒ no section. nil ⇒ not wired (the unit tests' state).
+	CheckFirst func(phaseID int64) string
+	// ReviewRecorded is told, after every phase review is recorded and written
+	// into the doc, that review findings may have changed — the daemon wires the
+	// lessons proposer's Kick, which groups repeated findings into candidates once
+	// the next workspace scan has projected the new block. ADVISORY and
+	// non-blocking. nil ⇒ off.
+	ReviewRecorded func(phaseID int64)
 	// Slots is the DAEMON-WIDE run registry and budget (internal/runcore): the
 	// per-phase single-flight gate AND — new — a bound this engine never had. A
 	// phase run used to be limited by nothing at all: ten phases started from the

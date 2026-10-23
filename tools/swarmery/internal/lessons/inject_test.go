@@ -187,3 +187,53 @@ func TestCompletionReportSection(t *testing.T) {
 		t.Errorf("cited in report = %v, want {2,3}", got)
 	}
 }
+
+// ForReviewer hands the reviewer the ACTIVE lessons whose areas overlap ANY of
+// the phase's forecasts (the prior and the executor's posterior) — never a
+// candidate, never a placeholder — and records nothing in lesson_uses.
+func TestForReviewerReturnsOverlappingActiveLessons(t *testing.T) {
+	db := openDB(t)
+	phaseID := seedRun(t, db, "rev", 0.2, "") // prior: internal/cost
+	mustExec(t, db, `INSERT INTO phase_forecasts
+		(phase_id, kind, areas_json, files_json, size_band, duration_band, outcome, confidence, post_hoc, doc_hash)
+		VALUES (?, 'posterior', '["tools/app/internal/api"]', '["tools/app/internal/api/vcs.go"]', 'S', '30-90m', 'done', 0.7, 0, 'h2')`, phaseID)
+	cost := seedActive(t, db, phaseID, 1, "Price cache reads separately.", "internal/cost/**", "2026-09-10T00:00:00Z")
+	api := seedActive(t, db, phaseID, 2, "Single-flight every cold cache read.", "internal/api/**", "2026-09-11T00:00:00Z")
+	seedActive(t, db, phaseID, 3, "Unrelated.", "internal/ingest/**", "2026-09-12T00:00:00Z")
+	seedActive(t, db, phaseID, 4, DraftPendingGuidance, "internal/api/**", "2026-09-13T00:00:00Z")
+	mustExec(t, db, `INSERT INTO surprise_lessons (source_phase_run, phase_id, seq, title, guidance, area_globs, status, created_at, updated_at)
+		VALUES ('cand', ?, 1, 'c', 'A candidate.', 'internal/api/**', 'candidate', 'now', 'now')`, phaseID)
+
+	got := NewInjector(db, DefaultBudgetTokens).ForReviewer(phaseID)
+	want := reviewerHeader + "\n- [" + Ref(api) + "] Single-flight every cold cache read.\n- [" + Ref(cost) + "] Price cache reads separately.\n\n"
+	if got != want {
+		t.Fatalf("ForReviewer =\n%q\nwant\n%q", got, want)
+	}
+	var uses int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM lesson_uses`).Scan(&uses); err != nil || uses != 0 {
+		t.Errorf("lesson_uses rows = %d, %v; a reviewer is not a run", uses, err)
+	}
+	// A phase with no forecast is placed nowhere and gets nothing.
+	other := mustExec(t, db, `INSERT INTO epic_phases (workspace_task_id, seq, name, doc_path, depends_on) VALUES (1, 9, 'x', '/ws/x.md', '[]')`)
+	if s := NewInjector(db, DefaultBudgetTokens).ForReviewer(other); s != "" {
+		t.Errorf("a phase without a forecast got %q", s)
+	}
+	if ReviewerSection(nil) != "" {
+		t.Error("no lessons must render nothing")
+	}
+}
+
+// The rendering phaserun's review_checkfirst golden pins (that test cannot import
+// this package): keep the two literals identical.
+func TestReviewerSectionMatchesThePhaserunGolden(t *testing.T) {
+	got := ReviewerSection([]Active{
+		{ID: 7, Guidance: "Single-flight every cold read of the /vcs cache in internal/api."},
+		{ID: 3, Guidance: "Redact a tool's output before truncating it in internal/repoprovider."},
+	})
+	const want = "Check first — accepted lessons for the areas this phase works in (each names a mistake that recurred here; look for it in the diff first, and cite the id when a finding confirms it):\n" +
+		"- [L-7] Single-flight every cold read of the /vcs cache in internal/api.\n" +
+		"- [L-3] Redact a tool's output before truncating it in internal/repoprovider.\n\n"
+	if got != want {
+		t.Errorf("ReviewerSection =\n%q\nwant\n%q", got, want)
+	}
+}

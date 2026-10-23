@@ -8,6 +8,28 @@ import { MOCK } from '../api';
 
 export type LessonStatus = 'candidate' | 'active' | 'retired' | 'dismissed' | 'merged';
 
+/** Who proposed the lesson: a run far from its forecast, or a review finding
+ *  that repeated across phases (verify-not-trust phase 8). */
+export type LessonSource = 'surprise' | 'review';
+
+/** One review finding a lesson cites as evidence `finding:<id>` (review_findings). */
+export interface LessonFinding {
+  id: number;
+  taskId: number;
+  projectSlug: string;
+  planId: string;
+  phaseId: number;
+  /** 0 when the finding's doc resolved to no phase. */
+  phaseSeq: number;
+  phaseName: string;
+  round: string;
+  /** The review block's own id, e.g. R1-2. */
+  findingId: string;
+  type: string;
+  file: string;
+  line: number;
+}
+
 export interface LessonMatch {
   kind: 'retro' | 'surprise';
   /** Set for kind "surprise" (another surprise lesson). */
@@ -48,6 +70,12 @@ export interface Lesson {
   matches: LessonMatch[];
   /** Stored verification row (phase 16); null until the first verification pass. */
   effectiveness?: LessonEffectiveness | null;
+  source: LessonSource;
+  /** A review lesson's group: the finding type and the area its files lie in; '' otherwise. */
+  reviewType: string;
+  reviewArea: string;
+  /** The `finding:<id>` evidence resolved for links; findings whose rows are gone are omitted. */
+  findings: LessonFinding[];
 }
 
 /** lesson_effectiveness: median area surprise before vs after activation.
@@ -151,6 +179,67 @@ export interface MergeTarget {
 
 const MOCK_LESSONS: Lesson[] = [
   {
+    id: 4,
+    phaseId: 906,
+    phaseName: 'Phase 6 — GitLab provider',
+    planId: '2026-10-09-phase-landing-repo-provider',
+    sourcePhaseRun: 'review:quality:tools/swarmery/internal/api',
+    title: 'Single-flight cold reads in internal/api',
+    normTitle: 'single flight cold reads in internal api',
+    guidance: 'In internal/api, put every cold cache read behind a single-flight before it reaches a probe.',
+    areaGlobs: ['tools/swarmery/internal/api/**'],
+    evidence: ['finding:18', 'finding:22'],
+    cause: 'Reviewers raised quality findings in tools/swarmery/internal/api in 2 phases.',
+    sourceParagraph: '',
+    surpriseIndex: null,
+    status: 'candidate',
+    linkedNormTitle: '',
+    mergedIntoId: null,
+    recurrences: 2,
+    recurrenceRuns: [],
+    model: 'claude-sonnet-5',
+    createdAt: '2026-10-23T10:00:00Z',
+    updatedAt: '2026-10-23T10:00:00Z',
+    activatedAt: null,
+    retiredAt: null,
+    retireReason: null,
+    promotedBranch: '',
+    matches: [],
+    source: 'review',
+    reviewType: 'quality',
+    reviewArea: 'tools/swarmery/internal/api',
+    findings: [
+      {
+        id: 18,
+        taskId: 900,
+        projectSlug: 'swarmery',
+        planId: '2026-10-09-phase-landing-repo-provider',
+        phaseId: 905,
+        phaseSeq: 5,
+        phaseName: 'Phase 5 — Plans review UI',
+        round: '1',
+        findingId: 'R1-3',
+        type: 'quality',
+        file: 'tools/swarmery/internal/api/vcs.go',
+        line: 0,
+      },
+      {
+        id: 22,
+        taskId: 900,
+        projectSlug: 'swarmery',
+        planId: '2026-10-09-phase-landing-repo-provider',
+        phaseId: 906,
+        phaseSeq: 6,
+        phaseName: 'Phase 6 — GitLab provider',
+        round: '1',
+        findingId: 'R1-2',
+        type: 'quality',
+        file: 'tools/swarmery/internal/api/tasks_diff.go',
+        line: 0,
+      },
+    ],
+  },
+  {
     id: 3,
     phaseId: 41,
     phaseName: 'Phase 2 — cache-aware costing',
@@ -178,6 +267,10 @@ const MOCK_LESSONS: Lesson[] = [
     retiredAt: null,
     retireReason: null,
     promotedBranch: '',
+    source: 'surprise',
+    reviewType: '',
+    reviewArea: '',
+    findings: [],
     matches: [
       {
         kind: 'retro',
@@ -219,6 +312,10 @@ const MOCK_LESSONS: Lesson[] = [
     retireReason: null,
     promotedBranch: '',
     matches: [],
+    source: 'surprise',
+    reviewType: '',
+    reviewArea: '',
+    findings: [],
   },
 ];
 
