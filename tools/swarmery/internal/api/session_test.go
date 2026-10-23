@@ -301,7 +301,7 @@ func TestSessionUnlock(t *testing.T) {
 	srv, _, _ := serverWithRoutines(t)
 	key := attachHookToken(t)
 
-	ticket, err := linksig.UnlockTicket(key, time.Now())
+	ticket, err := linksig.UnlockTicket(key, srv.URL, time.Now())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -328,9 +328,9 @@ func TestSessionUnlock(t *testing.T) {
 		t.Errorf("replayed ticket = %d %s, want 401 unlock_invalid", status, body)
 	}
 
-	stale, _ := linksig.UnlockTicket(key, time.Now().Add(-121*time.Second))
-	future, _ := linksig.UnlockTicket(key, time.Now().Add(121*time.Second))
-	wrongKey, _ := linksig.UnlockTicket(strings.Repeat("0", 64), time.Now())
+	stale, _ := linksig.UnlockTicket(key, srv.URL, time.Now().Add(-121*time.Second))
+	future, _ := linksig.UnlockTicket(key, srv.URL, time.Now().Add(121*time.Second))
+	wrongKey, _ := linksig.UnlockTicket(strings.Repeat("0", 64), srv.URL, time.Now())
 	for name, tk := range map[string]string{
 		"stale": stale, "future": future, "wrong key": wrongKey,
 		"garbage": "garbage", "empty": "",
@@ -340,7 +340,7 @@ func TestSessionUnlock(t *testing.T) {
 		}
 	}
 
-	fresh, _ := linksig.UnlockTicket(key, time.Now())
+	fresh, _ := linksig.UnlockTicket(key, srv.URL, time.Now())
 	if status, body := unlockDo(t, srv, "http://evil.example", fresh); status != http.StatusForbidden {
 		t.Errorf("foreign Origin unlock = %d %s, want 403", status, body)
 	}
@@ -353,6 +353,46 @@ func TestSessionUnlock(t *testing.T) {
 	}
 }
 
+// (f”) A ticket is bound to the origin it was minted for, and only the
+// listener's own address-literal origin may redeem one: not localhost, not a
+// sibling loopback address, not an opted-in alias.
+func TestSessionUnlockIsBoundToTheListenerOrigin(t *testing.T) {
+	enableOriginlessAuth(t)
+	srv, _, _ := serverWithRoutines(t)
+	key := attachHookToken(t)
+	port := serverPort(t, srv)
+	AttachTrustedOrigins([]string{"http://swarmery:" + port})
+	t.Cleanup(func() { AttachTrustedOrigins(nil) })
+
+	ticket, err := linksig.UnlockTicket(key, srv.URL, time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, origin := range []string{
+		"http://localhost:" + port, "http://127.0.0.2:" + port, "http://[::1]:" + port,
+		"http://swarmery:" + port, "https://127.0.0.1:" + port,
+	} {
+		status, body := unlockDo(t, srv, origin, ticket)
+		if status != http.StatusForbidden {
+			t.Errorf("unlock from Origin %s = %d %s, want 403", origin, status, body)
+		}
+	}
+	// A ticket minted for another origin does not verify at this one.
+	for _, other := range []string{"http://127.0.0.1:1", "http://127.0.0.2:" + port, "http://[::1]:" + port} {
+		tk, err := linksig.UnlockTicket(key, other, time.Now())
+		if err != nil {
+			t.Fatal(err)
+		}
+		if status, body := unlockDo(t, srv, srv.URL, tk); status != http.StatusUnauthorized || errorCode(body) != "unlock_invalid" {
+			t.Errorf("ticket for %s redeemed at %s = %d %s, want 401 unlock_invalid", other, srv.URL, status, body)
+		}
+	}
+	// None of the refusals spent the ticket minted for this listener.
+	if status, body := unlockDo(t, srv, srv.URL, ticket); status != http.StatusOK {
+		t.Fatalf("own-origin unlock after the refusals = %d %s, want 200", status, body)
+	}
+}
+
 // (f') An exposed listener mints no sessions.
 func TestSessionUnlockRefusedOnExposedListener(t *testing.T) {
 	enableOriginlessAuth(t)
@@ -360,7 +400,7 @@ func TestSessionUnlockRefusedOnExposedListener(t *testing.T) {
 	key := attachHookToken(t)
 	const lan = "192.168.1.5:7777"
 
-	ticket, _ := linksig.UnlockTicket(key, time.Now())
+	ticket, _ := linksig.UnlockTicket(key, "http://"+lan, time.Now())
 	body, _ := json.Marshal(map[string]string{"ticket": ticket})
 	req := listenerRequest(t, http.MethodPost, "/api/session/unlock", lan, strings.NewReader(string(body)))
 	req.Header.Set("Content-Type", "application/json")

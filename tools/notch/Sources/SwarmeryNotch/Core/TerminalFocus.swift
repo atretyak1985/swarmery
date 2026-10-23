@@ -105,7 +105,8 @@ public enum TerminalFocus {
     /// and another process may.
     static func unlockedDashboardURL(_ url: URL, signer: LinkSigner = LinkSigner()) -> URL {
         guard let base = loopbackLiteralURL(url),
-              let ticket = signer.unlockTicket(),
+              let origin = LinkSigner.unlockOrigin(of: base),
+              let ticket = signer.unlockTicket(origin: origin),
               var components = URLComponents(url: base, resolvingAgainstBaseURL: false)
         else { return url }
         components.fragment = "swarmery-unlock=\(ticket)"

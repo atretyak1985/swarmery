@@ -8,17 +8,23 @@ import (
 	"time"
 )
 
-const vectorKey = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+const (
+	vectorKey    = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+	vectorOrigin = "http://127.0.0.1:7777"
+)
 
 // The two vectors are the contract the SPA and the notch implement against:
-// changing either output breaks every other client.
+// changing either output breaks every other client. The unlock vector is
+// pinned in tools/notch LinkSignerTests too, and was cross-checked with an
+// independent HMAC-SHA256 (Python hmac) over
+// "swarmery-unlock\nhttp://127.0.0.1:7777\n1761200000\nn0nce-test-1".
 func TestUnlockSigVector(t *testing.T) {
-	const want = "6d3d147593d214d11e3b5c8b501651cf6cf188c36cbf8c11523d3c8e42c53f89"
-	if got := UnlockSig(vectorKey, "1761200000", "n0nce-test-1"); got != want {
+	const want = "99ddc25914ee0a3a46366c5df129d5dfde7fba0f18d0058415d6fd4d11145a02"
+	if got := UnlockSig(vectorKey, vectorOrigin, "1761200000", "n0nce-test-1"); got != want {
 		t.Fatalf("UnlockSig = %s, want %s", got, want)
 	}
 	ticket := "1761200000.n0nce-test-1." + want
-	nonce, err := VerifyUnlock(vectorKey, ticket, time.Unix(1761200000, 0))
+	nonce, err := VerifyUnlock(vectorKey, vectorOrigin, ticket, time.Unix(1761200000, 0))
 	if err != nil || nonce != "n0nce-test-1" {
 		t.Fatalf("VerifyUnlock(vector) = %q, %v; want the nonce, nil", nonce, err)
 	}
@@ -36,7 +42,7 @@ func TestSessionSigVector(t *testing.T) {
 
 func TestUnlockTicketRoundTrip(t *testing.T) {
 	now := time.Unix(1761200000, 0)
-	ticket, err := UnlockTicket(vectorKey, now)
+	ticket, err := UnlockTicket(vectorKey, vectorOrigin, now)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -44,29 +50,77 @@ func TestUnlockTicketRoundTrip(t *testing.T) {
 	if len(parts) != 3 || parts[0] != "1761200000" || len(parts[2]) != 64 {
 		t.Fatalf("ticket %q: want <ts>.<nonce>.<64 hex>", ticket)
 	}
-	if _, err := VerifyUnlock(vectorKey, ticket, now.Add(119*time.Second)); err != nil {
+	if _, err := VerifyUnlock(vectorKey, vectorOrigin, ticket, now.Add(119*time.Second)); err != nil {
 		t.Errorf("ticket 119 s later: %v, want valid", err)
 	}
-	if _, err := VerifyUnlock(vectorKey, ticket, now.Add(-119*time.Second)); err != nil {
+	if _, err := VerifyUnlock(vectorKey, vectorOrigin, ticket, now.Add(-119*time.Second)); err != nil {
 		t.Errorf("ticket 119 s early: %v, want valid", err)
 	}
-	if _, err := VerifyUnlock(vectorKey, ticket, now.Add(121*time.Second)); !errors.Is(err, ErrSkew) {
+	if _, err := VerifyUnlock(vectorKey, vectorOrigin, ticket, now.Add(121*time.Second)); !errors.Is(err, ErrSkew) {
 		t.Errorf("ticket 121 s later: %v, want ErrSkew", err)
 	}
-	if _, err := VerifyUnlock(vectorKey, ticket, now.Add(-121*time.Second)); !errors.Is(err, ErrSkew) {
+	if _, err := VerifyUnlock(vectorKey, vectorOrigin, ticket, now.Add(-121*time.Second)); !errors.Is(err, ErrSkew) {
 		t.Errorf("ticket 121 s early: %v, want ErrSkew", err)
 	}
-	if _, err := VerifyUnlock(strings.Repeat("f", 64), ticket, now); !errors.Is(err, ErrBadSignature) {
+	if _, err := VerifyUnlock(strings.Repeat("f", 64), vectorOrigin, ticket, now); !errors.Is(err, ErrBadSignature) {
 		t.Errorf("wrong key: %v, want ErrBadSignature", err)
 	}
-	if _, err := VerifyUnlock("", ticket, now); !errors.Is(err, ErrBadSignature) {
+	if _, err := VerifyUnlock("", vectorOrigin, ticket, now); !errors.Is(err, ErrBadSignature) {
 		t.Errorf("empty key: %v, want ErrBadSignature", err)
+	}
+}
+
+// A ticket is bound to the origin it was minted for: it does not verify for
+// any other one, a sibling loopback address or a name included.
+func TestUnlockTicketIsOriginBound(t *testing.T) {
+	now := time.Unix(1761200000, 0)
+	ticket, err := UnlockTicket(vectorKey, vectorOrigin, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, other := range []string{
+		"http://127.0.0.1:7778", "http://127.0.0.2:7777", "http://[::1]:7777",
+		"https://127.0.0.1:7777", "http://localhost:7777", "",
+	} {
+		if _, err := VerifyUnlock(vectorKey, other, ticket, now); err == nil {
+			t.Errorf("ticket minted for %s verified for %q", vectorOrigin, other)
+		}
+	}
+	if _, err := UnlockTicket(vectorKey, "", now); err == nil {
+		t.Error("UnlockTicket with no origin minted a ticket")
+	}
+}
+
+func TestUnlockOrigin(t *testing.T) {
+	for in, want := range map[string]string{
+		"http://127.0.0.1:7777":      "http://127.0.0.1:7777",
+		"http://127.0.0.1:7777/":     "http://127.0.0.1:7777",
+		"HTTP://127.0.0.1:7777":      "http://127.0.0.1:7777",
+		"http://127.0.0.1":           "http://127.0.0.1:80",
+		"https://127.0.0.1":          "https://127.0.0.1:443",
+		"http://[::1]:7777":          "http://[::1]:7777",
+		"http://[0:0:0:0:0:0:0:1]:7": "http://[::1]:7",
+		"http://192.168.1.5:7777":    "http://192.168.1.5:7777",
+	} {
+		got, err := UnlockOrigin(in)
+		if err != nil || got != want {
+			t.Errorf("UnlockOrigin(%q) = %q, %v; want %q", in, got, err, want)
+		}
+	}
+	for _, in := range []string{
+		"", "null", "http://localhost:7777", "http://swarmery:7777", "ftp://127.0.0.1:21",
+		"http://[fe80::1%25en0]:7777", "http://[::ffff:127.0.0.1]:7777", "127.0.0.1:7777",
+		"http://127.0.0.1:0", "http://127.0.0.1:99999", "http://u@127.0.0.1:7777",
+	} {
+		if got, err := UnlockOrigin(in); err == nil {
+			t.Errorf("UnlockOrigin(%q) = %q, want an error", in, got)
+		}
 	}
 }
 
 func TestVerifyUnlockMalformed(t *testing.T) {
 	now := time.Unix(1761200000, 0)
-	sig := UnlockSig(vectorKey, "1761200000", "n0nce-test-1")
+	sig := UnlockSig(vectorKey, vectorOrigin, "1761200000", "n0nce-test-1")
 	for name, ticket := range map[string]string{
 		"empty":          "",
 		"two parts":      "1761200000." + sig,
@@ -78,7 +132,7 @@ func TestVerifyUnlockMalformed(t *testing.T) {
 		"short sig":      "1761200000.n0nce-test-1.abcd",
 		"non-hex sig":    "1761200000.n0nce-test-1." + strings.Repeat("z", 64),
 	} {
-		if _, err := VerifyUnlock(vectorKey, ticket, now); err == nil {
+		if _, err := VerifyUnlock(vectorKey, vectorOrigin, ticket, now); err == nil {
 			t.Errorf("%s: VerifyUnlock(%q) = nil, want an error", name, ticket)
 		}
 	}

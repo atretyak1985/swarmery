@@ -13,7 +13,9 @@
 #         /api/session/unlock redeems for a session;
 #   (iv)  the same write with X-Swarmery-Session passes the gate, and an
 #         /api/ws upgrade offering the session selects exactly swarmery.v1;
-#   (v)   the ticket does not unlock twice.
+#   (v)   the ticket does not unlock twice;
+#   (vi)  a ticket is bound to the origin it was opened at (127.0.0.1): it is
+#         refused from the localhost name and another loopback address.
 #
 # It never touches a daemon on :7777 or anything under ~/.swarmery. Requires go
 # and curl; no built SPA (only API routes are hit). Deliberately NOT named
@@ -164,6 +166,23 @@ if [ "$got" = "401" ] && grep -q '"code":"unlock_invalid"' "$SCRATCH/body"; then
   pass "(v) a replayed ticket is 401 unlock_invalid"
 else
   fail "(v) replayed ticket: got $got $(cat "$SCRATCH/body")"
+fi
+
+# (vi) the ticket is bound to the origin it was opened at: a fresh one is
+# refused from the localhost name (403) and from another loopback address, and
+# still redeems at the bound literal afterwards.
+URL2="$(run "$BIN" open --print --port "$PORT")"
+TICKET2="${URL2#*#swarmery-unlock=}"
+got_name="$(status -X POST -H "Origin: http://localhost:$PORT" -H 'Content-Type: application/json' \
+  -d "{\"ticket\":\"$TICKET2\"}" "$BASE/api/session/unlock")"
+got_sib="$(status -X POST -H "Origin: http://127.0.0.2:$PORT" -H 'Content-Type: application/json' \
+  -d "{\"ticket\":\"$TICKET2\"}" "$BASE/api/session/unlock")"
+got_own="$(status -X POST -H "Origin: $ORIGIN" -H 'Content-Type: application/json' \
+  -d "{\"ticket\":\"$TICKET2\"}" "$BASE/api/session/unlock")"
+if [ "$got_name" = "403" ] && [ "$got_sib" = "403" ] && [ "$got_own" = "200" ]; then
+  pass "(vi) unlock refused from localhost ($got_name) and 127.0.0.2 ($got_sib), redeemed at $ORIGIN ($got_own)"
+else
+  fail "(vi) origin binding: localhost $got_name, 127.0.0.2 $got_sib, own $got_own"
 fi
 
 if [ "$failures" -ne 0 ]; then

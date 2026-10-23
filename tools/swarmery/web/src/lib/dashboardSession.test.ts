@@ -20,7 +20,7 @@ import {
   wsProtocols,
 } from './dashboardSession';
 
-const TICKET = '1761200000.n0nce-test-1.6d3d147593d214d11e3b5c8b501651cf6cf188c36cbf8c11523d3c8e42c53f89';
+const TICKET = '1761200000.n0nce-test-1.99ddc25914ee0a3a46366c5df129d5dfde7fba0f18d0058415d6fd4d11145a02';
 
 function json(status: number, body: unknown): Response {
   return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });

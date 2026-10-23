@@ -118,8 +118,13 @@ daemon" from the address it actually listens on, and both are extended only by
   address literal, never the name `localhost`, which may resolve to `::1`
   first (a daemon bound to another loopback literal is opened with
   `--url http://[::1]:7777`); the dashboard redeems
-  the ticket at `POST /api/session/unlock` (own `Origin` required, valid for
-  2 minutes, once) for a session valid 30 days. Sessions are stateless HMACs
+  the ticket at `POST /api/session/unlock` (valid for 2 minutes, once) for a
+  session valid 30 days. The ticket is bound to the origin it opens
+  (`http://127.0.0.1:<port>`), and the unlock accepts only that `Origin`: the
+  listener's own address literal. A dashboard reached as `localhost` or
+  through a `SWARMERY_TRUSTED_ORIGINS` alias is never unlocked (`403`; the
+  browser keeps a session per origin, so such a page stays read-only) — open
+  the dashboard with `swarmery open`, which uses the literal address. Sessions are stateless HMACs
   under the link token, so `swarmery link token --rotate` signs every
   dashboard out. `swarmery open --print` prints the URL instead of opening it.
 - **Binding wider.** `serve --bind` with a non-loopback address refuses to

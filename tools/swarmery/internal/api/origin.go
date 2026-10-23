@@ -214,7 +214,8 @@ func isTrustedOrigin(r *http.Request, origin string) bool {
 }
 
 // isStrictLocalOrigin is the Origin check for browser-only endpoints (the PTY
-// terminal, the session unlock): unlike requireLocalOrigin, an ABSENT Origin
+// terminal; the session unlock is stricter still, selfUnlockOrigin in
+// session.go): unlike requireLocalOrigin, an ABSENT Origin
 // is rejected too. The daemon's own origin and the opt-in list apply as
 // everywhere else — a dashboard reached by a trusted alias must not get
 // working writes and a dead terminal. It is a fence, not a credential: any

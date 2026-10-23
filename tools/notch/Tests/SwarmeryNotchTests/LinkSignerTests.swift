@@ -105,19 +105,48 @@ final class LinkSignerTests: XCTestCase {
 
     private let unlockKey = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 
-    /// The ticket vector shared with the daemon: a drift on either side breaks the unlock.
+    /// The ticket vector shared with the daemon
+    /// (tools/swarmery/internal/linksig/session_test.go TestUnlockSigVector):
+    /// a drift on either side breaks the unlock. The origin is bound into the MAC.
     func testUnlockSignatureVector() {
         XCTAssertEqual(
-            LinkSigner.unlockSignature(key: unlockKey, ts: "1761200000", nonce: "n0nce-test-1"),
-            "6d3d147593d214d11e3b5c8b501651cf6cf188c36cbf8c11523d3c8e42c53f89"
+            LinkSigner.unlockSignature(key: unlockKey, origin: "http://127.0.0.1:7777", ts: "1761200000", nonce: "n0nce-test-1"),
+            "99ddc25914ee0a3a46366c5df129d5dfde7fba0f18d0058415d6fd4d11145a02"
         )
     }
 
     func testUnlockTicketShape() throws {
         let signer = LinkSigner(keyPath: try keyFile(unlockKey))
-        let ticket = try XCTUnwrap(signer.unlockTicket(now: Date(timeIntervalSince1970: 1_761_200_000), nonce: "n0nce-test-1"))
-        XCTAssertEqual(ticket, "1761200000.n0nce-test-1.6d3d147593d214d11e3b5c8b501651cf6cf188c36cbf8c11523d3c8e42c53f89")
+        let ticket = try XCTUnwrap(signer.unlockTicket(origin: "http://127.0.0.1:7777",
+                                                       now: Date(timeIntervalSince1970: 1_761_200_000), nonce: "n0nce-test-1"))
+        XCTAssertEqual(ticket, "1761200000.n0nce-test-1.99ddc25914ee0a3a46366c5df129d5dfde7fba0f18d0058415d6fd4d11145a02")
         XCTAssertFalse(ticket.contains(unlockKey))
+    }
+
+    func testUnlockOriginIsCanonical() throws {
+        let cases: [String: String] = [
+            "http://127.0.0.1:7777/sessions/u": "http://127.0.0.1:7777",
+            "http://127.0.0.1": "http://127.0.0.1:80",
+            "https://127.0.0.1": "https://127.0.0.1:443",
+            "http://[::1]:7777": "http://[::1]:7777",
+            "http://[0:0:0:0:0:0:0:1]:7777": "http://[::1]:7777",
+        ]
+        for (raw, want) in cases {
+            XCTAssertEqual(LinkSigner.unlockOrigin(of: URL(string: raw)!), want, raw)
+        }
+        for raw in ["http://localhost:7777", "ftp://127.0.0.1:21", "http://[::ffff:127.0.0.1]:7777"] {
+            XCTAssertNil(LinkSigner.unlockOrigin(of: URL(string: raw)!), raw)
+        }
+    }
+
+    /// The ticket of a localhost base is bound to the rewritten origin, the one
+    /// the browser will send.
+    func testUnlockedURLTicketIsBoundToItsOrigin() throws {
+        let signer = LinkSigner(keyPath: try keyFile(unlockKey), now: { Date(timeIntervalSince1970: 1_761_200_000) },
+                                nonce: { "n0nce-test-1" })
+        let url = TerminalFocus.unlockedDashboardURL(URL(string: "http://localhost:7777/sessions/u")!, signer: signer)
+        XCTAssertEqual(URLComponents(url: url, resolvingAgainstBaseURL: false)?.fragment,
+                       "swarmery-unlock=1761200000.n0nce-test-1.99ddc25914ee0a3a46366c5df129d5dfde7fba0f18d0058415d6fd4d11145a02")
     }
 
     func testUnlockedDashboardURLCarriesATicketFragment() throws {

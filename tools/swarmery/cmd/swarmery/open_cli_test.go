@@ -47,7 +47,7 @@ func TestOpenPrintURLShape(t *testing.T) {
 	if !strings.HasPrefix(u, "http://127.0.0.1:7798/#swarmery-unlock=") {
 		t.Fatalf("URL %q: want http://127.0.0.1:7798/#swarmery-unlock=<ticket>", u)
 	}
-	nonce, err := linksig.VerifyUnlock(openTestKey, ticketOf(t, u), time.Now())
+	nonce, err := linksig.VerifyUnlock(openTestKey, "http://127.0.0.1:7798", ticketOf(t, u), time.Now())
 	if err != nil || nonce == "" {
 		t.Fatalf("printed ticket does not verify: %v", err)
 	}
@@ -64,7 +64,7 @@ func TestOpenSessionPage(t *testing.T) {
 	if !strings.HasPrefix(u, "http://127.0.0.1:7798/sessions/"+id+"#swarmery-unlock=") {
 		t.Fatalf("URL %q: want the session page with the ticket fragment", u)
 	}
-	if _, err := linksig.VerifyUnlock(openTestKey, ticketOf(t, u), time.Now()); err != nil {
+	if _, err := linksig.VerifyUnlock(openTestKey, "http://127.0.0.1:7798", ticketOf(t, u), time.Now()); err != nil {
 		t.Fatalf("ticket does not verify: %v", err)
 	}
 }
@@ -114,8 +114,18 @@ func TestOpenUsesTheBoundLiteral(t *testing.T) {
 		if code := cmdOpen(args, &out, &errb); code != 0 {
 			t.Fatalf("%s: exit %d, stderr %s", name, code, errb.String())
 		}
-		if u := strings.TrimSpace(out.String()); !strings.HasPrefix(u, tc.want) {
+		u := strings.TrimSpace(out.String())
+		if !strings.HasPrefix(u, tc.want) {
 			t.Errorf("%s: URL %q, want prefix %q", name, u, tc.want)
+			continue
+		}
+		// The ticket is bound to the origin it opens, and to no other.
+		origin, _, _ := strings.Cut(tc.want, "/#")
+		if _, err := linksig.VerifyUnlock(openTestKey, origin, ticketOf(t, u), time.Now()); err != nil {
+			t.Errorf("%s: ticket does not verify for %s: %v", name, origin, err)
+		}
+		if _, err := linksig.VerifyUnlock(openTestKey, "http://localhost:7798", ticketOf(t, u), time.Now()); err == nil {
+			t.Errorf("%s: ticket verifies for http://localhost:7798 too", name)
 		}
 	}
 }

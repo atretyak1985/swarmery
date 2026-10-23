@@ -29,7 +29,6 @@ import (
 	"net/url"
 	"os/exec"
 	"runtime"
-	"strconv"
 	"strings"
 	"time"
 
@@ -122,41 +121,32 @@ func cmdOpen(args []string, stdout, stderr io.Writer) int {
 
 // loopbackBase reduces --url to scheme://<loopback literal>:<port>: http(s),
 // a loopback IP address literal (no name, not even localhost; no zone), no
-// path beyond "/", the scheme's default port when none is given.
+// path beyond "/", the scheme's default port when none is given. The result
+// is linksig.UnlockOrigin's canonical form: the origin the ticket is bound to.
 func loopbackBase(raw string) (string, error) {
 	u, err := url.Parse(strings.TrimSpace(raw))
 	if err != nil {
 		return "", err
 	}
-	scheme := strings.ToLower(u.Scheme)
-	if scheme != "http" && scheme != "https" {
-		return "", fmt.Errorf("want http://<loopback address>:<port> (got %q)", raw)
-	}
-	if (u.Path != "" && u.Path != "/") || u.RawQuery != "" || u.Fragment != "" || u.User != nil {
+	if (u.Path != "" && u.Path != "/") || u.RawQuery != "" || u.Fragment != "" {
 		return "", fmt.Errorf("want a base URL with no path, query or fragment (got %q)", raw)
 	}
+	origin, err := linksig.UnlockOrigin(raw)
+	if err != nil {
+		return "", fmt.Errorf("want http://<loopback address literal>:<port> such as http://127.0.0.1:7777 or http://[::1]:7777, never a name (got %q)", raw)
+	}
 	addr, err := netip.ParseAddr(u.Hostname())
-	if err != nil || addr.Zone() != "" || addr.Is4In6() || !addr.IsLoopback() {
-		return "", fmt.Errorf("the host must be a loopback address literal such as 127.0.0.1 or [::1], never a name (got %q)", u.Hostname())
+	if err != nil || !addr.IsLoopback() {
+		return "", fmt.Errorf("the host must be a loopback address, the daemon's own (got %q)", u.Hostname())
 	}
-	port := u.Port()
-	if port == "" {
-		port = "80"
-		if scheme == "https" {
-			port = "443"
-		}
-	}
-	n, err := strconv.ParseUint(port, 10, 16)
-	if err != nil || n == 0 {
-		return "", fmt.Errorf("bad port %q", port)
-	}
-	return scheme + "://" + netip.AddrPortFrom(addr, uint16(n)).String(), nil
+	return origin, nil
 }
 
-// unlockURL is the dashboard URL under base (a session page when sessionID
-// is set) with a fresh unlock ticket in its fragment.
+// unlockURL is the dashboard URL under base — a canonical origin
+// (linksig.UnlockOrigin), which the ticket is bound to — (a session page when
+// sessionID is set) with a fresh unlock ticket in its fragment.
 func unlockURL(key, base, sessionID string, now time.Time) (string, error) {
-	ticket, err := linksig.UnlockTicket(key, now)
+	ticket, err := linksig.UnlockTicket(key, base, now)
 	if err != nil {
 		return "", errors.New("cannot mint an unlock ticket: " + err.Error())
 	}

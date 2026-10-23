@@ -26,6 +26,7 @@ package api
 import (
 	"encoding/json"
 	"errors"
+	"net"
 	"net/http"
 	"strings"
 	"time"
@@ -138,6 +139,27 @@ func writeDashboardLocked(w http.ResponseWriter) {
 	})
 }
 
+// selfUnlockOrigin is the canonical origin (linksig.UnlockOrigin) of the
+// listener this request arrived on — scheme, the listener's own address
+// literal and its port — when the request's Origin names exactly that; ok is
+// false otherwise: no Origin, a name (localhost, an opted-in alias), another
+// loopback address or port, another scheme, or no listener in the context.
+func selfUnlockOrigin(r *http.Request) (string, bool) {
+	lhost, lport, ok := listenerAddr(r)
+	if !ok {
+		return "", false
+	}
+	self, err := linksig.UnlockOrigin(requestScheme(r) + "://" + net.JoinHostPort(lhost, lport))
+	if err != nil {
+		return "", false
+	}
+	got, err := linksig.UnlockOrigin(r.Header.Get("Origin"))
+	if err != nil || got != self {
+		return "", false
+	}
+	return self, true
+}
+
 func writeUnlockInvalid(w http.ResponseWriter, msg string) {
 	writeJSONStatus(w, http.StatusUnauthorized, map[string]string{
 		"error": msg,
@@ -149,21 +171,30 @@ func writeUnlockInvalid(w http.ResponseWriter, msg string) {
 // Exempt from the session requirement (it is how a session is obtained), so
 // it runs its own fence:
 //
-//	403  no Origin, or one that is not the daemon's own / opted in
-//	401  {"code":"unlock_invalid"} on an exposed listener, with no link
-//	     attached, or for a malformed, stale, wrongly signed or spent ticket
+//	401  {"code":"unlock_invalid"} on an exposed listener
+//	403  no Origin, or one that is not this listener's own address-literal
+//	     origin (selfUnlockOrigin)
+//	401  {"code":"unlock_invalid"} with no link attached, or for a malformed,
+//	     stale, wrongly signed, spent or other-origin ticket
 //	200  {"session":"<token>"}
 //
-// A ticket's nonce is spent only once its signature verified.
+// A ticket is bound to the origin it was minted for (linksig.UnlockSig), and
+// the daemon verifies it for the request's Origin. That Origin must be the
+// listener's own, spelled with its address literal: `localhost` and the
+// SWARMERY_TRUSTED_ORIGINS aliases are refused here (and only here — they
+// keep working for everything else), because a name may resolve to a
+// listener that is not this daemon. A ticket's nonce is spent only once its
+// signature verified.
 func (h *Handler) sessionUnlock(w http.ResponseWriter, r *http.Request) {
-	if !isStrictLocalOrigin(r) {
-		writeJSONStatus(w, http.StatusForbidden, map[string]string{
-			"error": "unlock needs the dashboard's own Origin",
-		})
-		return
-	}
 	if isExposedListener(r) {
 		writeUnlockInvalid(w, "this daemon listens beyond loopback: the dashboard cannot be unlocked here")
+		return
+	}
+	origin, ok := selfUnlockOrigin(r)
+	if !ok {
+		writeJSONStatus(w, http.StatusForbidden, map[string]string{
+			"error": "unlock needs the dashboard opened by the daemon's own address (http://127.0.0.1:<port>, as `swarmery open` does), not a name",
+		})
 		return
 	}
 	lh := linkHolder
@@ -181,7 +212,7 @@ func (h *Handler) sessionUnlock(w http.ResponseWriter, r *http.Request) {
 	}
 	key := lh.Current()
 	now := time.Now()
-	nonce, err := linksig.VerifyUnlock(key, strings.TrimSpace(req.Ticket), now)
+	nonce, err := linksig.VerifyUnlock(key, origin, strings.TrimSpace(req.Ticket), now)
 	switch {
 	case errors.Is(err, linksig.ErrSkew):
 		writeUnlockInvalid(w, "unlock ticket expired: open the dashboard again with `swarmery open`")

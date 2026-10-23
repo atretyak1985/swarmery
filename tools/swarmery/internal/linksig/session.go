@@ -5,11 +5,16 @@
 // under the link token, so rotating the token invalidates every ticket and
 // every session at once; the daemon keeps no session state.
 //
-//	ticket  = <ts>.<nonce>.<sig>       sig = hex HMAC(token, "swarmery-unlock\n"  + ts       + "\n" + nonce)
+//	ticket  = <ts>.<nonce>.<sig>         sig = hex HMAC(token, "swarmery-unlock\n" + origin + "\n" + ts + "\n" + nonce)
 //	session = v1.<issuedAt>.<rand>.<sig> sig = hex HMAC(token, "swarmery-session\n" + issuedAt + "\n" + rand)
 //
 // ts and issuedAt are decimal unix seconds; nonce and rand are 1–64
-// characters of [A-Za-z0-9_-]. A ticket is valid within UnlockMaxSkew of the
+// characters of [A-Za-z0-9_-]. origin is the dashboard origin the ticket is
+// meant for, in the canonical form UnlockOrigin returns
+// (scheme://<IP literal>:<port>, e.g. http://127.0.0.1:7777). It is bound into
+// the MAC but never transmitted: the daemon derives it from the unlock
+// request's Origin, so a ticket redeemed from any other origin does not
+// verify. A ticket is valid within UnlockMaxSkew of the
 // daemon's clock and once per nonce (the caller keeps the nonce memory,
 // NewUnlockVerifier); a session for SessionTTL after issuedAt.
 package linksig
@@ -17,6 +22,9 @@ package linksig
 import (
 	"crypto/rand"
 	"encoding/hex"
+	"errors"
+	"net/netip"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -38,9 +46,48 @@ const (
 	sessionTag = "swarmery-session"
 )
 
-// UnlockSig is the hex signature of the ticket for ts and nonce.
-func UnlockSig(key, ts, nonce string) string {
-	return mac(key, unlockTag+"\n"+ts+"\n"+nonce)
+// ErrOrigin: an unlock origin that is not http(s)://<IP address literal>[:port].
+var ErrOrigin = errors.New("linksig: unlock origin must be http(s)://<IP address literal>[:port]")
+
+// UnlockOrigin reduces a URL or a browser Origin to the canonical origin an
+// unlock ticket is bound to: lowercase http or https, an IP address literal
+// host (never a name — not even localhost — no zone, not the IPv4-mapped
+// IPv6 form) and the port spelled out (the scheme's default when absent).
+// IPv6 comes back bracketed and compressed (http://[::1]:7777). A path is
+// ignored; user info is refused.
+func UnlockOrigin(raw string) (string, error) {
+	u, err := url.Parse(strings.TrimSpace(raw))
+	if err != nil || u.User != nil || u.Opaque != "" {
+		return "", ErrOrigin
+	}
+	scheme := strings.ToLower(u.Scheme)
+	port := u.Port()
+	switch scheme {
+	case "http":
+		if port == "" {
+			port = "80"
+		}
+	case "https":
+		if port == "" {
+			port = "443"
+		}
+	default:
+		return "", ErrOrigin
+	}
+	addr, err := netip.ParseAddr(u.Hostname())
+	if err != nil || addr.Zone() != "" || addr.Is4In6() {
+		return "", ErrOrigin
+	}
+	n, err := strconv.ParseUint(port, 10, 16)
+	if err != nil || n == 0 {
+		return "", ErrOrigin
+	}
+	return scheme + "://" + netip.AddrPortFrom(addr, uint16(n)).String(), nil
+}
+
+// UnlockSig is the hex signature of the ticket for origin, ts and nonce.
+func UnlockSig(key, origin, ts, nonce string) string {
+	return mac(key, unlockTag+"\n"+origin+"\n"+ts+"\n"+nonce)
 }
 
 // SessionSig is the hex signature of the session for issuedAt and rnd.
@@ -48,21 +95,28 @@ func SessionSig(key, issuedAt, rnd string) string {
 	return mac(key, sessionTag+"\n"+issuedAt+"\n"+rnd)
 }
 
-// UnlockTicket mints a ticket at now with a fresh random nonce.
-func UnlockTicket(key string, now time.Time) (string, error) {
+// UnlockTicket mints a ticket for origin (canonicalised by UnlockOrigin;
+// ErrOrigin when it is not an IP-literal origin) at now with a fresh random
+// nonce.
+func UnlockTicket(key, origin string, now time.Time) (string, error) {
+	o, err := UnlockOrigin(origin)
+	if err != nil {
+		return "", err
+	}
 	nonce, err := NewNonce()
 	if err != nil {
 		return "", err
 	}
 	ts := strconv.FormatInt(now.Unix(), 10)
-	return ts + "." + nonce + "." + UnlockSig(key, ts, nonce), nil
+	return ts + "." + nonce + "." + UnlockSig(key, o, ts, nonce), nil
 }
 
-// VerifyUnlock checks a ticket under key at now and returns its nonce; the
-// caller still has to claim the nonce (Verifier.Claim) so the ticket is
-// redeemed once. Errors: ErrMalformed, ErrSkew, ErrBadSignature (also for an
-// empty key).
-func VerifyUnlock(key, ticket string, now time.Time) (string, error) {
+// VerifyUnlock checks a ticket for origin (in UnlockOrigin's canonical form)
+// under key at now and returns its nonce; the caller still has to claim the
+// nonce (Verifier.Claim) so the ticket is redeemed once. Errors:
+// ErrMalformed, ErrSkew, ErrBadSignature (also for an empty key or origin,
+// and for a ticket minted for another origin).
+func VerifyUnlock(key, origin, ticket string, now time.Time) (string, error) {
 	parts := strings.Split(ticket, ".")
 	if len(parts) != 3 {
 		return "", ErrMalformed
@@ -76,7 +130,7 @@ func VerifyUnlock(key, ticket string, now time.Time) (string, error) {
 	if skew > UnlockMaxSkew || skew < -UnlockMaxSkew {
 		return "", ErrSkew
 	}
-	if key == "" || !equalHex(UnlockSig(key, tsText, nonce), sig) {
+	if key == "" || origin == "" || !equalHex(UnlockSig(key, origin, tsText, nonce), sig) {
 		return "", ErrBadSignature
 	}
 	return nonce, nil
