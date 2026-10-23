@@ -31,6 +31,7 @@ import (
 
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/claudeflags"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/phasediag"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/phasegate"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/phaserun"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/planning"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/runcore"
@@ -223,10 +224,17 @@ func writePhaseStartRefusal(w http.ResponseWriter, err error) {
 		})
 	// The decision hold (migration 0122): read-only like the doc gates above and,
 	// like them, not lifted by force — the fix is to take the decision.
+	// "holds" names each holding decision with its planning-turn link (the
+	// "decide now" target; verify-not-trust phase 10).
 	case errors.As(err, &decisionErr):
+		holds := decisionErr.Refs
+		if holds == nil {
+			holds = []phasegate.HoldRef{}
+		}
 		writeConflictFields(w, codeDecisionUndecided, decisionErr.Error(), map[string]any{
 			"decisions": decisionErr.Decisions,
 			"detail":    decisionErr.Detail,
+			"holds":     holds,
 			"hint":      hintDecisionUndecided,
 		})
 	case errors.As(err, &manualOnlyErr):

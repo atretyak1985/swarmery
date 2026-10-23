@@ -224,9 +224,25 @@ func decodeReview(b Block) (Review, *ParseError) {
 		return Review{}, perr
 	}
 	for _, it := range items {
-		r.Drift = append(r.Drift, Drift{Criterion: it.str("criterion"), File: it.str("file"), Note: it.str("note")})
+		// The plan round names a decision instead of a criterion: {id, where, how}
+		// (verify-not-trust phase 12) reads into the same three fields.
+		r.Drift = append(r.Drift, Drift{
+			Criterion: firstNonEmpty(it.str("criterion"), it.str("id")),
+			File:      firstNonEmpty(it.str("file"), it.str("where")),
+			Note:      firstNonEmpty(it.str("note"), it.str("how")),
+		})
 	}
 	return r, nil
+}
+
+// firstNonEmpty is the first of vs that is not "".
+func firstNonEmpty(vs ...string) string {
+	for _, v := range vs {
+		if v != "" {
+			return v
+		}
+	}
+	return ""
 }
 
 // mapItem is one entry of a list of flat maps.

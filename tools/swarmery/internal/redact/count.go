@@ -102,6 +102,8 @@ func CountStored(ctx context.Context, db *sql.DB) (StoredCount, error) {
 				switch t.table {
 				case "events", "permission_requests":
 					c = countPayload(vals[len(t.cols)].String, vals[i].String)
+				case "link_events":
+					c = countPayload("", vals[i].String)
 				case "file_changes":
 					c = CountLiteral(vals[i].String)
 				default:
@@ -158,7 +160,12 @@ func countTree(v any, fields map[string]bool, literal bool, acc map[string]int) 
 		}
 	case map[string]any:
 		for k, e := range x {
-			countTree(e, fields, literal || fields[k], acc)
+			sub := literal || fields[k]
+			rec := func(v any) { countTree(v, fields, sub, acc) }
+			if c := keyCue(k); c != noCue && !literal && countCued(c, e, acc, rec) {
+				continue
+			}
+			rec(e)
 		}
 	case []any:
 		for _, e := range x {

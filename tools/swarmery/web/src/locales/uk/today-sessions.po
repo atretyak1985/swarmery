@@ -353,6 +353,10 @@ msgstr "усі сесії →"
 msgid "Allow (add to scope)"
 msgstr "Дозволити (додати до обсягу)"
 
+#: src/pages/NeedsYou.tsx
+msgid "Allowing this releases: {pathList}"
+msgstr "Дозвіл відкриває: {pathList}"
+
 #: src/pages/Approvals.tsx
 msgid "always allow…"
 msgstr "завжди дозволяти…"
@@ -374,6 +378,7 @@ msgctxt "verb: the button that opens the question"
 msgid "answer"
 msgstr "відповісти"
 
+#: src/pages/NeedsYou.tsx
 #: src/pages/NeedsYou.tsx
 msgid "answer {decisionId}"
 msgstr "відповісти на {decisionId}"
@@ -1214,6 +1219,10 @@ msgstr "активності інструментів не зафіксован�
 msgid "no transcript activity past the stuck window — the session may have died silently"
 msgstr "у транскрипті нічого після вікна застрягання — сесія могла тихо померти"
 
+#: src/pages/NeedsYou.tsx
+msgid "no trigger"
+msgstr "без тригера"
+
 #: src/pages/Overview.tsx
 msgid "no waiting"
 msgstr "без очікування"
@@ -1340,6 +1349,7 @@ msgstr "відкрити фазу →"
 msgid "open PR ↗"
 msgstr "відкрити PR ↗"
 
+#: src/pages/NeedsYou.tsx
 #: src/pages/NeedsYou.tsx
 #: src/pages/NeedsYou.tsx
 msgid "open review →"
@@ -1633,6 +1643,10 @@ msgstr "Надіслати"
 msgid "Send a message from this session"
 msgstr "Надіслати повідомлення від цієї сесії"
 
+#: src/pages/NeedsYou.tsx
+msgid "Send my own answer"
+msgstr "Надіслати власну відповідь"
+
 #: src/pages/detail/Chat.tsx
 #: src/pages/sessions/SwarmPanel.tsx
 msgid "sending…"
@@ -1808,6 +1822,10 @@ msgstr "Зупинити"
 msgid "stop asking"
 msgstr "не питати"
 
+#: src/pages/NeedsYou.tsx
+msgid "stop: {trigger}"
+msgstr "зупинка: {trigger}"
+
 #: src/pages/detail/CommandInput.tsx
 msgid "Stopping…"
 msgstr "Зупиняємо…"
@@ -1920,6 +1938,10 @@ msgstr "Мод swarmery link цієї сесії не опитує команд�
 #: src/pages/Overview.tsx
 msgid "The spine · today"
 msgstr "Хребет дня · сьогодні"
+
+#: src/pages/NeedsYou.tsx
+msgid "the stop block broke its contract: {flagList}"
+msgstr "блок зупинки порушив контракт: {flagList}"
 
 #: src/pages/ProjectDetail.tsx
 #: src/pages/ProjectOverview.tsx
@@ -2121,6 +2143,10 @@ msgstr "Worktree, готові до видалення, у {repoRoot}"
 #: src/pages/sessions/CacheColdBadge.tsx
 msgid "writing handoff…"
 msgstr "пишу передачу…"
+
+#: src/pages/NeedsYou.tsx
+msgid "your own answer — or a note sent with the option you pick"
+msgstr "власна відповідь — або примітка до варіанта, який ви оберете"
 
 #: src/pages/detail/CallTree.tsx
 msgid "Σ tokens"

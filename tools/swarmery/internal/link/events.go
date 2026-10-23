@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/ingest"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/redact"
 )
 
 // Event kinds the mod sends (mods-swarmery-link phase 1, Implementation
@@ -312,7 +313,11 @@ func validate(ev Event) (normalized, error) {
 		if !json.Valid(raw) {
 			return n, errors.New("payload is not valid JSON")
 		}
-		n.payload = string(raw)
+		// Stored masked, like a transcript event (internal/redact): a mod's
+		// payload is meant to carry no input, but the daemon does not trust
+		// that. The validators below read the raw payload; a clean one keeps
+		// its exact bytes.
+		n.payload, _ = redact.PayloadJSON("", string(raw))
 	}
 	if ev.Kind == KindSessionMeasure {
 		var m measure

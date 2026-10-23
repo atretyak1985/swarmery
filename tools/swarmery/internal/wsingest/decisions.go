@@ -261,13 +261,16 @@ func FormatStopDecisionLine(seq int, question, answer string) string {
 
 // FormatPhaseDecisionLine is FormatStopDecisionLine for any per-phase decision
 // source — `- **D-n** (<source>) — <question> → <answer>`; a review decision
-// (verify-not-trust phase 9) writes `(review)`.
+// (verify-not-trust phase 9) writes `(review)`. Every part is flattened onto
+// one line, the source included: an agent-declared stop's source carries the
+// agent's trigger (`stop: <trigger>`), and the agent is untrusted — a newline in
+// it must not write a checkbox or a fence into the doc.
 func FormatPhaseDecisionLine(seq int, source, question, answer string) string {
 	a := oneLine(answer)
 	if a == "" {
 		a = UndecidedAnswer
 	}
-	return fmt.Sprintf("- **D-%d** (%s) — %s → %s", seq, source, oneLine(question), a)
+	return fmt.Sprintf("- **D-%d** (%s) — %s → %s", seq, oneLine(source), oneLine(question), a)
 }
 
 // AppendPhaseDecision returns doc with line appended to its `## Decisions`
