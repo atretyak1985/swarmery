@@ -91,13 +91,55 @@ func TestEditUnder(t *testing.T) {
 }
 
 func TestDaemonDenyRules(t *testing.T) {
-	got := DaemonDenyRules(0)
-	if len(got) != 8 || got[0] != "Bash(curl *127.0.0.1:7777*)" || got[5] != "Bash(http *localhost:7777*)" ||
-		got[6] != "Bash(swarmery api*)" || got[7] != "Bash(*/swarmery api*)" {
-		t.Errorf("DaemonDenyRules(0) = %q", got)
+	want := []string{
+		"Bash(curl *127.0.0.1:7777*)", "Bash(curl *localhost:7777*)", "Bash(curl *[::1]:7777*)",
+		"Bash(wget *127.0.0.1:7777*)", "Bash(wget *localhost:7777*)", "Bash(wget *[::1]:7777*)",
+		"Bash(http *127.0.0.1:7777*)", "Bash(http *localhost:7777*)", "Bash(http *[::1]:7777*)",
+		"Bash(*/curl *127.0.0.1:7777*)", "Bash(*/curl *localhost:7777*)", "Bash(*/curl *[::1]:7777*)",
+		"Bash(*/wget *127.0.0.1:7777*)", "Bash(*/wget *localhost:7777*)", "Bash(*/wget *[::1]:7777*)",
+		"Bash(*/http *127.0.0.1:7777*)", "Bash(*/http *localhost:7777*)", "Bash(*/http *[::1]:7777*)",
+		"Bash(swarmery api*)", "Bash(*/swarmery api*)", "Bash(command swarmery*)",
+		"Read(~/.swarmery/link-token)", "Read(~/.swarmery/credentials/**)", "Read(~/.swarmery/secrets/**)",
 	}
-	if got := DaemonDenyRules(7794); got[1] != "Bash(curl *localhost:7794*)" {
+	if got := DaemonDenyRules(0); strings.Join(got, "\n") != strings.Join(want, "\n") {
+		t.Errorf("DaemonDenyRules(0) =\n%s\nwant\n%s", strings.Join(got, "\n"), strings.Join(want, "\n"))
+	}
+	if got := DaemonDenyRules(7794); got[1] != "Bash(curl *localhost:7794*)" || got[11] != "Bash(*/curl *[::1]:7794*)" {
 		t.Errorf("DaemonDenyRules(7794) = %q", got)
+	}
+}
+
+// The daemon rules catch a client by installed path, on the IPv6 loopback and
+// through `command`; none of them touches the executor's own worktree, which
+// lives under ~/.swarmery/worktrees.
+func TestDaemonDenyRules_Forms(t *testing.T) {
+	rules := DaemonDenyRules(7794)
+	hit := func(cmd string) string {
+		for _, r := range rules {
+			if matchesRule(r, cmd) {
+				return r
+			}
+		}
+		return ""
+	}
+	for _, cmd := range []string{
+		"curl -s http://127.0.0.1:7794/api/x", "/usr/bin/curl -s http://127.0.0.1:7794/api/x",
+		"/opt/homebrew/bin/wget -qO- localhost:7794/api", "curl -g http://[::1]:7794/api/x",
+		"http POST [::1]:7794/api/x", "command swarmery api POST /api/x", "/Users/u/.swarmery/bin/swarmery api GET /x",
+	} {
+		if hit(cmd) == "" {
+			t.Errorf("daemon deny list misses %q", cmd)
+		}
+	}
+	for _, cmd := range []string{"curl -s https://example.com", "/usr/bin/curl http://127.0.0.1:8080/", "swarmery version"} {
+		if r := hit(cmd); r != "" {
+			t.Errorf("daemon deny list blocks %q (rule %s)", cmd, r)
+		}
+	}
+	for _, r := range rules {
+		if strings.HasPrefix(r, "Read(") && (strings.Contains(r, "worktrees") || r == "Read(~/.swarmery/**)") {
+			t.Errorf("rule %s would deny the executor its own worktree (~/.swarmery/worktrees)", r)
+		}
 	}
 }
 
@@ -142,6 +184,8 @@ func TestDenyLists_WriteFormsMatchedReadsNot(t *testing.T) {
 	}
 	writes := []string{
 		"git push", "git push origin swarm/x",
+		"git -C /wt push origin swarm/x", "git -c push.default=current push", "git --no-pager push -u origin x",
+		"git --git-dir=/r/.git push",
 		"gh pr create --fill", "gh pr merge 12 --squash", "gh pr close 12", "gh pr reopen 12",
 		"gh pr edit 12 --title x", "gh pr ready 12", "gh pr review 12 --approve", "gh pr comment 12 -b x",
 		"gh pr update-branch 12", "gh pr lock 12", "gh pr unlock 12",
@@ -160,6 +204,8 @@ func TestDenyLists_WriteFormsMatchedReadsNot(t *testing.T) {
 		"gh api repos/o/r/pulls", "gh api repos/o/r/pulls --jq .[].number", "gh api repos/o/r/pulls --paginate",
 		"glab mr view 3", "glab mr list", "glab mr diff 3", "glab api projects/1/merge_requests",
 		"git status", "git log --oneline",
+		// A commit or a search that merely mentions the word is not a push.
+		`git commit -m "feat: push notifications"`, "git log --grep push", "git -C /wt status",
 	}
 	for name, rules := range lists {
 		hit := func(cmd string) string {

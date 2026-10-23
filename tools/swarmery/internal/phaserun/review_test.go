@@ -201,10 +201,14 @@ func TestReviewSpawnArgsDenyEditToolsAndBash(t *testing.T) {
 		t.Fatalf("argv carries %d --disallowedTools flags, want exactly 1:\n%s", flags, raw)
 	}
 	const wantList = "Edit,Write,MultiEdit,NotebookEdit,Bash," +
-		"Bash(curl *127.0.0.1:8080*),Bash(curl *localhost:8080*)," +
-		"Bash(wget *127.0.0.1:8080*),Bash(wget *localhost:8080*)," +
-		"Bash(http *127.0.0.1:8080*),Bash(http *localhost:8080*)," +
-		"Bash(swarmery api*),Bash(*/swarmery api*)"
+		"Bash(curl *127.0.0.1:8080*),Bash(curl *localhost:8080*),Bash(curl *[::1]:8080*)," +
+		"Bash(wget *127.0.0.1:8080*),Bash(wget *localhost:8080*),Bash(wget *[::1]:8080*)," +
+		"Bash(http *127.0.0.1:8080*),Bash(http *localhost:8080*),Bash(http *[::1]:8080*)," +
+		"Bash(*/curl *127.0.0.1:8080*),Bash(*/curl *localhost:8080*),Bash(*/curl *[::1]:8080*)," +
+		"Bash(*/wget *127.0.0.1:8080*),Bash(*/wget *localhost:8080*),Bash(*/wget *[::1]:8080*)," +
+		"Bash(*/http *127.0.0.1:8080*),Bash(*/http *localhost:8080*),Bash(*/http *[::1]:8080*)," +
+		"Bash(swarmery api*),Bash(*/swarmery api*),Bash(command swarmery*)," +
+		"Read(~/.swarmery/link-token),Read(~/.swarmery/credentials/**),Read(~/.swarmery/secrets/**)"
 	if list != wantList {
 		t.Errorf("--disallowedTools %q, want %q", list, wantList)
 	}
