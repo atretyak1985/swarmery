@@ -226,10 +226,14 @@ func TestRequireLocalOriginFence(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	})
 
+	// A trusted Origin is the dashboard, which carries its session; the
+	// session gate itself is covered in session_test.go.
+	session := testDashboardSession(t)
 	do := func(origin string) int {
 		req := localRequest(t, http.MethodPost, "/api/anything", nil)
 		if origin != "" {
 			req.Header.Set("Origin", origin)
+			req.Header.Set(SessionHeader, session)
 		}
 		rec := httptest.NewRecorder()
 		h(rec, req)

@@ -13,6 +13,7 @@ import (
 
 	"github.com/coder/websocket"
 
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/linksig"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/store"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/term"
 )
@@ -61,6 +62,10 @@ func termTestServer(t *testing.T) (srv *httptest.Server, projectDir, worktreeDir
 	AttachTermManager(mgr)
 	t.Cleanup(func() { mgr.CloseAll(); AttachTermManager(nil) })
 
+	// The terminal upgrade needs a dashboard session, verified under the
+	// link token (session.go); termSessionProtocols mints one under it.
+	attachHookToken(t)
+
 	h, err := NewServer(db, false)
 	if err != nil {
 		t.Fatalf("new server: %v", err)
@@ -68,6 +73,16 @@ func termTestServer(t *testing.T) (srv *httptest.Server, projectDir, worktreeDir
 	srv = httptest.NewServer(h)
 	t.Cleanup(srv.Close)
 	return srv, projectDir, worktreeDir
+}
+
+// termSessionProtocols is the subprotocol list a dashboard terminal offers:
+// swarmery.v1 and a fresh session under the attached link token.
+func termSessionProtocols() []string {
+	s, err := linksig.MintSession(hookToken(), time.Now())
+	if err != nil {
+		panic(err)
+	}
+	return sessionProtocols(s)
 }
 
 func termWSURL(srv *httptest.Server, cwd string) string {
@@ -108,7 +123,8 @@ func TestTermCwdAllowList(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer cancel()
 			c, _, err := websocket.Dial(ctx, termWSURL(srv, tc.cwd), &websocket.DialOptions{
-				HTTPHeader: localOrigin(srv),
+				HTTPHeader:   localOrigin(srv),
+				Subprotocols: termSessionProtocols(),
 			})
 			if err != nil {
 				t.Fatalf("dial should have upgraded for %s: %v", tc.cwd, err)
@@ -144,7 +160,8 @@ func TestTermCwdAllowList(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer cancel()
 			c, resp, err := websocket.Dial(ctx, termWSURL(srv, tc.cwd), &websocket.DialOptions{
-				HTTPHeader: localOrigin(srv),
+				HTTPHeader:   localOrigin(srv),
+				Subprotocols: termSessionProtocols(),
 			})
 			if err == nil {
 				c.Close(websocket.StatusNormalClosure, "")
@@ -186,7 +203,9 @@ func TestTermOriginGate(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer cancel()
-			opts := &websocket.DialOptions{HTTPHeader: http.Header{}}
+			// Every case carries a valid session: the Origin rule is what
+			// is under test (the session gate: session_test.go).
+			opts := &websocket.DialOptions{HTTPHeader: http.Header{}, Subprotocols: termSessionProtocols()}
 			if tc.origin != "" {
 				opts.HTTPHeader.Set("Origin", tc.origin)
 			}
@@ -230,7 +249,8 @@ func TestTermConcurrencyCap(t *testing.T) {
 	})
 	for i := 0; i < 5; i++ {
 		c, _, err := websocket.Dial(ctx, termWSURL(srv, projectDir), &websocket.DialOptions{
-			HTTPHeader: localOrigin(srv),
+			HTTPHeader:   localOrigin(srv),
+			Subprotocols: termSessionProtocols(),
 		})
 		if err != nil {
 			t.Fatalf("dial %d: %v", i, err)
@@ -248,7 +268,8 @@ func TestTermConcurrencyCap(t *testing.T) {
 	// The 6th upgrades (origin+cwd pass) but the PTY start is refused, so the
 	// server closes the socket; the first Read returns a close error.
 	c6, _, err := websocket.Dial(ctx, termWSURL(srv, projectDir), &websocket.DialOptions{
-		HTTPHeader: localOrigin(srv),
+		HTTPHeader:   localOrigin(srv),
+		Subprotocols: termSessionProtocols(),
 	})
 	if err != nil {
 		t.Fatalf("6th dial (upgrade should still succeed): %v", err)
@@ -270,7 +291,8 @@ func TestTermResizeControl(t *testing.T) {
 	defer cancel()
 
 	c, _, err := websocket.Dial(ctx, termWSURL(srv, projectDir), &websocket.DialOptions{
-		HTTPHeader: localOrigin(srv),
+		HTTPHeader:   localOrigin(srv),
+		Subprotocols: termSessionProtocols(),
 	})
 	if err != nil {
 		t.Fatalf("dial: %v", err)
@@ -318,7 +340,8 @@ func TestTermServiceUnattached(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	_, resp, err := websocket.Dial(ctx, termWSURL(srv, "/tmp"), &websocket.DialOptions{
-		HTTPHeader: localOrigin(srv),
+		HTTPHeader:   localOrigin(srv),
+		Subprotocols: termSessionProtocols(),
 	})
 	if err == nil {
 		t.Fatal("dial should fail when the service is unattached")
@@ -361,7 +384,7 @@ func TestTermRefusedOnAnExposedListener(t *testing.T) {
 	t.Cleanup(func() { AttachExposedBind(false) })
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	c, resp, err := websocket.Dial(ctx, termWSURL(srv, projectDir), &websocket.DialOptions{HTTPHeader: localOrigin(srv)})
+	c, resp, err := websocket.Dial(ctx, termWSURL(srv, projectDir), &websocket.DialOptions{HTTPHeader: localOrigin(srv), Subprotocols: termSessionProtocols()})
 	if err == nil {
 		c.Close(websocket.StatusNormalClosure, "")
 		t.Fatal("exposed bind: the terminal upgraded")
@@ -372,7 +395,7 @@ func TestTermRefusedOnAnExposedListener(t *testing.T) {
 
 	// (c) loopback-only again: the terminal upgrades as before
 	AttachExposedBind(false)
-	c, _, err = websocket.Dial(ctx, termWSURL(srv, projectDir), &websocket.DialOptions{HTTPHeader: localOrigin(srv)})
+	c, _, err = websocket.Dial(ctx, termWSURL(srv, projectDir), &websocket.DialOptions{HTTPHeader: localOrigin(srv), Subprotocols: termSessionProtocols()})
 	if err != nil {
 		t.Fatalf("loopback daemon: terminal should upgrade: %v", err)
 	}

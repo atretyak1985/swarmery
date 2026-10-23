@@ -415,6 +415,9 @@ func TestWSOriginFence(t *testing.T) {
 	AttachTrustedOrigins([]string{"http://swarmery:" + port})
 	t.Cleanup(func() { AttachTrustedOrigins(nil) })
 	wsURL := strings.Replace(srv.URL, "http://", "ws://", 1) + "/api/ws"
+	// A browser Origin rides with the dashboard's session (the session gate
+	// itself: session_test.go); the fence refuses a foreign one regardless.
+	session := testDashboardSession(t)
 
 	cases := []struct {
 		name   string
@@ -437,6 +440,7 @@ func TestWSOriginFence(t *testing.T) {
 			opts := &websocket.DialOptions{HTTPHeader: http.Header{}}
 			if tc.origin != "" {
 				opts.HTTPHeader.Set("Origin", tc.origin)
+				opts.Subprotocols = sessionProtocols(session)
 			}
 			c, resp, err := websocket.Dial(ctx, wsURL, opts)
 			if tc.ok {

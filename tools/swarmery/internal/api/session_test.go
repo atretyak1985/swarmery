@@ -35,6 +35,38 @@ func mintTestSession(t *testing.T) (key, session string) {
 	return key, s
 }
 
+// testDashboardSession is a session valid under the attached link token —
+// one is attached first when none is. For the tests that drive a write with
+// the daemon's own Origin: that is the dashboard, and the dashboard carries a
+// session. Attach any test-specific link token BEFORE calling it.
+func testDashboardSession(t *testing.T) string {
+	t.Helper()
+	if linkHolder == nil {
+		attachHookToken(t)
+	}
+	s, err := linksig.MintSession(linkHolder.Get(), time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	return s
+}
+
+// dashboardHeader is an http.Header carrying origin and a dashboard session.
+func dashboardHeader(t *testing.T, origin string) http.Header {
+	t.Helper()
+	h := http.Header{}
+	h.Set("Origin", origin)
+	h.Set(SessionHeader, testDashboardSession(t))
+	return h
+}
+
+// dashboardDial is the dial options of a dashboard WebSocket: the daemon's
+// own Origin and the session in the subprotocol list.
+func dashboardDial(t *testing.T, srv *httptest.Server) *websocket.DialOptions {
+	t.Helper()
+	return &websocket.DialOptions{HTTPHeader: localOrigin(srv), Subprotocols: sessionProtocols(testDashboardSession(t))}
+}
+
 // originDo sends one request with the given Origin ("" = none), dashboard
 // session ("" = none) and Authorization ("" = none).
 func originDo(t *testing.T, srv *httptest.Server, method, path, body, origin, session, auth string) (int, string) {
@@ -403,5 +435,43 @@ func TestExposedListenerIgnoresSession(t *testing.T) {
 	}
 	if n := routineCount(t, srv); n != 0 {
 		t.Errorf("a refused request created %d routine(s)", n)
+	}
+}
+
+// The serena proxy relays a dashboard write, never the dashboard's session:
+// neither the header nor the subprotocol entry reaches the upstream.
+func TestSerenaProxyDoesNotRelaySession(t *testing.T) {
+	enableOriginlessAuth(t)
+	srv, _ := projectsTestServer(t)
+	s := testDashboardSession(t)
+
+	var gotHeader, gotProto string
+	var hits int
+	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hits++
+		gotHeader = r.Header.Get(SessionHeader)
+		gotProto = r.Header.Get("Sec-WebSocket-Protocol")
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	t.Cleanup(backend.Close)
+	startProxyStub(t, backend.URL)
+
+	req, _ := http.NewRequest(http.MethodPost, srv.URL+"/api/projects/1/serena/clear_logs", strings.NewReader(`{}`))
+	req.Header = dashboardHeader(t, srv.URL)
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Sec-WebSocket-Protocol", "other.v1, "+WSSessionPrefix+s)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusNoContent || hits != 1 {
+		t.Fatalf("dashboard proxy POST = %d (backend hits %d), want the backend's 204", resp.StatusCode, hits)
+	}
+	if gotHeader != "" {
+		t.Errorf("the session header reached the upstream: %q", gotHeader)
+	}
+	if strings.Contains(gotProto, WSSessionPrefix) || gotProto != "other.v1" {
+		t.Errorf("upstream Sec-WebSocket-Protocol = %q, want only other.v1", gotProto)
 	}
 }

@@ -76,6 +76,30 @@ func presentedSession(r *http.Request) string {
 	return ""
 }
 
+// stripDashboardSession removes the dashboard session from headers relayed
+// to an upstream (the serena proxy): the header, and the session entry of a
+// WebSocket subprotocol list (the other entries stay).
+func stripDashboardSession(h http.Header) {
+	h.Del(SessionHeader)
+	vals := h.Values("Sec-WebSocket-Protocol")
+	if len(vals) == 0 {
+		return
+	}
+	var keep []string
+	for _, v := range vals {
+		for _, p := range strings.Split(v, ",") {
+			p = strings.TrimSpace(p)
+			if p != "" && !strings.HasPrefix(p, WSSessionPrefix) {
+				keep = append(keep, p)
+			}
+		}
+	}
+	h.Del("Sec-WebSocket-Protocol")
+	if len(keep) > 0 {
+		h.Set("Sec-WebSocket-Protocol", strings.Join(keep, ", "))
+	}
+}
+
 // hasDashboardSession reports whether r carries a session that verifies under
 // the current link token. False with no link attached: nothing can verify.
 func hasDashboardSession(r *http.Request) bool {

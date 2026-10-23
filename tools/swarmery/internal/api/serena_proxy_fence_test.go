@@ -43,7 +43,9 @@ func proxyDo(t *testing.T, method, rawURL, origin string) *http.Response {
 		t.Fatal(err)
 	}
 	if origin != "" {
-		req.Header.Set("Origin", origin)
+		// A browser Origin rides with the dashboard's session: a foreign
+		// one is refused by the fence whatever it carries.
+		req.Header = dashboardHeader(t, origin)
 	}
 	req.Header.Set("Content-Type", "application/json")
 	res, err := http.DefaultClient.Do(req)

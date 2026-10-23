@@ -82,7 +82,8 @@ func TestTermAccountQueryGates(t *testing.T) {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 		c, _, err := websocket.Dial(ctx, termAccountWSURL(srv, "nabu-org"), &websocket.DialOptions{
-			HTTPHeader: localOrigin(srv),
+			HTTPHeader:   localOrigin(srv),
+			Subprotocols: termSessionProtocols(),
 		})
 		if err != nil {
 			t.Fatalf("dial should have upgraded for a known account: %v", err)
@@ -113,7 +114,8 @@ func TestTermAccountQueryGates(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer cancel()
 			c, _, err := websocket.Dial(ctx, tc.url, &websocket.DialOptions{
-				HTTPHeader: localOrigin(srv),
+				HTTPHeader:   localOrigin(srv),
+				Subprotocols: termSessionProtocols(),
 			})
 			if err == nil {
 				c.Close(websocket.StatusNormalClosure, "")
