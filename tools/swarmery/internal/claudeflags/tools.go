@@ -142,7 +142,7 @@ func DaemonDenyRules(port int) []string {
 	if port <= 0 {
 		port = DaemonPort()
 	}
-	out := make([]string, 0, 2*len(daemonClients)*len(daemonHosts)+5+len(daemonSecretReads))
+	out := make([]string, 0, 2*len(daemonClients)*len(daemonHosts)+7+len(daemonSecretReads))
 	for _, prefix := range []string{"", "*/"} {
 		for _, c := range daemonClients {
 			for _, h := range daemonHosts {
@@ -158,6 +158,9 @@ func DaemonDenyRules(port int) []string {
 	// `swarmery link token` prints the link token, and `--rotate` replaces it
 	// under the running mod.
 	out = append(out, "Bash(swarmery link*)", "Bash(*/swarmery link*)")
+	// `swarmery open` reads the link token and prints a one-use dashboard
+	// unlock ticket.
+	out = append(out, "Bash(swarmery open*)", "Bash(*/swarmery open*)")
 	return append(out, daemonSecretReads...)
 }
 

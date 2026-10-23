@@ -123,6 +123,7 @@ func wantDaemonRules(port string) []string {
 			"Bash(*/http *127.0.0.1:P*)|Bash(*/http *localhost:P*)|Bash(*/http *[::1]:P*)|"+
 			"Bash(swarmery api*)|Bash(*/swarmery api*)|Bash(command swarmery*)|"+
 			"Bash(swarmery link*)|Bash(*/swarmery link*)|"+
+			"Bash(swarmery open*)|Bash(*/swarmery open*)|"+
 			"Read(~/.swarmery/link-token)|Read(~/.swarmery/credentials/**)|Read(~/.swarmery/secrets/**)|"+
 			"Read(~/.swarmery/swarmery.db*)|"+
 			"Read(~/.claude/.credentials.json)|Read(~/.claude-*/.credentials.json)|Read(~/.config/claude/.credentials.json)",
