@@ -29,7 +29,17 @@ func openKeyFile(t *testing.T) string {
 	prev := proveListener
 	proveListener = func(string, string) error { return nil }
 	t.Cleanup(func() { proveListener = prev })
+	useRunDir(t, filepath.Join(t.TempDir(), "run"), 50*time.Millisecond)
 	return p
+}
+
+// useRunDir points the launcher pages at dir and their removal at delay.
+func useRunDir(t *testing.T, dir string, delay time.Duration) {
+	t.Helper()
+	prevDir, prevDelay := openRunDir, launcherTTL
+	openRunDir = func() (string, error) { return dir, nil }
+	launcherTTL = delay
+	t.Cleanup(func() { openRunDir, launcherTTL = prevDir, prevDelay })
 }
 
 // fakeDaemon answers GET /api/link/health the way the daemon's linkAuth does:
@@ -169,30 +179,147 @@ func TestOpenSessionPage(t *testing.T) {
 	}
 }
 
+// The ticket never rides in a process argv (which every local user can list):
+// the opener gets the path of a 0600 launcher page in a 0700 per-user dir,
+// whose script replaces itself with the unlock URL, and the page is deleted
+// shortly after.
 func TestOpenRunsTheOpener(t *testing.T) {
 	kp := openKeyFile(t)
-	var got []string
+	runDir := filepath.Join(t.TempDir(), "run")
+	useRunDir(t, runDir, 100*time.Millisecond)
+
+	type seen struct {
+		arg, content  string
+		mode, dirMode os.FileMode
+	}
+	var got []seen
 	prev := openBrowser
-	openBrowser = func(u string) error { got = append(got, u); return nil }
+	openBrowser = func(arg string) error {
+		s := seen{arg: arg}
+		if fi, err := os.Lstat(arg); err == nil {
+			s.mode = fi.Mode()
+		}
+		if fi, err := os.Lstat(filepath.Dir(arg)); err == nil {
+			s.dirMode = fi.Mode()
+		}
+		b, _ := os.ReadFile(arg)
+		s.content = string(b)
+		got = append(got, s)
+		return nil
+	}
 	t.Cleanup(func() { openBrowser = prev })
 
 	var out, errb bytes.Buffer
 	if code := cmdOpen([]string{"--port", "7798", "--key-file", kp}, &out, &errb); code != 0 {
 		t.Fatalf("exit %d, stderr %s", code, errb.String())
 	}
-	if len(got) != 1 || !strings.HasPrefix(got[0], "http://127.0.0.1:7798/#swarmery-unlock=") {
-		t.Fatalf("opener got %q", got)
+	if len(got) != 1 {
+		t.Fatalf("opener ran %d time(s), want 1", len(got))
+	}
+	g := got[0]
+	if strings.Contains(g.arg, "swarmery-unlock") || strings.Contains(g.arg, "#") || filepath.Dir(g.arg) != runDir {
+		t.Fatalf("opener argv %q: want a launcher file path under %s, no ticket", g.arg, runDir)
+	}
+	if g.mode != 0o600 {
+		t.Errorf("launcher mode %v, want -rw-------", g.mode)
+	}
+	if g.dirMode != os.ModeDir|0o700 {
+		t.Errorf("run dir mode %v, want drwx------", g.dirMode)
+	}
+	if !strings.Contains(g.content, `<meta name="referrer" content="no-referrer">`) ||
+		!strings.Contains(g.content, "location.replace(") {
+		t.Errorf("launcher page %q: want a no-referrer page whose script calls location.replace", g.content)
+	}
+	start := strings.Index(g.content, `location.replace("`)
+	end := strings.Index(g.content, `")</script>`)
+	if start < 0 || end < start {
+		t.Fatalf("launcher page %q: no location.replace(\"…\")", g.content)
+	}
+	u := g.content[start+len(`location.replace("`) : end]
+	if !strings.HasPrefix(u, "http://127.0.0.1:7798/#swarmery-unlock=") {
+		t.Fatalf("launcher target %q", u)
+	}
+	if _, err := linksig.VerifyUnlock(openTestKey, "http://127.0.0.1:7798", ticketOf(t, u), time.Now()); err != nil {
+		t.Errorf("launcher ticket does not verify: %v", err)
 	}
 	if out.Len() != 0 {
 		t.Errorf("without --print the ticket went to stdout: %q", out.String())
 	}
-	if strings.Contains(errb.String(), ticketOf(t, got[0])) {
+	if strings.Contains(errb.String(), ticketOf(t, u)) {
 		t.Errorf("the ticket was echoed to stderr: %q", errb.String())
+	}
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		if _, err := os.Lstat(g.arg); os.IsNotExist(err) {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("launcher %s still exists 5 s after the open", g.arg)
+		}
+		time.Sleep(20 * time.Millisecond)
 	}
 
 	openBrowser = func(string) error { return errors.New("no display") }
 	if code := cmdOpen([]string{"--port", "7798", "--key-file", kp}, &out, &errb); code != 2 {
 		t.Errorf("failed opener: exit %d, want 2", code)
+	}
+	if left, _ := filepath.Glob(filepath.Join(runDir, "*")); len(left) != 0 {
+		t.Errorf("a failed open left %q behind", left)
+	}
+}
+
+// A stale launcher from an earlier run is swept; a symlinked or foreign run
+// dir is refused.
+func TestOpenRunDirHygiene(t *testing.T) {
+	kp := openKeyFile(t)
+	prev := openBrowser
+	openBrowser = func(string) error { return nil }
+	t.Cleanup(func() { openBrowser = prev })
+
+	runDir := filepath.Join(t.TempDir(), "run")
+	useRunDir(t, runDir, time.Hour)
+	if err := os.Mkdir(runDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	stale := filepath.Join(runDir, "open-stale.html")
+	if err := os.WriteFile(stale, []byte("x"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	old := time.Now().Add(-time.Hour)
+	if err := os.Chtimes(stale, old, old); err != nil {
+		t.Fatal(err)
+	}
+	var out, errb bytes.Buffer
+	if code := cmdOpen([]string{"--port", "7798", "--key-file", kp}, &out, &errb); code != 0 {
+		t.Fatalf("exit %d, stderr %s", code, errb.String())
+	}
+	if _, err := os.Lstat(stale); !os.IsNotExist(err) {
+		t.Errorf("stale launcher survived the next run")
+	}
+
+	target := t.TempDir()
+	link := filepath.Join(t.TempDir(), "run")
+	if err := os.Symlink(target, link); err != nil {
+		t.Fatal(err)
+	}
+	useRunDir(t, link, time.Hour)
+	if code := cmdOpen([]string{"--port", "7798", "--key-file", kp}, &out, &errb); code != 2 {
+		t.Errorf("symlinked run dir: exit %d, want 2", code)
+	}
+	if left, _ := filepath.Glob(filepath.Join(target, "*")); len(left) != 0 {
+		t.Errorf("a launcher was written through the symlink: %q", left)
+	}
+
+	loose := filepath.Join(t.TempDir(), "run")
+	if err := os.Mkdir(loose, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	useRunDir(t, loose, time.Hour)
+	if code := cmdOpen([]string{"--port", "7798", "--key-file", kp}, &out, &errb); code != 0 {
+		t.Fatalf("own run dir with loose mode: exit %d, stderr %s", code, errb.String())
+	}
+	if fi, err := os.Lstat(loose); err != nil || fi.Mode().Perm() != 0o700 {
+		t.Errorf("own run dir mode %v, want tightened to 0700", fi.Mode())
 	}
 }
 

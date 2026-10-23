@@ -131,7 +131,11 @@ daemon" from the address it actually listens on, and both are extended only by
   `swarmery open` exits `2` and the notch opens the plain URL, without a
   ticket. Sessions are stateless HMACs
   under the link token, so `swarmery link token --rotate` signs every
-  dashboard out. `swarmery open --print` prints the URL instead of opening it.
+  dashboard out. The URL never appears in a process's argv (which every
+  local user can list): `swarmery open` hands the browser the path of a 0600
+  launcher page in `~/.swarmery/run/` (0700) that replaces itself with the
+  URL, and deletes it about 10 seconds later (a page left behind is swept on
+  the next run). `swarmery open --print` prints the URL instead of opening it.
 - **Binding wider.** `serve --bind` with a non-loopback address refuses to
   start until a link token exists (`swarmery link token` mints it): exposed,
   the daemon must never fall back to trusting a missing `Origin`. Exposed (a

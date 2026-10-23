@@ -20,6 +20,10 @@
 // (checkListener): a ticket is handed only to a listener that signs its
 // answer with the link token.
 //
+// The URL never goes on the opener's command line (open_launcher.go): the
+// opener gets the path of a short-lived 0600 launcher page that replaces
+// itself with the URL. --print prints the URL itself — the operator's choice.
+//
 // Exit codes: 0 opened (or printed), 2 a usage error, no link token, a
 // listener that is down or does not prove it holds the token, or the browser
 // could not be started.
@@ -33,6 +37,7 @@ import (
 	"net/http"
 	"net/netip"
 	"net/url"
+	"os"
 	"os/exec"
 	"runtime"
 	"strings"
@@ -46,7 +51,8 @@ const openUsage = "usage: swarmery open [--print] [--session <uuid>] [--port <n>
 // unlockFragment is the URL fragment key the SPA reads the ticket from.
 const unlockFragment = "swarmery-unlock"
 
-// openBrowser hands a URL to the platform's opener; a test replaces it.
+// openBrowser hands a file path (the launcher page, open_launcher.go — never
+// the unlock URL itself) to the platform's opener; a test replaces it.
 var openBrowser = func(u string) error {
 	var name string
 	switch runtime.GOOS {
@@ -166,13 +172,21 @@ func cmdOpen(args []string, stdout, stderr io.Writer) int {
 		return 2
 	}
 	if *printOnly {
+		// The operator's explicit choice: the URL, ticket and all, on stdout.
 		fmt.Fprintln(stdout, u)
 		return 0
 	}
-	if err := openBrowser(u); err != nil {
+	launcher, err := prepareLauncher(u)
+	if err != nil {
+		fmt.Fprintf(stderr, "swarmery open: %v (use --print to get the URL instead)\n", err)
+		return 2
+	}
+	if err := openBrowser(launcher); err != nil {
+		_ = os.Remove(launcher)
 		fmt.Fprintf(stderr, "swarmery open: %v\n", err)
 		return 2
 	}
+	removeLater(launcher, launcherTTL)
 	page, _, _ := strings.Cut(u, "#")
 	fmt.Fprintf(stderr, "swarmery open: opened %s (the unlock link works once, within 2 minutes)\n", page)
 	return 0
