@@ -1,4 +1,4 @@
--- 0126: worktree cleanup proposals (internal/wtcleanup) — the janitor's
+-- 0130: worktree cleanup proposals (internal/wtcleanup) — the janitor's
 -- keep-unmerged pile, narrowed to worktrees whose phase or board card is closed
 -- and annotated with a PROOF that the branch's content is already in main.
 --

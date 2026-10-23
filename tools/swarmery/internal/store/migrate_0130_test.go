@@ -2,20 +2,20 @@ package store
 
 import "testing"
 
-// TestMigrate0126AddsWorktreeCleanup: the proposals table lands with its
+// TestMigrate0130AddsWorktreeCleanup: the proposals table lands with its
 // columns, and the partial unique index allows one OPEN proposal per checkout
 // while decided history rows for the same path stay unconstrained.
-func TestMigrate0126AddsWorktreeCleanup(t *testing.T) {
+func TestMigrate0130AddsWorktreeCleanup(t *testing.T) {
 	db := openRaw(t)
 	if err := Migrate(db); err != nil {
 		t.Fatalf("migrate fresh db: %v", err)
 	}
 	var name string
-	if err := db.QueryRow(`SELECT name FROM schema_migrations WHERE version = 126`).Scan(&name); err != nil {
-		t.Fatalf("migration 126 not recorded: %v", err)
+	if err := db.QueryRow(`SELECT name FROM schema_migrations WHERE version = 130`).Scan(&name); err != nil {
+		t.Fatalf("migration 130 not recorded: %v", err)
 	}
-	if name != "0126_worktree_cleanup.sql" {
-		t.Errorf("migration 126 name: want 0126_worktree_cleanup.sql, got %s", name)
+	if name != "0130_worktree_cleanup.sql" {
+		t.Errorf("migration 130 name: want 0130_worktree_cleanup.sql, got %s", name)
 	}
 	mustHaveColumns(t, db, "worktree_cleanup_proposals",
 		"id", "repo_root", "project_id", "path", "branch", "phase_id", "task_id",
