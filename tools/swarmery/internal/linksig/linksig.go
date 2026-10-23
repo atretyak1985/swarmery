@@ -213,6 +213,7 @@ func Target(r *http.Request) string {
 // daemon; safe for concurrent use.
 type Verifier struct {
 	mu    sync.Mutex
+	ttl   time.Duration // how long a nonce is remembered (NonceTTL by default)
 	seen  map[string]*list.Element
 	order *list.List // front = oldest; values are seenNonce
 }
@@ -224,7 +225,11 @@ type seenNonce struct {
 
 // NewVerifier returns an empty Verifier.
 func NewVerifier() *Verifier {
-	return &Verifier{seen: make(map[string]*list.Element), order: list.New()}
+	return newVerifier(NonceTTL)
+}
+
+func newVerifier(ttl time.Duration) *Verifier {
+	return &Verifier{ttl: ttl, seen: make(map[string]*list.Element), order: list.New()}
 }
 
 // VerifyRequest checks r's Swarmery-HMAC signature under key at now, and on
@@ -272,13 +277,14 @@ func readBody(r *http.Request) ([]byte, error) {
 	return body, nil
 }
 
-// remember records nonce at now; false when it was already seen inside NonceTTL.
+// remember records nonce at now; false when it was already seen inside the
+// verifier's TTL.
 func (v *Verifier) remember(nonce string, now time.Time) bool {
 	v.mu.Lock()
 	defer v.mu.Unlock()
 	for front := v.order.Front(); front != nil; front = v.order.Front() {
 		s, _ := front.Value.(seenNonce)
-		if now.Sub(s.at) < NonceTTL {
+		if now.Sub(s.at) < v.ttl {
 			break
 		}
 		v.order.Remove(front)
