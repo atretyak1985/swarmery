@@ -65,9 +65,11 @@ function connect(): void {
     if (socket !== ws) return; // superseded or torn down
     socket = null;
     if (subscribers.size === 0) return;
-    // The first attempt of this page refused before it opened: with no
-    // session that is the daemon asking for one (raised once, not per retry).
-    if (!opened && !everConnected && attempt === 0) reportSocketRefused();
+    // Refused before it opened. With no session that is the daemon asking for
+    // one (the banner is raised for the page's first attempt only, not per
+    // retry); with a session stored, the daemon is asked whether it is still
+    // alive (a rotated link token kills it while the page stays open).
+    if (!opened) reportSocketRefused(!everConnected && attempt === 0);
     const delayMs = Math.min(BACKOFF_BASE_MS * 2 ** attempt, BACKOFF_CAP_MS);
     attempt += 1;
     retryTimer = setTimeout(() => {

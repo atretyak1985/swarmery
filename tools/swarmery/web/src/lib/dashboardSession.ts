@@ -13,6 +13,8 @@
 // session header to every write and reports a `dashboard_locked` answer to
 // whoever subscribed with `onDashboardLocked` (the global banner). A source
 // scan test (dashboardSession.test.ts) fails on a `fetch` anywhere else.
+// The one read that carries the session header is the GET /api/session probe
+// (verifyStoredSession), which asks whether a stored session is still alive.
 
 export const SESSION_HEADER = 'X-Swarmery-Session';
 export const SESSION_STORAGE_KEY = 'swarmery.session';
@@ -137,13 +139,76 @@ export function wsProtocols(): string[] {
 }
 
 /**
- * A socket that closed before it ever opened, with no session to offer, was
- * refused for want of one: say so through the locked banner. A socket that had
- * a session and still failed is more likely a daemon restart; the next write
- * tells the two apart.
+ * A socket closed before it ever opened.
+ *
+ * With no session to offer it was refused for want of one: the first refusal
+ * of a streak (`firstOfStreak`, the default) says so through the locked
+ * banner; a retry of the same streak stays quiet.
+ *
+ * With a session stored the refusal is ambiguous — a daemon restart, or a
+ * session the daemon no longer accepts (a rotated link token) — so the page
+ * asks GET /api/session (see verifyStoredSession) and drops the session only
+ * when the daemon says it is dead.
  */
-export function reportSocketRefused(): void {
-  if (getSession() === null) emitLocked();
+export function reportSocketRefused(firstOfStreak = true): void {
+  if (getSession() !== null) {
+    void verifyStoredSession();
+    return;
+  }
+  if (firstOfStreak) emitLocked();
+}
+
+export const SESSION_CHECK_PATH = '/api/session';
+
+/** The one probe in flight, shared by every concurrent caller. */
+let probe: Promise<void> | null = null;
+
+/**
+ * Ask the daemon whether the stored session still verifies. This is the ONE
+ * read that carries the session header: apiFetch never sends it on a GET, so
+ * the probe builds its own request instead of going through apiFetch. Called
+ * once at boot (main.tsx) and whenever a socket is refused while a session is
+ * stored.
+ *
+ *   204                        the session is good: nothing changes
+ *   401 {code:dashboard_locked} the session is dead: drop it, raise the banner
+ *   anything else, or no answer the daemon is down or older: nothing changes
+ *
+ * A session replaced while the probe ran (a fresh unlock) is kept: only the
+ * token that was asked about can be dropped. Never rejects.
+ */
+export function verifyStoredSession(): Promise<void> {
+  if (probe !== null) return probe;
+  const token = getSession();
+  if (token === null) return Promise.resolve();
+  const current = probeSession(token).finally(() => {
+    if (probe === current) probe = null;
+  });
+  probe = current;
+  return current;
+}
+
+async function probeSession(token: string): Promise<void> {
+  let res: Response;
+  try {
+    res = await fetch(SESSION_CHECK_PATH, {
+      method: 'GET',
+      headers: { [SESSION_HEADER]: token },
+      cache: 'no-store',
+    });
+  } catch {
+    return; // Daemon unreachable: a restart is not a lock.
+  }
+  if (res.status !== 401) return;
+  try {
+    const body = (await res.json()) as { code?: unknown };
+    if (body.code !== LOCKED_CODE) return;
+  } catch {
+    return;
+  }
+  if (getSession() !== token) return;
+  setSession(null);
+  emitLocked();
 }
 
 function methodOf(input: RequestInfo | URL, init: RequestInit | undefined): string {
@@ -199,5 +264,6 @@ export function apiFetch(input: RequestInfo | URL, init?: RequestInit): Promise<
 /** Test-only: forget the in-memory token and lower the locked notice. */
 export function resetDashboardSessionForTests(): void {
   memoryToken = null;
+  probe = null;
   dismissLockedNotice();
 }

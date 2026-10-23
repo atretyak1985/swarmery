@@ -250,6 +250,31 @@ describe('dead session detection', () => {
     expect(isLockedNoticeShown()).toBe(false);
   });
 
+  it('the probe is the one GET that carries the session; apiFetch reads still do not', async () => {
+    window.localStorage.setItem(SESSION_STORAGE_KEY, 'sess-probe');
+    fetchMock.mockResolvedValueOnce(new Response(null, { status: 204 }));
+    await verifyStoredSession();
+    const probeInit = fetchMock.mock.calls[0]?.[1] as RequestInit | undefined;
+    expect(probeInit?.method).toBe('GET');
+    expect(probeInit?.cache).toBe('no-store');
+    expect(sentHeaders(fetchMock, 0).get(SESSION_HEADER)).toBe('sess-probe');
+
+    await apiFetch('/api/session');
+    await apiFetch('/api/x', { method: 'GET', headers: { Accept: 'application/json' } });
+    expect(fetchMock.mock.calls[1]).toEqual(['/api/session']);
+    expect(sentHeaders(fetchMock, 1).get(SESSION_HEADER)).toBeNull();
+    expect(sentHeaders(fetchMock, 2).get(SESSION_HEADER)).toBeNull();
+    expect(sentHeaders(fetchMock, 2).get('Accept')).toBe('application/json');
+  });
+
+  it('a probe that already settled does not block the next one', async () => {
+    window.localStorage.setItem(SESSION_STORAGE_KEY, 'sess-twice');
+    fetchMock.mockResolvedValue(new Response(null, { status: 204 }));
+    await verifyStoredSession();
+    await verifyStoredSession();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
   it('at boot, nothing is asked without a stored session', async () => {
     await verifyStoredSession();
     expect(fetchMock).not.toHaveBeenCalled();
