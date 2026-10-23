@@ -18,7 +18,7 @@ func TestMigrate0130AddsWorktreeCleanup(t *testing.T) {
 		t.Errorf("migration 130 name: want 0130_worktree_cleanup.sql, got %s", name)
 	}
 	mustHaveColumns(t, db, "worktree_cleanup_proposals",
-		"id", "repo_root", "project_id", "path", "branch", "head_sha", "phase_id", "task_id",
+		"id", "repo_root", "project_id", "path", "branch", "phase_id", "task_id",
 		"proof_kind", "proof_detail", "proposed_at", "decided", "decided_at", "salvage_branch", "error")
 
 	ins := `INSERT INTO worktree_cleanup_proposals (repo_root, path, proof_kind, proposed_at, decided)
