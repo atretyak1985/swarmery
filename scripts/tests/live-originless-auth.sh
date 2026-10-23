@@ -7,7 +7,10 @@
 # then asserts over HTTP:
 #   - a raw Origin-less POST /api/routines without auth gets 401 and creates nothing;
 #   - the same write through `swarmery api` (signed) gets 201;
-#   - the daemon's own browser Origin still writes without a credential;
+#   - the daemon's own browser Origin without a session is refused (401
+#     dashboard_locked);
+#   - after an unlock (`swarmery open --print` + POST /api/session/unlock) the
+#     same own-Origin write carrying X-Swarmery-Session gets 201;
 #   - plain GETs need no credential;
 #   - the hook shim (`swarmery hook stop`, SWARMERY_PORT=7796) is accepted (http-202);
 #   - `serve --bind 0.0.0.0 --port 7797` with an empty HOME refuses to start
@@ -88,8 +91,35 @@ else
 fi
 [ "$(count_routines)" = 1 ] && pass "the signed POST created one routine" || fail "routines = $(count_routines), want 1"
 
-got="$(curl -s -o /dev/null -w '%{http_code}' -X POST -H "Origin: $BASE" -H 'Content-Type: application/json' -d "$ROUTINE" "$BASE/api/routines")"
-[ "$got" = 201 ] && pass "browser POST with the daemon's own Origin ($got)" || fail "own-Origin POST = $got, want 201"
+got="$(curl -s -o "$SCRATCH/body" -w '%{http_code}' -X POST -H "Origin: $BASE" -H 'Content-Type: application/json' -d "$ROUTINE" "$BASE/api/routines")"
+if [ "$got" = 401 ] && grep -q '"code":"dashboard_locked"' "$SCRATCH/body"; then
+  pass "own-Origin POST without a session is locked ($got dashboard_locked)"
+else
+  fail "own-Origin POST without a session = $got $(head -c 120 "$SCRATCH/body"), want 401 dashboard_locked"
+fi
+
+# Unlock the way the dashboard does: `swarmery open --print` mints a ticket in
+# the URL fragment; POST /api/session/unlock (Origin = the listener's literal
+# address) trades it for a session the browser then sends on every write.
+unlock_url=""
+if unlock_url="$(env -i "$SCRATCH/launch.sh" "$SCRATCH/home" "$BIN" open --print --port "$PORT" 2>"$SCRATCH/open.err")"; then
+  pass "swarmery open --print minted an unlock URL"
+else
+  fail "swarmery open --print failed: $(cat "$SCRATCH/open.err")"
+fi
+ticket="${unlock_url#*swarmery-unlock=}"
+got="$(curl -s -o "$SCRATCH/unlock" -w '%{http_code}' -X POST -H "Origin: http://127.0.0.1:$PORT" \
+  -H 'Content-Type: application/json' -d "{\"ticket\":\"$ticket\"}" "$BASE/api/session/unlock")"
+session="$(sed -n 's/.*"session":"\([^"]*\)".*/\1/p' "$SCRATCH/unlock")"
+if [ "$got" = 200 ] && [ -n "$session" ]; then
+  pass "POST /api/session/unlock traded the ticket for a session ($got)"
+else
+  fail "unlock = $got $(head -c 120 "$SCRATCH/unlock"), want 200 with a session"
+fi
+got="$(curl -s -o /dev/null -w '%{http_code}' -X POST -H "Origin: $BASE" -H "X-Swarmery-Session: $session" \
+  -H 'Content-Type: application/json' -d "$ROUTINE" "$BASE/api/routines")"
+[ "$got" = 201 ] && pass "own-Origin POST with the session ($got)" || fail "own-Origin POST with the session = $got, want 201"
+
 got="$(curl -s -o /dev/null -w '%{http_code}' -X POST -H 'Origin: http://evil.example' -d "$ROUTINE" "$BASE/api/routines")"
 [ "$got" = 403 ] && pass "foreign Origin ($got)" || fail "foreign Origin = $got, want 403"
 got="$(curl -s -o /dev/null -w '%{http_code}' "$BASE/api/routines")"
