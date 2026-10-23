@@ -12,6 +12,10 @@
 -- proof_kind 'none' rows are COUNTED (the item's "without proof: K"), never
 -- listed for deletion, and apply refuses them.
 --
+-- head_sha binds the proof to one commit: apply refuses (head-changed) when the
+-- checkout's HEAD moved since the scan, and re-resolves the owner (owner-active)
+-- because a phase re-run reuses the same path and branch.
+--
 -- decided: NULL while open, then removed | gone (the path disappeared between
 -- propose and apply). A failed removal leaves the row undecided with `error`
 -- set, so the operator can retry it from the same card.
@@ -22,6 +26,7 @@ CREATE TABLE worktree_cleanup_proposals (
     project_id     INTEGER REFERENCES projects(id),  -- for the needs-you ?project= scope
     path           TEXT NOT NULL,                    -- the worktree checkout
     branch         TEXT NOT NULL DEFAULT '',         -- '' when detached
+    head_sha       TEXT NOT NULL DEFAULT '',         -- the checkout's HEAD the proof was computed for
     phase_id       INTEGER,                          -- epic_phases.id when a phase run owns it
     task_id        INTEGER,                          -- tasks.id: the board card, or the plan of the phase
     proof_kind     TEXT NOT NULL,                    -- landing | content-diff | none
