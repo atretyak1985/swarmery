@@ -343,7 +343,7 @@ function StepEditor({
           type="text"
           value={step.command ?? ''}
           onChange={(e) => set({ command: e.target.value })}
-          placeholder={t`shell command (e.g. curl -fsS -X POST …)`}
+          placeholder={t`shell command (e.g. swarmery api POST /api/… --data @body.json)`}
           className="mt-2 w-full rounded-md border border-line-strong bg-surface px-2 py-1 font-mono text-[11px] text-ink"
         />
       )}

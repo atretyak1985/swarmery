@@ -2424,8 +2424,8 @@ msgid "sessions"
 msgstr "sessions"
 
 #: src/pages/Routines.tsx
-msgid "shell command (e.g. curl -fsS -X POST …)"
-msgstr "shell command (e.g. curl -fsS -X POST …)"
+msgid "shell command (e.g. swarmery api POST /api/… --data @body.json)"
+msgstr "shell command (e.g. swarmery api POST /api/… --data @body.json)"
 
 #: src/pages/plans/DecisionTable.tsx
 msgid "show {id}"

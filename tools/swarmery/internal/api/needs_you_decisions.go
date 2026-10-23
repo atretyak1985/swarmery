@@ -21,7 +21,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"slices"
 
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/mdfence"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/phaserun"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/store"
 )
@@ -60,9 +62,11 @@ type needsYouDecision struct {
 	// stop_reason_missing, stop_option_invalid, stop_paths_rejected). FreeText is
 	// true when the operator may answer in their own words: POST {option:
 	// "other", note}. Paths are exactly the files an allow-add-to-scope answer
-	// would add to the guard's `allow:` list — the guard check's findings plus
-	// the agent's vetted `paths:` (phaserun.StopAllowPaths); absent for a stop
-	// that is not a protected-path stop.
+	// would add to the guard's `allow:` list (phaserun.DecisionAllowPaths): the
+	// guard check's findings and, for a protected-path stop, the agent's
+	// `paths:`, every one vetted as a literal file under a protected glob —
+	// never a raw file name or guard.log field. A guard decision carries them
+	// too, and stop_paths_rejected in Flags when vetting dropped a candidate.
 	Trigger  string   `json:"trigger,omitempty"`
 	Reason   string   `json:"reason,omitempty"`
 	Flags    []string `json:"flags,omitempty"`
@@ -71,18 +75,33 @@ type needsYouDecision struct {
 }
 
 // withStop fills the agent-declared stop's fields from the decision's stored
-// guard_json; a decision without a stop is returned unchanged. The options come
-// from the block — labels and consequences as the agent wrote them.
+// guard_json. The options come from the block — labels and consequences as the
+// agent wrote them, except the guard's own allow/reject ids, which carry the
+// daemon's, and which a stop on a run its guard check flagged always offers
+// (phaserun.StopOptionsOf). A guard decision (source stop, no block) gets only
+// its vetted Paths and a stop_paths_rejected flag; a review decision is
+// returned unchanged.
 func (d needsYouDecision) withStop(guardJSON string) needsYouDecision {
+	paths, rejected := phaserun.DecisionAllowPaths(guardJSON)
 	st := phaserun.StopFromJSON(guardJSON)
 	if st == nil {
+		if d.Source == store.DecisionSourceStop {
+			d.Paths = paths
+			if rejected {
+				d.Flags = []string{mdfence.LintStopPathsRejected}
+			}
+		}
 		return d
 	}
 	d.Trigger, d.Reason, d.FreeText = st.Trigger, st.Reason, true
 	d.Flags = append([]string{}, st.Flags...)
-	d.Paths = phaserun.StopAllowPaths(guardJSON)
-	d.Options = make([]needsYouDecisionOption, 0, len(st.Options))
-	for _, o := range st.Options {
+	if rejected && !slices.Contains(d.Flags, mdfence.LintStopPathsRejected) {
+		d.Flags = append(d.Flags, mdfence.LintStopPathsRejected)
+	}
+	d.Paths = paths
+	opts := phaserun.StopOptionsOf(guardJSON)
+	d.Options = make([]needsYouDecisionOption, 0, len(opts))
+	for _, o := range opts {
 		d.Options = append(d.Options, needsYouDecisionOption{ID: o.ID, Label: o.Label, Consequence: o.Consequence})
 	}
 	return d

@@ -104,7 +104,7 @@ Make the daemon forget its token for a project's host — its CLI calls fall bac
 to your own CLI login, if any:
 
 ```bash
-curl -X DELETE http://localhost:7777/api/projects/<projectId>/vcs/token
+swarmery api DELETE /api/projects/<projectId>/vcs/token   # signed: a write without an Origin needs link auth
 # or
 rm ~/.swarmery/secrets/vcs-<host>.env
 ```

@@ -16,6 +16,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/linksig"
 )
 
 const (
@@ -35,9 +37,10 @@ const (
 var errEmptyToken = errors.New("link token file is empty")
 
 // TokenPath returns <home>/.swarmery/link-token, beside the daemon database
-// (internal/installer homeDBPath).
+// (internal/installer homeDBPath). It is linksig.KeyPath, the path every
+// signing client reads, so the two can never name different files.
 func TokenPath(home string) string {
-	return filepath.Join(home, ".swarmery", "link-token")
+	return linksig.KeyPath(home)
 }
 
 // EnsureToken returns the installation's link token, minting one when the file

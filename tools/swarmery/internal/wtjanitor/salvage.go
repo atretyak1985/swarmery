@@ -45,14 +45,19 @@ func salvageTo(repoRoot, worktreePath, origBranch, branch string, now time.Time)
 	if err != nil {
 		return "", fmt.Errorf("salvage: commit-tree: %w", err)
 	}
-	if _, err := run(repoRoot, "update-ref", "refs/heads/"+branch, commit); err != nil {
+	// The empty old value makes update-ref refuse when the ref already exists:
+	// an earlier rescue under the same name is never overwritten — the salvage
+	// fails, and a failed salvage keeps the worktree.
+	if _, err := run(repoRoot, "update-ref", "refs/heads/"+branch, commit, ""); err != nil {
 		return "", fmt.Errorf("salvage: update-ref %s: %w", branch, err)
 	}
 	return branch, nil
 }
 
-// SalvageBranchName is deterministic per (worktree, day) so a same-day retry
-// overwrites its own ref instead of littering the branch list.
+// SalvageBranchName is deterministic per (worktree, day) so retries do not
+// litter the branch list. salvageTo never overwrites an existing ref, so a
+// same-day retry after a salvaged-but-not-removed sweep keeps the worktree
+// until the next day's name is free.
 func SalvageBranchName(worktreePath string, now time.Time) string {
 	return "salvage/" + filepath.Base(worktreePath) + "-" + now.UTC().Format("20060102")
 }

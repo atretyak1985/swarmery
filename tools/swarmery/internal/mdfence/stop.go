@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"path"
 	"strings"
+	"unicode"
+	"unicode/utf8"
 )
 
 // StopKind is the `kind:` value of the block an executor writes when one of its
@@ -55,8 +57,9 @@ const (
 	LintStopOptionsCount = "stop_options_count"
 	// LintStopReasonMissing: the block gives no reason.
 	LintStopReasonMissing = "stop_reason_missing"
-	// LintStopOptionInvalid: an option has no id, repeats an id, or uses the
-	// reserved id `other`; it was renamed so every option stays answerable.
+	// LintStopOptionInvalid: an option has no id, an id that is not a bare token
+	// (ValidOptionID), repeats an id, or uses the reserved id `other`; it was
+	// renamed so every option stays answerable.
 	LintStopOptionInvalid = "stop_option_invalid"
 	// LintStopPathsRejected: one or more `paths:` entries were dropped — not a
 	// literal repo-relative file path (LiteralRepoPath), or, once the daemon
@@ -111,10 +114,10 @@ func KnownStopTrigger(trigger string) bool {
 // (ErrUnparsable, with the output line). Everything softer is a flag on a parsed
 // block: an unknown or missing trigger (stop_trigger_unknown — the trigger is
 // kept, flattened), a count of options other than two (stop_options_count), a
-// missing reason (stop_reason_missing), an option without an id, with a repeated
-// id or with the reserved id `other` (stop_option_invalid — renamed option-<n>),
-// a `paths:` entry that is not a literal repo-relative file path
-// (stop_paths_rejected — dropped).
+// missing reason (stop_reason_missing), an option without an id, with an id that
+// is not a bare token, with a repeated id or with the reserved id `other`
+// (stop_option_invalid — renamed option-<n>), a `paths:` entry that is not a
+// literal repo-relative file path as written (stop_paths_rejected — dropped).
 //
 // The block is written by the executor, which is untrusted, and its scalars end
 // up in the phase doc and in the next run's prompt: every scalar returned is
@@ -149,7 +152,9 @@ func ParseStop(output string) (*Stop, error) {
 		return nil, perr
 	}
 	for _, p := range paths {
-		if p = flatScalar(p); LiteralRepoPath(p) {
+		// Vetted as written, never flattened first: a path the agent wrote with a
+		// newline in it is not the file the flattened spelling names.
+		if LiteralRepoPath(p) {
 			st.Paths = append(st.Paths, p)
 		} else {
 			flags[LintStopPathsRejected] = true
@@ -167,7 +172,7 @@ func ParseStop(output string) (*Stop, error) {
 			Label:       flatScalar(it.str("label")),
 			Consequence: flatScalar(it.str("consequence")),
 		}
-		if o.ID == "" || o.ID == StopOptionOther || seen[o.ID] {
+		if !ValidOptionID(o.ID) || o.ID == StopOptionOther || seen[o.ID] {
 			flags[LintStopOptionInvalid] = true
 			o.ID = fmt.Sprintf("option-%d", i+1)
 			for seen[o.ID] {
@@ -191,6 +196,29 @@ func ParseStop(output string) (*Stop, error) {
 	return st, nil
 }
 
+// maxOptionIDLen bounds an option id; ids are short tokens, not sentences.
+const maxOptionIDLen = 64
+
+// ValidOptionID reports whether id is a bare option token: a lower-case letter
+// or digit, then letters, digits, `.`, `_` or `-`. The daemon reads the chosen
+// id back out of the recorded answer (`<id>` or `<id> — <note>`), so an id that
+// could carry a space or a dash sequence would let an option that is not
+// allow-add-to-scope read back as one.
+func ValidOptionID(id string) bool {
+	if id == "" || len(id) > maxOptionIDLen {
+		return false
+	}
+	for i, r := range id {
+		switch {
+		case r >= 'a' && r <= 'z', r >= '0' && r <= '9':
+		case i > 0 && (r == '.' || r == '_' || r == '-'):
+		default:
+			return false
+		}
+	}
+	return true
+}
+
 // flatScalar puts s on one line: every run of whitespace — newlines, carriage
 // returns, tabs, the Unicode line and paragraph separators — becomes one space.
 func flatScalar(s string) string { return strings.Join(strings.Fields(s), " ") }
@@ -203,12 +231,25 @@ func token(s string) string { return flatScalar(strings.ReplaceAll(s, "`", "")) 
 // repository root — the only kind of agent-supplied path that may become an
 // entry of a guard's `allow:` list, where entries act as globs. It rejects an
 // empty path, glob metacharacters (`*` `?` `[` `]` `{` `}`, and bash's extglob
-// openers `+(` `@(` `!(`), a leading `/`, a `..` segment, a backslash, control
-// characters, a path not in clean form (`./x`, `a//b`, or a trailing `/`, which
-// a guard reads as a whole directory), and anything under `.swarmery` — the
-// guard's own inputs, never on offer (letter case ignored, as the hook does).
+// openers `+(` `@(` `!(`), a leading `/`, a `..` segment, a backslash, a path
+// not in clean form (`./x`, `a//b`, or a trailing `/`, which a guard reads as a
+// whole directory), and anything under `.swarmery` — the guard's own inputs,
+// never on offer (letter case ignored, as the hook does).
+//
+// It also rejects invalid UTF-8 and every rune that is not printable
+// (unicode.IsPrint: control characters, non-ASCII spaces, the line and
+// paragraph separators) or is a format rune (category Cf: zero-width spaces
+// and joiners, the bidi embeddings and overrides U+202A–U+202E, the isolates
+// U+2066–U+2069). Such a path would make the hook's guard parser fail closed
+// on every call, and a bidi override could make the "releases" line the
+// operator reads spell a different file than the one released.
+//
+// Whether the path names a FILE rather than a directory is not knowable from
+// the string: the daemon checks that against the run's worktree and changed
+// files before an entry is stored or offered (phaserun.vetAllowPaths).
 func LiteralRepoPath(p string) bool {
-	if p == "" || strings.ContainsAny(p, "*?[]{}\\") || strings.HasPrefix(p, "/") {
+	if p == "" || strings.TrimSpace(p) != p || strings.ContainsAny(p, "*?[]{}\\") || strings.HasPrefix(p, "/") ||
+		!utf8.ValidString(p) {
 		return false
 	}
 	for _, opener := range []string{"+(", "@(", "!("} {
@@ -217,7 +258,7 @@ func LiteralRepoPath(p string) bool {
 		}
 	}
 	for _, r := range p {
-		if r < 0x20 || r == 0x7f {
+		if !unicode.IsPrint(r) || unicode.Is(unicode.Cf, r) {
 			return false
 		}
 	}

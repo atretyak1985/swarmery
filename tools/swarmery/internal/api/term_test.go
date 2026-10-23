@@ -331,3 +331,50 @@ func TestTermServiceUnattached(t *testing.T) {
 		t.Errorf("unattached status = %d, want 503", got)
 	}
 }
+
+// TestTermRefusedOnAnExposedListener (D7): a browser cannot sign a WebSocket,
+// and on a listener beyond loopback an Origin header proves nothing — any
+// client on the network can send the daemon's own. The terminal is therefore
+// loopback-only: refused before the upgrade on an exposed listener.
+func TestTermRefusedOnAnExposedListener(t *testing.T) {
+	srv, projectDir, _ := termTestServer(t)
+	upgrade := func(r *http.Request) {
+		r.Header.Set("Connection", "Upgrade")
+		r.Header.Set("Upgrade", "websocket")
+		r.Header.Set("Sec-WebSocket-Version", "13")
+		r.Header.Set("Sec-WebSocket-Key", "dGhlIHNhbXBsZSBub25jZQ==")
+	}
+
+	// (a) a connection on a LAN address, carrying that address as its Origin
+	const lan = "192.168.1.5:7777"
+	req := listenerRequest(t, http.MethodGet, "/api/term/ws?cwd="+url.QueryEscape(projectDir), lan, nil)
+	req.Header.Set("Origin", "http://"+lan)
+	upgrade(req)
+	rec := httptest.NewRecorder()
+	srv.Config.Handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusForbidden || !strings.Contains(rec.Body.String(), "loopback") {
+		t.Errorf("LAN listener terminal upgrade = %d %s, want 403 naming loopback", rec.Code, rec.Body.String())
+	}
+
+	// (b) a non-loopback --bind: even a loopback connection is refused
+	AttachExposedBind(true)
+	t.Cleanup(func() { AttachExposedBind(false) })
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	c, resp, err := websocket.Dial(ctx, termWSURL(srv, projectDir), &websocket.DialOptions{HTTPHeader: localOrigin(srv)})
+	if err == nil {
+		c.Close(websocket.StatusNormalClosure, "")
+		t.Fatal("exposed bind: the terminal upgraded")
+	}
+	if resp == nil || resp.StatusCode != http.StatusForbidden {
+		t.Errorf("exposed bind: resp %v, want 403", resp)
+	}
+
+	// (c) loopback-only again: the terminal upgrades as before
+	AttachExposedBind(false)
+	c, _, err = websocket.Dial(ctx, termWSURL(srv, projectDir), &websocket.DialOptions{HTTPHeader: localOrigin(srv)})
+	if err != nil {
+		t.Fatalf("loopback daemon: terminal should upgrade: %v", err)
+	}
+	c.Close(websocket.StatusNormalClosure, "")
+}

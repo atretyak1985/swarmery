@@ -94,14 +94,27 @@ never be delegated.
     verbatim — plus a third choice: answer in their own words. Then append the
     answer under the phase doc's `## Decisions` by hand, shaped exactly
     `- **D-n** (stop: <trigger>) — <reason> → <option id | other: text>`
-    (`n` = the next free decision number in the plan). For a `protected-path`
-    stop answered `allow-add-to-scope`, add the block's `paths` to the guard
-    block's `allow:` list. Re-dispatch the phase with `Decision D-n: <answer>`
-    in the brief, on the same worktree so the partial work survives. A block
-    whose options are not exactly two, or whose trigger is outside the four, is
-    still handed over — say what the block got wrong. When the daemon tracks the
-    plan and offers a stop `phase_decision` for the phase, answer through that
-    instead: it writes the line and the `allow:` list itself.
+    (`n` = the next free decision number in the plan). The executor is
+    untrusted, so its `paths` never go into `allow:` as written. For a
+    `protected-path` stop, vet each entry first and keep only a literal,
+    repo-relative FILE: no glob characters (`* ? [ ] { }`, no `+(` `@(` `!(`),
+    no `..` segment, no leading `/`, no backslash, nothing unprintable or
+    invisible (control, zero-width or bidi characters), not a directory in the
+    worktree and not the parent of any other path in play, nothing under
+    `.swarmery`, and matched by one of the guard's `protected_paths` globs.
+    Show the operator the exact list that survived, and say what was dropped,
+    before they answer. Only when they answer `allow-add-to-scope` does that
+    list, and nothing else, join the guard block's `allow:` list. When the run
+    changed a protected file, or the guard refused one of its calls, offer
+    reject as well whatever the trigger was, and continue on the same worktree
+    only after an `allow-add-to-scope` answer. Any other answer means a fresh
+    worktree, so the next run does not build on edits the operator did not
+    accept. Otherwise re-dispatch the phase with `Decision D-n: <answer>` in the
+    brief, on the same worktree so the partial work survives. A block whose
+    options are not exactly two, or whose trigger is outside the four, is still
+    handed over — say what the block got wrong. When the daemon tracks the plan
+    and offers a stop `phase_decision` for the phase, answer through that
+    instead: it vets the paths, writes the line and the `allow:` list itself.
 12. **Executors cite the ids they satisfy.** Every executor brief carries:
     "Cite the IDs you satisfy (D-n, SC-n) in the Completion Report; a decision
     you deliberately do not implement is written as

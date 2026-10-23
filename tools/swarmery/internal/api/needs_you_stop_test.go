@@ -91,7 +91,14 @@ func TestNeedsYouAgentStopDecision(t *testing.T) {
 		!reflect.DeepEqual(dec.Flags, []string{mdfence.LintStopOptionsCount}) {
 		t.Fatalf("decision = %+v", dec)
 	}
-	want := []needsYouDecisionOption{{ID: "allow-add-to-scope", Label: "Let me edit the test", Consequence: "the test changes"}}
+	// The guard check flagged this run (trap_test.go changed), so the card offers
+	// the guard's allow and reject even though the stored row predates merging
+	// them in — and the reserved allow id carries the daemon's label, not the
+	// agent's.
+	want := []needsYouDecisionOption{
+		{ID: "allow-add-to-scope", Label: "Allow (add to scope)", Consequence: "the files listed join the guard's allow list and the next run builds on this run's branch"},
+		{ID: "reject", Label: "Reject", Consequence: "the guard stays as it is; no protected edit of this run is built on"},
+	}
 	if !reflect.DeepEqual(dec.Options, want) {
 		t.Fatalf("options = %+v, want %+v", dec.Options, want)
 	}
@@ -116,7 +123,7 @@ func TestNeedsYouAgentStopDecision(t *testing.T) {
 		resp.Body.Close()
 		return resp.StatusCode
 	}
-	if c := post(`{"option":"reject"}`); c != http.StatusBadRequest {
+	if c := post(`{"option":"skip-test-change"}`); c != http.StatusBadRequest {
 		t.Errorf("an option the stop does not offer: %d, want 400", c)
 	}
 	if c := post(`{"option":"other"}`); c != http.StatusBadRequest {
@@ -165,5 +172,46 @@ func TestNeedsYouAgentStopPathsAreVetted(t *testing.T) {
 	body, _ := os.ReadFile(doc)
 	if g, perr := mdfence.ParseGuard(string(body)); perr != nil || !reflect.DeepEqual(g.Allow, []string{"pkg/foo_test.go"}) {
 		t.Errorf("guard after allow = %+v, %v; want allow [pkg/foo_test.go]", g, perr)
+	}
+}
+
+// A plain guard decision is vetted the same way: a changed file literally named
+// `**/*_test.go` and a forged guard.log path `**/*` reach neither the card's
+// paths nor the guard's `allow:` list, and the card flags the drop.
+func TestNeedsYouGuardDecisionPathsAreVetted(t *testing.T) {
+	srv, db := needsYouServerDB(t)
+	alphaPhase, _, _ := manualPhaseFixture(t, db)
+	var alphaTask int64
+	_ = db.QueryRow(`SELECT workspace_task_id FROM epic_phases WHERE id = ?`, alphaPhase).Scan(&alphaTask)
+	d, doc := seedGuardDecision(t, db, alphaTask, alphaPhase, time.Now().UTC().Add(-time.Hour).Format(time.RFC3339))
+	raw := `{"hasGuard":true,"protectedPaths":["**/*_test.go"],"allow":[],"protectedChanged":["**/*_test.go","trap_test.go"],` +
+		`"guardBlocks":[{"at":"t","tool":"Bash","path":"**/*","reason":"r"}],"guardBlocksTotal":1}`
+	if _, err := db.Exec(`UPDATE phase_decisions SET guard_json = ? WHERE id = ?`, raw, d.ID); err != nil {
+		t.Fatal(err)
+	}
+	got := decisionItems(getNeedsYou(t, srv.URL+"/api/needs-you").Items)
+	if len(got) != 1 || got[0].Decision == nil {
+		t.Fatalf("phase_decision items = %+v", got)
+	}
+	dec := got[0].Decision
+	if !reflect.DeepEqual(dec.Paths, []string{"trap_test.go"}) || !reflect.DeepEqual(dec.Flags, []string{mdfence.LintStopPathsRejected}) {
+		t.Fatalf("guard decision paths = %q flags = %q", dec.Paths, dec.Flags)
+	}
+	if dec.Trigger != "" || dec.FreeText {
+		t.Fatalf("a guard decision rendered as a stop: %+v", dec)
+	}
+	u := srv.URL + "/api/epics/" + strconv.FormatInt(alphaTask, 10) + "/phases/" + strconv.FormatInt(alphaPhase, 10) +
+		"/decisions/" + d.DecisionID
+	resp, err := http.Post(u, "application/json", strings.NewReader(`{"option":"allow-add-to-scope"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("allow: %d, want 200", resp.StatusCode)
+	}
+	body, _ := os.ReadFile(doc)
+	if g, perr := mdfence.ParseGuard(string(body)); perr != nil || !reflect.DeepEqual(g.Allow, []string{"trap_test.go"}) {
+		t.Errorf("guard after allow = %+v, %v; want allow [trap_test.go]", g, perr)
 	}
 }

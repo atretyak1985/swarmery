@@ -1,0 +1,13 @@
+-- 0131: bind a worktree-cleanup proof to one commit (internal/wtcleanup).
+--
+-- worktree_cleanup_proposals (0130) stored a proof without the commit it was
+-- computed for. A phase re-run warm-reuses the same path and branch, so a row
+-- proposed for a merged landing could later carry commits that are not in
+-- main. head_sha is the checkout's HEAD at scan time: Propose writes it on
+-- insert and on refresh, and Apply refuses (head-changed) when the live HEAD
+-- differs or the stored value is empty. Rows written before this migration
+-- read '' and are therefore refused until the next scan refreshes them.
+-- ADD COLUMN with a constant default rewrites no rows.
+--
+-- Rollback: ALTER TABLE worktree_cleanup_proposals DROP COLUMN head_sha;
+ALTER TABLE worktree_cleanup_proposals ADD COLUMN head_sha TEXT NOT NULL DEFAULT '';

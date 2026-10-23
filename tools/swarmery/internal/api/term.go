@@ -63,6 +63,15 @@ func (h *Handler) term(w http.ResponseWriter, r *http.Request) {
 			map[string]string{"error": "terminal service not attached"})
 		return
 	}
+	// Loopback-only (D7): a browser cannot sign a WebSocket, and on a listener
+	// beyond loopback an Origin header proves nothing — any client on that
+	// network can send the daemon's own. So an exposed daemon has no terminal.
+	if isExposedListener(r) {
+		writeJSONStatus(w, http.StatusForbidden, map[string]string{
+			"error": "the terminal is available only when the daemon listens on loopback",
+		})
+		return
+	}
 	// Strict origin gate: browser-originated ⇒ the daemon's own Origin is REQUIRED.
 	if !isStrictLocalOrigin(r) {
 		writeJSONStatus(w, http.StatusForbidden,

@@ -1110,7 +1110,7 @@ func (s *Service) runAndHandle(ctx context.Context, cancel context.CancelFunc, r
 		// An agent-declared stop (a blocked run's `kind: stop` block) becomes its
 		// decision right after the guard check, so a protected-path stop and the
 		// guard's own finding on the same run share one open decision.
-		s.stopStage(phaseID, info, endState, spec.SessionUUID, guard)
+		s.stopStage(phaseID, info, endState, spec.SessionUUID, acq.Path, guard)
 		_, reviewFix := s.guardedReviewRun(phaseID, info, acq, endState, guard)
 		// Verify BEFORE the worktree goes away — the worktree IS the thing being
 		// graded, and removeWorktree below deletes the only copy of it. This is the
