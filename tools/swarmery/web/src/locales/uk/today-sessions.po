@@ -190,6 +190,10 @@ msgstr "виконується: {runningCount}"
 msgid "{scoredRuns, plural, one {run scored} few {runs scored} many {runs scored} other {runs scored}}"
 msgstr "{scoredRuns, plural, one {запуск оцінено} few {запуски оцінено} many {запусків оцінено} other {запуску оцінено}}"
 
+#: src/pages/NeedsYou.tsx
+msgid "{selectedCount} selected"
+msgstr "вибрано: {selectedCount}"
+
 #: src/pages/Projects.tsx
 msgid "{sessionCount} sessions · {costLabel}"
 msgstr "сесій: {sessionCount} · {costLabel}"
@@ -477,6 +481,10 @@ msgstr "заблоковано {age}"
 msgid "Blocked on you · {count}"
 msgstr "Чекають на вас · {count}"
 
+#: src/pages/NeedsYou.tsx
+msgid "Branch"
+msgstr "Гілка"
+
 #: src/pages/sessions/CacheColdBadge.tsx
 msgid "cache cold"
 msgstr "кеш вистиг"
@@ -588,6 +596,10 @@ msgstr "підтвердити локально"
 #: src/pages/sessions/SwarmPanel.tsx
 msgid "conflict"
 msgstr "конфлікт"
+
+#: src/pages/NeedsYou.tsx
+msgid "content in main"
+msgstr "вміст у main"
 
 #: src/pages/detail/ContextHogsCard.tsx
 msgid "context hogs"
@@ -948,6 +960,11 @@ msgstr "До останнього"
 #: src/pages/Projects.tsx
 msgid "last activity"
 msgstr "активність"
+
+#. placeholder {0}: c.error
+#: src/pages/NeedsYou.tsx
+msgid "last attempt: {0}"
+msgstr "остання спроба: {0}"
 
 #: src/pages/SessionDetail.tsx
 msgid "last event"
@@ -1358,6 +1375,10 @@ msgstr "решта"
 msgid "out of scope"
 msgstr "поза межами"
 
+#: src/pages/NeedsYou.tsx
+msgid "Path"
+msgstr "Шлях"
+
 #: src/pages/Approvals.tsx
 #: src/pages/sessions/SwarmPanel.tsx
 msgid "pending"
@@ -1372,6 +1393,10 @@ msgstr "Настоює"
 #: src/pages/detail/Timeline.tsx
 msgid "Permission"
 msgstr "Дозвіл"
+
+#: src/pages/NeedsYou.tsx
+msgid "Phase / card"
+msgstr "Фаза / картка"
 
 #: src/pages/detail/PendingRunNotice.tsx
 msgid "phase review"
@@ -1422,6 +1447,10 @@ msgstr "Плани →"
 msgid "plugins"
 msgstr "плагіни"
 
+#: src/pages/NeedsYou.tsx
+msgid "PR merged"
+msgstr "PR злито"
+
 #: src/pages/Approvals.tsx
 msgid "pre-fill an auto-approve rule from this request (the rule catches future requests; this one still needs your decision)"
 msgstr "заповнити правило автопогодження за цим запитом (правило ловить майбутні запити; цей ще потребує вашого рішення)"
@@ -1451,6 +1480,10 @@ msgstr "Проєкти"
 #: src/pages/Projects.tsx
 msgid "projects…"
 msgstr "проєкти…"
+
+#: src/pages/NeedsYou.tsx
+msgid "Proof"
+msgstr "Доказ"
 
 #: src/pages/today/loopModel.ts
 msgid "Proof →"
@@ -1507,6 +1540,14 @@ msgstr "Відхилити"
 #: src/pages/Approvals.tsx
 msgid "release with no decision — the native selector renders in the terminal (E12d/E12e)"
 msgstr "відпустити без рішення — рідний селектор з’явиться в терміналі (E12d/E12e)"
+
+#: src/pages/NeedsYou.tsx
+msgid "Remove selected"
+msgstr "Видалити вибрані"
+
+#: src/pages/NeedsYou.tsx
+msgid "Removing…"
+msgstr "Видалення…"
 
 #: src/pages/SessionDetail.tsx
 #: src/pages/SessionDetail.tsx
@@ -1584,6 +1625,14 @@ msgstr "запусків оцінено"
 #: src/pages/Sessions.tsx
 msgid "select {0} for continue phase"
 msgstr "вибрати {0} для продовження фази"
+
+#: src/pages/NeedsYou.tsx
+msgid "Select {path}"
+msgstr "Вибрати {path}"
+
+#: src/pages/NeedsYou.tsx
+msgid "Select all worktrees"
+msgstr "Вибрати всі worktree"
 
 #: src/pages/detail/CommandInput.tsx
 #: src/pages/sessions/SwarmPanel.tsx
@@ -2060,6 +2109,10 @@ msgstr "Де лежить робота"
 msgid "Where your time went"
 msgstr "Куди пішов ваш час"
 
+#: src/pages/NeedsYou.tsx
+msgid "without proof: {withoutProof}"
+msgstr "без доказу: {withoutProof}"
+
 #: src/pages/Overview.tsx
 #: src/pages/Overview.tsx
 #: src/pages/today/LiveNow.tsx
@@ -2078,6 +2131,14 @@ msgstr "працює · {lastActive}"
 #: src/pages/ProjectSettings.tsx
 msgid "workspace…"
 msgstr "робочий простір…"
+
+#: src/pages/NeedsYou.tsx
+msgid "Worktrees of finished phases and cards whose content is already in main. Removing one writes a salvage branch first."
+msgstr "Worktree завершених фаз і карток, чий вміст уже є в main. Перед видаленням кожного створюється рятувальна гілка salvage."
+
+#: src/pages/NeedsYou.tsx
+msgid "Worktrees ready to remove in {repoRoot}"
+msgstr "Worktree, готові до видалення, у {repoRoot}"
 
 #: src/pages/sessions/CacheColdBadge.tsx
 msgid "writing handoff…"

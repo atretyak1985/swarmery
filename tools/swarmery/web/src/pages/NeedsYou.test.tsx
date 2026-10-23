@@ -392,6 +392,107 @@ describe('NeedsYou page', () => {
     expect(within(rowOf('lint fix')).queryByTestId('needs-you-stalled-on')).toBeNull();
   });
 
+  const CLEANUP = item({
+    kind: 'worktree_cleanup',
+    sessionId: 0,
+    sessionUuid: '',
+    sessionName: 'shop',
+    question: '',
+    asksQuestion: false,
+    preview: '2 finished worktrees with their content in main · 3 without proof',
+    blockingSince: iso(-120),
+    cleanup: {
+      id: 11,
+      repoRoot: '/work/shop',
+      withoutProof: 3,
+      candidates: [
+        {
+          id: 11,
+          path: '/wt/shop/phase-41',
+          branch: 'swarm/phase-41',
+          owner: 'Line items · Phase 2: Totals',
+          phaseId: 41,
+          taskId: 7,
+          planExternalId: '2026-10-01-line-items',
+          phaseSeq: 2,
+          proofKind: 'landing',
+          proofDetail: 'phase landing merged',
+        },
+        {
+          id: 12,
+          path: '/wt/shop/T-abc',
+          branch: 'swarm/T-abc',
+          owner: 'T-abc: Fix the thing',
+          phaseId: null,
+          taskId: 9,
+          proofKind: 'content-diff',
+          proofDetail: 'merging into origin/main changes nothing',
+        },
+      ],
+    },
+  });
+
+  it('renders a worktree_cleanup card: candidates with their proof, and the without-proof count', async () => {
+    serve([CLEANUP]);
+    await renderPage();
+    const row = rowOf('shop');
+    expect(row.dataset.kind).toBe('worktree_cleanup');
+    expect(within(row).getByText('Worktree cleanup')).toBeTruthy();
+    expect(within(row).getByRole('link', { name: 'shop' }).getAttribute('href')).toBe('/settings');
+
+    const cands = within(row).getAllByTestId('cleanup-candidate');
+    expect(cands).toHaveLength(2);
+    expect(within(cands[0]).getByText('/wt/shop/phase-41')).toBeTruthy();
+    expect(within(cands[0]).getByText('swarm/phase-41')).toBeTruthy();
+    expect(within(cands[0]).getByText('PR merged')).toBeTruthy();
+    expect(
+      within(cands[0]).getByRole('link', { name: 'Line items · Phase 2: Totals' }).getAttribute('href'),
+    ).toBe('/p/shop/plans/2026-10-01-line-items/phase/2');
+    expect(within(cands[1]).getByText('content in main')).toBeTruthy();
+    expect(within(cands[1]).getByText('T-abc: Fix the thing')).toBeTruthy();
+    expect(within(cands[1]).queryByRole('link')).toBeNull();
+    expect(within(row).getByTestId('cleanup-without-proof').textContent).toBe('without proof: 3');
+  });
+
+  it('removes only the selected worktrees, after the click, then refetches', async () => {
+    serve([CLEANUP]);
+    const apply = vi.spyOn(api, 'applyWorktreeCleanup').mockResolvedValue({
+      id: 11,
+      repoRoot: '/work/shop',
+      paths: [{ path: '/wt/shop/T-abc', outcome: 'removed', salvageBranch: 'salvage/swarm-T-abc-20261022T033000Z' }],
+    });
+    await renderPage();
+    const row = rowOf('shop');
+    const remove = within(row).getByRole('button', { name: 'Remove selected' });
+    expect((remove as HTMLButtonElement).disabled).toBe(true);
+    expect(apply).not.toHaveBeenCalled();
+
+    fireEvent.click(within(row).getByRole('checkbox', { name: 'Select /wt/shop/T-abc' }));
+    expect(within(row).getByText('1 selected')).toBeTruthy();
+    expect((remove as HTMLButtonElement).disabled).toBe(false);
+    expect(apply).not.toHaveBeenCalled(); // ticking is not removing
+
+    fireEvent.click(remove);
+    await waitFor(() => expect(apply).toHaveBeenCalledTimes(1));
+    expect(apply).toHaveBeenCalledWith(11, ['/wt/shop/T-abc']);
+    const outcome = await within(row).findByTestId('cleanup-outcome');
+    expect(outcome.dataset.outcome).toBe('removed');
+    expect(outcome.textContent).toContain('salvage/swarm-T-abc-20261022T033000Z');
+    await waitFor(() => expect(api.getNeedsYou).toHaveBeenCalledTimes(2));
+  });
+
+  it('select-all ticks every listed candidate, never the ones without proof', async () => {
+    serve([CLEANUP]);
+    const apply = vi.spyOn(api, 'applyWorktreeCleanup').mockResolvedValue({ id: 11, repoRoot: '/work/shop', paths: [] });
+    await renderPage();
+    const row = rowOf('shop');
+    fireEvent.click(within(row).getByRole('checkbox', { name: 'Select all worktrees' }));
+    expect(within(row).getByText('2 selected')).toBeTruthy();
+    fireEvent.click(within(row).getByRole('button', { name: 'Remove selected' }));
+    await waitFor(() => expect(apply).toHaveBeenCalledTimes(1));
+    expect(apply.mock.calls[0][1]).toEqual(['/wt/shop/phase-41', '/wt/shop/T-abc']);
+  });
+
   it('ignores frames that cannot change the queue', async () => {
     serve([AWAITING]);
     await renderPage();

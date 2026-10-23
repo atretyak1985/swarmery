@@ -190,6 +190,10 @@ msgstr "{runningCount} running"
 msgid "{scoredRuns, plural, one {run scored} few {runs scored} many {runs scored} other {runs scored}}"
 msgstr "{scoredRuns, plural, one {run scored} few {runs scored} many {runs scored} other {runs scored}}"
 
+#: src/pages/NeedsYou.tsx
+msgid "{selectedCount} selected"
+msgstr "{selectedCount} selected"
+
 #: src/pages/Projects.tsx
 msgid "{sessionCount} sessions · {costLabel}"
 msgstr "{sessionCount} sessions · {costLabel}"
@@ -477,6 +481,10 @@ msgstr "blocked {age}"
 msgid "Blocked on you · {count}"
 msgstr "Blocked on you · {count}"
 
+#: src/pages/NeedsYou.tsx
+msgid "Branch"
+msgstr "Branch"
+
 #: src/pages/sessions/CacheColdBadge.tsx
 msgid "cache cold"
 msgstr "cache cold"
@@ -588,6 +596,10 @@ msgstr "confirm locally"
 #: src/pages/sessions/SwarmPanel.tsx
 msgid "conflict"
 msgstr "conflict"
+
+#: src/pages/NeedsYou.tsx
+msgid "content in main"
+msgstr "content in main"
 
 #: src/pages/detail/ContextHogsCard.tsx
 msgid "context hogs"
@@ -948,6 +960,11 @@ msgstr "Jump to latest"
 #: src/pages/Projects.tsx
 msgid "last activity"
 msgstr "last activity"
+
+#. placeholder {0}: c.error
+#: src/pages/NeedsYou.tsx
+msgid "last attempt: {0}"
+msgstr "last attempt: {0}"
 
 #: src/pages/SessionDetail.tsx
 msgid "last event"
@@ -1358,6 +1375,10 @@ msgstr "other parts"
 msgid "out of scope"
 msgstr "out of scope"
 
+#: src/pages/NeedsYou.tsx
+msgid "Path"
+msgstr "Path"
+
 #: src/pages/Approvals.tsx
 #: src/pages/sessions/SwarmPanel.tsx
 msgid "pending"
@@ -1372,6 +1393,10 @@ msgstr "Percolating"
 #: src/pages/detail/Timeline.tsx
 msgid "Permission"
 msgstr "Permission"
+
+#: src/pages/NeedsYou.tsx
+msgid "Phase / card"
+msgstr "Phase / card"
 
 #: src/pages/detail/PendingRunNotice.tsx
 msgid "phase review"
@@ -1422,6 +1447,10 @@ msgstr "Plans →"
 msgid "plugins"
 msgstr "plugins"
 
+#: src/pages/NeedsYou.tsx
+msgid "PR merged"
+msgstr "PR merged"
+
 #: src/pages/Approvals.tsx
 msgid "pre-fill an auto-approve rule from this request (the rule catches future requests; this one still needs your decision)"
 msgstr "pre-fill an auto-approve rule from this request (the rule catches future requests; this one still needs your decision)"
@@ -1451,6 +1480,10 @@ msgstr "Projects"
 #: src/pages/Projects.tsx
 msgid "projects…"
 msgstr "projects…"
+
+#: src/pages/NeedsYou.tsx
+msgid "Proof"
+msgstr "Proof"
 
 #: src/pages/today/loopModel.ts
 msgid "Proof →"
@@ -1507,6 +1540,14 @@ msgstr "Reject"
 #: src/pages/Approvals.tsx
 msgid "release with no decision — the native selector renders in the terminal (E12d/E12e)"
 msgstr "release with no decision — the native selector renders in the terminal (E12d/E12e)"
+
+#: src/pages/NeedsYou.tsx
+msgid "Remove selected"
+msgstr "Remove selected"
+
+#: src/pages/NeedsYou.tsx
+msgid "Removing…"
+msgstr "Removing…"
 
 #: src/pages/SessionDetail.tsx
 #: src/pages/SessionDetail.tsx
@@ -1584,6 +1625,14 @@ msgstr "runs scored"
 #: src/pages/Sessions.tsx
 msgid "select {0} for continue phase"
 msgstr "select {0} for continue phase"
+
+#: src/pages/NeedsYou.tsx
+msgid "Select {path}"
+msgstr "Select {path}"
+
+#: src/pages/NeedsYou.tsx
+msgid "Select all worktrees"
+msgstr "Select all worktrees"
 
 #: src/pages/detail/CommandInput.tsx
 #: src/pages/sessions/SwarmPanel.tsx
@@ -2060,6 +2109,10 @@ msgstr "Where work sits"
 msgid "Where your time went"
 msgstr "Where your time went"
 
+#: src/pages/NeedsYou.tsx
+msgid "without proof: {withoutProof}"
+msgstr "without proof: {withoutProof}"
+
 #: src/pages/Overview.tsx
 #: src/pages/Overview.tsx
 #: src/pages/today/LiveNow.tsx
@@ -2078,6 +2131,14 @@ msgstr "working · {lastActive}"
 #: src/pages/ProjectSettings.tsx
 msgid "workspace…"
 msgstr "workspace…"
+
+#: src/pages/NeedsYou.tsx
+msgid "Worktrees of finished phases and cards whose content is already in main. Removing one writes a salvage branch first."
+msgstr "Worktrees of finished phases and cards whose content is already in main. Removing one writes a salvage branch first."
+
+#: src/pages/NeedsYou.tsx
+msgid "Worktrees ready to remove in {repoRoot}"
+msgstr "Worktrees ready to remove in {repoRoot}"
 
 #: src/pages/sessions/CacheColdBadge.tsx
 msgid "writing handoff…"
