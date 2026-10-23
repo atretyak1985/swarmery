@@ -39,7 +39,11 @@ import { Graphify } from './pages/Graphify';
 import { ProjectDetailRedirect } from './workspace/ProjectDetailRedirect';
 import { PLANS_ROUTE_PATHS } from './pages/plans/plansUrl';
 import { Today } from './pages/today/Today';
-import { consumeUnlockFragment, verifyStoredSession } from './lib/dashboardSession';
+import {
+  consumeUnlockFragment,
+  verifyStoredSession,
+  watchUnlockFragment,
+} from './lib/dashboardSession';
 import './index.css';
 
 // An unlock ticket in the fragment (`swarmery open`, the notch menu) is read
@@ -47,9 +51,11 @@ import './index.css';
 // first render waits for the exchange so the first write and the first socket
 // already carry the session. Once it settles, a stored session is checked once
 // (GET /api/session) so a dead one is dropped and the banner says so; the
-// render does not wait on that check.
+// render does not wait on that check. An unlock URL opened later in this same
+// tab is a hash navigation without a reload; watchUnlockFragment catches it.
 const unlocked = consumeUnlockFragment();
 void unlocked.then(() => verifyStoredSession());
+watchUnlockFragment();
 
 // Health (Canvas v3 phase 5) absorbs /analytics and /retro as tabs. Lazy, and
 // it lazy-loads those two pages itself (Analytics pulls in Recharts), so their

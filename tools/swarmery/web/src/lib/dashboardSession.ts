@@ -3,8 +3,9 @@
 //
 // How the page gets one: `swarmery open` (or "Open dashboard" in the notch
 // menu) opens the dashboard as `<base>/<path>#swarmery-unlock=<ticket>`, a
-// short-lived ticket signed with the link token. On boot the page reads that
-// fragment, strips it from the address bar at once (a reload or a copied URL
+// short-lived ticket signed with the link token. On boot, and on every later
+// hash change (the URL opened in a tab already on the dashboard), the page
+// reads that fragment, strips it from the address bar at once (a reload or a copied URL
 // never carries it), and trades it for a session token at
 // POST /api/session/unlock. The token lives in localStorage, with an
 // in-memory copy for a browser whose storage throws.
@@ -107,6 +108,22 @@ export function consumeUnlockFragment(): Promise<void> {
   return exchangeTicket(ticket);
 }
 
+/**
+ * Keep consuming unlock fragments after boot. Opening the unlock URL in a tab
+ * that already shows the dashboard is a same-document hash navigation: no
+ * reload, so the boot-time consumeUnlockFragment never sees it. A `hashchange`
+ * runs the same path (strip, exchange, store; a successful unlock lowers the
+ * locked notice). Any other hash change is ignored. Returns the unsubscribe
+ * function.
+ */
+export function watchUnlockFragment(): () => void {
+  const onHashChange = (): void => {
+    void consumeUnlockFragment();
+  };
+  window.addEventListener('hashchange', onHashChange);
+  return () => window.removeEventListener('hashchange', onHashChange);
+}
+
 /** The first render waits on the exchange; a daemon that never answers must
  * not hold the page blank. */
 const UNLOCK_TIMEOUT_MS = 5_000;
@@ -123,7 +140,10 @@ async function exchangeTicket(ticket: string): Promise<void> {
     });
     if (!res.ok) return;
     const body = (await res.json()) as { session?: unknown };
-    if (typeof body.session === 'string' && body.session !== '') setSession(body.session);
+    if (typeof body.session !== 'string' || body.session === '') return;
+    setSession(body.session);
+    // Unlocked: the notice a refusal raised no longer applies.
+    if (lockedNotice) dismissLockedNotice();
   } catch {
     // Daemon unreachable, timed out, or a malformed answer: stay locked.
   } finally {

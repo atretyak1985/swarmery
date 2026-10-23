@@ -18,6 +18,7 @@ import {
   reportSocketRefused,
   resetDashboardSessionForTests,
   verifyStoredSession,
+  watchUnlockFragment,
   wsProtocols,
 } from './dashboardSession';
 
@@ -82,6 +83,56 @@ describe('unlock fragment', () => {
     await expect(consumeUnlockFragment()).resolves.toBeUndefined();
     expect(getSession()).toBeNull();
     expect(window.location.hash).toBe('');
+  });
+
+  it('a hash navigation in an open tab is consumed too, and lowers the locked notice', async () => {
+    reportSocketRefused(); // no session: the locked notice goes up
+    expect(isLockedNoticeShown()).toBe(true);
+    const stop = watchUnlockFragment();
+    try {
+      fetchMock.mockResolvedValueOnce(json(200, { session: 'sess-hash' }));
+      // A same-document navigation: the URL changes without a reload, then
+      // the browser fires hashchange.
+      window.history.replaceState(null, '', `/sessions?tab=all#swarmery-unlock=${TICKET}`);
+      window.dispatchEvent(new HashChangeEvent('hashchange'));
+
+      expect(window.location.hash).toBe('');
+      expect(window.location.pathname).toBe('/sessions');
+      expect(window.location.search).toBe('?tab=all');
+      await vi.waitFor(() => expect(getSession()).toBe('sess-hash'));
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+      expect(url).toBe('/api/session/unlock');
+      expect(init.method).toBe('POST');
+      expect(JSON.parse(String(init.body))).toEqual({ ticket: TICKET });
+      expect(window.localStorage.getItem(SESSION_STORAGE_KEY)).toBe('sess-hash');
+      expect(isLockedNoticeShown()).toBe(false);
+
+      // Any other hash change asks nothing.
+      window.history.replaceState(null, '', '/docs#anchor');
+      window.dispatchEvent(new HashChangeEvent('hashchange'));
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(window.location.hash).toBe('#anchor');
+    } finally {
+      stop();
+    }
+  });
+
+  it('a refused hash-navigation ticket keeps the locked notice up', async () => {
+    reportSocketRefused();
+    const stop = watchUnlockFragment();
+    try {
+      fetchMock.mockResolvedValueOnce(json(401, { code: 'unlock_invalid' }));
+      window.history.replaceState(null, '', `/#swarmery-unlock=${TICKET}`);
+      window.dispatchEvent(new HashChangeEvent('hashchange'));
+      await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+      await new Promise((r) => setTimeout(r, 0));
+      expect(getSession()).toBeNull();
+      expect(isLockedNoticeShown()).toBe(true);
+      expect(window.location.hash).toBe('');
+    } finally {
+      stop();
+    }
   });
 
   it('does nothing without a fragment', async () => {
