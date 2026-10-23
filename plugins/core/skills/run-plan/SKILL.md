@@ -86,6 +86,22 @@ never be delegated.
     is** (recorded as a `D-n` decision in the plan). When the plan is tracked by
     the swarmery daemon and it offers a review `phase_decision` for the phase,
     answer through that instead of asking in chat.
+11. **An executor's stop goes to the operator as it came.** When an executor
+    ends `PHASE BLOCKED: <trigger>` with a `kind: stop` block (shape:
+    `workspace-plans/resources/plan-format.md` → "`kind: stop`"), never pick an
+    option yourself and never work around the stop in a fix dispatch. Hand the
+    operator the block's `reason` and its two options — label and consequence,
+    verbatim — plus a third choice: answer in their own words. Then append the
+    answer under the phase doc's `## Decisions` by hand, shaped exactly
+    `- **D-n** (stop: <trigger>) — <reason> → <option id | other: text>`
+    (`n` = the next free decision number in the plan). For a `protected-path`
+    stop answered `allow-add-to-scope`, add the block's `paths` to the guard
+    block's `allow:` list. Re-dispatch the phase with `Decision D-n: <answer>`
+    in the brief, on the same worktree so the partial work survives. A block
+    whose options are not exactly two, or whose trigger is outside the four, is
+    still handed over — say what the block got wrong. When the daemon tracks the
+    plan and offers a stop `phase_decision` for the phase, answer through that
+    instead: it writes the line and the `allow:` list itself.
 
 # Resources
 
