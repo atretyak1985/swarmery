@@ -2,7 +2,9 @@ package api
 
 import (
 	"database/sql"
+	"encoding/json"
 	"net/http"
+	"net/http/httptest"
 	"os"
 	"reflect"
 	"strconv"
@@ -11,6 +13,8 @@ import (
 	"time"
 
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/mdfence"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/phasegate"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/phaserun"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/store"
 )
 
@@ -28,6 +32,34 @@ func seedAgentStop(t *testing.T, db *sql.DB, taskID, phaseID int64) (store.Decis
 		t.Fatalf("refresh into a stop: created=%v err=%v", created, err)
 	}
 	return d, doc
+}
+
+// The decision-undecided 409 carries each holding decision with its planning
+// turn ("holds") and a message that names the link.
+func TestWritePhaseStartRefusal_DecisionHolds(t *testing.T) {
+	const link = "/p/p/plans?tab=new&planningSession=7&turn=3#planning-turn-3"
+	err := &phaserun.DecisionUndecidedError{Detail: "decision-undecided: D-3 (Which store?)", Decisions: []string{"D-3"},
+		Refs: []phasegate.HoldRef{{DecisionID: "D-3", Question: "Which store?", Seq: 3, PlanningSessionID: 7, PlanningTurn: link}}}
+	rec := httptest.NewRecorder()
+	writePhaseStartRefusal(rec, err)
+	if rec.Code != http.StatusConflict {
+		t.Fatalf("status = %d", rec.Code)
+	}
+	var body struct {
+		Code   string              `json:"code"`
+		Error  string              `json:"error"`
+		Detail string              `json:"detail"`
+		Holds  []phasegate.HoldRef `json:"holds"`
+	}
+	if e := json.Unmarshal(rec.Body.Bytes(), &body); e != nil {
+		t.Fatal(e)
+	}
+	if body.Code != codeDecisionUndecided || body.Detail != err.Detail || len(body.Holds) != 1 || body.Holds[0].PlanningTurn != link {
+		t.Fatalf("body = %s", rec.Body.String())
+	}
+	if !strings.Contains(body.Error, link) {
+		t.Errorf("409 message does not carry the planning-turn link: %q", body.Error)
+	}
 }
 
 // The needs-you phase_decision item of an agent-declared stop carries what the
