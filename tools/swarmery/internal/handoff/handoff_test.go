@@ -271,7 +271,9 @@ func TestGenerateWritesFileAndRow(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read handoff file: %v", err)
 	}
-	want := canned + "\n" + anchorHeading + "\n- unknown (cwd no longer exists)\n"
+	// The model left the required Rejected section out and no Non-goals/Open
+	// risks anchor exists, so the generator appends it at the end.
+	want := canned + "\n" + rejectedHeading + "\n" + noneRecorded + "\n\n" + anchorHeading + "\n- unknown (cwd no longer exists)\n"
 	if string(body) != want {
 		t.Errorf("file body = %q, want %q", body, want)
 	}
@@ -305,7 +307,7 @@ func TestGenerateAppendsAnchor(t *testing.T) {
 	seedSession(t, db, 1, "anchor-uuid", repo, time.Hour)
 	seedAssistantTurn(t, db, 1, 1, Threshold+5_000, 10*time.Minute, "did the thing")
 
-	fr := &fakeRunner{out: "# Handoff: x\n"}
+	fr := &fakeRunner{out: "# Handoff: x\n" + rejectedHeading + "\n" + noneRecorded + "\n"}
 	path, err := generateInto(db, fr, 1, testNow, t.TempDir())
 	if err != nil {
 		t.Fatalf("generateInto: %v", err)
@@ -321,7 +323,7 @@ func TestGenerateAppendsAnchor(t *testing.T) {
 	if idx < 0 {
 		t.Fatalf("file must contain the anchor heading; body=%q", body)
 	}
-	if !strings.HasPrefix(body, "# Handoff: x\n\n"+anchorHeading) {
+	if !strings.HasPrefix(body, "# Handoff: x\n"+rejectedHeading+"\n"+noneRecorded+"\n\n"+anchorHeading) {
 		t.Errorf("anchor must follow the model output after one blank line; body=%q", body)
 	}
 	tail := body[idx:]
@@ -342,6 +344,7 @@ func TestGenerateAppendsAnchor(t *testing.T) {
 	// Prompt sections.
 	for _, want := range []string{
 		"## Non-goals",
+		"## Rejected —",
 		"## Open risks & failed checks",
 		"Do not restate the repository anchor; it is appended automatically.",
 		"≤120 lines",
