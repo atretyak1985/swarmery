@@ -110,6 +110,9 @@ func Routes(root *http.ServeMux, h *Handler) {
 	// dashboard's writes carry. NOT behind requireLocalOrigin — it is how a
 	// session is obtained — so it runs its own Origin and listener checks.
 	mux.HandleFunc("POST /api/session/unlock", h.sessionUnlock)
+	// …and whether the session the dashboard holds still verifies (204/401),
+	// so a dead one is dropped instead of silently failing every socket.
+	mux.HandleFunc("GET /api/session", h.sessionCheck)
 
 	// wave C: stats
 	mux.HandleFunc("GET /api/stats/today", h.statsToday)

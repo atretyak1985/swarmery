@@ -167,6 +167,30 @@ func writeUnlockInvalid(w http.ResponseWriter, msg string) {
 	})
 }
 
+// GET /api/session — does the session the dashboard holds still verify? The
+// SPA asks at boot and whenever a WebSocket is refused before it opened, so a
+// session the daemon no longer accepts (a rotated link token, an expired
+// session) is dropped and the locked banner says how to unlock:
+//
+//	204  X-Swarmery-Session verifies under the current link token
+//	401  {"code":"dashboard_locked"} otherwise — and always on an exposed
+//	     listener, where a session is never accepted
+//	403  a present Origin that is not the daemon's own or opted in
+//
+// A same-origin browser GET carries no Origin, so none is required.
+func (h *Handler) sessionCheck(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store")
+	if o := r.Header.Get("Origin"); o != "" && !isTrustedOrigin(r, o) {
+		writeJSONStatus(w, http.StatusForbidden, map[string]string{"error": "cross-origin request rejected"})
+		return
+	}
+	if isExposedListener(r) || !hasDashboardSession(r) {
+		writeDashboardLocked(w)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
 // POST /api/session/unlock — redeem an unlock ticket for a dashboard session.
 // Exempt from the session requirement (it is how a session is obtained), so
 // it runs its own fence:

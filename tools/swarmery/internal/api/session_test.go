@@ -515,3 +515,47 @@ func TestSerenaProxyDoesNotRelaySession(t *testing.T) {
 		t.Errorf("upstream Sec-WebSocket-Protocol = %q, want only other.v1", gotProto)
 	}
 }
+
+// (i) GET /api/session tells the dashboard whether its stored session still
+// verifies: 204 or 401 dashboard_locked, never accepted on an exposed listener.
+func TestSessionCheck(t *testing.T) {
+	enableOriginlessAuth(t)
+	srv, _, _ := serverWithRoutines(t)
+	key, s := mintTestSession(t)
+	wrongKey, err := linksig.MintSession(strings.Repeat("0", 64), time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for name, tc := range map[string]struct {
+		origin, session string
+		want            int
+	}{
+		"same-origin GET, valid":  {"", s, http.StatusNoContent},
+		"own Origin, valid":       {srv.URL, s, http.StatusNoContent},
+		"no session":              {srv.URL, "", http.StatusUnauthorized},
+		"wrong key":               {"", wrongKey, http.StatusUnauthorized},
+		"garbage":                 {"", "v1.garbage", http.StatusUnauthorized},
+		"the link token":          {"", key, http.StatusUnauthorized},
+		"foreign Origin, valid":   {"http://evil.example", s, http.StatusForbidden},
+		"other local port, valid": {"http://127.0.0.1:1", s, http.StatusForbidden},
+	} {
+		status, body := originDo(t, srv, http.MethodGet, "/api/session", "", tc.origin, tc.session, "")
+		if status != tc.want {
+			t.Errorf("%s: GET /api/session = %d %s, want %d", name, status, body, tc.want)
+			continue
+		}
+		if status == http.StatusUnauthorized && errorCode(body) != "dashboard_locked" {
+			t.Errorf("%s: 401 body %s, want code dashboard_locked", name, body)
+		}
+	}
+
+	const lan = "192.168.1.5:7777"
+	req := listenerRequest(t, http.MethodGet, "/api/session", lan, nil)
+	req.Header.Set(SessionHeader, s)
+	rec := httptest.NewRecorder()
+	srv.Config.Handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusUnauthorized || errorCode(rec.Body.String()) != "dashboard_locked" {
+		t.Errorf("exposed listener, valid session = %d %s, want 401 dashboard_locked", rec.Code, rec.Body.String())
+	}
+}

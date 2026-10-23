@@ -95,6 +95,50 @@ describe('live-updates socket', () => {
   });
 });
 
+describe('dead session detection on a refused socket', () => {
+  it('a live-updates reconnect refused while a session is stored asks GET /api/session; a 401 locks', async () => {
+    vi.useFakeTimers();
+    try {
+      window.localStorage.setItem(SESSION_STORAGE_KEY, 'sess-rotated');
+      const fetchMock = vi.fn(
+        async () =>
+          new Response(JSON.stringify({ code: 'dashboard_locked' }), {
+            status: 401,
+            headers: { 'Content-Type': 'application/json' },
+          }),
+      );
+      vi.stubGlobal('fetch', fetchMock);
+      const { unmount } = renderHook(() => useLiveUpdates(() => undefined, () => undefined));
+      const first = FakeSocket.instances.at(-1);
+      first?.onopen?.();
+      first?.onclose?.(); // the daemon went away; the reconnect is refused
+      await vi.advanceTimersByTimeAsync(1_000);
+      const second = FakeSocket.instances.at(-1);
+      expect(second).not.toBe(first);
+      second?.onclose?.();
+      await vi.waitFor(() => expect(isLockedNoticeShown()).toBe(true));
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(fetchMock.mock.calls[0]?.[0]).toBe('/api/session');
+      expect(window.localStorage.getItem(SESSION_STORAGE_KEY)).toBeNull();
+      unmount();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('a terminal refused while a session is stored asks GET /api/session', async () => {
+    window.localStorage.setItem(SESSION_STORAGE_KEY, 'sess-live');
+    const fetchMock = vi.fn(async () => new Response(null, { status: 204 }));
+    vi.stubGlobal('fetch', fetchMock);
+    render(<XTerm cwd="/tmp/x" fontSize={12} />);
+    FakeSocket.instances.at(-1)?.onclose?.();
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    expect(fetchMock.mock.calls[0]?.[0]).toBe('/api/session');
+    expect(isLockedNoticeShown()).toBe(false);
+    expect(window.localStorage.getItem(SESSION_STORAGE_KEY)).toBe('sess-live');
+  });
+});
+
 describe('terminal socket', () => {
   it('offers swarmery.v1 and the session subprotocol when a session exists', () => {
     window.localStorage.setItem(SESSION_STORAGE_KEY, 'sess-term');

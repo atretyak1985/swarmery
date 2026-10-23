@@ -17,6 +17,7 @@ import {
   readUnlockTicket,
   reportSocketRefused,
   resetDashboardSessionForTests,
+  verifyStoredSession,
   wsProtocols,
 } from './dashboardSession';
 
@@ -186,5 +187,71 @@ describe('socket subprotocols', () => {
     window.localStorage.clear();
     reportSocketRefused();
     expect(isLockedNoticeShown()).toBe(true);
+  });
+
+  it('without a session, only the first refusal of a streak raises the notice', () => {
+    reportSocketRefused(false);
+    expect(isLockedNoticeShown()).toBe(false);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+});
+
+describe('dead session detection', () => {
+  it('a socket refused while a session is stored asks GET /api/session; a 401 drops it', async () => {
+    window.localStorage.setItem(SESSION_STORAGE_KEY, 'sess-dead');
+    fetchMock.mockResolvedValueOnce(json(401, { code: 'dashboard_locked' }));
+    reportSocketRefused(false);
+    await vi.waitFor(() => expect(isLockedNoticeShown()).toBe(true));
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock.mock.calls[0]?.[0]).toBe('/api/session');
+    expect(sentHeaders(fetchMock).get(SESSION_HEADER)).toBe('sess-dead');
+    expect(getSession()).toBeNull();
+  });
+
+  it('a 204 keeps the session and the page unlocked', async () => {
+    window.localStorage.setItem(SESSION_STORAGE_KEY, 'sess-ok');
+    fetchMock.mockResolvedValueOnce(new Response(null, { status: 204 }));
+    await verifyStoredSession();
+    expect(getSession()).toBe('sess-ok');
+    expect(isLockedNoticeShown()).toBe(false);
+  });
+
+  it('a daemon that is down or answers anything else changes nothing', async () => {
+    window.localStorage.setItem(SESSION_STORAGE_KEY, 'sess-keep');
+    fetchMock.mockRejectedValueOnce(new TypeError('Failed to fetch'));
+    await verifyStoredSession();
+    fetchMock.mockResolvedValueOnce(json(401, { code: 'unauthorized' }));
+    await verifyStoredSession();
+    expect(getSession()).toBe('sess-keep');
+    expect(isLockedNoticeShown()).toBe(false);
+  });
+
+  it('concurrent refusals share one probe', async () => {
+    window.localStorage.setItem(SESSION_STORAGE_KEY, 'sess-x');
+    let release: (r: Response) => void = () => undefined;
+    fetchMock.mockReturnValueOnce(new Promise<Response>((resolve) => (release = resolve)));
+    const a = verifyStoredSession();
+    reportSocketRefused();
+    reportSocketRefused(false);
+    release(new Response(null, { status: 204 }));
+    await a;
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('a session replaced while the probe ran is kept', async () => {
+    window.localStorage.setItem(SESSION_STORAGE_KEY, 'sess-old');
+    let release: (r: Response) => void = () => undefined;
+    fetchMock.mockReturnValueOnce(new Promise<Response>((resolve) => (release = resolve)));
+    const p = verifyStoredSession();
+    window.localStorage.setItem(SESSION_STORAGE_KEY, 'sess-new');
+    release(json(401, { code: 'dashboard_locked' }));
+    await p;
+    expect(getSession()).toBe('sess-new');
+    expect(isLockedNoticeShown()).toBe(false);
+  });
+
+  it('at boot, nothing is asked without a stored session', async () => {
+    await verifyStoredSession();
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });
