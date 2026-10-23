@@ -2168,7 +2168,7 @@ export type TaskPriority = 'urgent' | 'high' | 'normal' | 'low';
  * were written against an incomplete set — and the one that indexes a Record by
  * origin crashed the card renderer on the first fix card that reached the board.
  */
-export type TaskOrigin = 'manual' | 'session' | 'llm' | 'verify-fix';
+export type TaskOrigin = 'manual' | 'session' | 'llm' | 'verify-fix' | 'github';
 
 /**
  * Where a captured card came from — Go: boardTaskSourceDTO (migration 0066).

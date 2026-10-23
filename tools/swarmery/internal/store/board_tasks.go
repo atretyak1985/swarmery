@@ -70,13 +70,16 @@ func ValidColumn(c string) bool { return boardColumns[c] }
 // origins is the closed set of task provenances (0048 + the verifier's
 // fix-chain marker): 'manual' for a hand-written card, 'session' / 'llm' for
 // one captured from a session, 'verify-fix' for a fix task the verifier minted
-// off a failed verdict. One map, read by every validator, so the HTTP check,
-// the capture path and the constructor can never disagree about the set.
+// off a failed verdict, 'github' for an inbox card the GitHub inbox routine
+// keeps in step with one issue or pull request (internal/ghinbox). One map,
+// read by every validator, so the HTTP check, the capture path and the
+// constructor can never disagree about the set.
 var origins = map[string]bool{
 	"manual":     true,
 	"session":    true,
 	"llm":        true,
 	"verify-fix": true,
+	"github":     true,
 }
 
 // ValidOrigin reports whether o is in the closed provenance set. Pure.

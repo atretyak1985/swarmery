@@ -1907,6 +1907,10 @@ msgid "from a session"
 msgstr "із сесії"
 
 #: src/workspace/boardModel.ts
+msgid "from GitHub"
+msgstr "з GitHub"
+
+#: src/workspace/boardModel.ts
 msgid "from session #{id}"
 msgstr "із сесії #{id}"
 
@@ -2101,6 +2105,10 @@ msgstr "лише kebab-case ([a-z0-9-])"
 #: src/components/PlanBranchDirtyModal.tsx
 msgid "keep the work"
 msgstr "залишити роботу"
+
+#: src/workspace/boardModel.ts
+msgid "kept in step with a GitHub issue or pull request"
+msgstr "синхронізується з issue або pull request на GitHub"
 
 #: src/components/KillButton.tsx
 msgid "Kill"
@@ -2364,6 +2372,10 @@ msgstr "нейтральний холодний сірий"
 msgid "never run"
 msgstr "не запускали"
 
+#: src/workspace/TaskCard.tsx
+msgid "new comment"
+msgstr "новий коментар"
+
 #: src/components/NewProjectButton.tsx
 msgid "New project"
 msgstr "Новий проєкт"
@@ -2588,6 +2600,11 @@ msgstr "Одне надсилання охоплює щонайбільше {max
 #: src/api.ts
 msgid "Only a human can close the open criteria of this phase. Do the [MANUAL] checks and tick them in the Criteria tab — the phase is listed in Needs you."
 msgstr "Відкриті критерії цієї фази може закрити лише людина. Виконайте перевірки [MANUAL] і відмітьте їх у вкладці Criteria — фаза є у «Потребує вас»."
+
+#: src/workspace/TaskCard.tsx
+#: src/workspace/TaskCard.tsx
+msgid "open {ref} on GitHub"
+msgstr "відкрити {ref} на GitHub"
 
 #: src/components/VcsSignInDialog.tsx
 msgid "Open {verificationUri}"
@@ -3670,6 +3687,10 @@ msgstr "пропущено: {skippedCount}"
 #: src/components/NewProjectButton.tsx
 msgid "slug"
 msgstr "slug"
+
+#: src/workspace/TaskCard.tsx
+msgid "someone commented on GitHub since this card was last handled — the newest comments are in its description"
+msgstr "на GitHub з’явився коментар після того, як картку востаннє розібрали, — найновіші коментарі в її описі"
 
 #: src/main.tsx
 msgid "something broke"

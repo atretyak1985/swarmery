@@ -318,3 +318,24 @@ func TestPrevOutputSplicedIntoPrompt(t *testing.T) {
 		}
 	}
 }
+
+// A step that failed under ContinueOnFailure still hands its output on: the
+// next ai-prompt step's {{prev_output}} is what the failed command printed.
+func TestPrevOutputAfterFailedStep(t *testing.T) {
+	sr := &stubRunner{out: "summary"}
+	s, _ := newTestSvc(t, sr, &stubTasks{})
+	r := mustCreate(t, s, CreateParams{Name: "chain", TimeoutSec: 60, Steps: mkSteps(
+		Step{Type: StepCommand, Name: "report", Command: "echo 'proj-a: created 2'; exit 1", ContinueOnFailure: true},
+		Step{Type: StepAIPrompt, Name: "sum", Prompt: "Report:\n" + PrevOutputPlaceholder + "end"},
+	)})
+	run, results := runInline(t, s, r, "manual")
+	if run.Status != "failed" || len(results) != 2 {
+		t.Fatalf("run = %s with %d results, want failed (the command failed) with both steps run", run.Status, len(results))
+	}
+	if sr.callCount() != 1 {
+		t.Fatalf("runner calls = %d, want 1", sr.callCount())
+	}
+	if got := sr.calls[0].prompt; got != "Report:\nproj-a: created 2\nend" {
+		t.Errorf("summary prompt = %q, want the failed command's output in place of the placeholder", got)
+	}
+}

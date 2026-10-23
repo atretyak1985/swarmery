@@ -26,6 +26,7 @@ type SeedFile struct {
 // seed tests load every file named here and fail on a file missing from it, so
 // a shipped routine cannot drift out of the validated set unnoticed.
 var ShippedSeedFiles = []string{
+	"github-inbox.json",  // every 2h: GitHub issues/PR comments into triage cards
 	"inbox-triage.json",  // nightly: label the classifier queue
 	"memory-review.json", // Friday: memory lint + consolidation dry-run
 	"model-upgrade.json", // monthly: changelog, prompt audit, model eval
