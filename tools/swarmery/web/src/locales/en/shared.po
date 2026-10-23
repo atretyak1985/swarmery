@@ -1046,6 +1046,10 @@ msgstr "cause"
 msgid "change the plan — interview + staged diff, applied only on your approval"
 msgstr "change the plan — interview + staged diff, applied only on your approval"
 
+#: src/components/DashboardLockedBanner.tsx
+msgid "Changes and the terminal need an unlocked dashboard. Run <0>swarmery open</0> in a terminal, or choose <1>Open dashboard</1> in the notch menu."
+msgstr "Changes and the terminal need an unlocked dashboard. Run <0>swarmery open</0> in a terminal, or choose <1>Open dashboard</1> in the notch menu."
+
 #: src/api.ts
 msgid "changing the cost failed: {status}"
 msgstr "changing the cost failed: {status}"
@@ -1402,6 +1406,10 @@ msgstr "daemon unreachable"
 msgid "Dark"
 msgstr "Dark"
 
+#: src/components/DashboardLockedBanner.tsx
+msgid "dashboard locked"
+msgstr "dashboard locked"
+
 #: src/api.ts
 msgid "decide proposal failed"
 msgstr "decide proposal failed"
@@ -1628,6 +1636,7 @@ msgstr "disconnecting…"
 
 #: src/components/AccountReadyBanner.tsx
 #: src/components/AccountsSection.tsx
+#: src/components/DashboardLockedBanner.tsx
 msgid "dismiss"
 msgstr "dismiss"
 
@@ -1635,6 +1644,10 @@ msgstr "dismiss"
 #: src/workspace/TaskCard.tsx
 msgid "Dismiss"
 msgstr "Dismiss"
+
+#: src/components/DashboardLockedBanner.tsx
+msgid "Dismiss the dashboard locked notice"
+msgstr "Dismiss the dashboard locked notice"
 
 #: src/workspace/boardModel.ts
 msgid "dispatch error: {why}"

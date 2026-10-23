@@ -148,16 +148,19 @@ func TestOriginlessWriteLegacyBearerAccepted(t *testing.T) {
 }
 
 // TestOriginlessBrowserOriginUnchanged: a request that carries the daemon's own
-// Origin passes without link auth, a foreign Origin is 403 whatever it carries.
+// Origin passes with a dashboard session instead of link auth (and is locked
+// without one, session_test.go); a foreign Origin is 403 whatever it carries.
 func TestOriginlessBrowserOriginUnchanged(t *testing.T) {
 	enableOriginlessAuth(t)
 	srv, _, _ := serverWithRoutines(t)
 	key := attachHookToken(t)
+	session := testDashboardSession(t)
 
 	do := func(origin, auth string) int {
 		req, _ := http.NewRequest(http.MethodPost, srv.URL+"/api/routines", strings.NewReader(originlessRoutineBody))
 		req.Header.Set("Content-Type", "application/json")
 		req.Header.Set("Origin", origin)
+		req.Header.Set(SessionHeader, session)
 		if auth != "" {
 			req.Header.Set("Authorization", auth)
 		}
@@ -169,7 +172,7 @@ func TestOriginlessBrowserOriginUnchanged(t *testing.T) {
 		return resp.StatusCode
 	}
 	if got := do(srv.URL, ""); got != http.StatusCreated {
-		t.Errorf("own Origin without auth = %d, want 201", got)
+		t.Errorf("own Origin with a session, without link auth = %d, want 201", got)
 	}
 	if got := do("http://evil.example", ""); got != http.StatusForbidden {
 		t.Errorf("foreign Origin = %d, want 403", got)
@@ -353,9 +356,10 @@ func TestExposedListenerOwnOriginNeedsAuth(t *testing.T) {
 	if status, body := exposedPost(t, srv, lan, "http://"+lan, signedAuth(t, key, http.MethodPost, "/api/routines", originlessRoutineBody)); status != http.StatusCreated {
 		t.Errorf("exposed listener, own Origin, signed = %d %s, want 201", status, body)
 	}
-	// Loopback keeps the browser-Origin model.
-	if status, body := exposedPost(t, srv, "127.0.0.1:7777", "http://127.0.0.1:7777", ""); status != http.StatusCreated {
-		t.Errorf("loopback listener, own Origin, no auth = %d %s, want 201", status, body)
+	// Loopback takes the dashboard's session instead (session_test.go): the
+	// own Origin alone is locked.
+	if status, body := exposedPost(t, srv, "127.0.0.1:7777", "http://127.0.0.1:7777", ""); status != http.StatusUnauthorized || !strings.Contains(body, "dashboard_locked") {
+		t.Errorf("loopback listener, own Origin, no auth = %d %s, want 401 dashboard_locked", status, body)
 	}
 }
 

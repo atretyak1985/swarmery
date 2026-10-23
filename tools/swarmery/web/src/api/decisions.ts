@@ -4,6 +4,7 @@
 // data so the view renders offline.
 
 import { MOCK } from '../api';
+import { apiFetch } from '../lib/dashboardSession';
 
 export type DecideMode = 'off' | 'shadow' | 'active';
 
@@ -115,7 +116,7 @@ async function jsonOrThrow<T>(res: Response, what: string): Promise<T> {
 /** GET /api/decisions — per-question stats. */
 export async function fetchDecisions(): Promise<DecisionsResponse> {
   if (MOCK) return MOCK_DECISIONS;
-  return jsonOrThrow<DecisionsResponse>(await fetch('/api/decisions'), 'GET /api/decisions');
+  return jsonOrThrow<DecisionsResponse>(await apiFetch('/api/decisions'), 'GET /api/decisions');
 }
 
 /** PUT /api/decisions/{question}/mode — the dashboard's mode switch. */
@@ -133,7 +134,7 @@ export async function putDecisionMode(
   }
   const path = `/api/decisions/${encodeURIComponent(questionId)}/mode`;
   return jsonOrThrow<DecisionsResponse>(
-    await fetch(path, {
+    await apiFetch(path, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ mode }),
@@ -155,7 +156,7 @@ export async function fetchSessionLabels(uuid: string): Promise<SessionLabel | n
     };
   }
   const path = `/api/decisions/labels/${encodeURIComponent(uuid)}`;
-  const body = await jsonOrThrow<{ labels: SessionLabel | null }>(await fetch(path), `GET ${path}`);
+  const body = await jsonOrThrow<{ labels: SessionLabel | null }>(await apiFetch(path), `GET ${path}`);
   return body.labels;
 }
 
@@ -215,7 +216,7 @@ export async function fetchLabelQueue(
   if (project !== null) qs.set('project', project);
   if (includeRules) qs.set('rules', '1');
   const path = `/api/decisions/queue?${qs.toString()}`;
-  const body = await jsonOrThrow<{ items: QueueItem[] }>(await fetch(path), `GET ${path}`);
+  const body = await jsonOrThrow<{ items: QueueItem[] }>(await apiFetch(path), `GET ${path}`);
   return body.items;
 }
 
@@ -223,7 +224,7 @@ export async function fetchLabelQueue(
 export async function postGroundTruth(id: number, value: string): Promise<void> {
   if (MOCK) return;
   const path = `/api/decisions/${String(id)}/ground-truth`;
-  const res = await fetch(path, {
+  const res = await apiFetch(path, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ value }),

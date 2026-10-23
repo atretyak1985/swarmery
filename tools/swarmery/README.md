@@ -82,13 +82,14 @@ the complexity router: with `SWARMERY_ROUTE_PHASERUN` and/or
 
 ## Security model
 
-The daemon has no authentication: it binds loopback (`--bind 127.0.0.1`) and
-trusts whoever can reach it. A browser lends that reach to every page it
-renders, so two fences stand in front of the API (`internal/api/origin.go`).
-Both derive "this daemon" from the address it actually listens on, and both
-are extended only by `SWARMERY_TRUSTED_ORIGINS` (comma-separated
-`scheme://host[:port]`; `swarmery install --trusted-origins …` bakes it into
-the service definition):
+The daemon binds loopback (`--bind 127.0.0.1`). Reads are open to whoever can
+reach it; every write and upgrade needs a credential — the link token for
+non-browser clients, a dashboard session for the browser (below). A browser
+also lends the user's loopback reach to every page it renders, so two fences
+stand in front of the API (`internal/api/origin.go`). Both derive "this
+daemon" from the address it actually listens on, and both are extended only by
+`SWARMERY_TRUSTED_ORIGINS` (comma-separated `scheme://host[:port]`;
+`swarmery install --trusted-origins …` bakes it into the service definition):
 
 - **Origin.** Every write, the `/api/ws` live stream and the terminal upgrade
   refuse a browser `Origin` other than the daemon's own — scheme, host **and
@@ -104,14 +105,64 @@ the service definition):
   gets `401`. The legacy `Bearer <token>` form is still accepted during the
   transition. Plain reads need no credential. Scripts write through
   `swarmery api <METHOD> <path> [--data …]` instead of raw `curl`.
+- **The dashboard authenticates with a session token.** The daemon's own
+  `Origin` is no proof of a browser — any local process can send it — so a
+  write, the `/api/ws` live stream and the terminal upgrade that carry it
+  also need a dashboard session (`X-Swarmery-Session: <token>` on HTTP; the
+  subprotocol entry `swarmery.session.<token>` next to `swarmery.v1` on a
+  WebSocket, where the daemon selects exactly `swarmery.v1`), or link auth.
+  Without one they get `401 {"code":"dashboard_locked"}`. The browser never
+  holds the link token: `swarmery open [--session <uuid>] [--port <n>]` (or
+  the notch) signs a one-use unlock ticket with it and opens
+  `http://127.0.0.1:<port>/#swarmery-unlock=<ticket>` — the daemon's bound
+  address literal, never the name `localhost`, which may resolve to `::1`
+  first (a daemon bound to another loopback literal is opened with
+  `--url http://[::1]:7777`); the dashboard redeems
+  the ticket at `POST /api/session/unlock` (valid for 2 minutes, once) for a
+  session valid 30 days. The ticket is bound to the origin it opens
+  (`http://127.0.0.1:<port>`), and the unlock accepts only that `Origin`: the
+  listener's own address literal. A dashboard reached as `localhost` or
+  through a `SWARMERY_TRUSTED_ORIGINS` alias is never unlocked (`403`; the
+  browser keeps a session per origin, so such a page stays read-only) — open
+  the dashboard with `swarmery open`, which uses the literal address. Before
+  minting a ticket, `swarmery open` and the notch make the listener prove it is
+  the daemon (a signed `GET /api/link/health` whose answer must carry a valid
+  `X-Swarmery-Sig`): with the daemon down, or another process on its port,
+  `swarmery open` exits `2` and the notch opens the plain URL, without a
+  ticket. Sessions are stateless HMACs
+  under the link token, so `swarmery link token --rotate` signs every
+  dashboard out. The URL never appears in a process's argv (which every
+  local user can list): `swarmery open` hands the browser the path of a 0600
+  launcher page in `~/.swarmery/run/` (0700) that replaces itself with the
+  URL, and deletes it about 10 seconds later (a page left behind is swept on
+  the next run). `swarmery open --print` prints the URL instead of opening it.
+  The daemon logs one line per successful unlock — its time and the remote
+  address (`session: dashboard unlocked at <RFC 3339 UTC> from <addr>`), never
+  the ticket or the session — so an unlock you did not make shows up in the
+  daemon's log. A page that holds a session asks `GET /api/session` at boot and
+  whenever a socket is refused before it opened (`204` the session verifies,
+  `401 {"code":"dashboard_locked"}` it does not, always `401` on an exposed
+  listener); on a `401` it drops the session and shows the locked banner, so
+  a rotated link token is noticed without a failed write.
+- **Residual risk: the daemon's port while the daemon is down.** The
+  dashboard's origin is `http://127.0.0.1:<port>`, not the process behind it.
+  A local process that binds the daemon's port while the daemon is not running
+  serves pages on that same origin, and those pages can read the session the
+  browser stored for it (and use it once the daemon is back). `swarmery open`'s
+  listener proof keeps such a process from being handed a fresh ticket, but
+  it cannot protect a session already stored. Keep the daemon under its
+  service manager (`swarmery install`: launchd on macOS, `systemd --user` on
+  Linux) so its port is not left free, and if you suspect it was,
+  `swarmery link token --rotate` signs every dashboard out.
 - **Binding wider.** `serve --bind` with a non-loopback address refuses to
   start until a link token exists (`swarmery link token` mints it): exposed,
   the daemon must never fall back to trusting a missing `Origin`. Exposed (a
   non-loopback `--bind`, or a connection that arrived on a non-loopback
   address), an `Origin` header proves nothing either — any client can send
   the daemon's own — so every write and the `/api/ws` live stream need link
-  auth even from a browser, and the terminal (`/api/term/ws`) is refused
-  outright. A dashboard opened over the network is therefore read-only, with
+  auth even from a browser (a dashboard session is not accepted there, and
+  `POST /api/session/unlock` mints none), and the terminal (`/api/term/ws`) is
+  refused outright. A dashboard opened over the network is therefore read-only, with
   no live updates and no terminal; signed clients (`swarmery api`, the
   console, the notch) keep working.
 - **Host.** Every route — reads included — refuses a `Host` header that does

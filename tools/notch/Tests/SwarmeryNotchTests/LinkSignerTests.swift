@@ -101,6 +101,110 @@ final class LinkSignerTests: XCTestCase {
         XCTAssertNotEqual(first, second, "every connect attempt needs a fresh nonce")
     }
 
+    // MARK: - dashboard unlock ticket
+
+    private let unlockKey = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+
+    /// The ticket vector shared with the daemon
+    /// (tools/swarmery/internal/linksig/session_test.go TestUnlockSigVector):
+    /// a drift on either side breaks the unlock. The origin is bound into the MAC.
+    func testUnlockSignatureVector() {
+        XCTAssertEqual(
+            LinkSigner.unlockSignature(key: unlockKey, origin: "http://127.0.0.1:7777", ts: "1761200000", nonce: "n0nce-test-1"),
+            "99ddc25914ee0a3a46366c5df129d5dfde7fba0f18d0058415d6fd4d11145a02"
+        )
+    }
+
+    func testUnlockTicketShape() throws {
+        let signer = LinkSigner(keyPath: try keyFile(unlockKey))
+        let ticket = try XCTUnwrap(signer.unlockTicket(origin: "http://127.0.0.1:7777",
+                                                       now: Date(timeIntervalSince1970: 1_761_200_000), nonce: "n0nce-test-1"))
+        XCTAssertEqual(ticket, "1761200000.n0nce-test-1.99ddc25914ee0a3a46366c5df129d5dfde7fba0f18d0058415d6fd4d11145a02")
+        XCTAssertFalse(ticket.contains(unlockKey))
+    }
+
+    func testUnlockOriginIsCanonical() throws {
+        let cases: [String: String] = [
+            "http://127.0.0.1:7777/sessions/u": "http://127.0.0.1:7777",
+            "http://127.0.0.1": "http://127.0.0.1:80",
+            "https://127.0.0.1": "https://127.0.0.1:443",
+            "http://[::1]:7777": "http://[::1]:7777",
+            "http://[0:0:0:0:0:0:0:1]:7777": "http://[::1]:7777",
+        ]
+        for (raw, want) in cases {
+            XCTAssertEqual(LinkSigner.unlockOrigin(of: URL(string: raw)!), want, raw)
+        }
+        for raw in ["http://localhost:7777", "ftp://127.0.0.1:21", "http://[::ffff:127.0.0.1]:7777"] {
+            XCTAssertNil(LinkSigner.unlockOrigin(of: URL(string: raw)!), raw)
+        }
+    }
+
+    /// The ticket of a localhost base is bound to the rewritten origin, the one
+    /// the browser will send.
+    func testUnlockedURLTicketIsBoundToItsOrigin() throws {
+        let signer = LinkSigner(keyPath: try keyFile(unlockKey), now: { Date(timeIntervalSince1970: 1_761_200_000) },
+                                nonce: { "n0nce-test-1" })
+        let url = TerminalFocus.unlockedDashboardURL(URL(string: "http://localhost:7777/sessions/u")!, signer: signer)
+        XCTAssertEqual(URLComponents(url: url, resolvingAgainstBaseURL: false)?.fragment,
+                       "swarmery-unlock=1761200000.n0nce-test-1.99ddc25914ee0a3a46366c5df129d5dfde7fba0f18d0058415d6fd4d11145a02")
+    }
+
+    func testUnlockedDashboardURLCarriesATicketFragment() throws {
+        let signer = LinkSigner(keyPath: try keyFile(unlockKey))
+        let base = URL(string: "http://127.0.0.1:7777/sessions/uuid-1")!
+        let url = TerminalFocus.unlockedDashboardURL(base, signer: signer)
+        let fragment = try XCTUnwrap(URLComponents(url: url, resolvingAgainstBaseURL: false)?.fragment)
+        XCTAssertTrue(fragment.hasPrefix("swarmery-unlock="), fragment)
+        let parts = fragment.dropFirst("swarmery-unlock=".count).split(separator: ".", omittingEmptySubsequences: false)
+        XCTAssertEqual(parts.count, 3)
+        XCTAssertNotNil(Int64(parts[0]))
+        XCTAssertFalse(parts[1].isEmpty)
+        XCTAssertEqual(parts[2].count, 64)
+        XCTAssertEqual(url.path, "/sessions/uuid-1")
+        XCTAssertEqual(url.host, "127.0.0.1")
+    }
+
+    /// `localhost` may resolve to ::1 first, where the daemon does not listen
+    /// and another process may: the unlock URL names the IPv4 literal.
+    func testLocalhostIsRewrittenToTheLoopbackLiteral() throws {
+        let signer = LinkSigner(keyPath: try keyFile(unlockKey))
+        let base = URL(string: "http://localhost:7777/sessions/uuid-1")!
+        let url = TerminalFocus.unlockedDashboardURL(base, signer: signer)
+        XCTAssertEqual(url.host, "127.0.0.1")
+        XCTAssertEqual(url.port, 7777)
+        XCTAssertEqual(url.path, "/sessions/uuid-1")
+        let fragment = try XCTUnwrap(URLComponents(url: url, resolvingAgainstBaseURL: false)?.fragment)
+        XCTAssertTrue(fragment.hasPrefix("swarmery-unlock="), fragment)
+    }
+
+    func testLoopbackLiteralsKeepTheirAddress() throws {
+        let signer = LinkSigner(keyPath: try keyFile(unlockKey))
+        for raw in ["http://127.0.0.1:7777", "http://127.0.0.2:7777", "http://[::1]:7777"] {
+            let url = TerminalFocus.unlockedDashboardURL(URL(string: raw)!, signer: signer)
+            XCTAssertTrue(url.absoluteString.hasPrefix(raw + "#swarmery-unlock="), url.absoluteString)
+        }
+    }
+
+    func testNamesOtherThanLocalhostGetNoTicket() throws {
+        let signer = LinkSigner(keyPath: try keyFile(unlockKey))
+        for raw in ["http://swarmery:7777", "http://192.168.1.5:7777", "http://localhost.example:7777"] {
+            let base = URL(string: raw)!
+            XCTAssertEqual(TerminalFocus.unlockedDashboardURL(base, signer: signer), base, raw)
+        }
+    }
+
+    func testNoLinkTokenMeansNoFragment() {
+        let signer = LinkSigner(keyPath: "/nonexistent/link-token")
+        let base = URL(string: "http://127.0.0.1:7777")!
+        XCTAssertEqual(TerminalFocus.unlockedDashboardURL(base, signer: signer), base)
+    }
+
+    func testARemoteDashboardGetsNoTicket() throws {
+        let signer = LinkSigner(keyPath: try keyFile(unlockKey))
+        let base = URL(string: "https://dashboard.example.com")!
+        XCTAssertEqual(TerminalFocus.unlockedDashboardURL(base, signer: signer), base)
+    }
+
     // MARK: - focus URL allow-list (L-1)
 
     private let dashboard = URL(string: "http://127.0.0.1:7777")!

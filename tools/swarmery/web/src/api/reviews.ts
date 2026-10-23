@@ -8,6 +8,7 @@
 
 import { MOCK } from '../api';
 import type { GuardSummary } from './types';
+import { apiFetch } from '../lib/dashboardSession';
 
 export type ReviewScope = 'phase' | 'plan';
 export type ReviewVerdict = 'pass' | 'fail' | 'inconclusive';
@@ -98,7 +99,7 @@ async function failure(res: Response, what: string): Promise<Error> {
 export async function fetchUnackedPlanReviews(): Promise<Review[]> {
   if (MOCK) return [];
   const path = '/api/reviews?scope=plan&unacked=1';
-  const res = await fetch(path);
+  const res = await apiFetch(path);
   if (!res.ok) throw await failure(res, `GET ${path}`);
   return (await res.json()) as Review[];
 }
@@ -107,7 +108,7 @@ export async function fetchUnackedPlanReviews(): Promise<Review[]> {
 export async function fetchPhaseReviews(taskId: number, phaseId: number): Promise<Review[]> {
   if (MOCK) return [];
   const path = `/api/epics/${String(taskId)}/phases/${String(phaseId)}/reviews`;
-  const res = await fetch(path);
+  const res = await apiFetch(path);
   if (!res.ok) throw await failure(res, `GET ${path}`);
   return (await res.json()) as Review[];
 }
@@ -116,7 +117,7 @@ export async function fetchPhaseReviews(taskId: number, phaseId: number): Promis
 export async function ackReview(id: number): Promise<Review | null> {
   if (MOCK) return null;
   const path = `/api/reviews/${String(id)}/ack`;
-  const res = await fetch(path, { method: 'POST' });
+  const res = await apiFetch(path, { method: 'POST' });
   if (!res.ok) throw await failure(res, `POST ${path}`);
   return (await res.json()) as Review;
 }

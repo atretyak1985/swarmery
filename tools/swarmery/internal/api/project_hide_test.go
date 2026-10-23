@@ -110,13 +110,13 @@ func TestArchiveProjectAllowsLocalOrigin(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	req.Header.Set("Origin", origin)
+	req.Header = dashboardHeader(t, origin)
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatal(err)
 	}
 	resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		t.Errorf("local-origin archive = %d, want 200", resp.StatusCode)
+		t.Errorf("local-origin archive with a dashboard session = %d, want 200", resp.StatusCode)
 	}
 }

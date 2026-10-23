@@ -107,6 +107,8 @@ func (h *Handler) serenaProxy(w http.ResponseWriter, r *http.Request) {
 			// The link credential an Origin-less client authenticated to
 			// the daemon with is the daemon's, never the upstream's.
 			pr.Out.Header.Del("Authorization")
+			// So is the dashboard's session token.
+			stripDashboardSession(pr.Out.Header)
 		},
 		ModifyResponse: func(res *http.Response) error {
 			res.Header.Set("Content-Security-Policy", serenaProxyCSP)

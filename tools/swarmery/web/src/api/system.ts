@@ -33,6 +33,7 @@ import type {
 } from './types';
 import { MOCK } from '../api';
 import { mockSystemApi } from '../mock/system';
+import { apiFetch } from '../lib/dashboardSession';
 
 /** Which /api/system list a request targets (agents/skills share DTOs). */
 export type SystemItemsKind = 'agents' | 'skills';
@@ -43,7 +44,7 @@ export interface SystemListFilters {
 }
 
 async function get<T>(path: string): Promise<T> {
-  const res = await fetch(path);
+  const res = await apiFetch(path);
   if (!res.ok) {
     throw new Error(`GET ${path}: ${String(res.status)}`);
   }
@@ -126,7 +127,7 @@ export function fetchSystemInsights(projectId?: string): Promise<SystemInsights>
 export async function fetchSkillAuditReport(): Promise<SystemSkillAuditReportBody | null> {
   if (MOCK) return mockSystemApi.skillAuditReport();
   const path = '/api/system/skill-audit/report';
-  const res = await fetch(path);
+  const res = await apiFetch(path);
   if (res.status === 404) return null;
   if (!res.ok) {
     throw new Error(`GET ${path}: ${String(res.status)}`);
@@ -200,7 +201,7 @@ export class SystemWriteError extends Error {
  * resolves it only by refetching and editing on top of the new base_hash.
  */
 async function writeCall<T>(path: string, method: 'PUT' | 'POST' | 'DELETE', body?: unknown): Promise<T> {
-  const res = await fetch(path, {
+  const res = await apiFetch(path, {
     method,
     headers: { 'Content-Type': 'application/json' },
     ...(body !== undefined ? { body: JSON.stringify(body) } : {}),

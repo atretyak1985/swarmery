@@ -10,9 +10,10 @@
 import type { AgentProfile, AgentRosterResp } from './types';
 import { MOCK } from '../api';
 import { mockAgentHubApi } from '../mock/agentHub';
+import { apiFetch } from '../lib/dashboardSession';
 
 async function get<T>(path: string): Promise<T> {
-  const res = await fetch(path);
+  const res = await apiFetch(path);
   if (!res.ok) {
     throw new Error(`GET ${path}: ${String(res.status)}`);
   }

@@ -1,8 +1,8 @@
 // Browser-facing trust policy for the loopback API (D4 hardening).
 //
-// The daemon has no auth in v1: it binds loopback and trusts whoever can reach
-// it. Two browser-side attacks still need a fence, because a browser lends the
-// user's loopback reachability to every page it renders:
+// The daemon binds loopback. Two browser-side attacks need a fence on top of
+// the credentials below, because a browser lends the user's loopback
+// reachability to every page it renders:
 //
 //   - CSRF from a page on another origin. A state-changing request (and the
 //     two WebSocket upgrades) carries the page's Origin, so a present Origin
@@ -30,6 +30,14 @@
 // write or upgrade behind requireLocalOrigin must carry link auth (a request
 // signed with the link token, internal/linksig, or during the transition the
 // legacy bearer scheme), the same credential the /api/link/* routes take.
+//
+// A present Origin is no proof of a browser either: any local process can
+// write the daemon's own. So the dashboard authenticates its writes and
+// upgrades with a session token (session.go) — minted at POST
+// /api/session/unlock for a ticket signed with the link token, which
+// `swarmery open` and the notch hand to the browser — and link auth is
+// accepted wherever a session is.
+//
 // Plain reads (GET/HEAD without an upgrade) stay open: a same-origin browser
 // GET carries no Origin either. Every request still has to name the daemon in
 // Host, which every HTTP client does by default from the URL it dials.
@@ -205,12 +213,14 @@ func isTrustedOrigin(r *http.Request, origin string) bool {
 	return u.Scheme == requestScheme(r) && isSelfHost(r, u.Host)
 }
 
-// isStrictLocalOrigin is the gate for browser-only endpoints (the PTY
-// terminal): unlike requireLocalOrigin, an ABSENT Origin is rejected too, so a
-// raw ws:// dial from a non-browser client cannot ride the no-Origin exemption
-// into a shell. The daemon's own origin and the opt-in list apply as everywhere
-// else — a dashboard reached by a trusted alias must not get working writes and
-// a dead terminal.
+// isStrictLocalOrigin is the Origin check for browser-only endpoints (the PTY
+// terminal; the session unlock is stricter still, selfUnlockOrigin in
+// session.go): unlike requireLocalOrigin, an ABSENT Origin
+// is rejected too. The daemon's own origin and the opt-in list apply as
+// everywhere else — a dashboard reached by a trusted alias must not get
+// working writes and a dead terminal. It is a fence, not a credential: any
+// local process can send the daemon's own Origin, so the terminal also needs
+// a dashboard session (authenticateDashboard).
 //
 // It says nothing on an exposed listener (isExposedListener): there any client
 // can send the daemon's own Origin, so a caller must refuse first (term.go).
@@ -231,9 +241,11 @@ func isTrustedHost(r *http.Request) bool {
 	return trustedHosts[h] || isSelfHost(r, h)
 }
 
-// originlessAuthRequired gates Origin-less writes and upgrades on link auth.
-// Always on in the daemon; the api package's TestMain turns it off for the
-// tests written before the gate, which drive the routes without a credential.
+// originlessAuthRequired gates Origin-less writes and upgrades (and every
+// write on an exposed listener) on link auth. Always on in the daemon; the api
+// package's TestMain turns it off for the tests written before the gate, which
+// drive the routes with no Origin and no credential. It does NOT cover the
+// dashboard-session gate on a trusted Origin: that one holds in every test.
 var originlessAuthRequired = true
 
 // isPlainRead is a GET or HEAD that asks for no protocol upgrade.
@@ -243,19 +255,21 @@ func isPlainRead(r *http.Request) bool {
 
 // requireLocalOrigin guards state-changing requests (and WebSocket upgrades).
 // A request that carries a browser Origin must carry the daemon's own or an
-// opted-in one (CSRF hardening, D4), or it is 403. A request without an Origin
-// comes from a non-browser client and must carry link auth (authenticateLink:
-// signed, or the legacy bearer scheme), or it is 401 — 503 while the daemon has
-// no link token. A plain GET without an Origin passes: a same-origin browser
-// read carries none, and reads are not what this fence is for.
+// opted-in one (CSRF hardening, D4), or it is 403. A plain read (GET/HEAD, no
+// upgrade) then passes: a same-origin browser read carries no Origin, and
+// reads are not what this fence is for. Everything else needs a credential:
 //
-// An Origin header is only evidence of a browser when nothing else can reach
-// the listener: any non-browser client may send whatever Origin it likes. So on
-// an EXPOSED listener (D7: the daemon was started with a non-loopback --bind,
-// or this connection arrived on a non-loopback address) every gated request
-// that is not a plain read needs link auth, Origin or not; a dashboard opened
-// over the network then reads but cannot write (401 with a clear error). On a
-// loopback listener the browser-Origin model stands.
+//   - the daemon's own Origin on a loopback listener: a dashboard session
+//     (X-Swarmery-Session, or the swarmery.session.<token> subprotocol on an
+//     upgrade) or link auth, else 401 dashboard_locked (session.go). Any local
+//     process can write that Origin, so the header alone authorises nothing.
+//   - no Origin: link auth (authenticateLink: a signed request, or the legacy
+//     bearer credential), else 401 — 503 while the daemon has no link token.
+//   - an EXPOSED listener (D7: the daemon was started with a non-loopback
+//     --bind, or this connection arrived on a non-loopback address): link
+//     auth, Origin or not. A dashboard session is not accepted there, so a
+//     dashboard opened over the network reads but cannot write (401 with a
+//     clear error).
 func requireLocalOrigin(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		o := r.Header.Get("Origin")
@@ -264,12 +278,23 @@ func requireLocalOrigin(next http.HandlerFunc) http.HandlerFunc {
 				map[string]string{"error": "cross-origin request rejected"})
 			return
 		}
-		if !originlessAuthRequired || isPlainRead(r) {
+		if isPlainRead(r) {
 			next(w, r)
 			return
 		}
 		exposed := isExposedListener(r)
 		if o != "" && !exposed {
+			// The daemon's own Origin on loopback: the dashboard — or any
+			// local process that wrote that header. Its credential is a
+			// dashboard session, or link auth (session.go).
+			r, ok := authenticateDashboard(w, r)
+			if !ok {
+				return
+			}
+			next(w, r)
+			return
+		}
+		if !originlessAuthRequired {
 			next(w, r)
 			return
 		}

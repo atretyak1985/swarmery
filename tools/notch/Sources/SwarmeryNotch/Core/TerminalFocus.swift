@@ -92,6 +92,75 @@ public enum TerminalFocus {
         base.appendingPathComponent("sessions").appendingPathComponent(sessionUuid)
     }
 
+    /// The dashboard asks for a session token on every browser write and on
+    /// the terminal socket. Opening it with `#swarmery-unlock=<ticket>` (a
+    /// short-lived ticket signed with the link token) lets the page fetch one
+    /// itself. Minted at open time, so the ticket is fresh. Without a readable
+    /// link token -- or for a dashboard that is not on this machine -- the
+    /// plain URL opens and the page's locked banner explains the way in.
+    ///
+    /// The unlocked URL names the daemon by its loopback address literal: a
+    /// `localhost` base becomes `127.0.0.1` (the daemon's default bind), since
+    /// that name may resolve to ::1 first, where the daemon does not listen
+    /// and another process may.
+    static func unlockedDashboardURL(_ url: URL, signer: LinkSigner = LinkSigner()) -> URL {
+        guard let base = loopbackLiteralURL(url),
+              let origin = LinkSigner.unlockOrigin(of: base),
+              let ticket = signer.unlockTicket(origin: origin),
+              var components = URLComponents(url: base, resolvingAgainstBaseURL: false)
+        else { return url }
+        components.fragment = "swarmery-unlock=\(ticket)"
+        return components.url ?? url
+    }
+
+    /// `unlockedDashboardURL`, but only for a listener that proves it is the
+    /// daemon (`DaemonIdentity`): a ticket goes to no other process. When the
+    /// proof fails — the daemon is down, or something else holds its port —
+    /// the plain `url` opens, without a ticket.
+    static func verifiedDashboardURL(_ url: URL, signer: LinkSigner = LinkSigner(),
+                                     session: URLSession = .shared) async -> URL {
+        guard let base = loopbackLiteralURL(url),
+              let origin = LinkSigner.unlockOrigin(of: base),
+              await DaemonIdentity.proves(origin: origin, signer: signer, session: session)
+        else { return url }
+        return unlockedDashboardURL(url, signer: signer)
+    }
+
+    /// `url` with its host as a loopback address literal: unchanged when it
+    /// already is one (127.0.0.0/8, ::1), `localhost` rewritten to
+    /// `127.0.0.1`, nil for any other host.
+    static func loopbackLiteralURL(_ url: URL) -> URL? {
+        guard var components = URLComponents(url: url, resolvingAgainstBaseURL: false),
+              let rawHost = components.host?.lowercased()
+        else { return nil }
+        let host = rawHost.hasPrefix("[") && rawHost.hasSuffix("]") ? String(rawHost.dropFirst().dropLast()) : rawHost
+        if host == "localhost" {
+            components.host = "127.0.0.1"
+            return components.url
+        }
+        return isLoopbackLiteral(host) ? url : nil
+    }
+
+    /// An IPv4 address in 127.0.0.0/8 or the IPv6 loopback, written as an
+    /// address literal (never a name).
+    static func isLoopbackLiteral(_ host: String) -> Bool {
+        var v4 = in_addr()
+        if inet_pton(AF_INET, host, &v4) == 1 {
+            return UInt32(bigEndian: v4.s_addr) >> 24 == 127
+        }
+        var v6 = in6_addr()
+        if inet_pton(AF_INET6, host, &v6) == 1 {
+            return withUnsafeBytes(of: &v6) { Array($0) } == [UInt8](repeating: 0, count: 15) + [1]
+        }
+        return false
+    }
+
+    /// Opens the dashboard root (the menu-bar "Open dashboard" item), unlocked.
+    @MainActor
+    public static func openDashboardHome(dashboardBaseURL: URL = DaemonClient.resolveBaseURL()) {
+        perform(.openDashboard(dashboardBaseURL))
+    }
+
     @MainActor
     public static func focus(_ session: Session, dashboardBaseURL: URL = DaemonClient.resolveBaseURL()) {
         perform(strategy(for: session.terminal, sessionUuid: session.sessionUuid, dashboardBaseURL: dashboardBaseURL))
@@ -114,7 +183,9 @@ public enum TerminalFocus {
         case let .activateApp(bundleID):
             activate(bundleID: bundleID)
         case let .openDashboard(url):
-            NSWorkspace.shared.open(url)
+            Task { @MainActor in
+                NSWorkspace.shared.open(await verifiedDashboardURL(url))
+            }
         }
     }
 

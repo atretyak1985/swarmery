@@ -6,6 +6,7 @@
 // offline.
 
 import { MOCK } from '../api';
+import { apiFetch } from '../lib/dashboardSession';
 
 /** Why a breaker opened: the login / access is gone, or a usage limit was hit. */
 export type AccountBreakerKind = 'auth' | 'quota';
@@ -60,7 +61,7 @@ const MOCK_ALERTS: Alert[] = [
 /** GET /api/alerts — every unresolved alert, oldest first. */
 export async function fetchAlerts(): Promise<Alert[]> {
   if (MOCK) return MOCK_ALERTS;
-  const res = await fetch('/api/alerts');
+  const res = await apiFetch('/api/alerts');
   if (!res.ok) throw new Error(`GET /api/alerts: ${String(res.status)}`);
   const body = (await res.json()) as { alerts: Alert[] };
   return body.alerts;
@@ -79,7 +80,7 @@ export async function resumeAccount(account: string): Promise<void> {
     return;
   }
   const path = `/api/accounts/${encodeURIComponent(account)}/breaker/resume`;
-  const res = await fetch(path, { method: 'POST' });
+  const res = await apiFetch(path, { method: 'POST' });
   if (!res.ok) {
     const body = (await res.json().catch(() => ({}))) as { error?: string };
     throw new Error(body.error ?? `POST ${path}: ${String(res.status)}`);

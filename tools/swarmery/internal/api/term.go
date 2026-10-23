@@ -10,6 +10,10 @@
 //     requireLocalOrigin: a MISSING Origin is rejected too (only the daemon's own
 //     origin, or one opted in via SWARMERY_TRUSTED_ORIGINS, passes — origin.go).
 //     This closes a raw ws:// dial that would ride the no-Origin exemption.
+//   - The Origin alone authorises nothing — any local process can send the
+//     daemon's own — so the upgrade must also carry a dashboard session
+//     (subprotocol swarmery.session.<token>) or link auth (session.go). The
+//     101 selects exactly swarmery.v1.
 //   - cwd MUST EvalSymlinks to either a registered project path or a live task
 //     worktree_path — anything else (e.g. /etc, a symlink escape) is 403.
 //   - account MUST be a well-formed key (claudeacct.ValidKey) naming an account
@@ -78,6 +82,13 @@ func (h *Handler) term(w http.ResponseWriter, r *http.Request) {
 			map[string]string{"error": "cross-origin or origin-less terminal upgrade rejected"})
 		return
 	}
+	// The Origin is no credential (any local process can send the daemon's
+	// own): the upgrade must carry a dashboard session in its subprotocol
+	// list, or link auth (session.go).
+	r, ok := authenticateDashboard(w, r)
+	if !ok {
+		return
+	}
 	reqCwd := r.URL.Query().Get("cwd")
 	reqAccount := strings.TrimSpace(r.URL.Query().Get("account"))
 
@@ -121,6 +132,9 @@ func (h *Handler) term(w http.ResponseWriter, r *http.Request) {
 		// check, and aware of the opt-in list), so the library gate is opened;
 		// the Host fence (requireLocalHost, routes.go) ran before the handler.
 		OriginPatterns: []string{"*"},
+		// Select exactly swarmery.v1: the session entry the client offered
+		// alongside it is never echoed back.
+		Subprotocols: wsAcceptProtocols,
 	})
 	if err != nil {
 		log.Printf("warn: term: accept: %v", err)

@@ -4,6 +4,7 @@
 // UI re-checks the gate before drawing anything.
 
 import { MOCK } from '../api';
+import { apiFetch } from '../lib/dashboardSession';
 
 export type CalibrationDim = 'agent' | 'model' | 'effort' | 'project';
 
@@ -59,7 +60,7 @@ const MOCK_REPORT: CalibrationReport = {
 export async function fetchCalibration(dims: CalibrationDim[]): Promise<CalibrationReport> {
   if (MOCK) return MOCK_REPORT;
   const path = `/api/calibration?by=${encodeURIComponent(dims.join(','))}`;
-  const res = await fetch(path);
+  const res = await apiFetch(path);
   if (!res.ok) throw new Error(`GET ${path}: ${String(res.status)}`);
   return (await res.json()) as CalibrationReport;
 }

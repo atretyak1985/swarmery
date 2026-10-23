@@ -80,7 +80,7 @@ func postRescan(t *testing.T, url, origin string) (int, string) {
 		t.Fatal(err)
 	}
 	if origin != "" {
-		req.Header.Set("Origin", origin)
+		req.Header = dashboardHeader(t, origin)
 	}
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {

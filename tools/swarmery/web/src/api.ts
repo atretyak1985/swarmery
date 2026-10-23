@@ -132,13 +132,14 @@ import type {
 } from './api/types';
 import { t } from '@lingui/core/macro';
 import { currentLocale } from './i18n/locale';
+import { apiFetch } from './lib/dashboardSession';
 import { mockApi } from './mock/data';
 
 /** Offline mock mode — fixture data + fake WS (VITE_MOCK=1). */
 export const MOCK: boolean = import.meta.env.VITE_MOCK === '1';
 
 async function get<T>(path: string): Promise<T> {
-  const res = await fetch(path);
+  const res = await apiFetch(path);
   if (!res.ok) {
     throw new Error(`GET ${path}: ${res.status}`);
   }
@@ -182,7 +183,7 @@ export function fetchProjectOverview(id: number | string): Promise<ProjectOvervi
 /** DELETE /api/projects/{id} — soft-archive (remove from the default list). */
 export async function archiveProject(id: number): Promise<void> {
   if (MOCK) return; // no-op in mock mode
-  const res = await fetch(`/api/projects/${String(id)}`, { method: 'DELETE' });
+  const res = await apiFetch(`/api/projects/${String(id)}`, { method: 'DELETE' });
   if (!res.ok) {
     const data = (await res.json().catch(() => ({}))) as { error?: string };
     throw new Error(data.error ?? t`archive failed: ${{ status: res.status }}`);
@@ -192,7 +193,7 @@ export async function archiveProject(id: number): Promise<void> {
 /** POST /api/projects/{id}/restore — un-archive. */
 export async function restoreProject(id: number): Promise<void> {
   if (MOCK) return; // no-op in mock mode
-  const res = await fetch(`/api/projects/${String(id)}/restore`, { method: 'POST' });
+  const res = await apiFetch(`/api/projects/${String(id)}/restore`, { method: 'POST' });
   if (!res.ok) {
     const data = (await res.json().catch(() => ({}))) as { error?: string };
     throw new Error(data.error ?? t`restore failed: ${{ status: res.status }}`);
@@ -204,7 +205,7 @@ export async function restoreProject(id: number): Promise<void> {
  * in-flight job when one is already running). */
 export async function rebuildArchitectureMap(id: number): Promise<void> {
   if (MOCK) return; // no-op in mock mode
-  const res = await fetch(`/api/projects/${String(id)}/architecture/rebuild`, { method: 'POST' });
+  const res = await apiFetch(`/api/projects/${String(id)}/architecture/rebuild`, { method: 'POST' });
   if (!res.ok) {
     const data = (await res.json().catch(() => ({}))) as { error?: string };
     throw new Error(data.error ?? t`rebuild failed: ${{ status: res.status }}`);
@@ -220,7 +221,7 @@ export function fetchProjectsHealth(): Promise<ProjectsHealthResponse> {
 /** PATCH /api/projects/{id} — update pinned / tags (dashboard-only meta). */
 export async function patchProject(id: number, patch: ProjectMetaPatch): Promise<ProjectMeta> {
   if (MOCK) return { pinned: patch.pinned ?? false, tags: patch.tags ?? [] };
-  const res = await fetch(`/api/projects/${String(id)}`, {
+  const res = await apiFetch(`/api/projects/${String(id)}`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(patch),
@@ -257,7 +258,7 @@ export async function detachProject(
   if (dryRun) params.set('dryRun', '1');
   if (full) params.set('full', '1');
   const qs = params.size > 0 ? `?${params.toString()}` : '';
-  const res = await fetch(`/api/projects/${String(id)}/detach${qs}`, {
+  const res = await apiFetch(`/api/projects/${String(id)}/detach${qs}`, {
     method: 'POST',
   });
   if (!res.ok) {
@@ -285,7 +286,7 @@ export async function attachProject(id: number, dryRun: boolean): Promise<Attach
     };
   }
   const qs = dryRun ? '?dryRun=1' : '';
-  const res = await fetch(`/api/projects/${String(id)}/attach${qs}`, {
+  const res = await apiFetch(`/api/projects/${String(id)}/attach${qs}`, {
     method: 'POST',
   });
   if (!res.ok) {
@@ -313,7 +314,7 @@ export async function toggleProjectPlugin(
   enabled: boolean,
 ): Promise<ProjectPluginToggleResponse> {
   if (MOCK) return { name, enabled, changed: true, backup: '.claude/settings.json.bak' };
-  const res = await fetch(`/api/projects/${String(id)}/plugins/${encodeURIComponent(name)}`, {
+  const res = await apiFetch(`/api/projects/${String(id)}/plugins/${encodeURIComponent(name)}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ enabled }),
@@ -350,7 +351,7 @@ export async function repairProjectPlugin(
       status: 'ok',
       restart: true,
     };
-  const res = await fetch(
+  const res = await apiFetch(
     `/api/projects/${String(id)}/plugins/${encodeURIComponent(pluginId)}/repair`,
     { method: 'POST' },
   );
@@ -397,7 +398,7 @@ export async function putProjectConfig(
   value: unknown,
 ): Promise<ProjectConfigWriteResponse> {
   if (MOCK) return { key, written: true, backup: '.claude/project.json.bak', changed: true };
-  const res = await fetch(`/api/projects/${String(id)}/config/${encodeURIComponent(key)}`, {
+  const res = await apiFetch(`/api/projects/${String(id)}/config/${encodeURIComponent(key)}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ value }),
@@ -439,7 +440,7 @@ export async function probeProjectConfig(
 ): Promise<ProjectConfigProbeResponse> {
   // i18n-ignore — mock-only path
   if (MOCK) return { suggestions: {}, reason: 'probe is unavailable in mock mode' };
-  const res = await fetch(
+  const res = await apiFetch(
     `/api/projects/${String(id)}/config/${encodeURIComponent(key)}/probe`,
     {
       method: 'POST',
@@ -483,7 +484,7 @@ export async function onboardProject(
 ): Promise<OnboardResponse> {
   const body: OnboardRequest = { slug, path, packs };
   if (workspaceRoot !== undefined && workspaceRoot !== '') body.workspaceRoot = workspaceRoot;
-  const res = await fetch('/api/projects/onboard', {
+  const res = await apiFetch('/api/projects/onboard', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
@@ -540,7 +541,7 @@ export function fetchSessionHandoff(id: number | string): Promise<SessionHandoff
  */
 export async function requestSessionHandoff(id: number): Promise<SessionHandoffRequest> {
   if (MOCK) return mockApi.requestSessionHandoff(id);
-  const res = await fetch(`/api/sessions/${String(id)}/handoff`, { method: 'POST' });
+  const res = await apiFetch(`/api/sessions/${String(id)}/handoff`, { method: 'POST' });
   if (!res.ok) throw new Error(await errText(res));
   return (await res.json()) as SessionHandoffRequest;
 }
@@ -682,7 +683,7 @@ export function fetchUsage(fresh = false): Promise<UsageResp> {
  */
 export async function startUsageLogin(account: string): Promise<UsageLoginStart> {
   if (MOCK) throw new Error('connecting an account is not available in mock mode'); // i18n-ignore — mock-only path
-  const res = await fetch(`/api/usage/accounts/${encodeURIComponent(account)}/login/start`, {
+  const res = await apiFetch(`/api/usage/accounts/${encodeURIComponent(account)}/login/start`, {
     method: 'POST',
   });
   if (!res.ok) throw new Error(await errBody(res, t`could not start the connection`));
@@ -698,7 +699,7 @@ export async function startUsageLogin(account: string): Promise<UsageLoginStart>
  */
 export async function completeUsageLogin(account: string, code: string): Promise<UsageLoginComplete> {
   if (MOCK) throw new Error('connecting an account is not available in mock mode'); // i18n-ignore — mock-only path
-  const res = await fetch(`/api/usage/accounts/${encodeURIComponent(account)}/login/complete`, {
+  const res = await apiFetch(`/api/usage/accounts/${encodeURIComponent(account)}/login/complete`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ code }),
@@ -715,7 +716,7 @@ export async function completeUsageLogin(account: string, code: string): Promise
 export async function probeAccount(key: string, source?: 'pty-login'): Promise<AccountProbeResponse> {
   if (MOCK) throw new Error('probing an account is not available in mock mode'); // i18n-ignore — mock-only path
   const qs = source !== undefined ? `?source=${source}` : '';
-  const res = await fetch(`/api/accounts/${encodeURIComponent(key)}/probe${qs}`, {
+  const res = await apiFetch(`/api/accounts/${encodeURIComponent(key)}/probe${qs}`, {
     method: 'POST',
   });
   if (!res.ok) throw new Error(await errBody(res, t`could not re-check the account`));
@@ -732,7 +733,7 @@ export async function probeAccount(key: string, source?: 'pty-login'): Promise<A
  */
 export async function disconnectUsageAccount(account: string): Promise<void> {
   if (MOCK) throw new Error('disconnecting an account is not available in mock mode'); // i18n-ignore — mock-only path
-  const res = await fetch(`/api/usage/accounts/${encodeURIComponent(account)}/login`, {
+  const res = await apiFetch(`/api/usage/accounts/${encodeURIComponent(account)}/login`, {
     method: 'DELETE',
   });
   if (!res.ok) throw new Error(await errBody(res, t`could not disconnect the account`));
@@ -759,7 +760,7 @@ export function fetchRetroFriction(range: AnalyticsRange = {}): Promise<RetroFri
  */
 export async function unmuteFrictionGroup(key: string): Promise<void> {
   if (MOCK) return;
-  const res = await fetch(`/api/retro/friction/mute?key=${encodeURIComponent(key)}`, {
+  const res = await apiFetch(`/api/retro/friction/mute?key=${encodeURIComponent(key)}`, {
     method: 'DELETE',
   });
   if (!res.ok && res.status !== 404) {
@@ -816,7 +817,7 @@ async function errText(res: Response): Promise<string> {
  * 202 with a `running` row; 409 when one is already in flight.
  */
 export async function startRetroAnalysis(range: AnalyticsRange = {}): Promise<RetroAnalysis> {
-  const res = await fetch(`/api/retro/analysis?${rangeQuery(range, {})}`, {
+  const res = await apiFetch(`/api/retro/analysis?${rangeQuery(range, {})}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: '{}',
@@ -837,7 +838,7 @@ export async function decideRetroAnalysis(
   id: number,
   status: 'accepted' | 'dismissed',
 ): Promise<RetroAnalysis> {
-  const res = await fetch(`/api/retro/analysis/${String(id)}`, {
+  const res = await apiFetch(`/api/retro/analysis/${String(id)}`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ status }),
@@ -855,7 +856,7 @@ export async function planFromRetroAnalysis(
   id: number,
   projectId: number,
 ): Promise<RetroPlanStarted> {
-  const res = await fetch(`/api/retro/analysis/${String(id)}/plan`, {
+  const res = await apiFetch(`/api/retro/analysis/${String(id)}/plan`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ projectId }),
@@ -903,7 +904,7 @@ export async function patchRecommendation(
   status: Extract<RecommendationStatus, 'accepted' | 'dismissed'>,
 ): Promise<Recommendation> {
   if (MOCK) return mockApi.patchRecommendation(id, status);
-  const res = await fetch(`/api/retro/recommendations/${String(id)}`, {
+  const res = await apiFetch(`/api/retro/recommendations/${String(id)}`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ status }),
@@ -918,7 +919,7 @@ export async function patchRecommendation(
 /** POST /api/retro/advise — run the advisor rule engine now ("Analyze now"). */
 export async function runAdvise(): Promise<AdviseStats> {
   if (MOCK) return mockApi.advise();
-  const res = await fetch('/api/retro/advise', { method: 'POST' });
+  const res = await apiFetch('/api/retro/advise', { method: 'POST' });
   if (!res.ok) throw new Error(t`advise failed: ${{ status: res.status }}`);
   return (await res.json()) as AdviseStats;
 }
@@ -947,7 +948,7 @@ export function fetchProjectRecommendations(
 export async function runProjectAdvise(project: string | number): Promise<AdviseStats> {
   if (MOCK) return mockApi.advise();
   const qs = new URLSearchParams({ projectId: String(project) });
-  const res = await fetch(`/api/retro/advise?${qs.toString()}`, { method: 'POST' });
+  const res = await apiFetch(`/api/retro/advise?${qs.toString()}`, { method: 'POST' });
   if (!res.ok) throw new Error(t`advise failed: ${{ status: res.status }}`);
   return (await res.json()) as AdviseStats;
 }
@@ -981,7 +982,7 @@ export async function putMemoryFile(
 ): Promise<MemoryFileContent> {
   if (MOCK) return mockApi.putMemoryFile(project, path, content);
   const qs = new URLSearchParams({ path });
-  const res = await fetch(
+  const res = await apiFetch(
     `/api/projects/${encodeURIComponent(String(project))}/memory/file?${qs.toString()}`,
     {
       method: 'PUT',
@@ -1009,7 +1010,7 @@ export async function consolidateMemory(
 ): Promise<MemoryConsolidateResp> {
   if (MOCK) return mockApi.consolidateMemory(dir, dryRun);
   const qs = new URLSearchParams({ path: dir, dry_run: dryRun ? '1' : '0' });
-  const res = await fetch(`/api/memory/consolidate?${qs.toString()}`, { method: 'POST' });
+  const res = await apiFetch(`/api/memory/consolidate?${qs.toString()}`, { method: 'POST' });
   const data = (await res.json().catch(() => ({}))) as Partial<MemoryConsolidateResp>;
   if (!res.ok) {
     const error = data.error ?? t`consolidate failed: ${{ status: res.status }}`;
@@ -1064,7 +1065,7 @@ export function fetchAgentEvidence(agent: string): Promise<AgentEvidence> {
  * 202 while the model runs; 404 unknown agent; 409 an open proposal exists.
  */
 export async function improveAgent(agent: string): Promise<void> {
-  const res = await fetch(`/api/retro/agents/${encodeURIComponent(agent)}/improve`, {
+  const res = await apiFetch(`/api/retro/agents/${encodeURIComponent(agent)}/improve`, {
     method: 'POST',
   });
   if (!res.ok) throw new Error(await errBody(res, t`improve agent failed`));
@@ -1078,7 +1079,7 @@ export async function patchProposal(
   id: number,
   status: 'approved' | 'rejected',
 ): Promise<void> {
-  const res = await fetch(`/api/retro/proposals/${String(id)}`, {
+  const res = await apiFetch(`/api/retro/proposals/${String(id)}`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ status }),
@@ -1088,13 +1089,13 @@ export async function patchProposal(
 
 /** POST /api/retro/proposals/{id}/retry — re-run generation for a failed row. */
 export async function retryProposal(id: number): Promise<void> {
-  const res = await fetch(`/api/retro/proposals/${String(id)}/retry`, { method: 'POST' });
+  const res = await apiFetch(`/api/retro/proposals/${String(id)}/retry`, { method: 'POST' });
   if (!res.ok) throw new Error(await errBody(res, t`retry proposal failed`));
 }
 
 /** POST /api/retro/proposals/{id}/apply — manual re-run of a stuck approved row. */
 export async function applyProposal(id: number): Promise<void> {
-  const res = await fetch(`/api/retro/proposals/${String(id)}/apply`, { method: 'POST' });
+  const res = await apiFetch(`/api/retro/proposals/${String(id)}/apply`, { method: 'POST' });
   if (!res.ok) throw new Error(await errBody(res, t`apply proposal failed`));
 }
 
@@ -1169,7 +1170,7 @@ export interface CreateBoardTaskInput {
  */
 export async function createBoardTask(input: CreateBoardTaskInput): Promise<BoardTask> {
   if (MOCK) return mockApi.createBoardTask(input);
-  const res = await fetch('/api/board/tasks', {
+  const res = await apiFetch('/api/board/tasks', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(input),
@@ -1205,7 +1206,7 @@ export interface PatchBoardTaskInput {
 /** PATCH /api/board/tasks/{id} → updated BoardTask (id = numeric row id). */
 export async function patchBoardTask(id: number, patch: PatchBoardTaskInput): Promise<BoardTask> {
   if (MOCK) return mockApi.patchBoardTask(id, patch);
-  const res = await fetch(`/api/board/tasks/${String(id)}`, {
+  const res = await apiFetch(`/api/board/tasks/${String(id)}`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(patch),
@@ -1224,7 +1225,7 @@ export async function patchBoardTask(id: number, patch: PatchBoardTaskInput): Pr
  */
 export async function deleteBoardTask(id: number): Promise<void> {
   if (MOCK) return mockApi.deleteBoardTask(id);
-  const res = await fetch(`/api/board/tasks/${String(id)}`, { method: 'DELETE' });
+  const res = await apiFetch(`/api/board/tasks/${String(id)}`, { method: 'DELETE' });
   if (!res.ok) {
     const data = (await res.json().catch(() => ({}))) as { error?: string };
     throw new Error(data.error ?? t`delete task failed: ${{ status: res.status }}`);
@@ -1260,7 +1261,7 @@ async function reviewActionError(res: Response, fallback: string): Promise<Error
  * base; 404 when the branch was deleted out of band.
  */
 export async function getBoardTaskDiff(id: number): Promise<TaskDiff> {
-  const res = await fetch(`/api/board/tasks/${String(id)}/diff`);
+  const res = await apiFetch(`/api/board/tasks/${String(id)}/diff`);
   if (!res.ok) throw await reviewActionError(res, t`diff failed`);
   return (await res.json()) as TaskDiff;
 }
@@ -1274,7 +1275,7 @@ export async function getBoardTaskDiff(id: number): Promise<TaskDiff> {
  * 202 means "started" — the verdict lands later on a task_updated frame.
  */
 export async function verifyBoardTask(id: number): Promise<void> {
-  const res = await fetch(`/api/tasks/${String(id)}/verify`, { method: 'POST' });
+  const res = await apiFetch(`/api/tasks/${String(id)}/verify`, { method: 'POST' });
   if (!res.ok) throw await reviewActionError(res, t`verify failed`);
 }
 
@@ -1283,7 +1284,7 @@ export async function verifyBoardTask(id: number): Promise<void> {
  * card's prompt and send it back to todo. 409 outside in_review/done.
  */
 export async function rerunBoardTask(id: number, feedback: string): Promise<BoardTask> {
-  const res = await fetch(`/api/board/tasks/${String(id)}/rerun`, {
+  const res = await apiFetch(`/api/board/tasks/${String(id)}/rerun`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ feedback }),
@@ -1298,7 +1299,7 @@ export async function rerunBoardTask(id: number, feedback: string): Promise<Boar
  * still succeeds with `deleted: false`. 409 while the card is running.
  */
 export async function discardBoardTask(id: number): Promise<DiscardTaskResponse> {
-  const res = await fetch(`/api/board/tasks/${String(id)}/discard`, { method: 'POST' });
+  const res = await apiFetch(`/api/board/tasks/${String(id)}/discard`, { method: 'POST' });
   if (!res.ok) throw await reviewActionError(res, t`discard failed`);
   return (await res.json()) as DiscardTaskResponse;
 }
@@ -1309,7 +1310,7 @@ export async function discardBoardTask(id: number): Promise<DiscardTaskResponse>
  * when the repo has no origin or `gh` is not installed.
  */
 export async function landBoardTask(id: number, draft = false): Promise<LandTaskResponse> {
-  const res = await fetch(`/api/board/tasks/${String(id)}/land`, {
+  const res = await apiFetch(`/api/board/tasks/${String(id)}/land`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ draft }),
@@ -1368,7 +1369,7 @@ async function landError(res: Response, fallback: string): Promise<LandError> {
  */
 export async function getPhaseReview(taskId: number, phaseId: number): Promise<PhaseReview> {
   if (MOCK) return mockApi.phaseReview(taskId, phaseId);
-  const res = await fetch(`/api/epics/${String(taskId)}/phases/${String(phaseId)}/review`);
+  const res = await apiFetch(`/api/epics/${String(taskId)}/phases/${String(phaseId)}/review`);
   if (!res.ok) throw await landError(res, t`review failed`);
   return (await res.json()) as PhaseReview;
 }
@@ -1382,7 +1383,7 @@ export async function getPhaseReview(taskId: number, phaseId: number): Promise<P
  */
 export async function landPhase(taskId: number, phaseId: number, body: PhaseLandRequest): Promise<PhaseLandResponse> {
   if (MOCK) return mockApi.landPhase(taskId, phaseId, body);
-  const res = await fetch(`/api/epics/${String(taskId)}/phases/${String(phaseId)}/land`, {
+  const res = await apiFetch(`/api/epics/${String(taskId)}/phases/${String(phaseId)}/land`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
@@ -1410,7 +1411,7 @@ export function getProjectVcs(projectId: number, fresh = false): Promise<VcsInfo
  */
 export async function putProjectVcsProvider(projectId: number, provider: VcsProviderAnswer): Promise<void> {
   if (MOCK) return;
-  const res = await fetch(`/api/projects/${String(projectId)}/vcs/provider`, {
+  const res = await apiFetch(`/api/projects/${String(projectId)}/vcs/provider`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ provider }),
@@ -1455,7 +1456,7 @@ export interface BulkArchiveResult {
  */
 export async function bulkArchiveBoardTasks(input: BulkArchiveInput): Promise<BulkArchiveResult> {
   if (MOCK) return { matched: 0, archived: 0 }; // no-op in mock mode
-  const res = await fetch('/api/board/tasks/bulk-archive', {
+  const res = await apiFetch('/api/board/tasks/bulk-archive', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(input),
@@ -1497,7 +1498,7 @@ export async function duplicatePlaybook(
   name: string,
 ): Promise<DuplicatePlaybookResponse> {
   if (MOCK) return mockApi.duplicatePlaybook(projectId, name);
-  const res = await fetch(
+  const res = await apiFetch(
     `/api/projects/${String(projectId)}/playbooks/${encodeURIComponent(name)}/duplicate`,
     { method: 'POST' },
   );
@@ -1544,7 +1545,7 @@ export async function startPlanning(
   const body: { idea: string; model?: string; effort?: string } = { idea };
   if (model !== undefined && model !== '') body.model = model;
   if (effort !== undefined && effort !== '') body.effort = effort;
-  const res = await fetch(`/api/projects/${String(projectId)}/planning`, {
+  const res = await apiFetch(`/api/projects/${String(projectId)}/planning`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
@@ -1559,7 +1560,7 @@ export async function startPlanning(
 /** POST /api/projects/{id}/planning/cancel — abort the in-flight planner run. */
 export async function cancelPlanning(projectId: number): Promise<void> {
   if (MOCK) return; // no-op in mock mode
-  const res = await fetch(`/api/projects/${String(projectId)}/planning/cancel`, { method: 'POST' });
+  const res = await apiFetch(`/api/projects/${String(projectId)}/planning/cancel`, { method: 'POST' });
   if (!res.ok) {
     const data = (await res.json().catch(() => ({}))) as { error?: string };
     throw new Error(data.error ?? t`cancel planning failed: ${{ status: res.status }}`);
@@ -1579,7 +1580,7 @@ export async function answerPlanning(
   body: { questionId: string; selectedOptionIds: string[]; otherText?: string },
 ): Promise<{ status: string }> {
   if (MOCK) return mockApi.answerPlanning(projectId, body);
-  const res = await fetch(`/api/projects/${String(projectId)}/planning/answer`, {
+  const res = await apiFetch(`/api/projects/${String(projectId)}/planning/answer`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
@@ -1601,7 +1602,7 @@ export async function refinePlanning(
   instructions: string,
 ): Promise<{ status: string }> {
   if (MOCK) return mockApi.refinePlanning(projectId, instructions);
-  const res = await fetch(`/api/projects/${String(projectId)}/planning/refine`, {
+  const res = await apiFetch(`/api/projects/${String(projectId)}/planning/refine`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ instructions }),
@@ -1619,7 +1620,7 @@ export async function refinePlanning(
  */
 export async function proceedPlanning(projectId: number): Promise<{ status: string }> {
   if (MOCK) return mockApi.proceedPlanning(projectId);
-  const res = await fetch(`/api/projects/${String(projectId)}/planning/proceed`, {
+  const res = await apiFetch(`/api/projects/${String(projectId)}/planning/proceed`, {
     method: 'POST',
   });
   if (!res.ok) {
@@ -1638,7 +1639,7 @@ export async function setPlanningTurnCost(
   reason?: string,
 ): Promise<PlanningQuestion> {
   if (MOCK) return mockApi.setPlanningTurnCost(planningSessionId, seq, cost);
-  const res = await fetch(
+  const res = await apiFetch(
     `/api/planning/sessions/${String(planningSessionId)}/turns/${String(seq)}/cost`,
     {
       method: 'PATCH',
@@ -1679,7 +1680,7 @@ export async function startRevision(
   phaseId?: number,
 ): Promise<PlanningStart> {
   if (MOCK) return mockApi.startRevision(taskId, reason, phaseId);
-  const res = await fetch(`/api/epics/${String(taskId)}/revisions`, {
+  const res = await apiFetch(`/api/epics/${String(taskId)}/revisions`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ reason, ...(phaseId !== undefined ? { phaseId } : {}) }),
@@ -1711,7 +1712,7 @@ export async function fetchRevisions(taskId: number): Promise<PlanRevision[]> {
 export async function fetchTerminalSessions(taskId: number): Promise<TerminalSession[]> {
   if (MOCK) return [];
   const path = `/api/epics/${String(taskId)}/terminal-sessions`;
-  const res = await fetch(path);
+  const res = await apiFetch(path);
   if (res.status === 404) return [];
   if (!res.ok) throw new Error(`GET ${path}: ${String(res.status)}`);
   const data: unknown = await res.json();
@@ -1738,7 +1739,7 @@ export async function applyRevision(
   revisionId: number,
 ): Promise<{ status: string; files: number }> {
   if (MOCK) return mockApi.applyRevision(revisionId);
-  const res = await fetch(`/api/revisions/${String(revisionId)}/apply`, { method: 'POST' });
+  const res = await apiFetch(`/api/revisions/${String(revisionId)}/apply`, { method: 'POST' });
   if (!res.ok) {
     const data = (await res.json().catch(() => ({}))) as {
       error?: string;
@@ -1760,7 +1761,7 @@ export async function applyRevision(
  * plan file changes. The note lands on the revision's reason ("Rejected: …"). */
 export async function rejectRevision(revisionId: number, note?: string): Promise<void> {
   if (MOCK) return mockApi.rejectRevision(revisionId, note);
-  const res = await fetch(`/api/revisions/${String(revisionId)}/reject`, {
+  const res = await apiFetch(`/api/revisions/${String(revisionId)}/reject`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(note !== undefined && note.trim() !== '' ? { note } : {}),
@@ -1780,7 +1781,7 @@ export async function pauseDispatch(
   if (MOCK) return; // no-op in mock mode
   const body: { scope: string; paused: boolean; projectId?: number } = { scope, paused };
   if (scope === 'project' && projectId !== undefined) body.projectId = projectId;
-  const res = await fetch('/api/dispatch/pause', {
+  const res = await apiFetch('/api/dispatch/pause', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
@@ -1840,7 +1841,7 @@ export function getNeedsYou(project?: string | null): Promise<NeedsYouResponse> 
  */
 export async function applyWorktreeCleanup(id: number, paths: string[]): Promise<WorktreeCleanupApplyResult> {
   if (MOCK) return { id, repoRoot: '', paths: paths.map((path) => ({ path, outcome: 'removed' })) };
-  const res = await fetch(`/api/worktree-cleanup/${String(id)}/apply`, {
+  const res = await apiFetch(`/api/worktree-cleanup/${String(id)}/apply`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ paths }),
@@ -1893,7 +1894,7 @@ export async function resolveApproval(
   const body: { action: ApprovalAction; reason?: string; answers?: ApprovalAnswers } = { action };
   if (reason !== undefined && reason !== '') body.reason = reason;
   if (answers !== undefined) body.answers = answers;
-  const res = await fetch(`/api/approvals/${String(id)}`, {
+  const res = await apiFetch(`/api/approvals/${String(id)}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
@@ -1926,7 +1927,7 @@ export function fetchApprovalRules(): Promise<ApprovalRule[]> {
 }
 
 export async function createApprovalRule(input: ApprovalRuleInput): Promise<ApprovalRule> {
-  const res = await fetch('/api/approval-rules', {
+  const res = await apiFetch('/api/approval-rules', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(input),
@@ -1939,7 +1940,7 @@ export async function createApprovalRule(input: ApprovalRuleInput): Promise<Appr
 }
 
 export async function toggleApprovalRule(id: number, enabled: boolean): Promise<ApprovalRule> {
-  const res = await fetch(`/api/approval-rules/${String(id)}`, {
+  const res = await apiFetch(`/api/approval-rules/${String(id)}`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ enabled }),
@@ -1949,7 +1950,7 @@ export async function toggleApprovalRule(id: number, enabled: boolean): Promise<
 }
 
 export async function deleteApprovalRule(id: number): Promise<void> {
-  const res = await fetch(`/api/approval-rules/${String(id)}`, { method: 'DELETE' });
+  const res = await apiFetch(`/api/approval-rules/${String(id)}`, { method: 'DELETE' });
   if (!res.ok) throw new Error(t`delete rule failed: ${{ status: res.status }}`);
 }
 
@@ -1984,7 +1985,7 @@ export async function putPermissionPreset(
   projectId: number | string,
   input: PermissionPresetInput,
 ): Promise<PermissionPresetView> {
-  const res = await fetch(`/api/projects/${String(projectId)}/permission-preset`, {
+  const res = await apiFetch(`/api/projects/${String(projectId)}/permission-preset`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(input),
@@ -2020,7 +2021,7 @@ export async function putPermissionPreset(
  */
 export async function extractSessionTasks(id: number): Promise<number> {
   if (MOCK) return 0; // no-op in mock mode — never spend tokens from a demo
-  const res = await fetch(`/api/sessions/${String(id)}/extract-tasks`, { method: 'POST' });
+  const res = await apiFetch(`/api/sessions/${String(id)}/extract-tasks`, { method: 'POST' });
   const data = (await res.json().catch(() => ({}))) as { error?: string; inserted?: number };
   if (!res.ok) {
     throw new Error(data.error ?? t`extract failed: ${{ status: res.status }}`);
@@ -2031,7 +2032,7 @@ export async function extractSessionTasks(id: number): Promise<number> {
 /** POST /api/sessions/{id}/kill — send SIGTERM (force=false) or SIGKILL (force=true). */
 export async function killSession(id: number, force = false): Promise<void> {
   if (MOCK) return; // no-op in mock mode
-  const res = await fetch(`/api/sessions/${String(id)}/kill`, {
+  const res = await apiFetch(`/api/sessions/${String(id)}/kill`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ force }),
@@ -2046,7 +2047,7 @@ export async function killSession(id: number, force = false): Promise<void> {
  * as 'completed' (not 'killed'). Works even when no PID is known. */
 export async function stopSession(id: number): Promise<void> {
   if (MOCK) return; // no-op in mock mode
-  const res = await fetch(`/api/sessions/${String(id)}/stop`, { method: 'POST' });
+  const res = await apiFetch(`/api/sessions/${String(id)}/stop`, { method: 'POST' });
   if (!res.ok) {
     const data = await res.json().catch(() => ({})) as { error?: string };
     throw new Error(data.error ?? t`stop failed: ${{ status: res.status }}`);
@@ -2064,7 +2065,7 @@ export async function stopSession(id: number): Promise<void> {
  */
 export async function sendSessionMessage(id: number, text: string): Promise<void> {
   if (MOCK) return; // no-op in mock mode
-  const res = await fetch(`/api/sessions/${String(id)}/message`, {
+  const res = await apiFetch(`/api/sessions/${String(id)}/message`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ text }),
@@ -2089,7 +2090,7 @@ async function linkCommand(path: string, body: unknown): Promise<LinkCommandQueu
     mockCommandId += 1;
     return { commandId: mockCommandId };
   }
-  const res = await fetch(path, {
+  const res = await apiFetch(path, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
@@ -2143,7 +2144,7 @@ export async function sendSwarmMessage(
     mockCommandId += 1;
     return { commandId: mockCommandId, messageId: 1000 + mockCommandId };
   }
-  const res = await fetch(`/api/sessions/${String(senderId)}/link/message`, {
+  const res = await apiFetch(`/api/sessions/${String(senderId)}/link/message`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ to, text }),
@@ -2164,7 +2165,7 @@ export async function bulkLinkPrompt(sessionIds: number[], text: string): Promis
       skipped: sessionIds.slice(1).map((id) => ({ id, reason: 'session has no link' })),
     };
   }
-  const res = await fetch('/api/sessions/link/bulk-prompt', {
+  const res = await apiFetch('/api/sessions/link/bulk-prompt', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ sessionIds, text }),
@@ -2179,7 +2180,7 @@ export async function bulkLinkPrompt(sessionIds: number[], text: string): Promis
  */
 export async function cancelSessionMessage(id: number): Promise<void> {
   if (MOCK) return; // no-op in mock mode
-  const res = await fetch(`/api/sessions/${String(id)}/message/cancel`, { method: 'POST' });
+  const res = await apiFetch(`/api/sessions/${String(id)}/message/cancel`, { method: 'POST' });
   if (!res.ok) {
     const data = await res.json().catch(() => ({})) as { error?: string };
     throw new Error(data.error ?? t`cancel failed: ${{ status: res.status }}`);
@@ -2194,7 +2195,7 @@ export async function patchSessionOutcome(
   outcome: SessionOutcome | null,
 ): Promise<void> {
   if (MOCK) return; // no-op in mock mode
-  const res = await fetch(`/api/sessions/${String(id)}`, {
+  const res = await apiFetch(`/api/sessions/${String(id)}`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ outcome }),
@@ -2211,7 +2212,7 @@ export async function patchSessionOutcome(
  */
 export async function renameSession(id: number, title: string | null): Promise<void> {
   if (MOCK) return; // no-op in mock mode
-  const res = await fetch(`/api/sessions/${String(id)}`, {
+  const res = await apiFetch(`/api/sessions/${String(id)}`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ title }),
@@ -2259,7 +2260,7 @@ export function fetchExploration(project?: string): Promise<ExplorationResp> {
  */
 export async function serenaStart(id: number): Promise<void> {
   if (MOCK) return; // no-op in mock mode
-  const res = await fetch(`/api/projects/${String(id)}/serena/start`, { method: 'POST' });
+  const res = await apiFetch(`/api/projects/${String(id)}/serena/start`, { method: 'POST' });
   if (!res.ok) {
     const data = (await res.json().catch(() => ({}))) as { error?: string };
     throw new Error(data.error ?? t`serena start failed: ${{ status: res.status }}`);
@@ -2269,7 +2270,7 @@ export async function serenaStart(id: number): Promise<void> {
 /** POST /api/projects/{id}/serena/stop — stop the dashboard process. */
 export async function serenaStop(id: number): Promise<void> {
   if (MOCK) return; // no-op in mock mode
-  const res = await fetch(`/api/projects/${String(id)}/serena/stop`, { method: 'POST' });
+  const res = await apiFetch(`/api/projects/${String(id)}/serena/stop`, { method: 'POST' });
   if (!res.ok) {
     const data = (await res.json().catch(() => ({}))) as { error?: string };
     throw new Error(data.error ?? t`serena stop failed: ${{ status: res.status }}`);
@@ -2302,7 +2303,7 @@ export class ConnectorsUnavailableError extends Error {
  */
 export async function fetchConnectors(): Promise<ConnectorsResponse> {
   if (MOCK) return mockApi.connectors();
-  const res = await fetch('/api/connectors');
+  const res = await apiFetch('/api/connectors');
   if (res.status === 503) {
     const data = (await res.json().catch(() => ({}))) as { error?: string; hint?: string };
     throw new ConnectorsUnavailableError(data.error ?? t`connectors unavailable`, data.hint ?? null);
@@ -2316,7 +2317,7 @@ export async function fetchConnectors(): Promise<ConnectorsResponse> {
 /** Add a stdio/http/sse MCP server; the daemon returns the refreshed list. */
 export async function addConnector(input: AddConnectorInput): Promise<Connector[]> {
   if (MOCK) return (await mockApi.connectors()).connectors;
-  const res = await fetch('/api/connectors', {
+  const res = await apiFetch('/api/connectors', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(input),
@@ -2333,7 +2334,7 @@ export async function addConnector(input: AddConnectorInput): Promise<Connector[
 export async function removeConnector(name: string, scope?: string): Promise<Connector[]> {
   if (MOCK) return (await mockApi.connectors()).connectors;
   const qs = scope !== undefined && scope !== '' ? `?scope=${encodeURIComponent(scope)}` : '';
-  const res = await fetch(`/api/connectors/${encodeURIComponent(name)}${qs}`, { method: 'DELETE' });
+  const res = await apiFetch(`/api/connectors/${encodeURIComponent(name)}${qs}`, { method: 'DELETE' });
   if (!res.ok) {
     const data = (await res.json().catch(() => ({}))) as { error?: string };
     throw new Error(data.error ?? t`remove connector failed: ${{ status: res.status }}`);
@@ -2351,7 +2352,7 @@ export function fetchAccounts(): Promise<AccountsResponse> {
 
 export async function createAccount(key: string): Promise<ProvisionResponse> {
   if (MOCK) return mockApi.createAccount(key);
-  const res = await fetch('/api/accounts', {
+  const res = await apiFetch('/api/accounts', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ key }),
@@ -2365,7 +2366,7 @@ export async function createAccount(key: string): Promise<ProvisionResponse> {
 
 export async function deleteAccount(key: string): Promise<RemoveAccountResponse> {
   if (MOCK) return mockApi.deleteAccount(key);
-  const res = await fetch(`/api/accounts/${encodeURIComponent(key)}`, { method: 'DELETE' });
+  const res = await apiFetch(`/api/accounts/${encodeURIComponent(key)}`, { method: 'DELETE' });
   if (!res.ok) {
     const data = (await res.json().catch(() => ({}))) as { error?: string };
     throw new Error(data.error ?? t`delete account failed: ${{ status: res.status }}`);
@@ -2383,7 +2384,7 @@ export async function putProjectAccount(
   account: string,
 ): Promise<AccountBinding> {
   if (MOCK) return mockApi.putProjectAccount(id, account);
-  const res = await fetch(`/api/projects/${encodeURIComponent(id)}/account`, {
+  const res = await apiFetch(`/api/projects/${encodeURIComponent(id)}/account`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ account }),
@@ -2452,7 +2453,7 @@ export function fetchRoutineRuns(id: string): Promise<RoutineRun[]> {
  * webhook:true was requested). */
 export async function createRoutine(input: RoutineInput): Promise<Routine> {
   if (MOCK) return mockApi.createRoutine(input);
-  const res = await fetch('/api/routines', {
+  const res = await apiFetch('/api/routines', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(input),
@@ -2467,7 +2468,7 @@ export async function createRoutine(input: RoutineInput): Promise<Routine> {
 /** PATCH /api/routines/{id} — partial update. */
 export async function patchRoutine(id: string, input: Partial<RoutineInput>): Promise<Routine> {
   if (MOCK) return mockApi.patchRoutine(id, input);
-  const res = await fetch(`/api/routines/${encodeURIComponent(id)}`, {
+  const res = await apiFetch(`/api/routines/${encodeURIComponent(id)}`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(input),
@@ -2482,7 +2483,7 @@ export async function patchRoutine(id: string, input: Partial<RoutineInput>): Pr
 /** DELETE /api/routines/{id}. */
 export async function deleteRoutine(id: string): Promise<void> {
   if (MOCK) return;
-  const res = await fetch(`/api/routines/${encodeURIComponent(id)}`, { method: 'DELETE' });
+  const res = await apiFetch(`/api/routines/${encodeURIComponent(id)}`, { method: 'DELETE' });
   if (!res.ok) {
     const data = (await res.json().catch(() => ({}))) as { error?: string };
     throw new Error(data.error ?? t`delete routine failed: ${{ status: res.status }}`);
@@ -2493,7 +2494,7 @@ export async function deleteRoutine(id: string): Promise<void> {
  * (false when the routine is already running / the global cap is full). */
 export async function runRoutine(id: string): Promise<{ status: string }> {
   if (MOCK) return { status: 'started' };
-  const res = await fetch(`/api/routines/${encodeURIComponent(id)}/run`, { method: 'POST' });
+  const res = await apiFetch(`/api/routines/${encodeURIComponent(id)}/run`, { method: 'POST' });
   if (!res.ok) {
     const data = (await res.json().catch(() => ({}))) as { error?: string };
     throw new Error(data.error ?? t`run routine failed: ${{ status: res.status }}`);
@@ -2530,7 +2531,7 @@ export async function epicLifecycle(
     };
     return { status: next[action] };
   }
-  const res = await fetch(`/api/epics/${String(taskId)}/lifecycle`, {
+  const res = await apiFetch(`/api/epics/${String(taskId)}/lifecycle`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ action }),
@@ -2693,7 +2694,7 @@ export async function runEpicPhase(
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload),
         };
-  const res = await fetch(`/api/epics/${String(taskId)}/phases/${String(phaseId)}/run`, init);
+  const res = await apiFetch(`/api/epics/${String(taskId)}/phases/${String(phaseId)}/run`, init);
   if (!res.ok) {
     // Every 409 carries a `code`; the branch-holds-commits one additionally
     // carries structured escape-hatch data (`branch`, `commitsAhead`, `base`) the
@@ -2734,7 +2735,7 @@ export async function deletePhaseRunBranch(
   phaseId: number,
 ): Promise<{ deleted: boolean; branch: string }> {
   if (MOCK) return { deleted: true, branch: 'swarm/phase-mock' };
-  const res = await fetch(`/api/epics/${String(taskId)}/phases/${String(phaseId)}/branch`, {
+  const res = await apiFetch(`/api/epics/${String(taskId)}/phases/${String(phaseId)}/branch`, {
     method: 'DELETE',
   });
   if (!res.ok) {
@@ -2765,7 +2766,7 @@ export async function deleteOrphanBranch(
   branch: string,
 ): Promise<{ deleted: boolean; branch: string }> {
   if (MOCK) return { deleted: true, branch };
-  const res = await fetch(
+  const res = await apiFetch(
     `/api/epics/${String(taskId)}/orphan-branch?branch=${encodeURIComponent(branch)}`,
     { method: 'DELETE' },
   );
@@ -2785,7 +2786,7 @@ export async function cancelEpicPhaseRun(
   phaseId: number,
 ): Promise<{ status: string }> {
   if (MOCK) return { status: 'cancelling' };
-  const res = await fetch(`/api/epics/${String(taskId)}/phases/${String(phaseId)}/run/cancel`, {
+  const res = await apiFetch(`/api/epics/${String(taskId)}/phases/${String(phaseId)}/run/cancel`, {
     method: 'POST',
   });
   if (!res.ok) {
@@ -2818,7 +2819,7 @@ export async function runEpicPlan(
       agent: opts.agent ?? 'tech-lead',
       mode: opts.mode ?? 'auto',
     };
-  const res = await fetch(`/api/epics/${String(taskId)}/run`, {
+  const res = await apiFetch(`/api/epics/${String(taskId)}/run`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ agent: opts.agent ?? '', mode: opts.mode ?? 'auto' }),
@@ -2853,7 +2854,7 @@ export async function deletePlanRunBranch(
   taskId: number,
 ): Promise<{ deleted: boolean; branch: string }> {
   if (MOCK) return { deleted: true, branch: 'swarm/plan-mock' };
-  const res = await fetch(`/api/epics/${String(taskId)}/branch`, { method: 'DELETE' });
+  const res = await apiFetch(`/api/epics/${String(taskId)}/branch`, { method: 'DELETE' });
   if (!res.ok) {
     // Same enriched error the phase-scoped delete throws — the plan and phase
     // surfaces answer the same condition with the same `code` (runconflict.go),
@@ -2870,7 +2871,7 @@ export async function deletePlanRunBranch(
 /** POST /api/epics/{taskId}/run/cancel — 202 / 409 when idle. */
 export async function cancelEpicPlanRun(taskId: number): Promise<{ status: string }> {
   if (MOCK) return { status: 'cancelling' };
-  const res = await fetch(`/api/epics/${String(taskId)}/run/cancel`, { method: 'POST' });
+  const res = await apiFetch(`/api/epics/${String(taskId)}/run/cancel`, { method: 'POST' });
   if (!res.ok) {
     const body = (await res.json().catch(() => ({}))) as { error?: string };
     throw new Error(body.error ?? t`plan run cancel failed (${{ status: res.status }})`);
@@ -2926,7 +2927,7 @@ export async function generatePlainSummary(
       text: t`This is a mock plain-language explanation. In the real dashboard Claude writes it from the plan doc.`,
     };
   }
-  const res = await fetch(plainUrl(taskId, kind, path, lang), { method: 'POST' });
+  const res = await apiFetch(plainUrl(taskId, kind, path, lang), { method: 'POST' });
   if (!res.ok) {
     const data = (await res.json().catch(() => ({}))) as { error?: string };
     throw new Error(data.error ?? t`plain-language summary failed: ${{ status: res.status }}`);
@@ -2937,7 +2938,7 @@ export async function generatePlainSummary(
 /** PUT /api/epics/{taskId}/docs?path= {content} — overwrite a plan doc (backup). */
 export async function savePlanDoc(taskId: number, path: string, content: string): Promise<PlanDoc> {
   if (MOCK) return { path, content, backup: '.backups/mock/doc.md' };
-  const res = await fetch(`/api/epics/${String(taskId)}/docs?path=${encodeURIComponent(path)}`, {
+  const res = await apiFetch(`/api/epics/${String(taskId)}/docs?path=${encodeURIComponent(path)}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ content }),
@@ -2960,7 +2961,7 @@ export async function togglePlanCheckbox(
   done: boolean,
 ): Promise<PlanDoc> {
   if (MOCK) return mockApi.togglePlanCheckbox(taskId, path, line, done);
-  const res = await fetch(`/api/epics/${String(taskId)}/docs?path=${encodeURIComponent(path)}`, {
+  const res = await apiFetch(`/api/epics/${String(taskId)}/docs?path=${encodeURIComponent(path)}`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ line, done }),
@@ -2996,7 +2997,7 @@ export async function markPlanCriterion(
       lines[line] = cur.replace(/^(\s*[-*]\s+\[[ xX]\]\s+)(?:\[(?:LAND|MANUAL)\]\s+)?/, `$1[${cls}] `);
     return { ...doc, content: lines.join('\n') };
   }
-  const res = await fetch(`/api/epics/${String(taskId)}/docs?path=${encodeURIComponent(path)}`, {
+  const res = await apiFetch(`/api/epics/${String(taskId)}/docs?path=${encodeURIComponent(path)}`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ line, class: cls }),
@@ -3086,7 +3087,7 @@ async function vcsLoginError(res: Response, fallback: string): Promise<VcsLoginE
  */
 export async function startVcsLogin(projectId: number): Promise<VcsLoginStart> {
   if (MOCK) return mockApi.startVcsLogin();
-  const res = await fetch(`/api/projects/${String(projectId)}/vcs/login`, {
+  const res = await apiFetch(`/api/projects/${String(projectId)}/vcs/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ method: 'device' }),
@@ -3103,7 +3104,7 @@ export async function startVcsLogin(projectId: number): Promise<VcsLoginStart> {
  */
 export async function pollVcsLogin(projectId: number, loginId: string): Promise<VcsLoginPoll> {
   if (MOCK) return mockApi.pollVcsLogin();
-  const res = await fetch(`/api/projects/${String(projectId)}/vcs/login/${encodeURIComponent(loginId)}`);
+  const res = await apiFetch(`/api/projects/${String(projectId)}/vcs/login/${encodeURIComponent(loginId)}`);
   if (!res.ok) throw await vcsLoginError(res, t`sign-in poll failed`);
   return (await res.json()) as VcsLoginPoll;
 }
@@ -3116,7 +3117,7 @@ export async function pollVcsLogin(projectId: number, loginId: string): Promise<
  */
 export async function submitVcsToken(projectId: number, token: string): Promise<VcsTokenResult> {
   if (MOCK) return mockApi.submitVcsToken();
-  const res = await fetch(`/api/projects/${String(projectId)}/vcs/login`, {
+  const res = await apiFetch(`/api/projects/${String(projectId)}/vcs/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ method: 'token', token }),
@@ -3131,7 +3132,7 @@ export async function submitVcsToken(projectId: number, token: string): Promise<
  */
 export async function deleteVcsToken(projectId: number): Promise<void> {
   if (MOCK) return;
-  const res = await fetch(`/api/projects/${String(projectId)}/vcs/token`, { method: 'DELETE' });
+  const res = await apiFetch(`/api/projects/${String(projectId)}/vcs/token`, { method: 'DELETE' });
   if (!res.ok) throw await vcsLoginError(res, t`sign-out failed`);
 }
 
@@ -3148,7 +3149,7 @@ export async function deleteVcsToken(projectId: number): Promise<void> {
  */
 export async function refreshPhaseLanding(taskId: number, phaseId: number): Promise<PhaseLandResponse['landing']> {
   if (MOCK) return mockApi.refreshPhaseLanding(taskId, phaseId);
-  const res = await fetch(`/api/epics/${String(taskId)}/phases/${String(phaseId)}/landing/refresh`, {
+  const res = await apiFetch(`/api/epics/${String(taskId)}/phases/${String(phaseId)}/landing/refresh`, {
     method: 'POST',
   });
   if (!res.ok) throw await landError(res, t`refresh failed`);
