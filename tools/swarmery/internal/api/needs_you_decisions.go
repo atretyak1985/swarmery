@@ -57,12 +57,17 @@ type needsYouDecision struct {
 	// review decision: Trigger is the block's trigger verbatim (the closed
 	// vocabulary unless Flags says stop_trigger_unknown), Reason its sentence,
 	// Flags the block's lints (stop_trigger_unknown, stop_options_count,
-	// stop_reason_missing, stop_option_invalid). FreeText is true when the
-	// operator may answer in their own words: POST {option: "other", note}.
+	// stop_reason_missing, stop_option_invalid, stop_paths_rejected). FreeText is
+	// true when the operator may answer in their own words: POST {option:
+	// "other", note}. Paths are exactly the files an allow-add-to-scope answer
+	// would add to the guard's `allow:` list — the guard check's findings plus
+	// the agent's vetted `paths:` (phaserun.StopAllowPaths); absent for a stop
+	// that is not a protected-path stop.
 	Trigger  string   `json:"trigger,omitempty"`
 	Reason   string   `json:"reason,omitempty"`
 	Flags    []string `json:"flags,omitempty"`
 	FreeText bool     `json:"freeText,omitempty"`
+	Paths    []string `json:"paths,omitempty"`
 }
 
 // withStop fills the agent-declared stop's fields from the decision's stored
@@ -75,6 +80,7 @@ func (d needsYouDecision) withStop(guardJSON string) needsYouDecision {
 	}
 	d.Trigger, d.Reason, d.FreeText = st.Trigger, st.Reason, true
 	d.Flags = append([]string{}, st.Flags...)
+	d.Paths = phaserun.StopAllowPaths(guardJSON)
 	d.Options = make([]needsYouDecisionOption, 0, len(st.Options))
 	for _, o := range st.Options {
 		d.Options = append(d.Options, needsYouDecisionOption{ID: o.ID, Label: o.Label, Consequence: o.Consequence})

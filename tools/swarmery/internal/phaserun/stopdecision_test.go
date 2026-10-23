@@ -1,6 +1,7 @@
 package phaserun
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"reflect"
@@ -240,7 +241,7 @@ func TestBlockedStopAnsweredLiftsCooldown(t *testing.T) {
 // it, and allowing widens the guard by both path lists.
 func TestStopDecisionMergesWithTheGuardDecision(t *testing.T) {
 	s, _, _, taskID, p1, docPath := stopService(t)
-	guard := GuardResult{HasGuard: true, ProtectedChanged: []string{"schema_test.go"}}
+	guard := GuardResult{HasGuard: true, ProtectedPaths: []string{"**/*_test.go"}, ProtectedChanged: []string{"schema_test.go"}}
 	if _, _, err := store.UpsertStopDecision(s.DB, taskID, p1, guardQuestion(guard), GuardOptions, guardJSON(guard), s.ts()); err != nil {
 		t.Fatal(err)
 	}
@@ -303,6 +304,93 @@ func TestStopDecisionInjectionStaysOnOneLine(t *testing.T) {
 	}
 	if n := strings.Count(doc, "\n- [x]"); n != 0 {
 		t.Errorf("doc gained %d ticked checkbox lines:\n%s", n, doc)
+	}
+}
+
+// widenStop is a protected-path stop naming every kind of path an untrusted
+// agent might use to widen its own scope, beside one legitimate test file.
+const widenStop = "kind: stop\ntrigger: protected-path\nreason: the fix needs a test\npaths:\n" +
+	"  - \"**/*\"\n  - \".github/workflows/*.yml\"\n  - \"../x\"\n  - \".swarmery/plan/p.md\"\n  - \"pkg/foo_test.go\"\n" +
+	"options:\n  - id: allow-add-to-scope\n    label: Allow\n  - id: skip-test-change\n    label: Skip\n"
+
+// The agent's `paths:` reach the guard's `allow:` list only as literal files
+// under a protected glob: globs, `..`, .swarmery and unprotected paths are
+// dropped before the row is stored, and flagged.
+func TestStopDecisionVetsAgentPaths(t *testing.T) {
+	s, r, _, taskID, p1, docPath := stopService(t)
+	blockWithStop(t, s, r, p1, widenStop)
+	d, err := store.GetTaskDecision(s.DB, taskID, "D-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	st := StopOf(d)
+	if st == nil || !reflect.DeepEqual(st.Paths, []string{"pkg/foo_test.go"}) ||
+		!reflect.DeepEqual(st.Flags, []string{mdfence.LintStopPathsRejected}) {
+		t.Fatalf("stop payload = %+v, want only pkg/foo_test.go and stop_paths_rejected", st)
+	}
+	if got := StopAllowPaths(d.GuardJSON); !reflect.DeepEqual(got, []string{"pkg/foo_test.go"}) {
+		t.Fatalf("StopAllowPaths = %q", got)
+	}
+	if _, err := AnswerGuardDecision(s.DB, taskID, p1, "D-1", GuardAnswer{Option: GuardOptionAllow}, answerAt(t)); err != nil {
+		t.Fatal(err)
+	}
+	g, perr := mdfence.ParseGuard(readFileT(t, docPath))
+	if perr != nil || !reflect.DeepEqual(g.Allow, []string{"pkg/foo_test.go"}) {
+		t.Fatalf("allow = %q, %v; want only pkg/foo_test.go", g.Allow, perr)
+	}
+}
+
+// A row raised before the paths were vetted (its stored paths raw) is vetted
+// again when it is answered: the stored payload is never trusted on its own.
+func TestStopDecisionRevetsStoredPathsOnAnswer(t *testing.T) {
+	s, _, _, taskID, p1, docPath := stopService(t)
+	guard := GuardResult{HasGuard: true, ProtectedPaths: []string{"**/*_test.go"}}
+	raw := guardJSONWithStop(t, guard, &StopPayload{
+		Trigger: mdfence.StopTriggerProtectedPath, Reason: "r",
+		Options: []mdfence.StopOption{{ID: GuardOptionAllow, Label: "Allow"}, {ID: "skip", Label: "Skip"}},
+		Paths:   []string{"**/*", "pkg/foo_test.go", "README.md"},
+	})
+	if _, _, err := store.UpsertStopDecision(s.DB, taskID, p1, "r", []string{GuardOptionAllow, "skip"}, raw, s.ts()); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := AnswerGuardDecision(s.DB, taskID, p1, "D-1", GuardAnswer{Option: GuardOptionAllow}, answerAt(t)); err != nil {
+		t.Fatal(err)
+	}
+	g, perr := mdfence.ParseGuard(readFileT(t, docPath))
+	if perr != nil || !reflect.DeepEqual(g.Allow, []string{"pkg/foo_test.go"}) {
+		t.Fatalf("allow = %q, %v; want only pkg/foo_test.go", g.Allow, perr)
+	}
+}
+
+func guardJSONWithStop(t *testing.T, g GuardResult, st *StopPayload) string {
+	t.Helper()
+	b, err := json.Marshal(stopRecord{GuardResult: g, Stop: st})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(b)
+}
+
+func TestGuardGlobMatch(t *testing.T) {
+	for _, c := range []struct {
+		glob, path string
+		want       bool
+	}{
+		{"**/*_test.go", "pkg/foo_test.go", true},
+		{"**/*_test.go", "foo_test.go", true},
+		{"**/*_test.go", "pkg/a/b/Foo_TEST.go", true},
+		{"**/*_test.go", "pkg/foo.go", false},
+		{".github/workflows/*.yml", ".github/workflows/ci.yml", true},
+		{".github/workflows/*.yml", ".github/workflows/sub/ci.yml", false},
+		{"scripts/tests/", "scripts/tests/a/b.sh", true},
+		{"scripts/tests/**", "scripts/tests", false},
+		{"./docs/*.md", "docs/a.md", true},
+		{"**", "anything/at/all", true},
+		{"pkg/[", "pkg/[", false},
+	} {
+		if got := guardGlobMatch(c.glob, c.path); got != c.want {
+			t.Errorf("guardGlobMatch(%q, %q) = %v, want %v", c.glob, c.path, got, c.want)
+		}
 	}
 }
 
