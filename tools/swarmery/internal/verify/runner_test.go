@@ -98,18 +98,8 @@ func TestDaemonDenyPatterns(t *testing.T) {
 		port int
 		want []string
 	}{
-		{7777, []string{
-			"Bash(curl *127.0.0.1:7777*)", "Bash(curl *localhost:7777*)",
-			"Bash(wget *127.0.0.1:7777*)", "Bash(wget *localhost:7777*)",
-			"Bash(http *127.0.0.1:7777*)", "Bash(http *localhost:7777*)",
-			"Bash(swarmery api*)", "Bash(*/swarmery api*)",
-		}},
-		{8080, []string{
-			"Bash(curl *127.0.0.1:8080*)", "Bash(curl *localhost:8080*)",
-			"Bash(wget *127.0.0.1:8080*)", "Bash(wget *localhost:8080*)",
-			"Bash(http *127.0.0.1:8080*)", "Bash(http *localhost:8080*)",
-			"Bash(swarmery api*)", "Bash(*/swarmery api*)",
-		}},
+		{7777, wantDaemonRules("7777")},
+		{8080, wantDaemonRules("8080")},
 	} {
 		if got := DaemonDenyPatterns(tc.port); strings.Join(got, "|") != strings.Join(tc.want, "|") {
 			t.Errorf("DaemonDenyPatterns(%d) = %q, want %q", tc.port, got, tc.want)
@@ -118,6 +108,26 @@ func TestDaemonDenyPatterns(t *testing.T) {
 	if got, want := strings.Join(DaemonDenyPatterns(0), "|"), strings.Join(DaemonDenyPatterns(DefaultDaemonPort), "|"); got != want {
 		t.Errorf("DaemonDenyPatterns(0) = %q, want the default port's %q", got, want)
 	}
+}
+
+// wantDaemonRules is the daemon deny list for port, spelled out: each client
+// by name and by installed path on the three loopback spellings, the
+// `swarmery api` client, and the credential reads.
+func wantDaemonRules(port string) []string {
+	return strings.Split(strings.ReplaceAll(
+		"Bash(curl *127.0.0.1:P*)|Bash(curl *localhost:P*)|Bash(curl *[::1]:P*)|"+
+			"Bash(wget *127.0.0.1:P*)|Bash(wget *localhost:P*)|Bash(wget *[::1]:P*)|"+
+			"Bash(http *127.0.0.1:P*)|Bash(http *localhost:P*)|Bash(http *[::1]:P*)|"+
+			"Bash(*/curl *127.0.0.1:P*)|Bash(*/curl *localhost:P*)|Bash(*/curl *[::1]:P*)|"+
+			"Bash(*/wget *127.0.0.1:P*)|Bash(*/wget *localhost:P*)|Bash(*/wget *[::1]:P*)|"+
+			"Bash(*/http *127.0.0.1:P*)|Bash(*/http *localhost:P*)|Bash(*/http *[::1]:P*)|"+
+			"Bash(swarmery api*)|Bash(*/swarmery api*)|Bash(command swarmery*)|"+
+			"Bash(swarmery link*)|Bash(*/swarmery link*)|"+
+			"Bash(swarmery open*)|Bash(*/swarmery open*)|"+
+			"Read(~/.swarmery/link-token)|Read(~/.swarmery/credentials/**)|Read(~/.swarmery/secrets/**)|"+
+			"Read(~/.swarmery/swarmery.db*)|"+
+			"Read(~/.claude/.credentials.json)|Read(~/.claude-*/.credentials.json)|Read(~/.config/claude/.credentials.json)",
+		":P*", ":"+port+"*"), "|")
 }
 
 // TestToolDenyArgsDaemonDeny pins the full flag a verifier (port from config) and a
@@ -130,17 +140,9 @@ func TestToolDenyArgsDaemonDeny(t *testing.T) {
 		want  string
 	}{
 		{"verifier on 7777", DaemonDenyPatterns(7777),
-			"--disallowedTools Edit,Write,MultiEdit,NotebookEdit," +
-				"Bash(curl *127.0.0.1:7777*),Bash(curl *localhost:7777*)," +
-				"Bash(wget *127.0.0.1:7777*),Bash(wget *localhost:7777*)," +
-				"Bash(http *127.0.0.1:7777*),Bash(http *localhost:7777*)," +
-				"Bash(swarmery api*),Bash(*/swarmery api*)"},
+			"--disallowedTools Edit,Write,MultiEdit,NotebookEdit," + strings.Join(wantDaemonRules("7777"), ",")},
 		{"reviewer on 8080", append([]string{"Bash"}, DaemonDenyPatterns(8080)...),
-			"--disallowedTools Edit,Write,MultiEdit,NotebookEdit,Bash," +
-				"Bash(curl *127.0.0.1:8080*),Bash(curl *localhost:8080*)," +
-				"Bash(wget *127.0.0.1:8080*),Bash(wget *localhost:8080*)," +
-				"Bash(http *127.0.0.1:8080*),Bash(http *localhost:8080*)," +
-				"Bash(swarmery api*),Bash(*/swarmery api*)"},
+			"--disallowedTools Edit,Write,MultiEdit,NotebookEdit,Bash," + strings.Join(wantDaemonRules("8080"), ",")},
 	} {
 		args := ToolDenyArgs(tc.extra)
 		if len(args) != 2 {

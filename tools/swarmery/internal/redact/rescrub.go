@@ -27,7 +27,11 @@ import (
 
 // RulesVersion identifies the rule set a rescrub pass ran with. Bump it when
 // the rules change so that stored rows are scanned again.
-const RulesVersion = 1
+//
+//	1  the 11 classes, PEM blocks, code fields literal-only
+//	2  key-cued payload masking, Basic auth, --password, OpenAI and Stripe
+//	   shapes, counts after a token-named key kept; link_events covered
+const RulesVersion = 2
 
 // Rescrub defaults: a batch is small enough to hold the writer for
 // milliseconds, the pause long enough to let the ingest in between.
@@ -124,6 +128,14 @@ var targets = []target{
 	// events table for each batch.
 	{table: "events", name: PermissionEventsProgress, cols: []string{"payload"}, ctx: []string{"tool_name"},
 		where: "rowid IN (SELECT event_id FROM permission_requests WHERE event_id IS NOT NULL)", fix: fixPayload},
+	// swarmery-link mod events (internal/link): a JSON payload with no tool
+	// context, redacted like a non-tool event.
+	{table: "link_events", cols: []string{"payload"}, fix: fixWith(func(doc string) string {
+		out, _ := PayloadJSON("", doc)
+		return out
+	})},
+	// Swarm messages the sessions exchanged (internal/link swarm.go): text.
+	{table: "link_messages", cols: []string{"body", "reason"}, fix: fixWith(All)},
 }
 
 // PermissionEventsProgress is the redaction_progress key of the pass over the
