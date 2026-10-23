@@ -1907,6 +1907,9 @@ export interface GuardSummary {
 export interface DecisionOption {
   id: string;
   label: string;
+  /** What follows from choosing it — an agent-declared stop's options carry
+   *  one; guard and review options do not. */
+  consequence?: string;
 }
 
 /**
@@ -1925,6 +1928,21 @@ export interface NeedsYouDecision {
   question: string;
   options: DecisionOption[];
   guard: GuardSummary;
+  /** An agent-declared stop (verify-not-trust phase 10) — absent for a guard or
+   *  review decision. The trigger verbatim: out-of-scope | protected-path |
+   *  access-error | criterion-impossible, unless `flags` says
+   *  stop_trigger_unknown. */
+  trigger?: string;
+  /** The stop block's one-sentence reason. */
+  reason?: string;
+  /** The stop block's lints: stop_trigger_unknown, stop_options_count,
+   *  stop_reason_missing, stop_option_invalid, stop_paths_rejected. */
+  flags?: string[];
+  /** A protected-path stop's vetted, repo-relative files: what answering
+   *  allow-add-to-scope adds to the guard's `allow:` list. */
+  paths?: string[];
+  /** The operator may answer in their own words: POST {option: "other", note}. */
+  freeText?: boolean;
 }
 
 /** Haiku-extracted reply card for an awaiting_reply item (always null until phase 4). */
@@ -4131,6 +4149,10 @@ export interface DecisionHoldRef {
   seq: number;
   /** null for a decision born in the README rather than an interview. */
   planningSessionId: number | null;
+  /** The dashboard path of the planning turn that asked it (Go
+   *  phasegate.PlanningTurnLink) — the hold's "decide now" link. Absent for a
+   *  README decision, an unknown project slug, or an older daemon. */
+  planningTurn?: string;
 }
 
 /** A phase's decision hold (Go `decisionHoldDTO`): non-null while a decision it

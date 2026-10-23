@@ -3322,6 +3322,7 @@ function PhaseDetailPanel({
             {...(phase.completionReport !== null ? { report: <Markdown text={phase.completionReport} /> } : {})}
             terms={terms}
             decisionHref={(d) => decisionTurnHref(projectSlug, d)}
+            stopHref={`/p/${encodeURIComponent(projectSlug)}/needs-you`}
           />
           <WorkaroundHits
             phaseId={phase.id}
