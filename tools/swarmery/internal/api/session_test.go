@@ -4,8 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"io"
+	"log"
 	"net/http"
 	"net/http/httptest"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -557,5 +559,52 @@ func TestSessionCheck(t *testing.T) {
 	srv.Config.Handler.ServeHTTP(rec, req)
 	if rec.Code != http.StatusUnauthorized || errorCode(rec.Body.String()) != "dashboard_locked" {
 		t.Errorf("exposed listener, valid session = %d %s, want 401 dashboard_locked", rec.Code, rec.Body.String())
+	}
+}
+
+// (j) A successful unlock logs exactly one line — when, and from which remote
+// address — and never the ticket or the session it minted. A refused unlock
+// logs nothing.
+func TestSessionUnlockLogsOneLine(t *testing.T) {
+	enableOriginlessAuth(t)
+	srv, _, _ := serverWithRoutines(t)
+	key := attachHookToken(t)
+	logs := &syncBuffer{}
+	prevOut := log.Writer()
+	log.SetOutput(logs)
+	t.Cleanup(func() { log.SetOutput(prevOut) })
+
+	if status, body := unlockDo(t, srv, srv.URL, "garbage"); status != http.StatusUnauthorized {
+		t.Fatalf("garbage ticket = %d %s, want 401", status, body)
+	}
+	ticket, err := linksig.UnlockTicket(key, srv.URL, time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	status, body := unlockDo(t, srv, srv.URL, ticket)
+	if status != http.StatusOK {
+		t.Fatalf("unlock = %d %s, want 200", status, body)
+	}
+	var got struct {
+		Session string `json:"session"`
+	}
+	if err := json.Unmarshal([]byte(body), &got); err != nil || got.Session == "" {
+		t.Fatalf("unlock answer %s: want {\"session\":…}", body)
+	}
+
+	var lines []string
+	for _, line := range strings.Split(logs.String(), "\n") {
+		if strings.Contains(line, "dashboard unlocked") {
+			lines = append(lines, line)
+		}
+	}
+	if len(lines) != 1 {
+		t.Fatalf("unlock log lines = %q, want exactly one", lines)
+	}
+	if !regexp.MustCompile(`at \d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z from 127\.0\.0\.1:\d+$`).MatchString(lines[0]) {
+		t.Errorf("unlock log line %q: want a UTC timestamp and the loopback remote address", lines[0])
+	}
+	if all := logs.String(); strings.Contains(all, ticket) || strings.Contains(all, got.Session) {
+		t.Errorf("the log carries the ticket or the session: %q", all)
 	}
 }

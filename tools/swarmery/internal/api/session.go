@@ -26,6 +26,7 @@ package api
 import (
 	"encoding/json"
 	"errors"
+	"log"
 	"net"
 	"net/http"
 	"strings"
@@ -254,6 +255,14 @@ func (h *Handler) sessionUnlock(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, err)
 		return
 	}
+	logUnlock(now, r.RemoteAddr)
 	w.Header().Set("Cache-Control", "no-store")
 	writeJSONStatus(w, http.StatusOK, map[string]string{"session": s})
+}
+
+// logUnlock records one line per successful unlock: when, and from which
+// remote address. Never the ticket or the session — the log is readable by
+// anything that can read the daemon's output.
+func logUnlock(at time.Time, remoteAddr string) {
+	log.Printf("session: dashboard unlocked at %s from %s", at.UTC().Format(time.RFC3339), remoteAddr)
 }

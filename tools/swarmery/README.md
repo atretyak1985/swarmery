@@ -136,6 +136,24 @@ daemon" from the address it actually listens on, and both are extended only by
   launcher page in `~/.swarmery/run/` (0700) that replaces itself with the
   URL, and deletes it about 10 seconds later (a page left behind is swept on
   the next run). `swarmery open --print` prints the URL instead of opening it.
+  The daemon logs one line per successful unlock — its time and the remote
+  address (`session: dashboard unlocked at <RFC 3339 UTC> from <addr>`), never
+  the ticket or the session — so an unlock you did not make shows up in the
+  daemon's log. A page that holds a session asks `GET /api/session` at boot and
+  whenever a socket is refused before it opened (`204` the session verifies,
+  `401 {"code":"dashboard_locked"}` it does not, always `401` on an exposed
+  listener); on a `401` it drops the session and shows the locked banner, so
+  a rotated link token is noticed without a failed write.
+- **Residual risk: the daemon's port while the daemon is down.** The
+  dashboard's origin is `http://127.0.0.1:<port>`, not the process behind it.
+  A local process that binds the daemon's port while the daemon is not running
+  serves pages on that same origin, and those pages can read the session the
+  browser stored for it (and use it once the daemon is back). `swarmery open`'s
+  listener proof keeps such a process from being handed a fresh ticket, but
+  it cannot protect a session already stored. Keep the daemon under its
+  service manager (`swarmery install`: launchd on macOS, `systemd --user` on
+  Linux) so its port is not left free, and if you suspect it was,
+  `swarmery link token --rotate` signs every dashboard out.
 - **Binding wider.** `serve --bind` with a non-loopback address refuses to
   start until a link token exists (`swarmery link token` mints it): exposed,
   the daemon must never fall back to trusting a missing `Origin`. Exposed (a
