@@ -240,6 +240,17 @@ func applyReviewBlocks(tx *sql.Tx, taskID int64, p epicPhase, cutoff time.Time, 
 			}
 			keepFindings[[2]string{r.Round, fid}] = true
 		}
+
+		// The plan round's drift (verify-not-trust phase 12): where the code
+		// departed from a decision, one plan-conformance finding per entry.
+		if r.Round == mdfence.ReviewRoundPlan {
+			for i, d := range r.Drift {
+				if err := insertDriftFinding(tx, taskID, phaseID, p.docPath, r.Round, i, d, source, now); err != nil {
+					return err
+				}
+				keepFindings[[2]string{r.Round, planDriftFindingID(i)}] = true
+			}
+		}
 	}
 
 	if err := deleteMissingReviewRows(tx, p.docPath, keepBlocks, keepFindings); err != nil {
@@ -318,17 +329,19 @@ func deleteMissingReviewRows(tx *sql.Tx, docPath string, keepBlocks map[string]b
 }
 
 // sweepOrphanReviewRows drops review rows of this task whose doc is no longer a
-// phase of it — the prune in applyEpics is the one place a phase disappears.
+// phase of it — the prune in applyEpics is the one place a phase disappears. A
+// daemon plan review's rows (PlanReviewDocPath) belong to no doc and stay.
 func sweepOrphanReviewRows(tx *sql.Tx, taskID int64) error {
 	for _, table := range []string{"review_findings", "review_blocks"} {
 		if _, err := tx.Exec(`DELETE FROM `+table+`
 			 WHERE workspace_task_id = ?
+			   AND doc_path <> ?
 			   AND doc_path NOT IN (SELECT doc_path FROM epic_phases WHERE workspace_task_id = ?)`,
-			taskID, taskID); err != nil {
+			taskID, PlanReviewDocPath(taskID), taskID); err != nil {
 			return err
 		}
 	}
-	return nil
+	return sweepOrphanEvidence(tx, taskID)
 }
 
 func boolInt(b bool) int {

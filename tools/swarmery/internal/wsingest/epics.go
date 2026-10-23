@@ -1263,6 +1263,9 @@ func applyEpics(tx *sql.Tx, taskID int64, phases []epicPhase, readmePresent bool
 		if err := applyDecisionDeps(tx, taskID, p); err != nil {
 			return err
 		}
+		if err := applyEvidence(tx, taskID, p); err != nil {
+			return err
+		}
 	}
 
 	// A plan dir with no README is not a plan with no phases — it is a plan we
