@@ -120,7 +120,7 @@ func stopSource(trigger string) string {
 // blocked without a block — the plain `PHASE BLOCKED:` path is untouched. A panic
 // is logged and swallowed: the review, the verifier and the worktree removal
 // after it still run.
-func (s *Service) stopStage(phaseID int64, info phaseInfo, endState, sessionUUID string, guard GuardResult) {
+func (s *Service) stopStage(phaseID int64, info phaseInfo, endState, sessionUUID, worktreePath string, guard GuardResult) {
 	defer func() {
 		if r := recover(); r != nil {
 			log.Printf("error: phaserun: phase=%d stop stage panicked: %v", phaseID, r)
@@ -137,30 +137,86 @@ func (s *Service) stopStage(phaseID int64, info phaseInfo, endState, sessionUUID
 	if st == nil {
 		return
 	}
-	s.raiseStopDecision(phaseID, info, st, guard)
+	s.raiseStopDecision(phaseID, info, st, guard, worktreeDirProbe(s.reviewGit(), worktreePath))
+}
+
+// The guard's own choices, as a stop decision offers them. Their ids are what
+// the daemon acts on (allow widens the guard), so their label and consequence
+// are the daemon's, never the agent's: an agent cannot label its allow option
+// "Leave the test alone".
+var (
+	stopGuardAllowOption = mdfence.StopOption{
+		ID: GuardOptionAllow, Label: "Allow (add to scope)",
+		Consequence: "the files listed join the guard's allow list and the next run builds on this run's branch",
+	}
+	stopGuardRejectOption = mdfence.StopOption{
+		ID: GuardOptionReject, Label: "Reject",
+		Consequence: "the guard stays as it is; no protected edit of this run is built on",
+	}
+)
+
+// stopOptions are the options a stop decision offers: the agent's, with the
+// daemon's label and consequence on the reserved guard ids, plus — when the
+// run's guard check flagged it — the guard's allow and reject choices the agent
+// did not already offer. A stop never hides the guard's own question: an
+// access-error stop on a run that edited a protected file still lets the
+// operator reject that edit.
+func stopOptions(agent []mdfence.StopOption, guard GuardResult) []mdfence.StopOption {
+	out := make([]mdfence.StopOption, 0, len(agent)+2)
+	for _, o := range agent {
+		switch o.ID {
+		case GuardOptionAllow:
+			o = stopGuardAllowOption
+		case GuardOptionReject:
+			o = stopGuardRejectOption
+		}
+		out = append(out, o)
+	}
+	if !guard.Flagged() {
+		return out
+	}
+	for _, o := range []mdfence.StopOption{stopGuardAllowOption, stopGuardRejectOption} {
+		if !slices.ContainsFunc(out, func(x mdfence.StopOption) bool { return x.ID == o.ID }) {
+			out = append(out, o)
+		}
+	}
+	return out
+}
+
+// StopOptionsOf are the options the stop decision stored as guardJSON offers,
+// rebuilt from the stored record (stopOptions) so a row raised before the
+// guard's choices were merged in still offers them; nil for a decision without
+// a stop.
+func StopOptionsOf(guardJSON string) []mdfence.StopOption {
+	rec := decodeStopRecord(guardJSON)
+	if rec.Stop == nil {
+		return nil
+	}
+	return stopOptions(rec.Stop.Options, rec.GuardResult)
 }
 
 // raiseStopDecision writes (or refreshes) the phase's open stop decision from an
-// agent's block. Best-effort, like the guard decision.
-func (s *Service) raiseStopDecision(phaseID int64, info phaseInfo, st *mdfence.Stop, guard GuardResult) {
-	paths, rejected := vetStopPaths(st.Paths, guard.ProtectedPaths)
+// agent's block. isDir probes the run's worktree (worktreeDirProbe; nil skips
+// it). Best-effort, like the guard decision.
+func (s *Service) raiseStopDecision(phaseID int64, info phaseInfo, st *mdfence.Stop, guard GuardResult, isDir func(string) bool) {
+	paths, rejected := vetAllowPaths(st.Paths, guard.ProtectedPaths, guard.Paths(), isDir)
 	flags := append([]string(nil), st.Flags...)
+	if _, guardRejected := guard.releasable(); guardRejected {
+		rejected = true
+	}
 	if rejected && !slices.Contains(flags, mdfence.LintStopPathsRejected) {
 		flags = append(flags, mdfence.LintStopPathsRejected)
 	}
 	rec := stopRecord{GuardResult: guard, Stop: &StopPayload{
-		Trigger: st.Trigger, Reason: st.Reason, Options: st.Options, Paths: paths, Flags: flags,
+		Trigger: st.Trigger, Reason: st.Reason, Options: stopOptions(st.Options, guard), Paths: paths, Flags: flags,
 	}}
-	if rec.Stop.Options == nil {
-		rec.Stop.Options = []mdfence.StopOption{}
-	}
 	raw, err := json.Marshal(rec)
 	if err != nil {
 		log.Printf("error: phaserun: phase=%d stop decision not recorded: %v", phaseID, err)
 		return
 	}
 	d, created, err := store.UpsertStopDecision(s.DB, info.WorkspaceTaskID, phaseID, stopQuestion(st),
-		st.OptionIDs(), string(raw), s.ts())
+		(&mdfence.Stop{Options: rec.Stop.Options}).OptionIDs(), string(raw), s.ts())
 	if err != nil {
 		log.Printf("error: phaserun: phase=%d stop decision not recorded: %v", phaseID, err)
 		return
@@ -174,46 +230,29 @@ func (s *Service) raiseStopDecision(phaseID int64, info phaseInfo, st *mdfence.S
 	s.notify(info.WorkspaceTaskID)
 }
 
-// vetStopPaths keeps the agent-named paths that may become `allow:` entries:
-// literal repo-relative file paths (mdfence.LiteralRepoPath — no glob, no `..`,
-// nothing under .swarmery) that fall under one of the guard's protected globs,
-// matched the way the guard check matches them (guardGlobMatch). The agent is
-// untrusted and allow entries act as globs, so `paths: ["**/*"]` must not
-// release every protected path. rejected reports that something was dropped.
-// No protected globs (no guard, or a guard check that did not run) keeps
-// nothing: there is nothing an allow could legitimately release.
-func vetStopPaths(paths, protected []string) (kept []string, rejected bool) {
-	for _, p := range uniquePaths(paths) {
-		ok := mdfence.LiteralRepoPath(p)
-		if ok {
-			ok = false
-			for _, g := range protected {
-				if guardGlobMatch(g, p) {
-					ok = true
-					break
-				}
-			}
-		}
-		if ok {
-			kept = append(kept, p)
-		} else {
-			rejected = true
-		}
+// stopReleasable is what an allow-add-to-scope answer to rec's stop adds to the
+// guard's `allow:` list, and whether vetting dropped anything (now, or when the
+// row was raised). Every path passes vetAllowPaths, whatever its source: the
+// guard check's own findings (file names and guard.log fields the run wrote),
+// then — for a protected-path stop only — the agent's `paths:`, all re-vetted
+// against the guard the run was checked with, so a stored row is never taken on
+// trust. A stop that is not a protected-path stop releases only the guard
+// check's findings, which are empty unless that check flagged the run.
+func stopReleasable(rec stopRecord) (paths []string, rejected bool) {
+	if rec.Stop == nil {
+		return nil, false
 	}
-	return kept, rejected
+	if rec.Stop.Trigger != mdfence.StopTriggerProtectedPath {
+		return rec.GuardResult.releasable()
+	}
+	paths, rejected = rec.GuardResult.releasable(rec.Stop.Paths...)
+	return paths, rejected || slices.Contains(rec.Stop.Flags, mdfence.LintStopPathsRejected)
 }
 
-// stopAllowPaths are the paths an allow-add-to-scope answer to rec's stop adds
-// to the guard's `allow:` list: the guard check's own findings, then the
-// agent's paths re-vetted against the guard the run was checked with (a row
-// raised before the paths were vetted is vetted here). None for a stop that is
-// not a protected-path stop — its allow releases nothing.
+// stopAllowPaths is stopReleasable's paths.
 func stopAllowPaths(rec stopRecord) []string {
-	if rec.Stop == nil || rec.Stop.Trigger != mdfence.StopTriggerProtectedPath {
-		return nil
-	}
-	agent, _ := vetStopPaths(rec.Stop.Paths, rec.GuardResult.ProtectedPaths)
-	return uniquePaths(rec.GuardResult.Paths(), agent)
+	paths, _ := stopReleasable(rec)
+	return paths
 }
 
 // StopAllowPaths is stopAllowPaths for a decision's stored guard_json: exactly
@@ -228,6 +267,9 @@ func StopAllowPaths(guardJSON string) []string {
 // for a guard decision.
 func answerStopDecision(db *sql.DB, d store.Decision, rec stopRecord, docPath string, ans GuardAnswer, now time.Time) (store.Decision, error) {
 	st := rec.Stop
+	// What the card offered: the stored options with the guard's own choices
+	// merged in (a row raised before they were stored still offers them).
+	offered := &StopPayload{Options: stopOptions(st.Options, rec.GuardResult)}
 	opt := strings.ToLower(strings.TrimSpace(ans.Option))
 	note := flatten(ans.Note)
 	if opt == "" && note != "" {
@@ -240,13 +282,15 @@ func answerStopDecision(db *sql.DB, d store.Decision, rec stopRecord, docPath st
 			return store.Decision{}, fmt.Errorf("%w: %q needs the operator's text in note", ErrDecisionBadOption, mdfence.StopOptionOther)
 		}
 		answer = mdfence.StopOptionOther + ": " + note
-	case st.HasOption(opt):
+	case offered.HasOption(opt) && mdfence.ValidOptionID(opt):
+		// A row raised before ids were held to bare tokens may offer one that
+		// would read back as another (stopAnswerOption); it is not answerable.
 		answer = opt
 		if note != "" {
 			answer += " — " + note
 		}
 	default:
-		want := append(append([]string(nil), (&mdfence.Stop{Options: st.Options}).OptionIDs()...), mdfence.StopOptionOther)
+		want := append(append([]string(nil), (&mdfence.Stop{Options: offered.Options}).OptionIDs()...), mdfence.StopOptionOther)
 		return store.Decision{}, fmt.Errorf("%w %q (want one of %s)", ErrDecisionBadOption, ans.Option, strings.Join(want, ", "))
 	}
 
@@ -364,10 +408,14 @@ func (s *Service) decisionsNoteFor(phaseID, taskID int64) string {
 // the operator has answered one of its stop decisions since: the re-run then
 // continues on the phase's own branch, like a returned run, so the partial work
 // the stopped run committed is built on rather than refused as a dirty branch.
-// Only an agent-declared stop (any answer) or a guard decision answered allow
-// counts: a guard decision answered reject refused the protected edits that
-// branch holds, so the re-run must not build on them — the dirty-branch refusal
-// stands.
+// What counts depends on what the run did to protected paths. A decision whose
+// guard check flagged the run (it changed a protected file, or the hook refused
+// it) counts only when answered allow-add-to-scope — a guard decision's
+// `allow (add to scope)…` answer, or a stop's exact allow-add-to-scope option:
+// any other answer, reject or an agent option or the operator's own words, left
+// the protected edits that branch holds unaccepted, so the re-run must not build
+// on them and the dirty-branch refusal stands. An agent-declared stop whose
+// guard check found nothing counts with any answer.
 func (s *Service) stopAnsweredSinceBlock(phaseID int64, info phaseInfo) bool {
 	if info.RunState != "blocked" {
 		return false
@@ -385,7 +433,7 @@ func (s *Service) stopAnsweredSinceBlock(phaseID int64, info phaseInfo) bool {
 			d.PhaseID == nil || *d.PhaseID != phaseID {
 			continue
 		}
-		if StopOf(d) == nil && !strings.HasPrefix(d.Answer, guardAnswerAllow) {
+		if !answerContinuesBranch(d) {
 			continue
 		}
 		if at, err := time.Parse(time.RFC3339, *d.DecidedAt); err == nil && !at.Before(ended) {
@@ -393,4 +441,29 @@ func (s *Service) stopAnsweredSinceBlock(phaseID int64, info phaseInfo) bool {
 		}
 	}
 	return false
+}
+
+// answerContinuesBranch reports whether decided decision d's answer lets the
+// re-run build on the stopped run's branch (stopAnsweredSinceBlock).
+func answerContinuesBranch(d store.Decision) bool {
+	rec := decodeStopRecord(d.GuardJSON)
+	if rec.Stop == nil {
+		return strings.HasPrefix(d.Answer, guardAnswerAllow)
+	}
+	if !rec.GuardResult.Flagged() {
+		return true
+	}
+	return stopAnswerOption(d.Answer) == GuardOptionAllow
+}
+
+// stopAnswerOption is the option id a stop's recorded answer chose: `<id>` or
+// `<id> — <note>` (answerStopDecision), "" for the operator's own words
+// (`other: <text>`). Option ids are bare tokens (mdfence.ValidOptionID), so the
+// id cannot itself contain the separator.
+func stopAnswerOption(answer string) string {
+	if strings.HasPrefix(answer, mdfence.StopOptionOther+": ") {
+		return ""
+	}
+	id, _, _ := strings.Cut(answer, " — ")
+	return id
 }

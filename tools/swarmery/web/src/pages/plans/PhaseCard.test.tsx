@@ -175,6 +175,18 @@ describe('PhaseCard decision links and stops', () => {
     expect(screen.getByRole('link', { name: 'open the question →' }).getAttribute('href')).toBe('/fallback');
   });
 
+  it.each(['/\\evil.example/x', '/\t/evil.example/x', '/\n/evil.example', '/ok\\..\\x'])(
+    'ignores a planning turn a browser reads as another origin (%j)',
+    (planningTurn) => {
+      const hold = {
+        detail: 'decision-undecided: D-3 (Which store?)',
+        decisions: [{ decisionId: 'D-3', question: 'Which store?', seq: 3, planningSessionId: 44, planningTurn }],
+      };
+      render(<PhaseCard phase={phase({ decisionHold: hold })} decisionHref={() => '/fallback'} />);
+      expect(screen.getByRole('link', { name: 'open the question →' }).getAttribute('href')).toBe('/fallback');
+    },
+  );
+
   const stop = {
     taskId: 7,
     phaseId: 12,

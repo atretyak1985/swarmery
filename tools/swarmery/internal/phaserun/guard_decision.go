@@ -37,14 +37,37 @@ const (
 // GuardOptions are the option ids a guard decision offers.
 var GuardOptions = []string{GuardOptionAllow, GuardOptionReject}
 
-// guardQuestion is the decision's question for a flagged guard result.
+// guardQuestion is the decision's question for a flagged guard result. It names
+// only the vetted paths (releasable) — exactly what allow would release; the
+// raw names the run controls are counted, never echoed.
 func guardQuestion(r GuardResult) string {
-	paths := r.Paths()
-	list := strings.Join(paths, ", ")
-	if list == "" {
+	paths, _ := r.releasable()
+	raw := len(r.Paths())
+	var list string
+	switch {
+	case len(paths) > 0:
+		list = strings.Join(paths, ", ")
+		if n := raw - len(paths); n > 0 {
+			list += " (and " + plural(n, "path") + " that cannot be allowed — not a literal file path; see the Review tab)"
+		}
+	case raw > 0:
+		list = "(" + plural(raw, "path") + ", none of which can be allowed — not a literal file path; see the Review tab)"
+	default:
 		list = "(the guard refused " + plural(r.GuardBlocksTotal, "attempt") + "; see guard.log)"
 	}
 	return "The run touched protected paths: " + list + ". Allow (add to scope) or reject?"
+}
+
+// DecisionAllowPaths are exactly the files an allow-add-to-scope answer to the
+// decision stored as guardJSON would add to the guard's `allow:` list — a guard
+// decision's or an agent-declared stop's — and whether vetting dropped any
+// candidate (the decision's stop_paths_rejected). For the operator's card.
+func DecisionAllowPaths(guardJSON string) (paths []string, rejected bool) {
+	rec := decodeStopRecord(guardJSON)
+	if rec.Stop != nil {
+		return stopReleasable(rec)
+	}
+	return rec.GuardResult.releasable()
 }
 
 // guardStage runs the guard check of a finished run and, when the run touched
@@ -175,7 +198,9 @@ func AnswerGuardDecision(db *sql.DB, taskID, phaseID int64, decisionID string, a
 	}
 	var guard GuardResult
 	_ = json.Unmarshal([]byte(d.GuardJSON), &guard)
-	paths := guard.Paths()
+	// Only vetted paths: guard.Paths() is file names and guard.log fields the
+	// run wrote, and an `allow:` entry acts as a glob.
+	paths, _ := guard.releasable()
 
 	answer := "reject"
 	if ans.Option == GuardOptionAllow {

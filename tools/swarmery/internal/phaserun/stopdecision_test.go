@@ -166,7 +166,8 @@ func TestStopDecisionEndToEnd(t *testing.T) {
 	prompt := r.specs[len(r.specs)-1].Prompt
 	r.mu.Unlock()
 	for _, want := range []string{
-		"- Decision D-1: allow-add-to-scope (Let me edit the writer test) — answers your earlier stop (protected-path): " + stopReason,
+		// The reserved allow id carries the daemon's label, not the agent's.
+		"- Decision D-1: allow-add-to-scope (Allow (add to scope)) — answers your earlier stop (protected-path): " + stopReason,
 		"STOP TRIGGERS",
 		"- out-of-scope change\n- protected path\n",
 	} {
@@ -253,7 +254,7 @@ func TestStopDecisionMergesWithTheGuardDecision(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	s.raiseStopDecision(p1, info, st, guard)
+	s.raiseStopDecision(p1, info, st, guard, nil)
 	ds, _ := store.ListTaskDecisions(s.DB, taskID)
 	if len(ds) != 1 || ds[0].Question != stopReason || StopOf(ds[0]) == nil {
 		t.Fatalf("decisions = %+v, want the guard's row refreshed into the stop", ds)
@@ -443,9 +444,9 @@ func TestStopStageIgnoresPlainBlocksAndDoneRuns(t *testing.T) {
 		t.Fatal(err)
 	}
 	seedTranscript(t, s.DB, "plain", "PHASE BLOCKED: the dependency is not merged")
-	s.stopStage(p1, info, "blocked", "plain", GuardResult{})
+	s.stopStage(p1, info, "blocked", "plain", "", GuardResult{})
 	seedTranscript(t, s.DB, "done", stopOutput(protectedPathStop)+"\n\nPHASE DONE")
-	s.stopStage(p1, info, "done", "done", GuardResult{})
+	s.stopStage(p1, info, "done", "done", "", GuardResult{})
 	if ds, _ := store.ListTaskDecisions(s.DB, taskID); len(ds) != 0 {
 		t.Fatalf("decisions = %+v, want none", ds)
 	}

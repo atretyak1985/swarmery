@@ -83,10 +83,18 @@ export interface PhaseCardProps {
   stopHref?: string | null;
 }
 
+/** Whether `p` is a path on this origin: it starts with one `/` that a browser
+ *  cannot read as the start of `//host` — browsers treat `\` as `/` and drop
+ *  tabs and newlines from a URL, so `/\host` and `/<tab>/host` are refused, as
+ *  is any backslash, whitespace or control character. */
+function isSameOriginPath(p: string): boolean {
+  return p.startsWith('/') && !/^\/[/\\]/.test(p) && !/[\\\s\u0000-\u001f\u007f]/.test(p);
+}
+
 /** The decision's own planning-turn link (the daemon's `planningTurn`), else
  *  the caller's; null when neither has one. Only same-origin paths are used. */
 function holdHref(d: DecisionHoldRef, hrefFor?: ((ref: DecisionHoldRef) => string | null) | undefined): string | null {
-  if (d.planningTurn !== undefined && d.planningTurn.startsWith('/') && !d.planningTurn.startsWith('//')) {
+  if (d.planningTurn !== undefined && isSameOriginPath(d.planningTurn)) {
     return d.planningTurn;
   }
   return hrefFor?.(d) ?? null;

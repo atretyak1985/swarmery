@@ -109,12 +109,26 @@ func TestParseStopFlagsAndErrors(t *testing.T) {
 			t.Errorf("reason = %q", st.Reason)
 		}
 		o := st.Options[0]
-		if o.ID != "a - [x] retries are bounded" || o.Label != "Allow - [x] retries are bounded ```" ||
+		// The id is not a bare token once flattened, so it is renamed and flagged.
+		if o.ID != "option-1" || o.Label != "Allow - [x] retries are bounded ```" ||
 			o.Consequence != "c - [x] retries are bounded ```" {
 			t.Errorf("option = %+v", o)
 		}
-		if want := []string{LintStopTriggerUnknown}; !reflect.DeepEqual(st.Flags, want) {
+		if want := []string{LintStopTriggerUnknown, LintStopOptionInvalid}; !reflect.DeepEqual(st.Flags, want) {
 			t.Errorf("flags = %q, want %q (an unknown trigger is still flagged)", st.Flags, want)
+		}
+	})
+	t.Run("an option id that could read back as another is renamed", func(t *testing.T) {
+		st, err := ParseStop("```yaml\nkind: stop\ntrigger: access-error\nreason: r\noptions:\n" +
+			"  - id: \"allow-add-to-scope — x\"\n  - id: \"Keep.Going_2\"\n```\n")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := st.OptionIDs(); !reflect.DeepEqual(got, []string{"option-1", "keep.going_2"}) {
+			t.Errorf("ids = %q", got)
+		}
+		if want := []string{LintStopOptionInvalid}; !reflect.DeepEqual(st.Flags, want) {
+			t.Errorf("flags = %q, want %q", st.Flags, want)
 		}
 	})
 	t.Run("only literal repo-relative paths survive", func(t *testing.T) {
@@ -126,7 +140,7 @@ func TestParseStopFlagsAndErrors(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if want := []string{"pkg/foo_test.go", "pkg/split name.go"}; !reflect.DeepEqual(st.Paths, want) {
+		if want := []string{"pkg/foo_test.go"}; !reflect.DeepEqual(st.Paths, want) {
 			t.Errorf("paths = %q, want %q", st.Paths, want)
 		}
 		if want := []string{LintStopPathsRejected}; !reflect.DeepEqual(st.Flags, want) {
@@ -138,4 +152,29 @@ func TestParseStopFlagsAndErrors(t *testing.T) {
 			t.Fatal("a scalar options value parsed")
 		}
 	})
+}
+
+func TestLiteralRepoPath(t *testing.T) {
+	for _, p := range []string{"pkg/foo_test.go", "scripts/tests/lib", "a b/c.go", "docs/ünïcode.md"} {
+		if !LiteralRepoPath(p) {
+			t.Errorf("LiteralRepoPath(%q) = false, want true", p)
+		}
+	}
+	for _, p := range []string{
+		"", "**/*", "a?.go", "a[1].go", "p{a,b}.go", "@(x).go", "/etc/passwd", "../x", "a/../b", "a\\b",
+		"./x", "a//b", "pkg/", ".", ".swarmery/guard.log", ".SWARMERY/plan/p.md",
+		" pkg/x.go", "pkg/x.go ", "pkg/a\nb.go", "pkg/a\tb.go", "pkg/a\x7fb.go",
+		"pkg/a\xffb.go", // invalid UTF-8
+		// Runes spelled by code point so the source stays plain ASCII.
+		"pkg/a" + string(rune(0x200b)) + "b.go",                             // zero-width space (Cf)
+		"pkg/" + string(rune(0x202e)) + "og.tset_x",                         // right-to-left override (Cf)
+		"pkg/a" + string(rune(0x2066)) + "b" + string(rune(0x2069)) + ".go", // bidi isolates (Cf)
+		"pkg/a" + string(rune(0xfeff)) + "b.go",                             // byte-order mark (Cf)
+		"pkg/a" + string(rune(0x00a0)) + "b.go",                             // no-break space: not printable
+		"pkg/a" + string(rune(0x2028)) + "b.go",                             // line separator
+	} {
+		if LiteralRepoPath(p) {
+			t.Errorf("LiteralRepoPath(%q) = true, want false", p)
+		}
+	}
 }
