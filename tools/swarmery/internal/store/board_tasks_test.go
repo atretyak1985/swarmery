@@ -148,7 +148,7 @@ func TestInsertBoardTaskValidation(t *testing.T) {
 }
 
 func TestValidOriginAndColumn(t *testing.T) {
-	for _, o := range []string{"manual", "session", "llm", "verify-fix"} {
+	for _, o := range []string{"manual", "session", "llm", "verify-fix", "github"} {
 		if !ValidOrigin(o) {
 			t.Errorf("ValidOrigin(%q) = false", o)
 		}

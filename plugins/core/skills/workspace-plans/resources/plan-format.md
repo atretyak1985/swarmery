@@ -38,6 +38,7 @@ Status: Pending
 **Repo:** `<repo>` · **Branch:** `<branch>` · **Depends on:** … · **Estimate:** …   ← Branch is informational; the daemon lands swarm/phase-<id>
 **Verify:** off             ← off | normal | strict (see "Header rows" below)
 **Review:** off             ← on | off
+**Effort:** high            ← low | medium | high | xhigh — required (see "Header rows")
 ## In plain words           ← 3–6 jargon-free sentences; see below
 ## Goal
 ## Files to Create / Files to Modify
@@ -120,9 +121,9 @@ agents skip.
 The final phase of a multi-phase plan is always a quality gate
 (`kind: quality-gate`).
 
-### Header rows: `**Verify:**` and `**Review:**`
+### Header rows: `**Verify:**`, `**Review:**` and `**Effort:**`
 
-Both are read from the phase doc's header only — the lines before the first
+All three are read from the phase doc's header only — the lines before the first
 `## ` section, within the first 15 lines — so a `**Verify:**` line quoted in an
 agent prompt further down never counts. Put them on their own lines directly
 after the `**Repo:** …` line.
@@ -131,6 +132,7 @@ after the `**Repo:** …` line.
 |---|---|---|---|
 | `**Verify:**` | `off` \| `normal` \| `strict` | After a run ends `done` or `partial`, a read-only verifier grades the ticked criteria at the given strictness. Any value but `off` also makes the phase gate require a passing verdict before the phase counts as complete. A missing or unrecognized value means `off`. | L/XL: `normal`. S/M: `off`, or `normal` when the phase touches data, schemas or migrations. |
 | `**Review:**` | `on` \| `off` | The phase asks for a read-only code-review pass over its diff before the verifier runs; a failed review returns the phase once with the findings appended to the doc. A missing value means `off`, and a daemon without the review stage ignores the row. | L/XL: `on`. S/M: `off`. |
+| `**Effort:**` | `low` \| `medium` \| `high` \| `xhigh` | The reasoning depth the phase's run gets (`--effort`), chosen together with the model the phase needs. A value the CLI does not accept fails the run before it starts, naming the doc. Required: a doc without it runs at the daemon's default effort and is linted `phase_effort_missing`. | `low`/`medium` for mechanical edits and config, `high` for ordinary implementation, `xhigh` for design-heavy or cross-cutting work. |
 
 ### The header's `**Branch:**` is informational
 
@@ -255,6 +257,24 @@ allocated when the branch is rebased for landing: the next number above the
 highest on the default branch at that moment. A number picked at write time
 collides with whatever lands first while the branch is open, and every collision
 costs a renumber commit.
+
+### New agents and skills: extend first
+
+Before a phase proposes a new agent or a new skill, its doc names the existing
+skill the work extends instead — or says in one sentence why none fits. Put it in
+`## Implementation Details` as one line, so a grep can find it:
+
+```markdown
+**Extends:** workspace-plans — the new check is one more section of the format, not a new skill.
+**Extends:** none — no installed skill touches billing exports; closest is pdf-export, which only renders.
+```
+
+Pick the candidate from the dashboard's System → Insights → Skill audit: its
+weekly report ends with "Before a new agent, extend one of these", and its
+similar-description pairs show where two skills already overlap. A roster that
+adds before it extends grows back to dozens of agents nobody calls — every new
+agent or skill costs trigger recall for all the others. A phase that adds
+neither needs no `**Extends:**` line.
 
 ## `## In plain words`
 

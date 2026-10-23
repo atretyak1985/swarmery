@@ -16,10 +16,10 @@ package api
 //      g.name = g.plugin_name || ':' || l.name. An identical local copy is a
 //      pointless override (safe to delete); a diverged one is intentional or
 //      drift — the diff is served so a human can judge.
-//   c. dead components — the linter's ACTIVE agent_dead findings
-//      (sysscan/lint.go, 30-day telemetry window, advisory), reframed into
-//      the insights payload so the UI reads one endpoint. agent_dead is the
-//      only dead rule today → the list is agents-only by design.
+//   c. dead components — the linter's ACTIVE agent_dead and skill_dead
+//      findings (sysscan/skillaudit.go, 30-day window, matched by name,
+//      advisory), reframed into the insights payload so the UI reads one
+//      endpoint.
 //
 // Content sources: agents/skills diff from *_versions.content (plugin cache
 // items ARE versioned by the scanner, so plugin-side content comes from the
@@ -34,6 +34,7 @@ import (
 	"database/sql"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/plugindrift"
@@ -80,7 +81,7 @@ type staleOverrideDTO struct {
 }
 
 type deadComponentDTO struct {
-	Kind        string  `json:"kind"` // always "agent" today — agent_dead is the only dead rule (lint.go)
+	Kind        string  `json:"kind"` // agent (agent_dead) | skill (skill_dead)
 	ID          int64   `json:"id"`
 	Name        string  `json:"name"`
 	Scope       string  `json:"scope"`
@@ -117,6 +118,35 @@ type systemInsightsDTO struct {
 	// a kind-specific target expression ('agent:' || a.id and the like), and a
 	// plugin: target matches none of them.
 	PluginDrift []pluginDriftDTO `json:"pluginDrift"`
+	// SkillAudit is the active skill_desc_similar / session_skill_load_high
+	// findings, and SkillAuditReport the newest weekly report (null before the
+	// first one) — system_skill_audit.go.
+	SkillAudit       []skillAuditFindingDTO `json:"skillAudit"`
+	SkillAuditReport *skillAuditReportDTO   `json:"skillAuditReport"`
+	// StartCost is the session-start cost findings — the CLAUDE.md size rules
+	// and unused MCP servers (sysscan/lint.go): what every session of a project
+	// loads before its first prompt. Like PluginDrift, no component row carries
+	// these targets, so this list is the only place they render.
+	StartCost []startCostDTO `json:"startCost"`
+}
+
+// startCostDTO is one active session-start cost finding. ProjectPath is the
+// project it applies to; "" (and a null slug) for a user-scope MCP server,
+// which every project loads.
+type startCostDTO struct {
+	Rule        string  `json:"rule"`
+	Severity    string  `json:"severity"`
+	Target      string  `json:"target"`
+	Message     string  `json:"message"`
+	ProjectSlug *string `json:"projectSlug"`
+	ProjectPath string  `json:"projectPath"`
+}
+
+// startCostRules are the lint rules the StartCost list carries.
+var startCostRules = []string{
+	sysscan.RuleClaudeMDOversized,
+	sysscan.RuleClaudeMDOver200Lines,
+	sysscan.RuleMCPServerUnused30d,
 }
 
 // pluginDriftDTO is one active plugin_* finding, resolved to the project it
@@ -136,7 +166,7 @@ const (
 	promotionHint      = "promote: de-flavor → move to a domain pack (2 projects) or core (all projects) → bump that plugin's semver → delete the donor copies (docs/EXTENDING.md)"
 	staleIdenticalHint = "identical to the plugin copy — the local override is pointless; delete the local file and rely on the plugin"
 	staleDivergedHint  = "diverged from the plugin copy — intentional override or drift; review the diff, then re-sync or delete the local copy"
-	deadHint           = "0 telemetry mentions in 30 days (advisory — events.agent_id is only partially attributed); consider deleting or archiving"
+	deadHint           = "no use in 30 days, matched by name (advisory — a component used only outside recorded sessions looks dead too); before deleting or archiving, check it is not the one a new agent should extend"
 	undocumentedHint   = "add the missing `# How to use` subsections to the item's own file (docs/system-docs-format.md §2), then re-run the scan"
 )
 
@@ -224,6 +254,8 @@ func computeInsights(db *sql.DB, esc *effectiveScope) (systemInsightsDTO, error)
 		Dead:                []deadComponentDTO{},
 		Undocumented:        []undocumentedItemDTO{},
 		PluginDrift:         []pluginDriftDTO{},
+		SkillAudit:          []skillAuditFindingDTO{},
+		StartCost:           []startCostDTO{},
 	}
 	var err error
 	if out.PromotionCandidates, err = promotionCandidates(db, esc); err != nil {
@@ -243,7 +275,69 @@ func computeInsights(db *sql.DB, esc *effectiveScope) (systemInsightsDTO, error)
 	if drift, derr := pluginDriftFindings(db, esc); derr == nil {
 		out.PluginDrift = drift
 	}
+	if out.SkillAudit, err = skillAuditFindings(db, esc); err != nil {
+		return out, err
+	}
+	out.SkillAuditReport = latestSkillAuditReport()
+	if cost, cerr := startCostFindings(db, esc); cerr == nil {
+		out.StartCost = cost
+	}
 	return out, nil
+}
+
+// startCostFindings lists the active startCostRules findings, each resolved to
+// the project its target names: claude_md:<dir>/CLAUDE.md belongs to <dir>,
+// mcp:<scope>:<name>|<path> to <path>, and mcp:user:<name> to none — a
+// user-scope server is loaded by every project, so a project scope keeps it.
+func startCostFindings(db *sql.DB, esc *effectiveScope) ([]startCostDTO, error) {
+	holes := strings.Repeat(",?", len(startCostRules))[1:]
+	args := make([]any, len(startCostRules))
+	for i, rule := range startCostRules {
+		args[i] = rule
+	}
+	rows, err := db.Query(`
+		SELECT f.target, f.rule, f.severity, f.message
+		FROM config_lint_findings f
+		WHERE f.resolved_at IS NULL AND f.rule IN (`+holes+`)
+		ORDER BY f.severity DESC, f.rule, f.target`, args...)
+	if err != nil {
+		return nil, err
+	}
+	out := []startCostDTO{}
+	for rows.Next() {
+		var d startCostDTO
+		if err := rows.Scan(&d.Target, &d.Rule, &d.Severity, &d.Message); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		if md, ok := strings.CutPrefix(d.Target, "claude_md:"); ok {
+			d.ProjectPath = filepath.Dir(md)
+		} else if _, path, ok := strings.Cut(d.Target, "|"); ok {
+			d.ProjectPath = path
+		}
+		out = append(out, d)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	// Second pass after the cursor is closed — the single-connection rule
+	// pluginDriftFindings documents.
+	slugs, err := projectSlugsByPath(db)
+	if err != nil {
+		return nil, err
+	}
+	scopedOut := []startCostDTO{}
+	for _, d := range out {
+		if slug, ok := slugs[d.ProjectPath]; ok && d.ProjectPath != "" {
+			d.ProjectSlug = &slug
+		}
+		if esc.scoped() && d.ProjectPath != "" && (d.ProjectSlug == nil || *d.ProjectSlug != esc.slug()) {
+			continue
+		}
+		scopedOut = append(scopedOut, d)
+	}
+	return scopedOut, nil
 }
 
 // pluginDriftFindings lists active plugin_* findings with the project resolved
@@ -504,33 +598,46 @@ func staleOverrideList(db *sql.DB, esc *effectiveScope) ([]staleOverrideDTO, err
 	return out, nil
 }
 
-// deadComponents reframes the linter's ACTIVE agent_dead findings — one
-// source of truth, no second telemetry query.
-// A project scope keeps only the agents EFFECTIVE there (effectiveScope) — a
-// dead agent of another project is that project's problem.
-func deadComponents(db *sql.DB, esc *effectiveScope) ([]deadComponentDTO, error) {
-	pred, args := esc.predicate("a.", true)
-	rows, err := db.Query(`
-		SELECT a.id, a.name, a.scope, p.slug, f.message
-		FROM config_lint_findings f
-		JOIN agents a ON f.target = 'agent:' || a.id
-		LEFT JOIN projects p ON p.id = a.project_id
-		WHERE f.rule = 'agent_dead' AND f.resolved_at IS NULL AND a.deleted = 0`+pred+`
-		ORDER BY a.name, a.id`, args...)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
+// deadKinds are the item kinds a dead rule covers, in payload order.
+var deadKinds = []struct{ kind, table, rule string }{
+	{kind: "agent", table: "agents", rule: sysscan.RuleAgentDead},
+	{kind: "skill", table: "skills", rule: sysscan.RuleSkillDead},
+}
 
+// deadComponents reframes the linter's ACTIVE agent_dead and skill_dead
+// findings — one source of truth, no second telemetry query. Agents first, then
+// skills, each by name.
+// A project scope keeps only the items EFFECTIVE there (effectiveScope) — a
+// dead component of another project is that project's problem.
+func deadComponents(db *sql.DB, esc *effectiveScope) ([]deadComponentDTO, error) {
+	pred, args := esc.predicate("t.", true)
 	out := []deadComponentDTO{}
-	for rows.Next() {
-		d := deadComponentDTO{Kind: "agent", Hint: deadHint}
-		if err := rows.Scan(&d.ID, &d.Name, &d.Scope, &d.ProjectSlug, &d.Message); err != nil {
+	for _, k := range deadKinds {
+		// One cursor at a time: the store runs a single connection.
+		rows, err := db.Query(`
+			SELECT t.id, t.name, t.scope, p.slug, f.message
+			FROM config_lint_findings f
+			JOIN `+k.table+` t ON f.target = '`+k.kind+`:' || t.id
+			LEFT JOIN projects p ON p.id = t.project_id
+			WHERE f.rule = ? AND f.resolved_at IS NULL AND t.deleted = 0`+pred+`
+			ORDER BY t.name, t.id`, append([]any{k.rule}, args...)...)
+		if err != nil {
 			return nil, err
 		}
-		out = append(out, d)
+		for rows.Next() {
+			d := deadComponentDTO{Kind: k.kind, Hint: deadHint}
+			if err := rows.Scan(&d.ID, &d.Name, &d.Scope, &d.ProjectSlug, &d.Message); err != nil {
+				rows.Close()
+				return nil, err
+			}
+			out = append(out, d)
+		}
+		rows.Close()
+		if err := rows.Err(); err != nil {
+			return nil, err
+		}
 	}
-	return out, rows.Err()
+	return out, nil
 }
 
 // undocumentedItems reframes the linter's ACTIVE docs_missing / docs_incomplete

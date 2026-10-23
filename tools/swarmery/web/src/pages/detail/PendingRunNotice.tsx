@@ -9,6 +9,8 @@ export function pendingSourceLabel(source: PendingSession['source']): string {
   switch (source) {
     case 'phase':
       return t`phase run`;
+    case 'review':
+      return t`phase review`;
     case 'plan':
       return t`plan run`;
     case 'dispatch':

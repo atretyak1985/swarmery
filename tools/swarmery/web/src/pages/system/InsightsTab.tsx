@@ -2,9 +2,12 @@
 // advisory cards over GET /api/system/insights. Sections: promotion
 // candidates (graduation rule, docs/EXTENDING.md), stale local overrides
 // (local name colliding with a plugin item), dead components (active
-// agent_dead findings), undocumented components (active docs_missing /
+// agent_dead / skill_dead findings), the skill audit (similar skill
+// descriptions, skills loaded per session, the latest weekly report),
+// undocumented components (active docs_missing /
 // docs_incomplete findings — the docs axis is kept out of lintMax, so this
-// list is where it surfaces in bulk), plugin drift. Each item expands to
+// list is where it surfaces in bulk), plugin drift, session-start cost
+// (CLAUDE.md size rules + unused MCP servers). Each item expands to
 // copies + a redacted unified
 // diff (DiffBlock, shared with the detail panel) + a copyable next-step
 // hint. Display-only by design — promotion itself stays a manual flow.
@@ -12,20 +15,25 @@
 import { plural } from '@lingui/core/macro';
 import { Trans, useLingui } from '@lingui/react/macro';
 import { createContext, useContext, useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import type {
   SystemDeadComponent,
   SystemInsights,
   SystemPluginDrift,
   SystemPromotionCandidate,
+  SystemSkillAuditFinding,
+  SystemSkillAuditReport,
+  SystemSkillAuditReportBody,
   SystemStaleOverride,
+  SystemStartCost,
   SystemUndocumentedItem,
 } from '../../api/types';
-import { fetchSystemInsights } from '../../api/system';
+import { fetchSkillAuditReport, fetchSystemInsights } from '../../api/system';
 import { Empty, ErrorBox, Loading } from '../../components/ui';
+import { Markdown } from '../../lib/markdown';
 import { useProjectColor } from '../../lib/projectColors';
 import { DiffBlock } from './ItemDetail';
-import { ScopeBadge } from './shared';
+import { ScopeBadge, SeverityChip } from './shared';
 
 /* ----- shared atoms ----- */
 
@@ -140,18 +148,21 @@ function ExpandableRow({
 }
 
 function InsightSection({
+  id,
   title,
   count,
   subtitle,
   children,
 }: {
+  /** Anchor for deep links (#skill-audit from the Agents-tab hint). */
+  id?: string;
   title: string;
   count: number;
   subtitle: string;
   children: React.ReactNode;
 }): JSX.Element {
   return (
-    <section className="overflow-hidden rounded-xl border border-line bg-surface">
+    <section id={id} className="overflow-hidden rounded-xl border border-line bg-surface">
       <div className="flex items-baseline gap-2 border-b border-line px-3.5 py-2.5">
         <h2 className="text-[13.5px] font-semibold text-ink">{title}</h2>
         <span className="font-mono text-[11px] text-ink-dim">{String(count)}</span>
@@ -260,6 +271,90 @@ function DeadRow({ d }: { d: SystemDeadComponent }): JSX.Element {
   );
 }
 
+// Skill-audit rows are flat like plugin drift: the severity-toned rule chip, the
+// pair (or the project), and the linter's message — which carries the numbers.
+function SkillAuditRow({ f }: { f: SystemSkillAuditFinding }): JSX.Element {
+  const { t } = useLingui();
+  const pair = f.rule === 'skill_desc_similar';
+  return (
+    <div className="flex flex-col gap-1 border-b border-line-soft px-3.5 py-2 last:border-b-0">
+      <div className="flex items-center gap-2">
+        <SeverityChip severity={f.severity} label={pair ? t`similar skills` : t`skills per session`} />
+        {pair ? (
+          <span className="min-w-0 truncate font-mono text-[12px] font-semibold text-ink">
+            {f.skills.join('  ~  ')}
+          </span>
+        ) : (
+          <ProjectChip slug={f.projectSlug} />
+        )}
+      </div>
+      <div className="font-mono text-[11px] text-ink-dim">{f.message}</div>
+    </div>
+  );
+}
+
+/** The report body, fetched when its row opens (the list payload carries only
+ * the date and path). */
+function SkillAuditReportBody(): JSX.Element {
+  const { t } = useLingui();
+  const [body, setBody] = useState<SystemSkillAuditReportBody | null | undefined>(undefined);
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    fetchSkillAuditReport()
+      .then((b) => {
+        if (!cancelled) setBody(b);
+      })
+      .catch((e: unknown) => {
+        if (!cancelled) setError(String(e));
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+  if (error !== null) return <div className="font-mono text-[11px] text-red">{error}</div>;
+  if (body === undefined) return <Loading label={t`report…`} />;
+  if (body === null) {
+    return (
+      <div className="font-mono text-[11px] text-ink-dim">
+        <Trans>the report is gone from the workspace</Trans>
+      </div>
+    );
+  }
+  return (
+    <div className="text-[13px]">
+      <Markdown text={body.markdown} />
+    </div>
+  );
+}
+
+function SkillAuditReportRow({ report }: { report: SystemSkillAuditReport | null }): JSX.Element {
+  if (report === null) {
+    return (
+      <div className="border-b border-line-soft px-3.5 py-2.5 font-mono text-[11px] text-ink-dim">
+        <Trans>No weekly report yet — seed config/routines/skill-audit.json to write one every Monday.</Trans>
+      </div>
+    );
+  }
+  const date = report.date;
+  return (
+    <ExpandableRow
+      header={
+        <>
+          <span className="min-w-0 truncate text-[13.5px] font-semibold text-ink">
+            <Trans>Latest report · {date}</Trans>
+          </span>
+          <span className="ml-auto hidden min-w-0 truncate font-mono text-[10px] text-ink-faint sm:inline">
+            {report.path}
+          </span>
+        </>
+      }
+    >
+      <SkillAuditReportBody />
+    </ExpandableRow>
+  );
+}
+
 // Undocumented rows reuse the dead-component shell: a headline that names the
 // item and the gap, expanding into the required subsections still absent. The
 // rule chip distinguishes "no guide at all" from "guide with holes" — the two
@@ -345,6 +440,47 @@ function PluginDriftRow({ d }: { d: SystemPluginDrift }): JSX.Element {
   );
 }
 
+// Session-start cost rows are flat like plugin drift: the finding is its own
+// message. Warn = a CLAUDE.md over the size rules; info = an MCP server whose
+// tools are offered to every session and nobody called in 30 days.
+function StartCostRow({ d }: { d: SystemStartCost }): JSX.Element {
+  const names = useContext(NamesCtx);
+  return (
+    <div className="flex flex-col gap-1 border-b border-line-soft px-3.5 py-2 last:border-b-0">
+      <div className="flex items-center gap-2">
+        <span
+          className={`shrink-0 rounded-full border px-2 py-px font-mono text-[10px] whitespace-nowrap ${
+            d.severity === 'warn'
+              ? 'border-amber/40 bg-amber/10 text-amber'
+              : 'border-blue/40 bg-blue/10 text-blue'
+          }`}
+        >
+          {d.rule}
+        </span>
+        <span className="min-w-0 truncate font-mono text-[12px] font-semibold text-ink" data-tip-mono data-tip={d.target}>
+          {d.target.replace(/^(claude_md|mcp):/, '').replace(/\|.*$/, '')}
+        </span>
+        <span className="ml-auto shrink-0">
+          {d.projectSlug !== null ? (
+            <Link
+              to={`/p/${d.projectSlug}`}
+              className="rounded-full border border-blue/40 px-2 py-px font-mono text-[10px] whitespace-nowrap text-blue hover:underline"
+              data-tip-mono data-tip={d.projectPath}
+            >
+              {names[d.projectSlug] ?? d.projectSlug}
+            </Link>
+          ) : (
+            <span className="font-mono text-[10px] whitespace-nowrap text-ink-faint">
+              {d.projectPath === '' ? <Trans>every project</Trans> : d.projectPath}
+            </span>
+          )}
+        </span>
+      </div>
+      <div className="font-mono text-[11px] text-ink-dim">{d.message}</div>
+    </div>
+  );
+}
+
 /* ----- the tab ----- */
 
 export function InsightsTab({
@@ -360,6 +496,7 @@ export function InsightsTab({
   projectId?: string | null;
 }): JSX.Element {
   const { t } = useLingui();
+  const { hash } = useLocation();
   const [insights, setInsights] = useState<SystemInsights | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
@@ -380,8 +517,17 @@ export function InsightsTab({
     };
   }, [refreshKey, attempt, projectId]);
 
+  // A deep link (#skill-audit from the Agents-tab hint) lands on its section
+  // once the payload has rendered it.
+  const loaded = insights !== null;
+  useEffect(() => {
+    if (!loaded || hash === '') return;
+    document.getElementById(hash.slice(1))?.scrollIntoView?.({ block: 'start' });
+  }, [loaded, hash]);
+
   if (error !== null) return <ErrorBox message={error} onRetry={() => setAttempt((a) => a + 1)} />;
   if (insights === null) return <Loading label={t`insights…`} />;
+  const skillAudit = insights.skillAudit ?? [];
 
   return (
     <NamesCtx.Provider value={projectNames}>
@@ -419,14 +565,32 @@ export function InsightsTab({
       <InsightSection
         title={t`Dead components`}
         count={insights.dead.length}
-        subtitle={t`0 telemetry mentions in 30 days (advisory)`}
+        subtitle={t`no use in 30 days, matched by name (advisory)`}
       >
         {insights.dead.length === 0 ? (
           <Empty>
-            <Trans>every agent has recent telemetry mentions</Trans>
+            <Trans>every agent and skill was used in the last 30 days</Trans>
           </Empty>
         ) : (
-          insights.dead.map((d) => <DeadRow key={d.id} d={d} />)
+          insights.dead.map((d) => <DeadRow key={`${d.kind}:${String(d.id)}`} d={d} />)
+        )}
+      </InsightSection>
+
+      <InsightSection
+        id="skill-audit"
+        title={t`Skill audit`}
+        count={skillAudit.length}
+        subtitle={t`similar skill descriptions and skills loaded per session — extend a skill before adding one`}
+      >
+        <SkillAuditReportRow report={insights.skillAuditReport ?? null} />
+        {skillAudit.length === 0 ? (
+          <Empty>
+            <Trans>no similar skill descriptions, and no project above the skills-per-session limit</Trans>
+          </Empty>
+        ) : (
+          skillAudit.map((f) => (
+            <SkillAuditRow key={`${f.rule}:${f.skills.join('|')}:${f.projectSlug ?? ''}`} f={f} />
+          ))
         )}
       </InsightSection>
 
@@ -457,6 +621,20 @@ export function InsightsTab({
           insights.pluginDrift.map((d) => (
             <PluginDriftRow key={`${d.rule}:${d.pluginId}:${d.projectPath}`} d={d} />
           ))
+        )}
+      </InsightSection>
+
+      <InsightSection
+        title={t`Session-start cost`}
+        count={insights.startCost?.length ?? 0}
+        subtitle={t`loaded into every session's first request — CLAUDE.md size, unused MCP servers`}
+      >
+        {insights.startCost === undefined || insights.startCost.length === 0 ? (
+          <Empty>
+            <Trans>no oversized CLAUDE.md and no idle MCP server</Trans>
+          </Empty>
+        ) : (
+          insights.startCost.map((d) => <StartCostRow key={`${d.rule}:${d.target}`} d={d} />)
         )}
       </InsightSection>
     </div>

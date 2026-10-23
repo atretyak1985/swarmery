@@ -1907,6 +1907,10 @@ msgid "from a session"
 msgstr "from a session"
 
 #: src/workspace/boardModel.ts
+msgid "from GitHub"
+msgstr "from GitHub"
+
+#: src/workspace/boardModel.ts
 msgid "from session #{id}"
 msgstr "from session #{id}"
 
@@ -2101,6 +2105,10 @@ msgstr "kebab-case only ([a-z0-9-])"
 #: src/components/PlanBranchDirtyModal.tsx
 msgid "keep the work"
 msgstr "keep the work"
+
+#: src/workspace/boardModel.ts
+msgid "kept in step with a GitHub issue or pull request"
+msgstr "kept in step with a GitHub issue or pull request"
 
 #: src/components/KillButton.tsx
 msgid "Kill"
@@ -2364,6 +2372,10 @@ msgstr "neutral cool gray"
 msgid "never run"
 msgstr "never run"
 
+#: src/workspace/TaskCard.tsx
+msgid "new comment"
+msgstr "new comment"
+
 #: src/components/NewProjectButton.tsx
 msgid "New project"
 msgstr "New project"
@@ -2588,6 +2600,11 @@ msgstr "One send reaches at most {max} sessions; select all takes the first {max
 #: src/api.ts
 msgid "Only a human can close the open criteria of this phase. Do the [MANUAL] checks and tick them in the Criteria tab — the phase is listed in Needs you."
 msgstr "Only a human can close the open criteria of this phase. Do the [MANUAL] checks and tick them in the Criteria tab — the phase is listed in Needs you."
+
+#: src/workspace/TaskCard.tsx
+#: src/workspace/TaskCard.tsx
+msgid "open {ref} on GitHub"
+msgstr "open {ref} on GitHub"
 
 #: src/components/VcsSignInDialog.tsx
 msgid "Open {verificationUri}"
@@ -3671,6 +3688,10 @@ msgstr "skipped: {skippedCount}"
 msgid "slug"
 msgstr "slug"
 
+#: src/workspace/TaskCard.tsx
+msgid "someone commented on GitHub since this card was last handled — the newest comments are in its description"
+msgstr "someone commented on GitHub since this card was last handled — the newest comments are in its description"
+
 #: src/main.tsx
 msgid "something broke"
 msgstr "something broke"
@@ -3686,6 +3707,10 @@ msgstr "spawned by verification to repair {externalId}"
 #: src/workspace/boardModel.ts
 msgid "stale"
 msgstr "stale"
+
+#: src/lib/needsYou.ts
+msgid "Stalled phase"
+msgstr "Stalled phase"
 
 #: src/workspace/NewTaskModal.tsx
 msgid "start immediately — the dispatcher picks it up"

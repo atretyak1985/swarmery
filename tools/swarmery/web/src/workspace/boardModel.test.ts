@@ -23,6 +23,8 @@ import {
   compareDispatchOrder,
   DEP_BLOCK_PREFIX,
   filterTasks,
+  githubItem,
+  hasNewComment,
   idleSince,
   inboxTtlMs,
   isAccountPause,
@@ -1085,5 +1087,36 @@ describe('isExpired vs isStale', () => {
     const never = makeTask({ staleAfter: null });
     expect(isExpired(never, now)).toBe(false);
     expect(isStale(never, now)).toBe(false);
+  });
+});
+
+describe('GitHub inbox labels', () => {
+  it('parses a github:<owner>/<repo>#<n> label into its item', () => {
+    expect(githubItem('github:octo/widgets.js#12')).toEqual({
+      slug: 'octo/widgets.js',
+      number: 12,
+      url: 'https://github.com/octo/widgets.js/issues/12',
+    });
+  });
+
+  it('is null for every other label', () => {
+    const others = [
+      'jira-ticket',
+      'new-comment',
+      'github:octo#1',
+      'github:octo/w#0',
+      'github:../w#1',
+      'github:o/w#1x',
+      'github:o/w/x#1',
+    ];
+    for (const l of others) {
+      expect(githubItem(l)).toBeNull();
+    }
+  });
+
+  it('shows the new-comment marker only on an inbox card carrying it', () => {
+    expect(hasNewComment({ boardColumn: 'triage', labels: ['github:o/r#1', 'new-comment'] })).toBe(true);
+    expect(hasNewComment({ boardColumn: 'triage', labels: ['github:o/r#1'] })).toBe(false);
+    expect(hasNewComment({ boardColumn: 'in_review', labels: ['new-comment'] })).toBe(false);
   });
 });

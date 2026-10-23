@@ -551,10 +551,6 @@ msgstr "✓ завжди дозволено"
 msgid "$ Cost"
 msgstr "$ Вартість"
 
-#: src/pages/system/InsightsTab.tsx
-msgid "0 telemetry mentions in 30 days (advisory)"
-msgstr "0 згадок у телеметрії за 30 днів (довідково)"
-
 #: src/pages/inbox/InboxDetail.tsx
 msgid "A change to {agent}, drafted from its evidence"
 msgstr "Зміна для {agent}, підготована з його доказів"
@@ -960,6 +956,10 @@ msgstr "завдяки вам"
 #: src/pages/learning/Proof.tsx
 msgid "Because of you"
 msgstr "Завдяки вам"
+
+#: src/pages/system/SkillsToExtendHint.tsx
+msgid "Before proposing a new agent, extend an existing skill."
+msgstr "Перш ніж пропонувати нового агента, розширте наявний скіл."
 
 #: src/pages/Retro.tsx
 msgid "behavior {behavior}"
@@ -1641,8 +1641,8 @@ msgid "events"
 msgstr "події"
 
 #: src/pages/system/InsightsTab.tsx
-msgid "every agent has recent telemetry mentions"
-msgstr "кожен агент має свіжі згадки в телеметрії"
+msgid "every agent and skill was used in the last 30 days"
+msgstr "кожен агент і скіл використовувався за останні 30 днів"
 
 #: src/pages/system/InsightsTab.tsx
 msgid "every component carries a complete usage guide"
@@ -1660,6 +1660,10 @@ msgstr "Кожен наступний запуск, що торкається {a
 #: src/pages/inbox/ReviewItem.tsx
 msgid "Every phase of this plan finished. A read-only reviewer read all of their run branches together, looking at the seams between phases — what one phase hands over and another expects. Nothing was blocked or re-run."
 msgstr "Усі фази цього плану завершені. Рев’юер без права на запис прочитав усі їхні гілки запусків разом, дивлячись на шви між фазами — що одна фаза передає, а інша очікує. Нічого не заблоковано і не перезапущено."
+
+#: src/pages/system/InsightsTab.tsx
+msgid "every project"
+msgstr "кожен проєкт"
 
 #: src/pages/Analytics.tsx
 msgid "every series is hidden — click a legend chip to show one"
@@ -2242,6 +2246,10 @@ msgstr "останнє використання <0>{lastUsed}</0>"
 msgid "latest eval run, finished {evalFinished}"
 msgstr "останній прогін оцінки, завершено {evalFinished}"
 
+#: src/pages/system/InsightsTab.tsx
+msgid "Latest report · {date}"
+msgstr "Останній звіт · {date}"
+
 #: src/pages/learning/Learning.tsx
 #: src/pages/learning/Learning.tsx
 msgid "Learning"
@@ -2308,6 +2316,10 @@ msgstr "лінт…"
 #: src/pages/Retro.tsx
 msgid "LLM-judge trajectory score"
 msgstr "оцінка траєкторії LLM-суддею"
+
+#: src/pages/system/InsightsTab.tsx
+msgid "loaded into every session's first request — CLAUDE.md size, unused MCP servers"
+msgstr "завантажується в перший запит кожної сесії — розмір CLAUDE.md, невикористані сервери MCP"
 
 #: src/pages/health/PhaseRunsTab.tsx
 #: src/pages/inbox/Inbox.tsx
@@ -2721,6 +2733,10 @@ msgstr "відкритих рекомендацій немає — радник 
 msgid "no overlays found — the daemon's working copy has no overlays/ directory, or it is empty on this machine"
 msgstr "оверлеїв не знайдено — у робочій копії демона немає каталогу overlays/ або він порожній на цій машині"
 
+#: src/pages/system/InsightsTab.tsx
+msgid "no oversized CLAUDE.md and no idle MCP server"
+msgstr "немає завеликого CLAUDE.md і жодного простійного сервера MCP"
+
 #: src/pages/Analytics.tsx
 msgid "no priced tasks"
 msgstr "немає задач із вартістю"
@@ -2770,6 +2786,14 @@ msgstr "за {days, plural, one {останній # день} few {останн�
 msgid "No scored turns in this window."
 msgstr "У цьому вікні немає оцінених ходів."
 
+#: src/pages/system/InsightsTab.tsx
+msgid "no similar skill descriptions, and no project above the skills-per-session limit"
+msgstr "немає схожих описів скілів і жодного проєкту понад ліміт скілів на сесію"
+
+#: src/pages/system/SkillsToExtendHint.tsx
+msgid "No skill-audit report yet — seed config/routines/skill-audit.json."
+msgstr "Звіту аудиту скілів ще немає — засійте config/routines/skill-audit.json."
+
 #: src/pages/Retro.tsx
 msgid "no SKILL.md was resolved from the lesson; dismissing frees the slot so the rule can re-propose"
 msgstr "з уроку не вдалося визначити SKILL.md; відхилення звільнить слот, і правило зможе запропонувати знову"
@@ -2810,9 +2834,17 @@ msgstr "немає придатного гайда `# How to use` (system-docs-f
 msgid "no usage guide yet — <0>{name}</0> has no <1># How to use</1> section in its source file"
 msgstr "гайда з використання ще немає — у вихідному файлі <0>{name}</0> немає розділу <1># How to use</1>"
 
+#: src/pages/system/InsightsTab.tsx
+msgid "no use in 30 days, matched by name (advisory)"
+msgstr "не використовувався 30 днів, зіставлено за назвою (довідково)"
+
 #: src/pages/system/ItemDetail.tsx
 msgid "no versions captured yet"
 msgstr "версій ще не зафіксовано"
+
+#: src/pages/system/InsightsTab.tsx
+msgid "No weekly report yet — seed config/routines/skill-audit.json to write one every Monday."
+msgstr "Тижневого звіту ще немає — засійте config/routines/skill-audit.json, щоб він писався щопонеділка."
 
 #: src/pages/Retro.tsx
 msgid "noise"
@@ -3337,6 +3369,10 @@ msgstr "прибрати інструмент {tool}"
 msgid "replaced by a newer lesson"
 msgstr "замінений новішим уроком"
 
+#: src/pages/system/InsightsTab.tsx
+msgid "report…"
+msgstr "звіт…"
+
 #: src/pages/system/ModsTab.tsx
 msgid "Rescan"
 msgstr "Пересканувати"
@@ -3656,6 +3692,10 @@ msgstr "сесія {sessionId}"
 msgid "Session {sessionId} asked {askedAgo} ago and is waiting on you. Nothing runs until you answer."
 msgstr "Сесія {sessionId} запитала {askedAgo} тому й чекає на вас. Доки ви не відповісте, ніщо не виконується."
 
+#: src/pages/system/InsightsTab.tsx
+msgid "Session-start cost"
+msgstr "Вартість старту сесії"
+
 #: src/pages/Retro.tsx
 #: src/pages/system-hub/Profiles.tsx
 msgid "sessions"
@@ -3697,12 +3737,24 @@ msgstr "показати звіт validate для {name}"
 msgid "sign-in or access"
 msgstr "вхід або доступ"
 
+#: src/pages/system/InsightsTab.tsx
+msgid "similar skill descriptions and skills loaded per session — extend a skill before adding one"
+msgstr "схожі описи скілів і скіли, завантажені за сесію, — розширте скіл, перш ніж додавати новий"
+
+#: src/pages/system/InsightsTab.tsx
+msgid "similar skills"
+msgstr "схожі скіли"
+
 #: src/pages/Analytics.tsx
 #: src/pages/Analytics.tsx
 #: src/pages/Retro.tsx
 #: src/pages/SystemHub.tsx
 msgid "skill"
 msgstr "скіл"
+
+#: src/pages/system/InsightsTab.tsx
+msgid "Skill audit"
+msgstr "Аудит скілів"
 
 #: src/pages/Analytics.tsx
 msgid "skill invocations"
@@ -3723,9 +3775,17 @@ msgstr "скіли"
 msgid "Skills"
 msgstr "Скіли"
 
+#: src/pages/system/InsightsTab.tsx
+msgid "skills per session"
+msgstr "скілів на сесію"
+
 #: src/pages/Analytics.tsx
 msgid "skills run inside a turn, not as their own — no independent $ to attribute."
 msgstr "скіли працюють усередині ходу, а не окремо — окремої вартості в $ не приписати."
+
+#: src/pages/system/SkillsToExtendHint.tsx
+msgid "Skills to extend first — skill audit {date}"
+msgstr "Скіли, які варто розширити першими — аудит скілів {date}"
 
 #: src/pages/Analytics.tsx
 msgid "skills…"
@@ -4047,6 +4107,10 @@ msgstr "Пропозицію позначено погодженою; засто
 #: src/pages/inbox/inboxModel.ts
 msgid "The recommendation is closed. It reopens on its own if the rule keeps firing."
 msgstr "Рекомендацію закрито. Вона відкриється знову сама, якщо правило й далі спрацьовуватиме."
+
+#: src/pages/system/InsightsTab.tsx
+msgid "the report is gone from the workspace"
+msgstr "звіту вже немає у workspace"
 
 #: src/pages/inbox/InboxDetail.tsx
 msgid "The review leaves the Inbox. It stays on record; nothing else changes."

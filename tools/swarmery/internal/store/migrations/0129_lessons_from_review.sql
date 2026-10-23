@@ -1,4 +1,4 @@
--- 0128: lesson candidates from repeated review findings (verify-not-trust phase 8,
+-- 0129: lesson candidates from repeated review findings (verify-not-trust phase 8,
 -- D3/D38). A finding type that recurs in one code area across two or more phases
 -- becomes ONE surprise_lessons candidate (internal/lessons/fromreview.go) — never
 -- a rule: Accept stays the only path to 'active' (activeguard_test.go).

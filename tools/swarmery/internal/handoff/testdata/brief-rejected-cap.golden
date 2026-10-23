@@ -1,0 +1,26 @@
+# Handoff: ship the cache layer
+## State — what is done and verified vs in progress
+- store chosen, eviction pending
+## Non-goals — what this session deliberately did not do or ruled out
+- no cache metrics
+## Rejected
+- Redis — chose SQLite table instead [decision D-1]
+- LRU eviction — Evicts the least recently used entry when full; chose TTL only instead [interview D-2]
+- Eager warm-up — chose Lazy fill instead [decision D-3]
+- refactor — d2.task_type: refactor -> bugfix [correction decision:900]
+- continue — d1.run_end: continue -> stop [correction decision:901]
+- Split phase 1 into a migration and a backfill — the backfill must ship with the migration [correction revision:7]
+- Redis as the store — dropped
+- memcached — another service to run
+- write-through on every turn — doubled the write load
+- … and 7 more
+
+## Open risks & failed checks
+- unknown
+## Next step
+- implement TTL in internal/cache
+## Verification
+- go test ./internal/cache/...
+
+## Repository anchor (recorded by swarmery, not generated)
+- unknown (cwd no longer exists)

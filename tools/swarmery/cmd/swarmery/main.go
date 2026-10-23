@@ -18,6 +18,7 @@
 //	swarmery onboard <slug>        bootstrap a consumer project (.claude + workspace)
 //	swarmery agents sync           regenerate the project-local agent overrides
 //	swarmery link token            print / rotate the swarmery link token
+//	swarmery ghinbox sync          prReview repos' new issues/PRs/comments → triage cards
 package main
 
 import (
@@ -57,6 +58,7 @@ import (
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/economics"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/evals"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/extract"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/guards"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/handoff"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/hookcfg"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/hookshim"
@@ -91,6 +93,7 @@ import (
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/settingsoverlay"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/spawnpath"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/staleness"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/stall"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/store"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/surprise"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/sysedit"
@@ -161,6 +164,8 @@ func main() {
 		err = cmdEvalsImport(os.Args[2:])
 	case "sysscan":
 		err = cmdSysscan(os.Args[2:])
+	case "skill-audit":
+		err = skillAudit(os.Args[2:], os.Stdout)
 	case "install":
 		err = installer.CmdInstall(os.Args[2:])
 	case "uninstall":
@@ -204,6 +209,11 @@ func main() {
 		os.Exit(cmdTriage(os.Args[2:]))
 	case "link":
 		err = cmdLink(os.Args[2:], os.Stdout)
+	case "ghinbox":
+		// Exit code is the contract (ghinbox_cli.go): the github-inbox routine
+		// runs `ghinbox sync --all` as a command step, and a 1 there is what
+		// keeps the next run's window from moving past an unread repository.
+		os.Exit(cmdGhinbox(os.Args[2:]))
 	case "rescrub":
 		err = cmdRescrub(os.Args[2:], os.Stdout)
 	case "workaround-backfill":
@@ -293,6 +303,13 @@ func usage() {
                                    nothing is edited. --project never opens the database;
                                    --all reads the non-archived project list from it (read-only,
                                    no migrations). The same report R13 and the Memory page show.
+  swarmery skill-audit [--db <path>] [--json] [--similarity <0..1>] [--p95 <n>] [--window <days>]
+                                   unused agents and skills, similar skill descriptions and the
+                                   per-project p95 of skills loaded per session, computed now from
+                                   the registry and the last 30 days of events (usage matched by
+                                   name). Thresholds default to guards.json; the flags override them
+                                   for one run (calibration). Read-only, never migrates; exit 0
+                                   whatever it finds. The weekly skill-audit routine's first step.
   swarmery wscan    [--db <path>] [--workspace-root <dir>]   one-shot workspace scan
   swarmery evals-import [--db <path>] --agent <name> <results.json>
                                    import a promptfoo results.json as an eval run for a
@@ -319,6 +336,11 @@ func usage() {
                                    minted on first use): no flag prints it, --print-path prints the
                                    file path, --rotate mints a new one (a running daemon picks it up
                                    on the next request that presents it). Never opens the database
+  swarmery ghinbox sync (--project <id|slug> | --all) [--since <RFC3339>] [--dry-run] [--db <path>]
+                                   GitHub inbox: one triage card per open issue / PR of the
+                                   prReview repos that is new or got a comment since the last
+                                   ok github-inbox run (else 24h); read with the daemon's stored
+                                   token only; never writes todo; --dry-run writes nothing
   swarmery hook <permission-request|stop>          Claude Code hook shim (reads stdin)
   swarmery hooks <install|uninstall|status> [--project <path>] [--all] [--port <n>]
   swarmery agents sync [--project <name|dir>] [--check] [--claude-dir <dir>] [--marketplace <name>]
@@ -1776,7 +1798,7 @@ func cmdServe(args []string) error {
 	notifyURL := fs.String("notify-url", os.Getenv("SWARMERY_NOTIFY_URL"),
 		"webhook URL to POST notifications to (env: SWARMERY_NOTIFY_URL; empty disables). NOTE: bodies include project names and tool arguments — point this only at receivers you trust")
 	notifyEvents := fs.String("notify-events", notify.EventsSetting(os.Getenv),
-		"comma-separated events to send: approval_requested, approval_expired, session_completed, session_error, plugin_drift, phase_surprise, run_needs_operator (default: approval_requested,run_needs_operator; env: SWARMERY_NOTIFY_EVENTS replaces the default)")
+		"comma-separated events to send: approval_requested, approval_expired, session_completed, session_error, plugin_drift, phase_surprise, run_needs_operator, phase_stalled (default: approval_requested,run_needs_operator; env: SWARMERY_NOTIFY_EVENTS replaces the default)")
 	notifyTemplate := fs.String("notify-template", envOr("SWARMERY_NOTIFY_TEMPLATE", notify.TemplateGeneric),
 		"webhook body template: generic (raw JSON) | ntfy (text body + Title/Priority/Tags headers) | telegram (Bot API sendMessage JSON) (env: SWARMERY_NOTIFY_TEMPLATE)")
 	notifyTelegramChat := fs.String("notify-telegram-chat", os.Getenv("SWARMERY_NOTIFY_TELEGRAM_CHAT"),
@@ -2875,6 +2897,9 @@ func cmdServe(args []string) error {
 	// (GET /api/sessions/{id}/context-hogs resolves uuid→transcript under them,
 	// searching every configured root the way the ingest heal does).
 	api.AttachProjectsRoots(cfg.ProjectsRoots)
+	// The latest weekly skill-audit report lives in the same workspace the
+	// workspace scanner watches (--workspace-root).
+	api.AttachWorkspaceRoot(wsCfg.WorkspaceRoot)
 	bootLog.Info(logbuf.Phasef("api.build", time.Since(buildStart)))
 	addr := net.JoinHostPort(*bind, strconv.Itoa(*port))
 	log.Printf("swarmery serving on http://%s (db: %s)", addr, *dbPath)
@@ -3023,6 +3048,45 @@ func cmdServe(args []string) error {
 		}()
 		log.Printf("swarmery worktree janitor started (interval %s, min-idle %s)",
 			wtjCfg.TickInterval, wtjCfg.MinIdle)
+	}
+
+	// verify-not-trust phase 11: the stalled-phase detector. Every 60 s it
+	// derives which running phases' active stage (executor → reviewer → verifier)
+	// stopped working — no turn for stallMinutes (a `**Playbook:**` override such
+	// as long-tests stretches it), a session that ended without its report /
+	// verdict / record, or a permission request pending past stallMinutes — and
+	// reconciles the stall_notices ledger: a new stall emits ONE phase_stalled
+	// webhook and nudges the plan page and the Needs-you queue (plan_updated); a
+	// cleared one leaves the ledger, so a recurrence notifies again. Notification
+	// only: nothing is restarted or killed. Thresholds come from guards.json
+	// (SWARMERY_GUARDS overrides it whole); a broken override disables the
+	// detector loudly rather than guessing. Kill-switch SWARMERY_STALL=0.
+	if os.Getenv("SWARMERY_STALL") == "0" {
+		log.Printf("swarmery stall detector disabled (SWARMERY_STALL=0)")
+	} else if g, err := guards.Load(); err != nil {
+		log.Printf("error: swarmery stall detector disabled: %v", err)
+	} else {
+		stallTicker := &stall.Ticker{
+			DB:     db,
+			Config: stall.Config{Guards: g},
+			Emit: func(st stall.Stalled) {
+				minutes := st.Minutes(time.Now())
+				notifier.Emit(notify.PhaseStalledEvent(notify.PhaseStalled{
+					TaskID: st.TaskID, PhaseID: st.PhaseID, PhaseSeq: st.PhaseSeq, PhaseName: st.PhaseName,
+					PlanTitle: st.PlanTitle, Project: st.Project, Stage: string(st.Stage), Reason: string(st.Reason),
+					SinceMinutes: minutes, SessionUUID: st.SessionUUID,
+					Detail: stall.Describe(st.Stage, st.Reason, minutes),
+				}))
+			},
+			Changed: func(taskID int64) {
+				if bus != nil {
+					bus.Publish(ingest.Notification{Type: ingest.NotePlanUpdated, TaskID: taskID})
+				}
+			},
+		}
+		go stallTicker.Run(ctx)
+		log.Printf("swarmery stall detector started (interval %s, stallMinutes %d, playbook overrides %v)",
+			stall.DefaultInterval, g.StallMinutes, g.PlaybookOverrides)
 	}
 
 	srv := api.NewHTTPServer(addr, handler)

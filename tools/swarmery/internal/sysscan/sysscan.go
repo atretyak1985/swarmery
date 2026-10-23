@@ -71,6 +71,11 @@ type Config struct {
 	MaxClaudeMDTokens   int // claude_md_oversized: max estimated tokens, len/4 (default 2500; env SWARMERY_LINT_MAX_CLAUDE_MD_TOKENS)
 	MinDocsSection      int // docs_incomplete: min runes of body per REQUIRED guide subsection (default 40; env SWARMERY_LINT_MIN_DOCS_SECTION)
 
+	// Skill-audit thresholds (skillaudit.go). Zero = read guards.json
+	// (guards.Load) on each lint pass; set them only to pin a test.
+	SkillSimilarityThreshold float64 // skill_desc_similar: token Jaccard at or above which two skills are flagged
+	SessionSkillLoadP95      int     // session_skill_load_high: p95 of distinct skills per session above which a project is flagged
+
 	// ClaudeBin is the claude executable the mods pass validates with. ""
 	// resolves it via internal/claudebin at validate time; tests inject a fake
 	// so no test ever runs the real CLI.

@@ -366,6 +366,12 @@ export interface Session {
    *  modelChanged, which has no direction: an operator escalating sonnet ->
    *  opus changed model but did not fall back. The chip renders on THIS. */
   modelFellBack: boolean;
+  /** The session's OWN turns ran on more than one model (subagent and
+   *  `<synthetic>` turns excluded, `[1m]` folded). Broader than modelChanged,
+   *  which compares only the first and last model. Additive optional. */
+  modelSwitched?: boolean;
+  /** The distinct models of those turns, first-use order. Additive optional. */
+  models?: string[];
   gitBranch: string | null;
   cwd: string | null;
   status: SessionStatus;
@@ -591,7 +597,7 @@ export type SessionsResponse = SessionsPage;
 export interface PendingSession {
   pending: true;
   sessionUuid: string;
-  source: 'phase' | 'plan' | 'dispatch' | 'verify' | 'planning' | 'revision' | (string & {});
+  source: 'phase' | 'review' | 'plan' | 'dispatch' | 'verify' | 'planning' | 'revision' | (string & {});
   running: boolean;
   startedAt: string | null;
   label: string;
@@ -1811,12 +1817,15 @@ export type ApprovalChannel = 'shim' | 'mod';
  * a production deploy handed to the session's own terminal, a session that
  * ended its turn waiting for a typed reply, a recently failed session, a
  * plan phase whose every open criterion is `[MANUAL]` (only a human closes it),
- * or one whose every open criterion is `[LAND]` with its run branch ready,
- * pushed or under an open PR (only the merge is left), or a phase whose run
- * touched protected paths (`phase_decision`: allow them into scope or reject).
+ * one whose every open criterion is `[LAND]` with its run branch ready,
+ * pushed or under an open PR (only the merge is left), a phase whose run
+ * touched protected paths (`phase_decision`: allow them into scope or reject),
+ * or a plan phase whose active stage stopped working (`stalled_phase`, ranked
+ * just below approval).
  */
 export type NeedsYouKind =
   | 'approval'
+  | 'stalled_phase'
   | 'question'
   | 'phase_decision'
   | 'prod_deploy_local'
@@ -1845,6 +1854,14 @@ export interface NeedsYouPhase {
   landingState?: NeedsYouLandingState;
   /** `awaiting_merge` only, once a PR is open. */
   prUrl?: string;
+}
+
+/** A `stalled_phase` item's diagnosis — also on the approval item a
+ *  permission-pending stall was folded into (Go needsYouStall). */
+export interface NeedsYouStall {
+  stage: StallStage;
+  reason: StallReason;
+  sinceMinutes: number;
 }
 
 /** One refusal the phase-guard hook logged to the run's `.swarmery/guard.log`. */
@@ -1941,8 +1958,11 @@ export interface NeedsYouItem {
   /** The session's terminal deep link (WARP_FOCUS_URL), when known. */
   termFocusUrl: string | null;
   suggestion: ReplySuggestion | null;
-  /** `manual_phase` / `awaiting_merge` only: the phase to open. Absent on every session item. */
+  /** `manual_phase` / `awaiting_merge` / `stalled_phase`: the phase to open — and on an
+   *  approval item a permission-pending stall was folded into. Absent on every other item. */
   phase?: NeedsYouPhase;
+  /** `stalled_phase`, and an approval a permission-pending stall was folded into. */
+  stall?: NeedsYouStall;
   /** approval items only: the transport of the permission request. Absent on an older daemon. */
   channel?: ApprovalChannel;
   /** `phase_decision` only: the question, its options and the run's guard check. */
@@ -2148,7 +2168,7 @@ export type TaskPriority = 'urgent' | 'high' | 'normal' | 'low';
  * were written against an incomplete set — and the one that indexes a Record by
  * origin crashed the card renderer on the first fix card that reached the board.
  */
-export type TaskOrigin = 'manual' | 'session' | 'llm' | 'verify-fix';
+export type TaskOrigin = 'manual' | 'session' | 'llm' | 'verify-fix' | 'github';
 
 /**
  * Where a captured card came from — Go: boardTaskSourceDTO (migration 0066).
@@ -2911,10 +2931,11 @@ export interface SystemStaleOverride {
   hint: string;
 }
 
-/** Go: deadComponentDTO — an active agent_dead lint finding, insight framing. */
+/** Go: deadComponentDTO — an active agent_dead / skill_dead lint finding,
+ * insight framing (usage matched by name over 30 days; advisory). */
 export interface SystemDeadComponent {
-  /** Always 'agent' today — agent_dead is the only telemetry-dead rule. */
-  kind: 'agent';
+  /** agent (agent_dead) | skill (skill_dead). */
+  kind: 'agent' | 'skill';
   id: number;
   name: string;
   scope: 'global' | 'project';
@@ -2955,6 +2976,54 @@ export interface SystemInsights {
    * drift scanner.
    */
   pluginDrift?: SystemPluginDrift[];
+  /** Active skill_desc_similar / session_skill_load_high findings. Additive
+   * optional: absent on a daemon older than the skill audit. */
+  skillAudit?: SystemSkillAuditFinding[];
+  /** The newest weekly skill-audit report; null before the routine wrote one,
+   * absent on an older daemon. */
+  skillAuditReport?: SystemSkillAuditReport | null;
+  /**
+   * Active session-start cost findings — claude_md_oversized,
+   * claude_md_over_200_lines, mcp_server_unused_30d. Additive optional.
+   */
+  startCost?: SystemStartCost[];
+}
+
+/** Go: skillAuditFindingDTO — one active skill_desc_similar or
+ * session_skill_load_high finding (sysscan/skillaudit.go). */
+export interface SystemSkillAuditFinding {
+  rule: 'skill_desc_similar' | 'session_skill_load_high';
+  severity: LintSeverity;
+  message: string;
+  /** skill_desc_similar: the pair's two names; [] for a project finding. */
+  skills: string[];
+  /** session_skill_load_high: the flagged project; null for a pair. */
+  projectSlug: string | null;
+}
+
+/** Go: skillAuditReportDTO — the newest weekly skill-audit report on disk
+ * (<workspace>/swarmery/workspace/retro/skill-audit-<date>.md). */
+export interface SystemSkillAuditReport {
+  /** YYYY-MM-DD, from the file name. */
+  date: string;
+  path: string;
+}
+
+/** Go: skillAuditReportBodyDTO — GET /api/system/skill-audit/report. */
+export interface SystemSkillAuditReportBody extends SystemSkillAuditReport {
+  /** Redacted. */
+  markdown: string;
+}
+
+/** One active session-start cost finding (Go: startCostDTO). */
+export interface SystemStartCost {
+  rule: string;
+  severity: string;
+  target: string;
+  message: string;
+  /** Null for a user-scope MCP server — every project loads it. */
+  projectSlug: string | null;
+  projectPath: string;
 }
 
 /** One active plugin_* finding, resolved to the project it belongs to. */
@@ -4241,6 +4310,31 @@ export interface EpicPhase {
    *  did not settle on its own — repeat the review or accept it as is. null
    *  otherwise; absent from an older daemon. Answered inline on the Review tab. */
   reviewDecision?: NeedsYouDecision | null;
+  /** The phase's current stall — its active stage stopped working (Go
+   *  phaseStallDTO, internal/stall). null when not stalled; absent from a daemon
+   *  older than the stall detector — read it as `phase.stalled ?? null`.
+   *  Notification only: nothing about completion consults it. */
+  stalled?: PhaseStall | null;
+}
+
+/** Which session of a phase run is stalled. */
+export type StallStage = 'executor' | 'reviewer' | 'verifier';
+
+/** Why it counts as stalled: no turn for stallMinutes, a session that ended
+ *  without its report/verdict/record, or a permission request pending too long. */
+export type StallReason = 'no-turns' | 'ended' | 'permission-pending';
+
+/** Mirrors api.phaseStallDTO (the stall_notices ledger the detector's tick keeps). */
+export interface PhaseStall {
+  stage: StallStage;
+  reason: StallReason;
+  /** When the stall began (RFC3339): the last sign of life, or the request's time. */
+  since: string;
+  sinceMinutes: number;
+  /** The stalled stage's session; '' while it has not linked one. */
+  sessionUuid: string;
+  /** The pending permission request behind `permission-pending`. */
+  requestId: number | null;
 }
 
 /** One finding of a review round (Go reviewFindingDTO, internal/api/review_findings.go). */
@@ -5050,3 +5144,44 @@ export type PhaseLandingRefreshErrorCode =
   | 'no-remote'
   | 'provider-unknown'
   | 'status-failed';
+
+// --- session-start cost: GET /api/projects/{id}/first-request ---------------
+
+/** Go: firstreq.Measured — real usage of each session's first request. */
+export interface FirstRequestMeasured {
+  /** Median cache write (5m + 1h) of the first assistant turn. */
+  medianTokens: number;
+  /** Median whole first prompt (input + cache read + cache write). */
+  medianPromptTokens: number;
+  sessions: number;
+}
+
+/** Go: firstreq.Breakdown — an ESTIMATE (~bytes/4) of medianPromptTokens. */
+export interface FirstRequestEstimate {
+  claudeMd: number;
+  mcp: number;
+  skills: number;
+  /** Measured prompt minus the three parts above. */
+  other: number;
+  /** The caveat, verbatim. */
+  note: string;
+  claudeMdFiles: string[];
+  mcpTools: number;
+  mcpSchemas: number;
+  skillCount: number;
+}
+
+/** Go: mcpcfg.ConfiguredServer. */
+export interface ConfiguredMcpServer {
+  name: string;
+  scope: string;
+  source: string;
+}
+
+/** Go: firstRequestDTO. */
+export interface FirstRequest {
+  windowDays: number;
+  measured: FirstRequestMeasured;
+  estimate: FirstRequestEstimate;
+  mcpServers: ConfiguredMcpServer[];
+}

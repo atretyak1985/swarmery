@@ -4,7 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"os/exec"
+	"strings"
 	"syscall"
 	"time"
 )
@@ -21,6 +23,18 @@ const detailCap = 8 * 1024
 // stepOutputCap bounds one step's captured output inside the detail JSON so a
 // chatty command can't blow the whole-run detail budget on its own.
 const stepOutputCap = 1024
+
+// A step can read the FULL output of the step before it — the routine-run
+// detail keeps only a clipped tail, which is no use as input. A command step
+// gets the path of a temp file holding it in PrevOutputEnv; an ai-prompt step
+// gets it spliced in wherever its prompt says PrevOutputPlaceholder. The first
+// step has no predecessor: the env var is unset and the placeholder becomes "".
+// Handing over is bounded by prevOutputCap (the tail is kept, see handOver).
+const (
+	PrevOutputEnv         = "SWARMERY_PREV_OUTPUT"
+	PrevOutputPlaceholder = "{{prev_output}}"
+	prevOutputCap         = 1 << 20
+)
 
 // execRun runs one routine end-to-end: acquire a global-cap slot, insert a
 // 'running' run row, execute the steps sequentially under the whole-run timeout,
@@ -69,6 +83,7 @@ func (s *Service) execRun(ctx context.Context, r Routine, trigger string) {
 func (s *Service) runSteps(runCtx context.Context, r Routine, projectPath string) ([]StepResult, string) {
 	results := make([]StepResult, 0, len(r.Steps))
 	status := "ok"
+	var prev *string // full output of the step before; nil before the first
 	for _, step := range r.Steps {
 		// Whole-run timeout tripped between steps → record the remaining step as
 		// timed out and stop.
@@ -78,7 +93,8 @@ func (s *Service) runSteps(runCtx context.Context, r Routine, projectPath string
 			return results, "timeout"
 		}
 
-		res := s.execStep(runCtx, r, projectPath, step)
+		res, full := s.execStep(runCtx, r, projectPath, step, prev)
+		prev = &full
 		results = append(results, res)
 		if res.Status == "ok" {
 			continue
@@ -99,48 +115,70 @@ func (s *Service) runSteps(runCtx context.Context, r Routine, projectPath string
 	return results, status
 }
 
-// execStep dispatches one step by type and returns its result. Per-step timeout
-// (step.TimeoutSec, else defaultStepTimeout, else the whole-run ctx) is layered
-// on the run ctx.
-func (s *Service) execStep(ctx context.Context, r Routine, projectPath string, step Step) StepResult {
+// execStep dispatches one step by type and returns its result plus its full
+// (unclipped) output for the next step. prev is the previous step's full
+// output, nil for the first step. Per-step timeout (step.TimeoutSec, else
+// defaultStepTimeout, else the whole-run ctx) is layered on the run ctx.
+func (s *Service) execStep(ctx context.Context, r Routine, projectPath string, step Step, prev *string) (StepResult, string) {
 	res := StepResult{Name: step.Name, Type: step.Type}
 	stepCtx, cancel := s.stepContext(ctx, step)
 	defer cancel()
 
 	switch step.Type {
 	case StepCommand:
-		out, err := s.runCommand(stepCtx, projectPath, step.Command)
+		var env []string
+		if prev != nil {
+			path, cleanup, err := writePrevOutput(*prev)
+			if err != nil {
+				res.Status = "failed"
+				res.Error = "hand over the previous step's output: " + err.Error()
+				return res, ""
+			}
+			defer cleanup()
+			env = []string{PrevOutputEnv + "=" + path}
+		}
+		out, err := s.runCommand(stepCtx, projectPath, step.Command, env...)
 		res.Output = clip(out, stepOutputCap)
 		if err != nil {
 			res.Status = classify(stepCtx, err)
 			res.Error = err.Error()
-			return res
+			return res, out
 		}
 		res.Status = "ok"
+		return res, out
 	case StepAIPrompt:
 		if s.Runner == nil {
 			res.Status = "failed"
 			res.Error = "no runner configured"
-			return res
+			return res, ""
 		}
-		out, err := s.Runner.Run(stepCtx, projectPath, step.Prompt, step.Model)
+		prompt := step.Prompt
+		if strings.Contains(prompt, PrevOutputPlaceholder) {
+			in := ""
+			if prev != nil {
+				in = handOver(*prev)
+			}
+			prompt = strings.ReplaceAll(prompt, PrevOutputPlaceholder, in)
+		}
+		out, err := s.Runner.Run(stepCtx, projectPath, prompt, step.Model)
 		res.Output = clip(out, stepOutputCap)
 		if err != nil {
 			res.Status = classify(stepCtx, err)
 			res.Error = err.Error()
-			return res
+			return res, out
 		}
 		res.Status = "ok"
+		return res, out
 	case StepCreateTask:
 		if s.Tasks == nil {
 			res.Status = "failed"
 			res.Error = "no task creator configured"
-			return res
+			return res, ""
 		}
 		if !r.ProjectID.Valid {
 			res.Status = "failed"
 			res.Error = "create-task requires a project-scoped routine"
-			return res
+			return res, ""
 		}
 		col := step.BoardColumn
 		if col == "" {
@@ -150,15 +188,46 @@ func (s *Service) execStep(ctx context.Context, r Routine, projectPath string, s
 		if err != nil {
 			res.Status = "failed"
 			res.Error = err.Error()
-			return res
+			return res, ""
 		}
 		res.Status = "ok"
 		res.Output = "created task " + cardID
+		return res, res.Output
 	default:
 		res.Status = "failed"
 		res.Error = "unknown step type " + step.Type
 	}
-	return res
+	return res, ""
+}
+
+// handOver is what the next step receives: the output verbatim (unlike clip, no
+// whitespace trim — a report's trailing newline is part of it), the tail kept
+// past prevOutputCap.
+func handOver(out string) string {
+	if len(out) > prevOutputCap {
+		return out[len(out)-prevOutputCap:]
+	}
+	return out
+}
+
+// writePrevOutput stores the previous step's output in a private temp file for
+// a command step to read, and returns the cleanup that removes it.
+func writePrevOutput(out string) (string, func(), error) {
+	f, err := os.CreateTemp("", "swarmery-routine-prev-*.txt")
+	if err != nil {
+		return "", nil, err
+	}
+	cleanup := func() { os.Remove(f.Name()) }
+	if _, err := f.WriteString(handOver(out)); err != nil {
+		f.Close()
+		cleanup()
+		return "", nil, err
+	}
+	if err := f.Close(); err != nil {
+		cleanup()
+		return "", nil, err
+	}
+	return f.Name(), cleanup, nil
 }
 
 // stepContext layers the per-step timeout onto the run ctx. A step override of 0
@@ -175,9 +244,13 @@ func (s *Service) stepContext(ctx context.Context, step Step) (context.Context, 
 // runCommand executes a shell command with cwd = project path (global → daemon
 // cwd, i.e. cwd=""). `sh -c` so the stored command can be a normal one-liner
 // (curl … | jq, &&-chains). Combined stdout+stderr is returned as the output.
-func (s *Service) runCommand(ctx context.Context, cwd, command string) (string, error) {
+// extraEnv is appended to the daemon's environment (nil = inherit it as is).
+func (s *Service) runCommand(ctx context.Context, cwd, command string, extraEnv ...string) (string, error) {
 	cmd := exec.CommandContext(ctx, "sh", "-c", command)
 	cmd.Dir = cwd
+	if len(extraEnv) > 0 {
+		cmd.Env = append(os.Environ(), extraEnv...)
+	}
 	// Run in a dedicated process group so a timeout kills the whole tree, not just
 	// the `sh` parent. Without this, exec.CommandContext SIGKILLs only sh; an
 	// orphaned child (e.g. `sleep`) keeps the stdout/stderr pipe's write end open

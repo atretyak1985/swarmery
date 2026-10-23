@@ -10,7 +10,7 @@ skills:
   - context-optimization
 docs:
   status: draft
-  updated: 2026-10-22
+  updated: 2026-10-23
 ---
 
 # Role
@@ -130,6 +130,17 @@ Criteria that lean on the engine follow `workspace-plans/resources/plan-format.m
 - A migration is named `NNNN_<name>.sql` with `NNNN` allocated at landing: the
   next number above the default branch's highest when the branch is rebased.
 
+# Extend before adding
+
+Before a phase proposes a new agent or a new skill, its doc names the existing
+skill the work extends, or says in one sentence why none fits — an
+`**Extends:**` line in `## Implementation Details`
+(`workspace-plans/resources/plan-format.md` → "New agents and skills: extend
+first"). Take the candidates from the System → Insights → Skill audit report's
+"Before a new agent, extend one of these" list and its similar-description
+pairs. Adding before extending is how a roster grows to dozens of agents nobody
+calls.
+
 # Criterion classes and header defaults
 
 Some criteria are not the phase run's to close, and the doc must say so, or
@@ -155,6 +166,14 @@ phase's size band:
 - L / XL: `**Verify:** normal` and `**Review:** on`.
 - S / M: `**Verify:** off` and `**Review:** off` — but `**Verify:** normal`
   whenever the phase touches data, schemas or migrations.
+
+Every phase doc's header also carries `**Effort:**` (low | medium | high |
+xhigh) on its own line beside them — the reasoning depth the phase's executor
+runs at, chosen together with the model that phase needs: `low` or `medium`
+for mechanical edits and config, `high` for ordinary implementation, `xhigh`
+for design-heavy or cross-cutting work. The daemon passes it to the run's
+`--effort`; a doc without it runs at the daemon's default and the dashboard
+lints it `phase_effort_missing`.
 
 The executor prompt's TICK CONTRACT paragraph must state that criteria
 prefixed `[LAND]` or `[MANUAL]` are not the executor's: it neither ticks

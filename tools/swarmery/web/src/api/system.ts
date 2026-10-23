@@ -26,6 +26,7 @@ import type {
   SystemOverlays,
   SystemRestoreResponse,
   SystemRollbackRequest,
+  SystemSkillAuditReportBody,
   SystemSummary,
   SystemWriteRequest,
   SystemWriteResponse,
@@ -118,6 +119,19 @@ export function fetchSystemInsights(projectId?: string): Promise<SystemInsights>
   if (MOCK) return mockSystemApi.insights();
   const qs = projectId !== undefined && projectId !== '' ? `?projectId=${encodeURIComponent(projectId)}` : '';
   return get(`/api/system/insights${qs}`);
+}
+
+/** GET /api/system/skill-audit/report — the newest weekly skill-audit report;
+ * null when the routine has not written one yet (404). */
+export async function fetchSkillAuditReport(): Promise<SystemSkillAuditReportBody | null> {
+  if (MOCK) return mockSystemApi.skillAuditReport();
+  const path = '/api/system/skill-audit/report';
+  const res = await fetch(path);
+  if (res.status === 404) return null;
+  if (!res.ok) {
+    throw new Error(`GET ${path}: ${String(res.status)}`);
+  }
+  return (await res.json()) as SystemSkillAuditReportBody;
 }
 
 // --- System → Mods (mods-swarmery-link phase 9) --------------------------------

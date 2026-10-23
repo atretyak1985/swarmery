@@ -1,6 +1,7 @@
 import type { I18n } from '@lingui/core';
 import { msg } from '@lingui/core/macro';
 import { Trans, useLingui } from '@lingui/react/macro';
+import type { ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { Session } from '../api/types';
 import { fmtSpan, fmtTime } from '../lib/format';
@@ -258,6 +259,7 @@ export function SessionCard({
   label = null,
   roleTag = null,
   subline = null,
+  badges = null,
 }: {
   session: Session;
   /** Live "now: <last action>" line, fed by event_appended WS messages. */
@@ -279,6 +281,9 @@ export function SessionCard({
   /** Replaces the dim meta line (model · branch · time) with an explanatory
    * one-liner — "dispatches phases in dependency order", retry attempts, … */
   subline?: string | null;
+  /** Extra chips the mounting page adds beside the row's own badges (the
+   * Sessions page's model-switch badge). Rendered in both layouts. */
+  badges?: ReactNode;
 }): JSX.Element {
   const navigate = useNavigate();
   const { t, i18n } = useLingui();
@@ -344,6 +349,7 @@ export function SessionCard({
         )}
         <AccountBadge session={session} />
         <ContextBadge session={session} />
+        {badges}
         <HandoffChip session={session} />
         <CacheColdBadge session={session} />
         <SessionLinkChips session={session} />
@@ -468,6 +474,7 @@ export function SessionCard({
             )}
             <AccountBadge session={session} />
             <ContextBadge session={session} />
+            {badges}
             <HandoffChip session={session} />
             <CacheColdBadge session={session} />
             <SessionLinkChips session={session} />

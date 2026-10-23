@@ -51,8 +51,8 @@ awaiting merge, and ticks `[LAND]` itself when the pull request for the run
 branch merges — whether landed through the Review tab or opened outside the
 platform and found by the landing poll or "Find PR". When the PR comes from
 any other branch, its `[LAND]` criteria are ticked by hand. The header rows
-`**Verify:**` (off | normal | strict) and `**Review:**` (on | off) sit directly after `**Repo:** …`; L/XL phases default
-to `normal` / `on`. Details: `resources/plan-format.md` → "Criterion classes"
+`**Verify:**` (off | normal | strict), `**Review:**` (on | off) and the required `**Effort:**` (low | medium | high | xhigh)
+sit directly after `**Repo:** …`; L/XL phases default to `normal` / `on`. Details: `resources/plan-format.md` → "Criterion classes"
 and "Header rows".
 
 Criteria that lean on the engine follow five rules in `resources/plan-format.md`:

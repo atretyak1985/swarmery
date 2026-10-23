@@ -269,6 +269,11 @@ type epicPhaseDTO struct {
 	// 9): its review cycle did not settle on its own — repeat the review or accept
 	// it as is. null otherwise. The Review tab answers it inline.
 	ReviewDecision *needsYouDecision `json:"reviewDecision"`
+	// Stalled is the phase's current stall — the active stage (executor, reviewer
+	// or verifier) stopped working (internal/stall, phase_stall.go). Null when the
+	// phase is not stalled. Notification only: nothing in CompletionState or
+	// RunOutcome consults it.
+	Stalled *phaseStallDTO `json:"stalled"`
 }
 
 // phaseForecastDTO is one stored `## Forecast` block. Every text field is
@@ -990,14 +995,16 @@ func (h *Handler) epicPhases(taskID int64, planDir string) ([]epicPhaseDTO, epic
 	for _, p := range phases {
 		docs[p.ID] = p.DocPath
 	}
-	reopens := h.phaseReopens(taskID, docs)      // and again
-	reviews := h.phaseReviews(taskID)            // and again
-	blocks := h.phaseReviewBlocks(taskID, docs)  // and again
-	verifying := h.phasesVerifying(phases)       // and again
-	workarounds := h.phaseWorkaroundHits(taskID) // and again
-	guards := h.phaseGuardDecisions(taskID)      // and again
-	reviewDecs := h.phaseReviewDecisions(taskID) // and again
+	reopens := h.phaseReopens(taskID, docs)           // and again
+	reviews := h.phaseReviews(taskID)                 // and again
+	blocks := h.phaseReviewBlocks(taskID, docs)       // and again
+	verifying := h.phasesVerifying(phases)            // and again
+	workarounds := h.phaseWorkaroundHits(taskID)      // and again
+	guards := h.phaseGuardDecisions(taskID)           // and again
+	reviewDecs := h.phaseReviewDecisions(taskID)      // and again
+	stalls := h.phaseStalls(taskID, time.Now().UTC()) // and again
 	for i := range phases {
+		phases[i].Stalled = stalls[phases[i].ID]
 		phases[i].VerifyRunning = verifying[phases[i].ID]
 		phases[i].RunEvents = runEventsOrEmpty(runcore.RunEvents(h.DB, phaserun.Engine, phases[i].ID))
 		used := usage[phases[i].ID]

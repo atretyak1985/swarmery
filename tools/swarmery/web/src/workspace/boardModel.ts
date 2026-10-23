@@ -386,6 +386,11 @@ export function sourceLine(task: BoardTask): SourceLine {
       tip: t`spawned by verification to repair ${externalId}`,
     };
   }
+  // A GitHub inbox card names its item on the label chip, which links to it;
+  // this line only says where the card came from.
+  if (task.origin === 'github') {
+    return { text: t`from GitHub`, target: null, tip: t`kept in step with a GitHub issue or pull request` };
+  }
   const sessionId = task.source?.sessionId ?? task.originSessionId;
   if (sessionId !== null) {
     const id = String(sessionId);
@@ -815,6 +820,42 @@ export function amnestyCandidates(tasks: readonly BoardTask[], nowMs: number): n
 }
 
 // --- card labels (0049 UI) ----------------------------------------------------
+
+/** The «new comment» marker the GitHub inbox puts on a card it returned to the
+ * inbox (Go: taskcap.NewCommentLabel). */
+export const NEW_COMMENT_LABEL = 'new-comment';
+
+/** One GitHub issue or pull request, as a `github:<owner>/<repo>#<n>` card
+ * label names it (Go: ghinbox.Label). */
+export interface GithubItem {
+  /** `owner/repo` */
+  readonly slug: string;
+  readonly number: number;
+  /** github.com sends /issues/N on to /pull/N for a pull request, so one URL
+   * shape opens either. */
+  readonly url: string;
+}
+
+const GITHUB_LABEL = /^github:([a-z0-9_.-]+)\/([a-z0-9_.-]+)#([1-9][0-9]*)$/;
+
+/** The GitHub item a label names, or null for any other label. */
+export function githubItem(label: string): GithubItem | null {
+  const m = GITHUB_LABEL.exec(label);
+  if (m === null) return null;
+  const [, owner = '', repo = '', num = ''] = m;
+  if (owner === '.' || owner === '..' || repo === '.' || repo === '..') return null;
+  return { slug: `${owner}/${repo}`, number: Number(num), url: `https://github.com/${owner}/${repo}/issues/${num}` };
+}
+
+/**
+ * Whether the card shows the «new comment» marker: it carries the label AND
+ * sits in the inbox. The marker answers "why is a card I already handled back
+ * here?" — once the card leaves the inbox that question is answered, so a
+ * marker left on it elsewhere is not shown.
+ */
+export function hasNewComment(task: Pick<BoardTask, 'labels' | 'boardColumn'>): boolean {
+  return task.boardColumn === 'triage' && task.labels.includes(NEW_COMMENT_LABEL);
+}
 
 /** A card renders at most this many label chips before rolling the rest into
  * a single "+N" overflow chip, so a card with a dozen labels never blows out

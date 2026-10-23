@@ -59,6 +59,9 @@ func Routes(root *http.ServeMux, h *Handler) {
 	mux.HandleFunc("POST /api/projects/{id}/config/{key}/probe", requireLocalOrigin(h.probeProjectConfig))
 	// canvas v2 parity: project editorial aggregate (rightNow + thisWeek + attention).
 	mux.HandleFunc("GET /api/projects/{id}/overview", h.projectOverview)
+	// session-start cost: the measured first-request size + its estimated
+	// CLAUDE.md / MCP / skills split (first_request.go, internal/firstreq).
+	mux.HandleFunc("GET /api/projects/{id}/first-request", h.projectFirstRequest)
 	// phase landing: the project's code host, its vocabulary and the daemon's
 	// sign-in state (vcs.go; cached 60s per project).
 	mux.HandleFunc("GET /api/projects/{id}/vcs", h.projectVcs)
@@ -362,6 +365,7 @@ func Routes(root *http.ServeMux, h *Handler) {
 	// promotion & drift detector — read-only analysis over the registry
 	// (system_insights.go). Display-only: promotion stays a manual flow.
 	mux.HandleFunc("GET /api/system/insights", h.systemInsights)
+	mux.HandleFunc("GET /api/system/skill-audit/report", h.systemSkillAuditReport)
 
 	// phase 4: system, Stage 2 write surface (step-09) — agents/skills PUT +
 	// rollback through internal/sysedit. Same D4 origin hardening as the

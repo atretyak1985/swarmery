@@ -50,7 +50,7 @@ import (
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/wsingest"
 )
 
-// Lesson sources (surprise_lessons.source, migration 0128).
+// Lesson sources (surprise_lessons.source, migration 0129).
 const (
 	SourceSurprise = "surprise"
 	SourceReview   = "review"

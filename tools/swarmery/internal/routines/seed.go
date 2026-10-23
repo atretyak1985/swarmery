@@ -21,6 +21,18 @@ type SeedFile struct {
 	Steps      []Step `json:"steps"`
 }
 
+// ShippedSeedFiles are the routine definitions under config/routines/, by file
+// name. `swarmery routine seed --from config/routines/<file>` installs one. The
+// seed tests load every file named here and fail on a file missing from it, so
+// a shipped routine cannot drift out of the validated set unnoticed.
+var ShippedSeedFiles = []string{
+	"github-inbox.json",  // every 2h: GitHub issues/PR comments into triage cards
+	"inbox-triage.json",  // nightly: label the classifier queue
+	"memory-review.json", // Friday: memory lint + consolidation dry-run
+	"model-upgrade.json", // monthly: changelog, prompt audit, model eval
+	"skill-audit.json",   // Monday: skill audit report (haiku) into the workspace retro/ dir
+}
+
 // LoadSeedFile reads and validates a definition, including its steps.
 func LoadSeedFile(path string) (*SeedFile, error) {
 	raw, err := os.ReadFile(path)
