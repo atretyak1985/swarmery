@@ -41,7 +41,7 @@ func TestPhasePRBodyGolden(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	got := phasePRBody(string(doc), 41, 207, phasePRPlanRel)
+	got := phasePRBody(string(doc), 41, 207, phasePRPlanRel, phaseEvidence{})
 
 	goldenPath := filepath.Join("testdata", "phase-landing", "phase-doc.pr.md")
 	if *updatePhasePRGolden {
@@ -74,7 +74,7 @@ func TestPhasePRBodyPlaceholders(t *testing.T) {
 		"## Goal\nStand up the module.\n\n" +
 		"## Acceptance Criteria\n- [ ] builds\n- [ ] tests pass\n\n" +
 		"## Completion Report\n"
-	got := phasePRBody(doc, 3, 9, "plan/phase-1-scaffold.md")
+	got := phasePRBody(doc, 3, 9, "plan/phase-1-scaffold.md", phaseEvidence{})
 
 	want := "## Goal\n\nStand up the module.\n\n" +
 		"## Completion Report\n\n" + phasePRNoReport + "\n\n" +
@@ -90,7 +90,7 @@ func TestPhasePRBodyPlaceholders(t *testing.T) {
 
 func TestPhasePRBodyNoReportSectionNoGoal(t *testing.T) {
 	doc := "# Phase 4 — Docs\n\n## Acceptance Criteria\n- [x] README updated\n"
-	got := phasePRBody(doc, 1, 2, "p.md")
+	got := phasePRBody(doc, 1, 2, "p.md", phaseEvidence{})
 	for _, want := range []string{
 		"## Goal\n\n" + phasePRNoGoal + "\n",
 		"## Completion Report\n\n" + phasePRNoReport + "\n",
@@ -100,5 +100,41 @@ func TestPhasePRBodyNoReportSectionNoGoal(t *testing.T) {
 		if !strings.Contains(got, want) {
 			t.Errorf("body missing %q\n--- got ---\n%s", want, got)
 		}
+	}
+}
+
+// The evidence sections: a phase claiming SC-3 (cited by its report) and SC-4
+// (cited nowhere) lands SC-3 under Decisions honoured and SC-4 under Remaining;
+// a not-implemented line is honoured with its reason, never remaining; an id
+// evidenced elsewhere in the plan is honoured; an id the plan does not declare
+// is left out; a plan with no declared ids gets no sections at all.
+func TestPhasePRBodyEvidenceSections(t *testing.T) {
+	doc := "# Phase 3 — Import\n**Covers:** SC-3, SC-4, SC-9\n**Depends on decisions:** D-5, D-6, D-7\n\n" +
+		"## Goal\nImport.\n\n## Completion Report\nCloses SC-3.\n\n- not implemented: D-5 — the mirror waits on a policy\n"
+	ev := phaseEvidence{
+		Declared: map[string]bool{"SC-3": true, "SC-4": true, "D-5": true, "D-6": true, "D-7": true},
+		Held:     map[string]bool{"D-6": true},
+	}
+	got := phasePRBody(doc, 1, 2, "p.md", ev)
+	for _, want := range []string{
+		"## Decisions honoured\n\n- D-5 — not implemented: the mirror waits on a policy\n- D-6\n- SC-3\n\n",
+		"## Remaining\n\n- D-7\n- SC-4\n\n---\n",
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("body missing %q\n--- got ---\n%s", want, got)
+		}
+	}
+	if strings.Contains(got, "SC-9") {
+		t.Errorf("an undeclared id leaked into the body:\n%s", got)
+	}
+
+	none := phasePRBody(doc, 1, 2, "p.md", phaseEvidence{Declared: map[string]bool{}})
+	if strings.Contains(none, "## Remaining") || strings.Contains(none, "## Decisions honoured") {
+		t.Errorf("a plan with no declared ids must get no evidence sections:\n%s", none)
+	}
+
+	all := phasePRBody("# P\n**Covers:** SC-1\n\n## Completion Report\nCloses SC-1.\n", 1, 2, "p.md", phaseEvidence{})
+	if !strings.Contains(all, "## Remaining\n\n"+phasePRNoRemains+"\n") {
+		t.Errorf("remaining placeholder missing:\n%s", all)
 	}
 }

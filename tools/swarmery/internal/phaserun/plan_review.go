@@ -17,6 +17,7 @@ import (
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/phasediag"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/runsettings"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/verify"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/wsingest"
 )
 
 // The plan branch review (decision D4, step 2). Each phase of a plan runs on its
@@ -34,7 +35,10 @@ import (
 //
 // The review is ADVISORY. Its result is a phase_reviews row with scope='plan' and
 // phase_id NULL, which the Inbox shows. It blocks nothing, re-runs nothing and
-// writes nothing into any doc.
+// writes nothing into any doc. Its prompt carries the plan's decision table
+// (verify-not-trust phase 12), and the reviewer's `round: plan` block — ids →
+// evidence or missing, drift — is stored by wsingest.ApplyPlanReview under the
+// plan README's path.
 //
 // The dedupe key — sha256 of the sorted "<run_branch>@<tip>" lines — is stored in
 // phase_reviews.run_session_uuid, prefixed planReviewKeyPrefix. For scope='phase'
@@ -62,6 +66,11 @@ const (
 	planReviewNameKeyLen = 12
 	// planReviewReadmeCap bounds the plan README in the prompt.
 	planReviewReadmeCap = 32 << 10
+	// planReviewTableMaxRows bounds the decision table in the prompt (an argv
+	// element, like the diffs); the rest is named by a truncation marker.
+	planReviewTableMaxRows = 80
+	// planReviewTableTextCap bounds one row's text, in runes.
+	planReviewTableTextCap = 160
 )
 
 // planSeamFocus tells the reviewer what differs from a phase review. reviewerRole
@@ -455,8 +464,13 @@ func (s *Service) planReview(taskID, phaseID int64, key string, branches []planB
 	}
 	o.sessionUUID = s.UUID()
 	resolution := claudeacct.Resolve(info.ProjectPath)
+	table, terr := wsingest.LoadDecisionTable(s.DB, taskID)
+	if terr != nil {
+		// The table is context, not the subject: review the seams without it.
+		log.Printf("warning: phaserun: plan review task=%d: decision table unreadable: %v", taskID, terr)
+	}
 	spec := verify.RunSpec{
-		Prompt:          planReviewPrompt(title, planReadme(info.DocPath), sections, s.DaemonPort),
+		Prompt:          planReviewPrompt(title, planReadme(info.DocPath), renderDecisionTable(table.Rows), sections, s.DaemonPort),
 		SessionUUID:     o.sessionUUID,
 		Cwd:             acq.Path,
 		Model:           reviewModel,
@@ -480,6 +494,11 @@ func (s *Service) planReview(taskID, phaseID int64, key string, branches []planB
 	if o.treeAfter != o.treeBefore {
 		// No restore: the worktree is removed in the defer above.
 		return inconclusive(o, ClassReviewerMutatedTree, o.treeBefore+"→"+o.treeAfter), true
+	}
+	if run != nil {
+		// The reviewer's `round: plan` block (ids → evidence, drift), stored by
+		// recordPlanReview. A mutated tree above voids it with the verdict.
+		o.block = wsingest.PlanRoundBlock(run.Output)
 	}
 	o = concludeReview(o, run, rerr)
 	// A reviewer that never started produced no outcome of its own.
@@ -588,10 +607,60 @@ func planReadme(docPath string) string {
 	return string(b)
 }
 
+// planDecisionContract is the plan round's extra output contract, rendered only
+// with a decision table (verify-not-trust phase 12, D19).
+const planDecisionContract = `PLAN ROUND CONTRACT — decisions and criteria. Your kind: review block says round: plan. Check every id in the table above against the diffs:
+- ids: one entry per id — {id: D-n or SC-n, evidence: "phase <seq> @ <commit or file:line>"} when the diffs implement it, {id: D-n or SC-n, evidence: missing} when nothing does. A status of evidence in the table is the executor's own claim: verify it, do not copy it.
+- drift: one entry per place the code departs from a decision or criterion — {id: D-n or SC-n, where: <file[:line]>, how: <what the code does instead>}.
+A not-implemented row was skipped on purpose with the reason shown: give it evidence: missing unless the code implements it anyway, and report drift for it only when the code contradicts that reason. Drift alone does not fail the review; a finding still does.`
+
+// renderDecisionTable renders the plan's decision table for the plan review
+// prompt — id, text, status, the phases that claim it — capped at
+// planReviewTableMaxRows with a marker. "" for a plan without decisions or a spec.
+func renderDecisionTable(rows []wsingest.DecisionRow) string {
+	if len(rows) == 0 {
+		return ""
+	}
+	var b strings.Builder
+	fmt.Fprintf(&b, "DECISIONS AND CRITERIA (%d):\n| id | text | status | claimed by phases |\n|---|---|---|---|\n", len(rows))
+	for i, r := range rows {
+		if i == planReviewTableMaxRows {
+			fmt.Fprintf(&b, "[… %d more row(s) omitted: the table is capped at %d rows — check them against the plan README]\n",
+				len(rows)-i, planReviewTableMaxRows)
+			break
+		}
+		status := r.Status
+		if r.Reason != "" && r.Status == wsingest.RowNotImplemented {
+			status += " (" + r.Reason + ")"
+		}
+		claimed := make([]string, 0, len(r.ClaimedBy))
+		for _, seq := range r.ClaimedBy {
+			claimed = append(claimed, strconv.Itoa(seq))
+		}
+		if len(claimed) == 0 {
+			claimed = append(claimed, "—")
+		}
+		fmt.Fprintf(&b, "| %s | %s | %s | %s |\n", r.ID, tableCell(r.Text, planReviewTableTextCap),
+			tableCell(status, planReviewTableTextCap), strings.Join(claimed, ", "))
+	}
+	return b.String()
+}
+
+// tableCell makes s safe for one markdown table cell: one line, no pipes,
+// capped at n runes.
+func tableCell(s string, n int) string {
+	s = strings.ReplaceAll(strings.Join(strings.Fields(s), " "), "|", "\\|")
+	if r := []rune(s); len(r) > n {
+		s = string(r[:n-1]) + "…"
+	}
+	return s
+}
+
 // planReviewPrompt renders the plan branch review prompt: the phase reviewer's
-// role, contract and daemon-API rule, the seam focus, the plan README and the
-// per-phase diffs.
-func planReviewPrompt(title, readme, sections string, daemonPort int) string {
+// role, contract and daemon-API rule, the seam focus, the plan README, the
+// decision table with its contract (when the plan declares decisions or a spec)
+// and the per-phase diffs.
+func planReviewPrompt(title, readme, table, sections string, daemonPort int) string {
 	var b strings.Builder
 	b.WriteString(reviewerPreamble(daemonPort))
 	b.WriteString("\n\n")
@@ -603,6 +672,12 @@ func planReviewPrompt(title, readme, sections string, daemonPort int) string {
 		b.WriteString("\n\nPLAN README:\n----------------------------------------\n")
 		b.WriteString(strings.TrimRight(readme, "\n"))
 		b.WriteString("\n----------------------------------------\n")
+	}
+	if strings.TrimSpace(table) != "" {
+		b.WriteString("\n\n")
+		b.WriteString(strings.TrimRight(table, "\n"))
+		b.WriteString("\n\n")
+		b.WriteString(planDecisionContract)
 	}
 	b.WriteString("\n\nPHASE DIFFS (each phase's run branch against the commit its run started from):\n")
 	b.WriteString(sections)
@@ -624,5 +699,13 @@ func (s *Service) recordPlanReview(taskID int64, key, started string, o reviewOu
 		o.treeBefore, o.treeAfter, o.verdict, o.detail, o.findings,
 		started, s.ts()); err != nil {
 		log.Printf("error: phaserun: task=%d record plan review: %v", taskID, err)
+	}
+	// The reviewer's `round: plan` block: ids → decision_evidence (kind review),
+	// drift → plan-conformance findings. Stored straight into the store — this
+	// review writes into no doc — and replaced by the plan's next review.
+	if o.block != nil {
+		if err := wsingest.ApplyPlanReview(s.DB, taskID, *o.block); err != nil {
+			log.Printf("error: phaserun: task=%d store plan review block: %v", taskID, err)
+		}
 	}
 }

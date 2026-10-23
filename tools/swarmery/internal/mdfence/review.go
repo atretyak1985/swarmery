@@ -77,7 +77,10 @@ type IDEvidence struct {
 }
 
 // Drift is a gap between what the phase doc says and what the change does: a
-// ticked criterion that does not hold, or a change outside the phase's scope.
+// ticked criterion that does not hold, or a change outside the phase's scope. The
+// plan round (verify-not-trust phase 12) writes the same entry as `{id, where,
+// how}` — the decision/criterion id, the file (and line) the code departs at, and
+// how; those keys are read into Criterion, File and Note.
 type Drift struct {
 	Criterion string
 	File      string
@@ -224,9 +227,23 @@ func decodeReview(b Block) (Review, *ParseError) {
 		return Review{}, perr
 	}
 	for _, it := range items {
-		r.Drift = append(r.Drift, Drift{Criterion: it.str("criterion"), File: it.str("file"), Note: it.str("note")})
+		r.Drift = append(r.Drift, Drift{
+			Criterion: firstNonEmpty(it.str("criterion"), it.str("id")),
+			File:      firstNonEmpty(it.str("file"), it.str("where")),
+			Note:      firstNonEmpty(it.str("note"), it.str("how")),
+		})
 	}
 	return r, nil
+}
+
+// firstNonEmpty is the first non-empty value.
+func firstNonEmpty(vs ...string) string {
+	for _, v := range vs {
+		if v != "" {
+			return v
+		}
+	}
+	return ""
 }
 
 // mapItem is one entry of a list of flat maps.

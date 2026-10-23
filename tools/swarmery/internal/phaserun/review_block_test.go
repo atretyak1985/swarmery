@@ -71,7 +71,7 @@ func TestReviewPromptCarriesRound(t *testing.T) {
 	if !strings.Contains(p, "\n\nREVIEW ROUND: 2\n\nPHASE: Phase 1 — X") {
 		t.Errorf("prompt lacks the round before the phase:\n%s", p)
 	}
-	if !strings.Contains(planReviewPrompt("Plan", "", "", 7777), "REVIEW ROUND: plan") {
+	if !strings.Contains(planReviewPrompt("Plan", "", "", "", 7777), "REVIEW ROUND: plan") {
 		t.Error("the plan branch review prompt lacks REVIEW ROUND: plan")
 	}
 }

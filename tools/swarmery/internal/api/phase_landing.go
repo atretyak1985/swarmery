@@ -39,6 +39,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -631,11 +632,17 @@ func (h *Handler) landPhase(w http.ResponseWriter, r *http.Request) {
 
 	if action == landActionPR {
 		doc, _ := os.ReadFile(t.DocPath) // unreadable ⇒ the body's placeholders say so
+		table, terr := wsingest.LoadDecisionTable(h.DB, taskID)
+		if terr != nil {
+			// The evidence sections are an aid, not the change request: open it without them.
+			log.Printf("warning: land phase=%d: decision table unreadable: %v", phaseID, terr)
+		}
+		ev := phaseEvidenceFrom(table)
 		ref, err := provider.OpenChangeRequest(ctx, target, repoprovider.ChangeRequest{
 			Head:  branch,
 			Base:  base.PRBase,
 			Title: title,
-			Body:  phasePRBody(string(doc), taskID, phaseID, planRelPath(t)),
+			Body:  phasePRBody(string(doc), taskID, phaseID, planRelPath(t), ev),
 			Draft: body.Draft,
 		})
 		if err != nil {

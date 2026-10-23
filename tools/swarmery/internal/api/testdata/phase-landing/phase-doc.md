@@ -1,6 +1,8 @@
 # Phase 2 — Line-item CRUD
 Status: Done
 **Repo:** `apps/<mainApp>` · **Branch:** `feat/line-items` · **Depends on:** 1 · **Estimate:** M
+**Covers:** SC-3, SC-4
+**Depends on decisions:** D-2
 
 ## Goal
 Let an operator add, edit and remove line items on an order.
@@ -27,6 +29,7 @@ quoted template goal that must not leak into the change request
 
 ## Completion Report
 Shipped `src/orders/line-items.ts` and its route in commit abc1234.
+Closes SC-3 with the recompute-on-write rule decided in D-2.
 
 Verification: `npm test -- orders` → 14 passed.
 Deviation: DELETE 404 deferred to phase 3.

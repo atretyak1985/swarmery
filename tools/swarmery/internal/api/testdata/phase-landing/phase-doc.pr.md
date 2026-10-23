@@ -10,6 +10,7 @@ Discount rules.
 ## Completion Report
 
 Shipped `src/orders/line-items.ts` and its route in commit abc1234.
+Closes SC-3 with the recompute-on-write rule decided in D-2.
 
 Verification: `npm test -- orders` → 14 passed.
 Deviation: DELETE 404 deferred to phase 3.
@@ -18,6 +19,15 @@ Deviation: DELETE 404 deferred to phase 3.
 
 - [x] `POST /orders/{id}/line-items` creates a line item and returns 201.
 - [x] The order total is recomputed after every write (`npm test -- orders`).
+
+## Decisions honoured
+
+- D-2
+- SC-3
+
+## Remaining
+
+- SC-4
 
 ---
 

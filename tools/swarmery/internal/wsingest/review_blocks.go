@@ -155,94 +155,22 @@ func applyReviewBlocks(tx *sql.Tx, taskID int64, p epicPhase, cutoff time.Time, 
 	keepBlocks := map[string]bool{}
 	keepFindings := map[[2]string]bool{}
 	for _, r := range p.reviews {
-		source := reviewSource(r.Source)
-		written := now
-		if t, ok := parseStamp(r.WrittenAt); ok {
-			written = t.Format(time.RFC3339)
-		}
-		scopeLeft, err := jsonList(r.ScopeLeft)
+		kept, err := upsertReviewBlock(tx, taskID, phaseID, p.docPath, r, resolvedBy, now)
 		if err != nil {
 			return err
-		}
-		callers, err := jsonList(r.CheckedCallers)
-		if err != nil {
-			return err
-		}
-		resolves, err := jsonList(r.Resolves)
-		if err != nil {
-			return err
-		}
-		// written_at keeps its first value unless the block states its own.
-		if _, err := tx.Exec(`
-			INSERT INTO review_blocks
-				(workspace_task_id, phase_id, doc_path, round, verdict, complete,
-				 scope_left_json, checked_callers_json, resolves_json, unparsable, source, written_at)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-			ON CONFLICT(doc_path, round) DO UPDATE SET
-				workspace_task_id    = excluded.workspace_task_id,
-				phase_id             = excluded.phase_id,
-				verdict              = excluded.verdict,
-				complete             = excluded.complete,
-				scope_left_json      = excluded.scope_left_json,
-				checked_callers_json = excluded.checked_callers_json,
-				resolves_json        = excluded.resolves_json,
-				unparsable           = excluded.unparsable,
-				source               = excluded.source,
-				written_at           = CASE WHEN ? THEN excluded.written_at ELSE review_blocks.written_at END`,
-			taskID, phaseID, p.docPath, r.Round, r.Verdict, boolInt(r.Complete),
-			scopeLeft, callers, resolves, boolInt(r.Unparsable), source, written,
-			r.WrittenAt != ""); err != nil {
-			return fmt.Errorf("review block %s round %s: %w", p.docPath, r.Round, err)
 		}
 		keepBlocks[r.Round] = true
-
-		for i, f := range r.Findings {
-			fid := findingID(r.Round, i, f.ID)
-			// The type column is CHECKed against the five lenses; a value outside
-			// them is kept verbatim in the note rather than failing the whole scan.
-			var typ any
-			note := f.Note
-			if slices.Contains(mdfence.FindingTypes, f.Type) {
-				typ = f.Type
-			} else if f.Type != "" {
-				note = strings.TrimSpace("type: " + f.Type + "\n" + note)
-			}
-			var line any
-			if f.Line > 0 {
-				line = f.Line
-			}
-			var resolved any
-			if by, ok := resolvedBy[fid]; ok && by != r.Round {
-				resolved = by
-			}
-			// resolved_by is re-derived from the doc but never CLEARED by a scan: a
-			// value set outside the doc (a later stage closing a finding) survives.
-			if _, err := tx.Exec(`
-				INSERT INTO review_findings
-					(workspace_task_id, phase_id, doc_path, round, finding_id, type, file, line,
-					 criterion, test_caught, evidence, note, resolved_by, source, created_at)
-				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-				ON CONFLICT(doc_path, round, finding_id) DO UPDATE SET
-					workspace_task_id = excluded.workspace_task_id,
-					phase_id          = excluded.phase_id,
-					type              = excluded.type,
-					file              = excluded.file,
-					line              = excluded.line,
-					criterion         = excluded.criterion,
-					test_caught       = excluded.test_caught,
-					evidence          = excluded.evidence,
-					note              = excluded.note,
-					resolved_by       = COALESCE(excluded.resolved_by, review_findings.resolved_by),
-					source            = excluded.source`,
-				taskID, phaseID, p.docPath, r.Round, fid, typ, f.File, line,
-				f.Criterion, boolInt(f.TestCaught), f.Evidence, note, resolved, source, now); err != nil {
-				return fmt.Errorf("review finding %s round %s %s: %w", p.docPath, r.Round, fid, err)
-			}
-			keepFindings[[2]string{r.Round, fid}] = true
+		for k := range kept {
+			keepFindings[k] = true
 		}
 	}
 
 	if err := deleteMissingReviewRows(tx, p.docPath, keepBlocks, keepFindings); err != nil {
+		return err
+	}
+	// An interactive plan-level review (run-plan's orchestrator writes its
+	// `round: plan` block under the last phase's `## Review`) evidences ids.
+	if err := applyPlanReviewEvidence(tx, taskID, phaseID, p.docPath, planRoundBlock(p.reviews)); err != nil {
 		return err
 	}
 
@@ -253,6 +181,104 @@ func applyReviewBlocks(tx *sql.Tx, taskID int64, p epicPhase, cutoff time.Time, 
 		}
 	}
 	return nil
+}
+
+// upsertReviewBlock writes one review block of docPath and its findings — on a
+// plan round, its drift too, as plan-conformance findings — and returns the
+// (round, finding id) keys it wrote. phaseID is nil for the daemon's plan review,
+// which belongs to no phase doc.
+func upsertReviewBlock(tx *sql.Tx, taskID int64, phaseID any, docPath string, r mdfence.Review,
+	resolvedBy map[string]string, now string) (map[[2]string]bool, error) {
+	keepFindings := map[[2]string]bool{}
+	source := reviewSource(r.Source)
+	written := now
+	if t, ok := parseStamp(r.WrittenAt); ok {
+		written = t.Format(time.RFC3339)
+	}
+	scopeLeft, err := jsonList(r.ScopeLeft)
+	if err != nil {
+		return nil, err
+	}
+	callers, err := jsonList(r.CheckedCallers)
+	if err != nil {
+		return nil, err
+	}
+	resolves, err := jsonList(r.Resolves)
+	if err != nil {
+		return nil, err
+	}
+	// written_at keeps its first value unless the block states its own.
+	if _, err := tx.Exec(`
+		INSERT INTO review_blocks
+			(workspace_task_id, phase_id, doc_path, round, verdict, complete,
+			 scope_left_json, checked_callers_json, resolves_json, unparsable, source, written_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		ON CONFLICT(doc_path, round) DO UPDATE SET
+			workspace_task_id    = excluded.workspace_task_id,
+			phase_id             = excluded.phase_id,
+			verdict              = excluded.verdict,
+			complete             = excluded.complete,
+			scope_left_json      = excluded.scope_left_json,
+			checked_callers_json = excluded.checked_callers_json,
+			resolves_json        = excluded.resolves_json,
+			unparsable           = excluded.unparsable,
+			source               = excluded.source,
+			written_at           = CASE WHEN ? THEN excluded.written_at ELSE review_blocks.written_at END`,
+		taskID, phaseID, docPath, r.Round, r.Verdict, boolInt(r.Complete),
+		scopeLeft, callers, resolves, boolInt(r.Unparsable), source, written,
+		r.WrittenAt != ""); err != nil {
+		return nil, fmt.Errorf("review block %s round %s: %w", docPath, r.Round, err)
+	}
+
+	findings := r.Findings
+	if r.Round == mdfence.ReviewRoundPlan && len(r.Drift) > 0 {
+		findings = append(append([]mdfence.Finding(nil), findings...), driftFindings(r.Drift)...)
+	}
+	for i, f := range findings {
+		fid := findingID(r.Round, i, f.ID)
+		// The type column is CHECKed against the five lenses; a value outside
+		// them is kept verbatim in the note rather than failing the whole scan.
+		var typ any
+		note := f.Note
+		if slices.Contains(mdfence.FindingTypes, f.Type) {
+			typ = f.Type
+		} else if f.Type != "" {
+			note = strings.TrimSpace("type: " + f.Type + "\n" + note)
+		}
+		var line any
+		if f.Line > 0 {
+			line = f.Line
+		}
+		var resolved any
+		if by, ok := resolvedBy[fid]; ok && by != r.Round {
+			resolved = by
+		}
+		// resolved_by is re-derived from the doc but never CLEARED by a scan: a
+		// value set outside the doc (a later stage closing a finding) survives.
+		if _, err := tx.Exec(`
+			INSERT INTO review_findings
+				(workspace_task_id, phase_id, doc_path, round, finding_id, type, file, line,
+				 criterion, test_caught, evidence, note, resolved_by, source, created_at)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			ON CONFLICT(doc_path, round, finding_id) DO UPDATE SET
+				workspace_task_id = excluded.workspace_task_id,
+				phase_id          = excluded.phase_id,
+				type              = excluded.type,
+				file              = excluded.file,
+				line              = excluded.line,
+				criterion         = excluded.criterion,
+				test_caught       = excluded.test_caught,
+				evidence          = excluded.evidence,
+				note              = excluded.note,
+				resolved_by       = COALESCE(excluded.resolved_by, review_findings.resolved_by),
+				source            = excluded.source`,
+			taskID, phaseID, docPath, r.Round, fid, typ, f.File, line,
+			f.Criterion, boolInt(f.TestCaught), f.Evidence, note, resolved, source, now); err != nil {
+			return nil, fmt.Errorf("review finding %s round %s %s: %w", docPath, r.Round, fid, err)
+		}
+		keepFindings[[2]string{r.Round, fid}] = true
+	}
+	return keepFindings, nil
 }
 
 // deleteMissingReviewRows removes the rows of blocks and findings the doc no
@@ -319,10 +345,12 @@ func deleteMissingReviewRows(tx *sql.Tx, docPath string, keepBlocks map[string]b
 
 // sweepOrphanReviewRows drops review rows of this task whose doc is no longer a
 // phase of it — the prune in applyEpics is the one place a phase disappears.
+// Rows without a phase (the daemon's plan review, keyed by the plan README —
+// ApplyPlanReview) belong to no phase doc and are left alone.
 func sweepOrphanReviewRows(tx *sql.Tx, taskID int64) error {
 	for _, table := range []string{"review_findings", "review_blocks"} {
 		if _, err := tx.Exec(`DELETE FROM `+table+`
-			 WHERE workspace_task_id = ?
+			 WHERE workspace_task_id = ? AND phase_id IS NOT NULL
 			   AND doc_path NOT IN (SELECT doc_path FROM epic_phases WHERE workspace_task_id = ?)`,
 			taskID, taskID); err != nil {
 			return err

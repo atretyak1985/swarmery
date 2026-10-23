@@ -990,7 +990,11 @@ func parseSpec(planDir string, warn func(string, ...any)) []SpecCriterion {
 // keeps the column's empty default and the Plans page would lint
 // blast_radius_missing on a phase whose doc already carries the line. It landed
 // as v11 on its own branch; v13 rescans a plan indexed under any earlier version.
-const parserVersion = "v13"
+//
+// v14: decision_evidence — the D-n / SC-n ids each Completion Report cites
+// (evidence.go, migration 0131). Without the bump an already-indexed plan shows
+// every declared id as remaining until some byte of it changes.
+const parserVersion = "v14"
 
 // planHash combines every plan file's bytes into one content hash, so the gate
 // re-parses when the README OR any phase doc changes (a checkbox flip lives in a
@@ -1089,6 +1093,11 @@ func (s *Scanner) scanEpics(taskID int64, dir string, warn func(string, ...any))
 	if err := applyDecisions(tx, taskID, planDir, parseDecisionsFile(planDir)); err != nil {
 		tx.Rollback()
 		warn("epics task#%d (%s): decisions: %v", taskID, planDir, err)
+		return
+	}
+	if err := applyEvidence(tx, taskID, phases); err != nil {
+		tx.Rollback()
+		warn("epics task#%d (%s): decision evidence: %v", taskID, planDir, err)
 		return
 	}
 	if _, err := tx.Exec(`
