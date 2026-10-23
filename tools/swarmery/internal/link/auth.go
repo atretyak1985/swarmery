@@ -132,6 +132,14 @@ func (h *Holder) reloadLocked() bool {
 	return true
 }
 
+// AcceptsBearer reports whether r carries `Authorization: Bearer <token>` with
+// this Holder's current token (the legacy scheme, refreshed through Current and
+// compared in constant time, exactly as Require does).
+func (h *Holder) AcceptsBearer(r *http.Request) bool {
+	presented, ok := bearer(r)
+	return ok && matches(presented, h.Current())
+}
+
 // Require is RequireToken bound to this Holder's Current: each request refreshes
 // (≤ 1 file read per reloadInterval) before the comparison. Inside one interval
 // after a rotate the cached value still answers — the old token keeps working

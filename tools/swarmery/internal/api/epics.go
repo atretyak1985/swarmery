@@ -63,6 +63,10 @@ type decisionHoldRefDTO struct {
 	Question          string `json:"question"`
 	Seq               int    `json:"seq"`
 	PlanningSessionID *int64 `json:"planningSessionId"`
+	// PlanningTurn is the dashboard path of the planning turn that asked it
+	// (phasegate.PlanningTurnLink) — the hold's "decide now" link; "" for a
+	// decision born in the README.
+	PlanningTurn string `json:"planningTurn,omitempty"`
 }
 
 type epicPhaseDTO struct {
@@ -356,9 +360,16 @@ type epicDTO struct {
 	HasSpec bool `json:"hasSpec"`
 	// Spec is the per-epic spec coverage (criteria + coveredBy phase seqs +
 	// covered/total + unknown refs); null when the task has no spec_criteria rows.
-	Spec   *epicSpecDTO   `json:"spec"`
-	Phases []epicPhaseDTO `json:"phases"`
-	Rollup epicRollupDTO  `json:"rollup"`
+	Spec *epicSpecDTO `json:"spec"`
+	// Evidence is the decision → phase → evidence table (verify-not-trust phase
+	// 12, wsingest.LoadDecisionTable) — the same body GET …/evidence serves.
+	// Never null; rows is [] for a plan with no decisions or spec criteria.
+	Evidence wsingest.DecisionTable `json:"evidence"`
+	// PlanReviewStatus is Evidence.PlanReview.Status lifted onto the epic:
+	// none | pass | fail | not-verified (an INCONCLUSIVE plan review).
+	PlanReviewStatus string         `json:"planReviewStatus"`
+	Phases           []epicPhaseDTO `json:"phases"`
+	Rollup           epicRollupDTO  `json:"rollup"`
 	// Whole-plan run state (migration 0040), null until the plan has ever been
 	// run. Distinct from the per-phase RunState above: this is ONE agent handed
 	// the whole plan, so it never stamps individual phases.
@@ -545,6 +556,11 @@ func (h *Handler) listEpics(w http.ResponseWriter, r *http.Request) {
 		out[i].Phases = phases
 		out[i].Rollup = rollup
 		out[i].Spec = buildEpicSpec(specCriteria[out[i].TaskID], covers)
+		if out[i].Evidence, err = wsingest.LoadDecisionTable(h.DB, out[i].TaskID); err != nil {
+			writeErr(w, err)
+			return
+		}
+		out[i].PlanReviewStatus = out[i].Evidence.PlanReview.Status
 		if card, ok := microPlanCards[out[i].TaskID]; ok {
 			out[i].CardExternalID = &card
 		}
@@ -1698,16 +1714,26 @@ func (h *Handler) attachDecisionHolds(taskID int64, phases []epicPhaseDTO, deps 
 		judged = append(judged, phasegate.Decision{ID: d.DecisionID, Question: d.Question, Cost: d.Cost, Status: d.Status})
 		byID[d.DecisionID] = d
 	}
+	slug := ""
+	slugRead := false
 	for i := range phases {
 		hold := phaserun.HoldFor(deps[phases[i].ID], judged)
 		if hold == nil {
 			continue
 		}
+		if !slugRead { // one read, and only for a plan that has a hold at all
+			slugRead = true
+			_ = h.DB.QueryRow(`SELECT COALESCE(p.slug, '') FROM tasks t LEFT JOIN projects p ON p.id = t.project_id
+				WHERE t.id = ?`, taskID).Scan(&slug)
+		}
 		dto := &decisionHoldDTO{Detail: hold.Detail, Decisions: []decisionHoldRefDTO{}}
 		for _, id := range hold.Decisions {
 			d := byID[id]
-			dto.Decisions = append(dto.Decisions, decisionHoldRefDTO{
-				DecisionID: id, Question: d.Question, Seq: d.Seq, PlanningSessionID: d.PlanningSessionID})
+			ref := decisionHoldRefDTO{DecisionID: id, Question: d.Question, Seq: d.Seq, PlanningSessionID: d.PlanningSessionID}
+			if d.PlanningSessionID != nil {
+				ref.PlanningTurn = phasegate.PlanningTurnLink(slug, *d.PlanningSessionID, d.Seq)
+			}
+			dto.Decisions = append(dto.Decisions, ref)
 		}
 		phases[i].DecisionHold = dto
 	}

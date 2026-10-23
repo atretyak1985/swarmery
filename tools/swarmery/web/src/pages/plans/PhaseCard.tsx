@@ -12,6 +12,7 @@ import type {
   DecisionHold,
   DecisionHoldRef,
   EpicPhase,
+  NeedsYouDecision,
   PhaseLanding,
   PhaseRunOutcome,
   ProviderTerms,
@@ -77,10 +78,36 @@ export interface PhaseCardProps {
   /** Where a "waits on D-n" hold links: the planning session turn that asked the
    *  decision. null (or absent) renders the hold without a link. */
   decisionHref?: (ref: DecisionHoldRef) => string | null;
+  /** Where the phase's open agent stop is answered (the Needs you page). null
+   *  (or absent) renders the stop without a link. */
+  stopHref?: string | null;
 }
 
-/** "waits on D-3 — <question>": the phase's decision hold, inline. The run gate
- *  refuses this phase until each listed decision is taken or marked cheap. */
+/** Whether `p` is a path on this origin: it starts with one `/` that a browser
+ *  cannot read as the start of `//host` — browsers treat `\` as `/` and drop
+ *  tabs and newlines from a URL, so `/\host` and `/<tab>/host` are refused, as
+ *  is any backslash, whitespace or control character. */
+function isSameOriginPath(p: string): boolean {
+  if (!p.startsWith('/') || /^\/[/\\]/.test(p) || /[\\\s]/.test(p)) return false;
+  for (let i = 0; i < p.length; i++) {
+    const c = p.charCodeAt(i);
+    if (c < 0x20 || c === 0x7f) return false;
+  }
+  return true;
+}
+
+/** The decision's own planning-turn link (the daemon's `planningTurn`), else
+ *  the caller's; null when neither has one. Only same-origin paths are used. */
+function holdHref(d: DecisionHoldRef, hrefFor?: ((ref: DecisionHoldRef) => string | null) | undefined): string | null {
+  if (d.planningTurn !== undefined && isSameOriginPath(d.planningTurn)) {
+    return d.planningTurn;
+  }
+  return hrefFor?.(d) ?? null;
+}
+
+/** "waits on decision D-3 — <question>": the phase's decision hold, inline. The
+ *  run gate refuses this phase until each listed decision is taken or marked
+ *  cheap. */
 export function DecisionHoldNote({
   hold,
   hrefFor,
@@ -95,11 +122,11 @@ export function DecisionHoldNote({
     >
       {hold.decisions.map((d) => {
         const id = d.decisionId;
-        const href = hrefFor?.(d) ?? null;
+        const href = holdHref(d, hrefFor);
         return (
           <div key={id} className="flex flex-wrap items-baseline gap-x-1.5">
             <span className="font-medium text-amber">
-              <Trans>waits on {id}</Trans>
+              <Trans>waits on decision {id}</Trans>
             </span>
             <span className="text-ink-3">— {d.question}</span>
             {href !== null && (
@@ -112,6 +139,49 @@ export function DecisionHoldNote({
       })}
     </div>
   );
+}
+
+/** "waits on decision D-7 · stop: protected-path — <reason>": the phase's open
+ *  agent-declared stop, inline. Its last run stopped on a trigger instead of
+ *  working around it; the next run starts once the operator answers. */
+export function StopDecisionNote({
+  decision,
+  href,
+}: {
+  decision: NeedsYouDecision;
+  href?: string | null | undefined;
+}): JSX.Element {
+  const id = decision.decisionId;
+  const trigger = decision.trigger ?? '';
+  const reason = decision.reason !== undefined && decision.reason !== '' ? decision.reason : decision.question;
+  return (
+    <div
+      data-testid="stop-decision"
+      className="mt-3 flex flex-wrap items-baseline gap-x-1.5 rounded-[10px] border border-red/40 bg-red/5 px-3 py-2.5 text-[12.5px]"
+    >
+      <span className="font-medium text-red">
+        <Trans>waits on decision {id}</Trans>
+      </span>
+      {trigger !== '' && (
+        <span className="rounded border border-red/45 px-1.5 py-px font-mono text-[10px] text-red">
+          <Trans>stop: {trigger}</Trans>
+        </span>
+      )}
+      <span className="text-ink-3">— {reason}</span>
+      {href != null && (
+        <a href={href} className="font-mono text-[11px] text-ink-dim transition-colors hover:text-brand">
+          <Trans>answer it →</Trans>
+        </a>
+      )}
+    </div>
+  );
+}
+
+/** The phase's open decision when it is an agent-declared stop; null otherwise. */
+function openStop(phase: EpicPhase): NeedsYouDecision | null {
+  const d = phase.guardDecision ?? null;
+  if (d === null) return null;
+  return d.trigger !== undefined || d.freeText === true ? d : null;
 }
 
 const OUTCOME_SENTENCE: Record<PhaseRunOutcome, MessageDescriptor> = {
@@ -211,9 +281,11 @@ export function PhaseCard({
   report,
   terms = null,
   decisionHref,
+  stopHref = null,
 }: PhaseCardProps): JSX.Element {
   const { i18n, t } = useLingui();
   const story = forecastStory(phase);
+  const stop = openStop(phase);
   const band = phase.surprise == null ? null : offPlanBand(phase.surprise.index);
   const title = state?.title ?? story?.headline ?? i18n._(OUTCOME_SENTENCE[phase.runOutcome]);
   const detail = state?.detail ?? story?.why ?? null;
@@ -270,6 +342,7 @@ export function PhaseCard({
       {phase.decisionHold != null && phase.decisionHold.decisions.length > 0 && (
         <DecisionHoldNote hold={phase.decisionHold} hrefFor={decisionHref} />
       )}
+      {stop !== null && <StopDecisionNote decision={stop} href={stopHref} />}
 
       <GuardBadge guard={phaseGuard(phase)} className="mt-2" />
 

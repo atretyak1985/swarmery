@@ -17,6 +17,7 @@ import (
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/api"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/console"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/ingest"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/link"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/logbuf"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/store"
 )
@@ -151,4 +152,58 @@ func TestHTTPClientStreamEventsReceivesFrames(t *testing.T) {
 		t.Errorf("StreamEvents did not return after cancel")
 	}
 	_ = frames
+}
+
+// attachLinkHome mints a link token in a temp HOME (the one the client reads)
+// and attaches it to the API, as the daemon does at start.
+func attachLinkHome(t *testing.T) {
+	t.Helper()
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	tok, err := link.EnsureToken(home)
+	if err != nil {
+		t.Fatal(err)
+	}
+	api.AttachLink(link.NewHolder(link.TokenPath(home), tok), ingest.ParseExcludeList(ingest.DefaultExclude))
+	t.Cleanup(func() { api.AttachLink(nil, nil) })
+}
+
+// TestHTTPClientSignsWritesAndTheStream: the daemon takes a write or a WS
+// upgrade without an Origin only with link auth; the console signs both.
+func TestHTTPClientSignsWritesAndTheStream(t *testing.T) {
+	attachLinkHome(t)
+	base, _ := liveDaemon(t, true)
+	client := console.NewHTTPClient(base)
+
+	// Past the auth gate the handler answers: no dispatcher is attached.
+	err := client.PauseDispatch(context.Background(), true)
+	if err == nil || strings.Contains(err.Error(), "401") || !strings.Contains(err.Error(), "dispatcher not attached") {
+		t.Errorf("PauseDispatch = %v, want the handler's 503, not the auth gate", err)
+	}
+	if err := client.ResolveApproval(context.Background(), 999999, "approve"); err == nil || strings.Contains(err.Error(), "401") {
+		t.Errorf("ResolveApproval(unknown id) = %v, want the handler's answer, not 401", err)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	errc := make(chan error, 1)
+	go func() { errc <- client.StreamEvents(ctx, make(chan console.WSEvent, 1)) }()
+	select {
+	case err := <-errc:
+		t.Fatalf("StreamEvents ended before cancel: %v (the signed upgrade was refused)", err)
+	case <-time.After(300 * time.Millisecond):
+	}
+	cancel()
+	<-errc
+}
+
+// TestHTTPClientWithoutTokenIsRefused: no token on disk → the daemon answers
+// the console's write with 401.
+func TestHTTPClientWithoutTokenIsRefused(t *testing.T) {
+	attachLinkHome(t)
+	base, _ := liveDaemon(t, true)
+	t.Setenv("HOME", t.TempDir()) // the client now finds no token
+	err := console.NewHTTPClient(base).PauseDispatch(context.Background(), true)
+	if err == nil || !strings.Contains(err.Error(), "401") {
+		t.Errorf("unsigned PauseDispatch = %v, want 401", err)
+	}
 }

@@ -1,6 +1,10 @@
 package phasegate
 
-import "strings"
+import (
+	"net/url"
+	"strconv"
+	"strings"
+)
 
 // Decision is the slice of a phase_decisions row (migration 0122) the decision
 // hold judges. Callers load it; this package stays pure (no DB, no clock).
@@ -9,6 +13,53 @@ type Decision struct {
 	Question string
 	Cost     string // cheap | expensive
 	Status   string // decided | undecided | recommended
+	// Seq and PlanningSessionID locate the interview turn that asked it (the
+	// question's planning_turns.seq in that session); PlanningSessionID is 0 for
+	// a decision born in the README, which has no turn to open.
+	Seq               int
+	PlanningSessionID int64
+}
+
+// HoldRef is one decision holding a phase, with where the operator takes it: the
+// planning page opened on the interview turn that asked it — the same link the
+// dashboard's phase card and Needs you open ("decide now").
+type HoldRef struct {
+	DecisionID        string `json:"decisionId"`
+	Question          string `json:"question"`
+	Seq               int    `json:"seq"`
+	PlanningSessionID int64  `json:"planningSessionId,omitempty"`
+	// PlanningTurn is the dashboard path of that turn; "" when the decision has
+	// no planning session or the project slug is unknown.
+	PlanningTurn string `json:"planningTurn,omitempty"`
+}
+
+// PlanningTurnLink is the dashboard path of a planning session's turn — the same
+// URL web/src/pages/Plans.tsx decisionTurnHref builds. "" when any part is
+// missing.
+func PlanningTurnLink(projectSlug string, planningSessionID int64, seq int) string {
+	if strings.TrimSpace(projectSlug) == "" || planningSessionID <= 0 || seq <= 0 {
+		return ""
+	}
+	s := strconv.Itoa(seq)
+	return "/p/" + url.PathEscape(projectSlug) + "/plans?tab=new&planningSession=" +
+		strconv.FormatInt(planningSessionID, 10) + "&turn=" + s + "#planning-turn-" + s
+}
+
+// HoldRefs is DecisionsHolding with each holding decision's planning-turn link.
+func HoldRefs(projectSlug string, deps []string, decisions []Decision) []HoldRef {
+	waiting := DecisionsHolding(deps, decisions)
+	if len(waiting) == 0 {
+		return nil
+	}
+	out := make([]HoldRef, 0, len(waiting))
+	for _, d := range waiting {
+		out = append(out, HoldRef{
+			DecisionID: d.ID, Question: strings.Join(strings.Fields(d.Question), " "), Seq: d.Seq,
+			PlanningSessionID: d.PlanningSessionID,
+			PlanningTurn:      PlanningTurnLink(projectSlug, d.PlanningSessionID, d.Seq),
+		})
+	}
+	return out
 }
 
 // DecisionHoldCode prefixes the hold detail, so every surface (the 409 body, the

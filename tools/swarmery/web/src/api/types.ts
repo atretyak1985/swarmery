@@ -1908,6 +1908,9 @@ export interface GuardSummary {
 export interface DecisionOption {
   id: string;
   label: string;
+  /** What follows from choosing it — an agent-declared stop's options carry
+   *  one; guard and review options do not. */
+  consequence?: string;
 }
 
 /**
@@ -1926,6 +1929,24 @@ export interface NeedsYouDecision {
   question: string;
   options: DecisionOption[];
   guard: GuardSummary;
+  /** An agent-declared stop (verify-not-trust phase 10) — absent for a guard or
+   *  review decision. The trigger verbatim: out-of-scope | protected-path |
+   *  access-error | criterion-impossible, unless `flags` says
+   *  stop_trigger_unknown. */
+  trigger?: string;
+  /** The stop block's one-sentence reason. */
+  reason?: string;
+  /** The stop block's lints: stop_trigger_unknown, stop_options_count,
+   *  stop_reason_missing, stop_option_invalid, stop_paths_rejected. A guard
+   *  decision carries stop_paths_rejected alone when vetting dropped a path. */
+  flags?: string[];
+  /** Exactly the files answering allow-add-to-scope adds to the guard's
+   *  `allow:` list: literal repo-relative files under a protected glob, vetted
+   *  by the daemon whatever named them (the run's changed file names, guard.log,
+   *  a protected-path stop's `paths:`). Never a glob or a directory. */
+  paths?: string[];
+  /** The operator may answer in their own words: POST {option: "other", note}. */
+  freeText?: boolean;
 }
 
 /** How a cleanup candidate's content is known to be in main (internal/wtcleanup). */
@@ -1965,7 +1986,7 @@ export interface NeedsYouCleanup {
 /** One path's outcome of an apply (Go wtcleanup.PathOutcome). */
 export interface WorktreeCleanupPathOutcome {
   path: string;
-  /** removed | gone | refused | failed | already-decided | not-proposed | no-proof | branch-changed */
+  /** removed | gone | refused | failed | already-decided | not-proposed | no-proof | branch-changed | head-changed | owner-active | repo-error */
   outcome: string;
   salvageBranch?: string;
   reason?: string;
@@ -4184,6 +4205,10 @@ export interface DecisionHoldRef {
   seq: number;
   /** null for a decision born in the README rather than an interview. */
   planningSessionId: number | null;
+  /** The dashboard path of the planning turn that asked it (Go
+   *  phasegate.PlanningTurnLink) — the hold's "decide now" link. Absent for a
+   *  README decision, an unknown project slug, or an older daemon. */
+  planningTurn?: string;
 }
 
 /** A phase's decision hold (Go `decisionHoldDTO`): non-null while a decision it
@@ -4700,6 +4725,73 @@ export interface EpicSpec {
   unknownRefs: SpecUnknownRef[];
 }
 
+/** A decision-table chip, strongest first — mirrors the Chip* constants in
+ *  internal/wsingest/evidence_table.go. */
+export type DecisionChip = 'evidence' | 'remaining' | 'not-implemented' | 'not-verified';
+
+/** The latest plan review's state — mirrors wsingest.PlanReviewState. */
+export interface PlanReviewState {
+  status: 'none' | 'pass' | 'fail' | 'not-verified';
+  /** The inconclusive class (reviewer-timed-out, incomplete, …); "" otherwise. */
+  reason: string;
+  detail: string;
+  /** RFC 3339 when it finished; "" for none. */
+  at: string;
+}
+
+/** One decision_evidence row behind a chip — mirrors wsingest.EvidenceItem. */
+export interface DecisionEvidenceItem {
+  kind: 'report' | 'pr' | 'review';
+  status: 'evidence' | 'not-implemented' | 'missing';
+  /** doc — written into a phase doc; plan-review — the daemon's own plan review. */
+  source: 'doc' | 'plan-review';
+  phaseId: number | null;
+  phaseSeq: number | null;
+  excerpt: string;
+  reason: string;
+}
+
+/** One declared id of the plan — mirrors wsingest.DecisionTableRow. */
+export interface DecisionTableRow {
+  /** "D-2" | "SC-4". */
+  id: string;
+  kind: 'decision' | 'criterion';
+  text: string;
+  /** The decision's answer; "" for a criterion. */
+  answer: string;
+  /** decided | undecided | recommended for a decision, done | open for a criterion. */
+  status: string;
+  chip: DecisionChip;
+  /** The not-implemented why, or the plan review's reason class. */
+  reason: string;
+  /** Seqs of the phases claiming it, ascending; never null. */
+  phases: number[];
+  /** Never null. */
+  evidence: DecisionEvidenceItem[];
+}
+
+/** Rows per chip — mirrors wsingest.DecisionTableCounts. */
+export interface DecisionTableCounts {
+  evidence: number;
+  remaining: number;
+  notImplemented: number;
+  notVerified: number;
+}
+
+/** The decision → phase → evidence table — mirrors wsingest.DecisionTable (the
+ *  epic payload's `evidence`). */
+export interface DecisionTable {
+  planReview: PlanReviewState;
+  /** Never null; empty for a plan with neither decisions nor spec criteria. */
+  rows: DecisionTableRow[];
+  counts: DecisionTableCounts;
+}
+
+/** GET /api/epics/{taskId}/evidence — the table keyed by its task. */
+export interface EpicEvidence extends DecisionTable {
+  taskId: number;
+}
+
 /** One row of GET /api/epics/{taskId}/terminal-sessions: a session that has this
  *  plan open in a terminal (a `terminal` pick, or an automatic resolution in the
  *  last 10 minutes), newest first. `phaseId` is the EpicPhase id as a string, or
@@ -4746,6 +4838,11 @@ export interface Epic {
    * edited (heuristic). Never null — [] means nothing has worked on this plan,
    * which is a different claim from "we don't know". */
   linkedSessions: LinkedSession[];
+  /** The decision → phase → evidence table (verify-not-trust phase 12); absent
+   *  from an older daemon. */
+  evidence?: DecisionTable;
+  /** evidence.planReview.status lifted onto the epic; absent from an older daemon. */
+  planReviewStatus?: PlanReviewState['status'];
 }
 
 /** One task_sessions row joined to its session — mirrors linkedSessionDTO.

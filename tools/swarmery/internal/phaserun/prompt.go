@@ -6,8 +6,11 @@ import (
 	"strings"
 	"text/template"
 
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/mdfence"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/repopath"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/runcore"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/store"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/wsingest"
 )
 
 // promptTemplate is the phase-run execution contract (interactive planning v2
@@ -48,10 +51,11 @@ var promptTemplate = template.Must(template.New("phaserun").Parse(
 - Installed dependencies (node_modules, .venv, …) are LENT from the project's main checkout as symlinks, because git only materializes committed files in a worktree: build and test commands work as-is. Do NOT run a package-install command (npm ci / npm install / pip install) — it would mutate the main checkout's shared tree.
 - Commit your work in the worktree with conventional commits. Do NOT push, do NOT open PRs, do NOT merge.
 - WRITE THE PHASE SUMMARY INTO THE PHASE DOCUMENT before you finish: fill the doc's ` + "`## Completion Report`" + ` section, or append it at the end of the doc when the section does not exist yet. Cover what shipped, the files and commits, the verification output, and every deviation or deferral. That section is the ONLY summary the operator's dashboard shows for this phase — a report left in your reply, in a scratchpad, or in a reports/ file is invisible there — editing the lent document IS how it reaches them. Write it on the blocked path too, describing how far you got and what stopped you.
+- Cite the IDs you satisfy (D-n, SC-n) in the Completion Report; a decision you deliberately do not implement is written as ` + "`not implemented: D-n — <why>`" + `.
 - ENDING YOUR TURN ENDS THIS PROCESS, and any subagent still running dies with it — while the exit code stays 0, so the run is recorded as a clean success that landed nothing. Never dispatch helpers and then reply that you are waiting on them: that reply IS the kill. Await anything you dispatch inside the same turn, or do the work yourself.
 - If the document's premises don't match the code you find, STOP and end your reply with: PHASE BLOCKED: <one-line reason>. Otherwise end with: PHASE DONE.
 
-{{.TurnContract}}
+{{.StopNote}}{{.TurnContract}}
 
 {{.RepoNote}}PHASE DOCUMENT ({{.DocRelPath}}):
 ----------------------------------------
@@ -118,7 +122,7 @@ func BuildPromptRun(docPath, docRelPath, docContent, repoRoot, projectPath, work
 	if returned {
 		note = ReturnedNote
 	}
-	return buildPromptNoted(docPath, docRelPath, docContent, repoRoot, projectPath, worktreePath, stackedOn, note, budget)
+	return buildPromptNoted(docPath, docRelPath, docContent, repoRoot, projectPath, worktreePath, stackedOn, note, "", budget)
 }
 
 // ReviewFixNote is ReturnedNote's counterpart for the fix re-run the review stage
@@ -141,8 +145,9 @@ func runNote(opts StartOptions) string {
 }
 
 // buildPromptNoted renders the phase-run prompt with note ("" ⇒ none) placed right
-// after the first paragraph.
-func buildPromptNoted(docPath, docRelPath, docContent, repoRoot, projectPath, worktreePath, stackedOn, note string, budget runcore.Budget) string {
+// after the first paragraph, then — ahead of the turn contract — the doc's stop
+// triggers (stopNote) and decisions ("" ⇒ none; the run's DecisionsNote).
+func buildPromptNoted(docPath, docRelPath, docContent, repoRoot, projectPath, worktreePath, stackedOn, note, decisions string, budget runcore.Budget) string {
 	if note != "" {
 		note += "\n\n"
 	}
@@ -154,9 +159,10 @@ func buildPromptNoted(docPath, docRelPath, docContent, repoRoot, projectPath, wo
 		RepoNote     string
 		TurnContract string
 		ReturnedNote string
+		StopNote     string
 	}{docPath, docRelPath, docContent,
 		repoNote(repoRoot, projectPath, worktreePath) + stackNote(stackedOn),
-		runcore.TurnContract(budget), note})
+		runcore.TurnContract(budget), note, stopNote(docContent) + decisions})
 	return b.String()
 }
 
@@ -201,3 +207,61 @@ func multiRepoNote(repoRoot, projectPath string) string {
 			"Do NOT create a `%s/` directory to make such a path resolve.\n\n",
 		name, repoRoot, projectPath, name, name)
 }
+
+// stopNote is the stop-trigger contract (verify-not-trust phase 10, D4): the doc
+// guard block's `stop_if` list, verbatim, and how to stop when one of them fires
+// — a `kind: stop` block with exactly two options the operator answers from the
+// dashboard, then the `PHASE BLOCKED: <trigger>` ending. "" when the doc carries
+// no readable guard or its stop_if is empty, so the prompt of a doc without one
+// is byte-identical to the prompt before stop triggers existed.
+func stopNote(doc string) string {
+	g, perr := mdfence.ParseGuard(doc)
+	if perr != nil || len(g.StopIf) == 0 {
+		return ""
+	}
+	var b strings.Builder
+	b.WriteString("STOP TRIGGERS — this phase's guard says to stop and ask, instead of working around it, when:\n")
+	for _, c := range g.StopIf {
+		b.WriteString("- " + c + "\n")
+	}
+	b.WriteString("When a trigger fires, STOP: write the kind: stop block with exactly two options, then end with PHASE BLOCKED: <trigger>.\n")
+	b.WriteString("The block is a fenced ```yaml block in your final reply; `trigger` is one of " +
+		strings.Join(mdfence.StopTriggers, ", ") + ":\n")
+	b.WriteString("```yaml\nkind: stop\ntrigger: <trigger>\nreason: <one sentence: what you found and why it stops you>\n" +
+		"paths:\n  - <protected-path only: each file you need to edit>\n" +
+		"options:\n  - id: <short-kebab-id>\n    label: <what the operator lets you do>\n    consequence: <what follows from it>\n" +
+		"  - id: <short-kebab-id>\n    label: <the alternative>\n    consequence: <what follows from it>\n```\n")
+	b.WriteString("For protected-path, the option that lets you edit those paths has the id `" + GuardOptionAllow + "`. " +
+		"Never offer `" + mdfence.StopOptionOther + "`: the operator can always answer in their own words. " +
+		"Their answer comes back as a `D-n` line under the doc's `## Decisions` and in the next run's prompt.\n\n")
+	return b.String()
+}
+
+// DecisionsNote is the block a run's prompt carries about the decisions it builds
+// on (verify-not-trust phase 10): the cheap decisions its doc depends on that
+// nobody answered — taken at the planner's recommended option, so the executor
+// must know it is building on a default — and the operator's answers to this
+// phase's earlier stops ("Decision D-n: <answer>"). "" when there are neither.
+func DecisionsNote(recommended, answered []store.Decision) string {
+	if len(recommended) == 0 && len(answered) == 0 {
+		return ""
+	}
+	var b strings.Builder
+	b.WriteString("DECISIONS this run builds on:\n")
+	for _, d := range recommended {
+		ans := strings.TrimSpace(strings.TrimSuffix(strings.TrimSpace(d.Answer), wsingest.RecommendedSuffix))
+		if ans == "" || ans == wsingest.UndecidedAnswer {
+			ans = "no recommended option was recorded — take the cheapest reversible choice and name it in the Completion Report"
+		}
+		fmt.Fprintf(&b, "- %s (recommended, no operator answer): %s → %s\n", d.DecisionID, flatten(d.Question), flatten(ans))
+	}
+	for _, d := range answered {
+		fmt.Fprintf(&b, "- Decision %s: %s — %s\n", d.DecisionID, flatten(answerShown(d)), flatten(decisionAsked(d)))
+	}
+	b.WriteString("Build on the recommended ones (the operator skipped them as cheap to change) and follow every Decision line: " +
+		"each one answers a stop an earlier run of this phase raised.\n\n")
+	return b.String()
+}
+
+// flatten collapses whitespace runs so a value cannot break a one-line entry.
+func flatten(s string) string { return strings.Join(strings.Fields(s), " ") }

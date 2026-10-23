@@ -80,10 +80,28 @@ public struct WSStream: Sendable {
     /// (re)connect attempt. `url` may carry the daemon's `http(s)` scheme —
     /// it is mapped to `ws(s)` here (see `socketURL(from:)`), so no caller
     /// can hand `URLSession` a scheme it refuses.
-    public init(url: URL, session: URLSession = .shared, sleep: @escaping SleepFn = WSStream.defaultSleep) {
+    ///
+    /// The upgrade is signed with `signer` (the daemon takes an Origin-less
+    /// upgrade only with link auth), freshly on every attempt so a reconnect
+    /// never replays a spent nonce.
+    public init(
+        url: URL,
+        session: URLSession = .shared,
+        signer: LinkSigner = LinkSigner(),
+        sleep: @escaping SleepFn = WSStream.defaultSleep
+    ) {
         let socketURL = Self.socketURL(from: url)
-        self.connect = { session.webSocketTask(with: socketURL) }
+        self.connect = { session.webSocketTask(with: Self.handshakeRequest(for: socketURL, signer: signer)) }
         self.sleep = sleep
+    }
+
+    /// The handshake request for one connect attempt: a GET signed over the
+    /// socket URL's path and query.
+    static func handshakeRequest(for socketURL: URL, signer: LinkSigner) -> URLRequest {
+        var request = URLRequest(url: socketURL)
+        request.httpMethod = "GET"
+        signer.sign(&request)
+        return request
     }
 
     /// `URLSession.webSocketTask(with:)` raises an Objective-C
