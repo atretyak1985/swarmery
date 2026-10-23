@@ -114,7 +114,10 @@ daemon" from the address it actually listens on, and both are extended only by
   Without one they get `401 {"code":"dashboard_locked"}`. The browser never
   holds the link token: `swarmery open [--session <uuid>] [--port <n>]` (or
   the notch) signs a one-use unlock ticket with it and opens
-  `http://localhost:<port>/#swarmery-unlock=<ticket>`; the dashboard redeems
+  `http://127.0.0.1:<port>/#swarmery-unlock=<ticket>` — the daemon's bound
+  address literal, never the name `localhost`, which may resolve to `::1`
+  first (a daemon bound to another loopback literal is opened with
+  `--url http://[::1]:7777`); the dashboard redeems
   the ticket at `POST /api/session/unlock` (own `Origin` required, valid for
   2 minutes, once) for a session valid 30 days. Sessions are stateless HMACs
   under the link token, so `swarmery link token --rotate` signs every

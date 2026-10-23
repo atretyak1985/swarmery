@@ -365,8 +365,9 @@ func usage() {
                                    way scripts write to the daemon: a write without an Origin
                                    needs link auth. Body to stdout; exit 0 on 2xx, 1 on another
                                    status, 2 on a usage or transport error
-  swarmery open [--print] [--session <uuid>] [--port <n>] [--key-file <path>]
-                                   open the dashboard (or a session's page) unlocked: the
+  swarmery open [--print] [--session <uuid>] [--port <n>] [--url <base>] [--key-file <path>]
+                                   open the dashboard (or a session's page) unlocked, by the
+                                   daemon's loopback address literal (127.0.0.1): the
                                    dashboard's writes need a session token, which the browser
                                    gets by redeeming a ticket signed with the link token. The
                                    ticket rides in the URL fragment and works once, within 2

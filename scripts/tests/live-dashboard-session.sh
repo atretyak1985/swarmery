@@ -124,7 +124,7 @@ fi
 # (iii) swarmery open --print → ticket → unlock → session.
 URL="$(run "$BIN" open --print --port "$PORT")"
 case "$URL" in
-  "http://localhost:$PORT/#swarmery-unlock="*) pass "(iii) swarmery open --print printed the unlock URL" ;;
+  "http://127.0.0.1:$PORT/#swarmery-unlock="*) pass "(iii) swarmery open --print printed the unlock URL (the bound literal, not localhost)" ;;
   *) fail "(iii) unexpected URL shape: $URL" ;;
 esac
 TICKET="${URL#*#swarmery-unlock=}"

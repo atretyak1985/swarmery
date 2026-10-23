@@ -44,8 +44,8 @@ func TestOpenPrintURLShape(t *testing.T) {
 		t.Fatalf("exit %d, stderr %s", code, errb.String())
 	}
 	u := strings.TrimSpace(out.String())
-	if !strings.HasPrefix(u, "http://localhost:7798/#swarmery-unlock=") {
-		t.Fatalf("URL %q: want http://localhost:7798/#swarmery-unlock=<ticket>", u)
+	if !strings.HasPrefix(u, "http://127.0.0.1:7798/#swarmery-unlock=") {
+		t.Fatalf("URL %q: want http://127.0.0.1:7798/#swarmery-unlock=<ticket>", u)
 	}
 	nonce, err := linksig.VerifyUnlock(openTestKey, ticketOf(t, u), time.Now())
 	if err != nil || nonce == "" {
@@ -61,7 +61,7 @@ func TestOpenSessionPage(t *testing.T) {
 		t.Fatalf("exit %d, stderr %s", code, errb.String())
 	}
 	u := strings.TrimSpace(out.String())
-	if !strings.HasPrefix(u, "http://localhost:7798/sessions/"+id+"#swarmery-unlock=") {
+	if !strings.HasPrefix(u, "http://127.0.0.1:7798/sessions/"+id+"#swarmery-unlock=") {
 		t.Fatalf("URL %q: want the session page with the ticket fragment", u)
 	}
 	if _, err := linksig.VerifyUnlock(openTestKey, ticketOf(t, u), time.Now()); err != nil {
@@ -80,7 +80,7 @@ func TestOpenRunsTheOpener(t *testing.T) {
 	if code := cmdOpen([]string{"--port", "7798", "--key-file", kp}, &out, &errb); code != 0 {
 		t.Fatalf("exit %d, stderr %s", code, errb.String())
 	}
-	if len(got) != 1 || !strings.HasPrefix(got[0], "http://localhost:7798/#swarmery-unlock=") {
+	if len(got) != 1 || !strings.HasPrefix(got[0], "http://127.0.0.1:7798/#swarmery-unlock=") {
 		t.Fatalf("opener got %q", got)
 	}
 	if out.Len() != 0 {
@@ -93,6 +93,46 @@ func TestOpenRunsTheOpener(t *testing.T) {
 	openBrowser = func(string) error { return errors.New("no display") }
 	if code := cmdOpen([]string{"--port", "7798", "--key-file", kp}, &out, &errb); code != 2 {
 		t.Errorf("failed opener: exit %d, want 2", code)
+	}
+}
+
+// The dashboard is opened by the literal address the daemon is bound to,
+// never by the name localhost: that name may resolve to ::1 first, where the
+// daemon does not listen and another process may.
+func TestOpenUsesTheBoundLiteral(t *testing.T) {
+	kp := openKeyFile(t)
+	for name, tc := range map[string]struct {
+		args []string
+		want string
+	}{
+		"default":        {[]string{"--port", "7798"}, "http://127.0.0.1:7798/#swarmery-unlock="},
+		"other loopback": {[]string{"--url", "http://127.0.0.2:7798"}, "http://127.0.0.2:7798/#swarmery-unlock="},
+		"ipv6 loopback":  {[]string{"--url", "http://[::1]:7798/"}, "http://[::1]:7798/#swarmery-unlock="},
+	} {
+		var out, errb bytes.Buffer
+		args := append([]string{"--print", "--key-file", kp}, tc.args...)
+		if code := cmdOpen(args, &out, &errb); code != 0 {
+			t.Fatalf("%s: exit %d, stderr %s", name, code, errb.String())
+		}
+		if u := strings.TrimSpace(out.String()); !strings.HasPrefix(u, tc.want) {
+			t.Errorf("%s: URL %q, want prefix %q", name, u, tc.want)
+		}
+	}
+}
+
+func TestOpenRefusesNamesAndRemoteAddresses(t *testing.T) {
+	kp := openKeyFile(t)
+	for _, base := range []string{
+		"http://localhost:7798", "http://swarmery:7777", "http://192.168.1.5:7777",
+		"ftp://127.0.0.1:7798", "http://[fe80::1%25en0]:7798", "127.0.0.1:7798",
+	} {
+		var out, errb bytes.Buffer
+		if code := cmdOpen([]string{"--print", "--url", base, "--key-file", kp}, &out, &errb); code != 2 {
+			t.Errorf("--url %s: exit %d, want 2", base, code)
+		}
+		if out.Len() != 0 {
+			t.Errorf("--url %s: printed %q", base, out.String())
+		}
 	}
 }
 

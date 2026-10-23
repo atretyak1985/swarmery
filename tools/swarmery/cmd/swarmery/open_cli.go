@@ -1,9 +1,15 @@
-// `swarmery open [--print] [--session <uuid>] [--port <n>]` — open the
-// dashboard unlocked. The dashboard authenticates its writes with a session
-// token, and the browser never holds the link token, so this command signs a
-// short-lived unlock ticket with it (internal/linksig) and hands the browser
+// `swarmery open [--print] [--session <uuid>] [--port <n>] [--url <base>]` —
+// open the dashboard unlocked. The dashboard authenticates its writes with a
+// session token, and the browser never holds the link token, so this command
+// signs a short-lived unlock ticket with it (internal/linksig) and hands the
+// browser
 //
-//	http://localhost:<port>/[sessions/<uuid>]#swarmery-unlock=<ticket>
+//	http://127.0.0.1:<port>/[sessions/<uuid>]#swarmery-unlock=<ticket>
+//
+// The dashboard is opened by the literal address the daemon is bound to —
+// 127.0.0.1 by default, or the loopback literal --url names (an IPv6 one in
+// brackets) — never by the name localhost: that name may resolve to ::1
+// first, where the daemon does not listen and another process may.
 //
 // The ticket rides in the URL fragment, which a browser never sends to any
 // server; the SPA redeems it once at POST /api/session/unlock and drops it
@@ -19,15 +25,18 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"net/netip"
+	"net/url"
 	"os/exec"
 	"runtime"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/linksig"
 )
 
-const openUsage = "usage: swarmery open [--print] [--session <uuid>] [--port <n>] [--key-file <path>]"
+const openUsage = "usage: swarmery open [--print] [--session <uuid>] [--port <n>] [--url <base>] [--key-file <path>]"
 
 // unlockFragment is the URL fragment key the SPA reads the ticket from.
 const unlockFragment = "swarmery-unlock"
@@ -62,6 +71,7 @@ func cmdOpen(args []string, stdout, stderr io.Writer) int {
 	printOnly := fs.Bool("print", false, "print the unlock URL instead of opening it")
 	session := fs.String("session", "", "open this session's page (its uuid)")
 	port := fs.Int("port", envPort(), "daemon port (env: SWARMERY_PORT)")
+	baseURL := fs.String("url", "", "daemon base URL, a loopback address literal (default http://127.0.0.1:<port>)")
 	keyFile := fs.String("key-file", "", "link token file (default ~/.swarmery/link-token)")
 	if err := fs.Parse(args); err != nil {
 		return usageErr("%v", err)
@@ -75,6 +85,14 @@ func cmdOpen(args []string, stdout, stderr io.Writer) int {
 	if *session != "" && !validSessionID(*session) {
 		return usageErr("--session must be a session uuid (got %q)", *session)
 	}
+	base := fmt.Sprintf("http://127.0.0.1:%d", *port)
+	if *baseURL != "" {
+		b, err := loopbackBase(*baseURL)
+		if err != nil {
+			return usageErr("--url: %v", err)
+		}
+		base = b
+	}
 	kp := *keyFile
 	if kp == "" {
 		kp = linksig.DefaultKeyPath()
@@ -84,7 +102,7 @@ func cmdOpen(args []string, stdout, stderr io.Writer) int {
 		fmt.Fprintf(stderr, "swarmery open: no link token at %s (the daemon mints it on start; `swarmery link token` mints one now)\n", kp)
 		return 2
 	}
-	u, err := unlockURL(key, *port, *session, openNow())
+	u, err := unlockURL(key, base, *session, openNow())
 	if err != nil {
 		fmt.Fprintf(stderr, "swarmery open: %v\n", err)
 		return 2
@@ -102,9 +120,42 @@ func cmdOpen(args []string, stdout, stderr io.Writer) int {
 	return 0
 }
 
-// unlockURL is the dashboard URL (a session page when sessionID is set) with
-// a fresh unlock ticket in its fragment.
-func unlockURL(key string, port int, sessionID string, now time.Time) (string, error) {
+// loopbackBase reduces --url to scheme://<loopback literal>:<port>: http(s),
+// a loopback IP address literal (no name, not even localhost; no zone), no
+// path beyond "/", the scheme's default port when none is given.
+func loopbackBase(raw string) (string, error) {
+	u, err := url.Parse(strings.TrimSpace(raw))
+	if err != nil {
+		return "", err
+	}
+	scheme := strings.ToLower(u.Scheme)
+	if scheme != "http" && scheme != "https" {
+		return "", fmt.Errorf("want http://<loopback address>:<port> (got %q)", raw)
+	}
+	if (u.Path != "" && u.Path != "/") || u.RawQuery != "" || u.Fragment != "" || u.User != nil {
+		return "", fmt.Errorf("want a base URL with no path, query or fragment (got %q)", raw)
+	}
+	addr, err := netip.ParseAddr(u.Hostname())
+	if err != nil || addr.Zone() != "" || addr.Is4In6() || !addr.IsLoopback() {
+		return "", fmt.Errorf("the host must be a loopback address literal such as 127.0.0.1 or [::1], never a name (got %q)", u.Hostname())
+	}
+	port := u.Port()
+	if port == "" {
+		port = "80"
+		if scheme == "https" {
+			port = "443"
+		}
+	}
+	n, err := strconv.ParseUint(port, 10, 16)
+	if err != nil || n == 0 {
+		return "", fmt.Errorf("bad port %q", port)
+	}
+	return scheme + "://" + netip.AddrPortFrom(addr, uint16(n)).String(), nil
+}
+
+// unlockURL is the dashboard URL under base (a session page when sessionID
+// is set) with a fresh unlock ticket in its fragment.
+func unlockURL(key, base, sessionID string, now time.Time) (string, error) {
 	ticket, err := linksig.UnlockTicket(key, now)
 	if err != nil {
 		return "", errors.New("cannot mint an unlock ticket: " + err.Error())
@@ -113,7 +164,7 @@ func unlockURL(key string, port int, sessionID string, now time.Time) (string, e
 	if sessionID != "" {
 		path = "/sessions/" + sessionID
 	}
-	return fmt.Sprintf("http://localhost:%d%s#%s=%s", port, path, unlockFragment, ticket), nil
+	return fmt.Sprintf("%s%s#%s=%s", base, path, unlockFragment, ticket), nil
 }
 
 // validSessionID: 1–64 characters of [0-9A-Za-z-] — a uuid, never a path.

@@ -135,6 +135,35 @@ final class LinkSignerTests: XCTestCase {
         XCTAssertEqual(url.host, "127.0.0.1")
     }
 
+    /// `localhost` may resolve to ::1 first, where the daemon does not listen
+    /// and another process may: the unlock URL names the IPv4 literal.
+    func testLocalhostIsRewrittenToTheLoopbackLiteral() throws {
+        let signer = LinkSigner(keyPath: try keyFile(unlockKey))
+        let base = URL(string: "http://localhost:7777/sessions/uuid-1")!
+        let url = TerminalFocus.unlockedDashboardURL(base, signer: signer)
+        XCTAssertEqual(url.host, "127.0.0.1")
+        XCTAssertEqual(url.port, 7777)
+        XCTAssertEqual(url.path, "/sessions/uuid-1")
+        let fragment = try XCTUnwrap(URLComponents(url: url, resolvingAgainstBaseURL: false)?.fragment)
+        XCTAssertTrue(fragment.hasPrefix("swarmery-unlock="), fragment)
+    }
+
+    func testLoopbackLiteralsKeepTheirAddress() throws {
+        let signer = LinkSigner(keyPath: try keyFile(unlockKey))
+        for raw in ["http://127.0.0.1:7777", "http://127.0.0.2:7777", "http://[::1]:7777"] {
+            let url = TerminalFocus.unlockedDashboardURL(URL(string: raw)!, signer: signer)
+            XCTAssertTrue(url.absoluteString.hasPrefix(raw + "#swarmery-unlock="), url.absoluteString)
+        }
+    }
+
+    func testNamesOtherThanLocalhostGetNoTicket() throws {
+        let signer = LinkSigner(keyPath: try keyFile(unlockKey))
+        for raw in ["http://swarmery:7777", "http://192.168.1.5:7777", "http://localhost.example:7777"] {
+            let base = URL(string: raw)!
+            XCTAssertEqual(TerminalFocus.unlockedDashboardURL(base, signer: signer), base, raw)
+        }
+    }
+
     func testNoLinkTokenMeansNoFragment() {
         let signer = LinkSigner(keyPath: "/nonexistent/link-token")
         let base = URL(string: "http://127.0.0.1:7777")!
