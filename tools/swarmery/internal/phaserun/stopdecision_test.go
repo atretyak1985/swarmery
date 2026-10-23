@@ -362,6 +362,46 @@ func TestStopDecisionRevetsStoredPathsOnAnswer(t *testing.T) {
 	}
 }
 
+// A blocked run's GUARD decision answered reject must not let the re-run build
+// on the branch that holds the rejected protected edits; answered allow, it may
+// — as an agent stop may, whatever its answer.
+func TestStopAnsweredSinceBlockGuardReject(t *testing.T) {
+	for _, c := range []struct {
+		option string
+		want   bool
+	}{{GuardOptionReject, false}, {GuardOptionAllow, true}} {
+		t.Run(c.option, func(t *testing.T) {
+			s, r, _, taskID, p1, _ := stopService(t)
+			r.mu.Lock()
+			r.runFn = func(spec RunSpec) (*Run, error) {
+				seedTranscript(t, s.DB, spec.SessionUUID, "Touched the test.\n\nPHASE BLOCKED: protected-path")
+				return &Run{SessionUUID: spec.SessionUUID, ExitCode: 0}, nil
+			}
+			r.mu.Unlock()
+			if _, err := s.Start(p1, "", ""); err != nil {
+				t.Fatalf("Start: %v", err)
+			}
+			guard := GuardResult{HasGuard: true, ProtectedPaths: []string{"**/*_test.go"}, ProtectedChanged: []string{"a_test.go"}}
+			if _, _, err := store.UpsertStopDecision(s.DB, taskID, p1, guardQuestion(guard), GuardOptions, guardJSON(guard), s.ts()); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := AnswerGuardDecision(s.DB, taskID, p1, "D-1", GuardAnswer{Option: c.option}, answerAt(t)); err != nil {
+				t.Fatal(err)
+			}
+			info, err := s.loadPhase(p1)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if info.RunState != "blocked" {
+				t.Fatalf("run_state = %q, want blocked (premise)", info.RunState)
+			}
+			if got := s.stopAnsweredSinceBlock(p1, info); got != c.want {
+				t.Fatalf("stopAnsweredSinceBlock after a guard %s = %v, want %v", c.option, got, c.want)
+			}
+		})
+	}
+}
+
 func guardJSONWithStop(t *testing.T, g GuardResult, st *StopPayload) string {
 	t.Helper()
 	b, err := json.Marshal(stopRecord{GuardResult: g, Stop: st})

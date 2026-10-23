@@ -123,6 +123,10 @@ var (
 // append their line to the doc before one of them loses the row update.
 var answerMu sync.Mutex
 
+// guardAnswerAllow is how an allow answer to a guard decision is recorded (the
+// paths and a note may follow); stopAnsweredSinceBlock reads it back.
+const guardAnswerAllow = "allow (add to scope)"
+
 // GuardAnswer is the operator's answer to a guard decision.
 type GuardAnswer struct {
 	Option string
@@ -175,7 +179,7 @@ func AnswerGuardDecision(db *sql.DB, taskID, phaseID int64, decisionID string, a
 
 	answer := "reject"
 	if ans.Option == GuardOptionAllow {
-		answer = "allow (add to scope)"
+		answer = guardAnswerAllow
 		if len(paths) > 0 {
 			answer += ": " + strings.Join(paths, ", ")
 		}

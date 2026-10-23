@@ -364,6 +364,10 @@ func (s *Service) decisionsNoteFor(phaseID, taskID int64) string {
 // the operator has answered one of its stop decisions since: the re-run then
 // continues on the phase's own branch, like a returned run, so the partial work
 // the stopped run committed is built on rather than refused as a dirty branch.
+// Only an agent-declared stop (any answer) or a guard decision answered allow
+// counts: a guard decision answered reject refused the protected edits that
+// branch holds, so the re-run must not build on them — the dirty-branch refusal
+// stands.
 func (s *Service) stopAnsweredSinceBlock(phaseID int64, info phaseInfo) bool {
 	if info.RunState != "blocked" {
 		return false
@@ -379,6 +383,9 @@ func (s *Service) stopAnsweredSinceBlock(phaseID int64, info phaseInfo) bool {
 	for _, d := range ds {
 		if d.Source != store.DecisionSourceStop || d.Status != store.DecisionDecided || d.DecidedAt == nil ||
 			d.PhaseID == nil || *d.PhaseID != phaseID {
+			continue
+		}
+		if StopOf(d) == nil && !strings.HasPrefix(d.Answer, guardAnswerAllow) {
 			continue
 		}
 		if at, err := time.Parse(time.RFC3339, *d.DecidedAt); err == nil && !at.Before(ended) {
