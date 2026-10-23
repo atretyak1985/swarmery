@@ -356,11 +356,19 @@ func uniqueSorted(v []int) []int {
 // daemon's phase_reviews scope='plan' row or a doc's `round: plan` block
 // (review_blocks). INCONCLUSIVE is not-verified, with the daemon's reason class
 // (the detail's prefix before ':') or "incomplete"/"inconclusive" for a block.
+//
+// Of the daemon's rows the latest settled one wins — the one carrying the
+// branch-set key (run_session_uuid) — and a transient row (key "", e.g.
+// reviewer-not-started) counts only when no settled review exists. That is how
+// recordPlanReview treats them: a transient failure keeps the previous settled
+// review's evidence rows, so the verdict shown beside them must stay that
+// review's too, not flip a PASS to not-verified.
 func latestPlanReview(db Querier, taskID int64) (PlanReviewState, error) {
 	st := PlanReviewState{Status: PlanReviewNone}
 	var verdict, detail, at string
 	err := db.QueryRow(`SELECT verdict, COALESCE(detail, ''), COALESCE(finished_at, started_at, '') FROM phase_reviews
-		 WHERE scope = 'plan' AND workspace_task_id = ? ORDER BY id DESC LIMIT 1`,
+		 WHERE scope = 'plan' AND workspace_task_id = ?
+		 ORDER BY CASE WHEN COALESCE(run_session_uuid, '') <> '' THEN 0 ELSE 1 END, id DESC LIMIT 1`,
 		strconv.FormatInt(taskID, 10)).Scan(&verdict, &detail, &at)
 	switch {
 	case err == nil:
