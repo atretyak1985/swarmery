@@ -19,6 +19,7 @@ function verdictClass(verdict: string): string {
     case 'redundant':
       return 'border-line-strong text-ink-dim';
     case 'salvage':
+    case 'force-unmerged': // the operator's removal from the Needs-you cleanup card, salvage branch first
       return 'border-brand/40 text-brand';
     case 'keep-unmerged':
       return 'border-amber/45 text-amber';

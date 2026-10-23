@@ -334,7 +334,10 @@ func (s *Service) repos() ([]repo, error) {
 // journal records one decision. A journal failure is logged, never returned: an
 // unwritable audit row must not stop the sweep that already happened.
 func (s *Service) journal(r repo, wt Worktree, dec Decision, salvageBranch string, removed bool, actErr error) {
-	var branch, salvage, errStr any
+	var project, branch, salvage, errStr any
+	if r.id != 0 {
+		project = r.id // 0 = not a known project (ForceUnmerged on a bare repo root)
+	}
 	if wt.Branch != "" {
 		branch = wt.Branch
 	}
@@ -347,7 +350,7 @@ func (s *Service) journal(r repo, wt Worktree, dec Decision, salvageBranch strin
 	if _, err := s.DB.Exec(
 		`INSERT INTO worktree_sweeps (ts, project_id, path, branch, verdict, reason, salvage_branch, files, removed, error)
 		 VALUES (?,?,?,?,?,?,?,?,?,?)`,
-		s.clock().UTC().Format(time.RFC3339), r.id, wt.Path, branch, string(dec.Verdict), dec.Reason,
+		s.clock().UTC().Format(time.RFC3339), project, wt.Path, branch, string(dec.Verdict), dec.Reason,
 		salvage, len(wt.Dirty), boolInt(removed), errStr,
 	); err != nil {
 		log.Printf("wtjanitor: journal %s: %v", wt.Path, err)

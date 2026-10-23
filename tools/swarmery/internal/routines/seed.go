@@ -31,6 +31,10 @@ var ShippedSeedFiles = []string{
 	"memory-review.json", // Friday: memory lint + consolidation dry-run
 	"model-upgrade.json", // monthly: changelog, prompt audit, model eval
 	"skill-audit.json",   // Monday: skill audit report (haiku) into the workspace retro/ dir
+	// Daily: narrows the janitor's keep-unmerged pile to closed phases/cards with
+	// a proof and posts the Needs-you card; a haiku step summarises the scan.
+	// Never removes anything — removal is the operator's click.
+	"worktree-cleanup.json",
 }
 
 // LoadSeedFile reads and validates a definition, including its steps.
