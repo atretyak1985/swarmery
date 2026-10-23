@@ -504,18 +504,40 @@ options:                     # exactly two
 ```
 ````
 
-- **Exactly two options**, each with `id` (short kebab), `label` and
-  `consequence`. Never offer `other`: the operator can always answer in their
+- **Exactly two options**, each with `id`, `label` and `consequence`. An id is
+  a bare token: lower-case letters and digits, then `.`, `_` or `-`, at most
+  64 characters. Never offer `other`: the operator can always answer in their
   own words, recorded as option `other` with their text.
 - On a `protected-path` stop, the option that lets the run edit `paths` has the
-  id `allow-add-to-scope`; choosing it appends those paths to the guard
-  block's `allow:` list.
-- A slip is shown, never swallowed: a trigger outside the set
-  (`stop_trigger_unknown`), other than two options (`stop_options_count`), no
-  reason (`stop_reason_missing`), or an option with no id, a repeated id or the
-  id `other` (`stop_option_invalid`, renamed `option-<n>`) still raises the
-  decision, with the flag beside it. A reply with no block is a plain
-  `PHASE BLOCKED:`.
+  id `allow-add-to-scope`. The ids `allow-add-to-scope` and `reject` belong to
+  the guard: the platform shows its own label and consequence for them,
+  whatever the block says.
+- **`paths` are vetted, never copied.** An entry survives only as a literal,
+  repo-relative FILE: no glob characters (`* ? [ ] { }`, no `+(` `@(` `!(`), no
+  `..` segment, no leading `/`, no backslash, no surrounding whitespace, nothing
+  unprintable or invisible (control, zero-width or bidi characters), not a
+  directory in the worktree and not the parent of another path in play,
+  nothing under `.swarmery`, and matched by one of the guard's
+  `protected_paths` globs. The same vetting applies to every path the platform
+  itself would offer: the names of the protected files the run changed and the
+  paths in `.swarmery/guard.log`. The operator is shown the exact list that
+  survived, and choosing `allow-add-to-scope` appends that list, and nothing
+  else, to the guard block's `allow:` list. A path in `allow:` without glob
+  characters releases exactly that one file, never what lies under it.
+- A slip is shown, never swallowed. A block can raise five flags, and each one
+  still raises the decision with the flag beside it:
+  - `stop_trigger_unknown`: a trigger outside the set.
+  - `stop_options_count`: other than two options.
+  - `stop_reason_missing`: no reason.
+  - `stop_option_invalid`: an option with no id, an id that is not a bare
+    token, a repeated id or the id `other`; it is renamed `option-<n>`.
+  - `stop_paths_rejected`: vetting dropped one or more `paths` (or one of the
+    run's own changed or refused paths); the dropped entries are never offered.
+
+  A reply with no block is a plain `PHASE BLOCKED:`.
+- When the run's guard check flagged it (it changed a protected file, or the
+  guard refused one of its calls), the decision also offers the guard's
+  `allow-add-to-scope` and `reject` choices, whatever the trigger.
 
 The answer is appended under the phase doc's `## Decisions`, shaped exactly:
 
@@ -525,9 +547,12 @@ The answer is appended under the phase doc's `## Decisions`, shaped exactly:
 
 A note the operator adds to a chosen option follows its id after ` — `. The
 doc then differs from the blocked run's, so the blocked-run cooldown lets
-the phase run again; the re-run continues on the phase's own branch (the
-stop's partial work survives), and its prompt carries
-`Decision D-n: <answer>`.
+the phase run again, and the re-run's prompt carries
+`Decision D-n: <answer>`. The re-run continues on the phase's own branch, so
+the stop's partial work survives, except when the guard check flagged the
+stopped run. Then it continues only after an `allow-add-to-scope` answer. Any
+other answer leaves the protected edits unaccepted, and the branch is refused
+as dirty instead of built on.
 
 ## `## Review` (appended per review round, never by the planner)
 
