@@ -206,7 +206,7 @@ added later without breaking older mods). A bare top-level array is rejected wit
 | `cwd` | string | `$.session.cwd()`. Resolves the project when the daemon has to mint the session row, and drives the exclude check. May be empty (the row is parked on the `(unknown)` project until the transcript shows the real cwd) |
 | `kind` | string, required | one of the kinds below. Anything else is rejected **per event** |
 | `at` | string, required | RFC 3339 with or without fractional seconds and in any offset. The daemon stores it as fixed-width UTC with milliseconds (`2006-01-02T15:04:05.000Z`) |
-| `payload` | object, optional | per kind, below. Must be valid JSON. Stored verbatim. `null` and absent are the same |
+| `payload` | object, optional | per kind, below. Must be valid JSON. Stored as sent, secret-shaped values masked. `null` and absent are the same |
 
 Limits:
 
@@ -232,8 +232,9 @@ Every accepted event also advances `sessions.link_seen_at` to the newest `at` se
 (`inputHash`, e.g. hex SHA-256 of the canonical JSON) and the subagent's `agentId`
 when the call runs inside one. It never sends the input itself. The full input is in
 the JSONL transcript already, and a second copy over HTTP is a second place for file
-contents and secrets to leak. The daemon stores the payload verbatim and does not
-check this. The rule is the mod's to keep.
+contents and secrets to leak. The daemon does not check this. It masks secret-shaped
+values in every stored payload (the transcript ingest's redaction), but the rule is
+the mod's to keep.
 
 **`session.measure` units are optional (M2).** An absent `context.percent` (before
 the first response) or an empty `rateLimits` (off a subscription) leaves the previous
@@ -744,8 +745,8 @@ field, a value out of range, a payload that is absent or not an object) rejects
 `turn.actual payload: <why>`, inside the usual `202`. It is never a `500`.
 
 **Privacy.** Paths and numbers only. No prompt text, no tool input and no model
-reply text ever go on the wire, and the daemon stores the payloads verbatim, so the
-rule is the mod's to keep.
+reply text ever go on the wire. The daemon masks only secret-shaped values in what it
+stores, so the rule is the mod's to keep.
 
 ### Storage and scoring
 

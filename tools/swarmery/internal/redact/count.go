@@ -102,6 +102,8 @@ func CountStored(ctx context.Context, db *sql.DB) (StoredCount, error) {
 				switch t.table {
 				case "events", "permission_requests":
 					c = countPayload(vals[len(t.cols)].String, vals[i].String)
+				case "link_events":
+					c = countPayload("", vals[i].String)
 				case "file_changes":
 					c = CountLiteral(vals[i].String)
 				default:

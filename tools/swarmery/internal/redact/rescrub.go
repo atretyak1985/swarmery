@@ -128,6 +128,12 @@ var targets = []target{
 	// events table for each batch.
 	{table: "events", name: PermissionEventsProgress, cols: []string{"payload"}, ctx: []string{"tool_name"},
 		where: "rowid IN (SELECT event_id FROM permission_requests WHERE event_id IS NOT NULL)", fix: fixPayload},
+	// swarmery-link mod events (internal/link): a JSON payload with no tool
+	// context, redacted like a non-tool event.
+	{table: "link_events", cols: []string{"payload"}, fix: fixWith(func(doc string) string {
+		out, _ := PayloadJSON("", doc)
+		return out
+	})},
 }
 
 // PermissionEventsProgress is the redaction_progress key of the pass over the
