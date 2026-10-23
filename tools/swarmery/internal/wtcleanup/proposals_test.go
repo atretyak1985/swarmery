@@ -61,6 +61,7 @@ func threeKinds(t *testing.T, f *fixture) (scan Scan, squashed, landed, unmerged
 	f.squashIntoMain("swarm/phase-" + itoa(a))
 	b := f.phase(2, "done", "done", "merged")
 	landed = f.worktree("phase-b", "swarm/phase-"+itoa(b), "b.md", "b\n")
+	f.mergeIntoMain("swarm/phase-" + itoa(b))
 	c := f.phase(3, "done", "done", "none")
 	unmerged = f.worktree("phase-c", "swarm/phase-"+itoa(c), "c.md", "c\n")
 	var err error
@@ -239,5 +240,91 @@ func TestApply_BranchChangedIsRefused(t *testing.T) {
 	}
 	if res.Paths[0].Outcome != OutcomeBranchChanged || len(rec.calls) != 0 {
 		t.Errorf("outcome = %+v, forcer calls %v; want branch-changed and no call", res.Paths[0], rec.calls)
+	}
+}
+
+// proposeLanded proposes threeKinds and returns the landed path, its proposal
+// id and its phase id.
+func proposeLanded(t *testing.T, f *fixture) (landed string, anchor, phaseID int64) {
+	t.Helper()
+	scan, _, landed, _ := threeKinds(t, f)
+	if _, err := Propose(f.db, scan, time.Now()); err != nil {
+		t.Fatalf("Propose: %v", err)
+	}
+	for _, c := range scan.Candidates {
+		if c.Path == landed {
+			phaseID = c.PhaseID
+		}
+	}
+	return landed, f.openRows()[landed].id, phaseID
+}
+
+// A phase re-run warm-reuses the same path and branch: once its owner is
+// running again, Apply refuses the click and the row stays open.
+func TestApply_OwnerRunningAgainIsRefused(t *testing.T) {
+	f := newFixture(t)
+	landed, anchor, phaseID := proposeLanded(t, f)
+	f.exec(`UPDATE epic_phases SET run_state = 'running' WHERE id = ?`, phaseID)
+
+	rec := &recordingForcer{}
+	res, err := Apply(f.db, ExecGit{}, rec, anchor, []string{landed}, time.Now())
+	if err != nil {
+		t.Fatalf("Apply: %v", err)
+	}
+	if res.Paths[0].Outcome != OutcomeOwnerActive || !strings.Contains(res.Paths[0].Reason, "in flight") || len(rec.calls) != 0 {
+		t.Errorf("outcome = %+v, forcer calls %v; want owner-active and no call", res.Paths[0], rec.calls)
+	}
+	if _, open := f.openRows()[landed]; !open {
+		t.Error("refused proposal was decided")
+	}
+}
+
+// Without git's worktree list nothing can be re-checked: every pick is refused
+// and nothing reaches the Forcer.
+func TestApply_UnreadableWorktreesForcesNothing(t *testing.T) {
+	f := newFixture(t)
+	scan, squashed, landed, _ := threeKinds(t, f)
+	if _, err := Propose(f.db, scan, time.Now()); err != nil {
+		t.Fatalf("Propose: %v", err)
+	}
+	anchor := f.openRows()[landed].id
+
+	rec := &recordingForcer{}
+	res, err := Apply(f.db, failingGit{}, rec, anchor, []string{squashed, landed}, time.Now())
+	if err != nil {
+		t.Fatalf("Apply: %v", err)
+	}
+	if len(rec.calls) != 0 {
+		t.Fatalf("forcer handed %v with an unreadable worktree list", rec.calls)
+	}
+	for _, o := range res.Paths {
+		if o.Outcome != OutcomeRepoError || !strings.Contains(o.Reason, "cannot list worktrees") {
+			t.Errorf("%s: %+v, want repo-error with the reason", o.Path, o)
+		}
+	}
+	if n := len(f.openRows()); n != 3 {
+		t.Errorf("open rows = %d, want all 3 still open", n)
+	}
+}
+
+// The proof was for one commit: a checkout whose HEAD moved since the scan is
+// refused before the Forcer is asked.
+func TestApply_HeadMovedIsRefused(t *testing.T) {
+	f := newFixture(t)
+	landed, anchor, _ := proposeLanded(t, f)
+	f.write(landed, "later.md", "after the proposal\n")
+	f.git(landed, "add", "later.md")
+	f.git(landed, "commit", "-qm", "later work")
+
+	rec := &recordingForcer{}
+	res, err := Apply(f.db, ExecGit{}, rec, anchor, []string{landed}, time.Now())
+	if err != nil {
+		t.Fatalf("Apply: %v", err)
+	}
+	if res.Paths[0].Outcome != OutcomeHeadChanged || len(rec.calls) != 0 {
+		t.Errorf("outcome = %+v, forcer calls %v; want head-changed and no call", res.Paths[0], rec.calls)
+	}
+	if _, open := f.openRows()[landed]; !open {
+		t.Error("refused proposal was decided")
 	}
 }

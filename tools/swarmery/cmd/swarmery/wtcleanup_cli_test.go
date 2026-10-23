@@ -83,6 +83,11 @@ func wtcleanupFixture(t *testing.T) (dbPath, landed, unmerged string, git func(d
 		}
 		git(path, "add", file)
 		git(path, "commit", "-qm", "work")
+		if landing == "merged" {
+			// A merged landing: the branch's HEAD reaches main (the landing proof
+			// requires it — the landing row records no commit id).
+			git(repo, "merge", "-q", "--no-ff", "-m", "land "+branch, branch)
+		}
 		exec1(`INSERT INTO worktree_sweeps (ts, project_id, path, branch, verdict, reason) VALUES (?, 1, ?, ?, 'keep-unmerged', 'branch has unmerged commits')`,
 			time.Now().UTC().Format(time.RFC3339), path, branch)
 		return path
