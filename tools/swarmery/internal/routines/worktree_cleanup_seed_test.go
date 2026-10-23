@@ -50,8 +50,11 @@ func TestWorktreeCleanupSeedFile(t *testing.T) {
 		t.Errorf("step 2 = %s model %q continueOnFailure %v; want a haiku ai-prompt that cannot stop the propose step",
 			summary.Type, summary.Model, summary.ContinueOnFailure)
 	}
-	if !strings.Contains(summary.Prompt, "last-scan.json") || !strings.Contains(summary.Prompt, "Make no decisions") {
-		t.Errorf("summary prompt must read the scan report and decide nothing: %q", summary.Prompt)
+	// The scan's JSON reaches the model through the step handoff, not a file it
+	// would need a tool to read.
+	if !strings.HasSuffix(summary.Prompt, PrevOutputPlaceholder) || !strings.Contains(summary.Prompt, "Make no decisions") ||
+		!strings.Contains(summary.Prompt, "run no tools") {
+		t.Errorf("summary prompt must end in the scan's %s and decide nothing: %q", PrevOutputPlaceholder, summary.Prompt)
 	}
 	if propose.Type != StepCommand || strings.TrimSpace(propose.Command) != "swarmery wtcleanup propose" {
 		t.Errorf("step 3 = %+v, want `swarmery wtcleanup propose`", propose)

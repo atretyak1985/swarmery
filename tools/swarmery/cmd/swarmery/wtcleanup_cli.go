@@ -8,8 +8,8 @@ package main
 //	swarmery wtcleanup propose   store them as the Needs-you "Worktree cleanup" card
 //	swarmery wtcleanup apply     remove selected paths (salvage branch first)
 //
-// The daily worktree-cleanup routine runs scan (for its summary step) and
-// propose. apply is the card's "Remove selected" for a terminal: it is the only
+// The daily worktree-cleanup routine runs scan (its JSON is the summary step's
+// {{prev_output}}) and propose. apply is the card's "Remove selected" for a terminal: it is the only
 // subcommand that removes anything, and only paths an open proposal with a
 // proof names.
 
@@ -38,7 +38,7 @@ const wtcleanupUsage = `usage:
       phase or board card is closed, each with a proof its content is in main
       (landing merged, or merging it into main changes nothing). A candidate
       without proof is counted, never offered. --out also writes the JSON to
-      <file> (the routine's summary step reads it).
+      <file> (the routine keeps its last scan there for the operator).
   swarmery wtcleanup propose [--db <path>] [--json]
       Scan, then store the result as the open proposals the Needs-you
       "Worktree cleanup" card lists. Removes nothing.
