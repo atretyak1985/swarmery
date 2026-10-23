@@ -88,6 +88,27 @@ public struct LinkSigner: Sendable {
         return hex(Array(mac))
     }
 
+    // MARK: - Dashboard unlock ticket
+
+    /// A one-shot ticket that unlocks the browser dashboard: `<ts>.<nonce>.<sig>`.
+    /// The dashboard is opened as `<url>#swarmery-unlock=<ticket>` and trades it
+    /// for a session token at `POST /api/session/unlock`; like a signed request,
+    /// the ticket proves the link token without carrying it. Nil when there is
+    /// no key on disk (the page then opens locked and says how to unlock).
+    public func unlockTicket(now: Date? = nil, nonce: String? = nil) -> String? {
+        guard let key = readKey() else { return nil }
+        let ts = Int64((now ?? self.now()).timeIntervalSince1970)
+        let n = nonce ?? self.nonce()
+        return "\(ts).\(n).\(Self.unlockSignature(key: key, ts: String(ts), nonce: n))"
+    }
+
+    /// hex HMAC-SHA256(key, "swarmery-unlock\nts\nnonce").
+    static func unlockSignature(key: String, ts: String, nonce: String) -> String {
+        let text = "swarmery-unlock\n\(ts)\n\(nonce)"
+        let mac = HMAC<SHA256>.authenticationCode(for: Data(text.utf8), using: SymmetricKey(data: Data(key.utf8)))
+        return hex(Array(mac))
+    }
+
     static func hex(_ bytes: [UInt8]) -> String {
         bytes.map { String(format: "%02x", $0) }.joined()
     }

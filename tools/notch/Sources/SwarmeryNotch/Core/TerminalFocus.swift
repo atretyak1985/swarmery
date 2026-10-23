@@ -92,6 +92,34 @@ public enum TerminalFocus {
         base.appendingPathComponent("sessions").appendingPathComponent(sessionUuid)
     }
 
+    /// The dashboard asks for a session token on every browser write and on
+    /// the terminal socket. Opening it with `#swarmery-unlock=<ticket>` (a
+    /// short-lived ticket signed with the link token) lets the page fetch one
+    /// itself. Minted at open time, so the ticket is fresh. Without a readable
+    /// link token -- or for a dashboard that is not on this machine -- the
+    /// plain URL opens and the page's locked banner explains the way in.
+    static func unlockedDashboardURL(_ url: URL, signer: LinkSigner = LinkSigner()) -> URL {
+        guard isLoopback(url),
+              let ticket = signer.unlockTicket(),
+              var components = URLComponents(url: url, resolvingAgainstBaseURL: false)
+        else { return url }
+        components.fragment = "swarmery-unlock=\(ticket)"
+        return components.url ?? url
+    }
+
+    static func isLoopback(_ url: URL) -> Bool {
+        switch url.host?.lowercased() {
+        case "127.0.0.1", "localhost", "::1": return true
+        default: return false
+        }
+    }
+
+    /// Opens the dashboard root (the menu-bar "Open dashboard" item), unlocked.
+    @MainActor
+    public static func openDashboardHome(dashboardBaseURL: URL = DaemonClient.resolveBaseURL()) {
+        perform(.openDashboard(dashboardBaseURL))
+    }
+
     @MainActor
     public static func focus(_ session: Session, dashboardBaseURL: URL = DaemonClient.resolveBaseURL()) {
         perform(strategy(for: session.terminal, sessionUuid: session.sessionUuid, dashboardBaseURL: dashboardBaseURL))
@@ -114,7 +142,7 @@ public enum TerminalFocus {
         case let .activateApp(bundleID):
             activate(bundleID: bundleID)
         case let .openDashboard(url):
-            NSWorkspace.shared.open(url)
+            NSWorkspace.shared.open(unlockedDashboardURL(url))
         }
     }
 

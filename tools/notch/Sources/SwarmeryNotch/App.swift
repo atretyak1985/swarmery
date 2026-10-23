@@ -101,7 +101,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func openDashboard() {
-        NSWorkspace.shared.open(DaemonClient.resolveBaseURL())
+        TerminalFocus.openDashboardHome()
     }
 
     @objc private func quit() {

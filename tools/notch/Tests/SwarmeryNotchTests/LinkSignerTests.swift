@@ -101,6 +101,52 @@ final class LinkSignerTests: XCTestCase {
         XCTAssertNotEqual(first, second, "every connect attempt needs a fresh nonce")
     }
 
+    // MARK: - dashboard unlock ticket
+
+    private let unlockKey = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+
+    /// The ticket vector shared with the daemon: a drift on either side breaks the unlock.
+    func testUnlockSignatureVector() {
+        XCTAssertEqual(
+            LinkSigner.unlockSignature(key: unlockKey, ts: "1761200000", nonce: "n0nce-test-1"),
+            "6d3d147593d214d11e3b5c8b501651cf6cf188c36cbf8c11523d3c8e42c53f89"
+        )
+    }
+
+    func testUnlockTicketShape() throws {
+        let signer = LinkSigner(keyPath: try keyFile(unlockKey))
+        let ticket = try XCTUnwrap(signer.unlockTicket(now: Date(timeIntervalSince1970: 1_761_200_000), nonce: "n0nce-test-1"))
+        XCTAssertEqual(ticket, "1761200000.n0nce-test-1.6d3d147593d214d11e3b5c8b501651cf6cf188c36cbf8c11523d3c8e42c53f89")
+        XCTAssertFalse(ticket.contains(unlockKey))
+    }
+
+    func testUnlockedDashboardURLCarriesATicketFragment() throws {
+        let signer = LinkSigner(keyPath: try keyFile(unlockKey))
+        let base = URL(string: "http://127.0.0.1:7777/sessions/uuid-1")!
+        let url = TerminalFocus.unlockedDashboardURL(base, signer: signer)
+        let fragment = try XCTUnwrap(URLComponents(url: url, resolvingAgainstBaseURL: false)?.fragment)
+        XCTAssertTrue(fragment.hasPrefix("swarmery-unlock="), fragment)
+        let parts = fragment.dropFirst("swarmery-unlock=".count).split(separator: ".", omittingEmptySubsequences: false)
+        XCTAssertEqual(parts.count, 3)
+        XCTAssertNotNil(Int64(parts[0]))
+        XCTAssertFalse(parts[1].isEmpty)
+        XCTAssertEqual(parts[2].count, 64)
+        XCTAssertEqual(url.path, "/sessions/uuid-1")
+        XCTAssertEqual(url.host, "127.0.0.1")
+    }
+
+    func testNoLinkTokenMeansNoFragment() {
+        let signer = LinkSigner(keyPath: "/nonexistent/link-token")
+        let base = URL(string: "http://127.0.0.1:7777")!
+        XCTAssertEqual(TerminalFocus.unlockedDashboardURL(base, signer: signer), base)
+    }
+
+    func testARemoteDashboardGetsNoTicket() throws {
+        let signer = LinkSigner(keyPath: try keyFile(unlockKey))
+        let base = URL(string: "https://dashboard.example.com")!
+        XCTAssertEqual(TerminalFocus.unlockedDashboardURL(base, signer: signer), base)
+    }
+
     // MARK: - focus URL allow-list (L-1)
 
     private let dashboard = URL(string: "http://127.0.0.1:7777")!
