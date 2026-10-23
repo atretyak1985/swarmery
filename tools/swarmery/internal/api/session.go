@@ -20,7 +20,8 @@
 // on a request the page did not build itself.
 //
 // The session is a loopback credential only. On an exposed listener (D7) it
-// is not accepted and no session is minted: writes there need link auth.
+// is not accepted and no session is minted: every request there, reads
+// included, needs link auth (requireSignedWhenExposed, origin.go).
 package api
 
 import (

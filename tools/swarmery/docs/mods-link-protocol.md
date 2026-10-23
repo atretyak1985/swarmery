@@ -60,7 +60,7 @@ before merging), and 0114 is an unrelated routing migration that landed first.
 | Mode | `0600`. A wider mode found on disk is narrowed back to `0600` before the file is read. A missing `~/.swarmery` is created `0700` |
 | Content | 32 random bytes, hex-encoded (64 chars), one trailing newline. Readers trim whitespace |
 | Minted | by the daemon at start (`swarmery serve`, next to the DB open) or by the first `swarmery link token`, whichever comes first. A missing or empty file is replaced by a fresh token |
-| Header | `Authorization: Swarmery-HMAC ts=…,nonce=…,sig=…`, a request **signed** with the token (see "Signed requests" below), so the token never goes on the wire. The legacy `Authorization: Bearer <token>` is still accepted during the transition. Schemes are case-insensitive, comparisons constant-time |
+| Header | `Authorization: Swarmery-HMAC ts=…,nonce=…,sig=…`, a request **signed** with the token (see "Signed requests" below), so the token never goes on the wire. The legacy `Authorization: Bearer <token>` sends the token itself: on an exposed listener (a non-loopback `--bind`, or a connection that arrived on a non-loopback address) it is refused with `401`, and every request except `GET /api/health` and the SPA's static files must be signed. On loopback it still works, each answer carries `Deprecation: true`, and it is removed in swarmery-v0.3.0. Schemes are case-insensitive, comparisons constant-time |
 | Logged | the **path** only (`swarmery link token at …` at daemon start). The value never reaches a log, a response body or an error message |
 
 **Reading the token in the mod (M7).** `~` is not expanded by `$.fs.read`, which
@@ -166,8 +166,12 @@ against guard-pack's production-deploy list (vendored in `hooks/lib/prod.ts`, pi
 with the "confirm it here" notice and sends nothing. The daemon's own `local` answer
 for project patterns still applies.
 
-**Transition.** The bearer form is still accepted, and the daemon logs the first one a
-process sees. Origin-less non-link clients move later.
+**Transition.** The bearer form is accepted on a loopback listener only: each answer
+carries `Deprecation: true`, the daemon logs the first one a process sees, and the form
+is removed in swarmery-v0.3.0. On an exposed listener (a non-loopback `--bind`, or a
+connection that arrived on a non-loopback address) it is refused with `401`, and every
+request except `GET /api/health` and the SPA's static files must be signed.
+Origin-less non-link clients move later.
 
 ## Events: POST /api/link/events
 

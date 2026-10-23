@@ -11,9 +11,14 @@ import "net/http"
 // /api/ behind requireLocalHost (origin.go), so a request whose Host header
 // does not name this daemon (DNS rebinding) is refused before any handler —
 // reads included — runs. Writes additionally sit behind requireLocalOrigin.
+//
+// Exposed-listener gate: on a listener beyond loopback every /api/* request,
+// reads included, must be signed with the link token (requireSignedWhenExposed,
+// origin.go) — only GET /api/health passes unsigned. The SPA shell is served
+// outside this mux (server.go) and carries no data.
 func Routes(root *http.ServeMux, h *Handler) {
 	mux := http.NewServeMux()
-	root.Handle("/api/", requireLocalHost(mux))
+	root.Handle("/api/", requireLocalHost(requireSignedWhenExposed(mux)))
 
 	// ── core: vertical slice (this file's owner) ──
 	// The PreModelSwitch gate's only read: has this model a recorded verdict?

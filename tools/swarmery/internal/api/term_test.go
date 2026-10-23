@@ -358,9 +358,12 @@ func TestTermServiceUnattached(t *testing.T) {
 // TestTermRefusedOnAnExposedListener (D7): a browser cannot sign a WebSocket,
 // and on a listener beyond loopback an Origin header proves nothing — any
 // client on the network can send the daemon's own. The terminal is therefore
-// loopback-only: refused before the upgrade on an exposed listener.
+// loopback-only: refused before the upgrade on an exposed listener — even for
+// a signed request, which is what passes the exposed-listener gate
+// (requireSignedWhenExposed) to reach the terminal's own refusal.
 func TestTermRefusedOnAnExposedListener(t *testing.T) {
 	srv, projectDir, _ := termTestServer(t)
+	key := hookToken()
 	upgrade := func(r *http.Request) {
 		r.Header.Set("Connection", "Upgrade")
 		r.Header.Set("Upgrade", "websocket")
@@ -370,8 +373,10 @@ func TestTermRefusedOnAnExposedListener(t *testing.T) {
 
 	// (a) a connection on a LAN address, carrying that address as its Origin
 	const lan = "192.168.1.5:7777"
-	req := listenerRequest(t, http.MethodGet, "/api/term/ws?cwd="+url.QueryEscape(projectDir), lan, nil)
+	target := "/api/term/ws?cwd=" + url.QueryEscape(projectDir)
+	req := listenerRequest(t, http.MethodGet, target, lan, nil)
 	req.Header.Set("Origin", "http://"+lan)
+	req.Header.Set("Authorization", signedAuth(t, key, http.MethodGet, target, ""))
 	upgrade(req)
 	rec := httptest.NewRecorder()
 	srv.Config.Handler.ServeHTTP(rec, req)
@@ -384,7 +389,9 @@ func TestTermRefusedOnAnExposedListener(t *testing.T) {
 	t.Cleanup(func() { AttachExposedBind(false) })
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	c, resp, err := websocket.Dial(ctx, termWSURL(srv, projectDir), &websocket.DialOptions{HTTPHeader: localOrigin(srv), Subprotocols: termSessionProtocols()})
+	signed := localOrigin(srv)
+	signed.Set("Authorization", signedAuth(t, key, http.MethodGet, target, ""))
+	c, resp, err := websocket.Dial(ctx, termWSURL(srv, projectDir), &websocket.DialOptions{HTTPHeader: signed, Subprotocols: termSessionProtocols()})
 	if err == nil {
 		c.Close(websocket.StatusNormalClosure, "")
 		t.Fatal("exposed bind: the terminal upgraded")
