@@ -62,7 +62,10 @@ TOKEN_FILE="$SCRATCH/home/.swarmery/link-token"
 [ -s "$TOKEN_FILE" ] || { echo "$NAME: no link token minted" >&2; exit 1; }
 
 echo "→ starting isolated daemon: serve --bind 0.0.0.0 --port $PORT"
-run serve --bind 0.0.0.0 --db "$SCRATCH/s.db" --port "$PORT" --no-ingest >"$SCRATCH/daemon.log" 2>&1 &
+# Not through run(): a backgrounded shell function is a subshell, and its PID
+# would not be the daemon's — cleanup would kill the subshell and leak serve.
+env -i "$SCRATCH/launch.sh" "$SCRATCH/home" "$BIN" serve --bind 0.0.0.0 --db "$SCRATCH/s.db" --port "$PORT" --no-ingest \
+  >"$SCRATCH/daemon.log" 2>&1 &
 PID=$!
 up=0
 for _ in $(seq 1 150); do
