@@ -124,7 +124,12 @@ daemon" from the address it actually listens on, and both are extended only by
   listener's own address literal. A dashboard reached as `localhost` or
   through a `SWARMERY_TRUSTED_ORIGINS` alias is never unlocked (`403`; the
   browser keeps a session per origin, so such a page stays read-only) — open
-  the dashboard with `swarmery open`, which uses the literal address. Sessions are stateless HMACs
+  the dashboard with `swarmery open`, which uses the literal address. Before
+  minting a ticket, `swarmery open` and the notch make the listener prove it is
+  the daemon (a signed `GET /api/link/health` whose answer must carry a valid
+  `X-Swarmery-Sig`): with the daemon down, or another process on its port,
+  `swarmery open` exits `2` and the notch opens the plain URL, without a
+  ticket. Sessions are stateless HMACs
   under the link token, so `swarmery link token --rotate` signs every
   dashboard out. `swarmery open --print` prints the URL instead of opening it.
 - **Binding wider.** `serve --bind` with a non-loopback address refuses to

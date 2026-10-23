@@ -15,7 +15,8 @@
 #         /api/ws upgrade offering the session selects exactly swarmery.v1;
 #   (v)   the ticket does not unlock twice;
 #   (vi)  a ticket is bound to the origin it was opened at (127.0.0.1): it is
-#         refused from the localhost name and another loopback address.
+#         refused from the localhost name and another loopback address;
+#   (vii) `swarmery open` against a port no daemon serves mints no ticket.
 #
 # It never touches a daemon on :7777 or anything under ~/.swarmery. Requires go
 # and curl; no built SPA (only API routes are hit). Deliberately NOT named
@@ -183,6 +184,24 @@ if [ "$got_name" = "403" ] && [ "$got_sib" = "403" ] && [ "$got_own" = "200" ]; 
   pass "(vi) unlock refused from localhost ($got_name) and 127.0.0.2 ($got_sib), redeemed at $ORIGIN ($got_own)"
 else
   fail "(vi) origin binding: localhost $got_name, 127.0.0.2 $got_sib, own $got_own"
+fi
+
+# (vii) no daemon, no ticket: `swarmery open` first makes the listener prove it
+# holds the link token, so against a port nothing serves it exits 2, mints
+# nothing and prints nothing.
+DEAD_PORT=$((PORT + 1))
+if curl -s -o /dev/null --max-time 1 "http://127.0.0.1:$DEAD_PORT/"; then
+  echo "SKIP (vii) something listens on :$DEAD_PORT"
+else
+  set +e
+  dead_out="$(run "$BIN" open --print --port "$DEAD_PORT" 2>"$SCRATCH/dead.err")"
+  dead_code=$?
+  set -e
+  if [ "$dead_code" = "2" ] && [ -z "$dead_out" ] && grep -q 'no unlock ticket was minted' "$SCRATCH/dead.err"; then
+    pass "(vii) swarmery open against a dead port exits 2 and mints no ticket"
+  else
+    fail "(vii) dead port: exit $dead_code, stdout '$dead_out', stderr $(cat "$SCRATCH/dead.err")"
+  fi
 fi
 
 if [ "$failures" -ne 0 ]; then

@@ -56,10 +56,44 @@ public struct LinkSigner: Sendable {
     /// on disk (the request then goes out unsigned and the daemon answers 401).
     public func authorization(method: String, target: String, body: Data?) -> String? {
         guard let key = readKey() else { return nil }
+        return authorization(key: key, method: method, target: target, body: body).value
+    }
+
+    private func authorization(key: String, method: String, target: String, body: Data?) -> (value: String, nonce: String) {
         let ts = Int64(now().timeIntervalSince1970)
         let n = nonce()
         let sig = Self.sign(key: key, method: method, target: target, ts: ts, nonce: n, body: body ?? Data())
-        return "Swarmery-HMAC ts=\(ts),nonce=\(n),sig=\(sig)"
+        return ("Swarmery-HMAC ts=\(ts),nonce=\(n),sig=\(sig)", n)
+    }
+
+    /// A signed copy of `request` with the key and nonce its answer must be
+    /// signed over (`verifyResponse`), or nil when there is no key on disk.
+    func signedForVerifiedAnswer(_ request: URLRequest) -> (request: URLRequest, key: String, nonce: String)? {
+        guard let key = readKey(), let url = request.url, let target = Self.requestTarget(of: url) else { return nil }
+        let auth = authorization(key: key, method: request.httpMethod ?? "GET", target: target, body: request.httpBody)
+        var signed = request
+        signed.setValue(auth.value, forHTTPHeaderField: "Authorization")
+        return (signed, key, auth.nonce)
+    }
+
+    /// hex HMAC-SHA256(key, "swarmery-hmac-v1-response\nnonce\nstatus\nhex(SHA-256(body))")
+    /// — the daemon's X-Swarmery-Sig (linksig.SignResponse).
+    static func responseSignature(key: String, nonce: String, status: Int, body: Data) -> String {
+        let bodyHash = hex(Array(SHA256.hash(data: body)))
+        let text = ["swarmery-hmac-v1-response", nonce, String(status), bodyHash].joined(separator: "\n")
+        let mac = HMAC<SHA256>.authenticationCode(for: Data(text.utf8), using: SymmetricKey(data: Data(key.utf8)))
+        return hex(Array(mac))
+    }
+
+    /// Whether `signature` is the daemon's signature of this answer to the
+    /// request that carried `nonce`; compared in constant time. An empty key,
+    /// nonce or signature never verifies.
+    static func verifyResponse(key: String, nonce: String, status: Int, body: Data, signature: String?) -> Bool {
+        guard !key.isEmpty, !nonce.isEmpty, let signature, !signature.isEmpty else { return false }
+        let want = Array(responseSignature(key: key, nonce: nonce, status: status, body: body).utf8)
+        let got = Array(signature.lowercased().utf8)
+        guard want.count == got.count else { return false }
+        return zip(want, got).reduce(UInt8(0)) { $0 | ($1.0 ^ $1.1) } == 0
     }
 
     /// Signs `request` in place (method, path + query as on the request line,

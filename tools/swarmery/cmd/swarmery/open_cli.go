@@ -13,11 +13,16 @@
 //
 // The ticket rides in the URL fragment, which a browser never sends to any
 // server; the SPA redeems it once at POST /api/session/unlock and drops it
-// from the address bar. It is valid for linksig.UnlockMaxSkew (2 minutes) and
-// once.
+// from the address bar. It is valid for linksig.UnlockMaxSkew (2 minutes),
+// once, and only at the origin it was minted for.
 //
-// Exit codes: 0 opened (or printed), 2 a usage error, no link token, or the
-// browser could not be started.
+// Before minting it, the command makes the listener prove it is the daemon
+// (checkListener): a ticket is handed only to a listener that signs its
+// answer with the link token.
+//
+// Exit codes: 0 opened (or printed), 2 a usage error, no link token, a
+// listener that is down or does not prove it holds the token, or the browser
+// could not be started.
 package main
 
 import (
@@ -25,6 +30,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"net/http"
 	"net/netip"
 	"net/url"
 	"os/exec"
@@ -56,6 +62,55 @@ var openBrowser = func(u string) error {
 
 // openNow is the clock the ticket is signed at; a test replaces it.
 var openNow = time.Now
+
+// proveListener checks the listener at base holds the link token; a test
+// replaces it.
+var proveListener = checkListener
+
+// listenerProbeTimeout bounds the identity probe: the daemon answers it from
+// memory.
+const listenerProbeTimeout = 3 * time.Second
+
+// maxProbeAnswer bounds the probe answer read to verify its signature.
+const maxProbeAnswer = 64 << 10
+
+// checkListener makes the listener at base prove it is the daemon before a
+// ticket is minted for it: a request signed with the link token to
+// GET /api/link/health, whose answer the daemon signs (X-Swarmery-Sig over
+// the request's nonce, the status and the body). A process that holds the
+// port without holding the token can neither produce that signature nor read
+// the token off the wire, so an unsigned, wrongly signed or non-200 answer —
+// or no answer — is refused. Redirects are not followed.
+func checkListener(base, key string) error {
+	req, err := http.NewRequest(http.MethodGet, base+"/api/link/health", nil)
+	if err != nil {
+		return err
+	}
+	nonce, err := linksig.SignRequest(req, key, openNow())
+	if err != nil {
+		return err
+	}
+	client := &http.Client{
+		Timeout:       listenerProbeTimeout,
+		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		return fmt.Errorf("the daemon does not answer at %s (is it running? `swarmery serve`)", base)
+	}
+	defer resp.Body.Close()
+	body, err := io.ReadAll(io.LimitReader(resp.Body, maxProbeAnswer))
+	if err != nil {
+		return fmt.Errorf("reading the answer from %s: %v", base, err)
+	}
+	if !linksig.VerifyResponse(key, nonce, resp.StatusCode, body, resp.Header.Get(linksig.ResponseHeader)) {
+		return fmt.Errorf("the listener at %s did not prove it holds the link token (HTTP %d, answer unsigned or wrongly signed): it may not be the swarmery daemon", base, resp.StatusCode)
+	}
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("the daemon at %s answered HTTP %d to its identity check", base, resp.StatusCode)
+	}
+	return nil
+}
 
 func cmdOpen(args []string, stdout, stderr io.Writer) int {
 	usageErr := func(format string, a ...any) int {
@@ -99,6 +154,10 @@ func cmdOpen(args []string, stdout, stderr io.Writer) int {
 	key := linksig.ReadKeyFile(kp)
 	if key == "" {
 		fmt.Fprintf(stderr, "swarmery open: no link token at %s (the daemon mints it on start; `swarmery link token` mints one now)\n", kp)
+		return 2
+	}
+	if err := proveListener(base, key); err != nil {
+		fmt.Fprintf(stderr, "swarmery open: %v; no unlock ticket was minted\n", err)
 		return 2
 	}
 	u, err := unlockURL(key, base, *session, openNow())

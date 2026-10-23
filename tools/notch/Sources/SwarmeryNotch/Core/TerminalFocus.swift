@@ -113,6 +113,19 @@ public enum TerminalFocus {
         return components.url ?? url
     }
 
+    /// `unlockedDashboardURL`, but only for a listener that proves it is the
+    /// daemon (`DaemonIdentity`): a ticket goes to no other process. When the
+    /// proof fails — the daemon is down, or something else holds its port —
+    /// the plain `url` opens, without a ticket.
+    static func verifiedDashboardURL(_ url: URL, signer: LinkSigner = LinkSigner(),
+                                     session: URLSession = .shared) async -> URL {
+        guard let base = loopbackLiteralURL(url),
+              let origin = LinkSigner.unlockOrigin(of: base),
+              await DaemonIdentity.proves(origin: origin, signer: signer, session: session)
+        else { return url }
+        return unlockedDashboardURL(url, signer: signer)
+    }
+
     /// `url` with its host as a loopback address literal: unchanged when it
     /// already is one (127.0.0.0/8, ::1), `localhost` rewritten to
     /// `127.0.0.1`, nil for any other host.
@@ -170,7 +183,9 @@ public enum TerminalFocus {
         case let .activateApp(bundleID):
             activate(bundleID: bundleID)
         case let .openDashboard(url):
-            NSWorkspace.shared.open(unlockedDashboardURL(url))
+            Task { @MainActor in
+                NSWorkspace.shared.open(await verifiedDashboardURL(url))
+            }
         }
     }
 

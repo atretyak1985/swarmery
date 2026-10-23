@@ -3,9 +3,12 @@ package main
 import (
 	"bytes"
 	"errors"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -14,13 +17,110 @@ import (
 
 const openTestKey = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 
+// openKeyFile writes the test link token and, for the tests about the URL
+// itself, accepts every listener (proveListener); the identity tests below
+// put the real check back.
 func openKeyFile(t *testing.T) string {
 	t.Helper()
 	p := filepath.Join(t.TempDir(), "link-token")
 	if err := os.WriteFile(p, []byte(openTestKey+"\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
+	prev := proveListener
+	proveListener = func(string, string) error { return nil }
+	t.Cleanup(func() { proveListener = prev })
 	return p
+}
+
+// fakeDaemon answers GET /api/link/health the way the daemon's linkAuth does:
+// it verifies the request's signature under key and signs its answer. With
+// sign false it answers 200 unsigned — a listener that does not hold the token.
+func fakeDaemon(t *testing.T, key string, sign bool) (*httptest.Server, *atomic.Int32) {
+	t.Helper()
+	var hits atomic.Int32
+	v := linksig.NewVerifier()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hits.Add(1)
+		if r.URL.Path != "/api/link/health" || r.Method != http.MethodGet {
+			http.NotFound(w, r)
+			return
+		}
+		body := []byte(`{"ok":true}`)
+		if !sign {
+			_, _ = w.Write(body)
+			return
+		}
+		nonce, err := v.VerifyRequest(r, key, time.Now())
+		if err != nil {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		w.Header().Set(linksig.ResponseHeader, linksig.SignResponse(key, nonce, http.StatusOK, body))
+		_, _ = w.Write(body)
+	}))
+	t.Cleanup(srv.Close)
+	return srv, &hits
+}
+
+// realListenerCheck restores the identity check openKeyFile stubbed out.
+func realListenerCheck(t *testing.T) {
+	t.Helper()
+	prev := proveListener
+	proveListener = checkListener
+	t.Cleanup(func() { proveListener = prev })
+}
+
+// Before it mints a ticket, swarmery open makes the listener prove it holds
+// the link token: a signed request whose answer must carry a valid signature.
+func TestOpenProvesTheListener(t *testing.T) {
+	kp := openKeyFile(t)
+	realListenerCheck(t)
+	srv, hits := fakeDaemon(t, openTestKey, true)
+	var out, errb bytes.Buffer
+	if code := cmdOpen([]string{"--print", "--url", srv.URL, "--key-file", kp}, &out, &errb); code != 0 {
+		t.Fatalf("signed daemon: exit %d, stderr %s", code, errb.String())
+	}
+	if hits.Load() != 1 {
+		t.Errorf("the daemon saw %d request(s), want 1 identity probe", hits.Load())
+	}
+	u := strings.TrimSpace(out.String())
+	if !strings.HasPrefix(u, srv.URL+"/#swarmery-unlock=") {
+		t.Fatalf("URL %q, want %s/#swarmery-unlock=…", u, srv.URL)
+	}
+}
+
+func TestOpenRefusesAnUnprovenListener(t *testing.T) {
+	kp := openKeyFile(t)
+	realListenerCheck(t)
+	unsigned, _ := fakeDaemon(t, openTestKey, false)
+	otherKey, _ := fakeDaemon(t, strings.Repeat("f", 64), true)
+	down := httptest.NewServer(http.NotFoundHandler())
+	downURL := down.URL
+	down.Close()
+
+	var opened []string
+	prev := openBrowser
+	openBrowser = func(u string) error { opened = append(opened, u); return nil }
+	t.Cleanup(func() { openBrowser = prev })
+
+	for name, base := range map[string]string{"unsigned": unsigned.URL, "other key": otherKey.URL, "down": downURL} {
+		for _, extra := range [][]string{{"--print"}, nil} {
+			var out, errb bytes.Buffer
+			args := append([]string{"--url", base, "--key-file", kp}, extra...)
+			if code := cmdOpen(args, &out, &errb); code != 2 {
+				t.Errorf("%s %v: exit %d, want 2 (stderr %s)", name, extra, code, errb.String())
+			}
+			if out.Len() != 0 {
+				t.Errorf("%s %v: printed %q", name, extra, out.String())
+			}
+			if !strings.Contains(errb.String(), "no unlock ticket") {
+				t.Errorf("%s %v: stderr %q does not say no ticket was minted", name, extra, errb.String())
+			}
+		}
+	}
+	if len(opened) != 0 {
+		t.Errorf("the browser was opened for an unproven listener: %q", opened)
+	}
 }
 
 // ticketOf returns the unlock ticket in u's fragment.
