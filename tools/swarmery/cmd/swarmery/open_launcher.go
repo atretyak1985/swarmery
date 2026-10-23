@@ -26,10 +26,13 @@ const launcherGlob = "open-*.html"
 
 // openRunDir is the per-user dir the launcher pages go in; launcherTTL is how
 // long a launcher page lives before it is deleted (and past which an earlier
-// run's page counts as stale). Tests replace both.
+// run's page counts as stale). Tests replace both. The TTL leaves a
+// cold-starting browser time to read the page; the ticket inside it expires
+// on its own after linksig.UnlockMaxSkew (two minutes), so a page that
+// outlives its read is harmless.
 var (
 	openRunDir  = defaultRunDir
-	launcherTTL = 10 * time.Second
+	launcherTTL = 60 * time.Second
 )
 
 // defaultRunDir is ~/.swarmery/run.
