@@ -39,7 +39,14 @@ import { Graphify } from './pages/Graphify';
 import { ProjectDetailRedirect } from './workspace/ProjectDetailRedirect';
 import { PLANS_ROUTE_PATHS } from './pages/plans/plansUrl';
 import { Today } from './pages/today/Today';
+import { consumeUnlockFragment } from './lib/dashboardSession';
 import './index.css';
+
+// An unlock ticket in the fragment (`swarmery open`, the notch menu) is read
+// and stripped HERE, before the router below snapshots the location, and the
+// first render waits for the exchange so the first write and the first socket
+// already carry the session.
+const unlocked = consumeUnlockFragment();
 
 // Health (Canvas v3 phase 5) absorbs /analytics and /retro as tabs. Lazy, and
 // it lazy-loads those two pages itself (Analytics pulls in Recharts), so their
@@ -394,10 +401,11 @@ function renderApp(el: HTMLElement): void {
 // catalogs must be loaded before the first render. A failed chunk load falls
 // back to English rather than leaving the dashboard blank.
 const initialLocale = readLocale();
-activate(initialLocale)
+const i18nReady = activate(initialLocale)
   .catch((err: unknown) => {
     console.warn(`i18n: failed to load the "${initialLocale}" catalogs, falling back to English`, err);
     return activate('en');
   })
-  .catch((err: unknown) => console.error('i18n: failed to load the English catalogs', err))
-  .finally(() => renderApp(rootEl));
+  .catch((err: unknown) => console.error('i18n: failed to load the English catalogs', err));
+// consumeUnlockFragment never rejects; allSettled keeps the render unconditional.
+void Promise.allSettled([i18nReady, unlocked]).then(() => renderApp(rootEl));

@@ -5,6 +5,7 @@
 
 import { t } from '@lingui/core/macro';
 import { MOCK } from '../api';
+import { apiFetch } from '../lib/dashboardSession';
 
 export type LessonStatus = 'candidate' | 'active' | 'retired' | 'dismissed' | 'merged';
 
@@ -139,7 +140,7 @@ const MOCK_PROPOSALS: RetirementProposal[] = [
 export async function fetchRetirements(): Promise<RetirementProposal[]> {
   if (MOCK) return MOCK_PROPOSALS.filter((p) => p.state === 'proposed');
   const body = await jsonOrThrow<{ proposals: RetirementProposal[] }>(
-    await fetch('/api/lessons/retirements'),
+    await apiFetch('/api/lessons/retirements'),
     'GET /api/lessons/retirements',
   );
   return body.proposals;
@@ -153,7 +154,7 @@ async function decideRetirement(id: number, action: 'confirm' | 'keep'): Promise
     return cur;
   }
   const path = `/api/lessons/retirements/${String(id)}/${action}`;
-  return jsonOrThrow<RetirementProposal>(await fetch(path, { method: 'POST' }), `POST ${path}`);
+  return jsonOrThrow<RetirementProposal>(await apiFetch(path, { method: 'POST' }), `POST ${path}`);
 }
 
 /** Confirm a proposal: the lesson is retired with the proposal's reason. */
@@ -338,7 +339,7 @@ export async function fetchLessons(status?: LessonStatus): Promise<Lesson[]> {
   if (MOCK) return MOCK_LESSONS.filter((l) => status === undefined || l.status === status);
   const q = status === undefined ? '' : `?status=${encodeURIComponent(status)}`;
   const body = await jsonOrThrow<{ lessons: Lesson[] }>(
-    await fetch(`/api/lessons${q}`),
+    await apiFetch(`/api/lessons${q}`),
     'GET /api/lessons',
   );
   return body.lessons;
@@ -354,7 +355,7 @@ function mockUpdate(id: number, patch: Partial<Lesson>): Lesson {
 
 async function send(method: string, path: string, body?: unknown): Promise<Lesson> {
   return jsonOrThrow<Lesson>(
-    await fetch(path, {
+    await apiFetch(path, {
       method,
       headers: { 'Content-Type': 'application/json' },
       body: body === undefined ? null : JSON.stringify(body),

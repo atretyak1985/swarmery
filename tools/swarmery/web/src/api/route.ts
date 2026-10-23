@@ -4,6 +4,7 @@
 // the gate before drawing anything.
 
 import { MOCK } from '../api';
+import { apiFetch } from '../lib/dashboardSession';
 
 export type RouteSurface = 'dispatch' | 'phaserun';
 
@@ -116,7 +117,7 @@ export async function fetchRouteReport(surface: '' | RouteSurface, days: number)
   const params = new URLSearchParams({ days: String(days) });
   if (surface !== '') params.set('surface', surface);
   const path = `/api/route/report?${params.toString()}`;
-  const res = await fetch(path);
+  const res = await apiFetch(path);
   if (!res.ok) throw new Error(`GET ${path}: ${String(res.status)}`);
   return (await res.json()) as RouteReport;
 }
@@ -125,7 +126,7 @@ export async function fetchRouteReport(surface: '' | RouteSurface, days: number)
 export async function fetchRouteDecision(subject: string): Promise<RouteDecision | null> {
   if (MOCK) return null;
   const path = `/api/route/decision?subject=${encodeURIComponent(subject)}`;
-  const res = await fetch(path);
+  const res = await apiFetch(path);
   if (res.status === 404) return null;
   if (!res.ok) throw new Error(`GET ${path}: ${String(res.status)}`);
   return (await res.json()) as RouteDecision;

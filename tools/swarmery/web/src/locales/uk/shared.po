@@ -1046,6 +1046,10 @@ msgstr "причина"
 msgid "change the plan — interview + staged diff, applied only on your approval"
 msgstr "змінити план — інтерв’ю + підготований дифф, застосовується лише після вашого схвалення"
 
+#: src/components/DashboardLockedBanner.tsx
+msgid "Changes and the terminal need an unlocked dashboard. Run <0>swarmery open</0> in a terminal, or choose <1>Open dashboard</1> in the notch menu."
+msgstr "Зміни й термінал потребують розблокованого дашборда. Виконайте <0>swarmery open</0> у терміналі або виберіть <1>Open dashboard</1> у меню notch."
+
 #: src/api.ts
 msgid "changing the cost failed: {status}"
 msgstr "не вдалося змінити вартість: {status}"
@@ -1402,6 +1406,10 @@ msgstr "демон недоступний"
 msgid "Dark"
 msgstr "Темна"
 
+#: src/components/DashboardLockedBanner.tsx
+msgid "dashboard locked"
+msgstr "дашборд заблоковано"
+
 #: src/api.ts
 msgid "decide proposal failed"
 msgstr "рішення щодо пропозиції не вдалося"
@@ -1628,6 +1636,7 @@ msgstr "від’єднуємо…"
 
 #: src/components/AccountReadyBanner.tsx
 #: src/components/AccountsSection.tsx
+#: src/components/DashboardLockedBanner.tsx
 msgid "dismiss"
 msgstr "прибрати"
 
@@ -1635,6 +1644,10 @@ msgstr "прибрати"
 #: src/workspace/TaskCard.tsx
 msgid "Dismiss"
 msgstr "Прибрати"
+
+#: src/components/DashboardLockedBanner.tsx
+msgid "Dismiss the dashboard locked notice"
+msgstr "Прибрати сповіщення про заблокований дашборд"
 
 #: src/workspace/boardModel.ts
 msgid "dispatch error: {why}"

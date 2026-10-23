@@ -6,13 +6,14 @@
 
 import type { WorktreesResponse } from './types';
 import { MOCK } from '../api';
+import { apiFetch } from '../lib/dashboardSession';
 
 /** GET /api/worktrees?project= — inventory + recent decisions. */
 export async function fetchWorktrees(project?: string): Promise<WorktreesResponse> {
   if (MOCK) return { live: [], sweeps: [], enabled: true };
   const qs =
     project !== undefined && project !== '' ? `?project=${encodeURIComponent(project)}` : '';
-  const res = await fetch(`/api/worktrees${qs}`);
+  const res = await apiFetch(`/api/worktrees${qs}`);
   if (!res.ok) {
     throw new Error(`GET /api/worktrees: ${String(res.status)}`);
   }

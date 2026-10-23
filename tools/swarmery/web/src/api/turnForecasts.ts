@@ -5,6 +5,7 @@
 
 import { MOCK } from '../api';
 import type { TurnForecastsResp } from './types';
+import { apiFetch } from '../lib/dashboardSession';
 
 /** The windows the panel offers; the API clamps any value to [1, 90]. */
 export const TURN_FORECAST_DAYS = [14, 30, 90] as const;
@@ -72,7 +73,7 @@ export async function fetchTurnForecasts(
   const qs = new URLSearchParams({ days: String(days) });
   if (projectId !== null) qs.set('projectId', projectId);
   const path = `/api/insights/turn-forecasts?${qs.toString()}`;
-  const res = await fetch(path);
+  const res = await apiFetch(path);
   if (!res.ok) throw new Error(`GET ${path}: ${String(res.status)}`);
   return (await res.json()) as TurnForecastsResp;
 }

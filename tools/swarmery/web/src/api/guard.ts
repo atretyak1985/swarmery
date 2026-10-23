@@ -5,6 +5,7 @@
 
 import { MOCK } from '../api';
 import type { EpicPhase, GuardSummary } from './types';
+import { apiFetch } from '../lib/dashboardSession';
 
 /** The guard decision options (Go phaserun.GuardOptions). */
 export type GuardOption = 'allow-add-to-scope' | 'reject';
@@ -23,7 +24,7 @@ export async function answerGuardDecision(
 ): Promise<void> {
   if (MOCK) return;
   const path = `/api/epics/${String(taskId)}/phases/${String(phaseId)}/decisions/${encodeURIComponent(decisionId)}`;
-  const res = await fetch(path, {
+  const res = await apiFetch(path, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ option, note }),

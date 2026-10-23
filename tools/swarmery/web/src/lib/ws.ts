@@ -5,11 +5,14 @@
 // on every successful REconnect every subscriber's `onReconnect` fires so
 // list state can be refetched (messages may have been missed while offline).
 // In mock mode a single fake socket emits fixture messages instead.
+// The socket offers the dashboard session as a subprotocol
+// (lib/dashboardSession.ts): the daemon refuses an upgrade without one.
 
 import { useEffect, useRef, type MutableRefObject } from 'react';
 import type { BoardTask, PermissionRequest, Session, WSMessage } from '../api/types';
 import { MOCK } from '../api';
 import { createMockSocket, type MockSocket } from '../mock/ws';
+import { reportSocketRefused, wsProtocols } from './dashboardSession';
 
 const BACKOFF_BASE_MS = 1_000;
 const BACKOFF_CAP_MS = 30_000;
@@ -39,10 +42,12 @@ function broadcast(msg: WSMessage): void {
 
 function connect(): void {
   if (subscribers.size === 0) return;
-  const ws = new WebSocket(wsUrl());
+  const ws = new WebSocket(wsUrl(), wsProtocols());
+  let opened = false;
   socket = ws;
 
   ws.onopen = () => {
+    opened = true;
     attempt = 0;
     if (everConnected) for (const sub of subscribers) sub.reconnect.current();
     everConnected = true;
@@ -60,6 +65,9 @@ function connect(): void {
     if (socket !== ws) return; // superseded or torn down
     socket = null;
     if (subscribers.size === 0) return;
+    // The first attempt of this page refused before it opened: with no
+    // session that is the daemon asking for one (raised once, not per retry).
+    if (!opened && !everConnected && attempt === 0) reportSocketRefused();
     const delayMs = Math.min(BACKOFF_BASE_MS * 2 ** attempt, BACKOFF_CAP_MS);
     attempt += 1;
     retryTimer = setTimeout(() => {

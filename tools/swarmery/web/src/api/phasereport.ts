@@ -5,6 +5,7 @@
 import { t } from '@lingui/core/macro';
 import { MOCK } from '../api';
 import type { PhaseFindings, PhaseReopen, ReopenCaughtBy } from './types';
+import { apiFetch } from '../lib/dashboardSession';
 
 export interface PhaseRunsRow {
   /** Stable key — runs, runs_noop, noop_push_pr, reopens_operator, verifier_class:<c> … */
@@ -52,7 +53,7 @@ export async function fetchPhaseRunsReport(from: string, to: string): Promise<Ph
   if (MOCK) return MOCK_PHASE_RUNS_REPORT;
   const params = new URLSearchParams({ from, to });
   const path = `/api/phaseruns/report?${params.toString()}`;
-  const res = await fetch(path);
+  const res = await apiFetch(path);
   if (!res.ok) throw new Error(await errorText(res, `GET ${path}`));
   return (await res.json()) as PhaseRunsReport;
 }
@@ -79,7 +80,7 @@ export async function fetchPhaseReopens(taskId: number, phaseId: number): Promis
   // i18n-ignore — mock-only fixture criteria
   if (MOCK) return { reopens: [], ticked: ['POST creates a line item', 'DELETE removes it'] };
   const path = phasePath(taskId, phaseId, 'reopens');
-  const res = await fetch(path);
+  const res = await apiFetch(path);
   if (!res.ok) throw new Error(await errorText(res, `GET ${path}`));
   return (await res.json()) as PhaseReopensResp;
 }
@@ -96,7 +97,7 @@ export async function reopenPhase(
       unticked: body.criteria.length,
     };
   }
-  const res = await fetch(phasePath(taskId, phaseId, 'reopen'), {
+  const res = await apiFetch(phasePath(taskId, phaseId, 'reopen'), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
@@ -111,7 +112,7 @@ export async function reopenPhase(
  *  own message. */
 export async function reverifyPhase(taskId: number, phaseId: number): Promise<{ status: 'verifying' }> {
   if (MOCK) return { status: 'verifying' };
-  const res = await fetch(phasePath(taskId, phaseId, 'verify'), { method: 'POST' });
+  const res = await apiFetch(phasePath(taskId, phaseId, 'verify'), { method: 'POST' });
   if (!res.ok) throw new Error(await errorText(res, t`verify again failed`));
   return (await res.json()) as { status: 'verifying' };
 }
@@ -133,7 +134,7 @@ async function errorText(res: Response, fallback: string): Promise<string> {
 export async function fetchPhaseFindings(taskId: number, phaseId: number): Promise<PhaseFindings> {
   if (MOCK) return { legacyReview: false, blocks: [] };
   const path = phasePath(taskId, phaseId, 'findings');
-  const res = await fetch(path);
+  const res = await apiFetch(path);
   if (!res.ok) throw new Error(await errorText(res, `GET ${path}`));
   return (await res.json()) as PhaseFindings;
 }

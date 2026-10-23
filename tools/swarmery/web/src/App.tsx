@@ -14,6 +14,7 @@ import { useState } from 'react';
 import { Link, Outlet } from 'react-router-dom';
 import { MOCK } from './api';
 import { AccountReadyBanner } from './components/AccountReadyBanner';
+import { DashboardLockedBanner } from './components/DashboardLockedBanner';
 import { NewProjectButton } from './components/NewProjectButton';
 import { MobileNav, Sidebar, useSidebarSignals } from './components/Sidebar';
 import { LanguageToggle } from './components/LanguageToggle';
@@ -107,6 +108,7 @@ function AppShell(): JSX.Element {
       {/* Readiness signal for the scoped project's effective account — renders
           nothing (no wrapper at all) when unscoped or the account is fine, so
           the header rhythm is unchanged in the common case. */}
+      <DashboardLockedBanner />
       <AccountReadyBanner />
 
       <div className="flex min-h-0 flex-1">

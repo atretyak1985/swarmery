@@ -12,6 +12,7 @@ import { useEffect, useImperativeHandle, useRef, forwardRef } from 'react';
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import '@xterm/xterm/css/xterm.css';
+import { reportSocketRefused, wsProtocols } from '../lib/dashboardSession';
 import { resizeFrame, termWsUrl, termWsUrlForAccount } from './termSocket';
 
 export type TermStatus = 'connecting' | 'open' | 'closed';
@@ -90,9 +91,15 @@ export const XTerm = forwardRef<
       fitRef.current = fit;
 
       statusRef.current?.('connecting');
-      const ws = new WebSocket(account !== undefined ? termWsUrlForAccount(account) : termWsUrl(cwd ?? ''));
+      // The session rides as a subprotocol: the daemon refuses a terminal
+      // upgrade without one.
+      const ws = new WebSocket(
+        account !== undefined ? termWsUrlForAccount(account) : termWsUrl(cwd ?? ''),
+        wsProtocols(),
+      );
       ws.binaryType = 'arraybuffer';
       wsRef.current = ws;
+      let opened = false;
 
       const sendResize = (): void => {
         if (ws.readyState === WebSocket.OPEN) {
@@ -101,6 +108,7 @@ export const XTerm = forwardRef<
       };
 
       ws.onopen = () => {
+        opened = true;
         statusRef.current?.('open');
         sendResize(); // tell the PTY our initial window size
         term.focus();
@@ -113,6 +121,7 @@ export const XTerm = forwardRef<
         }
       };
       ws.onclose = () => {
+        if (!opened) reportSocketRefused();
         statusRef.current?.('closed');
         term.write('\r\n\x1b[2m[terminal session ended]\x1b[0m\r\n');
       };

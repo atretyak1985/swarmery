@@ -7,6 +7,7 @@
 // "nothing" so the Inbox still renders; the mutating calls throw.
 
 import { MOCK } from '../api';
+import { apiFetch } from '../lib/dashboardSession';
 
 export type TriageVerdictState =
   | 'applied'
@@ -208,7 +209,7 @@ async function readJson<T>(res: Response, what: string): Promise<T> {
 }
 
 function post(path: string, body?: unknown): Promise<Response> {
-  return fetch(path, {
+  return apiFetch(path, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     ...(body === undefined ? {} : { body: JSON.stringify(body) }),
@@ -219,7 +220,7 @@ function post(path: string, body?: unknown): Promise<Response> {
 export async function fetchActiveTriageRun(): Promise<TriageRun | null> {
   if (MOCK) return MOCK_RUN;
   const path = '/api/triage/runs/active';
-  const res = await fetch(path);
+  const res = await apiFetch(path);
   if (res.status === 503) return null;
   return readJson<TriageRun | null>(res, `GET ${path}`);
 }
@@ -228,7 +229,7 @@ export async function fetchActiveTriageRun(): Promise<TriageRun | null> {
 export async function fetchTriageRun(id: number): Promise<TriageRun> {
   if (MOCK) return { ...MOCK_RUN, id, status: 'ok', done: MOCK_RUN.total, finishedAt: '2026-10-05T09:10:00Z' };
   const path = `/api/triage/runs/${String(id)}`;
-  return readJson<TriageRun>(await fetch(path), `GET ${path}`);
+  return readJson<TriageRun>(await apiFetch(path), `GET ${path}`);
 }
 
 export interface StartTriageOptions {
@@ -270,7 +271,7 @@ export async function fetchTriageVerdicts(
   if (project !== null) qs.set('project', project);
   if (limit !== undefined) qs.set('limit', String(limit));
   const path = `/api/triage/verdicts?${qs.toString()}`;
-  const res = await fetch(path);
+  const res = await apiFetch(path);
   if (res.status === 503) return [];
   return (await readJson<{ items: TriageVerdict[] | null }>(res, `GET ${path}`)).items ?? [];
 }
@@ -308,7 +309,7 @@ export async function undoTriageVerdict(id: number): Promise<TriageVerdict> {
 export async function fetchTriageAudit(): Promise<TriageAudit> {
   if (MOCK) return { answered: 10, agree: 9, byQuestion: [{ questionId: 'd2.task_type', answered: 10, agree: 9 }] };
   const path = '/api/triage/audit';
-  const res = await fetch(path);
+  const res = await apiFetch(path);
   if (res.status === 503) return NO_AUDIT;
   return readJson<TriageAudit>(res, `GET ${path}`);
 }

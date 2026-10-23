@@ -21,9 +21,10 @@ import type {
 import { t } from '@lingui/core/macro';
 import { MOCK } from '../api';
 import { mockSystemHubApi } from '../mock/systemHub';
+import { apiFetch } from '../lib/dashboardSession';
 
 async function get<T>(path: string): Promise<T> {
-  const res = await fetch(path);
+  const res = await apiFetch(path);
   if (!res.ok) {
     throw new Error(`GET ${path}: ${String(res.status)}`);
   }
@@ -107,7 +108,7 @@ export async function copyTemplateToProject(
   projectId: string,
 ): Promise<SystemTemplateCopyResponse> {
   if (MOCK) return mockSystemHubApi.copyTemplate(name, projectId);
-  const res = await fetch(
+  const res = await apiFetch(
     `/api/system/templates/${encodeURIComponent(name)}/copy?projectId=${encodeURIComponent(projectId)}`,
     { method: 'POST', headers: { 'Content-Type': 'application/json' } },
   );
