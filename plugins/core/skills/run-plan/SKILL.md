@@ -1,7 +1,7 @@
 ---
 name: run-plan
 description: "EXECUTES an existing @planner plan -- parses the phase DAG, dispatches per-phase implement+review loops, preserving ASK gates. NOT for creating plans; NOT usable from inside a subagent."
-version: "1.5.0"
+version: "1.6.0"
 owner: "swarmery-core"
 docs:
   status: reviewed
@@ -86,6 +86,21 @@ never be delegated.
     is** (recorded as a `D-n` decision in the plan). When the plan is tracked by
     the swarmery daemon and it offers a review `phase_decision` for the phase,
     answer through that instead of asking in chat.
+11. **Cite the ids, then check them once at plan end.** Brief every executor to
+    cite the `D-n` / `SC-n` ids it satisfies in its Completion Report, and to
+    write a decision it deliberately skips on its own line as
+    `not implemented: D-n — <why>` — the dashboard reads both into the plan's
+    decision table, and a skip worded any other way reads as remaining work.
+    When the last phase is accepted, run ONE plan-level drift review: brief the
+    code reviewer with the decision table — every `D-n` of the README's
+    `## Decisions` and every `SC-n` of `spec.md`, with the phases that claim each
+    (`GET /api/epics/<taskId>/evidence` when the daemon is up) — plus every
+    phase's diff, and require a `kind: review` block with `round: plan`,
+    `ids: [{id, evidence: "phase <seq> @ <commit or file:line>" | missing}]` and
+    `drift: [{id, where: <file[:line]>, how}]`. Append it under the LAST phase
+    doc's `## Review` section. An INCONCLUSIVE plan review is recorded as
+    INCONCLUSIVE — the plan tab then shows the ids as not verified — never
+    re-labelled PASS. A plan without `## Decisions` and without a spec skips it.
 
 # Resources
 

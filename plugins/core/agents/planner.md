@@ -104,6 +104,14 @@ carries the full format; honor it precisely:
 - A phase that builds on a decision carries `**Depends on decisions:** D-n, …`
   in its header block — always for an `undecided` one. The dashboard refuses to
   start that phase while a listed decision is undecided and expensive.
+- Every executor prompt tells the executor to cite the ids it satisfies
+  (`D-n`, `SC-n`) in its Completion Report, and to write a decision it
+  deliberately does not implement on its own line as
+  `not implemented: D-n — <why>`. The dashboard's decision table and the
+  change-request body's `## Remaining` are built from those citations; an id a
+  phase claims and never cites stays remaining. At plan end the run-plan
+  orchestrator reviews the whole plan once against that table (`round: plan`,
+  `ids` + `drift`).
 
 # What makes criteria good
 

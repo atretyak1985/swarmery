@@ -34,6 +34,12 @@ import (
 // code path in this daemon gates on a forecast, and no second sentence in this
 // prompt may suggest one does. TestPromptForecastContract pins the count.
 //
+// THE CITATION BULLET (verify-not-trust phase 12, D19): wsingest.ScanEvidence
+// reads the D-n / SC-n ids a Completion Report cites into decision_evidence, and
+// the change-request body's `## Remaining` lists what the phase claimed but never
+// cited — so the report has to name them, and has to say `not implemented:` for a
+// deliberate omission rather than leave it reading as forgotten work.
+//
 // text/template so the doc path/content interpolate without any prompt-side
 // format bug (idiom of planning/prompt.go).
 var promptTemplate = template.Must(template.New("phaserun").Parse(
@@ -48,6 +54,7 @@ var promptTemplate = template.Must(template.New("phaserun").Parse(
 - Installed dependencies (node_modules, .venv, …) are LENT from the project's main checkout as symlinks, because git only materializes committed files in a worktree: build and test commands work as-is. Do NOT run a package-install command (npm ci / npm install / pip install) — it would mutate the main checkout's shared tree.
 - Commit your work in the worktree with conventional commits. Do NOT push, do NOT open PRs, do NOT merge.
 - WRITE THE PHASE SUMMARY INTO THE PHASE DOCUMENT before you finish: fill the doc's ` + "`## Completion Report`" + ` section, or append it at the end of the doc when the section does not exist yet. Cover what shipped, the files and commits, the verification output, and every deviation or deferral. That section is the ONLY summary the operator's dashboard shows for this phase — a report left in your reply, in a scratchpad, or in a reports/ file is invisible there — editing the lent document IS how it reaches them. Write it on the blocked path too, describing how far you got and what stopped you.
+- Cite the IDs you satisfy (D-n, SC-n) in the Completion Report: every decision and spec criterion this phase claims (its ` + "`**Covers:**`" + ` and ` + "`**Depends on decisions:**`" + ` lines) that the work satisfies, by id. A decision you deliberately do not implement is written on its own line as ` + "`not implemented: D-n — <why>`" + `: it is then recorded as a deliberate omission, never as remaining work.
 - ENDING YOUR TURN ENDS THIS PROCESS, and any subagent still running dies with it — while the exit code stays 0, so the run is recorded as a clean success that landed nothing. Never dispatch helpers and then reply that you are waiting on them: that reply IS the kill. Await anything you dispatch inside the same turn, or do the work yourself.
 - If the document's premises don't match the code you find, STOP and end your reply with: PHASE BLOCKED: <one-line reason>. Otherwise end with: PHASE DONE.
 
