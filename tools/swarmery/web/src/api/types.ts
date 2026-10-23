@@ -1908,6 +1908,9 @@ export interface GuardSummary {
 export interface DecisionOption {
   id: string;
   label: string;
+  /** What follows from choosing it — an agent-declared stop's options carry
+   *  one; guard and review options do not. */
+  consequence?: string;
 }
 
 /**
@@ -1926,6 +1929,24 @@ export interface NeedsYouDecision {
   question: string;
   options: DecisionOption[];
   guard: GuardSummary;
+  /** An agent-declared stop (verify-not-trust phase 10) — absent for a guard or
+   *  review decision. The trigger verbatim: out-of-scope | protected-path |
+   *  access-error | criterion-impossible, unless `flags` says
+   *  stop_trigger_unknown. */
+  trigger?: string;
+  /** The stop block's one-sentence reason. */
+  reason?: string;
+  /** The stop block's lints: stop_trigger_unknown, stop_options_count,
+   *  stop_reason_missing, stop_option_invalid, stop_paths_rejected. A guard
+   *  decision carries stop_paths_rejected alone when vetting dropped a path. */
+  flags?: string[];
+  /** Exactly the files answering allow-add-to-scope adds to the guard's
+   *  `allow:` list: literal repo-relative files under a protected glob, vetted
+   *  by the daemon whatever named them (the run's changed file names, guard.log,
+   *  a protected-path stop's `paths:`). Never a glob or a directory. */
+  paths?: string[];
+  /** The operator may answer in their own words: POST {option: "other", note}. */
+  freeText?: boolean;
 }
 
 /** How a cleanup candidate's content is known to be in main (internal/wtcleanup). */
@@ -4184,6 +4205,10 @@ export interface DecisionHoldRef {
   seq: number;
   /** null for a decision born in the README rather than an interview. */
   planningSessionId: number | null;
+  /** The dashboard path of the planning turn that asked it (Go
+   *  phasegate.PlanningTurnLink) — the hold's "decide now" link. Absent for a
+   *  README decision, an unknown project slug, or an older daemon. */
+  planningTurn?: string;
 }
 
 /** A phase's decision hold (Go `decisionHoldDTO`): non-null while a decision it

@@ -23,6 +23,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"os"
+	"path"
 	"path/filepath"
 	"regexp"
 	"sort"
@@ -80,6 +81,15 @@ type GuardResult struct {
 	// Base is the commit the diff ran from; DiffError why it could not run.
 	Base      string `json:"base"`
 	DiffError string `json:"diffError,omitempty"`
+	// ReleasablePaths are the Paths() an allow answer may add to the guard's
+	// `allow:` list, vetted with the worktree still on disk (vetAllowPaths):
+	// literal repo-relative FILES under a protected glob. ProtectedChanged comes
+	// from file names and GuardBlocks from guard.log, and the run controls both,
+	// so neither is ever written to `allow:` unvetted. PathsRejected reports that
+	// vetting dropped something. A record stored before the field existed decodes
+	// it as nil, and releasable then vets Paths() without the worktree.
+	ReleasablePaths []string `json:"releasablePaths"`
+	PathsRejected   bool     `json:"pathsRejected,omitempty"`
 }
 
 // Flagged reports whether the run touched, or tried to touch, protected paths —
@@ -95,9 +105,100 @@ func (r GuardResult) HasFindings() bool {
 
 // Paths is every path the decision is about: the changed protected files, then
 // the paths the hook refused (the "-" of a refusal without one is skipped), in
-// first-seen order.
+// first-seen order. Raw — file names and guard.log fields the run controls: what
+// an allow may release is releasable, never this.
 func (r GuardResult) Paths() []string {
 	return uniquePaths(r.ProtectedChanged, r.refusedPaths())
+}
+
+// releasable is what an allow answer may add to the guard's `allow:` list: the
+// stored ReleasablePaths (or, for a record from before they were stored, Paths())
+// plus extra — an agent-declared stop's own `paths:` — re-vetted against the
+// guard the run was checked with and against every raw path of the record, so
+// nothing a stored record claims is taken on trust. rejected reports that
+// vetting dropped something, now or when the record was made.
+func (r GuardResult) releasable(extra ...string) (kept []string, rejected bool) {
+	cands := r.ReleasablePaths
+	if cands == nil {
+		cands = r.Paths()
+	}
+	kept, rejected = vetAllowPaths(uniquePaths(cands, extra), r.ProtectedPaths, r.Paths(), nil)
+	return kept, rejected || r.PathsRejected
+}
+
+// vetAllowPaths keeps the candidate paths that may become `allow:` entries,
+// whoever named them — the agent's stop block, a changed file's name, a
+// guard.log field. A path is kept only when it is
+//
+//   - a literal repo-relative path (mdfence.LiteralRepoPath: no glob character,
+//     no `..`, no leading `/`, nothing unprintable, nothing under .swarmery);
+//   - under one of the guard's protected globs, matched as the guard check
+//     matches them (guardGlobMatch) — no protected globs keeps nothing;
+//   - a FILE: not the parent directory of another candidate or of any path in
+//     others (letter case ignored), and not a directory per isDir (the worktree,
+//     when it is still on disk; nil skips that probe).
+//
+// An entry naming a directory would let the hook pass a command that names the
+// directory (`rm -r <dir>`) while every file under it stays protected. rejected
+// reports that something was dropped.
+func vetAllowPaths(cands, protected, others []string, isDir func(string) bool) (kept []string, rejected bool) {
+	cands = uniquePaths(cands)
+	all := uniquePaths(cands, others)
+	for _, p := range cands {
+		ok := mdfence.LiteralRepoPath(p) && underProtectedGlob(protected, p) && !parentOfAny(p, all)
+		if ok && isDir != nil && isDir(p) {
+			ok = false
+		}
+		if ok {
+			kept = append(kept, p)
+		} else {
+			rejected = true
+		}
+	}
+	return kept, rejected
+}
+
+func underProtectedGlob(protected []string, p string) bool {
+	for _, g := range protected {
+		if guardGlobMatch(g, p) {
+			return true
+		}
+	}
+	return false
+}
+
+// parentOfAny reports whether p is a directory prefix of a path in paths, letter
+// case ignored.
+func parentOfAny(p string, paths []string) bool {
+	prefix := strings.ToLower(p) + "/"
+	for _, q := range paths {
+		if strings.HasPrefix(strings.ToLower(q), prefix) {
+			return true
+		}
+	}
+	return false
+}
+
+// worktreeDirProbe is vetAllowPaths' isDir for a worktree still on disk: p is a
+// directory when it stats as one (through a symlink too) or when the index holds
+// a file under it, letter case ignored — the hook matches without case, so a
+// directory spelled in another case is still that directory to it. A git error
+// reads as a directory: the probe fails toward dropping the path.
+func worktreeDirProbe(g worktree.Git, wt string) func(string) bool {
+	if wt == "" {
+		return nil
+	}
+	return func(p string) bool {
+		full := filepath.Join(wt, filepath.FromSlash(p))
+		if fi, err := os.Lstat(full); err == nil && fi.IsDir() {
+			return true
+		}
+		if fi, err := os.Stat(full); err == nil && fi.IsDir() {
+			return true
+		}
+		out, err := g.Run(wt, "-c", "core.quotepath=off", "ls-files", "--cached", "--", ":(literal,icase)"+p+"/")
+		return err != nil || strings.TrimSpace(out) != ""
+	}
 }
 
 // refusedPaths are the paths of guard.log's well-formed lines, the guard's own
@@ -213,6 +314,12 @@ func GuardCheck(g worktree.Git, in GuardInput) GuardResult {
 		res.Base = strings.TrimSpace(in.Base)
 		res.ProtectedChanged, res.DiffError = protectedChanges(g, in.Worktree, res.Base, res.ProtectedPaths, res.Allow)
 	}
+	// Vetted now, while the worktree is still there to tell a file from a
+	// directory; an allow answer later releases only these.
+	res.ReleasablePaths, res.PathsRejected = vetAllowPaths(res.Paths(), res.ProtectedPaths, nil, worktreeDirProbe(g, in.Worktree))
+	if res.ReleasablePaths == nil {
+		res.ReleasablePaths = []string{}
+	}
 	return res
 }
 
@@ -283,14 +390,20 @@ func readGuardLog(path string) (lines []GuardLogLine, total, malformed int) {
 // protectedChanges lists the files under a protected glob that the worktree holds
 // differently from base: `git diff --name-only <base>` (committed and uncommitted
 // tracked changes, deletions included) and `git ls-files --others` (new untracked
-// files), both restricted to the globs and with the allow entries excluded. The
-// globs are matched the way the hook matches them: `**` across directories and
-// zero of them, a directory glob as everything under it, letter case ignored.
+// files), both restricted to the globs, then with the allow entries filtered out
+// in Go (allowedBy). The globs are matched the way the hook matches them: `**`
+// across directories and zero of them, a directory glob as everything under it,
+// letter case ignored.
+//
+// The allow entries are never handed to git as exclude pathspecs: git reads an
+// entry without wildcards as a directory prefix, so `allow: [scripts/tests/lib]`
+// would drop every file under that directory from the audit while the hook
+// releases only the one path it names.
 func protectedChanges(g worktree.Git, wt, base string, globs, allow []string) ([]string, string) {
 	if base == "" {
 		return []string{}, "the run recorded no start point, so there is no base to diff against"
 	}
-	spec := guardPathspecs(globs, allow)
+	spec := guardPathspecs(globs)
 	diff, err := g.Run(wt, append([]string{"-c", "core.quotepath=off", "diff", "--name-only", "--no-renames", base, "--"}, spec...)...)
 	if err != nil {
 		return []string{}, "git diff --name-only " + base + ": " + err.Error()
@@ -302,7 +415,7 @@ func protectedChanges(g worktree.Git, wt, base string, globs, allow []string) ([
 	seen := map[string]bool{}
 	out := []string{}
 	for _, l := range strings.Split(diff+"\n"+others, "\n") {
-		if l = strings.TrimSpace(l); l != "" && !seen[l] {
+		if l = strings.TrimSpace(l); l != "" && !seen[l] && !allowedBy(allow, l) {
 			seen[l] = true
 			out = append(out, l)
 		}
@@ -311,16 +424,43 @@ func protectedChanges(g worktree.Git, wt, base string, globs, allow []string) ([
 	return out, ""
 }
 
-// guardPathspecs renders protected globs and allow entries as git pathspecs.
-func guardPathspecs(globs, allow []string) []string {
-	spec := make([]string, 0, len(globs)+len(allow))
+// guardPathspecs renders protected globs as git pathspecs. Allow entries are
+// not pathspecs (see protectedChanges): allowedBy filters them in Go.
+func guardPathspecs(globs []string) []string {
+	spec := make([]string, 0, len(globs))
 	for _, gl := range globs {
 		spec = append(spec, ":(glob,icase)"+gitGlob(gl))
 	}
-	for _, a := range allow {
-		spec = append(spec, ":(glob,icase,exclude)"+gitGlob(a))
-	}
 	return spec
+}
+
+// globMeta are the characters that make an allow entry a glob.
+const globMeta = "*?[]{}"
+
+// allowedBy reports whether the changed file p is released by an `allow:` entry.
+// An entry without glob characters — every entry the daemon writes, since it
+// writes only vetted literal file paths (vetAllowPaths) — releases exactly that
+// one path (letter case ignored, as the hook's nocasematch does), never what lies
+// under it. An entry with glob characters or a trailing `/` can only have been
+// written into the doc by hand; it keeps the glob reading guardGlobMatch gives a
+// protected glob.
+func allowedBy(allow []string, p string) bool {
+	for _, a := range allow {
+		a = strings.TrimPrefix(strings.TrimSpace(a), "./")
+		if a == "" {
+			continue
+		}
+		if !strings.ContainsAny(a, globMeta) && !strings.HasSuffix(a, "/") {
+			if strings.EqualFold(a, p) {
+				return true
+			}
+			continue
+		}
+		if guardGlobMatch(a, p) {
+			return true
+		}
+	}
+	return false
 }
 
 // gitGlob is a protected glob in git's `:(glob)` dialect: a directory glob
@@ -331,6 +471,45 @@ func gitGlob(g string) string {
 		return g + "**"
 	}
 	return g
+}
+
+// guardGlobMatch reports whether the repo-relative path p falls under the
+// protected glob — the matching protectedChanges asks git for, done in Go for a
+// path that need not exist: the glob in gitGlob's spelling, read in git's
+// `:(glob,icase)` dialect. `*`, `?` and `[…]` stay inside one path segment, a
+// `**` segment matches zero or more whole segments (a trailing one at least
+// one: `dir/**` is everything under dir), and letter case is ignored. A
+// malformed glob matches nothing.
+func guardGlobMatch(glob, p string) bool {
+	g := strings.ToLower(gitGlob(glob))
+	if g == "" || p == "" {
+		return false
+	}
+	return globSegsMatch(strings.Split(g, "/"), strings.Split(strings.ToLower(p), "/"))
+}
+
+func globSegsMatch(g, p []string) bool {
+	for len(g) > 0 {
+		if g[0] == "**" {
+			if len(g) == 1 {
+				return len(p) > 0
+			}
+			for i := 0; i <= len(p); i++ {
+				if globSegsMatch(g[1:], p[i:]) {
+					return true
+				}
+			}
+			return false
+		}
+		if len(p) == 0 {
+			return false
+		}
+		if ok, err := path.Match(g[0], p[0]); err != nil || !ok {
+			return false
+		}
+		g, p = g[1:], p[1:]
+	}
+	return len(p) == 0
 }
 
 // guardJSON is r as stored in a guard_json column.

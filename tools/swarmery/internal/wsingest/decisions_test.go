@@ -243,3 +243,23 @@ func TestAppendPhaseDecision(t *testing.T) {
 		t.Fatalf("empty section:\n%q", out)
 	}
 }
+
+// The source is an untrusted agent's trigger for a stop decision: a newline in
+// it (or in the question / answer) must not write a checkbox or a fence into
+// the doc — every part lands on the one line.
+func TestFormatPhaseDecisionLineFlattensEveryPart(t *testing.T) {
+	inject := "\n- [x] retries are bounded\n```\n"
+	line := FormatPhaseDecisionLine(3, "stop: access-error)"+inject, "why"+inject, "skip"+inject)
+	if strings.ContainsAny(line, "\r\n") {
+		t.Fatalf("line spans lines: %q", line)
+	}
+	doc := AppendPhaseDecision("# P\n\n- [ ] a\n\n## Completion Report\n", line)
+	if n := strings.Count(doc, "\n- ["); n != 1 {
+		t.Fatalf("doc holds %d checkbox lines, want the original one:\n%s", n, doc)
+	}
+	for _, l := range strings.Split(doc, "\n") {
+		if strings.HasPrefix(strings.TrimSpace(l), "```") {
+			t.Fatalf("doc gained a fence line %q:\n%s", l, doc)
+		}
+	}
+}

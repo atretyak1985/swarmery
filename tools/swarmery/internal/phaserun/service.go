@@ -839,8 +839,12 @@ func (s *Service) StartWith(phaseID int64, opts StartOptions) (sessionUUID strin
 	// are the work the operator reviewed and sent back, and the run continues on
 	// them (continueOwnBranch). Every other run still refuses. No Git seam ⇒ no tip
 	// to continue from ⇒ the refusal stands.
+	//
+	// The same holds for the re-run of a phase whose blocked run's stop the operator
+	// has since answered (stopdecision.go): the stopped run's partial commits are
+	// what the answer lets the next run finish.
 	ownTip := ""
-	if ahead > 0 && opts.Returned {
+	if ahead > 0 && (opts.Returned || s.stopAnsweredSinceBlock(phaseID, info)) {
 		ownTip = s.branchTip(info.RepoRoot, branch)
 	}
 	if ahead > 0 && ownTip == "" {
@@ -908,7 +912,7 @@ func (s *Service) StartWith(phaseID int64, opts StartOptions) (sessionUUID strin
 		acq.StartPoint = info.RunStartPoint
 	}
 	if ownTip != "" {
-		log.Printf("phaserun: phase=%d returned by the operator: continuing on its own branch %s at %s (%d commit(s) of earlier work)",
+		log.Printf("phaserun: phase=%d returned or stop answered by the operator: continuing on its own branch %s at %s (%d commit(s) of earlier work)",
 			phaseID, branch, ownTip, ahead)
 	}
 
@@ -989,7 +993,11 @@ func (s *Service) StartWith(phaseID int64, opts StartOptions) (sessionUUID strin
 		log.Printf("phaserun: phase=%d stacked on %s at %s (its dependency is not merged into %q)",
 			phaseID, base.StackedOn, acq.StartPoint, base.BaseBranch)
 	}
-	prompt := buildPromptNoted(docRel, filepath.Base(info.DocPath), string(doc), info.RepoRoot, info.ProjectPath, acq.Path, base.StackedOn, runNote(opts), budget)
+	// The decisions this run builds on (stopdecision.go): the cheap ones its doc
+	// depends on that nobody answered, and the operator's answers to this phase's
+	// earlier stops. "" for most phases, which keeps their prompt unchanged.
+	prompt := buildPromptNoted(docRel, filepath.Base(info.DocPath), string(doc), info.RepoRoot, info.ProjectPath, acq.Path, base.StackedOn, runNote(opts),
+		s.decisionsNoteFor(phaseID, info.WorkspaceTaskID), budget)
 	// After run_session_uuid is stamped (so every lesson_uses row names a run the
 	// pending-session registry already answers for) and before the spawn.
 	if s.InjectLessons != nil {
@@ -1099,6 +1107,10 @@ func (s *Service) runAndHandle(ctx context.Context, cancel context.CancelFunc, r
 		// it found, and a run that touched protected paths raises its decision
 		// whatever it reported (D25 — no kill mid-run, the decision comes after).
 		guard := s.guardStage(phaseID, info, acq.StartPoint, acq.Path)
+		// An agent-declared stop (a blocked run's `kind: stop` block) becomes its
+		// decision right after the guard check, so a protected-path stop and the
+		// guard's own finding on the same run share one open decision.
+		s.stopStage(phaseID, info, endState, spec.SessionUUID, acq.Path, guard)
 		_, reviewFix := s.guardedReviewRun(phaseID, info, acq, endState, guard)
 		// Verify BEFORE the worktree goes away — the worktree IS the thing being
 		// graded, and removeWorktree below deletes the only copy of it. This is the
