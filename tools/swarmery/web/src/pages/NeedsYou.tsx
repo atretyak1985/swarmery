@@ -26,7 +26,10 @@
 //                        and, once a PR is open, a link to that PR
 //   phase_decision       a phase run touched protected paths: the guard badge,
 //                        one button per option (allow into scope / reject) and
-//                        a free-text note, answered in place
+//                        a free-text note, answered in place. An agent-declared
+//                        stop (verify-not-trust phase 10) shows its trigger,
+//                        reason and contract flags, its two options with their
+//                        consequences, and a free-text answer sent as `other`
 //   worktree_cleanup     one repository's worktrees of closed phases / cards
 //                        whose content is proven in main: a table with
 //                        checkboxes, "Remove selected" (POST
@@ -44,6 +47,7 @@ import { answerGuardDecision } from '../api/guard';
 import type {
   CleanupProofKind,
   NeedsYouCleanupCandidate,
+  NeedsYouDecision,
   NeedsYouItem,
   NeedsYouKind,
   PermissionRequest,
@@ -307,6 +311,19 @@ export function PhaseDecision({
       .finally(() => setBusy(false));
   };
   const decisionId = decision.decisionId;
+  if (decision.trigger !== undefined || decision.freeText === true) {
+    return (
+      <StopDecision
+        decision={decision}
+        note={note}
+        setNote={setNote}
+        busy={busy}
+        error={error}
+        answer={answer}
+        reviewTo={reviewTo}
+      />
+    );
+  }
   return (
     <>
       <div className="mt-2 flex flex-wrap items-center gap-2">
@@ -339,6 +356,119 @@ export function PhaseDecision({
             {opt.id === 'allow-add-to-scope' ? t`Allow (add to scope)` : opt.id === 'reject' ? t`Reject` : opt.label}
           </button>
         ))}
+        {error !== null && (
+          <span role="alert" className="font-mono text-[11px] text-red">
+            {error}
+          </span>
+        )}
+        {reviewTo !== null && (
+          <Link to={reviewTo} className={`ml-auto ${LINK}`}>
+            <Trans>open review →</Trans>
+          </Link>
+        )}
+      </div>
+    </>
+  );
+}
+
+/** The option id that lets a protected-path stop's run edit its paths. */
+const ALLOW_OPTION = 'allow-add-to-scope';
+
+/** An agent-declared stop: the executor hit one of its phase's stop triggers
+ *  and stopped instead of working around it. Two options with what follows from
+ *  each, and the operator's own words as the third answer (option `other`). */
+function StopDecision({
+  decision,
+  note,
+  setNote,
+  busy,
+  error,
+  answer,
+  reviewTo,
+}: {
+  decision: NeedsYouDecision;
+  note: string;
+  setNote: (v: string) => void;
+  busy: boolean;
+  error: string | null;
+  answer: (option: string) => void;
+  reviewTo: string | null;
+}): JSX.Element {
+  const { t } = useLingui();
+  const decisionId = decision.decisionId;
+  const trigger = decision.trigger !== undefined && decision.trigger !== '' ? decision.trigger : t`no trigger`;
+  const reason = decision.reason !== undefined && decision.reason !== '' ? decision.reason : decision.question;
+  const flags = decision.flags ?? [];
+  const paths = decision.paths ?? [];
+  const flagList = flags.join(', ');
+  const pathList = paths.join(', ');
+  const own = note.trim();
+  return (
+    <>
+      <div className="mt-2 flex flex-wrap items-center gap-2">
+        <span className="font-mono text-[11px] font-semibold text-ink-2">{decisionId}</span>
+        <span
+          data-testid="stop-trigger"
+          className="rounded border border-red/45 bg-red/10 px-1.5 py-px font-mono text-[10.5px] text-red"
+        >
+          <Trans>stop: {trigger}</Trans>
+        </span>
+        <GuardBadge guard={decision.guard} />
+      </div>
+      <p className="mt-1.5 text-[13px] leading-[1.55] text-ink-2 [text-wrap:pretty]">{reason}</p>
+      {flags.length > 0 && (
+        <p
+          role="note"
+          data-testid="stop-flags"
+          className="mt-2 rounded-lg border border-amber/50 bg-amber/10 px-2.5 py-1.5 font-mono text-[11px] text-amber"
+        >
+          <Trans>the stop block broke its contract: {flagList}</Trans>
+        </p>
+      )}
+      <div className="mt-3 grid gap-2" role="group" aria-label={t`answer ${decisionId}`}>
+        {decision.options.map((opt) => (
+          <div key={opt.id} className="flex flex-wrap items-baseline gap-x-2.5 gap-y-1">
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => answer(opt.id)}
+              className={`${BTN} border-brand/50 bg-brand/10 font-semibold text-brand hover:bg-brand/20`}
+            >
+              {opt.label}
+            </button>
+            {opt.consequence !== undefined && opt.consequence !== '' && (
+              <span className="text-[12px] text-ink-3">→ {opt.consequence}</span>
+            )}
+            {opt.id === ALLOW_OPTION && paths.length > 0 && (
+              <span data-testid="stop-paths" className="basis-full font-mono text-[11px] text-ink-dim">
+                <Trans>Allowing this releases: {pathList}</Trans>
+              </span>
+            )}
+          </div>
+        ))}
+      </div>
+      <label className="mt-3 block">
+        <span className="font-mono text-[10.5px] text-ink-dim">
+          <Trans>your own answer — or a note sent with the option you pick</Trans>
+        </span>
+        <input
+          type="text"
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+          disabled={busy}
+          maxLength={2000}
+          className={`mt-1 block w-full rounded-lg border border-line bg-bg px-2.5 py-1.5 text-[12.5px] text-ink ${FOCUS}`}
+        />
+      </label>
+      <div className="mt-2 flex flex-wrap items-center gap-2">
+        <button
+          type="button"
+          disabled={busy || own === ''}
+          onClick={() => answer('other')}
+          className={`${BTN} border-line-strong text-ink-3 hover:bg-surface2`}
+        >
+          <Trans>Send my own answer</Trans>
+        </button>
         {error !== null && (
           <span role="alert" className="font-mono text-[11px] text-red">
             {error}

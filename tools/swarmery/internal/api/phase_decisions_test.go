@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"testing"
 
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/phasegate"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/planning"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/store"
 )
@@ -131,6 +132,11 @@ func TestEpicPhasesCarryDecisionHold(t *testing.T) {
 	if hold == nil || hold.Detail != "decision-undecided: D-3 (Which store?)" || len(hold.Decisions) != 1 ||
 		hold.Decisions[0].Seq != 3 || hold.Decisions[0].PlanningSessionID == nil || *hold.Decisions[0].PlanningSessionID != 44 {
 		t.Fatalf("phase 1 hold = %+v", hold)
+	}
+	var slug string
+	_ = db.QueryRow(`SELECT slug FROM projects WHERE id = ?`, projectID).Scan(&slug)
+	if want := phasegate.PlanningTurnLink(slug, 44, 3); want == "" || hold.Decisions[0].PlanningTurn != want {
+		t.Errorf("planningTurn = %q, want %q (the hold's decide-now link)", hold.Decisions[0].PlanningTurn, want)
 	}
 	if phases[1].DecisionHold != nil {
 		t.Errorf("phase 2 declares nothing but holds: %+v", phases[1].DecisionHold)

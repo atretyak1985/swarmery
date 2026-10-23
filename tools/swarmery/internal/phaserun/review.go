@@ -424,7 +424,8 @@ type reviewOutcome struct {
 	sessionUUID, treeBefore, treeAfter string
 	verdict, detail, findings          string
 	// block is the reviewer's own `kind: review` block (the last one that parses
-	// in its output); nil when it wrote none readable. Phase review only.
+	// in its output); nil when it wrote none readable. On the plan review it is
+	// the last `round: plan` block (planRoundBlock).
 	block *mdfence.Review
 	// blocks are all the parsable `kind: review` blocks of the output and
 	// blockErrs counts the ones that did not parse (ClassifyReview).

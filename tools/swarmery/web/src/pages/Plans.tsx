@@ -18,7 +18,7 @@
 //   phase → Phase (run state, interactive acceptance criteria, full doc)
 //         | Summary (what was done: Completion Report + `## Execution record`)
 //         | Edit (raw markdown + Save) — retired once the phase is done
-//   plan  → Plan (README markdown)
+//   plan  → Plan (the decision → phase → evidence table, then README markdown)
 //         | Spec (rendered spec.md + per-criterion coverage; only when the
 //           plan has a spec.md)
 //         | Summary (per-phase executed work; only when every phase is done)
@@ -106,6 +106,7 @@ import { ForecastSection, RailSection, SurpriseChip } from './plans/ForecastVsAc
 import { ForecastStory } from './plans/ForecastStory';
 import { DepsUnmergedActions } from './plans/DepsUnmergedActions';
 import { CriterionLint } from './plans/CriterionLint';
+import { DecisionTable } from './plans/DecisionTable';
 import { LandCriterionAction } from './plans/LandCriterionAction';
 import { PhaseCard, type PhaseCardAction } from './plans/PhaseCard';
 import { PHASE_TABS, PhasePanel, type PhaseTab } from './plans/PhasePanel';
@@ -3322,6 +3323,7 @@ function PhaseDetailPanel({
             {...(phase.completionReport !== null ? { report: <Markdown text={phase.completionReport} /> } : {})}
             terms={terms}
             decisionHref={(d) => decisionTurnHref(projectSlug, d)}
+            stopHref={`/p/${encodeURIComponent(projectSlug)}/needs-you`}
           />
           <WorkaroundHits
             phaseId={phase.id}
@@ -3631,7 +3633,12 @@ function PlanDetailPanel({
       {activeTab === 'edit' ? (
         <DocEditor taskId={epic.taskId} path="README.md" version={null} onSaved={onDocChanged} />
       ) : activeTab === 'plan' ? (
-        <PlanReadme epic={epic} />
+        <>
+          {/* The decision → phase → evidence table, inline above the README;
+              absent from an older daemon's payload. */}
+          {epic.evidence !== undefined && <DecisionTable table={epic.evidence} />}
+          <PlanReadme epic={epic} />
+        </>
       ) : activeTab === 'plain' ? (
         <PlainSummary taskId={epic.taskId} kind="plan" />
       ) : activeTab === 'spec' ? (

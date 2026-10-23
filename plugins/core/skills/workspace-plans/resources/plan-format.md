@@ -348,6 +348,18 @@ builds on a decision declares it in its header block —
 phase while a listed decision is undecided and expensive. Plans without the
 section are unaffected.
 
+What a listed decision does to the phase:
+
+| State of the listed decision | The phase |
+|---|---|
+| `decided` | runs; the answer is part of the plan |
+| `recommended` (cheap, skipped) | runs on the planner's pick; the run prompt lists it as `D-n (recommended, no operator answer): <question> → <pick>`, so the executor knows it builds on a default |
+| `undecided` (expensive, skipped) | is held: the run gate refuses with `decision-undecided: D-n (<question>)`, and the hold links the planning turn that asked it ("decide now") |
+
+A phase doc carries its own `## Decisions` too, written by the platform, never
+by the planner: one line per stop the operator answered for that phase (see
+"`kind: stop`" below).
+
 ## `## Forecast` (optional, in a phase doc, before `## Completion Report`)
 
 A small prediction the platform stores and later scores. It is DATA, never a
@@ -455,12 +467,92 @@ stop_if:
 - The defaults above protect CI workflows, hook manifests and tests. A phase
   that must edit a protected file (it writes or fixes tests) removes or narrows
   that glob, lists the files it will edit, and says why in `## Notes`.
-- `stop_if` keeps the four defaults; add phase-specific triggers after them.
+- `stop_if` keeps the four defaults; add phase-specific conditions after them.
+  The run prompt lists `stop_if` verbatim. Each default is one stop trigger
+  from a closed set — `out-of-scope change` → `out-of-scope`,
+  `protected path` → `protected-path`, `access or login error` →
+  `access-error`, `criterion impossible` → `criterion-impossible` — and a
+  phase-specific condition is raised under the closest of the four. The set
+  stays short by design; never add a trigger.
 - Both keys are required; an empty list is written `[]`. Unknown keys are
   ignored.
 - An `allow:` list is the daemon's, not the planner's: when a run touches a
   protected path, the operator's *allow (add to scope)* answer appends those
   paths under `allow:`, and the next run may edit them. Never write it in a plan.
+
+## `kind: stop` (the executor's final reply, never the plan)
+
+When a `stop_if` condition fires, the executor stops instead of working around
+it: its final reply carries one fenced `kind: stop` yaml block and ends
+`PHASE BLOCKED: <trigger>`. The platform reads the LAST such block of the
+reply and turns it into a decision the operator answers from the dashboard.
+
+````markdown
+```yaml
+kind: stop
+trigger: protected-path      # out-of-scope | protected-path | access-error | criterion-impossible
+reason: the fix needs pkg/orders/line_items_test.go, which the guard protects
+paths:                       # optional; protected-path only — the files it needs
+  - pkg/orders/line_items_test.go
+options:                     # exactly two
+  - id: allow-add-to-scope
+    label: Let me edit the test
+    consequence: the test changes with the code it covers
+  - id: keep-test
+    label: Leave the test alone
+    consequence: the line-items criterion stays open
+```
+````
+
+- **Exactly two options**, each with `id`, `label` and `consequence`. An id is
+  a bare token: lower-case letters and digits, then `.`, `_` or `-`, at most
+  64 characters. Never offer `other`: the operator can always answer in their
+  own words, recorded as option `other` with their text.
+- On a `protected-path` stop, the option that lets the run edit `paths` has the
+  id `allow-add-to-scope`. The ids `allow-add-to-scope` and `reject` belong to
+  the guard: the platform shows its own label and consequence for them,
+  whatever the block says.
+- **`paths` are vetted, never copied.** An entry survives only as a literal,
+  repo-relative FILE: no glob characters (`* ? [ ] { }`, no `+(` `@(` `!(`), no
+  `..` segment, no leading `/`, no backslash, no surrounding whitespace, nothing
+  unprintable or invisible (control, zero-width or bidi characters), not a
+  directory in the worktree and not the parent of another path in play,
+  nothing under `.swarmery`, and matched by one of the guard's
+  `protected_paths` globs. The same vetting applies to every path the platform
+  itself would offer: the names of the protected files the run changed and the
+  paths in `.swarmery/guard.log`. The operator is shown the exact list that
+  survived, and choosing `allow-add-to-scope` appends that list, and nothing
+  else, to the guard block's `allow:` list. A path in `allow:` without glob
+  characters releases exactly that one file, never what lies under it.
+- A slip is shown, never swallowed. A block can raise five flags, and each one
+  still raises the decision with the flag beside it:
+  - `stop_trigger_unknown`: a trigger outside the set.
+  - `stop_options_count`: other than two options.
+  - `stop_reason_missing`: no reason.
+  - `stop_option_invalid`: an option with no id, an id that is not a bare
+    token, a repeated id or the id `other`; it is renamed `option-<n>`.
+  - `stop_paths_rejected`: vetting dropped one or more `paths` (or one of the
+    run's own changed or refused paths); the dropped entries are never offered.
+
+  A reply with no block is a plain `PHASE BLOCKED:`.
+- When the run's guard check flagged it (it changed a protected file, or the
+  guard refused one of its calls), the decision also offers the guard's
+  `allow-add-to-scope` and `reject` choices, whatever the trigger.
+
+The answer is appended under the phase doc's `## Decisions`, shaped exactly:
+
+```
+- **D-n** (stop: <trigger>) — <reason> → <option id | other: text>
+```
+
+A note the operator adds to a chosen option follows its id after ` — `. The
+doc then differs from the blocked run's, so the blocked-run cooldown lets
+the phase run again, and the re-run's prompt carries
+`Decision D-n: <answer>`. The re-run continues on the phase's own branch, so
+the stop's partial work survives, except when the guard check flagged the
+stopped run. Then it continues only after an `allow-add-to-scope` answer. Any
+other answer leaves the protected edits unaccepted, and the branch is refused
+as dirty instead of built on.
 
 ## `## Review` (appended per review round, never by the planner)
 

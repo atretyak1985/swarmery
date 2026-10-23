@@ -11,6 +11,9 @@ package redact
 //     not a credential.
 //   - All for everything else: prompts, prose, Bash input and output, Read
 //     results, raw records.
+//
+// On top of both, outside the code fields, a string under a secret-named
+// object key is masked whole (keycue.go): {"password": "…"} at any depth.
 
 import (
 	"bytes"
@@ -75,7 +78,16 @@ func tree(v any, fields map[string]bool, literal bool) (any, bool) {
 	case map[string]any:
 		var out map[string]any
 		for k, e := range x {
-			ne, changed := tree(e, fields, literal || fields[k])
+			sub := literal || fields[k]
+			rec := func(v any) (any, bool) { return tree(v, fields, sub) }
+			var ne any
+			var changed, cued bool
+			if c := keyCue(k); c != noCue && !literal {
+				ne, changed, cued = cuedValue(c, e, rec)
+			}
+			if !cued {
+				ne, changed = rec(e)
+			}
 			if !changed {
 				continue
 			}

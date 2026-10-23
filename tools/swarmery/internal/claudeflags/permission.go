@@ -55,7 +55,15 @@
 //     bypassPermissions. An execution contract asks for edits, arbitrary build and
 //     test commands and a commit; acceptEdits denies every Bash command and
 //     dontAsk would need an open-ended Bash list. These sites carry
-//     AgentDenyArgs on top: no remote writes, no PR/MR, no daemon API.
+//     AgentDenyArgs on top: no remote writes, no PR/MR, no daemon API, no read
+//     of the daemon's credentials. An executor is trusted as the user it runs
+//     as — it can write and run anything that user can. The deny list guards
+//     the commands a model writes, so a plan's prompt cannot talk it into a
+//     push or a daemon call. It is a speed bump, not a boundary: a Python or
+//     Node one-liner, `sh -c '…'`, a quoted word (`git 'push'`), a variable or
+//     a client the list does not name all get past it, and reads by a script
+//     the model runs never meet the Read rules. Those bypasses are known and
+//     deliberately not chased.
 //   - SiteReadOnly — the verifier when its task declares Verify commands, and
 //     the phase and plan reviewers: dontAsk plus an explicit --allowedTools.
 //   - SitePlanner — planning, and the resume of a planning session: dontAsk plus

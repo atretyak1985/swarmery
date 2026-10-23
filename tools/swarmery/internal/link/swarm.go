@@ -14,6 +14,8 @@ import (
 	"strings"
 	"time"
 	"unicode/utf8"
+
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/redact"
 )
 
 // Swarm kinds (mods-swarmery-link phase 6): sessions running the link mod
@@ -393,6 +395,10 @@ func matchKey(body string) [32]byte {
 //     NULL. A send arriving after its receive pairs the same way, never with
 //     a receive whose from_session names another session.
 func RecordMessage(ctx context.Context, ex dbtx, rec MessageRecord) (int64, error) {
+	// Stored masked (internal/redact), every kind alike, so a send, its
+	// receive and a dashboard row carrying the same text still compare equal
+	// (matchKey).
+	rec.Body, rec.Reason = redact.All(rec.Body), redact.All(rec.Reason)
 	body, cut := clipBody(rec.Body)
 	rec.Body, rec.Truncated = body, rec.Truncated || cut
 

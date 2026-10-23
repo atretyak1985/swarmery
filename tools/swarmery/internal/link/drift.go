@@ -7,6 +7,8 @@ import (
 	"errors"
 	"fmt"
 	"time"
+
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/redact"
 )
 
 // KindDrift is the link_events kind of a plan-drift report (mods-swarmery-link
@@ -22,7 +24,8 @@ var ErrUnknownSession = errors.New("unknown session")
 
 // RecordDrift stores one drift report as a link_events row (kind drift) of the
 // session whose sessions.session_uuid is uuid, at `at` in the link's fixed-width
-// ms UTC form, with payload marshalled verbatim. stored=false means a report of
+// ms UTC form, with payload marshalled and its secret-shaped values masked.
+// stored=false means a report of
 // the same session already sits at that exact millisecond (the link_events
 // UNIQUE(session_id, kind, at) dedup key) — not an error.
 func RecordDrift(ctx context.Context, db *sql.DB, uuid string, at time.Time, payload any) (stored bool, err error) {
@@ -38,9 +41,11 @@ func RecordDrift(ctx context.Context, db *sql.DB, uuid string, at time.Time, pay
 	if err != nil {
 		return false, fmt.Errorf("link drift: payload: %w", err)
 	}
+	// Stored masked like every link_events payload (events.go normalize).
+	doc, _ := redact.PayloadJSON("", string(raw))
 	r, err := db.ExecContext(ctx,
 		`INSERT OR IGNORE INTO link_events (session_id, kind, at, payload) VALUES (?, ?, ?, ?)`,
-		sid, KindDrift, at.UTC().Format(tsFormat), string(raw))
+		sid, KindDrift, at.UTC().Format(tsFormat), doc)
 	if err != nil {
 		return false, fmt.Errorf("link drift: insert: %w", err)
 	}

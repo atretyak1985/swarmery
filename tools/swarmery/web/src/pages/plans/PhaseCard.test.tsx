@@ -133,11 +133,91 @@ describe('PhaseCard decision hold', () => {
       />,
     );
     const note = screen.getByTestId('decision-hold');
-    expect(note.textContent).toContain('waits on D-3');
+    expect(note.textContent).toContain('waits on decision D-3');
     expect(note.textContent).toContain('Which store?');
-    expect(note.textContent).toContain('waits on D-5');
+    expect(note.textContent).toContain('waits on decision D-5');
     const links = screen.getAllByRole('link', { name: 'open the question →' });
     expect(links).toHaveLength(1);
     expect(links[0]?.getAttribute('href')).toBe('/plan?turn=3');
+  });
+});
+
+// verify-not-trust phase 10: the hold prefers the daemon's own planning-turn
+// link, and an open agent-declared stop reads "waits on decision D-n" inline,
+// with its trigger and reason and a link to where it is answered.
+describe('PhaseCard decision links and stops', () => {
+  it('links the planning turn the daemon sent, over the caller-built link', () => {
+    const hold = {
+      detail: 'decision-undecided: D-3 (Which store?)',
+      decisions: [
+        {
+          decisionId: 'D-3',
+          question: 'Which store?',
+          seq: 3,
+          planningSessionId: 44,
+          planningTurn: '/p/orders/plans?tab=new&planningSession=44&turn=3#planning-turn-3',
+        },
+      ],
+    };
+    render(<PhaseCard phase={phase({ decisionHold: hold })} decisionHref={() => '/fallback'} />);
+    const link = screen.getByRole('link', { name: 'open the question →' });
+    expect(link.getAttribute('href')).toBe('/p/orders/plans?tab=new&planningSession=44&turn=3#planning-turn-3');
+  });
+
+  it('ignores a planning turn that is not a same-origin path', () => {
+    const hold = {
+      detail: 'decision-undecided: D-3 (Which store?)',
+      decisions: [
+        { decisionId: 'D-3', question: 'Which store?', seq: 3, planningSessionId: 44, planningTurn: '//evil.example/x' },
+      ],
+    };
+    render(<PhaseCard phase={phase({ decisionHold: hold })} decisionHref={() => '/fallback'} />);
+    expect(screen.getByRole('link', { name: 'open the question →' }).getAttribute('href')).toBe('/fallback');
+  });
+
+  it.each(['/\\evil.example/x', '/\t/evil.example/x', '/\n/evil.example', '/ok\\..\\x'])(
+    'ignores a planning turn a browser reads as another origin (%j)',
+    (planningTurn) => {
+      const hold = {
+        detail: 'decision-undecided: D-3 (Which store?)',
+        decisions: [{ decisionId: 'D-3', question: 'Which store?', seq: 3, planningSessionId: 44, planningTurn }],
+      };
+      render(<PhaseCard phase={phase({ decisionHold: hold })} decisionHref={() => '/fallback'} />);
+      expect(screen.getByRole('link', { name: 'open the question →' }).getAttribute('href')).toBe('/fallback');
+    },
+  );
+
+  const stop = {
+    taskId: 7,
+    phaseId: 12,
+    decisionId: 'D-7',
+    source: 'stop' as const,
+    question: 'The criterion needs pkg/orders/line_items_test.go, which the guard protects.',
+    options: [
+      { id: 'allow-add-to-scope', label: 'Let me edit the test', consequence: 'the test changes with the code' },
+      { id: 'keep-test', label: 'Leave the test alone', consequence: 'the criterion stays open' },
+    ],
+    guard: {},
+    trigger: 'protected-path',
+    reason: 'The criterion needs pkg/orders/line_items_test.go, which the guard protects.',
+    freeText: true,
+  };
+
+  it('shows an open agent stop inline with its trigger, reason and answer link', () => {
+    render(<PhaseCard phase={phase({ guardDecision: stop })} stopHref="/p/orders/needs-you" />);
+    const note = screen.getByTestId('stop-decision');
+    expect(note.textContent).toContain('waits on decision D-7');
+    expect(note.textContent).toContain('stop: protected-path');
+    expect(note.textContent).toContain(stop.reason);
+    expect(screen.getByRole('link', { name: 'answer it →' }).getAttribute('href')).toBe('/p/orders/needs-you');
+  });
+
+  it('shows nothing for a plain guard decision or no decision', () => {
+    const { trigger: _t, reason: _r, freeText: _f, ...guardOnly } = stop;
+    render(<PhaseCard phase={phase({ guardDecision: guardOnly })} />);
+    expect(screen.queryByTestId('stop-decision')).toBeNull();
+    cleanup();
+    render(<PhaseCard phase={phase({ guardDecision: null })} />);
+    expect(screen.queryByTestId('stop-decision')).toBeNull();
   });
 });
