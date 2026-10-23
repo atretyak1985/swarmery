@@ -1637,7 +1637,7 @@ msgstr "або відповідайте своїми словами — запи
 
 #: src/pages/plans/StopDecision.tsx
 msgid "out of scope"
-msgstr "поза межами фази"
+msgstr "поза межами"
 
 #: src/pages/plans/ForecastVsActual.tsx
 #: src/pages/plans/ForecastVsActual.tsx
