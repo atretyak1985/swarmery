@@ -167,6 +167,51 @@ func AreaOverlap(x, y string) bool {
 	return overlaps(a, b)
 }
 
+// AreaOf is the area one file lies in: its directory, normalized like an area
+// entry — "." for a file at the repo root, "" when nothing path-like is left. A
+// path written with a trailing slash names a directory and is its own area.
+// internal/lessons places a review finding with it (verify-not-trust phase 8).
+func AreaOf(file string) string {
+	raw := strings.TrimSpace(file)
+	n := normArea(raw)
+	if n == "" || n == "." || strings.HasSuffix(raw, "/") {
+		return n
+	}
+	return path.Dir(n)
+}
+
+// AreaApart reports how many directory levels separate two area entries when
+// one lies inside the other by AreaOverlap's rule (segments, after stripping a
+// leading sub-module prefix off either): 0 = the same place, 1 = a direct
+// subdirectory. ok=false exactly when AreaOverlap is false. The smallest
+// distance over every strip is returned, so `internal/api` and
+// `tools/app/internal/api` are 0 apart.
+func AreaApart(x, y string) (levels int, ok bool) {
+	nx, ny := normArea(x), normArea(y)
+	if nx == "" || ny == "" {
+		return 0, false
+	}
+	a, b := segs(nx), segs(ny)
+	if len(a) == 0 || len(b) == 0 {
+		return 0, len(a) == 0 && len(b) == 0
+	}
+	best := -1
+	for _, p := range [][2][]string{{a, b}, {b, a}} {
+		inner, outer := p[0], p[1]
+		for i := range inner {
+			if hasSegPrefix(inner[i:], outer) {
+				if d := len(inner) - i - len(outer); best < 0 || d < best {
+					best = d
+				}
+			}
+		}
+	}
+	if best < 0 {
+		return 0, false
+	}
+	return best, true
+}
+
 func anyOverlap(x string, in []string) bool {
 	for _, y := range in {
 		if overlaps(x, y) {
