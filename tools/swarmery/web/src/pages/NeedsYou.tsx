@@ -26,16 +26,33 @@
 //                        and, once a PR is open, a link to that PR
 //   phase_decision       a phase run touched protected paths: the guard badge,
 //                        one button per option (allow into scope / reject) and
-//                        a free-text note, answered in place
+//                        a free-text note, answered in place. An agent-declared
+//                        stop (verify-not-trust phase 10) shows its trigger,
+//                        reason and contract flags, its two options with their
+//                        consequences, and a free-text answer sent as `other`
+//   worktree_cleanup     one repository's worktrees of closed phases / cards
+//                        whose content is proven in main: a table with
+//                        checkboxes, "Remove selected" (POST
+//                        /api/worktree-cleanup/{id}/apply, salvage branch
+//                        first) and a "without proof: K" count of the ones
+//                        never offered
 //
 // Nothing here delivers a reply to a session: the operator pastes it.
 
 import { Trans, useLingui } from '@lingui/react/macro';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { fetchApprovals, resolveApproval, type ApprovalAction } from '../api';
+import { applyWorktreeCleanup, fetchApprovals, resolveApproval, type ApprovalAction } from '../api';
 import { answerGuardDecision } from '../api/guard';
-import type { NeedsYouItem, NeedsYouKind, PermissionRequest } from '../api/types';
+import type {
+  CleanupProofKind,
+  NeedsYouCleanupCandidate,
+  NeedsYouDecision,
+  NeedsYouItem,
+  NeedsYouKind,
+  PermissionRequest,
+  WorktreeCleanupPathOutcome,
+} from '../api/types';
 import { PendingCard } from './Approvals';
 import type { PhaseTab } from './plans/PhasePanel';
 import { ChannelBadge } from '../components/ChannelBadge';
@@ -64,6 +81,7 @@ const KIND_BADGE: Record<NeedsYouKind, string> = {
   failed: 'border-red/40 text-red',
   manual_phase: 'border-brand/40 text-brand',
   awaiting_merge: 'border-green/40 text-green',
+  worktree_cleanup: 'border-line-strong text-ink-3',
 };
 
 const FOCUS = 'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand';
@@ -293,6 +311,19 @@ export function PhaseDecision({
       .finally(() => setBusy(false));
   };
   const decisionId = decision.decisionId;
+  if (decision.trigger !== undefined || decision.freeText === true) {
+    return (
+      <StopDecision
+        decision={decision}
+        note={note}
+        setNote={setNote}
+        busy={busy}
+        error={error}
+        answer={answer}
+        reviewTo={reviewTo}
+      />
+    );
+  }
   return (
     <>
       <div className="mt-2 flex flex-wrap items-center gap-2">
@@ -325,6 +356,119 @@ export function PhaseDecision({
             {opt.id === 'allow-add-to-scope' ? t`Allow (add to scope)` : opt.id === 'reject' ? t`Reject` : opt.label}
           </button>
         ))}
+        {error !== null && (
+          <span role="alert" className="font-mono text-[11px] text-red">
+            {error}
+          </span>
+        )}
+        {reviewTo !== null && (
+          <Link to={reviewTo} className={`ml-auto ${LINK}`}>
+            <Trans>open review →</Trans>
+          </Link>
+        )}
+      </div>
+    </>
+  );
+}
+
+/** The option id that lets a protected-path stop's run edit its paths. */
+const ALLOW_OPTION = 'allow-add-to-scope';
+
+/** An agent-declared stop: the executor hit one of its phase's stop triggers
+ *  and stopped instead of working around it. Two options with what follows from
+ *  each, and the operator's own words as the third answer (option `other`). */
+function StopDecision({
+  decision,
+  note,
+  setNote,
+  busy,
+  error,
+  answer,
+  reviewTo,
+}: {
+  decision: NeedsYouDecision;
+  note: string;
+  setNote: (v: string) => void;
+  busy: boolean;
+  error: string | null;
+  answer: (option: string) => void;
+  reviewTo: string | null;
+}): JSX.Element {
+  const { t } = useLingui();
+  const decisionId = decision.decisionId;
+  const trigger = decision.trigger !== undefined && decision.trigger !== '' ? decision.trigger : t`no trigger`;
+  const reason = decision.reason !== undefined && decision.reason !== '' ? decision.reason : decision.question;
+  const flags = decision.flags ?? [];
+  const paths = decision.paths ?? [];
+  const flagList = flags.join(', ');
+  const pathList = paths.join(', ');
+  const own = note.trim();
+  return (
+    <>
+      <div className="mt-2 flex flex-wrap items-center gap-2">
+        <span className="font-mono text-[11px] font-semibold text-ink-2">{decisionId}</span>
+        <span
+          data-testid="stop-trigger"
+          className="rounded border border-red/45 bg-red/10 px-1.5 py-px font-mono text-[10.5px] text-red"
+        >
+          <Trans>stop: {trigger}</Trans>
+        </span>
+        <GuardBadge guard={decision.guard} />
+      </div>
+      <p className="mt-1.5 text-[13px] leading-[1.55] text-ink-2 [text-wrap:pretty]">{reason}</p>
+      {flags.length > 0 && (
+        <p
+          role="note"
+          data-testid="stop-flags"
+          className="mt-2 rounded-lg border border-amber/50 bg-amber/10 px-2.5 py-1.5 font-mono text-[11px] text-amber"
+        >
+          <Trans>the stop block broke its contract: {flagList}</Trans>
+        </p>
+      )}
+      <div className="mt-3 grid gap-2" role="group" aria-label={t`answer ${decisionId}`}>
+        {decision.options.map((opt) => (
+          <div key={opt.id} className="flex flex-wrap items-baseline gap-x-2.5 gap-y-1">
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => answer(opt.id)}
+              className={`${BTN} border-brand/50 bg-brand/10 font-semibold text-brand hover:bg-brand/20`}
+            >
+              {opt.label}
+            </button>
+            {opt.consequence !== undefined && opt.consequence !== '' && (
+              <span className="text-[12px] text-ink-3">→ {opt.consequence}</span>
+            )}
+            {opt.id === ALLOW_OPTION && paths.length > 0 && (
+              <span data-testid="stop-paths" className="basis-full font-mono text-[11px] text-ink-dim">
+                <Trans>Allowing this releases: {pathList}</Trans>
+              </span>
+            )}
+          </div>
+        ))}
+      </div>
+      <label className="mt-3 block">
+        <span className="font-mono text-[10.5px] text-ink-dim">
+          <Trans>your own answer — or a note sent with the option you pick</Trans>
+        </span>
+        <input
+          type="text"
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+          disabled={busy}
+          maxLength={2000}
+          className={`mt-1 block w-full rounded-lg border border-line bg-bg px-2.5 py-1.5 text-[12.5px] text-ink ${FOCUS}`}
+        />
+      </label>
+      <div className="mt-2 flex flex-wrap items-center gap-2">
+        <button
+          type="button"
+          disabled={busy || own === ''}
+          onClick={() => answer('other')}
+          className={`${BTN} border-line-strong text-ink-3 hover:bg-surface2`}
+        >
+          <Trans>Send my own answer</Trans>
+        </button>
         {error !== null && (
           <span role="alert" className="font-mono text-[11px] text-red">
             {error}
@@ -373,6 +517,189 @@ function AwaitingMerge({ item, reviewTo }: { item: NeedsYouItem; reviewTo: strin
   );
 }
 
+/* ----- worktree_cleanup: finished worktrees whose content is already in main ----- */
+
+const PROOF_BADGE: Record<CleanupProofKind, string> = {
+  landing: 'border-green/40 text-green',
+  'content-diff': 'border-brand/40 text-brand',
+};
+
+/** A candidate's phase on the Plans page; null for a board card's worktree. */
+function candidatePhaseHref(item: NeedsYouItem, c: NeedsYouCleanupCandidate): string | null {
+  if (c.planExternalId === undefined || c.planExternalId === '' || c.phaseSeq === undefined || c.phaseSeq === 0) {
+    return null;
+  }
+  return plansPath(item.projectSlug, {
+    plan: c.planExternalId,
+    detail: { kind: 'phase', seq: c.phaseSeq, tab: 'story' },
+  });
+}
+
+/**
+ * The janitor keeps a worktree whose branch has commits no other ref has. This
+ * card lists the ones whose phase or card is closed AND whose content is
+ * proven in main; the operator ticks some and removes them. Nothing is removed
+ * without that click, and the daemon writes a salvage branch before each one.
+ */
+function WorktreeCleanup({ item, onApplied }: { item: NeedsYouItem; onApplied: () => void }): JSX.Element {
+  const { t } = useLingui();
+  const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [outcomes, setOutcomes] = useState<readonly WorktreeCleanupPathOutcome[]>([]);
+  const cleanup = item.cleanup;
+  if (cleanup === undefined) return <></>;
+
+  const candidates = cleanup.candidates;
+  const allSelected = candidates.length > 0 && candidates.every((c) => selected.has(c.path));
+  const toggle = (path: string): void => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(path)) next.delete(path);
+      else next.add(path);
+      return next;
+    });
+  };
+  const toggleAll = (): void => {
+    setSelected(allSelected ? new Set() : new Set(candidates.map((c) => c.path)));
+  };
+  const remove = (): void => {
+    if (selected.size === 0) return;
+    setBusy(true);
+    setError(null);
+    applyWorktreeCleanup(cleanup.id, [...selected])
+      .then((res) => {
+        setOutcomes(res.paths);
+        setSelected(new Set());
+      })
+      .catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)))
+      .finally(() => {
+        setBusy(false);
+        onApplied();
+      });
+  };
+
+  const proofLabel = (kind: CleanupProofKind): string => (kind === 'landing' ? t`PR merged` : t`content in main`);
+  const selectedCount = String(selected.size);
+  const withoutProof = String(cleanup.withoutProof);
+  const repoRoot = cleanup.repoRoot;
+
+  return (
+    <>
+      <p className="mt-2 text-[12.5px] leading-[1.55] text-ink-3">
+        <Trans>
+          Worktrees of finished phases and cards whose content is already in main. Removing one writes a salvage
+          branch first.
+        </Trans>
+      </p>
+      <div className="mt-2 overflow-x-auto rounded-md border border-line">
+        <table className="w-full border-collapse text-left font-mono text-[11px]">
+          <caption className="sr-only">{t`Worktrees ready to remove in ${repoRoot}`}</caption>
+          <thead className="text-[10px] text-ink-dim">
+            <tr className="border-b border-line">
+              <th scope="col" className="w-8 px-2 py-1.5">
+                <input
+                  type="checkbox"
+                  checked={allSelected}
+                  onChange={toggleAll}
+                  aria-label={t`Select all worktrees`}
+                  className={FOCUS}
+                />
+              </th>
+              <th scope="col" className="px-2 py-1.5 font-normal">
+                <Trans>Path</Trans>
+              </th>
+              <th scope="col" className="px-2 py-1.5 font-normal">
+                <Trans>Branch</Trans>
+              </th>
+              <th scope="col" className="px-2 py-1.5 font-normal">
+                <Trans>Phase / card</Trans>
+              </th>
+              <th scope="col" className="px-2 py-1.5 font-normal">
+                <Trans>Proof</Trans>
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {candidates.map((c) => {
+              const phaseTo = candidatePhaseHref(item, c);
+              const path = c.path;
+              return (
+                <tr key={c.id} data-testid="cleanup-candidate" className="border-b border-line last:border-b-0 align-top">
+                  <td className="px-2 py-1.5">
+                    <input
+                      type="checkbox"
+                      checked={selected.has(c.path)}
+                      onChange={() => toggle(c.path)}
+                      aria-label={t`Select ${path}`}
+                      className={FOCUS}
+                    />
+                  </td>
+                  <td className="px-2 py-1.5 break-all text-ink">
+                    {c.path}
+                    {c.error !== undefined && c.error !== '' && (
+                      <div className="mt-0.5 text-[10.5px] text-red">{t`last attempt: ${c.error}`}</div>
+                    )}
+                  </td>
+                  <td className="px-2 py-1.5 break-all text-ink-3">{c.branch}</td>
+                  <td className="px-2 py-1.5 text-ink-3">
+                    {phaseTo !== null ? (
+                      <Link to={phaseTo} className={LINK}>
+                        {c.owner}
+                      </Link>
+                    ) : (
+                      c.owner
+                    )}
+                  </td>
+                  <td className="px-2 py-1.5">
+                    <span
+                      title={c.proofDetail}
+                      className={`rounded-full border px-2 py-px text-[10px] whitespace-nowrap ${PROOF_BADGE[c.proofKind]}`}
+                    >
+                      {proofLabel(c.proofKind)}
+                    </span>
+                    {c.proofDetail !== '' && <div className="mt-0.5 text-[10px] text-ink-dim">{c.proofDetail}</div>}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+      <div className="mt-3 flex flex-wrap items-center gap-3">
+        <button
+          type="button"
+          onClick={remove}
+          disabled={busy || selected.size === 0}
+          className={`${BTN} border-red/50 text-red hover:bg-red/10`}
+        >
+          {busy ? t`Removing…` : t`Remove selected`}
+        </button>
+        <span className="font-mono text-[11px] text-ink-dim">{t`${selectedCount} selected`}</span>
+        <span data-testid="cleanup-without-proof" className="ml-auto font-mono text-[11px] text-ink-dim">
+          {t`without proof: ${withoutProof}`}
+        </span>
+      </div>
+      {error !== null && (
+        <div role="alert" className="mt-2 font-mono text-[11px] text-red">
+          {error}
+        </div>
+      )}
+      {outcomes.length > 0 && (
+        <ul aria-live="polite" className="m-0 mt-2 list-none p-0 font-mono text-[10.5px] text-ink-3">
+          {outcomes.map((o) => (
+            <li key={o.path} data-testid="cleanup-outcome" data-outcome={o.outcome} className="break-all">
+              {o.outcome} · {o.path}
+              {o.salvageBranch !== undefined && o.salvageBranch !== '' ? ` → ${o.salvageBranch}` : ''}
+              {o.reason !== undefined && o.reason !== '' ? ` (${o.reason})` : ''}
+            </li>
+          ))}
+        </ul>
+      )}
+    </>
+  );
+}
+
 /* ----- one row ----- */
 
 function Row({
@@ -386,6 +713,7 @@ function Row({
   onResolve,
   onDismiss,
   onAnswered,
+  onApplied,
 }: {
   item: NeedsYouItem;
   /** The pending permission row behind an approval / question item, once loaded. */
@@ -398,6 +726,8 @@ function Row({
   onResolve: (request: PermissionRequest, action: ApprovalAction, reason?: string, answers?: AnswerMap) => void;
   onDismiss: () => void;
   onAnswered: () => void;
+  /** A worktree_cleanup apply finished: refetch the queue. */
+  onApplied: () => void;
 }): JSX.Element {
   const age = fmtSpan(item.blockingSince, new Date(nowMs).toISOString());
 
@@ -456,9 +786,13 @@ function Row({
     case 'phase_decision':
       body = <PhaseDecision item={item} reviewTo={phaseItemHref(item)} onAnswered={onAnswered} />;
       break;
+    case 'worktree_cleanup':
+      body = <WorktreeCleanup item={item} onApplied={onApplied} />;
+      break;
   }
   // A phase row names a plan phase, not a session: its title opens the phase.
-  const titleTo = phaseItemHref(item) ?? sessionTo;
+  // A cleanup row names a repository: its title opens the janitor's journal.
+  const titleTo = item.kind === 'worktree_cleanup' ? '/settings' : (phaseItemHref(item) ?? sessionTo);
 
   return (
     <li
@@ -556,7 +890,7 @@ export function NeedsYou(): JSX.Element {
         <ul className="m-0 mt-2 flex list-none flex-col gap-2.5 p-0">
           {items.map((item) => (
             <Row
-              key={`${item.kind}:${String(item.sessionId)}:${String(item.requestId)}:${String(item.phase?.phaseId)}:${item.blockingSince}`}
+              key={`${item.kind}:${String(item.sessionId)}:${String(item.requestId)}:${String(item.phase?.phaseId)}:${String(item.cleanup?.id)}:${item.blockingSince}`}
               item={item}
               request={item.requestId !== null ? (requests.get(item.requestId) ?? null) : null}
               nowMs={nowMs}
@@ -567,6 +901,7 @@ export function NeedsYou(): JSX.Element {
               onResolve={resolve}
               onDismiss={() => dismiss(item)}
               onAnswered={reload}
+              onApplied={reload}
             />
           ))}
         </ul>

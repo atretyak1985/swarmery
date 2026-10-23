@@ -741,3 +741,36 @@ or merged. Seed it once:
 ```bash
 swarmery routine seed --from config/routines/skill-audit.json
 ```
+
+## Daily worktree cleanup
+
+The worktree janitor never removes a `keep-unmerged` worktree: its branch has
+commits main does not. `swarmery wtcleanup` narrows that pile to the worktrees
+whose plan phase or board card is closed and proves, per worktree, that the
+content is already in main — `landing` (the phase's `landing_state` is
+`merged`) or `content-diff` (`git merge-tree --write-tree` of main and the
+branch, then `git diff --stat` against main, is empty — tried against the
+remote's main first, then the local one; new objects go to a scratch directory,
+never into the repository). A closed worktree without a proof is counted, never
+offered.
+
+| Command | What it does |
+|---|---|
+| `swarmery wtcleanup scan [--db <path>] [--json] [--out <file>]` | Read-only (query_only, no migrations): candidates per repository by proof kind, plus why the other kept worktrees are not candidates. |
+| `swarmery wtcleanup propose [--db <path>] [--json]` | Scans, then stores the result as the open proposals the Needs-you **Worktree cleanup** card lists. Removes nothing. |
+| `swarmery wtcleanup apply --id <proposal> --path <worktree> [--path …]` | The card's **Remove selected** from a terminal: proof required, salvage branch `salvage/<branch>-<ts>` written first, idempotent. |
+
+Removal happens only after the operator's click (`POST
+/api/worktree-cleanup/{id}/apply`) or that `apply` command, through the
+janitor's `ForceUnmerged`, which writes the salvage branch before it removes
+anything and journals the verdict `force-unmerged`.
+
+`config/routines/worktree-cleanup.json` ships `worktree-cleanup-daily`: every
+day at 03:30 it runs the scan (keeping the last report in
+`~/.swarmery/wtcleanup/last-scan.json`), hands its JSON to a `haiku` prompt
+through `{{prev_output}}` for a one-paragraph summary per repository, and runs
+`propose`. It never removes a worktree. Seed it once:
+
+```bash
+swarmery routine seed --from config/routines/worktree-cleanup.json
+```

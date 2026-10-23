@@ -370,6 +370,10 @@ msgstr "an extra-small"
 msgid "an unmeasured time"
 msgstr "an unmeasured time"
 
+#: src/pages/plans/PhaseCard.tsx
+msgid "answer it →"
+msgstr "answer it →"
+
 #: src/pages/PlanningMode.tsx
 msgid "answer the planner"
 msgstr "answer the planner"
@@ -2568,6 +2572,10 @@ msgstr "step name"
 msgid "Steps"
 msgstr "Steps"
 
+#: src/pages/plans/PhaseCard.tsx
+msgid "stop: {trigger}"
+msgstr "stop: {trigger}"
+
 #: src/pages/plans/PhasePanel.tsx
 msgid "Story"
 msgstr "Story"
@@ -2953,8 +2961,9 @@ msgid "waiting on phase {waitingOn}"
 msgstr "waiting on phase {waitingOn}"
 
 #: src/pages/plans/PhaseCard.tsx
-msgid "waits on {id}"
-msgstr "waits on {id}"
+#: src/pages/plans/PhaseCard.tsx
+msgid "waits on decision {id}"
+msgstr "waits on decision {id}"
 
 #: src/pages/Routines.tsx
 msgid "webhook"

@@ -1832,7 +1832,8 @@ export type NeedsYouKind =
   | 'awaiting_reply'
   | 'failed'
   | 'manual_phase'
-  | 'awaiting_merge';
+  | 'awaiting_merge'
+  | 'worktree_cleanup';
 
 /** Where an `awaiting_merge` phase's landing stands (`ready` is derived). */
 export type NeedsYouLandingState = 'ready' | 'pushed' | 'pr_open';
@@ -1907,6 +1908,9 @@ export interface GuardSummary {
 export interface DecisionOption {
   id: string;
   label: string;
+  /** What follows from choosing it — an agent-declared stop's options carry
+   *  one; guard and review options do not. */
+  consequence?: string;
 }
 
 /**
@@ -1925,6 +1929,71 @@ export interface NeedsYouDecision {
   question: string;
   options: DecisionOption[];
   guard: GuardSummary;
+  /** An agent-declared stop (verify-not-trust phase 10) — absent for a guard or
+   *  review decision. The trigger verbatim: out-of-scope | protected-path |
+   *  access-error | criterion-impossible, unless `flags` says
+   *  stop_trigger_unknown. */
+  trigger?: string;
+  /** The stop block's one-sentence reason. */
+  reason?: string;
+  /** The stop block's lints: stop_trigger_unknown, stop_options_count,
+   *  stop_reason_missing, stop_option_invalid, stop_paths_rejected. */
+  flags?: string[];
+  /** A protected-path stop's vetted, repo-relative files: what answering
+   *  allow-add-to-scope adds to the guard's `allow:` list. */
+  paths?: string[];
+  /** The operator may answer in their own words: POST {option: "other", note}. */
+  freeText?: boolean;
+}
+
+/** How a cleanup candidate's content is known to be in main (internal/wtcleanup). */
+export type CleanupProofKind = 'landing' | 'content-diff';
+
+/** One listed worktree of a `worktree_cleanup` item (Go cleanupCandidateDTO). */
+export interface NeedsYouCleanupCandidate {
+  /** worktree_cleanup_proposals.id of this path. */
+  id: number;
+  path: string;
+  branch: string;
+  /** "<plan> · Phase <seq>: <name>" or "<external-id>: <title>". */
+  owner: string;
+  phaseId: number | null;
+  taskId: number | null;
+  /** Plans deep link of a phase's worktree; absent for a board card's. */
+  planExternalId?: string;
+  phaseSeq?: number;
+  /** landing: the phase's PR merged · content-diff: merging the branch into main changes nothing. */
+  proofKind: CleanupProofKind;
+  proofDetail: string;
+  /** The last failed apply of this path — it stays listed for a retry. */
+  error?: string;
+}
+
+/** A `worktree_cleanup` item's payload (Go needsYouCleanup). */
+export interface NeedsYouCleanup {
+  /** The proposal POST /api/worktree-cleanup/{id}/apply addresses. */
+  id: number;
+  repoRoot: string;
+  /** Closed phases/cards whose content is proven in main — the only removable rows. */
+  candidates: NeedsYouCleanupCandidate[];
+  /** Closed owners whose content is NOT proven in main: counted, never listed. */
+  withoutProof: number;
+}
+
+/** One path's outcome of an apply (Go wtcleanup.PathOutcome). */
+export interface WorktreeCleanupPathOutcome {
+  path: string;
+  /** removed | gone | refused | failed | already-decided | not-proposed | no-proof | branch-changed */
+  outcome: string;
+  salvageBranch?: string;
+  reason?: string;
+}
+
+/** POST /api/worktree-cleanup/{id}/apply (Go wtcleanup.ApplyResult). */
+export interface WorktreeCleanupApplyResult {
+  id: number;
+  repoRoot: string;
+  paths: WorktreeCleanupPathOutcome[];
 }
 
 /** Haiku-extracted reply card for an awaiting_reply item (always null until phase 4). */
@@ -1963,6 +2032,8 @@ export interface NeedsYouItem {
   phase?: NeedsYouPhase;
   /** `stalled_phase`, and an approval a permission-pending stall was folded into. */
   stall?: NeedsYouStall;
+  /** `worktree_cleanup` only: the proposals of one repository (sessionName is its directory name). */
+  cleanup?: NeedsYouCleanup;
   /** approval items only: the transport of the permission request. Absent on an older daemon. */
   channel?: ApprovalChannel;
   /** `phase_decision` only: the question, its options and the run's guard check. */
@@ -4131,6 +4202,10 @@ export interface DecisionHoldRef {
   seq: number;
   /** null for a decision born in the README rather than an interview. */
   planningSessionId: number | null;
+  /** The dashboard path of the planning turn that asked it (Go
+   *  phasegate.PlanningTurnLink) — the hold's "decide now" link. Absent for a
+   *  README decision, an unknown project slug, or an older daemon. */
+  planningTurn?: string;
 }
 
 /** A phase's decision hold (Go `decisionHoldDTO`): non-null while a decision it

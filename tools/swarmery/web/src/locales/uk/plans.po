@@ -370,6 +370,10 @@ msgstr "дуже мала"
 msgid "an unmeasured time"
 msgstr "невиміряний час"
 
+#: src/pages/plans/PhaseCard.tsx
+msgid "answer it →"
+msgstr "відповісти →"
+
 #: src/pages/PlanningMode.tsx
 msgid "answer the planner"
 msgstr "відповісти планувальнику"
@@ -2568,6 +2572,10 @@ msgstr "назва кроку"
 msgid "Steps"
 msgstr "Кроки"
 
+#: src/pages/plans/PhaseCard.tsx
+msgid "stop: {trigger}"
+msgstr "зупинка: {trigger}"
+
 #: src/pages/plans/PhasePanel.tsx
 msgid "Story"
 msgstr "Розповідь"
@@ -2953,8 +2961,9 @@ msgid "waiting on phase {waitingOn}"
 msgstr "чекає на фазу {waitingOn}"
 
 #: src/pages/plans/PhaseCard.tsx
-msgid "waits on {id}"
-msgstr "чекає на {id}"
+#: src/pages/plans/PhaseCard.tsx
+msgid "waits on decision {id}"
+msgstr "чекає на рішення {id}"
 
 #: src/pages/Routines.tsx
 msgid "webhook"

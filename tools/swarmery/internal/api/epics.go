@@ -63,6 +63,10 @@ type decisionHoldRefDTO struct {
 	Question          string `json:"question"`
 	Seq               int    `json:"seq"`
 	PlanningSessionID *int64 `json:"planningSessionId"`
+	// PlanningTurn is the dashboard path of the planning turn that asked it
+	// (phasegate.PlanningTurnLink) — the hold's "decide now" link; "" for a
+	// decision born in the README.
+	PlanningTurn string `json:"planningTurn,omitempty"`
 }
 
 type epicPhaseDTO struct {
@@ -1710,16 +1714,26 @@ func (h *Handler) attachDecisionHolds(taskID int64, phases []epicPhaseDTO, deps 
 		judged = append(judged, phasegate.Decision{ID: d.DecisionID, Question: d.Question, Cost: d.Cost, Status: d.Status})
 		byID[d.DecisionID] = d
 	}
+	slug := ""
+	slugRead := false
 	for i := range phases {
 		hold := phaserun.HoldFor(deps[phases[i].ID], judged)
 		if hold == nil {
 			continue
 		}
+		if !slugRead { // one read, and only for a plan that has a hold at all
+			slugRead = true
+			_ = h.DB.QueryRow(`SELECT COALESCE(p.slug, '') FROM tasks t LEFT JOIN projects p ON p.id = t.project_id
+				WHERE t.id = ?`, taskID).Scan(&slug)
+		}
 		dto := &decisionHoldDTO{Detail: hold.Detail, Decisions: []decisionHoldRefDTO{}}
 		for _, id := range hold.Decisions {
 			d := byID[id]
-			dto.Decisions = append(dto.Decisions, decisionHoldRefDTO{
-				DecisionID: id, Question: d.Question, Seq: d.Seq, PlanningSessionID: d.PlanningSessionID})
+			ref := decisionHoldRefDTO{DecisionID: id, Question: d.Question, Seq: d.Seq, PlanningSessionID: d.PlanningSessionID}
+			if d.PlanningSessionID != nil {
+				ref.PlanningTurn = phasegate.PlanningTurnLink(slug, *d.PlanningSessionID, d.Seq)
+			}
+			dto.Decisions = append(dto.Decisions, ref)
 		}
 		phases[i].DecisionHold = dto
 	}

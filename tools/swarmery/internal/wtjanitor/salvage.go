@@ -21,6 +21,12 @@ import (
 // as "do not remove". A salvage that fails is the one thing that turns a
 // removal back into a keep.
 func Salvage(repoRoot, worktreePath, origBranch string, now time.Time) (string, error) {
+	return salvageTo(repoRoot, worktreePath, origBranch, SalvageBranchName(worktreePath, now), now)
+}
+
+// salvageTo is Salvage with the rescue branch named by the caller: Sweep's
+// per-day name, or ForceUnmerged's per-second one.
+func salvageTo(repoRoot, worktreePath, origBranch, branch string, now time.Time) (string, error) {
 	if _, err := run(worktreePath, "add", "-A"); err != nil {
 		return "", fmt.Errorf("salvage: stage: %w", err)
 	}
@@ -39,7 +45,6 @@ func Salvage(repoRoot, worktreePath, origBranch string, now time.Time) (string, 
 	if err != nil {
 		return "", fmt.Errorf("salvage: commit-tree: %w", err)
 	}
-	branch := SalvageBranchName(worktreePath, now)
 	if _, err := run(repoRoot, "update-ref", "refs/heads/"+branch, commit); err != nil {
 		return "", fmt.Errorf("salvage: update-ref %s: %w", branch, err)
 	}

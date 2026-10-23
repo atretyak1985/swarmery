@@ -23,6 +23,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"os"
+	"path"
 	"path/filepath"
 	"regexp"
 	"sort"
@@ -331,6 +332,45 @@ func gitGlob(g string) string {
 		return g + "**"
 	}
 	return g
+}
+
+// guardGlobMatch reports whether the repo-relative path p falls under the
+// protected glob — the matching protectedChanges asks git for, done in Go for a
+// path that need not exist: the glob in gitGlob's spelling, read in git's
+// `:(glob,icase)` dialect. `*`, `?` and `[…]` stay inside one path segment, a
+// `**` segment matches zero or more whole segments (a trailing one at least
+// one: `dir/**` is everything under dir), and letter case is ignored. A
+// malformed glob matches nothing.
+func guardGlobMatch(glob, p string) bool {
+	g := strings.ToLower(gitGlob(glob))
+	if g == "" || p == "" {
+		return false
+	}
+	return globSegsMatch(strings.Split(g, "/"), strings.Split(strings.ToLower(p), "/"))
+}
+
+func globSegsMatch(g, p []string) bool {
+	for len(g) > 0 {
+		if g[0] == "**" {
+			if len(g) == 1 {
+				return len(p) > 0
+			}
+			for i := 0; i <= len(p); i++ {
+				if globSegsMatch(g[1:], p[i:]) {
+					return true
+				}
+			}
+			return false
+		}
+		if len(p) == 0 {
+			return false
+		}
+		if ok, err := path.Match(g[0], p[0]); err != nil || !ok {
+			return false
+		}
+		g, p = g[1:], p[1:]
+	}
+	return len(p) == 0
 }
 
 // guardJSON is r as stored in a guard_json column.

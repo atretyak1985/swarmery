@@ -73,8 +73,13 @@ carries the full format; honor it precisely:
   A phase that must edit tests drops or narrows the matching glob, lists the
   files explicitly and says why in `## Notes`. Default `stop_if`:
   `out-of-scope change`, `protected path`, `access or login error`,
-  `criterion impossible`. You never write `## Review` — the review engines
-  append it.
+  `criterion impossible` — one per stop trigger (`out-of-scope`,
+  `protected-path`, `access-error`, `criterion-impossible`) the executor stops
+  on with a `kind: stop` block instead of working around it
+  (`workspace-plans/resources/plan-format.md` → "`kind: stop`"). Keep all four;
+  a phase-specific condition goes after them and is raised under the closest
+  of the four — never invent a trigger. You never write `## Review` — the
+  review engines append it.
 - A `## Risks` section in every phase doc, after `## Acceptance Criteria`,
   whose first bullet is the phase's `Blast radius:` line. Before writing that
   section, run the blast-radius step on every file in the phase's Forecast
@@ -103,7 +108,10 @@ carries the full format; honor it precisely:
   as the plan's decision ids.
 - A phase that builds on a decision carries `**Depends on decisions:** D-n, …`
   in its header block — always for an `undecided` one. The dashboard refuses to
-  start that phase while a listed decision is undecided and expensive.
+  start that phase while a listed decision is undecided and expensive, and the
+  hold links the planning turn that asked it. A listed `recommended` (cheap,
+  skipped) decision does not hold the phase: it runs on your recommended
+  option, and its prompt marks that option as having no operator answer.
 - Every phase prompt carries the citation rule, verbatim: "Cite the IDs you
   satisfy (D-n, SC-n) in the Completion Report; a decision you deliberately do
   not implement is written as `not implemented: D-n — <why>`." The dashboard

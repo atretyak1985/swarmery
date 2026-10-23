@@ -190,6 +190,10 @@ msgstr "{runningCount} running"
 msgid "{scoredRuns, plural, one {run scored} few {runs scored} many {runs scored} other {runs scored}}"
 msgstr "{scoredRuns, plural, one {run scored} few {runs scored} many {runs scored} other {runs scored}}"
 
+#: src/pages/NeedsYou.tsx
+msgid "{selectedCount} selected"
+msgstr "{selectedCount} selected"
+
 #: src/pages/Projects.tsx
 msgid "{sessionCount} sessions · {costLabel}"
 msgstr "{sessionCount} sessions · {costLabel}"
@@ -349,6 +353,10 @@ msgstr "all sessions →"
 msgid "Allow (add to scope)"
 msgstr "Allow (add to scope)"
 
+#: src/pages/NeedsYou.tsx
+msgid "Allowing this releases: {pathList}"
+msgstr "Allowing this releases: {pathList}"
+
 #: src/pages/Approvals.tsx
 msgid "always allow…"
 msgstr "always allow…"
@@ -370,6 +378,7 @@ msgctxt "verb: the button that opens the question"
 msgid "answer"
 msgstr "answer"
 
+#: src/pages/NeedsYou.tsx
 #: src/pages/NeedsYou.tsx
 msgid "answer {decisionId}"
 msgstr "answer {decisionId}"
@@ -471,6 +480,10 @@ msgstr "blocked {age}"
 #: src/pages/Overview.tsx
 msgid "Blocked on you · {count}"
 msgstr "Blocked on you · {count}"
+
+#: src/pages/NeedsYou.tsx
+msgid "Branch"
+msgstr "Branch"
 
 #: src/pages/sessions/CacheColdBadge.tsx
 msgid "cache cold"
@@ -583,6 +596,10 @@ msgstr "confirm locally"
 #: src/pages/sessions/SwarmPanel.tsx
 msgid "conflict"
 msgstr "conflict"
+
+#: src/pages/NeedsYou.tsx
+msgid "content in main"
+msgstr "content in main"
 
 #: src/pages/detail/ContextHogsCard.tsx
 msgid "context hogs"
@@ -944,6 +961,11 @@ msgstr "Jump to latest"
 msgid "last activity"
 msgstr "last activity"
 
+#. placeholder {0}: c.error
+#: src/pages/NeedsYou.tsx
+msgid "last attempt: {0}"
+msgstr "last attempt: {0}"
+
 #: src/pages/SessionDetail.tsx
 msgid "last event"
 msgstr "last event"
@@ -1197,6 +1219,10 @@ msgstr "no tool activity recorded"
 msgid "no transcript activity past the stuck window — the session may have died silently"
 msgstr "no transcript activity past the stuck window — the session may have died silently"
 
+#: src/pages/NeedsYou.tsx
+msgid "no trigger"
+msgstr "no trigger"
+
 #: src/pages/Overview.tsx
 msgid "no waiting"
 msgstr "no waiting"
@@ -1325,6 +1351,7 @@ msgstr "open PR ↗"
 
 #: src/pages/NeedsYou.tsx
 #: src/pages/NeedsYou.tsx
+#: src/pages/NeedsYou.tsx
 msgid "open review →"
 msgstr "open review →"
 
@@ -1348,6 +1375,10 @@ msgstr "other parts"
 msgid "out of scope"
 msgstr "out of scope"
 
+#: src/pages/NeedsYou.tsx
+msgid "Path"
+msgstr "Path"
+
 #: src/pages/Approvals.tsx
 #: src/pages/sessions/SwarmPanel.tsx
 msgid "pending"
@@ -1362,6 +1393,10 @@ msgstr "Percolating"
 #: src/pages/detail/Timeline.tsx
 msgid "Permission"
 msgstr "Permission"
+
+#: src/pages/NeedsYou.tsx
+msgid "Phase / card"
+msgstr "Phase / card"
 
 #: src/pages/detail/PendingRunNotice.tsx
 msgid "phase review"
@@ -1412,6 +1447,10 @@ msgstr "Plans →"
 msgid "plugins"
 msgstr "plugins"
 
+#: src/pages/NeedsYou.tsx
+msgid "PR merged"
+msgstr "PR merged"
+
 #: src/pages/Approvals.tsx
 msgid "pre-fill an auto-approve rule from this request (the rule catches future requests; this one still needs your decision)"
 msgstr "pre-fill an auto-approve rule from this request (the rule catches future requests; this one still needs your decision)"
@@ -1441,6 +1480,10 @@ msgstr "Projects"
 #: src/pages/Projects.tsx
 msgid "projects…"
 msgstr "projects…"
+
+#: src/pages/NeedsYou.tsx
+msgid "Proof"
+msgstr "Proof"
 
 #: src/pages/today/loopModel.ts
 msgid "Proof →"
@@ -1497,6 +1540,14 @@ msgstr "Reject"
 #: src/pages/Approvals.tsx
 msgid "release with no decision — the native selector renders in the terminal (E12d/E12e)"
 msgstr "release with no decision — the native selector renders in the terminal (E12d/E12e)"
+
+#: src/pages/NeedsYou.tsx
+msgid "Remove selected"
+msgstr "Remove selected"
+
+#: src/pages/NeedsYou.tsx
+msgid "Removing…"
+msgstr "Removing…"
 
 #: src/pages/SessionDetail.tsx
 #: src/pages/SessionDetail.tsx
@@ -1575,6 +1626,14 @@ msgstr "runs scored"
 msgid "select {0} for continue phase"
 msgstr "select {0} for continue phase"
 
+#: src/pages/NeedsYou.tsx
+msgid "Select {path}"
+msgstr "Select {path}"
+
+#: src/pages/NeedsYou.tsx
+msgid "Select all worktrees"
+msgstr "Select all worktrees"
+
 #: src/pages/detail/CommandInput.tsx
 #: src/pages/sessions/SwarmPanel.tsx
 msgid "Send"
@@ -1583,6 +1642,10 @@ msgstr "Send"
 #: src/pages/sessions/SwarmPanel.tsx
 msgid "Send a message from this session"
 msgstr "Send a message from this session"
+
+#: src/pages/NeedsYou.tsx
+msgid "Send my own answer"
+msgstr "Send my own answer"
 
 #: src/pages/detail/Chat.tsx
 #: src/pages/sessions/SwarmPanel.tsx
@@ -1759,6 +1822,10 @@ msgstr "Stop"
 msgid "stop asking"
 msgstr "stop asking"
 
+#: src/pages/NeedsYou.tsx
+msgid "stop: {trigger}"
+msgstr "stop: {trigger}"
+
 #: src/pages/detail/CommandInput.tsx
 msgid "Stopping…"
 msgstr "Stopping…"
@@ -1871,6 +1938,10 @@ msgstr "The session's link mod is not polling for commands. Enable the swarmery-
 #: src/pages/Overview.tsx
 msgid "The spine · today"
 msgstr "The spine · today"
+
+#: src/pages/NeedsYou.tsx
+msgid "the stop block broke its contract: {flagList}"
+msgstr "the stop block broke its contract: {flagList}"
 
 #: src/pages/ProjectDetail.tsx
 #: src/pages/ProjectOverview.tsx
@@ -2038,6 +2109,10 @@ msgstr "Where work sits"
 msgid "Where your time went"
 msgstr "Where your time went"
 
+#: src/pages/NeedsYou.tsx
+msgid "without proof: {withoutProof}"
+msgstr "without proof: {withoutProof}"
+
 #: src/pages/Overview.tsx
 #: src/pages/Overview.tsx
 #: src/pages/today/LiveNow.tsx
@@ -2057,9 +2132,21 @@ msgstr "working · {lastActive}"
 msgid "workspace…"
 msgstr "workspace…"
 
+#: src/pages/NeedsYou.tsx
+msgid "Worktrees of finished phases and cards whose content is already in main. Removing one writes a salvage branch first."
+msgstr "Worktrees of finished phases and cards whose content is already in main. Removing one writes a salvage branch first."
+
+#: src/pages/NeedsYou.tsx
+msgid "Worktrees ready to remove in {repoRoot}"
+msgstr "Worktrees ready to remove in {repoRoot}"
+
 #: src/pages/sessions/CacheColdBadge.tsx
 msgid "writing handoff…"
 msgstr "writing handoff…"
+
+#: src/pages/NeedsYou.tsx
+msgid "your own answer — or a note sent with the option you pick"
+msgstr "your own answer — or a note sent with the option you pick"
 
 #: src/pages/detail/CallTree.tsx
 msgid "Σ tokens"

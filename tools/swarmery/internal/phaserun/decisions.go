@@ -17,9 +17,21 @@ type DecisionUndecidedError struct {
 	Detail string
 	// Decisions are the holding `D-n` ids, in the order the doc lists them.
 	Decisions []string
+	// Refs are the same decisions with the planning turn that asked each one
+	// (verify-not-trust phase 10): where the operator takes it ("decide now").
+	Refs []phasegate.HoldRef
 }
 
-func (e *DecisionUndecidedError) Error() string { return e.Detail }
+// Error is the hold detail, followed — when the first holding decision has a
+// planning turn — by where to take it, so the refusal names its own way out.
+func (e *DecisionUndecidedError) Error() string {
+	for _, r := range e.Refs {
+		if r.PlanningTurn != "" {
+			return e.Detail + " — decide " + r.DecisionID + " on its planning turn: " + r.PlanningTurn
+		}
+	}
+	return e.Detail
+}
 
 // querier is the read half of *sql.DB / *sql.Tx.
 type querier interface {
@@ -35,9 +47,14 @@ func DecisionHold(q querier, phaseID int64) (*DecisionUndecidedError, error) {
 	var (
 		taskID   int64
 		depsJSON string
+		slug     string
 	)
-	if err := q.QueryRow(`SELECT workspace_task_id, decision_deps FROM epic_phases WHERE id = ?`, phaseID).
-		Scan(&taskID, &depsJSON); err != nil {
+	if err := q.QueryRow(`SELECT e.workspace_task_id, e.decision_deps, COALESCE(p.slug, '')
+		  FROM epic_phases e
+		  LEFT JOIN tasks t ON t.id = e.workspace_task_id
+		  LEFT JOIN projects p ON p.id = t.project_id
+		 WHERE e.id = ?`, phaseID).
+		Scan(&taskID, &depsJSON, &slug); err != nil {
 		if err == sql.ErrNoRows {
 			return nil, nil
 		}
@@ -51,13 +68,13 @@ func DecisionHold(q querier, phaseID int64) (*DecisionUndecidedError, error) {
 	if err != nil {
 		return nil, err
 	}
-	return HoldFor(deps, decisions), nil
+	return HoldForIn(slug, deps, decisions), nil
 }
 
 // TaskDecisions loads a plan's decisions in the shape phasegate judges.
 func TaskDecisions(q querier, taskID int64) ([]phasegate.Decision, error) {
-	rows, err := q.Query(`SELECT decision_id, question, cost, status FROM phase_decisions
-		WHERE workspace_task_id = ? ORDER BY seq, id`, taskID)
+	rows, err := q.Query(`SELECT decision_id, question, cost, status, seq, COALESCE(planning_session_id, 0)
+		FROM phase_decisions WHERE workspace_task_id = ? ORDER BY seq, id`, taskID)
 	if err != nil {
 		return nil, err
 	}
@@ -65,7 +82,7 @@ func TaskDecisions(q querier, taskID int64) ([]phasegate.Decision, error) {
 	var out []phasegate.Decision
 	for rows.Next() {
 		var d phasegate.Decision
-		if err := rows.Scan(&d.ID, &d.Question, &d.Cost, &d.Status); err != nil {
+		if err := rows.Scan(&d.ID, &d.Question, &d.Cost, &d.Status, &d.Seq, &d.PlanningSessionID); err != nil {
 			return nil, err
 		}
 		out = append(out, d)
@@ -73,15 +90,22 @@ func TaskDecisions(q querier, taskID int64) ([]phasegate.Decision, error) {
 	return out, rows.Err()
 }
 
-// HoldFor is DecisionHold over already-loaded rows (the API's per-plan read).
+// HoldFor is DecisionHold over already-loaded rows (the API's per-plan read),
+// without planning-turn links.
 func HoldFor(deps []string, decisions []phasegate.Decision) *DecisionUndecidedError {
+	return HoldForIn("", deps, decisions)
+}
+
+// HoldForIn is HoldFor with the project's slug, so each holding decision that
+// came from an interview carries its planning-turn link.
+func HoldForIn(projectSlug string, deps []string, decisions []phasegate.Decision) *DecisionUndecidedError {
 	hold, reason := phasegate.HoldsForDecisions(deps, decisions)
 	if !hold {
 		return nil
 	}
-	e := &DecisionUndecidedError{Detail: reason}
-	for _, d := range phasegate.DecisionsHolding(deps, decisions) {
-		e.Decisions = append(e.Decisions, d.ID)
+	e := &DecisionUndecidedError{Detail: reason, Refs: phasegate.HoldRefs(projectSlug, deps, decisions)}
+	for _, r := range e.Refs {
+		e.Decisions = append(e.Decisions, r.DecisionID)
 	}
 	return e
 }

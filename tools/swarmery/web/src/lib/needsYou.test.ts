@@ -90,6 +90,17 @@ describe('dismissKey', () => {
   it('changes when the same session blocks again', () => {
     expect(dismissKey(item({ blockingSince: '2026-10-06T11:00:00Z' }))).not.toBe(dismissKey(item()));
   });
+
+  it('keys a worktree_cleanup item by its proposal: two repositories proposed in one run stay apart', () => {
+    const cleanup = (id: number): NeedsYouItem =>
+      item({
+        kind: 'worktree_cleanup',
+        sessionId: 0,
+        cleanup: { id, repoRoot: `/work/r${String(id)}`, candidates: [], withoutProof: 0 },
+      });
+    expect(dismissKey(cleanup(3))).toBe('worktree_cleanup:cleanup-3:2026-10-06T10:00:00Z');
+    expect(dismissKey(cleanup(3))).not.toBe(dismissKey(cleanup(4)));
+  });
 });
 
 describe('visibleItems / oldestFirst', () => {

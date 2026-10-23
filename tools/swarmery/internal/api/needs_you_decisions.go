@@ -34,6 +34,9 @@ const needsYouPhaseDecision = "phase_decision"
 type needsYouDecisionOption struct {
 	ID    string `json:"id"`
 	Label string `json:"label"`
+	// Consequence is what follows from choosing it — an agent-declared stop's
+	// options carry one; guard and review options do not.
+	Consequence string `json:"consequence,omitempty"`
 }
 
 // needsYouDecision is a phase_decision item's payload. Mirrors
@@ -42,12 +45,47 @@ type needsYouDecision struct {
 	TaskID     int64  `json:"taskId"`
 	PhaseID    int64  `json:"phaseId"`
 	DecisionID string `json:"decisionId"`
-	// Source is the decision's source: "stop" (a guard decision) or "review".
+	// Source is the decision's source: "stop" (a guard decision or an
+	// agent-declared stop) or "review".
 	Source   string                   `json:"source"`
 	Question string                   `json:"question"`
 	Options  []needsYouDecisionOption `json:"options"`
-	// Guard is the run's guard check (phaserun.GuardResult as stored).
+	// Guard is the run's guard check (phaserun.GuardResult as stored; an
+	// agent-declared stop adds its block under "stop").
 	Guard json.RawMessage `json:"guard"`
+	// The agent-declared stop (verify-not-trust phase 10), absent for a guard or
+	// review decision: Trigger is the block's trigger verbatim (the closed
+	// vocabulary unless Flags says stop_trigger_unknown), Reason its sentence,
+	// Flags the block's lints (stop_trigger_unknown, stop_options_count,
+	// stop_reason_missing, stop_option_invalid, stop_paths_rejected). FreeText is
+	// true when the operator may answer in their own words: POST {option:
+	// "other", note}. Paths are exactly the files an allow-add-to-scope answer
+	// would add to the guard's `allow:` list — the guard check's findings plus
+	// the agent's vetted `paths:` (phaserun.StopAllowPaths); absent for a stop
+	// that is not a protected-path stop.
+	Trigger  string   `json:"trigger,omitempty"`
+	Reason   string   `json:"reason,omitempty"`
+	Flags    []string `json:"flags,omitempty"`
+	FreeText bool     `json:"freeText,omitempty"`
+	Paths    []string `json:"paths,omitempty"`
+}
+
+// withStop fills the agent-declared stop's fields from the decision's stored
+// guard_json; a decision without a stop is returned unchanged. The options come
+// from the block — labels and consequences as the agent wrote them.
+func (d needsYouDecision) withStop(guardJSON string) needsYouDecision {
+	st := phaserun.StopFromJSON(guardJSON)
+	if st == nil {
+		return d
+	}
+	d.Trigger, d.Reason, d.FreeText = st.Trigger, st.Reason, true
+	d.Flags = append([]string{}, st.Flags...)
+	d.Paths = phaserun.StopAllowPaths(guardJSON)
+	d.Options = make([]needsYouDecisionOption, 0, len(st.Options))
+	for _, o := range st.Options {
+		d.Options = append(d.Options, needsYouDecisionOption{ID: o.ID, Label: o.Label, Consequence: o.Consequence})
+	}
+	return d
 }
 
 // guardOptionLabels are the operator-facing labels of the guard options.
@@ -92,6 +130,7 @@ func queryNeedsYouPhaseDecisions(db *sql.DB, scope string, projArgs []any) ([]ne
 		if !json.Valid(dec.Guard) {
 			dec.Guard = json.RawMessage("{}")
 		}
+		dec = dec.withStop(guardJS)
 		it.Kind = needsYouPhaseDecision
 		it.SessionName = manualPhaseTitle(ph)
 		it.Question = clipTail(dec.Question, needsYouQuestionMax)
@@ -153,8 +192,9 @@ func (h *Handler) phaseOpenDecisions(taskID int64, source string) map[int64]*nee
 		if !json.Valid(g) {
 			g = json.RawMessage("{}")
 		}
-		out[*d.PhaseID] = &needsYouDecision{TaskID: taskID, PhaseID: *d.PhaseID, DecisionID: d.DecisionID, Source: d.Source,
-			Question: d.Question, Options: decisionOptions(mustJSON(d.OptionIDs)), Guard: g}
+		dec := needsYouDecision{TaskID: taskID, PhaseID: *d.PhaseID, DecisionID: d.DecisionID, Source: d.Source,
+			Question: d.Question, Options: decisionOptions(mustJSON(d.OptionIDs)), Guard: g}.withStop(d.GuardJSON)
+		out[*d.PhaseID] = &dec
 	}
 	return out
 }

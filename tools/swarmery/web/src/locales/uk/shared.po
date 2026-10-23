@@ -4408,6 +4408,10 @@ msgstr "робочий простір…"
 msgid "worktree"
 msgstr "worktree"
 
+#: src/lib/needsYou.ts
+msgid "Worktree cleanup"
+msgstr "Прибирання worktree"
+
 #: src/workspace/task/TaskActions.tsx
 msgid "worktree reclaimed — nothing to re-grade"
 msgstr "worktree забрано — нічого переоцінювати"

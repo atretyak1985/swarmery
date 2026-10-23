@@ -41,6 +41,7 @@ var needsYouKindRank = map[string]int{
 	needsYouFailed:          5,
 	needsYouManualPhase:     6,
 	needsYouAwaitingMerge:   7,
+	needsYouWorktreeCleanup: 8,
 }
 
 const (
@@ -67,7 +68,7 @@ type replySuggestion struct {
 
 // needsYouItem is one blocker. Mirrors NeedsYouItem in web/src/api/types.ts.
 type needsYouItem struct {
-	Kind string `json:"kind"` // approval | stalled_phase | question | phase_decision | prod_deploy_local | awaiting_reply | failed | manual_phase | awaiting_merge
+	Kind string `json:"kind"` // approval | stalled_phase | question | phase_decision | prod_deploy_local | awaiting_reply | failed | manual_phase | awaiting_merge | worktree_cleanup
 	// SessionID / SessionUUID are 0 / "" for a phase item (manual_phase,
 	// awaiting_merge): a plan phase blocks, not a session. A stalled_phase item
 	// carries its stalled stage's session once that session is ingested.
@@ -105,6 +106,9 @@ type needsYouItem struct {
 	Stall *needsYouStall `json:"stall,omitempty"`
 	// Decision is a phase_decision item's question, options and guard check.
 	Decision *needsYouDecision `json:"decision,omitempty"`
+	// Cleanup carries a worktree_cleanup item's proposals; absent otherwise
+	// (worktree_cleanup.go). SessionName is then the repository's directory name.
+	Cleanup *needsYouCleanup `json:"cleanup,omitempty"`
 
 	at time.Time // parsed BlockingSince; zero when unparseable
 }
@@ -189,8 +193,12 @@ func collectNeedsYou(db *sql.DB, r *http.Request, now time.Time) ([]needsYouItem
 	if err != nil {
 		return nil, err
 	}
+	cleanup, err := queryNeedsYouWorktreeCleanup(db, scope, projArgs)
+	if err != nil {
+		return nil, err
+	}
 
-	all := make([]needsYouItem, 0, len(pending)+len(local)+len(awaiting)+len(failed)+len(manual)+len(merge)+len(stalled)+len(decisions))
+	all := make([]needsYouItem, 0, len(pending)+len(local)+len(awaiting)+len(failed)+len(manual)+len(merge)+len(stalled)+len(decisions)+len(cleanup))
 	all = append(all, pending...)
 	all = append(all, stalled...)
 	all = append(all, local...)
@@ -199,6 +207,7 @@ func collectNeedsYou(db *sql.DB, r *http.Request, now time.Time) ([]needsYouItem
 	all = append(all, manual...)
 	all = append(all, merge...)
 	all = append(all, decisions...)
+	all = append(all, cleanup...)
 	items := dedupeNeedsYou(all)
 	for i := range items {
 		items[i].BlockingSeconds = blockingSeconds(items[i].at, now)
@@ -419,8 +428,9 @@ func dedupeNeedsYou(items []needsYouItem) []needsYouItem {
 
 // sortNeedsYou orders items oldest blocker first; ties break on kind (approval <
 // stalled_phase < question < phase_decision < prod_deploy_local < awaiting_reply <
-// failed < manual_phase < awaiting_merge — the order of needsYouKindRank), then
-// on the item id (request id, else phase id, else session id).
+// failed < manual_phase < awaiting_merge < worktree_cleanup — the order of
+// needsYouKindRank), then on the item id (request id, else phase id, else
+// cleanup proposal id, else session id).
 func sortNeedsYou(items []needsYouItem) {
 	sort.SliceStable(items, func(i, j int) bool {
 		a, b := items[i], items[j]
@@ -442,6 +452,9 @@ func needsYouItemID(it needsYouItem) int64 {
 	}
 	if it.Phase != nil {
 		return it.Phase.PhaseID
+	}
+	if it.Cleanup != nil {
+		return it.Cleanup.ID
 	}
 	return it.SessionID
 }

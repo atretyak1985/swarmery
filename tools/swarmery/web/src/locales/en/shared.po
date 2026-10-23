@@ -4408,6 +4408,10 @@ msgstr "workspace…"
 msgid "worktree"
 msgstr "worktree"
 
+#: src/lib/needsYou.ts
+msgid "Worktree cleanup"
+msgstr "Worktree cleanup"
+
 #: src/workspace/task/TaskActions.tsx
 msgid "worktree reclaimed — nothing to re-grade"
 msgstr "worktree reclaimed — nothing to re-grade"
