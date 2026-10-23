@@ -345,8 +345,12 @@ followed by `(без відповіді, рекомендований)`; unanswe
 `undecided`, answer `undecided`. `(reason: …)` is optional. A phase doc that
 builds on a decision declares it in its header block —
 `**Depends on decisions:** D-1, D-3` — and the platform refuses to start that
-phase while a listed decision is undecided and expensive. Plans without the
-section are unaffected.
+phase while a listed decision is undecided and expensive. The refusal (and the
+phase card's "waits on D-n") names the question and links the planning turn
+that asked it — the "decide now" action. A listed `recommended` decision never
+holds: the run starts, its prompt lists it as
+`D-n (recommended, no operator answer): <question> → <answer>`, and the phase
+card marks it «no answer». Plans without the section are unaffected.
 
 ## `## Forecast` (optional, in a phase doc, before `## Completion Report`)
 
@@ -455,12 +459,53 @@ stop_if:
 - The defaults above protect CI workflows, hook manifests and tests. A phase
   that must edit a protected file (it writes or fixes tests) removes or narrows
   that glob, lists the files it will edit, and says why in `## Notes`.
-- `stop_if` keeps the four defaults; add phase-specific triggers after them.
+- `stop_if` keeps the four defaults and adds none — the trigger vocabulary is
+  closed (see "Stop triggers" below).
 - Both keys are required; an empty list is written `[]`. Unknown keys are
   ignored.
 - An `allow:` list is the daemon's, not the planner's: when a run touches a
   protected path, the operator's *allow (add to scope)* answer appends those
   paths under `allow:`, and the next run may edit them. Never write it in a plan.
+
+### Stop triggers and the `kind: stop` block
+
+The executor's prompt carries the guard's `stop_if` list verbatim, each entry
+with its trigger id — the closed vocabulary `out-of-scope`, `protected-path`,
+`access-error`, `criterion-impossible`. When one fires the executor STOPS
+instead of working around it: it commits what it has, writes one `kind: stop`
+block in its final message and ends `PHASE BLOCKED: <trigger>`:
+
+````markdown
+```yaml
+kind: stop
+trigger: protected-path
+reason: criterion 3 needs scripts/tests/run.sh to call the new suite
+paths: ["scripts/tests/run.sh"]   # protected-path only
+options:
+  - id: allow
+    label: Allow editing scripts/tests/run.sh
+    consequence: the re-run wires the suite and ticks criterion 3
+  - id: skip
+    label: Keep the script protected
+    consequence: criterion 3 stays open
+```
+````
+
+- Exactly two options, each with `id`, `label`, `consequence`. Another count
+  still raises the decision, flagged `stop_options_count`; a trigger outside the
+  vocabulary is flagged `stop_trigger_unknown`.
+- The daemon raises a `phase_decision` (source `stop`) in Needs you: the
+  trigger, the reason, the two options as buttons plus free text. The answer is
+  appended under the phase doc's `## Decisions` as
+  `- **D-n** (stop: <trigger>) — <reason> → <option id>: <label>` — or
+  `→ other: <text>` for free text — continuing the plan's `D-n` numbering. A
+  `protected-path` stop answered with an `allow…` option also adds its `paths`
+  to the guard's `allow:` list.
+- The answer changes the blocked fingerprint, so the phase may run again at
+  once; the re-run continues on the phase's own branch (the blocked run's
+  commits survive) and its prompt states `Decision D-n: <answer>`.
+- Run interactively (`run-plan`), the orchestrator hands the operator the same
+  two options and writes the `D-n` line by hand.
 
 ## `## Review` (appended per review round, never by the planner)
 

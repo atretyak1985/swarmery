@@ -86,6 +86,21 @@ never be delegated.
     is** (recorded as a `D-n` decision in the plan). When the plan is tracked by
     the swarmery daemon and it offers a review `phase_decision` for the phase,
     answer through that instead of asking in chat.
+11. **A stop block goes to the operator as is.** When an executor ends
+    `PHASE BLOCKED: <trigger>` with a `kind: stop` block (its guard's `stop_if`
+    fired: `out-of-scope`, `protected-path`, `access-error`,
+    `criterion-impossible`), do not work around it and do not re-dispatch.
+    Hand the operator the block's trigger, reason and its two options exactly as
+    written (plus "other — your own words"), then write their answer by hand
+    under the phase doc's `## Decisions` as
+    `- **D-n** (stop: <trigger>) — <reason> → <option id>: <label>` (or
+    `→ other: <text>`), `D-n` continuing the plan's numbering. A
+    `protected-path` stop answered with its `allow` option also adds the block's
+    `paths` to the guard block's `allow:` list. Then re-dispatch the phase with
+    `Decision D-n: <answer>` at the top of the executor brief. When the swarmery
+    daemon offers a stop `phase_decision` for the phase, answer through it
+    instead — it writes both lines itself. Shape:
+    `workspace-plans/resources/plan-format.md` → "Stop triggers".
 
 # Resources
 

@@ -73,8 +73,12 @@ carries the full format; honor it precisely:
   A phase that must edit tests drops or narrows the matching glob, lists the
   files explicitly and says why in `## Notes`. Default `stop_if`:
   `out-of-scope change`, `protected path`, `access or login error`,
-  `criterion impossible`. You never write `## Review` — the review engines
-  append it.
+  `criterion impossible` — keep all four and add none: the executor's prompt
+  carries them with the `kind: stop` contract (trigger ids `out-of-scope`,
+  `protected-path`, `access-error`, `criterion-impossible`), and the operator's
+  answer comes back as a `D-n` under the phase doc's `## Decisions`
+  (`plan-format.md` → "Stop triggers"). You never write `## Review` — the
+  review engines append it.
 - A `## Risks` section in every phase doc, after `## Acceptance Criteria`,
   whose first bullet is the phase's `Blast radius:` line. Before writing that
   section, run the blast-radius step on every file in the phase's Forecast
@@ -102,8 +106,12 @@ carries the full format; honor it precisely:
   `undecided`, its answer the word `undecided`. The dashboard reads these lines
   as the plan's decision ids.
 - A phase that builds on a decision carries `**Depends on decisions:** D-n, …`
-  in its header block — always for an `undecided` one. The dashboard refuses to
-  start that phase while a listed decision is undecided and expensive.
+  in its header block — always for an `undecided` one, and for a `recommended`
+  one the phase's work rests on. The dashboard refuses to start that phase while
+  a listed decision is undecided and expensive, naming the question and linking
+  the planning turn that asked it; a listed `recommended` one never holds — the
+  run starts with your recommended option, its prompt says so, and the phase
+  card marks it «no answer».
 
 # What makes criteria good
 
