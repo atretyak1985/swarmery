@@ -88,7 +88,12 @@ export interface PhaseCardProps {
  *  tabs and newlines from a URL, so `/\host` and `/<tab>/host` are refused, as
  *  is any backslash, whitespace or control character. */
 function isSameOriginPath(p: string): boolean {
-  return p.startsWith('/') && !/^\/[/\\]/.test(p) && !/[\\\s\u0000-\u001f\u007f]/.test(p);
+  if (!p.startsWith('/') || /^\/[/\\]/.test(p) || /[\\\s]/.test(p)) return false;
+  for (let i = 0; i < p.length; i++) {
+    const c = p.charCodeAt(i);
+    if (c < 0x20 || c === 0x7f) return false;
+  }
+  return true;
 }
 
 /** The decision's own planning-turn link (the daemon's `planningTurn`), else
