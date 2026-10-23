@@ -96,7 +96,7 @@ describe('apiFetch', () => {
     window.localStorage.setItem(SESSION_STORAGE_KEY, 'sess-2');
     const writes = ['POST', 'PUT', 'PATCH', 'DELETE', 'post'];
     for (const method of writes) await apiFetch('/api/x', { method });
-    writes.forEach((_, i) => expect(sentHeaders(fetchMock, i).get(SESSION_HEADER)).toBe('sess-2'));
+    for (let i = 0; i < writes.length; i++) expect(sentHeaders(fetchMock, i).get(SESSION_HEADER)).toBe('sess-2');
 
     fetchMock.mockClear();
     await apiFetch('/api/x');
