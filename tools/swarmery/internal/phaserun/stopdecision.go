@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"slices"
 	"strings"
 	"time"
 
@@ -39,7 +40,9 @@ type StopPayload struct {
 	Trigger string               `json:"trigger"`
 	Reason  string               `json:"reason"`
 	Options []mdfence.StopOption `json:"options"`
-	// Paths are the files a protected-path stop is about, as the agent named them.
+	// Paths are the files a protected-path stop is about: the agent's `paths:`
+	// that survived vetStopPaths (literal, under a protected glob). What was
+	// dropped is flagged stop_paths_rejected.
 	Paths []string `json:"paths,omitempty"`
 	// Flags are the block's lints (mdfence.LintStop*), shown to the operator.
 	Flags []string `json:"flags,omitempty"`
@@ -140,8 +143,13 @@ func (s *Service) stopStage(phaseID int64, info phaseInfo, endState, sessionUUID
 // raiseStopDecision writes (or refreshes) the phase's open stop decision from an
 // agent's block. Best-effort, like the guard decision.
 func (s *Service) raiseStopDecision(phaseID int64, info phaseInfo, st *mdfence.Stop, guard GuardResult) {
+	paths, rejected := vetStopPaths(st.Paths, guard.ProtectedPaths)
+	flags := append([]string(nil), st.Flags...)
+	if rejected && !slices.Contains(flags, mdfence.LintStopPathsRejected) {
+		flags = append(flags, mdfence.LintStopPathsRejected)
+	}
 	rec := stopRecord{GuardResult: guard, Stop: &StopPayload{
-		Trigger: st.Trigger, Reason: st.Reason, Options: st.Options, Paths: st.Paths, Flags: st.Flags,
+		Trigger: st.Trigger, Reason: st.Reason, Options: st.Options, Paths: paths, Flags: flags,
 	}}
 	if rec.Stop.Options == nil {
 		rec.Stop.Options = []mdfence.StopOption{}
@@ -162,8 +170,56 @@ func (s *Service) raiseStopDecision(phaseID int64, info phaseInfo, st *mdfence.S
 		verb = "raised"
 	}
 	log.Printf("phaserun: phase=%d stop decision %s %s (%s, flags=%v): %s",
-		phaseID, d.DecisionID, verb, st.Trigger, st.Flags, d.Question)
+		phaseID, d.DecisionID, verb, st.Trigger, flags, d.Question)
 	s.notify(info.WorkspaceTaskID)
+}
+
+// vetStopPaths keeps the agent-named paths that may become `allow:` entries:
+// literal repo-relative file paths (mdfence.LiteralRepoPath — no glob, no `..`,
+// nothing under .swarmery) that fall under one of the guard's protected globs,
+// matched the way the guard check matches them (guardGlobMatch). The agent is
+// untrusted and allow entries act as globs, so `paths: ["**/*"]` must not
+// release every protected path. rejected reports that something was dropped.
+// No protected globs (no guard, or a guard check that did not run) keeps
+// nothing: there is nothing an allow could legitimately release.
+func vetStopPaths(paths, protected []string) (kept []string, rejected bool) {
+	for _, p := range uniquePaths(paths) {
+		ok := mdfence.LiteralRepoPath(p)
+		if ok {
+			ok = false
+			for _, g := range protected {
+				if guardGlobMatch(g, p) {
+					ok = true
+					break
+				}
+			}
+		}
+		if ok {
+			kept = append(kept, p)
+		} else {
+			rejected = true
+		}
+	}
+	return kept, rejected
+}
+
+// stopAllowPaths are the paths an allow-add-to-scope answer to rec's stop adds
+// to the guard's `allow:` list: the guard check's own findings, then the
+// agent's paths re-vetted against the guard the run was checked with (a row
+// raised before the paths were vetted is vetted here). None for a stop that is
+// not a protected-path stop — its allow releases nothing.
+func stopAllowPaths(rec stopRecord) []string {
+	if rec.Stop == nil || rec.Stop.Trigger != mdfence.StopTriggerProtectedPath {
+		return nil
+	}
+	agent, _ := vetStopPaths(rec.Stop.Paths, rec.GuardResult.ProtectedPaths)
+	return uniquePaths(rec.GuardResult.Paths(), agent)
+}
+
+// StopAllowPaths is stopAllowPaths for a decision's stored guard_json: exactly
+// the files an allow-add-to-scope answer would release, for the operator's card.
+func StopAllowPaths(guardJSON string) []string {
+	return stopAllowPaths(decodeStopRecord(guardJSON))
 }
 
 // answerStopDecision records the operator's answer to an agent-declared stop:
@@ -200,8 +256,8 @@ func answerStopDecision(db *sql.DB, d store.Decision, rec stopRecord, docPath st
 	}
 	doc := wsingest.AppendPhaseDecision(string(body),
 		wsingest.FormatPhaseDecisionLine(d.Seq, stopSource(st.Trigger), d.Question, answer))
-	if st.Trigger == mdfence.StopTriggerProtectedPath && opt == GuardOptionAllow {
-		if paths := uniquePaths(rec.GuardResult.Paths(), st.Paths); len(paths) > 0 {
+	if opt == GuardOptionAllow {
+		if paths := stopAllowPaths(rec); len(paths) > 0 {
 			widened, perr := mdfence.AddGuardAllow(doc, paths)
 			switch {
 			case perr == nil:
@@ -308,6 +364,10 @@ func (s *Service) decisionsNoteFor(phaseID, taskID int64) string {
 // the operator has answered one of its stop decisions since: the re-run then
 // continues on the phase's own branch, like a returned run, so the partial work
 // the stopped run committed is built on rather than refused as a dirty branch.
+// Only an agent-declared stop (any answer) or a guard decision answered allow
+// counts: a guard decision answered reject refused the protected edits that
+// branch holds, so the re-run must not build on them — the dirty-branch refusal
+// stands.
 func (s *Service) stopAnsweredSinceBlock(phaseID int64, info phaseInfo) bool {
 	if info.RunState != "blocked" {
 		return false
@@ -323,6 +383,9 @@ func (s *Service) stopAnsweredSinceBlock(phaseID int64, info phaseInfo) bool {
 	for _, d := range ds {
 		if d.Source != store.DecisionSourceStop || d.Status != store.DecisionDecided || d.DecidedAt == nil ||
 			d.PhaseID == nil || *d.PhaseID != phaseID {
+			continue
+		}
+		if StopOf(d) == nil && !strings.HasPrefix(d.Answer, guardAnswerAllow) {
 			continue
 		}
 		if at, err := time.Parse(time.RFC3339, *d.DecidedAt); err == nil && !at.Before(ended) {

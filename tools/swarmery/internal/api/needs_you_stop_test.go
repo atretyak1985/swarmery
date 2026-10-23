@@ -22,9 +22,18 @@ import (
 // protected-path stop, the way phaserun.raiseStopDecision refreshes it.
 func seedAgentStop(t *testing.T, db *sql.DB, taskID, phaseID int64) (store.Decision, string) {
 	t.Helper()
+	return seedAgentStopPaths(t, db, taskID, phaseID, `["trap_test.go"]`, `["pkg/x_test.go"]`)
+}
+
+// seedAgentStopPaths is seedAgentStop with the guard check's changed files and
+// the stop's stored paths given as JSON arrays — stored as is, the way a row
+// raised before the paths were vetted holds them.
+func seedAgentStopPaths(t *testing.T, db *sql.DB, taskID, phaseID int64, changedJSON, pathsJSON string) (store.Decision, string) {
+	t.Helper()
 	_, doc := seedGuardDecision(t, db, taskID, phaseID, time.Now().UTC().Add(-time.Hour).Format(time.RFC3339))
-	guard := `{"hasGuard":true,"protectedChanged":["trap_test.go"],"stop":{"trigger":"protected-path",` +
-		`"reason":"The fix needs trap_test.go.","paths":["pkg/x_test.go"],"flags":["stop_options_count"],"options":[` +
+	guard := `{"hasGuard":true,"protectedPaths":["**/*_test.go"],"protectedChanged":` + changedJSON +
+		`,"stop":{"trigger":"protected-path",` +
+		`"reason":"The fix needs trap_test.go.","paths":` + pathsJSON + `,"flags":["stop_options_count"],"options":[` +
 		`{"id":"allow-add-to-scope","label":"Let me edit the test","consequence":"the test changes"}]}}`
 	d, created, err := store.UpsertStopDecision(db, taskID, phaseID, "The fix needs trap_test.go.",
 		[]string{"allow-add-to-scope"}, guard, time.Now().UTC().Format(time.RFC3339))
@@ -86,6 +95,9 @@ func TestNeedsYouAgentStopDecision(t *testing.T) {
 	if !reflect.DeepEqual(dec.Options, want) {
 		t.Fatalf("options = %+v, want %+v", dec.Options, want)
 	}
+	if !reflect.DeepEqual(dec.Paths, []string{"trap_test.go", "pkg/x_test.go"}) {
+		t.Fatalf("paths = %q, want what an allow would release", dec.Paths)
+	}
 
 	// The phase card's open decision carries the same fields.
 	h := &Handler{DB: db}
@@ -119,5 +131,39 @@ func TestNeedsYouAgentStopDecision(t *testing.T) {
 	}
 	if g, perr := mdfence.ParseGuard(string(body)); perr != nil || !reflect.DeepEqual(g.Allow, []string{"trap_test.go", "pkg/x_test.go"}) {
 		t.Errorf("guard after allow = %+v, %v", g, perr)
+	}
+}
+
+// The card's paths are exactly what an allow would release: an untrusted
+// agent's globs, `..`, .swarmery and unprotected paths never reach it, even on
+// a row whose stored paths were never vetted — and the allow matches the card.
+func TestNeedsYouAgentStopPathsAreVetted(t *testing.T) {
+	srv, db := needsYouServerDB(t)
+	alphaPhase, _, _ := manualPhaseFixture(t, db)
+	var alphaTask int64
+	_ = db.QueryRow(`SELECT workspace_task_id FROM epic_phases WHERE id = ?`, alphaPhase).Scan(&alphaTask)
+	d, doc := seedAgentStopPaths(t, db, alphaTask, alphaPhase, `[]`,
+		`["**/*", ".github/workflows/*.yml", "../x", ".swarmery/plan/p.md", "pkg/foo_test.go"]`)
+
+	got := decisionItems(getNeedsYou(t, srv.URL+"/api/needs-you").Items)
+	if len(got) != 1 || got[0].Decision == nil {
+		t.Fatalf("phase_decision items = %+v", got)
+	}
+	if paths := got[0].Decision.Paths; !reflect.DeepEqual(paths, []string{"pkg/foo_test.go"}) {
+		t.Fatalf("needs-you paths = %q, want [pkg/foo_test.go]", paths)
+	}
+	u := srv.URL + "/api/epics/" + strconv.FormatInt(alphaTask, 10) + "/phases/" + strconv.FormatInt(alphaPhase, 10) +
+		"/decisions/" + d.DecisionID
+	resp, err := http.Post(u, "application/json", strings.NewReader(`{"option":"allow-add-to-scope"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("allow: %d, want 200", resp.StatusCode)
+	}
+	body, _ := os.ReadFile(doc)
+	if g, perr := mdfence.ParseGuard(string(body)); perr != nil || !reflect.DeepEqual(g.Allow, []string{"pkg/foo_test.go"}) {
+		t.Errorf("guard after allow = %+v, %v; want allow [pkg/foo_test.go]", g, perr)
 	}
 }
