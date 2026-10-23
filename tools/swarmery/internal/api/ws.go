@@ -116,6 +116,10 @@ func (h *Handler) ws(w http.ResponseWriter, r *http.Request) {
 		// it cannot re-derive a different policy (the vite dev proxy forwards the
 		// dev origin, which `make dev` opts in via SWARMERY_TRUSTED_ORIGINS).
 		OriginPatterns: []string{"*"},
+		// The dashboard offers swarmery.v1 plus its session entry
+		// (requireLocalOrigin checked the session); select exactly
+		// swarmery.v1, never the entry that carries the token.
+		Subprotocols: wsAcceptProtocols,
 	})
 	if err != nil {
 		log.Printf("warn: ws: accept: %v", err)

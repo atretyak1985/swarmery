@@ -102,8 +102,14 @@ func Routes(root *http.ServeMux, h *Handler) {
 	// The live stream carries raw prompts, tool input and approval requestJson,
 	// so the upgrade sits behind the same origin fence as every write: a page on
 	// a foreign origin (another local port included) cannot subscribe, while an
-	// Origin-less client (the console, notch) still can.
+	// Origin-less client (the console, notch) still can — with link auth — and
+	// the dashboard with its session (subprotocol swarmery.session.<token>).
 	mux.HandleFunc("GET /api/ws", requireLocalOrigin(h.ws))
+	// dashboard session unlock (session.go): redeem a ticket signed with the
+	// link token (`swarmery open`, the notch) for the session token the
+	// dashboard's writes carry. NOT behind requireLocalOrigin — it is how a
+	// session is obtained — so it runs its own Origin and listener checks.
+	mux.HandleFunc("POST /api/session/unlock", h.sessionUnlock)
 
 	// wave C: stats
 	mux.HandleFunc("GET /api/stats/today", h.statsToday)
