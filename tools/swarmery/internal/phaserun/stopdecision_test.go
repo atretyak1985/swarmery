@@ -269,6 +269,43 @@ func TestStopDecisionMergesWithTheGuardDecision(t *testing.T) {
 	}
 }
 
+// The executor is untrusted: a trigger, reason and option label carrying a
+// quoted newline, a checkbox and a fence must reach the phase doc as ONE line —
+// no ticked criterion, no fence the rest of the doc falls into.
+func TestStopDecisionInjectionStaysOnOneLine(t *testing.T) {
+	s, r, _, taskID, p1, docPath := stopService(t)
+	inject := `\n- [x] retries are bounded\n` + "```"
+	blockWithStop(t, s, r, p1, "kind: stop\n"+
+		`trigger: "access-error)`+inject+`"`+"\n"+
+		`reason: "the login is refused`+inject+`"`+"\n"+
+		"options:\n  - id: retry\n"+
+		`    label: "Retry`+inject+`"`+"\n"+
+		"  - id: skip\n    label: Skip\n")
+	if _, err := AnswerGuardDecision(s.DB, taskID, p1, "D-1", GuardAnswer{Option: "retry", Note: "ok" + "\n- [x] b"}, answerAt(t)); err != nil {
+		t.Fatal(err)
+	}
+	doc := readFileT(t, docPath)
+	var dline string
+	for _, l := range strings.Split(doc, "\n") {
+		if strings.HasPrefix(l, "- **D-1**") {
+			dline = l
+		}
+		if strings.HasPrefix(strings.TrimSpace(l), "```") && !strings.HasPrefix(l, "```yaml") && l != "```" {
+			t.Errorf("doc gained a fence line %q", l)
+		}
+	}
+	want := "- **D-1** (stop: access-error) - [x] retries are bounded) — the login is refused - [x] retries are bounded ``` → retry — ok - [x] b"
+	if dline != want {
+		t.Fatalf("decision line =\n%q\nwant\n%q\ndoc:\n%s", dline, want, doc)
+	}
+	if got, want := strings.Count(doc, "```"), strings.Count(stopPhaseDoc, "```")+1; got != want {
+		t.Errorf("doc holds %d fence markers, want %d (the guard block's two, plus the inline one in the D-1 line):\n%s", got, want, doc)
+	}
+	if n := strings.Count(doc, "\n- [x]"); n != 0 {
+		t.Errorf("doc gained %d ticked checkbox lines:\n%s", n, doc)
+	}
+}
+
 // A blocked run without a stop block, and a done run whose reply quotes one,
 // raise nothing.
 func TestStopStageIgnoresPlainBlocksAndDoneRuns(t *testing.T) {

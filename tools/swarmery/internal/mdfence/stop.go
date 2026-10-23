@@ -2,6 +2,7 @@ package mdfence
 
 import (
 	"fmt"
+	"path"
 	"strings"
 )
 
@@ -57,7 +58,17 @@ const (
 	// LintStopOptionInvalid: an option has no id, repeats an id, or uses the
 	// reserved id `other`; it was renamed so every option stays answerable.
 	LintStopOptionInvalid = "stop_option_invalid"
+	// LintStopPathsRejected: one or more `paths:` entries were dropped — not a
+	// literal repo-relative file path (LiteralRepoPath), or, once the daemon
+	// checks it against the guard, under no protected glob. The executor is
+	// untrusted: only what survives may reach the guard's `allow:` list.
+	LintStopPathsRejected = "stop_paths_rejected"
 )
+
+// stopLintOrder is the stable order Stop.Flags are reported in.
+var stopLintOrder = []string{
+	LintStopTriggerUnknown, LintStopOptionsCount, LintStopReasonMissing, LintStopOptionInvalid, LintStopPathsRejected,
+}
 
 // StopOption is one answer a stop block offers the operator.
 type StopOption struct {
@@ -72,7 +83,9 @@ type Stop struct {
 	Reason  string
 	Options []StopOption
 	// Paths are the files a protected-path stop is about (optional): what an
-	// allow answer adds to the guard's `allow:` list.
+	// allow answer may add to the guard's `allow:` list. Only literal
+	// repo-relative file paths are kept (LiteralRepoPath); the rest are dropped
+	// and flagged stop_paths_rejected.
 	Paths []string
 	// Flags are the lints the block raised (Lint* constants), in a stable order.
 	Flags []string
@@ -97,9 +110,16 @@ func KnownStopTrigger(trigger string) bool {
 // or holds `options` / `paths` of the wrong shape returns a *ParseError
 // (ErrUnparsable, with the output line). Everything softer is a flag on a parsed
 // block: an unknown or missing trigger (stop_trigger_unknown — the trigger is
-// kept verbatim), a count of options other than two (stop_options_count), a
+// kept, flattened), a count of options other than two (stop_options_count), a
 // missing reason (stop_reason_missing), an option without an id, with a repeated
-// id or with the reserved id `other` (stop_option_invalid — renamed option-<n>).
+// id or with the reserved id `other` (stop_option_invalid — renamed option-<n>),
+// a `paths:` entry that is not a literal repo-relative file path
+// (stop_paths_rejected — dropped).
+//
+// The block is written by the executor, which is untrusted, and its scalars end
+// up in the phase doc and in the next run's prompt: every scalar returned is
+// flattened onto one line (flatScalar), and the trigger and option ids — the
+// tokens printed bare — lose their backticks too (token).
 func ParseStop(output string) (*Stop, error) {
 	blocks := kindBlocks(output, StopKind)
 	if len(blocks) == 0 {
@@ -115,17 +135,25 @@ func ParseStop(output string) (*Stop, error) {
 	flags := map[string]bool{}
 
 	st.Trigger, _ = scalar(keys["trigger"])
-	st.Trigger = strings.ToLower(st.Trigger)
+	st.Trigger = strings.ToLower(token(st.Trigger))
 	if !KnownStopTrigger(st.Trigger) {
 		flags[LintStopTriggerUnknown] = true
 	}
 	st.Reason, _ = scalar(keys["reason"])
-	st.Reason = strings.Join(strings.Fields(st.Reason), " ")
+	st.Reason = flatScalar(st.Reason)
 	if st.Reason == "" {
 		flags[LintStopReasonMissing] = true
 	}
-	if st.Paths, perr = stringList(b, "paths", keys["paths"]); perr != nil {
+	paths, perr := stringList(b, "paths", keys["paths"])
+	if perr != nil {
 		return nil, perr
+	}
+	for _, p := range paths {
+		if p = flatScalar(p); LiteralRepoPath(p) {
+			st.Paths = append(st.Paths, p)
+		} else {
+			flags[LintStopPathsRejected] = true
+		}
 	}
 
 	items, perr := mapList(b, "options", keys["options"])
@@ -135,9 +163,9 @@ func ParseStop(output string) (*Stop, error) {
 	seen := map[string]bool{}
 	for i, it := range items {
 		o := StopOption{
-			ID:          strings.ToLower(it.str("id")),
-			Label:       strings.Join(strings.Fields(it.str("label")), " "),
-			Consequence: strings.Join(strings.Fields(it.str("consequence")), " "),
+			ID:          strings.ToLower(token(it.str("id"))),
+			Label:       flatScalar(it.str("label")),
+			Consequence: flatScalar(it.str("consequence")),
 		}
 		if o.ID == "" || o.ID == StopOptionOther || seen[o.ID] {
 			flags[LintStopOptionInvalid] = true
@@ -155,12 +183,53 @@ func ParseStop(output string) (*Stop, error) {
 	if len(st.Options) != 2 {
 		flags[LintStopOptionsCount] = true
 	}
-	for _, f := range []string{LintStopTriggerUnknown, LintStopOptionsCount, LintStopReasonMissing, LintStopOptionInvalid} {
+	for _, f := range stopLintOrder {
 		if flags[f] {
 			st.Flags = append(st.Flags, f)
 		}
 	}
 	return st, nil
+}
+
+// flatScalar puts s on one line: every run of whitespace — newlines, carriage
+// returns, tabs, the Unicode line and paragraph separators — becomes one space.
+func flatScalar(s string) string { return strings.Join(strings.Fields(s), " ") }
+
+// token is a bare token (a trigger, an option id) flattened and without
+// backticks, so it can neither break a line nor open a code span or a fence.
+func token(s string) string { return flatScalar(strings.ReplaceAll(s, "`", "")) }
+
+// LiteralRepoPath reports whether p names one file literally, relative to the
+// repository root — the only kind of agent-supplied path that may become an
+// entry of a guard's `allow:` list, where entries act as globs. It rejects an
+// empty path, glob metacharacters (`*` `?` `[` `]` `{` `}`, and bash's extglob
+// openers `+(` `@(` `!(`), a leading `/`, a `..` segment, a backslash, control
+// characters, a path not in clean form (`./x`, `a//b`, or a trailing `/`, which
+// a guard reads as a whole directory), and anything under `.swarmery` — the
+// guard's own inputs, never on offer (letter case ignored, as the hook does).
+func LiteralRepoPath(p string) bool {
+	if p == "" || strings.ContainsAny(p, "*?[]{}\\") || strings.HasPrefix(p, "/") {
+		return false
+	}
+	for _, opener := range []string{"+(", "@(", "!("} {
+		if strings.Contains(p, opener) {
+			return false
+		}
+	}
+	for _, r := range p {
+		if r < 0x20 || r == 0x7f {
+			return false
+		}
+	}
+	for _, seg := range strings.Split(p, "/") {
+		if seg == ".." {
+			return false
+		}
+	}
+	if p == "." || path.Clean(p) != p {
+		return false
+	}
+	return !strings.HasPrefix(strings.ToLower(p), ".swarmery")
 }
 
 // OptionIDs are the ids of the block's options, in order.
