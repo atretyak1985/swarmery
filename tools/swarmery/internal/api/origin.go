@@ -377,7 +377,14 @@ func requireSignedWhenExposed(next http.Handler) http.Handler {
 		}
 		if r.Header.Get("Authorization") == "" {
 			w.Header().Set("WWW-Authenticate", `Swarmery-HMAC realm="swarmery-link"`)
-			writeJSONStatus(w, http.StatusUnauthorized, map[string]string{"error": exposedUnauthenticatedMsg})
+			body := map[string]string{"error": exposedUnauthenticatedMsg}
+			// A request that presents a dashboard session (the header, or the
+			// subprotocol entry on an upgrade) is told the dashboard is locked:
+			// a session never unlocks an exposed listener.
+			if presentedSession(r) != "" {
+				body["code"] = "dashboard_locked"
+			}
+			writeJSONStatus(w, http.StatusUnauthorized, body)
 			noteOriginlessRefusal(r, "an exposed listener")
 			return
 		}
