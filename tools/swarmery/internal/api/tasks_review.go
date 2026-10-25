@@ -12,6 +12,8 @@ package api
 //	land    — push the branch, open a PR, move the card to done
 //	rerun   — append the reviewer's feedback to the prompt and re-queue it
 //	discard — reclaim the worktree, delete the branch, archive the card
+//	close-no-change — close the card as done without a commit, with written
+//	          evidence (already fixed / not a defect / duplicate)
 //
 // Re-verify is deliberately NOT re-implemented here: POST /api/tasks/{id}/verify
 // (verify.go) already exists with the exact preflight this surface would need
@@ -217,6 +219,120 @@ func (h *Handler) discardBoardTask(w http.ResponseWriter, r *http.Request) {
 	publishTaskUpdated(id)
 	pokeDispatch()
 	writeJSON(w, map[string]any{"deleted": deleted, "branch": tgt.Branch, "task": d}, nil)
+}
+
+// noChangeReasons are the verdicts close-no-change accepts: the defect is already
+// fixed, it is not a defect, or the card duplicates other work.
+var noChangeReasons = map[string]bool{
+	"already_fixed": true,
+	"not_a_defect":  true,
+	"duplicate":     true,
+}
+
+// noChangeEvidenceMax caps the evidence written into the micro-plan and onto the
+// card, so a pasted log cannot balloon a workspace doc that is pushed to a remote.
+const noChangeEvidenceMax = 8000
+
+// POST /api/board/tasks/{id}/close-no-change {"reason": "…", "evidence": "…"} —
+// close a card as done WITHOUT a commit, because it needed none.
+//
+// The fourth review exit, and the only one that produces no branch: land ships
+// the work, rerun redoes it, discard throws it away, and this says there was no
+// work to do. Evidence is mandatory because it is the whole claim — criterion 1 of
+// the card's micro-plan is satisfied by a commit OR by written evidence, and
+// wsingest.TickCardMicroPlan ticks nothing over a blank Completion Report. The
+// evidence is written into that report BEFORE the card moves, so a failed write
+// leaves an open card rather than a done card with an empty record.
+//
+// A card with no micro-plan (dispatched before micro-plans, or minting disabled)
+// still closes; result_note carries the evidence's first line.
+func (h *Handler) closeNoChangeBoardTask(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.ParseInt(r.PathValue("id"), 10, 64)
+	if err != nil {
+		writeClientErr(w, http.StatusBadRequest, "invalid task id")
+		return
+	}
+	var body struct {
+		Reason   string `json:"reason"`
+		Evidence string `json:"evidence"`
+	}
+	if err := json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&body); err != nil {
+		writeClientErr(w, http.StatusBadRequest, "invalid JSON body")
+		return
+	}
+	reason := strings.TrimSpace(body.Reason)
+	if !noChangeReasons[reason] {
+		writeClientErr(w, http.StatusBadRequest,
+			"reason must be one of already_fixed, not_a_defect, duplicate")
+		return
+	}
+	evidence := strings.TrimSpace(body.Evidence)
+	if evidence == "" {
+		writeClientErr(w, http.StatusBadRequest, "evidence is required")
+		return
+	}
+	evidence = strings.TrimSpace(cutUTF8(evidence, noChangeEvidenceMax))
+
+	tgt, ok := h.loadReviewTarget(w, id)
+	if !ok {
+		return
+	}
+	if tgt.Status == "running" || activeInDispatch(id) {
+		writeConflict(w, codeAlreadyRunning,
+			"this card is running — stop it first (move it to done or archived), then close it")
+		return
+	}
+
+	doc, err := wsingest.CardMicroPlanDoc(h.DB, id)
+	if err != nil {
+		writeErr(w, err)
+		return
+	}
+	if doc != "" {
+		report := "**Outcome: closed without a commit — " + reason + ".**\n\n" + evidence
+		if err := wsingest.AppendCompletionReport(doc, report); err != nil {
+			writeErr(w, err)
+			return
+		}
+	}
+
+	// Re-guarded at the write, as discard is: the running check above is a read,
+	// and a 0-row update means the card started running in the gap.
+	now := time.Now().UTC().Format(boardTSFormat)
+	note := "NO CHANGE (" + reason + "): " + firstLineOf(evidence)
+	res, err := h.DB.Exec(`
+		UPDATE tasks SET board_column='done', status='done', result_note=?,
+		                 finished_at=?, column_moved_at=?, dispatch_error=NULL
+		 WHERE id=? AND source='queue' AND status != 'running'`, note, now, now, id)
+	if err != nil {
+		writeErr(w, err)
+		return
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		writeConflict(w, codeAlreadyRunning,
+			"this card was picked up by the dispatcher while closing — stop it first, then close it")
+		return
+	}
+	// The same effects a drag to done fires: worktree reclaimed (branch kept),
+	// phase doc ticked, and — now that the report carries the evidence — the
+	// card's own micro-plan ticked.
+	h.applyTerminalColumnEffects(id, "done")
+	d, err := h.boardTaskByID(id)
+	if err != nil {
+		writeErr(w, err)
+		return
+	}
+	publishTaskUpdated(id)
+	pokeDispatch()
+	writeJSON(w, d, nil)
+}
+
+// firstLineOf is s up to its first line break, trimmed.
+func firstLineOf(s string) string {
+	if i := strings.IndexAny(s, "\r\n"); i >= 0 {
+		s = s[:i]
+	}
+	return strings.TrimSpace(s)
 }
 
 // archiveMicroPlanDir moves a discarded card's micro-plan from working/ to

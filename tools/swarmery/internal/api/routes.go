@@ -257,6 +257,7 @@ func Routes(root *http.ServeMux, h *Handler) {
 	mux.HandleFunc("POST /api/board/tasks/{id}/rerun", requireLocalOrigin(h.rerunBoardTask))
 	mux.HandleFunc("POST /api/board/tasks/{id}/discard", requireLocalOrigin(h.discardBoardTask))
 	mux.HandleFunc("POST /api/board/tasks/{id}/land", requireLocalOrigin(h.landBoardTask))
+	mux.HandleFunc("POST /api/board/tasks/{id}/close-no-change", requireLocalOrigin(h.closeNoChangeBoardTask))
 
 	// fusion phase 3: dispatcher control — status + pause/resume (global or
 	// per-project). The pause write carries the same D4 origin hardening.
