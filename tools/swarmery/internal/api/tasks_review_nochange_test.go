@@ -8,12 +8,15 @@ package api
 import (
 	"database/sql"
 	"net/http"
+	"net/http/httptest"
 	"os"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/taskdir"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/wsingest"
 )
 
 // seedMicroPlanCard mints a real micro-plan for the card and joins it through
@@ -170,6 +173,78 @@ func TestCloseNoChange_NonQueueTaskIsNotFound(t *testing.T) {
 	// An unknown id is a 404 too.
 	if resp, _ := postReview(t, srv.URL, 999999, "close-no-change", `{"reason":"duplicate","evidence":"x"}`); resp.StatusCode != http.StatusNotFound {
 		t.Errorf("unknown id status = %d, want 404", resp.StatusCode)
+	}
+}
+
+// postCloseNoChange calls the handler directly, so a test can set Handler seams.
+func postCloseNoChange(h *Handler, id int64, body string) *httptest.ResponseRecorder {
+	req := httptest.NewRequest(http.MethodPost, "/api/board/tasks/"+strconv.FormatInt(id, 10)+"/close-no-change",
+		strings.NewReader(body))
+	req.SetPathValue("id", strconv.FormatInt(id, 10))
+	rec := httptest.NewRecorder()
+	h.closeNoChangeBoardTask(rec, req)
+	return rec
+}
+
+// R1-4: the dispatcher picks the card up between the running check and the
+// guarded write. The close is a 409 and the micro-plan's Completion Report stays
+// blank — no evidence is left behind for a close that never happened.
+func TestCloseNoChange_RaceToRunningLeavesTheReportBlank(t *testing.T) {
+	_, db := reviewServer(t, t.TempDir())
+	id := seedReviewCard(t, db, "T-nc9", reviewCard{})
+	doc := seedMicroPlanCard(t, db, id, "T-nc9")
+	h := &Handler{DB: db}
+	h.closeNoChangeHook = func() {
+		if _, err := db.Exec(`UPDATE tasks SET status='running', board_column='in_progress' WHERE id=?`, id); err != nil {
+			t.Error(err)
+		}
+	}
+
+	rec := postCloseNoChange(h, id, `{"reason":"already_fixed","evidence":"guarded at auth.go:42"}`)
+	if rec.Code != http.StatusConflict {
+		t.Fatalf("status = %d, want 409 (body %s)", rec.Code, rec.Body)
+	}
+	if blank, err := wsingest.CompletionReportBlank(doc); err != nil || !blank {
+		t.Fatalf("Completion Report blank = %v (%v), want true:\n%s", blank, err, readFileString(t, doc))
+	}
+	if col := taskRow(t, db, id, "board_column"); col != "in_progress" {
+		t.Errorf("board_column = %q, want in_progress (the dispatcher's)", col)
+	}
+	if note := taskRow(t, db, id, "result_note"); note != "" {
+		t.Errorf("result_note = %q, want empty", note)
+	}
+}
+
+// R1-4: a Completion Report write that fails after the card moved puts the card
+// back where it was and answers 500 — never a done card with an empty record.
+func TestCloseNoChange_ReportWriteFailureRestoresTheCard(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root ignores the read-only mode this test relies on")
+	}
+	_, db := reviewServer(t, t.TempDir())
+	id := seedReviewCard(t, db, "T-nc10", reviewCard{})
+	doc := seedMicroPlanCard(t, db, id, "T-nc10")
+	if _, err := db.Exec(`UPDATE tasks SET result_note='prior note', column_moved_at='2026-10-24T08:00:00Z' WHERE id=?`, id); err != nil {
+		t.Fatal(err)
+	}
+	before := map[string]string{}
+	cols := []string{"board_column", "status", "result_note", "finished_at", "column_moved_at"}
+	for _, c := range cols {
+		before[c] = taskRow(t, db, id, c)
+	}
+	if err := os.Chmod(doc, 0o444); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(doc, 0o644) })
+
+	rec := postCloseNoChange(&Handler{DB: db}, id, `{"reason":"duplicate","evidence":"same as T-1"}`)
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("status = %d, want 500 (body %s)", rec.Code, rec.Body)
+	}
+	for _, c := range cols {
+		if got := taskRow(t, db, id, c); got != before[c] {
+			t.Errorf("%s = %q, want %q (restored)", c, got, before[c])
+		}
 	}
 }
 

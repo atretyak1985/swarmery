@@ -43,6 +43,10 @@ type Handler struct {
 	// its action — a test seam for an item that changes after the open check
 	// (nil in production).
 	triageAcceptHook func()
+	// closeNoChangeHook, when non-nil, runs between close-no-change's running
+	// check and its guarded status write — a test seam for a card the
+	// dispatcher picks up in that gap (nil in production).
+	closeNoChangeHook func()
 	// Improve is the agent-rewriter service behind the /api/retro/proposals
 	// endpoints (self-improvement phase 3).
 	Improve *improve.Service

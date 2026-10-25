@@ -241,8 +241,10 @@ const noChangeEvidenceMax = 8000
 // work to do. Evidence is mandatory because it is the whole claim — criterion 1 of
 // the card's micro-plan is satisfied by a commit OR by written evidence, and
 // wsingest.TickCardMicroPlan ticks nothing over a blank Completion Report. The
-// evidence is written into that report BEFORE the card moves, so a failed write
-// leaves an open card rather than a done card with an empty record.
+// guarded status write runs first, so a card the dispatcher picked up in the
+// gap is a 409 with the report untouched; the evidence is written next, and a
+// failed write puts the row back as it was (500) rather than leaving a done
+// card with an empty record. Only then do the done-column effects fire.
 //
 // A card with no micro-plan (dispatched before micro-plans, or minting disabled)
 // still closes; result_note carries the evidence's first line.
@@ -288,16 +290,25 @@ func (h *Handler) closeNoChangeBoardTask(w http.ResponseWriter, r *http.Request)
 		writeErr(w, err)
 		return
 	}
-	if doc != "" {
-		report := "**Outcome: closed without a commit — " + reason + ".**\n\n" + evidence
-		if err := wsingest.AppendCompletionReport(doc, report); err != nil {
-			writeErr(w, err)
-			return
-		}
+	// The row as it stood, so a failed evidence write can put the card back.
+	var prior struct {
+		column, status                        string
+		note, finished, moved, dispatchErrMsg sql.NullString
+	}
+	if err := h.DB.QueryRow(`
+		SELECT board_column, status, result_note, finished_at, column_moved_at, dispatch_error
+		  FROM tasks WHERE id=?`, id).Scan(&prior.column, &prior.status, &prior.note,
+		&prior.finished, &prior.moved, &prior.dispatchErrMsg); err != nil {
+		writeErr(w, err)
+		return
 	}
 
+	if h.closeNoChangeHook != nil {
+		h.closeNoChangeHook() // test seam: the card starts running in the gap
+	}
 	// Re-guarded at the write, as discard is: the running check above is a read,
-	// and a 0-row update means the card started running in the gap.
+	// and a 0-row update means the card started running in the gap. The guarded
+	// write goes FIRST, so a 409 leaves the micro-plan untouched.
 	now := time.Now().UTC().Format(boardTSFormat)
 	note := "NO CHANGE (" + reason + "): " + firstLineOf(evidence)
 	res, err := h.DB.Exec(`
@@ -312,6 +323,21 @@ func (h *Handler) closeNoChangeBoardTask(w http.ResponseWriter, r *http.Request)
 		writeConflict(w, codeAlreadyRunning,
 			"this card was picked up by the dispatcher while closing — stop it first, then close it")
 		return
+	}
+	if doc != "" {
+		report := "**Outcome: closed without a commit — " + reason + ".**\n\n" + evidence
+		if err := wsingest.AppendCompletionReport(doc, report); err != nil {
+			// Never a done card with an empty record: put the row back as it was.
+			if _, rerr := h.DB.Exec(`
+				UPDATE tasks SET board_column=?, status=?, result_note=?, finished_at=?,
+				                 column_moved_at=?, dispatch_error=?
+				 WHERE id=?`, prior.column, prior.status, prior.note, prior.finished,
+				prior.moved, prior.dispatchErrMsg, id); rerr != nil {
+				log.Printf("error: api: close-no-change %d: restore after a failed report write: %v", id, rerr)
+			}
+			writeErr(w, err)
+			return
+		}
 	}
 	// The same effects a drag to done fires: worktree reclaimed (branch kept),
 	// phase doc ticked, and — now that the report carries the evidence — the
