@@ -36,8 +36,8 @@ type frictionStaleness struct {
 
 // probeFrictionStaleness decides whether g's source still exists in the repo
 // of projectID. Stale when every absolute path the example names is gone from
-// an ephemeral location, or when every sample session ran on a non-default
-// branch that has since been deleted (or whose cwd is gone).
+// an ephemeral location (and from a worktree that is gone too), or when every
+// session of the group ran on a non-default branch that has since been deleted.
 func (h *Handler) probeFrictionStaleness(g errGroup, projectID int64) frictionStaleness {
 	root := h.stalenessRoot(projectID)
 	if root == "" {
@@ -48,9 +48,9 @@ func (h *Handler) probeFrictionStaleness(g errGroup, projectID int64) frictionSt
 		out.Reasons = append(out.Reasons,
 			"path "+strings.Join(missing, ", ")+" no longer exists (ephemeral worktree/temp location)")
 	}
-	if branches, ok := h.transientBranches(g.Samples, root); ok {
+	if branches, ok := h.transientBranches(g.SessionIDs, root); ok {
 		out.Reasons = append(out.Reasons,
-			"every sample session ran on a deleted or abandoned non-default branch: "+strings.Join(branches, ", "))
+			"every session ran on a deleted non-default branch: "+strings.Join(branches, ", "))
 	}
 	out.Stale = len(out.Reasons) > 0
 	return out
@@ -236,11 +236,13 @@ func isSchemeChar(c byte) bool {
 
 func isASCIILetter(c byte) bool { return (c|0x20) >= 'a' && (c|0x20) <= 'z' }
 
-// transientBranches reports whether the branch signal fires: every sample
-// session ran on a non-empty, non-default branch whose ref is gone from root
-// or whose cwd is gone. It returns the distinct branches, in sample order.
-func (h *Handler) transientBranches(samples []errGroupSample, root string) ([]string, bool) {
-	if len(samples) == 0 {
+// transientBranches reports whether the branch signal fires: EVERY session of
+// the group (not just the capped samples) ran on a non-empty, non-HEAD branch
+// other than the default one, and that branch's ref is gone from root. A live
+// ref keeps the group live whatever happened to the session's cwd. It returns
+// the distinct branches, newest session first.
+func (h *Handler) transientBranches(sessionIDs []int64, root string) ([]string, bool) {
+	if len(sessionIDs) == 0 {
 		return nil, false
 	}
 	def := archmap.DefaultBranch(root)
@@ -248,27 +250,26 @@ func (h *Handler) transientBranches(samples []errGroupSample, root string) ([]st
 		return nil, false
 	}
 	var branches []string
-	seen := map[string]bool{}
-	for _, sm := range samples {
-		var branch, cwd sql.NullString
-		if err := h.DB.QueryRow(`SELECT git_branch, cwd FROM sessions WHERE id = ?`, sm.SessionID).
-			Scan(&branch, &cwd); err != nil {
+	gone := map[string]bool{} // one git call per distinct branch
+	for _, id := range sessionIDs {
+		var branch sql.NullString
+		if err := h.DB.QueryRow(`SELECT git_branch FROM sessions WHERE id = ?`, id).Scan(&branch); err != nil {
 			return nil, false // unreadable or gone: fail open
 		}
 		b := strings.TrimSpace(branch.String)
 		if b == "" || b == "HEAD" || b == def {
 			return nil, false
 		}
-		refGone, ok := branchRefGone(root, b)
-		if !ok {
-			return nil, false // git could not run: fail open
-		}
-		if !refGone && !cwdGone(cwd.String) {
-			return nil, false // live ref and live cwd
-		}
-		if !seen[b] {
-			seen[b] = true
+		if _, judged := gone[b]; !judged {
+			refGone, ok := branchRefGone(root, b)
+			if !ok {
+				return nil, false // git could not run: fail open
+			}
+			gone[b] = refGone
 			branches = append(branches, b)
+		}
+		if !gone[b] {
+			return nil, false // the branch still exists
 		}
 	}
 	return branches, true
@@ -288,15 +289,4 @@ func branchRefGone(root, branch string) (gone, ok bool) {
 		return true, true
 	}
 	return false, false
-}
-
-// cwdGone: a recorded absolute cwd that no longer exists. An empty or
-// placeholder cwd is unknown, which counts as live.
-func cwdGone(cwd string) bool {
-	cwd = strings.TrimSpace(cwd)
-	if cwd == "" || !filepath.IsAbs(cwd) {
-		return false
-	}
-	_, err := os.Stat(cwd)
-	return errors.Is(err, os.ErrNotExist)
 }

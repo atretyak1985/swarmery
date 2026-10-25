@@ -4,10 +4,12 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/triage"
 )
@@ -36,13 +38,13 @@ func stalenessFixture(t *testing.T, j *advisorJudge) (*sql.DB, *triage.Service, 
 	return db, svc, src, root
 }
 
-func addBranchSession(t *testing.T, db *sql.DB, id int64, branch, cwd string) errGroupSample {
+func addBranchSession(t *testing.T, db *sql.DB, id int64, branch, cwd string) int64 {
 	t.Helper()
 	if _, err := db.Exec(`INSERT INTO sessions(id, project_id, session_uuid, status, started_at, git_branch, cwd)
-		VALUES(?, 1, ?, 'completed', '2026-01-02T00:00:00Z', ?, ?)`, id, "s"+branch+cwd, branch, cwd); err != nil {
+		VALUES(?, 1, ?, 'completed', '2026-01-02T00:00:00Z', ?, ?)`, id, fmt.Sprintf("s%d", id), branch, cwd); err != nil {
 		t.Fatal(err)
 	}
-	return errGroupSample{SessionID: id}
+	return id
 }
 
 // The path signal: a missing path in a worktree container or outside the root
@@ -92,9 +94,9 @@ func TestStalePathCutExampleSkipsTrailingToken(t *testing.T) {
 	}
 }
 
-// The branch signal: every sample on a deleted (or cwd-gone) non-default
-// branch is stale; one sample on main, an empty branch, or a live ref with a
-// live cwd keeps the group live.
+// The branch signal: every session of the group on a deleted non-default
+// branch is stale; one session on main, an empty branch, or a live ref keeps
+// the group live — a live ref stays live even when its cwd is gone.
 func TestStaleBranchSignal(t *testing.T) {
 	db, _, src, root := stalenessFixture(t, &advisorJudge{})
 	const ex = "internal/api/triage_agents.go:21:2: agentKind redeclared"
@@ -106,8 +108,8 @@ func TestStaleBranchSignal(t *testing.T) {
 	liveCwdGone := addBranchSession(t, db, 14, "live-branch", goneCwd)
 	empty := addBranchSession(t, db, 15, "", root)
 
-	probe := func(s ...errGroupSample) frictionStaleness {
-		return src.h.probeFrictionStaleness(errGroup{Example: ex, Samples: s}, 1)
+	probe := func(ids ...int64) frictionStaleness {
+		return src.h.probeFrictionStaleness(errGroup{Example: ex, SessionIDs: ids}, 1)
 	}
 	st := probe(deleted, neverCwdGone)
 	if !st.Stale || len(st.Reasons) != 1 ||
@@ -115,31 +117,99 @@ func TestStaleBranchSignal(t *testing.T) {
 		t.Fatalf("deleted branches = %+v, want stale naming both", st)
 	}
 	if st := probe(deleted, neverCwdGone, onMain); st.Stale {
-		t.Fatalf("with a sample on main = %+v, want live", st)
+		t.Fatalf("with a session on main = %+v, want live", st)
 	}
 	if st := probe(liveLive); st.Stale {
 		t.Fatalf("live ref + live cwd = %+v, want live", st)
 	}
-	if st := probe(liveCwdGone); !st.Stale {
-		t.Fatalf("live ref + gone cwd = %+v, want stale", st)
+	if st := probe(liveCwdGone); st.Stale {
+		t.Fatalf("live ref + gone cwd = %+v, want live (a gone cwd is not a gone branch)", st)
+	}
+	if st := probe(deleted, liveCwdGone); st.Stale {
+		t.Fatalf("deleted + live ref with gone cwd = %+v, want live", st)
 	}
 	if st := probe(deleted, empty); st.Stale {
-		t.Fatalf("with an empty-branch sample = %+v, want live", st)
+		t.Fatalf("with an empty-branch session = %+v, want live", st)
 	}
 	if st := probe(); st.Stale {
-		t.Fatalf("no samples and no paths = %+v, want live", st)
+		t.Fatalf("no sessions and no paths = %+v, want live", st)
 	}
-	if st := probe(errGroupSample{SessionID: 999}); st.Stale {
+	if st := probe(999); st.Stale {
 		t.Fatalf("unknown session = %+v, want live", st)
 	}
+	// The signal reads every session, not the 3-sample cap: with the newest
+	// three on a deleted branch and older ones on main, the group is live.
+	if st := src.h.probeFrictionStaleness(errGroup{Example: ex,
+		Samples:    []errGroupSample{{SessionID: deleted}, {SessionID: neverCwdGone}, {SessionID: deleted}},
+		SessionIDs: []int64{deleted, neverCwdGone, onMain}}, 1); st.Stale {
+		t.Fatalf("samples on deleted branches, an older session on main = %+v, want live", st)
+	}
+}
+
+// seedErrorsAt inserts n error events with msg in session sess at ts.
+func seedErrorsAt(t *testing.T, db *sql.DB, sess int64, msg string, ts time.Time, n int) {
+	t.Helper()
+	payload, _ := json.Marshal(map[string]any{"error": map[string]string{"message": msg}})
+	for i := 0; i < n; i++ {
+		if _, err := db.Exec(`INSERT INTO events (session_id, ts, type, tool_name, status, payload, dedup_key)
+			VALUES (?, ?, 'error', NULL, 'error', ?, ?)`, sess, ts.UTC().Format(time.RFC3339), string(payload),
+			fmt.Sprintf("at-%d-%d-%d", sess, ts.Unix(), i)); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
+// R1-3 end to end: 5 sessions on main, then 3 newer ones on a deleted branch.
+// errorGroups' samples are the 3 newest (all on the deleted branch), but the
+// group still recurs on main, so Apply must still give the fix card. With every
+// session on the deleted branch, the same group is down-ranked.
+func TestStaleApplyBranchSignalReadsEverySession(t *testing.T) {
+	const msg = "ENOENT reading config"
+	apply := func(t *testing.T, mainSessions int) triage.Applied {
+		t.Helper()
+		db, _, src, root := stalenessFixture(t, &advisorJudge{})
+		old, recent := time.Now().Add(-3*time.Hour), time.Now().Add(-time.Hour)
+		for i := 0; i < mainSessions; i++ {
+			seedErrorsAt(t, db, addBranchSession(t, db, int64(20+i), "main", root), msg, old.Add(time.Duration(i)*time.Minute), 1)
+		}
+		for i := 0; i < 3; i++ {
+			seedErrorsAt(t, db, addBranchSession(t, db, int64(40+i), "gone-branch", root), msg, recent.Add(time.Duration(i)*time.Minute), 1)
+		}
+		items, err := src.Collect(context.Background(), triage.Scope{}, 0)
+		if err != nil || len(items) != 1 || items[0].ProjectID != 1 {
+			t.Fatalf("collect = %+v (%v)", items, err)
+		}
+		it := items[0]
+		if err := src.Prepare(context.Background(), &it); err != nil {
+			t.Fatalf("prepare: %v", err)
+		}
+		a, err := src.Apply(context.Background(), it, it.Parts[0], frictionFixable, "why",
+			json.RawMessage(`{"title":"t","prompt":"p"}`))
+		if err != nil {
+			t.Fatalf("apply: %v", err)
+		}
+		return a
+	}
+	t.Run("older sessions on main keep it live", func(t *testing.T) {
+		a := apply(t, 5)
+		if len(a.Follow) != 1 || a.Follow[0].Class != triage.ClassCard || a.Follow[0].Value != "fix-card" {
+			t.Fatalf("follow = %+v, want a fix card", a.Follow)
+		}
+	})
+	t.Run("every session on a deleted branch is stale", func(t *testing.T) {
+		a := apply(t, 0)
+		if len(a.Follow) != 1 || a.Follow[0].Class != triage.ClassPlain || a.Follow[0].Value != "track" {
+			t.Fatalf("follow = %+v, want a plain track", a.Follow)
+		}
+	})
 }
 
 // No project, an unknown project, or a project whose path is gone: fail open.
 func TestStaleProbeFailsOpenWithoutRepo(t *testing.T) {
 	db, _, src, root := stalenessFixture(t, &advisorJudge{})
 	g := errGroup{
-		Example: "fatal: cannot change to '" + root + "/.claude/worktrees/agent-gone': No such file or directory",
-		Samples: []errGroupSample{addBranchSession(t, db, 10, "gone-branch", root)},
+		Example:    "fatal: cannot change to '" + root + "/.claude/worktrees/agent-gone': No such file or directory",
+		SessionIDs: []int64{addBranchSession(t, db, 10, "gone-branch", root)},
 	}
 	if st := src.h.probeFrictionStaleness(g, 1); !st.Stale || len(st.Reasons) != 2 {
 		t.Fatalf("control: project 1 = %+v, want stale on both signals", st)

@@ -130,6 +130,10 @@ type errGroup struct {
 	Count   int64
 	LastTs  string
 	Samples []errGroupSample // up to 3 distinct sessions, newest first
+	// SessionIDs is every distinct session of the group, newest first —
+	// uncapped, for judgments that must hold across all of them (the friction
+	// staleness probe). Never serialized.
+	SessionIDs []int64
 }
 
 // errorGroups fetches the range's status='error' events and folds them by
@@ -187,14 +191,17 @@ func (h *Handler) errorGroups(dr dateRange, pf string, pargs []any) ([]errGroup,
 			order = append(order, key)
 		}
 		a.group.Count++
-		if _, seen := a.sessions[sessID]; !seen && len(a.group.Samples) < 3 {
+		if _, seen := a.sessions[sessID]; !seen {
 			a.sessions[sessID] = struct{}{}
-			var tp *string
-			if title.Valid {
-				tt := title.String
-				tp = &tt
+			a.group.SessionIDs = append(a.group.SessionIDs, sessID)
+			if len(a.group.Samples) < 3 {
+				var tp *string
+				if title.Valid {
+					tt := title.String
+					tp = &tt
+				}
+				a.group.Samples = append(a.group.Samples, errGroupSample{SessionID: sessID, SessionUUID: sessUUID, Title: tp})
 			}
-			a.group.Samples = append(a.group.Samples, errGroupSample{SessionID: sessID, SessionUUID: sessUUID, Title: tp})
 		}
 	}
 	if err := rows.Err(); err != nil {
