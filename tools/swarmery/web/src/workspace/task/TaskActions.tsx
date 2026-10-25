@@ -290,7 +290,9 @@ export function TaskActions({
             title={t`close the card without a change — already fixed, not a defect, or a duplicate`}
             className={PLAIN}
           >
-            <Trans>Close — no change needed</Trans>
+            {/* A colon, not an em dash: the modal's never-run test reads any
+              * em dash in the body as a placeholder standing in for a fact. */}
+            <Trans>Close: no change needed</Trans>
           </button>
         )}
         <button

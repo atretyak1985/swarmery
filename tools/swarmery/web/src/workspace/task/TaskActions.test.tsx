@@ -257,7 +257,7 @@ describe('the review loop calls the same API functions as before the split', () 
 });
 
 describe('close — no change needed', () => {
-  const ACTION = 'Close — no change needed';
+  const ACTION = 'Close: no change needed';
 
   function openClose(): void {
     fireEvent.click(screen.getByRole('button', { name: ACTION }));

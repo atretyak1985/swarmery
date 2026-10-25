@@ -1150,10 +1150,6 @@ msgstr "закрити"
 msgid "Close"
 msgstr "Закрити"
 
-#: src/workspace/task/TaskActions.tsx
-msgid "Close — no change needed"
-msgstr "Закрити — змін не потрібно"
-
 #: src/api.ts
 msgid "close failed"
 msgstr "закрити не вдалося"
@@ -1173,6 +1169,10 @@ msgstr "Закрити використання"
 #: src/workspace/task/TaskActions.tsx
 msgid "close with no change needed"
 msgstr "закрити без потреби в змінах"
+
+#: src/workspace/task/TaskActions.tsx
+msgid "Close: no change needed"
+msgstr "Закрити: змін не потрібно"
 
 #: src/workspace/task/TaskActions.tsx
 msgid "closed with no change needed — card moved to done"
@@ -1791,7 +1791,7 @@ msgstr "Кожен виклик інструмента чекає на вас. �
 
 #: src/workspace/task/TaskActions.tsx
 msgid "evidence"
-msgstr "доказ"
+msgstr "докази"
 
 #: src/components/RunOutcomeModal.tsx
 msgid "Executor said: {said}"
@@ -4485,7 +4485,7 @@ msgstr "worktree"
 
 #: src/workspace/task/TaskActions.tsx
 msgid "write the evidence first — a close with no evidence cannot be audited"
-msgstr "спершу напишіть доказ — закриття без доказу неможливо перевірити"
+msgstr "спершу напишіть докази — закриття без доказів неможливо перевірити"
 
 #: src/workspace/task/TaskActions.tsx
 msgid "write the feedback first — a re-run with no notes repeats the same work"

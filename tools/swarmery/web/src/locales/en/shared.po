@@ -1150,10 +1150,6 @@ msgstr "close"
 msgid "Close"
 msgstr "Close"
 
-#: src/workspace/task/TaskActions.tsx
-msgid "Close — no change needed"
-msgstr "Close — no change needed"
-
 #: src/api.ts
 msgid "close failed"
 msgstr "close failed"
@@ -1173,6 +1169,10 @@ msgstr "Close usage"
 #: src/workspace/task/TaskActions.tsx
 msgid "close with no change needed"
 msgstr "close with no change needed"
+
+#: src/workspace/task/TaskActions.tsx
+msgid "Close: no change needed"
+msgstr "Close: no change needed"
 
 #: src/workspace/task/TaskActions.tsx
 msgid "closed with no change needed — card moved to done"
