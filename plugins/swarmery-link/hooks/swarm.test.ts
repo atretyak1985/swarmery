@@ -518,6 +518,8 @@ test('claimConflicts deny with approvals on: the refused write never reaches the
 })
 
 test('claimConflicts ask: the claim is made after the call ran, and the conflict line still shows', held('ask'), async ($, on) => {
+  // the person's yes to the ask: an unanswered ask is a denial in the kit
+  on('classic.PermissionRequest', () => ({ decision: { behavior: 'allow' } }))
   const w = await begin($, on, { store: foreign(OTHER, 1_000, [FILE]) })
   await $.turn.start(TURN)
   await $.tool.call(edit(FILE))
