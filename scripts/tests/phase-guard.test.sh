@@ -197,6 +197,69 @@ expect 0 "absent block: a test file is not protected" "$A" Edit "$A/pkg/trap_tes
 expect 0 "absent block: go test passes"               "$A" Bash "go test ./..."
 expect 2 "ok block: the plan doc is protected too"   "$R" Edit "$R/.swarmery/plan/ok.md" "$READ_GREP_MSG"
 
+# ── the lent doc: ticks and the report go through, the guard does not move ──
+# expect_json <exit> <description> <json> [stderr substring]
+expect_json() {
+  local want="$1" desc="$2"
+  run_hook "$3"
+  if [ "$RC" -ne "$want" ]; then bad "$desc (expected exit $want, got $RC: $ERR)"; return; fi
+  if [ -n "${4:-}" ] && [[ "$ERR" != *"$4"* ]]; then bad "$desc (stderr lacks '$4': $ERR)"; return; fi
+  ok "$desc"
+}
+# edit_json <cwd> <file> <old> <new> [replace_all]
+edit_json() {
+  jq -nc --arg c "$1" --arg f "$2" --arg o "$3" --arg n "$4" --argjson ra "${5:-false}" \
+    '{cwd: $c, tool_name: "Edit", tool_input: {file_path: $f, old_string: $o, new_string: $n, replace_all: $ra}}'
+}
+D=$(mkroot doc ok.md)
+DOC="$D/.swarmery/plan/ok.md"
+expect_json 0 "lent doc: Edit ticks a criterion" \
+  "$(edit_json "$D" "$DOC" '- [ ] export works' '- [x] export works')"
+expect_json 0 "lent doc: Edit fills the Completion Report (relative path)" \
+  "$(edit_json "$D" ".swarmery/plan/ok.md" '## Completion Report' $'## Completion Report\n\nShipped. ```text\ngo test ./... ok\n```')"
+expect_json 0 "lent doc: Edit inside the quoted example block (not the guard)" \
+  "$(edit_json "$D" "$DOC" 'protected_paths: [nothing]' 'protected_paths: [still nothing]')"
+expect_json 0 "lent doc: MultiEdit of two ticks" \
+  "$(jq -nc --arg c "$D" --arg f "$DOC" '{cwd: $c, tool_name: "MultiEdit", tool_input: {file_path: $f, edits: [
+      {old_string: "Status: Pending", new_string: "Status: Done"},
+      {old_string: "- [ ] export works", new_string: "- [x] export works"}]}}')"
+expect_json 0 "lent doc: Write that keeps the guard" \
+  "$(jq -nc --arg c "$D" --arg f "$DOC" --rawfile body "$DOC" '{cwd: $c, tool_name: "Write", tool_input: {file_path: $f, content: ($body | sub("- \\[ \\] export works"; "- [x] export works"))}}')"
+expect_json 2 "lent doc: Edit that drops a protected glob" \
+  "$(edit_json "$D" "$DOC" $'  - "**/*_test.go"\n' '')" "$READ_GREP_MSG"
+expect_json 2 "lent doc: Edit that rewrites a protected glob" \
+  "$(edit_json "$D" "$DOC" '"**/*_test.go"' '"nothing/*_test.go"')" "$READ_GREP_MSG"
+expect_json 2 "lent doc: Edit that adds an allow entry" \
+  "$(edit_json "$D" "$DOC" 'stop_if:' $'allow:\n  - "pkg/trap_test.go"\nstop_if:')" "$READ_GREP_MSG"
+expect_json 2 "lent doc: Edit that renames the block kind" \
+  "$(edit_json "$D" "$DOC" $'```yaml\nkind: guard' $'```yaml\nkind: prior')" "$READ_GREP_MSG"
+expect_json 2 "lent doc: Write that drops the guard section" \
+  "$(jq -nc --arg c "$D" --arg f "$DOC" '{cwd: $c, tool_name: "Write", tool_input: {file_path: $f, content: "# Phase 2\n\n- [x] export works\n"}}')" "$READ_GREP_MSG"
+expect_json 2 "lent doc: Edit whose old_string is not in the doc" \
+  "$(edit_json "$D" "$DOC" 'no such text' 'x')" "$READ_GREP_MSG"
+expect_json 2 "lent doc: Edit with replace_all that hits a glob" \
+  "$(edit_json "$D" "$DOC" '_test.go' '_x.go' true)" "$READ_GREP_MSG"
+U=$(mkroot docless absent.md)
+expect_json 0 "doc without a guard: Edit ticks the report" \
+  "$(edit_json "$U" "$U/.swarmery/plan/absent.md" '## Completion Report' $'## Completion Report\n\nDone.')"
+expect_json 2 "doc without a guard: Edit that adds one" \
+  "$(edit_json "$U" "$U/.swarmery/plan/absent.md" '## Completion Report' $'## Guard\n\n```yaml\nkind: guard\nprotected_paths:\n  - "src/**"\n```\n\n## Completion Report')" "$READ_GREP_MSG"
+expect_json 2 "doc without a guard: NotebookEdit is not opened" \
+  "$(jq -nc --arg c "$U" --arg f "$U/.swarmery/plan/absent.md" '{cwd: $c, tool_name: "NotebookEdit", tool_input: {notebook_path: $f, new_source: "x"}}')" "$READ_GREP_MSG"
+expect_json 2 "the opening is not for guard.log" \
+  "$(edit_json "$U" "$U/.swarmery/guard.log" 'a' 'b')" "$READ_GREP_MSG"
+S=$(mkroot symdoc absent.md)
+mkdir -p "$TMP/outside"
+printf '## Completion Report\n' > "$TMP/outside/real.md"
+ln -s "$TMP/outside/real.md" "$S/.swarmery/plan/linked.md"
+expect_json 2 "a symlinked plan doc is not opened" \
+  "$(edit_json "$S" "$S/.swarmery/plan/linked.md" '## Completion Report' 'x')" "$READ_GREP_MSG"
+N=$(mkroot nested absent.md)
+mkdir -p "$N/.swarmery/plan/sub"
+printf '## Completion Report\n' > "$N/.swarmery/plan/sub/x.md"
+expect_json 2 "a doc below .swarmery/plan/ is not opened" \
+  "$(edit_json "$N" "$N/.swarmery/plan/sub/x.md" '## Completion Report' 'x')" "$READ_GREP_MSG"
+
 # ── unparsable block: everything is blocked, with the parser's reason ──
 U=$(mkroot unparsable unparsable.md)
 expect 2 "unparsable: Edit on an ordinary file" "$U" Edit "$U/src/a.go" "unparsable (line 10)"
