@@ -70,6 +70,20 @@ func TestMintMicroPlan_PhaseDocContract(t *testing.T) {
 	if !strings.Contains(doc, "Swarm-Task-Id: T-42") {
 		t.Error("the doc does not name the commit trailer that makes the work attributable")
 	}
+	// Criterion 1 must admit the no-change outcome (already fixed, not a defect, a
+	// duplicate) backed by written evidence — otherwise a card that honestly needed
+	// no commit can never read Done.
+	wantCriterion := "- [ ] Either the task described above is implemented and committed on `swarm/T-42` " +
+		"with the `Swarm-Task-Id: T-42` trailer, or the card is closed as no change needed " +
+		"(already fixed, not a defect, or a duplicate) with the evidence written in the " +
+		"Completion Report below.\n"
+	if !strings.Contains(doc, wantCriterion) {
+		t.Errorf("criterion 1 does not carry the no-change arm:\n%s", doc)
+	}
+	if !strings.Contains(doc, "- [ ] Verification verdict is `pass`, or a reviewer explicitly accepted the card "+
+		"from the Review lane.\n") {
+		t.Errorf("criterion 2 changed:\n%s", doc)
+	}
 	// The card's whole prompt, verbatim — a truncated objective is a different task.
 	if !strings.Contains(doc, "Make it skip dirs it does not own.") {
 		t.Errorf("the prompt's second line was dropped:\n%s", doc)
@@ -86,7 +100,7 @@ func TestMintMicroPlan_NeverRewritesAnExistingDir(t *testing.T) {
 	root, dir := mint(t, testCard())
 	doc := PhaseDocPath(dir)
 	worked := read(t, doc) + "\nThe executor wrote this.\n"
-	if err := os.WriteFile(doc, []byte(strings.Replace(worked, "- [ ] The task", "- [x] The task", 1)), 0o644); err != nil {
+	if err := os.WriteFile(doc, []byte(strings.Replace(worked, "- [ ] Either the task", "- [x] Either the task", 1)), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -98,7 +112,7 @@ func TestMintMicroPlan_NeverRewritesAnExistingDir(t *testing.T) {
 		t.Errorf("second mint returned %q, want the same dir %q", again, dir)
 	}
 	after := read(t, doc)
-	if !strings.Contains(after, "- [x] The task") || !strings.Contains(after, "The executor wrote this.") {
+	if !strings.Contains(after, "- [x] Either the task") || !strings.Contains(after, "The executor wrote this.") {
 		t.Errorf("a re-mint erased the run's record:\n%s", after)
 	}
 }

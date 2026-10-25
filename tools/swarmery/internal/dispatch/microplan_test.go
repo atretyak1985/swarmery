@@ -178,7 +178,7 @@ func TestAdmit_ReDispatchReusesTheMicroPlan(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	worked := strings.Replace(string(raw), "- [ ] The task", "- [x] The task", 1) + "\nShipped it.\n"
+	worked := strings.Replace(string(raw), "- [ ] Either the task", "- [x] Either the task", 1) + "\nShipped it.\n"
 	if err := os.WriteFile(doc, []byte(worked), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -198,7 +198,7 @@ func TestAdmit_ReDispatchReusesTheMicroPlan(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(after), "- [x] The task") || !strings.Contains(string(after), "Shipped it.") {
+	if !strings.Contains(string(after), "- [x] Either the task") || !strings.Contains(string(after), "Shipped it.") {
 		t.Errorf("re-dispatch erased the previous run's record:\n%s", after)
 	}
 }
