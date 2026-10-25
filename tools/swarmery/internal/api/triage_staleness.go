@@ -280,7 +280,11 @@ func (h *Handler) transientBranches(sessionIDs []int64, root string) ([]string, 
 func branchRefGone(root, branch string) (gone, ok bool) {
 	ctx, cancel := context.WithTimeout(context.Background(), stalenessGitTimeout)
 	defer cancel()
-	err := exec.CommandContext(ctx, "git", "-C", root, "rev-parse", "--verify", "--quiet", "refs/heads/"+branch).Run()
+	cmd := exec.CommandContext(ctx, "git", "-C", root, "rev-parse", "--verify", "--quiet", "refs/heads/"+branch)
+	// A probe killed by its timeout must never strand index.lock in the
+	// operator's checkout (TestGitSpawnsSetOptionalLocks).
+	cmd.Env = append(os.Environ(), "GIT_OPTIONAL_LOCKS=0")
+	err := cmd.Run()
 	if err == nil {
 		return false, true
 	}
