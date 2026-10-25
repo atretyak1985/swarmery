@@ -1319,6 +1319,31 @@ export async function landBoardTask(id: number, draft = false): Promise<LandTask
   return (await res.json()) as LandTaskResponse;
 }
 
+/** Why a card closes with no change: the three reasons the server accepts. */
+export type CloseNoChangeReason = 'already_fixed' | 'not_a_defect' | 'duplicate';
+
+export interface CloseNoChangeInput {
+  reason: CloseNoChangeReason;
+  /** What shows no change is needed. Required — the server answers 400 when blank. */
+  evidence: string;
+}
+
+/**
+ * POST /api/board/tasks/{id}/close-no-change — close a card that needs no work
+ * (already fixed, not a defect, a duplicate) and move it to done. 400 for blank
+ * evidence or an unknown reason, 409 while the card is running, 404 when the id
+ * is not a board card.
+ */
+export async function closeBoardTaskNoChange(id: number, input: CloseNoChangeInput): Promise<BoardTask> {
+  const res = await apiFetch(`/api/board/tasks/${String(id)}/close-no-change`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ reason: input.reason, evidence: input.evidence }),
+  });
+  if (!res.ok) throw await reviewActionError(res, t`close failed`);
+  return (await res.json()) as BoardTask;
+}
+
 // --- phase landing (Phase 5): review, land, project VCS ----------------------
 
 /**
