@@ -206,3 +206,50 @@ func TestStaleApplyDownRanksFixable(t *testing.T) {
 		}
 	})
 }
+
+// R1-1/R1-2: the path signal fails open. A missing path outside the root is not
+// ephemeral on that alone, a `:line:col` suffix is not part of the path, a live
+// worktree keeps the group live, and a URL is not a path.
+func TestStalePathSignalFailsOpen(t *testing.T) {
+	_, _, src, root := stalenessFixture(t, &advisorJudge{})
+	wt := root + "/.claude/worktrees/agent-a"
+	if err := os.MkdirAll(wt, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(wt+"/x.go", []byte("package x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	tmp := t.TempDir() // no repo-wt/name under it
+	cases := []struct {
+		name, example string
+		stale         bool
+	}{
+		{"missing plugin-cache hook outside the root",
+			"open /Users/me/.claude/plugins/cache/x/hooks/foo.sh: no such file or directory", false},
+		{"live worktree file with line:col", wt + "/x.go:21:2: undefined: foo", false},
+		{"live worktree, missing file", wt + "/gone.go:3: undefined: foo", false},
+		{"sibling -wt worktree gone", "stat " + tmp + "/repo-wt/name/tools/a.go: no such file or directory", true},
+		{"http URL", "GET http://localhost:7777/api/sessions returned 500", false},
+		{"https URL", "fatal: unable to access 'https://github.com/x/y.git/'", false},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if st := src.h.probeFrictionStaleness(errGroup{Example: c.example}, 1); st.Stale != c.stale {
+				t.Fatalf("stale = %v (%v), want %v", st.Stale, st.Reasons, c.stale)
+			}
+		})
+	}
+
+	// The same line:col example once its worktree is removed: stale, and the
+	// reason names the path without the suffix.
+	if err := os.RemoveAll(wt); err != nil {
+		t.Fatal(err)
+	}
+	st := src.h.probeFrictionStaleness(errGroup{Example: wt + "/x.go:21:2: undefined: foo"}, 1)
+	if !st.Stale || len(st.Reasons) != 1 || !strings.Contains(st.Reasons[0], "path "+wt+"/x.go no longer exists") {
+		t.Fatalf("removed worktree = %+v, want stale naming %s/x.go", st, wt)
+	}
+	if got := extractAbsPaths("GET http://localhost:7777/api/sessions and file:/etc/hosts/x"); len(got) != 0 {
+		t.Fatalf("extracted %v from URLs", got)
+	}
+}

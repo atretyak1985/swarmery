@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -76,46 +77,94 @@ func (h *Handler) stalenessRoot(projectID int64) string {
 }
 
 // ephemeralMissingPaths reports whether the path signal fires for example: at
-// least one absolute path was extracted, none exists, and every one sits in an
-// ephemeral location. It returns the paths it judged.
+// least one absolute path was extracted, and every one is gone from an
+// ephemeral location whose worktree root (if it has one) is gone too. Any path
+// that exists, sits in a live worktree, or is not ephemeral keeps the group
+// live. It returns the paths it judged.
 func ephemeralMissingPaths(example, root string) ([]string, bool) {
 	paths := extractAbsPaths(example)
 	if len(paths) == 0 {
 		return nil, false
 	}
 	for _, p := range paths {
-		if _, err := os.Stat(p); err == nil {
-			return nil, false // the source is still there
-		}
-	}
-	for _, p := range paths {
-		if !isEphemeralPath(p, root) {
+		if !ephemeralAndGone(p, root) {
 			return nil, false
 		}
 	}
 	return paths, true
 }
 
-// isEphemeralPath: a path in a worktree container, or anywhere outside the
-// repo root (a sibling -wt dir, a temp dir, another checkout). A path inside
-// the root but outside a worktree container is the repo's own — not ephemeral,
-// even when the root itself lives under a temp dir.
-func isEphemeralPath(p, root string) bool {
-	if strings.Contains(p, "/.claude/worktrees/") || strings.Contains(p, "/worktrees/") {
-		return true
+// ephemeralAndGone: p does not exist, sits in an ephemeral location, and the
+// worktree that held it (when it is in one) does not exist either. Every error
+// other than "not found" counts as present — the probe fails open.
+func ephemeralAndGone(p, root string) bool {
+	if !pathGone(p) {
+		return false // the source is still there, or unreadable
 	}
-	if strings.HasPrefix(p, root+"/") {
+	wtRoot, ok := ephemeralLocation(p, root)
+	if !ok {
 		return false
 	}
-	// Outside the root: temp locations (os.TempDir, /tmp, /private/var/folders)
-	// are covered here too, since a temp path is never under a real repo root.
-	return true
+	return wtRoot == "" || pathGone(wtRoot)
 }
+
+// ephemeralLocation reports whether p sits in an ephemeral location and, when
+// that location is a worktree, the worktree's root (container segment plus the
+// next one). Ephemeral is ONLY: a `worktrees` container segment (which covers
+// `.claude/worktrees`), a directory segment ending in "-wt" (a sibling
+// worktree container), or a temp dir. Being outside the repo root is not
+// ephemeral on its own. Inside the root only a `worktrees` container counts:
+// the repo's own files are not temp files even when the root lives in one.
+func ephemeralLocation(p, root string) (wtRoot string, ok bool) {
+	if rel, in := strings.CutPrefix(p, root+"/"); in {
+		if wt, found := worktreeRoot(rel, false); found {
+			return root + "/" + wt, true
+		}
+		return "", false
+	}
+	if wt, found := worktreeRoot(strings.TrimPrefix(p, "/"), true); found {
+		return "/" + wt, true
+	}
+	for _, tmp := range []string{filepath.Clean(os.TempDir()) + "/", "/tmp/", "/private/var/folders/"} {
+		if strings.HasPrefix(p, tmp) {
+			return "", true
+		}
+	}
+	return "", false
+}
+
+// worktreeRoot finds the innermost worktree container in the relative path rel
+// (a `worktrees` segment, or with wtSuffix a directory segment ending in "-wt")
+// and returns rel up to and including the segment after it.
+func worktreeRoot(rel string, wtSuffix bool) (string, bool) {
+	segs := strings.Split(rel, "/")
+	for i := len(segs) - 1; i >= 0; i-- {
+		s := segs[i]
+		if s != "worktrees" && (!wtSuffix || i == len(segs)-1 || !strings.HasSuffix(s, "-wt")) {
+			continue
+		}
+		end := min(i+2, len(segs))
+		return strings.Join(segs[:end], "/"), true
+	}
+	return "", false
+}
+
+// pathGone: os.Stat says p does not exist. Any other outcome (exists, permission
+// denied, I/O error) is not evidence that it is gone.
+func pathGone(p string) bool {
+	_, err := os.Stat(p)
+	return errors.Is(err, os.ErrNotExist)
+}
+
+// reLineCol is a compiler-style `:line` or `:line:col` suffix on a path token.
+var reLineCol = regexp.MustCompile(`:\d+(?::\d+)?$`)
 
 // extractAbsPaths pulls absolute paths out of an error message: a token that
 // starts with "/" at a word boundary and runs to a quote, whitespace or ": ",
-// with trailing quotes, commas and colons stripped. Tokens of fewer than two
-// segments are ignored, and so is one that runs into a cut example's end.
+// with trailing quotes, commas and colons stripped and then a `:line[:col]`
+// suffix. A URL (a token starting "//", or one right after "scheme:") is not
+// a path. Tokens of fewer than two segments are ignored, and so is one that
+// runs into a cut example's end.
 func extractAbsPaths(example string) []string {
 	cut := utf8.RuneCountInString(example) >= errExampleRunes
 	var out []string
@@ -137,11 +186,13 @@ func extractAbsPaths(example string) []string {
 		}
 		tok := example[i:end]
 		atEnd := end == len(example)
+		url := strings.HasPrefix(tok, "//") || followsScheme(example, i)
 		i = end
-		if cut && atEnd {
-			continue // possibly truncated mid-path
+		if url || (cut && atEnd) {
+			continue // a URL, or possibly truncated mid-path
 		}
 		tok = strings.TrimRight(tok, `'",:`)
+		tok = reLineCol.ReplaceAllString(tok, "")
 		p := filepath.Clean(tok)
 		if strings.Count(strings.Trim(p, "/"), "/") < 1 || seen[p] {
 			continue
@@ -161,6 +212,29 @@ func isPathBoundary(c byte) bool {
 	}
 	return false
 }
+
+// followsScheme: the "/" at i comes right after a URL scheme — "scheme:" where
+// scheme is a letter followed by letters, digits, '+', '-' or '.', itself at a
+// word boundary ("http:", "file:", "git+ssh:").
+func followsScheme(s string, i int) bool {
+	if i == 0 || s[i-1] != ':' {
+		return false
+	}
+	j := i - 1
+	for j > 0 && isSchemeChar(s[j-1]) {
+		j--
+	}
+	if j == i-1 || !isASCIILetter(s[j]) {
+		return false // empty scheme, or one starting with a digit ("x.go:21:/…")
+	}
+	return j == 0 || isPathBoundary(s[j-1])
+}
+
+func isSchemeChar(c byte) bool {
+	return isASCIILetter(c) || (c >= '0' && c <= '9') || c == '+' || c == '-' || c == '.'
+}
+
+func isASCIILetter(c byte) bool { return (c|0x20) >= 'a' && (c|0x20) <= 'z' }
 
 // transientBranches reports whether the branch signal fires: every sample
 // session ran on a non-empty, non-default branch whose ref is gone from root
