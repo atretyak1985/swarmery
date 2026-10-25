@@ -20,7 +20,12 @@
 # own inputs are always protected: .swarmery/plan/** (the doc that carries the
 # guard) and .swarmery/guard.log (the record of what it refused), plus the
 # .swarmery and .swarmery/plan directory names themselves — removing either
-# would switch the guard off.
+# would switch the guard off. One opening, so a guarded run can still tick its
+# criteria and write its Completion Report: an Edit, MultiEdit or Write of a
+# lent doc (.swarmery/plan/<doc>.md, named directly, no symlink) goes through
+# when the doc's guard parses to the same globs and allow entries after the
+# edit as before. Bash on the doc, and any edit that changes the guard, stay
+# blocked.
 #
 # Exit codes (house protocol, see protect-sensitive-files.sh): 2 blocks the
 # call and the reason goes to STDERR, which is the only stream that reaches the
@@ -256,6 +261,48 @@ _protected() {
   return 1
 }
 
+# _plan_doc_edit_ok <rel> — whether this Edit / MultiEdit / Write of a lent
+# phase doc (.swarmery/plan/<doc>.md, no symlink on the way) leaves the doc's
+# guard exactly as it was: the edit is applied to a copy and the guard parser
+# must print the same globs and allow entries, with the same status, before and
+# after. That is what lets the executor tick its criteria and write its
+# Completion Report while the guard itself stays out of reach. An edit that
+# cannot be applied (no old_string, no match) is refused.
+_plan_doc_edit_ok() {
+  local rel="$1" doc tmp before after rc_before rc_after
+  case "$tool" in Edit|MultiEdit|Write) ;; *) return 1 ;; esac
+  case "$rel" in
+    .swarmery/plan/*/*) return 1 ;;
+    .swarmery/plan/*.md) ;;
+    *) return 1 ;;
+  esac
+  doc="$root/$rel"
+  [ -f "$doc" ] && [ ! -L "$doc" ] || return 1
+  [ "$(cd -P "$root/.swarmery/plan" 2>/dev/null && pwd -P)" = "${root_phys%/}/.swarmery/plan" ] || return 1
+  tmp=$(mktemp "${TMPDIR:-/tmp}/phase-guard.XXXXXX") || return 1
+  # jq's split/join keeps this byte-exact on non-ASCII text (index() would not).
+  if ! printf '%s' "$input" | jq -j --rawfile doc "$doc" '
+      def apply($s; $e):
+        ($e.old_string // "" | strings) as $o
+        | ($e.new_string // "" | strings) as $n
+        | if $o == "" then error("no old_string") else . end
+        | ($s | split($o)) as $parts
+        | if ($parts | length) < 2 then error("old_string not found")
+          elif ($e.replace_all // false) then $parts | join($n)
+          else $parts[0] + $n + ($parts[1:] | join($o)) end;
+      .tool_name as $t | .tool_input as $in
+      | if $t == "Write" then ($in.content // error("no content") | strings)
+        elif $t == "Edit" then apply($doc; $in)
+        else reduce (($in.edits // []) | .[]) as $e ($doc; apply(.; $e)) end' > "$tmp" 2>/dev/null; then
+    rm -f "$tmp"
+    return 1
+  fi
+  before=$(guard_parse "$doc"); rc_before=$?
+  after=$(guard_parse "$tmp"); rc_after=$?
+  rm -f "$tmp"
+  [ "$rc_before" -eq "$rc_after" ] && [ "$before" = "$after" ]
+}
+
 refuse() {
   local rel="$1" extra="${2:-}"
   local -a lines=(
@@ -273,7 +320,14 @@ if [ "$tool" != "Bash" ]; then
     case "$cur" in /*) ;; *) cur="$hook_cwd/$cur" ;; esac
     hops=0
     while :; do
-      if _to_rel "$cur" && _protected "$REL"; then refuse "$REL"; fi
+      if _to_rel "$cur" && _protected "$REL"; then
+        # The lent doc itself, named directly: ticks and the report go through
+        # when the guard parses the same after the edit.
+        if [ "$hops" -eq 0 ] && [ "$HIT_GLOB" = ".swarmery/plan/**" ] && _plan_doc_edit_ok "$REL"; then
+          break
+        fi
+        refuse "$REL"
+      fi
       # Where the write lands: the existing directory prefix through symlinks.
       _norm "$cur"
       dir="$NORM"
