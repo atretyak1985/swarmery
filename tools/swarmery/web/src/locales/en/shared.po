@@ -684,6 +684,10 @@ msgstr "All projects"
 msgid "All projects →"
 msgstr "All projects →"
 
+#: src/workspace/task/TaskActions.tsx
+msgid "already fixed"
+msgstr "already fixed"
+
 #: src/components/NotifySettings.tsx
 msgid "an active session ended"
 msgstr "an active session ended"
@@ -1003,6 +1007,7 @@ msgstr "cancel"
 #: src/components/SessionControls.tsx
 #: src/components/SessionControls.tsx
 #: src/components/StopButton.tsx
+#: src/workspace/task/TaskActions.tsx
 msgid "Cancel"
 msgstr "Cancel"
 
@@ -1145,9 +1150,33 @@ msgstr "close"
 msgid "Close"
 msgstr "Close"
 
+#: src/workspace/task/TaskActions.tsx
+msgid "Close — no change needed"
+msgstr "Close — no change needed"
+
+#: src/api.ts
+msgid "close failed"
+msgstr "close failed"
+
+#: src/workspace/task/TaskActions.tsx
+msgid "close the card and move it to done"
+msgstr "close the card and move it to done"
+
+#: src/workspace/task/TaskActions.tsx
+msgid "close the card without a change — already fixed, not a defect, or a duplicate"
+msgstr "close the card without a change — already fixed, not a defect, or a duplicate"
+
 #: src/components/usage/UsageModal.tsx
 msgid "Close usage"
 msgstr "Close usage"
+
+#: src/workspace/task/TaskActions.tsx
+msgid "close with no change needed"
+msgstr "close with no change needed"
+
+#: src/workspace/task/TaskActions.tsx
+msgid "closed with no change needed — card moved to done"
+msgstr "closed with no change needed — card moved to done"
 
 #: src/components/VcsProviderAsk.tsx
 msgid "Code host"
@@ -1190,6 +1219,7 @@ msgstr "configure"
 
 #: src/components/KillButton.tsx
 #: src/components/StopButton.tsx
+#: src/workspace/task/TaskActions.tsx
 msgid "Confirm"
 msgstr "Confirm"
 
@@ -1719,6 +1749,10 @@ msgstr "done"
 msgid "Done"
 msgstr "Done"
 
+#: src/workspace/task/TaskActions.tsx
+msgid "duplicate"
+msgstr "duplicate"
+
 #: src/api.ts
 msgid "duplicate playbook failed: {status}"
 msgstr "duplicate playbook failed: {status}"
@@ -1754,6 +1788,10 @@ msgstr "errors"
 #: src/components/PermissionPresets.tsx
 msgid "Every tool call waits for you. The safe default — nothing runs unattended."
 msgstr "Every tool call waits for you. The safe default — nothing runs unattended."
+
+#: src/workspace/task/TaskActions.tsx
+msgid "evidence"
+msgstr "evidence"
 
 #: src/components/RunOutcomeModal.tsx
 msgid "Executor said: {said}"
@@ -2487,6 +2525,10 @@ msgstr "no usage providers reported"
 msgid "no worktrees on this machine"
 msgstr "no worktrees on this machine"
 
+#: src/workspace/task/TaskActions.tsx
+msgid "not a defect"
+msgstr "not a defect"
+
 #: src/components/AccountSelector.tsx
 #: src/components/AccountsSection.tsx
 #: src/components/usage/UsageProviderCard.tsx
@@ -3135,6 +3177,10 @@ msgstr "Reads this whole window, has an agent write what hurts and what to chang
 #: src/components/AccountsSection.tsx
 msgid "ready"
 msgstr "ready"
+
+#: src/workspace/task/TaskActions.tsx
+msgid "reason"
+msgstr "reason"
 
 #: src/api.ts
 msgid "rebuild failed: {status}"
@@ -4373,6 +4419,10 @@ msgid "What should the session do next?"
 msgstr "What should the session do next?"
 
 #: src/workspace/task/TaskActions.tsx
+msgid "what shows no change is needed — the fixing commit, the duplicate card, the reasoning"
+msgstr "what shows no change is needed — the fixing commit, the duplicate card, the reasoning"
+
+#: src/workspace/task/TaskActions.tsx
 msgid "what to fix on the next pass — appended to the prompt"
 msgstr "what to fix on the next pass — appended to the prompt"
 
@@ -4432,6 +4482,10 @@ msgstr "worktree reclaimed — nothing to re-grade"
 #: src/pages/Settings.tsx
 msgid "worktrees"
 msgstr "worktrees"
+
+#: src/workspace/task/TaskActions.tsx
+msgid "write the evidence first — a close with no evidence cannot be audited"
+msgstr "write the evidence first — a close with no evidence cannot be audited"
 
 #: src/workspace/task/TaskActions.tsx
 msgid "write the feedback first — a re-run with no notes repeats the same work"
