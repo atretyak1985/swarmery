@@ -56,3 +56,17 @@ description = "guard-pack redaction test fixtures — the mod replaces secret-sh
 paths = [
   '''plugins/guard-pack/hooks/redaction\.test\.ts''',
 ]
+
+[[allowlists]]
+description = "RFC 6455's published sample WebSocket nonce as Go tests write it (`Header.Set(\"Sec-WebSocket-Key\", \"…\")` in api/term_test.go and api/exposed_session_code_test.go). Same literal as the entry above, which only matches the raw `Sec-WebSocket-Key: …` header form. A per-handshake random value, never a credential. Scoped to the one literal."
+regexTarget = "line"
+regexes = [
+  '''"Sec-WebSocket-Key", "dGhlIHNhbXBsZSBub25jZQ=="''',
+]
+
+[[allowlists]]
+description = "The link-signing test vector key: the counting hex string 0123456789abcdef repeated four times (64 hex chars). Shared by the Go and Swift signers' tests (linksig/session_test.go, cmd/swarmery/open_cli_test.go, notch DaemonIdentityTests/LinkSignerTests) so both sides are pinned to the same HMAC vectors. It is a published constant in this repo, not a key any daemon uses. Scoped to that one literal, so a real key on another line is still caught."
+regexTarget = "line"
+regexes = [
+  '''"(0123456789abcdef){4}"''',
+]
