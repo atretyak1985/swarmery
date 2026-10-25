@@ -35,7 +35,8 @@ const (
 		"a provider outage, an expected refusal. fixable when a concrete change would stop it; in that case put " +
 		"in payload {\"title\": at most 80 characters, \"prompt\": a self-contained task: what is wrong, the " +
 		"evidence, what done looks like, how to verify}. skip when the example is too generic to tell " +
-		"(\"Bash error\", \"Exit code 1\")."
+		"(\"Bash error\", \"Exit code 1\"). If staleness says stale, the error's source no longer exists — prefer " +
+		"noise unless the evidence shows the defect is still on the default branch."
 )
 
 // errAlreadyTracked is Apply's answer when an open recommendation for the
@@ -207,6 +208,11 @@ func (s *frictionSource) Prepare(_ context.Context, it *triage.Item) error {
 		}
 		fmt.Fprintf(&b, "- %q in project %s\n", title.String, project.String)
 	}
+	if st := s.h.probeFrictionStaleness(g, it.ProjectID); st.Stale {
+		fmt.Fprintf(&b, "staleness: stale — %s\n", strings.Join(st.Reasons, "; "))
+	} else {
+		b.WriteString("staleness: live\n")
+	}
 	it.Instruction, it.Evidence = frictionInstruction, b.String()
 	return nil
 }
@@ -258,14 +264,21 @@ func (s *frictionSource) Apply(_ context.Context, it triage.Item, p triage.Part,
 		if err != nil {
 			return triage.Applied{}, err
 		}
-		id, err := fileTriageRec(s.h.DB, frictionRule, "error_group", p.Ref, it.Title, reason, ev)
+		// Re-probe here: neither the judge nor a cached Prepare decides whether
+		// the error's source still exists. A stale group is tracked, never carded.
+		stale := s.h.probeFrictionStaleness(g, it.ProjectID)
+		detail := reason
+		if stale.Stale {
+			detail = reason + "\n\nDown-ranked — no fix card: " + strings.Join(stale.Reasons, "; ")
+		}
+		id, err := fileTriageRec(s.h.DB, frictionRule, "error_group", p.Ref, it.Title, detail, ev)
 		if err != nil {
 			return triage.Applied{}, err
 		}
 		ref := strconv.FormatInt(id, 10)
 		follow := triage.Suggestion{Kind: advisorKind, Class: triage.ClassPlain, Ref: ref, ItemKey: ref,
-			Title: it.Title, Value: "track", Reason: reason}
-		if it.ProjectID != 0 { // a card needs a project
+			Title: it.Title, Value: "track", Reason: detail}
+		if it.ProjectID != 0 && !stale.Stale { // a card needs a project and a live source
 			card, err := json.Marshal(fix)
 			if err != nil {
 				return triage.Applied{}, err
