@@ -53,6 +53,8 @@ const begin = async ($: Engine, on: On, w: World = {}): Promise<ReturnType<typeo
 }
 
 test('approvals off: no permission request even when the verdict is ask; the verdict stands', OFF, async ($, on) => {
+  // the person's yes to the engine's own dialog: an unanswered ask is a denial in the kit
+  on('classic.PermissionRequest', () => ({ decision: { behavior: 'allow' } }))
   const w = await begin($, on, { ...ASK, permissionReplies: [decided({ decision: 'allow' })] })
   const verdict = await $.tool.check(CALL)
   expect(verdict.decision).toBe('ask')
