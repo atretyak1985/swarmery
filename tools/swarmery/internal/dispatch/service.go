@@ -1493,8 +1493,9 @@ func (s *Service) finishReview(id int64, errMsg string) {
 func (s *Service) finishError(id int64, errMsg string) { s.finishReview(id, errMsg) }
 
 // finishDone moves a sentinel-done task straight to done, records the sentinel
-// line as result_note, and removes the worktree (no review needed — the model
-// declared no change).
+// line as result_note, closes the card's micro-plan with that line as evidence
+// (recordSentinelEvidence + TickCardMicroPlan), and removes the worktree (no
+// review needed — the model declared no change).
 func (s *Service) finishDone(c candidate, line string) {
 	var branch, wtpath sql.NullString
 	_ = s.DB.QueryRow(`SELECT branch, worktree_path FROM tasks WHERE id=?`, c.ID).
@@ -1507,6 +1508,10 @@ func (s *Service) finishDone(c candidate, line string) {
 		log.Printf("error: dispatch: finish done (task %d): %v", c.ID, err)
 		return
 	}
+	// The card's own micro-plan gets its evidence BEFORE the ticks: a no-change
+	// close is only honest with the reason written down, and TickCardMicroPlan
+	// refuses a blank report.
+	doc := s.recordSentinelEvidence(c.ID, wtpath.String, line)
 	// Board says done — check the phase doc's remaining acceptance boxes so plan
 	// progress follows (a sentinel exit like PREMISE STALE never touched the doc).
 	if n, err := wsingest.TickPhaseChecklist(s.DB, c.ID); err != nil {
@@ -1514,8 +1519,61 @@ func (s *Service) finishDone(c candidate, line string) {
 	} else if n > 0 {
 		log.Printf("dispatch: task %d done — ticked %d phase checkbox(es)", c.ID, n)
 	}
+	if n, err := wsingest.TickCardMicroPlan(s.DB, c.ID); err != nil {
+		log.Printf("warn: dispatch: tick card micro-plan (task %d): %v", c.ID, err)
+	} else if n > 0 {
+		log.Printf("dispatch: task %d done — ticked %d micro-plan checkbox(es)", c.ID, n)
+	}
+	// Keep the lent copy in step with what was just written: runPlaybook's deferred
+	// returnRunOutput copies it back over the workspace doc, and a worktree whose
+	// removal failed would otherwise hand back the pre-tick text and erase both the
+	// evidence and the ticks. A torn-down worktree holds no copy (a no-op).
+	if doc != "" && wtpath.String != "" {
+		if _, err := worktree.RelendPlanDoc(wtpath.String, doc); err != nil {
+			log.Printf("warn: dispatch: relend micro-plan (task %d): %v", c.ID, err)
+		}
+	}
 	s.removeWorktree(s.resolvedRepoRoot(c.ProjectPath, c.WorkspaceRoot, wtpath.String), wtpath.String, branch.String)
 	s.notify(c.ID)
+}
+
+// recordSentinelEvidence writes a no-change sentinel into the card micro-plan's
+// Completion Report when the executor left it blank, and returns the doc path
+// ("" when the card has no micro-plan).
+//
+// The lent copy is brought home FIRST: finishDone runs before runPlaybook's
+// deferred returnRunOutput and removes the worktree, so without this an executor
+// that ticked boxes or wrote its own report in the lent copy would lose both —
+// and the sentinel line would then stand in for a report that was written. Its
+// report wins; the sentinel line is the fallback for the common case where a
+// PREMISE STALE / NO-OP / DUPLICATE exit never touched the doc.
+func (s *Service) recordSentinelEvidence(id int64, wtPath, line string) string {
+	doc, err := wsingest.CardMicroPlanDoc(s.DB, id)
+	if err != nil {
+		log.Printf("warn: dispatch: resolve card micro-plan (task %d): %v", id, err)
+		return ""
+	}
+	if doc == "" {
+		return ""
+	}
+	if wtPath != "" {
+		worktree.ReturnPlanDocLogged(fmt.Sprintf("dispatch task=%d (done)", id),
+			wtPath, worktree.LentPlanDocRel(doc), doc)
+	}
+	blank, err := wsingest.CompletionReportBlank(doc)
+	if err != nil {
+		log.Printf("warn: dispatch: read card micro-plan report (task %d): %v", id, err)
+		return doc
+	}
+	if !blank {
+		return doc
+	}
+	evidence := "**Outcome: closed without a commit** — the executor ended with `" +
+		strings.TrimSpace(line) + "`."
+	if err := wsingest.AppendCompletionReport(doc, evidence); err != nil {
+		log.Printf("warn: dispatch: write sentinel evidence (task %d): %v", id, err)
+	}
+	return doc
 }
 
 // finishBlocked routes a BLOCKED sentinel back to todo + paused with the line as
