@@ -28,7 +28,7 @@
   },
   "devDependencies": {
     "@babel/core": "8.0.7",
-    "@biomejs/biome": "^2.5.15",
+    "@biomejs/biome": "^2.6.2",
     "@lingui/babel-plugin-lingui-macro": "5.9.5",
     "@lingui/cli": "5.9.5",
     "@lingui/conf": "5.9.5",
