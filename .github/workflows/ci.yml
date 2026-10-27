@@ -1,9 +1,26 @@
 name: CI
 
+# Docs-only changes are skipped (2026-10-27): every check below reads plugins/,
+# scripts/, overlays/ or tools/, never these paths.
 on:
   push:
     branches: [main]
+    paths-ignore:
+      - '*.md'
+      - 'docs/**'
+      - 'articles/**'
+      - 'site/**'
   pull_request:
+    paths-ignore:
+      - '*.md'
+      - 'docs/**'
+      - 'articles/**'
+      - 'site/**'
+
+# A new push to a PR branch cancels its now-stale run; main runs always finish.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   validate:

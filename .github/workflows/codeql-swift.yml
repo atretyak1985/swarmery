@@ -8,14 +8,18 @@ name: CodeQL (Swift)
 # warm cache turns the traced `swift build` into a no-op — CodeQL then sees no
 # Swift compiled and the analysis fails.
 
+# No push-to-main run (2026-10-27): the PR run plus the weekly schedule cover it,
+# and this is a macOS job (10x Linux minutes).
 on:
-  push:
-    branches: [main]
-    paths: ['tools/notch/**', '.github/workflows/codeql-swift.yml']
   pull_request:
     paths: ['tools/notch/**', '.github/workflows/codeql-swift.yml']
   schedule:
     - cron: '23 4 * * 1'
+
+# A new push to a PR branch cancels its now-stale run; main runs always finish.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   analyze:
