@@ -5,13 +5,25 @@ name: CodeQL
 # PR that leaves tools/notch alone does not wait on a macOS build. Uploads are
 # rejected while the repository's CodeQL *default* setup is still enabled —
 # switch it off after merging this file.
+#
+# No push-to-main run (2026-10-27, Actions minutes): every change reaches main
+# through a PR that is analysed here, and the weekly schedule keeps main's
+# alert baseline fresh. Docs-only PRs are skipped — no analysed language changes.
 
 on:
-  push:
-    branches: [main]
   pull_request:
+    paths-ignore:
+      - '*.md'
+      - 'docs/**'
+      - 'articles/**'
+      - 'site/**'
   schedule:
     - cron: '23 4 * * 1'
+
+# A new push to a PR branch cancels its now-stale run; main runs always finish.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   analyze:

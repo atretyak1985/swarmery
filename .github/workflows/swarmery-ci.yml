@@ -1,8 +1,10 @@
 name: swarmery-ci
 
+# push is main-only (2026-10-27): on a feat/** branch the pull_request run
+# already covers the same tree.
 on:
   push:
-    branches: [main, 'feat/**']
+    branches: [main]
     paths:
       - 'tools/swarmery/**'
       - '.github/workflows/swarmery-ci.yml'
@@ -31,6 +33,11 @@ on:
       # their TS mirrors: a change to either side must run those tests.
       - 'plugins/guard-pack/hooks/patterns/**'
       - 'plugins/guard-pack/hooks/testkit.ts'
+
+# A new push to a PR branch cancels its now-stale run; main runs always finish.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 defaults:
   run:
