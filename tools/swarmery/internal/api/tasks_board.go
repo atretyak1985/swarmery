@@ -1014,6 +1014,14 @@ func (h *Handler) applyTerminalColumnEffects(id int64, column string) {
 		} else if n > 0 {
 			log.Printf("api: task %d done — ticked %d phase checkbox(es)", id, n)
 		}
+		// The card's OWN micro-plan (tasks.workspace_dir). Ticked only when its
+		// Completion Report already carries evidence: a drag to done over a blank
+		// report proves nothing, and must not read as a verified plan.
+		if n, err := wsingest.TickCardMicroPlan(h.DB, id); err != nil {
+			log.Printf("warn: api: tick card micro-plan (task %d): %v", id, err)
+		} else if n > 0 {
+			log.Printf("api: task %d done — ticked %d micro-plan checkbox(es)", id, n)
+		}
 	}
 }
 

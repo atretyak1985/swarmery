@@ -20,10 +20,16 @@
 // to this file are the mitigation.
 
 import { Trans, useLingui } from '@lingui/react/macro';
-import { useEffect, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import type { BoardColumn, BoardTask } from '../../api/types';
-import type { PatchBoardTaskInput } from '../../api';
-import { discardBoardTask, landBoardTask, rerunBoardTask, verifyBoardTask } from '../../api';
+import type { CloseNoChangeReason, PatchBoardTaskInput } from '../../api';
+import {
+  closeBoardTaskNoChange,
+  discardBoardTask,
+  landBoardTask,
+  rerunBoardTask,
+  verifyBoardTask,
+} from '../../api';
 import { ConfirmDialog } from '../../components/ui';
 import {
   BOARD_COLUMNS,
@@ -52,6 +58,24 @@ const HISTORY_COLUMNS: BoardColumn[] = ['done', 'archived'];
 function reviewable(task: BoardTask): boolean {
   return task.boardColumn === 'in_review' || task.boardColumn === 'done';
 }
+
+/**
+ * Whether a card can be closed as "no change needed". Not while it runs (the
+ * server answers 409), and not once it is already filed in done or archived —
+ * there is nothing left to close.
+ */
+function closableNoChange(task: BoardTask): boolean {
+  const running = task.boardColumn === 'in_progress' || task.status === 'running';
+  return !running && task.boardColumn !== 'done' && task.boardColumn !== 'archived';
+}
+
+const CLOSE_REASONS: readonly CloseNoChangeReason[] = ['already_fixed', 'not_a_defect', 'duplicate'];
+
+const FIELD_LABEL = 'mb-1 block font-mono text-[10px] tracking-[0.1em] text-ink-faint uppercase';
+const ERROR_BOX =
+  'rounded-lg border border-red/25 bg-red/5 px-2.5 py-2 font-mono text-[11px] whitespace-pre-wrap text-red';
+const NOTE_BOX =
+  'rounded-lg border border-green/25 bg-green/5 px-2.5 py-2 font-mono text-[11px] break-all text-green';
 
 export function TaskActions({
   task,
@@ -89,6 +113,24 @@ export function TaskActions({
   const [reviewNote, setReviewNote] = useState<string | null>(null);
   const [confirmLand, setConfirmLand] = useState(false);
   const [confirmDiscard, setConfirmDiscard] = useState(false);
+  // Close-no-change state. Inline, not a dialog: the operator writes evidence,
+  // and that reads better in place than in an overlay.
+  const [closeOpen, setCloseOpen] = useState(false);
+  const [closeReason, setCloseReason] = useState<CloseNoChangeReason>('already_fixed');
+  const [closeEvidence, setCloseEvidence] = useState('');
+  const [closeBusy, setCloseBusy] = useState(false);
+  const [closeError, setCloseError] = useState<string | null>(null);
+  const [closeNote, setCloseNote] = useState<string | null>(null);
+  const closeToggleRef = useRef<HTMLButtonElement>(null);
+  const closeReasonRef = useRef<HTMLSelectElement>(null);
+  const closeReasonId = useId();
+  const closeEvidenceId = useId();
+
+  // Opening the form moves focus into it, so a keyboard user lands on the
+  // first field rather than having to tab past the rest of the action bar.
+  useEffect(() => {
+    if (closeOpen) closeReasonRef.current?.focus();
+  }, [closeOpen]);
 
   const confirming = confirmDelete || confirmLand || confirmDiscard;
   useEffect(() => {
@@ -175,6 +217,42 @@ export function TaskActions({
     });
   };
 
+  const reasonLabels: Record<CloseNoChangeReason, string> = {
+    already_fixed: t`already fixed`,
+    not_a_defect: t`not a defect`,
+    duplicate: t`duplicate`,
+  };
+
+  const cancelClose = (): void => {
+    setCloseOpen(false);
+    setCloseReason('already_fixed');
+    setCloseEvidence('');
+    setCloseError(null);
+    closeToggleRef.current?.focus();
+  };
+
+  /**
+   * Closes the card with no change. The server's 4xx sentence is shown
+   * verbatim, as the review actions do; on success the board's WS frame moves
+   * the card to done, which also hides this action.
+   */
+  const closeNoChange = (): void => {
+    const evidence = closeEvidence.trim();
+    if (evidence === '') return;
+    setCloseBusy(true);
+    setCloseError(null);
+    setCloseNote(null);
+    closeBoardTaskNoChange(task.id, { reason: closeReason, evidence })
+      .then(() => {
+        setCloseOpen(false);
+        setCloseEvidence('');
+        setCloseReason('already_fixed');
+        setCloseNote(t`closed with no change needed — card moved to done`);
+      })
+      .catch((e: unknown) => setCloseError(e instanceof Error ? e.message : String(e)))
+      .finally(() => setCloseBusy(false));
+  };
+
   const pauseLabel = task.userPaused ? t`▶ Resume` : t`❙❙ Pause`;
   const externalId = task.externalId;
   const taskBranch = task.branch ?? '—';
@@ -201,6 +279,20 @@ export function TaskActions({
         {task.boardColumn === 'done' && (
           <button type="button" onClick={() => setReviewOpen((v) => !v)} className={PLAIN}>
             <Trans>◇ Review…</Trans>
+          </button>
+        )}
+        {closableNoChange(task) && (
+          <button
+            ref={closeToggleRef}
+            type="button"
+            aria-expanded={closeOpen}
+            onClick={() => (closeOpen ? cancelClose() : setCloseOpen(true))}
+            title={t`close the card without a change — already fixed, not a defect, or a duplicate`}
+            className={PLAIN}
+          >
+            {/* A colon, not an em dash: the modal's never-run test reads any
+              * em dash in the body as a placeholder standing in for a fact. */}
+            <Trans>Close: no change needed</Trans>
           </button>
         )}
         <button
@@ -275,6 +367,73 @@ export function TaskActions({
       )}
 
       {error !== null && <div className="font-mono text-[10.5px] text-red">{error}</div>}
+
+      {closeOpen && closableNoChange(task) && (
+        <form
+          aria-label={t`close with no change needed`}
+          onSubmit={(e) => {
+            e.preventDefault();
+            closeNoChange();
+          }}
+          className="mt-1 flex flex-col gap-2 border-t border-line pt-3"
+        >
+          <div>
+            <label htmlFor={closeReasonId} className={FIELD_LABEL}>
+              <Trans>reason</Trans>
+            </label>
+            <select
+              id={closeReasonId}
+              ref={closeReasonRef}
+              value={closeReason}
+              onChange={(e) => setCloseReason(e.target.value as CloseNoChangeReason)}
+              className="rounded-md border border-line bg-field px-1.5 py-[3px] font-mono text-[11px] text-ink-dim outline-none focus:border-ink-dim"
+            >
+              {CLOSE_REASONS.map((r) => (
+                <option key={r} value={r}>
+                  {reasonLabels[r]}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label htmlFor={closeEvidenceId} className={FIELD_LABEL}>
+              <Trans>evidence</Trans>
+            </label>
+            <textarea
+              id={closeEvidenceId}
+              value={closeEvidence}
+              onChange={(e) => setCloseEvidence(e.target.value)}
+              rows={3}
+              required
+              placeholder={t`what shows no change is needed — the fixing commit, the duplicate card, the reasoning`}
+              className="w-full resize-y rounded-[8px] border border-line bg-field px-2.5 py-1.5 font-mono text-[11.5px] leading-relaxed text-ink outline-none focus:border-ink-dim"
+            />
+          </div>
+          {closeError !== null && (
+            <div role="alert" className={ERROR_BOX}>
+              {closeError}
+            </div>
+          )}
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="submit"
+              disabled={closeBusy || closeEvidence.trim() === ''}
+              title={
+                closeEvidence.trim() === ''
+                  ? t`write the evidence first — a close with no evidence cannot be audited`
+                  : t`close the card and move it to done`
+              }
+              className={PRIMARY}
+            >
+              <Trans>Confirm</Trans>
+            </button>
+            <button type="button" onClick={cancelClose} className={PLAIN}>
+              <Trans>Cancel</Trans>
+            </button>
+          </div>
+        </form>
+      )}
+      {closeNote !== null && <div className={NOTE_BOX}>{closeNote}</div>}
 
       {reviewOpen && reviewable(task) && (
         <div className="mt-1 flex flex-col gap-2 border-t border-line pt-3">

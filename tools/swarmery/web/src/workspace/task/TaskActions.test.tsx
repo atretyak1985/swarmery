@@ -22,6 +22,7 @@ import { cleanup, fireEvent, render, screen } from '../../test/render';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { BoardColumn, BoardTask } from '../../api/types';
 import {
+  closeBoardTaskNoChange,
   discardBoardTask,
   landBoardTask,
   rerunBoardTask,
@@ -34,6 +35,7 @@ vi.mock('../../api', () => ({
   rerunBoardTask: vi.fn(async () => ({})),
   discardBoardTask: vi.fn(async () => ({ deleted: true, branch: 'swarm/T-a1b2c3' })),
   landBoardTask: vi.fn(async () => ({ prUrl: 'https://example.test/pr/1' })),
+  closeBoardTaskNoChange: vi.fn(async () => ({})),
 }));
 
 function makeTask(over: Partial<BoardTask> = {}): BoardTask {
@@ -112,6 +114,7 @@ beforeEach(() => {
   vi.mocked(rerunBoardTask).mockClear();
   vi.mocked(discardBoardTask).mockClear();
   vi.mocked(landBoardTask).mockClear();
+  vi.mocked(closeBoardTaskNoChange).mockClear();
 });
 afterEach(cleanup);
 
@@ -250,5 +253,102 @@ describe('the review loop calls the same API functions as before the split', () 
     expect(screen.queryByRole('button', { name: 'Discard' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Re-verify' })).toBeNull();
     expect(screen.queryByLabelText('reviewer feedback')).toBeNull();
+  });
+});
+
+describe('close — no change needed', () => {
+  const ACTION = 'Close: no change needed';
+
+  function openClose(): void {
+    fireEvent.click(screen.getByRole('button', { name: ACTION }));
+  }
+
+  it('is offered to a card that is neither running nor filed', () => {
+    for (const column of ['triage', 'todo', 'in_review'] as const) {
+      renderActions(makeTask({ boardColumn: column }));
+      expect(screen.getByRole('button', { name: ACTION })).not.toBeNull();
+      cleanup();
+    }
+  });
+
+  it('is hidden for a running card', () => {
+    renderActions(makeTask({ boardColumn: 'in_progress', status: 'running' }));
+    expect(screen.queryByRole('button', { name: ACTION })).toBeNull();
+    cleanup();
+    // A queued card that already reports a live run is still running.
+    renderActions(makeTask({ boardColumn: 'todo', status: 'running' }));
+    expect(screen.queryByRole('button', { name: ACTION })).toBeNull();
+  });
+
+  it('is hidden for a done card and an archived card', () => {
+    renderActions(makeTask({ boardColumn: 'done' }));
+    expect(screen.queryByRole('button', { name: ACTION })).toBeNull();
+    cleanup();
+    renderActions(makeTask({ boardColumn: 'archived' }));
+    expect(screen.queryByRole('button', { name: ACTION })).toBeNull();
+  });
+
+  it('opens inline with a labelled reason and evidence, focused on the reason', () => {
+    renderActions(makeTask({ boardColumn: 'triage' }));
+    expect(screen.queryByLabelText('evidence')).toBeNull();
+    openClose();
+    const reason = screen.getByLabelText('reason') as HTMLSelectElement;
+    expect(reason.tagName).toBe('SELECT');
+    expect(Array.from(reason.options).map((o) => o.value)).toEqual([
+      'already_fixed',
+      'not_a_defect',
+      'duplicate',
+    ]);
+    expect(document.activeElement).toBe(reason);
+    expect((screen.getByLabelText('evidence') as HTMLTextAreaElement).required).toBe(true);
+    // No dialog: the form sits in the action bar.
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
+
+  it('keeps Confirm disabled while the evidence is blank', () => {
+    renderActions(makeTask({ boardColumn: 'triage' }));
+    openClose();
+    const confirm = screen.getByRole('button', { name: 'Confirm' }) as HTMLButtonElement;
+    expect(confirm.disabled).toBe(true);
+    fireEvent.change(screen.getByLabelText('evidence'), { target: { value: '   \n ' } });
+    expect(confirm.disabled).toBe(true);
+    fireEvent.click(confirm);
+    expect(closeBoardTaskNoChange).not.toHaveBeenCalled();
+    fireEvent.change(screen.getByLabelText('evidence'), { target: { value: 'fixed in abc123' } });
+    expect(confirm.disabled).toBe(false);
+  });
+
+  it('Cancel collapses the form without calling the API', () => {
+    renderActions(makeTask({ boardColumn: 'triage' }));
+    openClose();
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(screen.queryByLabelText('evidence')).toBeNull();
+    expect(closeBoardTaskNoChange).not.toHaveBeenCalled();
+  });
+
+  it('Confirm → closeBoardTaskNoChange(id, {reason, evidence})', async () => {
+    renderActions(makeTask({ boardColumn: 'in_review' }));
+    openClose();
+    fireEvent.change(screen.getByLabelText('reason'), { target: { value: 'duplicate' } });
+    fireEvent.change(screen.getByLabelText('evidence'), { target: { value: '  same as T-ffffff  ' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm' }));
+    expect(closeBoardTaskNoChange).toHaveBeenCalledWith(42, {
+      reason: 'duplicate',
+      evidence: 'same as T-ffffff',
+    });
+    expect(await screen.findByText(/card moved to done/)).not.toBeNull();
+    expect(screen.queryByLabelText('evidence')).toBeNull();
+  });
+
+  it('renders the server sentence of a 400 in the form', async () => {
+    vi.mocked(closeBoardTaskNoChange).mockRejectedValueOnce(new Error('evidence is required'));
+    renderActions(makeTask({ boardColumn: 'triage' }));
+    openClose();
+    fireEvent.change(screen.getByLabelText('evidence'), { target: { value: 'x' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm' }));
+    const alert = await screen.findByRole('alert');
+    expect(alert.textContent).toBe('evidence is required');
+    // The form stays open so the operator can correct and resend.
+    expect(screen.getByLabelText('evidence')).not.toBeNull();
   });
 });

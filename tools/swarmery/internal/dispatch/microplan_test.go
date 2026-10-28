@@ -178,7 +178,7 @@ func TestAdmit_ReDispatchReusesTheMicroPlan(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	worked := strings.Replace(string(raw), "- [ ] The task", "- [x] The task", 1) + "\nShipped it.\n"
+	worked := strings.Replace(string(raw), "- [ ] Either the task", "- [x] Either the task", 1) + "\nShipped it.\n"
 	if err := os.WriteFile(doc, []byte(worked), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -198,7 +198,7 @@ func TestAdmit_ReDispatchReusesTheMicroPlan(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(after), "- [x] The task") || !strings.Contains(string(after), "Shipped it.") {
+	if !strings.Contains(string(after), "- [x] Either the task") || !strings.Contains(string(after), "Shipped it.") {
 		t.Errorf("re-dispatch erased the previous run's record:\n%s", after)
 	}
 }
@@ -301,5 +301,87 @@ func TestRunPlaybook_NoDoclessReportLeavesTheCardAlone(t *testing.T) {
 
 	if e := taskField(t, db, id, "dispatch_error"); e.Valid && e.String != "" {
 		t.Errorf("a missing report became an error: %q", e.String)
+	}
+}
+
+// A PREMISE STALE / NO-OP / DUPLICATE exit is a card that needed no change. Its
+// micro-plan must still read Done — both boxes ticked — with the sentinel line as
+// the written evidence in its Completion Report. This is the dispatch half of the
+// regression for "a card cannot close without a commit".
+//
+// The worktree root is REAL so the doc is actually lent and the deferred
+// returnRunOutput actually runs: stubWt.Remove deletes nothing, which is exactly
+// the failed-removal case where a stale lent copy would otherwise be copied back
+// over the ticked doc.
+func TestSentinelDone_ClosesTheMicroPlanWithTheSentinelAsEvidence(t *testing.T) {
+	db := testDB(t)
+	r := &stubRunner{run: func(spec RunSpec) (*Run, error) {
+		ingestSession(t, db, spec.SessionUUID, "PREMISE STALE: already on HEAD")
+		return &Run{SessionUUID: spec.SessionUUID, ExitCode: 0}, nil
+	}}
+	s := newTestService(t, db, r, &stubWt{root: t.TempDir()})
+	s.WorkspaceRoot = t.TempDir()
+	id := insertTask(t, db, "T-stale-mp", taskOpts{})
+
+	s.Schedule()
+	waitFor(t, func() bool { return column(t, db, id) == "done" && !s.IsActive(id) })
+
+	dir := workspaceDirOf(t, s, id)
+	if dir == "" {
+		t.Fatal("no micro-plan was minted")
+	}
+	raw, err := os.ReadFile(taskdir.PhaseDocPath(dir))
+	if err != nil {
+		t.Fatal(err)
+	}
+	doc := string(raw)
+	report := doc[strings.LastIndex(doc, "## Completion Report"):]
+	if !strings.Contains(report, "PREMISE STALE: already on HEAD") {
+		t.Errorf("the sentinel line is not in the Completion Report:\n%s", doc)
+	}
+	if !strings.Contains(report, "closed without a commit") {
+		t.Errorf("the report does not say the card closed without a commit:\n%s", doc)
+	}
+	if strings.Contains(doc, "- [ ]") || strings.Count(doc, "- [x]") != 2 {
+		t.Errorf("want both boxes ticked:\n%s", doc)
+	}
+}
+
+// An executor that wrote its OWN report in the lent copy before exiting with a
+// sentinel keeps it: the copy comes home before the worktree is torn down, and the
+// sentinel line is not stacked on top of a report that already explains the close.
+func TestSentinelDone_KeepsTheExecutorsOwnReport(t *testing.T) {
+	db := testDB(t)
+	r := &stubRunner{run: func(spec RunSpec) (*Run, error) {
+		lent := filepath.Join(spec.Cwd, worktree.PlanDocDir, taskdir.PhaseDocName)
+		raw, err := os.ReadFile(lent)
+		if err != nil {
+			t.Errorf("read lent doc: %v", err)
+		} else if err := os.WriteFile(lent, append(raw, []byte("\nThe guard is already at auth.go:42.\n")...), 0o644); err != nil {
+			t.Errorf("write lent doc: %v", err)
+		}
+		ingestSession(t, db, spec.SessionUUID, "NO-OP: guard already present")
+		return &Run{SessionUUID: spec.SessionUUID, ExitCode: 0}, nil
+	}}
+	s := newTestService(t, db, r, &stubWt{root: t.TempDir()})
+	s.WorkspaceRoot = t.TempDir()
+	id := insertTask(t, db, "T-noop-mp", taskOpts{})
+
+	s.Schedule()
+	waitFor(t, func() bool { return column(t, db, id) == "done" && !s.IsActive(id) })
+
+	raw, err := os.ReadFile(taskdir.PhaseDocPath(workspaceDirOf(t, s, id)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	doc := string(raw)
+	if !strings.Contains(doc, "The guard is already at auth.go:42.") {
+		t.Errorf("the executor's own report was lost:\n%s", doc)
+	}
+	if strings.Contains(doc, "closed without a commit") {
+		t.Errorf("the sentinel evidence was stacked on the executor's report:\n%s", doc)
+	}
+	if strings.Contains(doc, "- [ ]") {
+		t.Errorf("want both boxes ticked:\n%s", doc)
 	}
 }

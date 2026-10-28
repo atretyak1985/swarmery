@@ -207,9 +207,17 @@ func planReadme(card Card) string {
 //
 // Two generic acceptance criteria, deliberately, rather than an LLM decomposition
 // of the prompt: generation stays deterministic and free, and the criteria that
-// matter for a board card are exactly these two — the work landed on its branch,
-// and somebody or something accepted it. The `## Completion Report` section is
-// the part that carries meaning, and it is the executor's to write.
+// matter for a board card are exactly these two — the work landed on its branch
+// (or the card honestly needed none), and somebody or something accepted it. The
+// `## Completion Report` section is the part that carries meaning, and it is the
+// executor's to write.
+//
+// Criterion 1 has two arms because not every card needs a change: the defect may
+// already be fixed, may not be a defect, or may duplicate other work. Such a card
+// closes as done WITHOUT a commit, and the evidence for that verdict is what the
+// Completion Report must then carry — wsingest.TickCardMicroPlan only ticks a
+// card's micro-plan once that report is non-blank, so the no-change arm can never
+// be satisfied by an empty claim.
 func phaseDoc(card Card) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "# Phase 1 — %s\n\n", oneLine(card.Title, card.ExternalID))
@@ -225,8 +233,10 @@ func phaseDoc(card Card) string {
 	}
 	b.WriteString(prompt + "\n\n")
 	b.WriteString("## Acceptance criteria\n\n")
-	fmt.Fprintf(&b, "- [ ] The task described above is implemented and committed on `swarm/%s` "+
-		"with the `Swarm-Task-Id: %s` trailer.\n", card.ExternalID, card.ExternalID)
+	fmt.Fprintf(&b, "- [ ] Either the task described above is implemented and committed on `swarm/%s` "+
+		"with the `Swarm-Task-Id: %s` trailer, or the card is closed as no change needed "+
+		"(already fixed, not a defect, or a duplicate) with the evidence written in the "+
+		"Completion Report below.\n", card.ExternalID, card.ExternalID)
 	b.WriteString("- [ ] Verification verdict is `pass`, or a reviewer explicitly accepted the card " +
 		"from the Review lane.\n\n")
 	b.WriteString("## Completion Report\n")
