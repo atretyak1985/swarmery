@@ -22,13 +22,18 @@ export function SectionTabs({
   labels,
   active,
   onSelect,
+  onReselect,
   idPrefix,
   ariaLabel,
 }: {
   tabs: readonly string[];
   labels: Record<string, string>;
-  active: string;
+  /** No tab open is a state of its own: every tab reads unselected, the first
+   * stays in the tab order. */
+  active: string | null;
   onSelect: (tab: string) => void;
+  /** A click on the open tab; absent, it does nothing. Keys never fold. */
+  onReselect?: () => void;
   /** Namespace for the tab/panel DOM ids — unique per mounted tablist. */
   idPrefix: string;
   ariaLabel: string;
@@ -36,7 +41,7 @@ export function SectionTabs({
   const btnRefs = useRef<Record<string, HTMLButtonElement | null>>({});
 
   const onKeyDown = (e: KeyboardEvent<HTMLDivElement>): void => {
-    const next = nextTabIndex(e.key, tabs.indexOf(active), tabs.length);
+    const next = nextTabIndex(e.key, active === null ? -1 : tabs.indexOf(active), tabs.length);
     if (next === null) return; // not our key — leave the event alone
     const target = tabs[next];
     if (target === undefined) return;
@@ -81,8 +86,8 @@ export function SectionTabs({
             // (WAI-ARIA APG), so dropping it where it cannot resolve costs
             // nothing and keeps the DOM at one panel.
             aria-controls={selected ? panelId : undefined}
-            tabIndex={tabIndexOf(t, active, tabs)}
-            onClick={() => onSelect(t)}
+            tabIndex={tabIndexOf(t, active ?? '', tabs)}
+            onClick={() => (selected ? onReselect?.() : onSelect(t))}
             className={`-mb-px shrink-0 border-b-2 px-3.5 py-[7px] text-[12.5px] font-medium whitespace-nowrap transition-colors ${
               selected ? 'border-brand text-brand' : 'border-transparent text-ink-dim hover:text-ink'
             }`}
@@ -114,7 +119,8 @@ export function SectionPanel({
 }
 
 /** The sections of a detail that the design's blocks cannot express: one tablist
- * and its one mounted panel, under the blocks. */
+ * under the blocks, all folded until one is opened (`active` null), then its one
+ * mounted panel. A click on the open tab folds it again. */
 export function DetailSections({
   tabs,
   labels,
@@ -126,8 +132,8 @@ export function DetailSections({
 }: {
   tabs: readonly string[];
   labels: Record<string, string>;
-  active: string;
-  onSelect: (tab: string) => void;
+  active: string | null;
+  onSelect: (tab: string | null) => void;
   idPrefix: string;
   ariaLabel: string;
   children: ReactNode;
@@ -139,14 +145,17 @@ export function DetailSections({
         labels={labels}
         active={active}
         onSelect={onSelect}
+        onReselect={() => onSelect(null)}
         idPrefix={idPrefix}
         ariaLabel={ariaLabel}
       />
-      <div className="mt-4">
-        <SectionPanel idPrefix={idPrefix} tab={active}>
-          {children}
-        </SectionPanel>
-      </div>
+      {active !== null && (
+        <div className="mt-4">
+          <SectionPanel idPrefix={idPrefix} tab={active}>
+            {children}
+          </SectionPanel>
+        </div>
+      )}
     </div>
   );
 }

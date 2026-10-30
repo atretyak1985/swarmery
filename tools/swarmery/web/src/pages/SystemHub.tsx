@@ -115,7 +115,7 @@ function originKv(item: SystemItem | SystemCommand): PageKv[] {
 
 interface DetailProps {
   tabParam: string | null;
-  onTab: (tab: string) => void;
+  onTab: (tab: string | null) => void;
   scopeSlug: string | null;
   projectNames: Record<string, string>;
   /** Bumped on a registry edit, so the embedded editor refetches. */
@@ -135,7 +135,7 @@ function SkillDetail({
 }: DetailProps & { id: number; item: SystemItem | undefined }): JSX.Element {
   const { t } = useLingui();
   const tabs = ['overview', 'docs', 'usage', 'definition'] as const;
-  const tab = tabs.find((value) => value === tabParam) ?? 'overview';
+  const tab = tabs.find((value) => value === tabParam) ?? null;
   const used = String(item?.tasks30d ?? 0);
   const lastUsed = item?.lastUsed;
   return (
@@ -162,14 +162,16 @@ function SkillDetail({
         active={tab}
         onSelect={onTab}
       >
-        <SkillProfile
-          id={id}
-          tab={tab}
-          projectId={scopeSlug}
-          projectNames={projectNames}
-          defRefresh={defRefresh}
-          onDefinitionMutated={onChanged}
-        />
+        {tab !== null && (
+          <SkillProfile
+            id={id}
+            tab={tab}
+            projectId={scopeSlug}
+            projectNames={projectNames}
+            defRefresh={defRefresh}
+            onDefinitionMutated={onChanged}
+          />
+        )}
       </DetailSections>
     </PageDetail>
   );
@@ -184,7 +186,7 @@ function CommandDetail({
 }: DetailProps & { id: number; item: SystemCommand | undefined }): JSX.Element {
   const { t } = useLingui();
   const tabs = ['overview', 'docs', 'content'] as const;
-  const tab = tabs.find((value) => value === tabParam) ?? 'overview';
+  const tab = tabs.find((value) => value === tabParam) ?? null;
   return (
     <PageDetail
       kind={t`system · command`}
@@ -200,7 +202,7 @@ function CommandDetail({
         active={tab}
         onSelect={onTab}
       >
-        <CommandProfile id={id} tab={tab} projectId={scopeSlug} />
+        {tab !== null && <CommandProfile id={id} tab={tab} projectId={scopeSlug} />}
       </DetailSections>
     </PageDetail>
   );

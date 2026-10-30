@@ -184,11 +184,11 @@ export function SystemShell(): JSX.Element {
   }
   if (group === null) return <Navigate to={`${base}/agents`} replace />;
 
-  const onTab = (tab: string): void => {
+  const onTab = (tab: string | null): void => {
     setSearchParams(
       (prev) => {
         const next = new URLSearchParams(prev);
-        if (tab === 'overview') next.delete('tab');
+        if (tab === null) next.delete('tab');
         else next.set('tab', tab);
         return next;
       },

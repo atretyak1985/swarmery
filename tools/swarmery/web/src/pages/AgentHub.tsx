@@ -36,8 +36,9 @@ const TAB_LABELS: Record<ProfileTab, MessageDescriptor> = {
   definition: msg`Definition`,
 };
 
-function parseTab(value: string | null): ProfileTab {
-  return (TABS as readonly string[]).includes(value ?? '') ? (value as ProfileTab) : 'overview';
+/** No `?tab=`, or one this page lacks: every section folded (the design's page). */
+function parseTab(value: string | null): ProfileTab | null {
+  return (TABS as readonly string[]).includes(value ?? '') ? (value as ProfileTab) : null;
 }
 
 /** The old routes land on the one place. */
@@ -94,7 +95,7 @@ export function AgentDetail({
   id: number;
   /** The raw `?tab=` value. */
   tabParam: string | null;
-  onTab: (tab: string) => void;
+  onTab: (tab: string | null) => void;
   scopeSlug: string | null;
   projectNames: Record<string, string>;
   healthHref: string;
@@ -204,15 +205,17 @@ export function AgentDetail({
         active={tab}
         onSelect={onTab}
       >
-        <ProfilePanel
-          tab={tab}
-          selectedId={id}
-          profile={profile}
-          projectNames={projectNames}
-          scopeSlug={scopeSlug}
-          defRefresh={refreshKey}
-          onDefinitionMutated={onChanged}
-        />
+        {tab !== null && (
+          <ProfilePanel
+            tab={tab}
+            selectedId={id}
+            profile={profile}
+            projectNames={projectNames}
+            scopeSlug={scopeSlug}
+            defRefresh={refreshKey}
+            onDefinitionMutated={onChanged}
+          />
+        )}
       </DetailSections>
     </PageDetail>
   );
