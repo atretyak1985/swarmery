@@ -223,8 +223,16 @@ function measureStage(i: LoopInputs, href: string): Stage {
   }
   const parts: string[] = [];
   if (scoredRuns > 0) {
-    const farOff = fmtCount(i.farOffPlan);
-    parts.push(i.farOffPlan > 0 ? t`${farOff} landed far from the plan.` : t`All landed close to the plan.`);
+    parts.push(
+      i.farOffPlan > 0
+        ? plural(i.farOffPlan, {
+            one: '# landed far from the plan.',
+            few: '# landed far from the plan.',
+            many: '# landed far from the plan.',
+            other: '# landed far from the plan.',
+          })
+        : t`All landed close to the plan.`,
+    );
   }
   let alert = '';
   if (classifierCalls > 0) {

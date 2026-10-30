@@ -132,6 +132,18 @@ export function Learning(): JSX.Element {
   const candidates = live.length - inForce;
   const proof = (recs ?? []).filter((r) => (PROOF_RECS as readonly string[]).includes(r.status));
   const provingOut = proof.filter((r) => r.status !== 'verified').length;
+  const lessonsInForce = plural(inForce, {
+    one: '# lesson in force',
+    few: '# lessons in force',
+    many: '# lessons in force',
+    other: '# lessons in force',
+  });
+  const changesProving = plural(provingOut, {
+    one: '# change proving out',
+    few: '# changes proving out',
+    many: '# changes proving out',
+    other: '# changes proving out',
+  });
 
   const groups: PlaceGroup[] = [
     {
@@ -145,7 +157,15 @@ export function Learning(): JSX.Element {
           key: 'queue',
           glyph: '▤',
           title: t`Review queue`,
-          summary: candidates > 0 ? t`${candidates} candidates · retirements · every status` : t`retirements · every status`,
+          summary:
+            candidates > 0
+              ? plural(candidates, {
+                  one: '# candidate · retirements · every status',
+                  few: '# candidates · retirements · every status',
+                  many: '# candidates · retirements · every status',
+                  other: '# candidates · retirements · every status',
+                })
+              : t`retirements · every status`,
         },
       ],
     },
@@ -222,7 +242,7 @@ export function Learning(): JSX.Element {
   return (
     <PagePlace
       title={t`Learning`}
-      sub={t`${inForce} lessons in force · ${provingOut} changes proving out`}
+      sub={`${lessonsInForce} · ${changesProving}`}
       searchHint={t`filter lessons`}
       groups={groups}
       openGroup={group}

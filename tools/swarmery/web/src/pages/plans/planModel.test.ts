@@ -146,11 +146,11 @@ describe('planSummary', () => {
   });
   it('says a plan nobody touched has not started', () => {
     const e = epic({ phases: [phase()] });
-    expect(planSummary(e, computeResolvedSeqs(e.phases))).toBe('0 of 1 phases landed · not started');
+    expect(planSummary(e, computeResolvedSeqs(e.phases))).toBe('0 of 1 phase landed · not started');
   });
   it('leaves the cost out while it is unknown', () => {
     const e = epic({ phases: [phase({ completionState: 'complete' })] });
-    expect(planSummary(e, computeResolvedSeqs(e.phases))).toBe('1 of 1 phases landed · all landed');
+    expect(planSummary(e, computeResolvedSeqs(e.phases))).toBe('1 of 1 phase landed · all landed');
   });
 });
 

@@ -48,7 +48,7 @@ export function cellPhrase(g: RouteGroup): string {
   const runs = g.n;
   const failRate = pct(g.failRate);
   const meanCost = usd(g.meanCost);
-  return t`${plural(runs, { one: '# runs', few: '# runs', many: '# runs', other: '# runs' })}, ${failRate} fail, ${meanCost} mean`;
+  return t`${plural(runs, { one: '# run', few: '# runs', many: '# runs', other: '# runs' })}, ${failRate} fail, ${meanCost} mean`;
 }
 
 /** The "would it have been cheaper/safer" line for one divergent cell. */
@@ -146,7 +146,7 @@ export function RoutingTables({ rep }: { rep: RouteReport }): JSX.Element {
       <div className="mt-2 text-[12px] text-ink-dim">
         <Trans>Not enough runs yet (n &lt; {min} per group).</Trans>
         {rep.rows + rep.unsettled > 0 &&
-          ` ${t`${settled} settled, ${unsettled} still running in the last ${plural(days, { one: '# days', few: '# days', many: '# days', other: '# days' })}.`}`}
+          ` ${t`${settled} settled, ${unsettled} still running in the last ${plural(days, { one: '# day', few: '# days', many: '# days', other: '# days' })}.`}`}
       </div>
     );
   }
@@ -156,7 +156,7 @@ export function RoutingTables({ rep }: { rep: RouteReport }): JSX.Element {
   return (
     <>
       <div className="mt-1 font-mono text-[10px] text-ink-faint">
-        {t`${plural(settledRuns, { one: '# settled run(s)', few: '# settled run(s)', many: '# settled run(s)', other: '# settled run(s)' })}, ${unsettled} still running · last ${plural(days, { one: '# days', few: '# days', many: '# days', other: '# days' })}`}
+        {t`${plural(settledRuns, { one: '# settled run(s)', few: '# settled run(s)', many: '# settled run(s)', other: '# settled run(s)' })}, ${unsettled} still running · last ${plural(days, { one: '# day', few: '# days', many: '# days', other: '# days' })}`}
       </div>
       {tiers.length > 0 && (
         <GroupTable caption={t`By tier`} keyLabel={t`tier`} keyOf={(g) => g.tier ?? '—'} groups={tiers} />

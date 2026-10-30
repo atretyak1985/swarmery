@@ -118,8 +118,15 @@ function windowDays(a: RetroAgentsResp): number | null {
 }
 
 function trendClause(now: number, prev: number | null, days: number | null): string {
-  const dayCount = String(days ?? 0);
-  const window = days !== null ? t`the ${dayCount} days before` : t`the window before`;
+  const window =
+    days !== null
+      ? plural(days, {
+          one: 'the # day before',
+          few: 'the # days before',
+          many: 'the # days before',
+          other: 'the # days before',
+        })
+      : t`the window before`;
   const nowPct = fmtPct(now);
   if (prev === null) return t`The fleet failed ${nowPct} of its runs in this window`;
   if (Math.abs(now - prev) < 2) return t`The fleet is failing about as often as ${window}`;

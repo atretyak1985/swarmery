@@ -1,5 +1,6 @@
 // The sessions of a plan.
 
+import { plural } from '@lingui/core/macro';
 import { Trans, useLingui } from '@lingui/react/macro';
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
@@ -132,8 +133,18 @@ export function PlanSessions({
               aria-pressed={view.scope === 'phase'}
               aria-label={
                 view.scope === 'phase'
-                  ? t`session scope: phase ${seqLabel} only, ${phaseCount} of ${totalCount} sessions`
-                  : t`session scope: all ${totalCount} sessions of the plan`
+                  ? plural(view.totalCount, {
+                      one: `session scope: phase ${seqLabel} only, ${phaseCount} of # session`,
+                      few: `session scope: phase ${seqLabel} only, ${phaseCount} of # sessions`,
+                      many: `session scope: phase ${seqLabel} only, ${phaseCount} of # sessions`,
+                      other: `session scope: phase ${seqLabel} only, ${phaseCount} of # sessions`,
+                    })
+                  : plural(view.totalCount, {
+                      one: 'session scope: all # session of the plan',
+                      few: 'session scope: all # sessions of the plan',
+                      many: 'session scope: all # sessions of the plan',
+                      other: 'session scope: all # sessions of the plan',
+                    })
               }
               data-tip={
                 view.scope === 'phase'

@@ -21,10 +21,6 @@ msgstr " — agent {agent}"
 msgid " · live"
 msgstr " · live"
 
-#: src/pages/plans/forecastStoryModel.ts
-msgid "— {posterior} it added {count} more {areas} ({names})"
-msgstr "— {posterior} it added {count} more {areas} ({names})"
-
 #: src/pages/PlanningMode.tsx
 msgid "— nothing is written until you approve the diff."
 msgstr "— nothing is written until you approve the diff."
@@ -57,10 +53,52 @@ msgstr "(post hoc — excluded from calibration)"
 msgid "(question could not be parsed)"
 msgstr "(question could not be parsed)"
 
-#. placeholder {0}: String(n)
-#: src/pages/plans/ReviewFindings.tsx
-msgid "{0} review rounds"
-msgstr "{0} review rounds"
+#. placeholder {0}: added.length
+#: src/pages/plans/forecastStoryModel.ts
+msgid "{0, plural, one {— {posterior} it added # more area ({names})} few {— {posterior} it added # more areas ({names})} many {— {posterior} it added # more areas ({names})} other {— {posterior} it added # more areas ({names})}}"
+msgstr "{0, plural, one {— {posterior} it added # more area ({names})} few {— {posterior} it added # more areas ({names})} many {— {posterior} it added # more areas ({names})} other {— {posterior} it added # more areas ({names})}}"
+
+#. placeholder {0}: p.checkboxesTotal
+#. placeholder {0}: phase.checkboxesTotal
+#: src/pages/plans/PhaseCard.tsx
+#: src/pages/plans/phaseLedgerModel.ts
+msgid "{0, plural, one {{done} of # criterion} few {{done} of # criteria} many {{done} of # criteria} other {{done} of # criteria}}"
+msgstr "{0, plural, one {{done} of # criterion} few {{done} of # criteria} many {{done} of # criteria} other {{done} of # criteria}}"
+
+#. placeholder {0}: phase.checkboxesTotal
+#: src/pages/plans/PhasePanel.tsx
+msgid "{0, plural, one {{done}/# criterion} few {{done}/# criteria} many {{done}/# criteria} other {{done}/# criteria}}"
+msgstr "{0, plural, one {{done}/# criterion} few {{done}/# criteria} many {{done}/# criteria} other {{done}/# criteria}}"
+
+#. placeholder {0}: epic.phases.length
+#: src/pages/plans/planModel.ts
+msgid "{0, plural, one {{landed} of # phase landed} few {{landed} of # phases landed} many {{landed} of # phases landed} other {{landed} of # phases landed}}"
+msgstr "{0, plural, one {{landed} of # phase landed} few {{landed} of # phases landed} many {{landed} of # phases landed} other {{landed} of # phases landed}}"
+
+#. placeholder {0}: p.checkboxesTotal
+#: src/pages/plans/forecastStoryModel.ts
+msgid "{0, plural, one {{ticked} of the # criterion ticked} few {{ticked} of the # criteria ticked} many {{ticked} of the # criteria ticked} other {{ticked} of the # criteria ticked}}"
+msgstr "{0, plural, one {{ticked} of the # criterion ticked} few {{ticked} of the # criteria ticked} many {{ticked} of the # criteria ticked} other {{ticked} of the # criteria ticked}}"
+
+#. placeholder {0}: p.checkboxesTotal
+#: src/pages/plans/forecastStoryModel.ts
+msgid "{0, plural, one {none of the # criterion ticked} few {none of the # criteria ticked} many {none of the # criteria ticked} other {none of the # criteria ticked}}"
+msgstr "{0, plural, one {none of the # criterion ticked} few {none of the # criteria ticked} many {none of the # criteria ticked} other {none of the # criteria ticked}}"
+
+#. placeholder {0}: view.totalCount
+#: src/pages/plans/PlanSessions.tsx
+msgid "{0, plural, one {session scope: all # session of the plan} few {session scope: all # sessions of the plan} many {session scope: all # sessions of the plan} other {session scope: all # sessions of the plan}}"
+msgstr "{0, plural, one {session scope: all # session of the plan} few {session scope: all # sessions of the plan} many {session scope: all # sessions of the plan} other {session scope: all # sessions of the plan}}"
+
+#. placeholder {0}: view.totalCount
+#: src/pages/plans/PlanSessions.tsx
+msgid "{0, plural, one {session scope: phase {seqLabel} only, {phaseCount} of # session} few {session scope: phase {seqLabel} only, {phaseCount} of # sessions} many {session scope: phase {seqLabel} only, {phaseCount} of # sessions} other {session scope: phase {seqLabel} only, {phaseCount} of # sessions}}"
+msgstr "{0, plural, one {session scope: phase {seqLabel} only, {phaseCount} of # session} few {session scope: phase {seqLabel} only, {phaseCount} of # sessions} many {session scope: phase {seqLabel} only, {phaseCount} of # sessions} other {session scope: phase {seqLabel} only, {phaseCount} of # sessions}}"
+
+#. placeholder {0}: d.actualAreas.length
+#: src/pages/plans/forecastStoryModel.ts
+msgid "{0, plural, one {touched # area{offNote}} few {touched # areas{offNote}} many {touched # areas{offNote}} other {touched # areas{offNote}}}"
+msgstr "{0, plural, one {touched # area{offNote}} few {touched # areas{offNote}} many {touched # areas{offNote}} other {touched # areas{offNote}}}"
 
 #: src/pages/Board.tsx
 msgid "{archivedCount} archived"
@@ -90,6 +128,10 @@ msgstr "{changeShort} open"
 msgid "{changeShort} opened"
 msgstr "{changeShort} opened"
 
+#: src/pages/plans/TerminalBadge.tsx
+msgid "{count, plural, one {{label}: {subject} is open in # session — {listing}} few {{label}: {subject} is open in # sessions — {listing}} many {{label}: {subject} is open in # sessions — {listing}} other {{label}: {subject} is open in # sessions — {listing}}}"
+msgstr "{count, plural, one {{label}: {subject} is open in # session — {listing}} few {{label}: {subject} is open in # sessions — {listing}} many {{label}: {subject} is open in # sessions — {listing}} other {{label}: {subject} is open in # sessions — {listing}}}"
+
 #: src/pages/Playbooks.tsx
 msgid "{count, plural, one {# stage} few {# stages} many {# stages} other {# stages}}"
 msgstr "{count, plural, one {# stage} few {# stages} many {# stages} other {# stages}}"
@@ -110,18 +152,9 @@ msgstr "{docCount, plural, one {# plan doc will change on disk: {docs}. This is 
 msgid "{done} of {total} checkboxes done"
 msgstr "{done} of {total} checkboxes done"
 
-#: src/pages/plans/PhaseCard.tsx
-#: src/pages/plans/phaseLedgerModel.ts
-msgid "{done} of {total} criteria"
-msgstr "{done} of {total} criteria"
-
 #: src/pages/plans/PhaseDetailPanel.tsx
 msgid "{done}/{total} acceptance criteria met · full list on the Criteria tab"
 msgstr "{done}/{total} acceptance criteria met · full list on the Criteria tab"
-
-#: src/pages/plans/PhasePanel.tsx
-msgid "{done}/{total} criteria"
-msgstr "{done}/{total} criteria"
 
 #: src/pages/Board.tsx
 msgid "{doneCount} done"
@@ -148,20 +181,12 @@ msgid "{label} (no cards)"
 msgstr "{label} (no cards)"
 
 #: src/pages/plans/TerminalBadge.tsx
-msgid "{label}: {subject} is open in {count} sessions — {listing}"
-msgstr "{label}: {subject} is open in {count} sessions — {listing}"
-
-#: src/pages/plans/TerminalBadge.tsx
 msgid "{label}: {subject} is open in session {shortId} ({liveNote})"
 msgstr "{label}: {subject} is open in session {shortId} ({liveNote})"
 
 #: src/pages/plans/phaseLedgerModel.ts
 msgid "{land} [LAND] pending"
 msgstr "{land} [LAND] pending"
-
-#: src/pages/plans/planModel.ts
-msgid "{landed} of {total} phases landed"
-msgstr "{landed} of {total} phases landed"
 
 #: src/pages/plans/forecastStoryModel.ts
 msgid "{m, plural, one {# minute} few {# minutes} many {# minutes} other {# minutes}}"
@@ -171,9 +196,9 @@ msgstr "{m, plural, one {# minute} few {# minutes} many {# minutes} other {# min
 msgid "{manual, plural, one {# criterion [MANUAL] — only you can close it} few {# criteria [MANUAL] — only you can close them} many {# criteria [MANUAL] — only you can close them} other {# criteria [MANUAL] — only you can close them}}"
 msgstr "{manual, plural, one {# criterion [MANUAL] — only you can close it} few {# criteria [MANUAL] — only you can close them} many {# criteria [MANUAL] — only you can close them} other {# criteria [MANUAL] — only you can close them}}"
 
-#: src/pages/plans/forecastStoryModel.ts
-msgid "{n, plural, one {area} few {areas} many {areas} other {areas}}"
-msgstr "{n, plural, one {area} few {areas} many {areas} other {areas}}"
+#: src/pages/plans/ReviewFindings.tsx
+msgid "{n, plural, one {# review round} few {# review rounds} many {# review rounds} other {# review rounds}}"
+msgstr "{n, plural, one {# review round} few {# review rounds} many {# review rounds} other {# review rounds}}"
 
 #: src/pages/plans/planModel.ts
 msgid "{needs, plural, one {# needs you} few {# need you} many {# need you} other {# need you}}"
@@ -222,10 +247,6 @@ msgstr "{surpriseTerm} {index} · nothing gates on this"
 #: src/pages/plans/plansTarget.ts
 msgid "{tab} · Phase {seq} — {title} · {tail}"
 msgstr "{tab} · Phase {seq} — {title} · {tail}"
-
-#: src/pages/plans/forecastStoryModel.ts
-msgid "{ticked} of the {total} criteria ticked"
-msgstr "{ticked} of the {total} criteria ticked"
 
 #: src/pages/plans/PlanDetailPanel.tsx
 msgid "{title} — plan details"
@@ -283,10 +304,6 @@ msgstr "❐ README"
 #: src/pages/plans/PlanHeader.tsx
 msgid "❚❚ pause plan"
 msgstr "❚❚ pause plan"
-
-#: src/pages/plans/ReviewFindings.tsx
-msgid "1 review round"
-msgstr "1 review round"
 
 #: src/pages/plans/forecastStoryModel.ts
 msgid "30 to 90 min"
@@ -1654,10 +1671,6 @@ msgstr "no turns yet"
 msgid "nobody (it shipped)"
 msgstr "nobody (it shipped)"
 
-#: src/pages/plans/forecastStoryModel.ts
-msgid "none of the {total} criteria ticked"
-msgstr "none of the {total} criteria ticked"
-
 #: src/pages/PlanningMode.tsx
 msgid "not delivered"
 msgstr "not delivered"
@@ -2622,14 +2635,6 @@ msgid "session →"
 msgstr "session →"
 
 #: src/pages/plans/PlanSessions.tsx
-msgid "session scope: all {totalCount} sessions of the plan"
-msgstr "session scope: all {totalCount} sessions of the plan"
-
-#: src/pages/plans/PlanSessions.tsx
-msgid "session scope: phase {seqLabel} only, {phaseCount} of {totalCount} sessions"
-msgstr "session scope: phase {seqLabel} only, {phaseCount} of {totalCount} sessions"
-
-#: src/pages/plans/PlanSessions.tsx
 msgid "sessions"
 msgstr "sessions"
 
@@ -3127,10 +3132,6 @@ msgstr "tick this criterion in the doc"
 #: src/pages/Routines.tsx
 msgid "Timeout (s)"
 msgstr "Timeout (s)"
-
-#: src/pages/plans/forecastStoryModel.ts
-msgid "touched {count} {areas}{offNote}"
-msgstr "touched {count} {areas}{offNote}"
 
 #: src/pages/PlanningMode.tsx
 msgid "Transform your idea into a plan"

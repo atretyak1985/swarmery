@@ -65,16 +65,6 @@ function word(map: Record<string, MessageDescriptor>, key: string): string | und
   return message === undefined ? undefined : i18n._(message);
 }
 
-/** Counts are digits: a spelled-out English number cannot be translated. */
-function numberWord(n: number): string {
-  return String(n);
-}
-
-/** "area" / "areas" after a digit count. */
-function areaWord(n: number): string {
-  return plural(n, { one: 'area', few: 'areas', many: 'areas', other: 'areas' });
-}
-
 function capitalize(s: string): string {
   return s === '' ? s : `${s.charAt(0).toUpperCase()}${s.slice(1)}`;
 }
@@ -139,10 +129,14 @@ export function forecastStory(p: EpicPhase): ForecastStory | null {
     const added = s.revision?.areasAdded ?? [];
     if (added.length > 0) {
       const posterior = UI_TERMS.posterior.ui;
-      const count = numberWord(added.length);
-      const areas = areaWord(added.length);
       const names = added.map(areaName).join(', ');
-      sure += ` ${t`— ${posterior} it added ${count} more ${areas} (${names})`}`;
+      const addedText = plural(added.length, {
+        one: `— ${posterior} it added # more area (${names})`,
+        few: `— ${posterior} it added # more areas (${names})`,
+        many: `— ${posterior} it added # more areas (${names})`,
+        other: `— ${posterior} it added # more areas (${names})`,
+      });
+      sure += ` ${addedText}`;
     }
     expected += ` ${sure}.`;
   }
@@ -152,18 +146,34 @@ export function forecastStory(p: EpicPhase): ForecastStory | null {
     if (d.actualAreas.length === 0) happenedParts.push(t`no code touched`);
     else {
       const off = d.unexpectedAreas.length;
-      const count = numberWord(d.actualAreas.length);
-      const areas = areaWord(d.actualAreas.length);
-      const offCount = numberWord(off);
+      const offCount = String(off);
       const offNote = off > 0 ? ` ${t`(${offCount} not in the plan)`}` : '';
-      happenedParts.push(t`touched ${count} ${areas}${offNote}`);
+      happenedParts.push(
+        plural(d.actualAreas.length, {
+          one: `touched # area${offNote}`,
+          few: `touched # areas${offNote}`,
+          many: `touched # areas${offNote}`,
+          other: `touched # areas${offNote}`,
+        }),
+      );
     }
   }
-  const total = String(p.checkboxesTotal);
   const tickedCount = p.runCheckboxesBefore === null ? p.checkboxesDone : p.checkboxesDone - p.runCheckboxesBefore;
   const ticked = String(tickedCount);
   happenedParts.push(
-    tickedCount <= 0 ? t`none of the ${total} criteria ticked` : t`${ticked} of the ${total} criteria ticked`,
+    tickedCount <= 0
+      ? plural(p.checkboxesTotal, {
+          one: 'none of the # criterion ticked',
+          few: 'none of the # criteria ticked',
+          many: 'none of the # criteria ticked',
+          other: 'none of the # criteria ticked',
+        })
+      : plural(p.checkboxesTotal, {
+          one: `${ticked} of the # criterion ticked`,
+          few: `${ticked} of the # criteria ticked`,
+          many: `${ticked} of the # criteria ticked`,
+          other: `${ticked} of the # criteria ticked`,
+        }),
   );
   let happened = `${happenedParts.join(', ')}.`;
   if (d.actualAreas === null) happened += ` ${t`The diff was not measured, so we can't say which areas it touched.`}`;

@@ -2454,6 +2454,10 @@ msgstr "завантаження використання"
 msgid "loading worktrees…"
 msgstr "завантаження worktree…"
 
+#: src/main.tsx
+msgid "loading…"
+msgstr "завантаження…"
+
 #: src/components/PermissionPresets.tsx
 msgid "Locked down"
 msgstr "Заблоковано"

@@ -65,6 +65,26 @@ msgstr "· почато {age} тому"
 msgid "(target {cmp}{targetValue})"
 msgstr "(ціль {cmp}{targetValue})"
 
+#. placeholder {0}: row.runs
+#: src/pages/health/HealthOverview.tsx
+msgid "{0, plural, one {{agent}: {failed} of # run failed, down from {was}.} few {{agent}: {failed} of # runs failed, down from {was}.} many {{agent}: {failed} of # runs failed, down from {was}.} other {{agent}: {failed} of # runs failed, down from {was}.}}"
+msgstr "{0, plural, one {{agent}: {failed} із # запуску невдало, знизилось з {was}.} few {{agent}: {failed} із # запусків невдало, знизилось з {was}.} many {{agent}: {failed} із # запусків невдало, знизилось з {was}.} other {{agent}: {failed} із # запуску невдало, знизилось з {was}.}}"
+
+#. placeholder {0}: row.runs
+#: src/pages/health/HealthOverview.tsx
+msgid "{0, plural, one {{agent}: {failed} of # run failed.} few {{agent}: {failed} of # runs failed.} many {{agent}: {failed} of # runs failed.} other {{agent}: {failed} of # runs failed.}}"
+msgstr "{0, plural, one {{agent}: {failed} із # запуску невдало.} few {{agent}: {failed} із # запусків невдало.} many {{agent}: {failed} із # запусків невдало.} other {{agent}: {failed} із # запуску невдало.}}"
+
+#. placeholder {0}: d.calls
+#: src/pages/health/healthPlace.ts
+msgid "{0, plural, one {{tool} denied {denied} of # call} few {{tool} denied {denied} of # calls} many {{tool} denied {denied} of # calls} other {{tool} denied {denied} of # calls}}"
+msgstr "{0, plural, one {{tool} відхилено {denied} із # виклику} few {{tool} відхилено {denied} із # викликів} many {{tool} відхилено {denied} із # викликів} other {{tool} відхилено {denied} із # виклику}}"
+
+#. placeholder {0}: denied.calls
+#: src/pages/health/HealthOverview.tsx
+msgid "{0, plural, one {{tool} denied {deniedCount} of # call} few {{tool} denied {deniedCount} of # calls} many {{tool} denied {deniedCount} of # calls} other {{tool} denied {deniedCount} of # calls}}"
+msgstr "{0, plural, one {{tool} відхилено {deniedCount} із # виклику} few {{tool} відхилено {deniedCount} із # викликів} many {{tool} відхилено {deniedCount} із # викликів} other {{tool} відхилено {deniedCount} із # виклику}}"
+
 #. placeholder {0}: a.calls
 #. placeholder {0}: mod.uses.length
 #: src/pages/Analytics.tsx
@@ -104,6 +124,11 @@ msgstr "{0, plural, one {# запуск · середня несподіванк
 msgid "{0, plural, one {# run} few {# runs} many {# runs} other {# runs}}"
 msgstr "{0, plural, one {# запуск} few {# запуски} many {# запусків} other {# запуску}}"
 
+#. placeholder {0}: shown.length
+#: src/pages/health/ModCostPanel.tsx
+msgid "{0, plural, one {# session with the session mod} few {# sessions with the session mod} many {# sessions with the session mod} other {# sessions with the session mod}}"
+msgstr "{0, plural, one {# сесія з сесійним модом} few {# сесії з сесійним модом} many {# сесій з сесійним модом} other {# сесії з сесійним модом}}"
+
 #. placeholder {0}: p.n
 #: src/pages/learning/TurnForecastPanel.tsx
 msgid "{0, plural, one {# turn} few {# turns} many {# turns} other {# turns}}"
@@ -114,10 +139,20 @@ msgstr "{0, plural, one {# хід} few {# ходи} many {# ходів} other {#
 msgid "{0, plural, one {# validate error} few {# validate errors} many {# validate errors} other {# validate errors}}"
 msgstr "{0, plural, one {# помилка validate} few {# помилки validate} many {# помилок validate} other {# помилки validate}}"
 
+#. placeholder {0}: denied.calls
+#: src/pages/health/HealthOverview.tsx
+msgid "{0, plural, one {denied {deniedCount}× · of # call} few {denied {deniedCount}× · of # calls} many {denied {deniedCount}× · of # calls} other {denied {deniedCount}× · of # calls}}"
+msgstr "{0, plural, one {відхилено {deniedCount}× · із # виклику} few {відхилено {deniedCount}× · із # викликів} many {відхилено {deniedCount}× · із # викликів} other {відхилено {deniedCount}× · із # виклику}}"
+
 #. placeholder {0}: rep.minSamples
 #: src/pages/LessonsCalibration.tsx
 msgid "{0, plural, one {No group has # scored run yet.} few {No group has # scored runs yet.} many {No group has # scored runs yet.} other {No group has # scored runs yet.}}"
 msgstr "{0, plural, one {Жодна група ще не має # оціненого запуску.} few {Жодна група ще не має # оцінених запусків.} many {Жодна група ще не має # оцінених запусків.} other {Жодна група ще не має # оціненого запуску.}}"
+
+#. placeholder {0}: g.sessions.length
+#: src/pages/health/healthPlace.ts
+msgid "{0, plural, one {same error {count}× in # session} few {same error {count}× in # sessions} many {same error {count}× in # sessions} other {same error {count}× in # sessions}}"
+msgstr "{0, plural, one {та сама помилка {count}× у # сесії} few {та сама помилка {count}× у # сесіях} many {та сама помилка {count}× у # сесіях} other {та сама помилка {count}× у # сесії}}"
 
 #: src/pages/inbox/inboxModel.ts
 msgid "{action} · agent's suggestion"
@@ -126,14 +161,6 @@ msgstr "{action} · пропозиція агента"
 #: src/pages/inbox/HandledList.tsx
 msgid "{age} ago"
 msgstr "{age} тому"
-
-#: src/pages/health/HealthOverview.tsx
-msgid "{agent}: {failed} of {runs} runs failed, down from {was}."
-msgstr "{agent}: збій у {failed} з {runs} запусків, було {was}."
-
-#: src/pages/health/HealthOverview.tsx
-msgid "{agent}: {failed} of {runs} runs failed."
-msgstr "{agent}: збій у {failed} з {runs} запусків."
 
 #: src/pages/SystemShell.tsx
 msgid "{agentCount} agents · {skillCount} skills · {hookCount} hooks · {routineCount} routines"
@@ -160,8 +187,8 @@ msgid "{calls, plural, =1 {once} one {# times} few {# times} many {# times} othe
 msgstr "{calls, plural, =1 {один раз} one {# раз} few {# рази} many {# разів} other {# разу}}"
 
 #: src/pages/learning/Learning.tsx
-msgid "{candidates} candidates · retirements · every status"
-msgstr "{candidates} кандидатів · списання · усі статуси"
+msgid "{candidates, plural, one {# candidate · retirements · every status} few {# candidates · retirements · every status} many {# candidates · retirements · every status} other {# candidates · retirements · every status}}"
+msgstr "{candidates, plural, one {# кандидат · списання · усі статуси} few {# кандидати · списання · усі статуси} many {# кандидатів · списання · усі статуси} other {# кандидата · списання · усі статуси}}"
 
 #: src/pages/health/healthModel.ts
 msgid "{changesText} verified · {gatheringCount} gathering proof"
@@ -172,8 +199,8 @@ msgid "{checks, plural, one {# check got no verdict in the last hour} few {# che
 msgstr "{checks, plural, one {# перевірка за останню годину лишилася без вердикту} few {# перевірки за останню годину лишилися без вердикту} many {# перевірок за останню годину лишилися без вердикту} other {# перевірки за останню годину лишилося без вердикту}}"
 
 #: src/pages/memory/StaleFactsPanel.tsx
-msgid "{claims, plural, one {# PR claims} few {# PR claims} many {# PR claims} other {# PR claims}} across {files, plural, one {# files} few {# files} many {# files} other {# files}}"
-msgstr "{claims, plural, one {# PR-твердження} few {# PR-твердження} many {# PR-тверджень} other {# PR-твердження}} у {files, plural, one {# файлі} few {# файлах} many {# файлах} other {# файлу}}"
+msgid "{claims, plural, one {# PR claim} few {# PR claims} many {# PR claims} other {# PR claims}} across {files, plural, one {# file} few {# files} many {# files} other {# files}}"
+msgstr "{claims, plural, one {# PR-твердження} few {# PR-твердження} many {# PR-тверджень} other {# PR-твердження}} у {files, plural, one {# файлі} few {# файлах} many {# файлах} other {# файлах}}"
 
 #: src/pages/Analytics.tsx
 msgid "{commits} commits · {filesModified} files"
@@ -204,10 +231,6 @@ msgstr "{count, plural, one {# задача} few {# задачі} many {# зад
 msgid "{count} d"
 msgstr "{count} д"
 
-#: src/pages/health/ModCostPanel.tsx
-msgid "{count} sessions with the session mod · {total} · {divergingCount} differ by more than 10 %"
-msgstr "сесій із модом сесії: {count} · {total} · розходяться більш ніж на 10 %: {divergingCount}"
-
 #: src/pages/inbox/inboxModel.ts
 msgid "{count} waiting · oldest {age}"
 msgstr "{count} чекають · найстаріше {age}"
@@ -225,9 +248,21 @@ msgstr "{day}: {runs, plural, one {# запуск} few {# запуски} many {
 msgid "{dayCount} d"
 msgstr "{dayCount} д"
 
+#: src/pages/health/HealthOverview.tsx
+msgid "{days, plural, one {# day} few {# days} many {# days} other {# days}}"
+msgstr "{days, plural, one {# день} few {# дні} many {# днів} other {# дня}}"
+
+#: src/pages/health/healthModel.ts
+msgid "{days, plural, one {the # day before} few {the # days before} many {the # days before} other {the # days before}}"
+msgstr "{days, plural, one {попередній # день} few {попередні # дні} many {попередні # днів} other {попередні # дня}}"
+
 #: src/pages/Retro.tsx
 msgid "{delegations} delegations: {ok} ok, {redispatched} re-dispatched"
 msgstr "{delegations} делегувань: {ok} ок, {redispatched} перевідправлено"
+
+#: src/pages/health/ModCostPanel.tsx
+msgid "{diverging, plural, one {# differs by more than 10 %} few {# differ by more than 10 %} many {# differ by more than 10 %} other {# differ by more than 10 %}}"
+msgstr "{diverging, plural, one {# відрізняється більш ніж на 10 %} few {# відрізняються більш ніж на 10 %} many {# відрізняються більш ніж на 10 %} other {# відрізняється більш ніж на 10 %}}"
 
 #: src/pages/learning/classifierModel.ts
 msgid "{errors, plural, =1 {once} one {# times} few {# times} many {# times} other {# times}}"
@@ -304,16 +339,16 @@ msgid "{head} · {window} d · {failed} failed, up from {prev}"
 msgstr "{head} · {window} д · збій {failed}, було {prev}"
 
 #: src/pages/health/HealthOverview.tsx
-msgid "{head} in {window} days, {failed} failed — down from {was}."
-msgstr "{head} за {window} днів, збій {failed}, було {was}."
+msgid "{head} in {window}, {failed} failed — down from {was}."
+msgstr "{head} за {window}, {failed} невдало — знизилось з {was}."
 
 #: src/pages/health/HealthOverview.tsx
-msgid "{head} in {window} days, {failed} failed — up from {was}."
-msgstr "{head} за {window} днів, збій {failed}, було {was}."
+msgid "{head} in {window}, {failed} failed — up from {was}."
+msgstr "{head} за {window}, {failed} невдало — зросло з {was}."
 
 #: src/pages/health/HealthOverview.tsx
-msgid "{head} in {window} days, {failed} failed."
-msgstr "{head} за {window} днів, збій {failed}."
+msgid "{head} in {window}, {failed} failed."
+msgstr "{head} за {window}, {failed} невдало."
 
 #: src/pages/health/healthModel.ts
 msgid "{head}; almost all of the change is {agent}."
@@ -344,8 +379,8 @@ msgid "{hot, plural, one {# agent still sits above the {line} % line.} few {# ag
 msgstr "{hot, plural, one {# агент досі вище межі {line} %.} few {# агенти досі вище межі {line} %.} many {# агентів досі вище межі {line} %.} other {# агента досі вище межі {line} %.}}"
 
 #: src/pages/learning/Learning.tsx
-msgid "{inForce} lessons in force · {provingOut} changes proving out"
-msgstr "{inForce} уроків у силі · {provingOut} змін перевіряються"
+msgid "{inForce, plural, one {# lesson in force} few {# lessons in force} many {# lessons in force} other {# lessons in force}}"
+msgstr "{inForce, plural, one {# урок у силі} few {# уроки у силі} many {# уроків у силі} other {# уроку у силі}}"
 
 #: src/pages/system/ItemDetail.tsx
 msgid "{itemName} sections"
@@ -414,8 +449,8 @@ msgid "{ok} ok"
 msgstr "{ok} ок"
 
 #: src/pages/system/ItemDetail.tsx
-msgid "{okRuns} ok · {errorRuns} error · {sessions, plural, one {# sessions} few {# sessions} many {# sessions} other {# sessions}} · {projects, plural, one {# project} few {# projects} many {# projects} other {# projects}}"
-msgstr "{okRuns} ок · {errorRuns} з помилкою · {sessions, plural, one {# сесія} few {# сесії} many {# сесій} other {# сесії}} · {projects, plural, one {# проєкт} few {# проєкти} many {# проєктів} other {# проєкту}}"
+msgid "{okRuns} ok · {errorRuns} error · {sessions, plural, one {# session} few {# sessions} many {# sessions} other {# sessions}} · {projects, plural, one {# project} few {# projects} many {# projects} other {# projects}}"
+msgstr "{okRuns} ок · {errorRuns} помилок · {sessions, plural, one {# сесія} few {# сесії} many {# сесій} other {# сесії}} · {projects, plural, one {# проєкт} few {# проєкти} many {# проєктів} other {# проєкту}}"
 
 #: src/pages/inbox/Inbox.tsx
 msgid "{openCount} to review · nothing here blocks a session"
@@ -424,6 +459,10 @@ msgstr "{openCount} на розгляд · тут нічого не блокує
 #: src/pages/system/ItemDetail.tsx
 msgid "{percent}% err"
 msgstr "{percent}% пом."
+
+#: src/pages/learning/Learning.tsx
+msgid "{provingOut, plural, one {# change proving out} few {# changes proving out} many {# changes proving out} other {# changes proving out}}"
+msgstr "{provingOut, plural, one {# зміна на перевірці} few {# зміни на перевірці} many {# змін на перевірці} other {# зміни на перевірці}}"
 
 #: src/pages/Analytics.tsx
 msgid "{reads} cache reads · {uncached} uncached input"
@@ -464,7 +503,7 @@ msgid "{runs, plural, one {# run} few {# runs} many {# runs} other {# runs}}"
 msgstr "{runs, plural, one {# запуск} few {# запуски} many {# запусків} other {# запуску}}"
 
 #: src/pages/RoutingReport.tsx
-msgid "{runs, plural, one {# runs} few {# runs} many {# runs} other {# runs}}, {failRate} fail, {meanCost} mean"
+msgid "{runs, plural, one {# run} few {# runs} many {# runs} other {# runs}}, {failRate} fail, {meanCost} mean"
 msgstr "{runs, plural, one {# запуск} few {# запуски} many {# запусків} other {# запуску}}, {failRate} невдач, {meanCost} у середньому"
 
 #: src/pages/Analytics.tsx
@@ -480,13 +519,17 @@ msgstr "запусків за 30 днів: {runs}"
 msgid "{sessionCount, plural, one {in # session} few {in # sessions} many {in # sessions} other {in # sessions}}"
 msgstr "{sessionCount, plural, one {у # сесії} few {у # сесіях} many {у # сесіях} other {у # сесії}}"
 
-#: src/pages/RoutingReport.tsx
-msgid "{settled} settled, {unsettled} still running in the last {days, plural, one {# days} few {# days} many {# days} other {# days}}."
-msgstr "{settled} завершено, {unsettled} ще виконуються за останні {days, plural, one {# день} few {# дні} many {# днів} other {# дня}}."
+#: src/pages/health/ModCostPanel.tsx
+msgid "{sessionsText} · {total} · {divergingText}"
+msgstr "{sessionsText} · {total} · {divergingText}"
 
 #: src/pages/RoutingReport.tsx
-msgid "{settledRuns, plural, one {# settled run(s)} few {# settled run(s)} many {# settled run(s)} other {# settled run(s)}}, {unsettled} still running · last {days, plural, one {# days} few {# days} many {# days} other {# days}}"
-msgstr "{settledRuns, plural, one {# завершений запуск} few {# завершені запуски} many {# завершених запусків} other {# завершеного запуску}}, {unsettled} ще виконуються · останні {days, plural, one {# день} few {# дні} many {# днів} other {# дня}}"
+msgid "{settled} settled, {unsettled} still running in the last {days, plural, one {# day} few {# days} many {# days} other {# days}}."
+msgstr "{settled} завершено, {unsettled} ще виконуються {days, plural, one {за останній # день} few {за останні # дні} many {за останні # днів} other {за останнього # дня}}."
+
+#: src/pages/RoutingReport.tsx
+msgid "{settledRuns, plural, one {# settled run(s)} few {# settled run(s)} many {# settled run(s)} other {# settled run(s)}}, {unsettled} still running · last {days, plural, one {# day} few {# days} many {# days} other {# days}}"
+msgstr "{settledRuns, plural, one {# завершений запуск} few {# завершені запуски} many {# завершених запусків} other {# завершеного запуску}}, {unsettled} ще виконуються · {days, plural, one {останній # день} few {останні # дні} many {останні # днів} other {останнього # дня}}"
 
 #: src/pages/Memory.tsx
 msgid "{size} · {closed}/{total} lines closed"
@@ -508,14 +551,6 @@ msgstr "{tokens} токенів за {days} днів — лідер {topName} і
 #: src/pages/health/healthPlace.ts
 msgid "{tool} denied {count}×"
 msgstr "{tool} відхилено {count}×"
-
-#: src/pages/health/healthPlace.ts
-msgid "{tool} denied {denied} of {calls} times"
-msgstr "{tool} відхилено {denied} із {calls} разів"
-
-#: src/pages/health/HealthOverview.tsx
-msgid "{tool} denied {deniedCount} of {callCount} times"
-msgstr "{tool} відхилено {deniedCount} із {callCount} разів"
 
 #: src/pages/Analytics.tsx
 msgid "{toolCalls} calls"
@@ -1526,10 +1561,6 @@ msgstr "видалено"
 #: src/pages/Retro.tsx
 msgid "denied"
 msgstr "відхилено"
-
-#: src/pages/health/HealthOverview.tsx
-msgid "denied {deniedCount}× · of {callCount} calls"
-msgstr "відхилено {deniedCount}× · з {callCount} викликів"
 
 #: src/pages/Retro.tsx
 msgid "Denied tools"
@@ -2816,8 +2847,8 @@ msgid "most used"
 msgstr "найуживаніші"
 
 #: src/pages/Memory.tsx
-msgid "move {moveCount, plural, one {# files} few {# files} many {# files} other {# files}}"
-msgstr "перенести {moveCount, plural, one {# файл} few {# файли} many {# файлів} other {# файлу}}"
+msgid "move {moveCount, plural, one {# file} few {# files} many {# files} other {# files}}"
+msgstr "перенести {moveCount, plural, one {# файл} few {# файли} many {# файлів} other {# файла}}"
 
 #: src/pages/Memory.tsx
 msgid "move finished entries out of the always-loaded index"
@@ -3076,8 +3107,8 @@ msgid "no runs in the last 30 days"
 msgstr "за останні 30 днів запусків не було"
 
 #: src/pages/system/ItemDetail.tsx
-msgid "no runs recorded in the last {days, plural, one {# days} few {# days} many {# days} other {# days}}"
-msgstr "за {days, plural, one {останній # день} few {останні # дні} many {останні # днів} other {останні # дня}} запусків не зафіксовано"
+msgid "no runs recorded in the last {days, plural, one {# day} few {# days} many {# days} other {# days}}"
+msgstr "{days, plural, one {за останній # день запусків не зафіксовано} few {за останні # дні запусків не зафіксовано} many {за останні # днів запусків не зафіксовано} other {за останнього # дня запусків не зафіксовано}}"
 
 #: src/pages/learning/TurnForecastPanel.tsx
 msgid "No scored turns in this window."
@@ -3755,8 +3786,8 @@ msgstr "пересканування не вдалося: {rescanError}"
 #. placeholder {2}: lastRescan.parseErrors
 #. placeholder {3}: lastRescan.removed
 #: src/pages/system/ModsTab.tsx
-msgid "rescan: {0} mods · {1} validated · {2} parse errors · {3} removed"
-msgstr "пересканування: модів {0} · перевірено {1} · помилок розбору {2} · вилучено {3}"
+msgid "rescan: {0, plural, one {# mod} few {# mods} many {# mods} other {# mods}} · {1} validated · {2, plural, one {# parse error} few {# parse errors} many {# parse errors} other {# parse errors}} · {3} removed"
+msgstr "повторне сканування: {0, plural, one {# мод} few {# моди} many {# модів} other {# мода}} · {1} перевірено · {2, plural, one {# помилка розбору} few {# помилки розбору} many {# помилок розбору} other {# помилки розбору}} · {3} видалено"
 
 #: src/pages/system/ModsTab.tsx
 msgid "rescanning…"
@@ -3945,16 +3976,12 @@ msgid "said {said}, held {held}"
 msgstr "заявлено {said}, справдилося {held}"
 
 #: src/pages/health/HealthOverview.tsx
-msgid "Same error {count, plural, one {# times} few {# times} many {# times} other {# times}} in this window"
+msgid "Same error {count, plural, one {# time} few {# times} many {# times} other {# times}} in this window"
 msgstr "Та сама помилка {count, plural, one {# раз} few {# рази} many {# разів} other {# разу}} у цьому вікні"
 
 #: src/pages/health/healthPlace.ts
 msgid "same error {count}×"
 msgstr "та сама помилка {count}×"
-
-#: src/pages/health/healthPlace.ts
-msgid "same error {count}× in {sessions} sessions"
-msgstr "та сама помилка {count}× у {sessions} сесіях"
 
 #: src/pages/system/InsightsTab.tsx
 msgid "same-named local component in ≥2 projects — graduation rule (EXTENDING.md)"
@@ -4428,10 +4455,6 @@ msgstr "Шаблони"
 #: src/pages/learning/TurnForecastPanel.tsx
 msgid "tests outcome missed"
 msgstr "не вгадав результат тестів"
-
-#: src/pages/health/healthModel.ts
-msgid "the {dayCount} days before"
-msgstr "попередні {dayCount} днів"
 
 #: src/pages/inbox/InboxDetail.tsx
 msgid "The account is checked for real — its sign-in, then one short model call. If it answers, runs start again at once; if not, it stays paused and you see why."

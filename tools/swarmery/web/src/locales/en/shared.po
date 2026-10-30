@@ -2454,6 +2454,10 @@ msgstr "loading usage"
 msgid "loading worktrees…"
 msgstr "loading worktrees…"
 
+#: src/main.tsx
+msgid "loading…"
+msgstr "loading…"
+
 #: src/components/PermissionPresets.tsx
 msgid "Locked down"
 msgstr "Locked down"

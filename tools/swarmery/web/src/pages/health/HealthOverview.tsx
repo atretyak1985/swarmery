@@ -74,7 +74,7 @@ function AutoModeRow({ mode, inboxHref }: { mode: HealthAutoMode; inboxHref: str
 }
 
 function sameErrorLine(count: number): string {
-  return t`Same error ${plural(count, { one: '# times', few: '# times', many: '# times', other: '# times' })} in this window`;
+  return t`Same error ${plural(count, { one: '# time', few: '# times', many: '# times', other: '# times' })} in this window`;
 }
 
 function lastSeenLine(ago: string, sessions: number): string {
@@ -87,14 +87,14 @@ function fleetTitle(agents: RetroAgentsResp, days: number): string {
   const cell = windowCell(agents);
   const runs = cell.runs;
   const head = plural(runs, { one: '# run', few: '# runs', many: '# runs', other: '# runs' });
-  const window = String(days);
+  const window = plural(days, { one: '# day', few: '# days', many: '# days', other: '# days' });
   const failed = fmtPct(cell.failedPct);
   const prev = cell.prevFailedPct;
-  if (prev === null || Math.round(prev) === Math.round(cell.failedPct)) return t`${head} in ${window} days, ${failed} failed.`;
+  if (prev === null || Math.round(prev) === Math.round(cell.failedPct)) return t`${head} in ${window}, ${failed} failed.`;
   const was = fmtPct(prev);
   return cell.failedPct < prev
-    ? t`${head} in ${window} days, ${failed} failed — down from ${was}.`
-    : t`${head} in ${window} days, ${failed} failed — up from ${was}.`;
+    ? t`${head} in ${window}, ${failed} failed — down from ${was}.`
+    : t`${head} in ${window}, ${failed} failed — up from ${was}.`;
 }
 
 /** The one sentence: which way the rate moved and whose runs moved it. */
@@ -218,13 +218,17 @@ function allowAction(tool: string, state: AllowState, allow: () => void): PageAc
 function deniedRow(denied: RetroDeniedTool, onOpen: (key: string) => void): PageRow {
   const tool = denied.tool;
   const deniedCount = String(denied.denied);
-  const callCount = String(denied.calls);
   return {
     key: `denied:${tool}`,
     glyph: '▲',
     glyphTone: 'brand',
     label: tool,
-    sub: t`denied ${deniedCount}× · of ${callCount} calls`,
+    sub: plural(denied.calls, {
+      one: `denied ${deniedCount}× · of # call`,
+      few: `denied ${deniedCount}× · of # calls`,
+      many: `denied ${deniedCount}× · of # calls`,
+      other: `denied ${deniedCount}× · of # calls`,
+    }),
     right: t`+ always allow`,
     rightTone: 'brand',
     onClick: () => onOpen(`denied:${tool}`),
@@ -297,7 +301,12 @@ export function DeniedDetail({ denied, onBoard }: { denied: RetroDeniedTool; onB
     <PageDetail
       kind={t`health · friction`}
       kindTone="brand"
-      title={t`${tool} denied ${deniedCount} of ${callCount} times`}
+      title={plural(denied.calls, {
+          one: `${tool} denied ${deniedCount} of # call`,
+          few: `${tool} denied ${deniedCount} of # calls`,
+          many: `${tool} denied ${deniedCount} of # calls`,
+          other: `${tool} denied ${deniedCount} of # calls`,
+        })}
       lead={t`No approval rule covers this tool yet. Allow it once and these runs stop asking.`}
       kv={[
         { k: t`denied`, v: deniedCount },
@@ -395,7 +404,21 @@ export function AgentDetail({
       <PageDetail
         kind={t`health · agent`}
         kindTone={tone}
-        title={drop !== null && drop >= 2 ? t`${agent}: ${failed} of ${runs} runs failed, down from ${was}.` : t`${agent}: ${failed} of ${runs} runs failed.`}
+        title={
+          drop !== null && drop >= 2
+            ? plural(row.runs, {
+              one: `${agent}: ${failed} of # run failed, down from ${was}.`,
+              few: `${agent}: ${failed} of # runs failed, down from ${was}.`,
+              many: `${agent}: ${failed} of # runs failed, down from ${was}.`,
+              other: `${agent}: ${failed} of # runs failed, down from ${was}.`,
+            })
+            : plural(row.runs, {
+              one: `${agent}: ${failed} of # run failed.`,
+              few: `${agent}: ${failed} of # runs failed.`,
+              many: `${agent}: ${failed} of # runs failed.`,
+              other: `${agent}: ${failed} of # runs failed.`,
+            })
+        }
         stats={[
           { label: t`runs`, value: runs },
           { label: t`failed`, value: failed, tone },

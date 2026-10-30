@@ -4,6 +4,7 @@
 // swarmery-link mod's plan pick, so the badge says nothing about sessions that
 // never reported one; with no rows it renders nothing at all.
 
+import { plural } from '@lingui/core/macro';
 import { useLingui } from '@lingui/react/macro';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
@@ -86,7 +87,12 @@ export function TerminalBadge({
   const name =
     count === 1
       ? t`${label}: ${subject} is open in session ${shortId} (${liveNote})`
-      : t`${label}: ${subject} is open in ${count} sessions — ${listing}`;
+      : plural(count, {
+          one: `${label}: ${subject} is open in # session — ${listing}`,
+          few: `${label}: ${subject} is open in # sessions — ${listing}`,
+          many: `${label}: ${subject} is open in # sessions — ${listing}`,
+          other: `${label}: ${subject} is open in # sessions — ${listing}`,
+        });
 
   return (
     <Link

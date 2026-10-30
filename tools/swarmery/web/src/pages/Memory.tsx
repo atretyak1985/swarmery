@@ -369,7 +369,7 @@ function ConsolidatePanel({ dir, onApplied }: { dir: string; onApplied: () => vo
       <ConfirmDialog
         open={confirmApply}
         title={t`Consolidate the auto-memory index`}
-        confirmLabel={t`move ${plural(moveCount, { one: '# files', few: '# files', many: '# files', other: '# files' })}`}
+        confirmLabel={t`move ${plural(moveCount, { one: '# file', few: '# files', many: '# files', other: '# files' })}`}
         danger
         onConfirm={() => {
           setConfirmApply(false);

@@ -157,24 +157,32 @@ export function healthGroups({ agents, friction, recs, proposals, days }: Health
         ...deniedTools.map((d): PlaceItem => {
           const tool = d.tool;
           const denied = String(d.denied);
-          const calls = String(d.calls);
           return {
             key: `denied:${tool}`,
             glyph: '▲',
             glyphTone: 'brand',
-            title: t`${tool} denied ${denied} of ${calls} times`,
+            title: plural(d.calls, {
+              one: `${tool} denied ${denied} of # call`,
+              few: `${tool} denied ${denied} of # calls`,
+              many: `${tool} denied ${denied} of # calls`,
+              other: `${tool} denied ${denied} of # calls`,
+            }),
             summary: t`no rule covers it · + always allow`,
           };
         }),
         ...errors.map((g): PlaceItem => {
           const count = String(g.count);
-          const sessions = String(g.sessions.length);
           return {
             key: `error:${g.key}`,
             glyph: '✗',
             glyphTone: 'red',
             title: g.example,
-            summary: t`same error ${count}× in ${sessions} sessions`,
+            summary: plural(g.sessions.length, {
+              one: `same error ${count}× in # session`,
+              few: `same error ${count}× in # sessions`,
+              many: `same error ${count}× in # sessions`,
+              other: `same error ${count}× in # sessions`,
+            }),
             age: fmtAgo(g.last_ts),
           };
         }),

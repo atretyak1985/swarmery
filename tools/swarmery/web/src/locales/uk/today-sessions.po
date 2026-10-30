@@ -45,6 +45,11 @@ msgstr "{0, plural, one {{decisions} фаза чекає на рішення.} f
 msgid "{0, plural, one {# blocked attempt} few {# blocked attempts} many {# blocked attempts} other {# blocked attempts}}"
 msgstr "{0, plural, one {# заблокована спроба} few {# заблоковані спроби} many {# заблокованих спроб} other {# заблокованих спроб}}"
 
+#. placeholder {0}: i.farOffPlan
+#: src/pages/today/loopModel.ts
+msgid "{0, plural, one {# landed far from the plan.} few {# landed far from the plan.} many {# landed far from the plan.} other {# landed far from the plan.}}"
+msgstr "{0, plural, one {# ліг далеко від плану.} few {# лягли далеко від плану.} many {# лягли далеко від плану.} other {# лягло далеко від плану.}}"
+
 #. placeholder {0}: data.malformed
 #: src/pages/detail/ContextHogsCard.tsx
 msgid "{0, plural, one {# malformed line skipped} few {# malformed lines skipped} many {# malformed lines skipped} other {# malformed lines skipped}}"
@@ -134,10 +139,6 @@ msgstr "{errorCount} пом."
 #: src/pages/detail/Timeline.tsx
 msgid "{events} events"
 msgstr "подій: {events}"
-
-#: src/pages/today/loopModel.ts
-msgid "{farOff} landed far from the plan."
-msgstr "Далеко від плану: {farOff}."
 
 #: src/pages/today/loopModel.ts
 msgid "{finished} finished today, {failed} failed."

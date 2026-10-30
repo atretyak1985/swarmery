@@ -451,7 +451,7 @@ function AgentHistoryPanel({ agentId }: { agentId: number }): JSX.Element {
   } else if (hist.totals.runs === 0) {
     body = (
       <div className="text-[12px] text-ink-dim">
-        {t`no runs recorded in the last ${plural(days, { one: '# days', few: '# days', many: '# days', other: '# days' })}`}
+        {t`no runs recorded in the last ${plural(days, { one: '# day', few: '# days', many: '# days', other: '# days' })}`}
       </div>
     );
   } else {
@@ -470,7 +470,7 @@ function AgentHistoryPanel({ agentId }: { agentId: number }): JSX.Element {
           <StatCard label="p95" value={fmtDurationMs(duration.p95Ms)} />
         </div>
         <div className="mt-1 font-mono text-[10.5px] text-ink-dim">
-          {t`${okRuns} ok · ${errorRuns} error · ${plural(sessions, { one: '# sessions', few: '# sessions', many: '# sessions', other: '# sessions' })} · ${plural(projects, { one: '# project', few: '# projects', many: '# projects', other: '# projects' })}`}
+          {t`${okRuns} ok · ${errorRuns} error · ${plural(sessions, { one: '# session', few: '# sessions', many: '# sessions', other: '# sessions' })} · ${plural(projects, { one: '# project', few: '# projects', many: '# projects', other: '# projects' })}`}
         </div>
 
         <DaySparkline days={hist.byDay} />

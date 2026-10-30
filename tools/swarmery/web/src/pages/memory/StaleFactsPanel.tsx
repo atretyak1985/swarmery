@@ -52,7 +52,7 @@ export function StaleFactsPanel({
         </span>
         <span className="min-w-0 flex-1 truncate text-[12px] text-ink-faint">
           {report !== null
-            ? t`${plural(claims, { one: '# PR claims', few: '# PR claims', many: '# PR claims', other: '# PR claims' })} across ${plural(files, { one: '# files', few: '# files', many: '# files', other: '# files' })}`
+            ? t`${plural(claims, { one: '# PR claim', few: '# PR claims', many: '# PR claims', other: '# PR claims' })} across ${plural(files, { one: '# file', few: '# files', many: '# files', other: '# files' })}`
             : t`memory lines that still call a merged PR open`}
         </span>
       </div>

@@ -148,9 +148,15 @@ export function planGlyph(epic: Epic, resolvedSeqs: Set<number>): GlyphState {
 /** The list row's one sentence: `3 of 7 phases landed · 2 need you · $86`. */
 export function planSummary(epic: Epic, resolvedSeqs: Set<number>): string {
   const landed = String(phasesLanded(epic, resolvedSeqs));
-  const total = String(epic.phases.length);
   const needs = needYouCount(epic);
-  const parts = [t`${landed} of ${total} phases landed`];
+  const parts = [
+    plural(epic.phases.length, {
+      one: `${landed} of # phase landed`,
+      few: `${landed} of # phases landed`,
+      many: `${landed} of # phases landed`,
+      other: `${landed} of # phases landed`,
+    }),
+  ];
   if (needs > 0) {
     parts.push(plural(needs, { one: '# needs you', few: '# need you', many: '# need you', other: '# need you' }));
   } else if (epic.phases.some((p) => p.runState === 'running')) {

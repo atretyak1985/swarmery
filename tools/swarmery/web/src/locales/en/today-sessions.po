@@ -45,6 +45,11 @@ msgstr "{0, plural, one {{decisions} phase waits on a decision.} few {{decisions
 msgid "{0, plural, one {# blocked attempt} few {# blocked attempts} many {# blocked attempts} other {# blocked attempts}}"
 msgstr "{0, plural, one {# blocked attempt} few {# blocked attempts} many {# blocked attempts} other {# blocked attempts}}"
 
+#. placeholder {0}: i.farOffPlan
+#: src/pages/today/loopModel.ts
+msgid "{0, plural, one {# landed far from the plan.} few {# landed far from the plan.} many {# landed far from the plan.} other {# landed far from the plan.}}"
+msgstr "{0, plural, one {# landed far from the plan.} few {# landed far from the plan.} many {# landed far from the plan.} other {# landed far from the plan.}}"
+
 #. placeholder {0}: data.malformed
 #: src/pages/detail/ContextHogsCard.tsx
 msgid "{0, plural, one {# malformed line skipped} few {# malformed lines skipped} many {# malformed lines skipped} other {# malformed lines skipped}}"
@@ -134,10 +139,6 @@ msgstr "{errorCount} err"
 #: src/pages/detail/Timeline.tsx
 msgid "{events} events"
 msgstr "{events} events"
-
-#: src/pages/today/loopModel.ts
-msgid "{farOff} landed far from the plan."
-msgstr "{farOff} landed far from the plan."
 
 #: src/pages/today/loopModel.ts
 msgid "{finished} finished today, {failed} failed."

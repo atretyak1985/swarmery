@@ -95,8 +95,12 @@ export function phaseNote(
   }
   if (status === 'in_progress') {
     const done = String(p.checkboxesDone);
-    const total = String(p.checkboxesTotal);
-    return t`${done} of ${total} criteria`;
+    return plural(p.checkboxesTotal, {
+      one: `${done} of # criterion`,
+      few: `${done} of # criteria`,
+      many: `${done} of # criteria`,
+      other: `${done} of # criteria`,
+    });
   }
   return t`not started`;
 }

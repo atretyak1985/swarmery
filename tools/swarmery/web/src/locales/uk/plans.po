@@ -21,10 +21,6 @@ msgstr " — агент {agent}"
 msgid " · live"
 msgstr " · наживо"
 
-#: src/pages/plans/forecastStoryModel.ts
-msgid "— {posterior} it added {count} more {areas} ({names})"
-msgstr "— {posterior} додав ще {count} {areas} ({names})"
-
 #: src/pages/PlanningMode.tsx
 msgid "— nothing is written until you approve the diff."
 msgstr "— нічого не записується, доки ви не схвалите дифф."
@@ -57,10 +53,52 @@ msgstr "(post hoc — не враховано в калібруванні)"
 msgid "(question could not be parsed)"
 msgstr "(питання не вдалося розібрати)"
 
-#. placeholder {0}: String(n)
-#: src/pages/plans/ReviewFindings.tsx
-msgid "{0} review rounds"
-msgstr "раундів рев’ю: {0}"
+#. placeholder {0}: added.length
+#: src/pages/plans/forecastStoryModel.ts
+msgid "{0, plural, one {— {posterior} it added # more area ({names})} few {— {posterior} it added # more areas ({names})} many {— {posterior} it added # more areas ({names})} other {— {posterior} it added # more areas ({names})}}"
+msgstr "{0, plural, one {— {posterior} додано ще # область ({names})} few {— {posterior} додано ще # області ({names})} many {— {posterior} додано ще # областей ({names})} other {— {posterior} додано ще # області ({names})}}"
+
+#. placeholder {0}: p.checkboxesTotal
+#. placeholder {0}: phase.checkboxesTotal
+#: src/pages/plans/PhaseCard.tsx
+#: src/pages/plans/phaseLedgerModel.ts
+msgid "{0, plural, one {{done} of # criterion} few {{done} of # criteria} many {{done} of # criteria} other {{done} of # criteria}}"
+msgstr "{0, plural, one {{done} з # критерію} few {{done} з # критеріїв} many {{done} з # критеріїв} other {{done} з # критерію}}"
+
+#. placeholder {0}: phase.checkboxesTotal
+#: src/pages/plans/PhasePanel.tsx
+msgid "{0, plural, one {{done}/# criterion} few {{done}/# criteria} many {{done}/# criteria} other {{done}/# criteria}}"
+msgstr "{0, plural, one {{done}/# критерій} few {{done}/# критерії} many {{done}/# критеріїв} other {{done}/# критерію}}"
+
+#. placeholder {0}: epic.phases.length
+#: src/pages/plans/planModel.ts
+msgid "{0, plural, one {{landed} of # phase landed} few {{landed} of # phases landed} many {{landed} of # phases landed} other {{landed} of # phases landed}}"
+msgstr "{0, plural, one {{landed} з # фази злито} few {{landed} з # фаз злито} many {{landed} з # фаз злито} other {{landed} з # фази злито}}"
+
+#. placeholder {0}: p.checkboxesTotal
+#: src/pages/plans/forecastStoryModel.ts
+msgid "{0, plural, one {{ticked} of the # criterion ticked} few {{ticked} of the # criteria ticked} many {{ticked} of the # criteria ticked} other {{ticked} of the # criteria ticked}}"
+msgstr "{0, plural, one {{ticked} з # критерію відмічено} few {{ticked} із # критеріїв відмічено} many {{ticked} із # критеріїв відмічено} other {{ticked} з # критерію відмічено}}"
+
+#. placeholder {0}: p.checkboxesTotal
+#: src/pages/plans/forecastStoryModel.ts
+msgid "{0, plural, one {none of the # criterion ticked} few {none of the # criteria ticked} many {none of the # criteria ticked} other {none of the # criteria ticked}}"
+msgstr "{0, plural, one {# критерій не відмічено} few {жоден із # критеріїв не відмічено} many {жоден із # критеріїв не відмічено} other {жоден із # критеріїв не відмічено}}"
+
+#. placeholder {0}: view.totalCount
+#: src/pages/plans/PlanSessions.tsx
+msgid "{0, plural, one {session scope: all # session of the plan} few {session scope: all # sessions of the plan} many {session scope: all # sessions of the plan} other {session scope: all # sessions of the plan}}"
+msgstr "{0, plural, one {охоплення сесій: усі # сесія плану} few {охоплення сесій: усі # сесії плану} many {охоплення сесій: усі # сесій плану} other {охоплення сесій: усі # сесії плану}}"
+
+#. placeholder {0}: view.totalCount
+#: src/pages/plans/PlanSessions.tsx
+msgid "{0, plural, one {session scope: phase {seqLabel} only, {phaseCount} of # session} few {session scope: phase {seqLabel} only, {phaseCount} of # sessions} many {session scope: phase {seqLabel} only, {phaseCount} of # sessions} other {session scope: phase {seqLabel} only, {phaseCount} of # sessions}}"
+msgstr "{0, plural, one {охоплення сесій: лише фаза {seqLabel}, {phaseCount} із # сесії} few {охоплення сесій: лише фаза {seqLabel}, {phaseCount} із # сесій} many {охоплення сесій: лише фаза {seqLabel}, {phaseCount} із # сесій} other {охоплення сесій: лише фаза {seqLabel}, {phaseCount} із # сесії}}"
+
+#. placeholder {0}: d.actualAreas.length
+#: src/pages/plans/forecastStoryModel.ts
+msgid "{0, plural, one {touched # area{offNote}} few {touched # areas{offNote}} many {touched # areas{offNote}} other {touched # areas{offNote}}}"
+msgstr "{0, plural, one {змінено # область{offNote}} few {змінено # області{offNote}} many {змінено # областей{offNote}} other {змінено # області{offNote}}}"
 
 #: src/pages/Board.tsx
 msgid "{archivedCount} archived"
@@ -90,6 +128,10 @@ msgstr "{changeShort} відкрито"
 msgid "{changeShort} opened"
 msgstr "{changeShort} відкрито"
 
+#: src/pages/plans/TerminalBadge.tsx
+msgid "{count, plural, one {{label}: {subject} is open in # session — {listing}} few {{label}: {subject} is open in # sessions — {listing}} many {{label}: {subject} is open in # sessions — {listing}} other {{label}: {subject} is open in # sessions — {listing}}}"
+msgstr "{count, plural, one {{label}: {subject} відкрито у # сесії — {listing}} few {{label}: {subject} відкрито у # сесіях — {listing}} many {{label}: {subject} відкрито у # сесіях — {listing}} other {{label}: {subject} відкрито у # сесії — {listing}}}"
+
 #: src/pages/Playbooks.tsx
 msgid "{count, plural, one {# stage} few {# stages} many {# stages} other {# stages}}"
 msgstr "{count, plural, one {# етап} few {# етапи} many {# етапів} other {# етапу}}"
@@ -110,18 +152,9 @@ msgstr "{docCount, plural, one {# документ плану зміниться
 msgid "{done} of {total} checkboxes done"
 msgstr "{done} з {total} чекбоксів відмічено"
 
-#: src/pages/plans/PhaseCard.tsx
-#: src/pages/plans/phaseLedgerModel.ts
-msgid "{done} of {total} criteria"
-msgstr "{done} з {total} критеріїв"
-
 #: src/pages/plans/PhaseDetailPanel.tsx
 msgid "{done}/{total} acceptance criteria met · full list on the Criteria tab"
 msgstr "{done}/{total} критеріїв приймання виконано · повний список на вкладці «Критерії»"
-
-#: src/pages/plans/PhasePanel.tsx
-msgid "{done}/{total} criteria"
-msgstr "{done}/{total} критеріїв"
 
 #: src/pages/Board.tsx
 msgid "{doneCount} done"
@@ -148,20 +181,12 @@ msgid "{label} (no cards)"
 msgstr "{label} (без карток)"
 
 #: src/pages/plans/TerminalBadge.tsx
-msgid "{label}: {subject} is open in {count} sessions — {listing}"
-msgstr "{label}: {subject} — сесій: {count} ({listing})"
-
-#: src/pages/plans/TerminalBadge.tsx
 msgid "{label}: {subject} is open in session {shortId} ({liveNote})"
 msgstr "{label}: {subject} — сесія {shortId} ({liveNote})"
 
 #: src/pages/plans/phaseLedgerModel.ts
 msgid "{land} [LAND] pending"
 msgstr "{land} [LAND] очікує"
-
-#: src/pages/plans/planModel.ts
-msgid "{landed} of {total} phases landed"
-msgstr "злито фаз: {landed} із {total}"
 
 #: src/pages/plans/forecastStoryModel.ts
 msgid "{m, plural, one {# minute} few {# minutes} many {# minutes} other {# minutes}}"
@@ -171,9 +196,9 @@ msgstr "{m, plural, one {# хвилину} few {# хвилини} many {# хви
 msgid "{manual, plural, one {# criterion [MANUAL] — only you can close it} few {# criteria [MANUAL] — only you can close them} many {# criteria [MANUAL] — only you can close them} other {# criteria [MANUAL] — only you can close them}}"
 msgstr "{manual, plural, one {# критерій [MANUAL] — закрити можете лише ви} few {# критерії [MANUAL] — закрити можете лише ви} many {# критеріїв [MANUAL] — закрити можете лише ви} other {# критерію [MANUAL] — закрити можете лише ви}}"
 
-#: src/pages/plans/forecastStoryModel.ts
-msgid "{n, plural, one {area} few {areas} many {areas} other {areas}}"
-msgstr "{n, plural, one {зону} few {зони} many {зон} other {зони}}"
+#: src/pages/plans/ReviewFindings.tsx
+msgid "{n, plural, one {# review round} few {# review rounds} many {# review rounds} other {# review rounds}}"
+msgstr "{n, plural, one {# раунд рев’ю} few {# раунди рев’ю} many {# раундів рев’ю} other {# раунду рев’ю}}"
 
 #: src/pages/plans/planModel.ts
 msgid "{needs, plural, one {# needs you} few {# need you} many {# need you} other {# need you}}"
@@ -222,10 +247,6 @@ msgstr "{surpriseTerm} {index} · нічого від цього не залеж
 #: src/pages/plans/plansTarget.ts
 msgid "{tab} · Phase {seq} — {title} · {tail}"
 msgstr "{tab} · Фаза {seq} — {title} · {tail}"
-
-#: src/pages/plans/forecastStoryModel.ts
-msgid "{ticked} of the {total} criteria ticked"
-msgstr "відмічено {ticked} з {total} критеріїв"
 
 #: src/pages/plans/PlanDetailPanel.tsx
 msgid "{title} — plan details"
@@ -283,10 +304,6 @@ msgstr "❐ README"
 #: src/pages/plans/PlanHeader.tsx
 msgid "❚❚ pause plan"
 msgstr "❚❚ призупинити план"
-
-#: src/pages/plans/ReviewFindings.tsx
-msgid "1 review round"
-msgstr "1 раунд рев’ю"
 
 #: src/pages/plans/forecastStoryModel.ts
 msgid "30 to 90 min"
@@ -1654,10 +1671,6 @@ msgstr "ходів ще немає"
 msgid "nobody (it shipped)"
 msgstr "ніхто (воно вийшло)"
 
-#: src/pages/plans/forecastStoryModel.ts
-msgid "none of the {total} criteria ticked"
-msgstr "жодного з {total} критеріїв не відмічено"
-
 #: src/pages/PlanningMode.tsx
 msgid "not delivered"
 msgstr "не доставлено"
@@ -2622,14 +2635,6 @@ msgid "session →"
 msgstr "сесія →"
 
 #: src/pages/plans/PlanSessions.tsx
-msgid "session scope: all {totalCount} sessions of the plan"
-msgstr "область сесій: усі {totalCount} сесій плану"
-
-#: src/pages/plans/PlanSessions.tsx
-msgid "session scope: phase {seqLabel} only, {phaseCount} of {totalCount} sessions"
-msgstr "область сесій: лише фаза {seqLabel}, {phaseCount} з {totalCount} сесій"
-
-#: src/pages/plans/PlanSessions.tsx
 msgid "sessions"
 msgstr "сесії"
 
@@ -3127,10 +3132,6 @@ msgstr "відмітити цей критерій у документі"
 #: src/pages/Routines.tsx
 msgid "Timeout (s)"
 msgstr "Тайм-аут (с)"
-
-#: src/pages/plans/forecastStoryModel.ts
-msgid "touched {count} {areas}{offNote}"
-msgstr "зачепила {count} {areas}{offNote}"
 
 #: src/pages/PlanningMode.tsx
 msgid "Transform your idea into a plan"
