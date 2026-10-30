@@ -343,9 +343,11 @@ export function PhaseDetailPanel({
   const manualOpen = phase.manualOpen;
   const blocker = !needsYou
     ? null
-    : held
-      ? t`the phase waits on your answer`
-      : plural(manualOpen, {
+    : phase.guardDecision != null
+      ? t`the guard stop waits on your answer`
+      : held
+        ? t`the phase waits on your answer`
+        : plural(manualOpen, {
           one: '# manual check only you can close',
           few: '# manual checks only you can close',
           many: '# manual checks only you can close',

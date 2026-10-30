@@ -157,7 +157,7 @@ describe('PhasePanel', () => {
     renderPanel();
     expect(screen.getByTestId('phase-card')).toBeTruthy();
     const story = screen.getByTestId('forecast-story');
-    expect(story.textContent).toContain('what follows');
+    expect(story.textContent).toContain('what next');
     const fold = screen.getByText('show the score breakdown').closest('details');
     expect(fold).not.toBeNull();
     expect(fold?.open).toBe(false);

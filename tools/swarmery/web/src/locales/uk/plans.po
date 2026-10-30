@@ -441,6 +441,7 @@ msgid "answer in Needs you"
 msgstr "відповісти в «Потребує вас»"
 
 #: src/pages/plans/PhaseCard.tsx
+#: src/pages/plans/PhaseCard.tsx
 msgid "answer it →"
 msgstr "відповісти →"
 
@@ -810,6 +811,10 @@ msgstr "рішення"
 #: src/pages/PlanningMode.tsx
 msgid "decision D-{0}"
 msgstr "рішення D-{0}"
+
+#: src/pages/plans/PhaseCard.tsx
+msgid "decisions"
+msgstr "рішення"
 
 #: src/pages/plans/DecisionTable.tsx
 #: src/pages/plans/DecisionTable.tsx
@@ -3040,6 +3045,10 @@ msgstr "виконавець активно редагує цей докумен
 msgid "The forecast named no size, duration or outcome."
 msgstr "Прогноз не назвав ні розміру, ні тривалості, ні результату."
 
+#: src/pages/plans/PhaseDetailPanel.tsx
+msgid "the guard stop waits on your answer"
+msgstr "зупинка guard чекає на вашу відповідь"
+
 #: src/pages/plans/PhaseCard.tsx
 msgid "The last run failed."
 msgstr "Останній запуск невдалий."
@@ -3410,7 +3419,7 @@ msgid "webhook trigger enabled"
 msgstr "тригер вебхука увімкнено"
 
 #: src/pages/plans/ForecastStory.tsx
-msgid "what follows"
+msgid "what next"
 msgstr "що далі"
 
 #: src/pages/planning/ReviseModal.tsx

@@ -441,6 +441,7 @@ msgid "answer in Needs you"
 msgstr "answer in Needs you"
 
 #: src/pages/plans/PhaseCard.tsx
+#: src/pages/plans/PhaseCard.tsx
 msgid "answer it →"
 msgstr "answer it →"
 
@@ -810,6 +811,10 @@ msgstr "decision"
 #: src/pages/PlanningMode.tsx
 msgid "decision D-{0}"
 msgstr "decision D-{0}"
+
+#: src/pages/plans/PhaseCard.tsx
+msgid "decisions"
+msgstr "decisions"
 
 #: src/pages/plans/DecisionTable.tsx
 #: src/pages/plans/DecisionTable.tsx
@@ -3040,6 +3045,10 @@ msgstr "the executor is actively editing this phase doc"
 msgid "The forecast named no size, duration or outcome."
 msgstr "The forecast named no size, duration or outcome."
 
+#: src/pages/plans/PhaseDetailPanel.tsx
+msgid "the guard stop waits on your answer"
+msgstr "the guard stop waits on your answer"
+
 #: src/pages/plans/PhaseCard.tsx
 msgid "The last run failed."
 msgstr "The last run failed."
@@ -3410,8 +3419,8 @@ msgid "webhook trigger enabled"
 msgstr "webhook trigger enabled"
 
 #: src/pages/plans/ForecastStory.tsx
-msgid "what follows"
-msgstr "what follows"
+msgid "what next"
+msgstr "what next"
 
 #: src/pages/planning/ReviseModal.tsx
 msgid "what should change, and why"

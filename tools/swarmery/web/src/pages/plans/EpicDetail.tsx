@@ -12,7 +12,7 @@ import { DepsUnmergedActions } from './DepsUnmergedActions';
 import { NEUTRAL_TERMS } from './landingModel';
 import { useNow } from './phaseChips';
 import { PhaseDetailPanel } from './PhaseDetailPanel';
-import { PhaseLedger } from './PhaseLedger';
+import { PhaseLedger, PhaseRunLine } from './PhaseLedger';
 import type { PhaseRunEffort, PhaseRunModel } from './PhaseRunPickers';
 import { PlanDetailPanel } from './PlanDetailPanel';
 import { PlanHeader } from './PlanHeader';
@@ -236,6 +236,8 @@ export function EpicDetail({
           setReviseOpen(true);
         }}
       />}
+
+      {!onPhasePage && <PhaseRunLine model={phaseRunModel} effort={phaseRunEffort} />}
 
       {/* Leaving the details is the first thing offered while they are open. */}
       {detail?.kind === 'plan' && (

@@ -180,6 +180,69 @@ export function StopDecisionNote({
   );
 }
 
+/** The phase page's list of what holds the phase: id, the question, and a way to
+ *  it. The same decisions the card's notes carry, as rows of a place. */
+function DecisionRows({
+  phase,
+  stop,
+  stopHref,
+  hrefFor,
+}: {
+  phase: EpicPhase;
+  stop: NeedsYouDecision | null;
+  stopHref: string | null;
+  hrefFor?: ((ref: DecisionHoldRef) => string | null) | undefined;
+}): JSX.Element | null {
+  const rows = [
+    ...(stop === null
+      ? []
+      : [
+          {
+            id: stop.decisionId,
+            tone: 'text-red',
+            text:
+              stop.trigger !== undefined && stop.trigger !== ''
+                ? `${stop.trigger}: ${stop.reason !== undefined && stop.reason !== '' ? stop.reason : stop.question}`
+                : (stop.reason ?? stop.question),
+            href: stopHref,
+            testId: 'stop-decision',
+          },
+        ]),
+    ...(phase.decisionHold?.decisions ?? []).map((d) => ({
+      id: d.decisionId,
+      tone: 'text-amber',
+      text: d.question,
+      href: holdHref(d, hrefFor),
+      testId: 'decision-hold',
+    })),
+  ];
+  if (rows.length === 0) return null;
+  return (
+    <div className="mt-[18px] max-w-[720px]">
+      <div className="font-mono text-[10px] leading-[normal] tracking-[0.12em] text-ink-faint uppercase">
+        <Trans>decisions</Trans>
+      </div>
+      {rows.map((row) => (
+        <div
+          key={row.id}
+          data-testid={row.testId}
+          className="grid grid-cols-[44px_minmax(0,1fr)_auto] items-baseline gap-3 border-b border-line py-2"
+        >
+          <span className={`font-mono text-[11px] font-bold ${row.tone}`}>{row.id}</span>
+          <span className="text-[12.5px] leading-[1.45] text-ink-2">{row.text}</span>
+          {row.href !== null ? (
+            <a href={row.href} className="font-mono text-[10.5px] text-ink-faint transition-colors hover:text-brand">
+              <Trans>answer it →</Trans>
+            </a>
+          ) : (
+            <span />
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 /** The phase's open decision when it is an agent-declared stop; null otherwise. */
 function openStop(phase: EpicPhase): NeedsYouDecision | null {
   const d = phase.guardDecision ?? null;
@@ -360,10 +423,16 @@ export function PhaseCard({
         </>
       )}
 
-      {phase.decisionHold != null && phase.decisionHold.decisions.length > 0 && (
-        <DecisionHoldNote hold={phase.decisionHold} hrefFor={decisionHref} />
+      {embedded ? (
+        <DecisionRows phase={phase} stop={stop} stopHref={stopHref} hrefFor={decisionHref} />
+      ) : (
+        <>
+          {phase.decisionHold != null && phase.decisionHold.decisions.length > 0 && (
+            <DecisionHoldNote hold={phase.decisionHold} hrefFor={decisionHref} />
+          )}
+          {stop !== null && <StopDecisionNote decision={stop} href={stopHref} />}
+        </>
       )}
-      {stop !== null && <StopDecisionNote decision={stop} href={stopHref} />}
 
       <GuardBadge guard={phaseGuard(phase)} className="mt-2" />
 

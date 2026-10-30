@@ -289,6 +289,21 @@ describe('Inbox', () => {
     expect(screen.getByRole('tab', { name: /retire a lesson/ }).getAttribute('aria-selected')).toBe('true');
   });
 
+  it('all shows three rows of a group, then a way into its tab', async () => {
+    const real = vi.mocked(lessons.fetchLessons).getMockImplementation();
+    const [first] = (await real?.()) ?? [];
+    vi.mocked(lessons.fetchLessons).mockImplementation(
+      async () => [1, 2, 3, 4, 5].map((id) => ({ ...first, id, title: `lesson ${String(id)}` })) as never,
+    );
+    await renderInbox('/inbox');
+    expect(rows().filter((r) => r.dataset.kind === 'lesson')).toHaveLength(3);
+    fireEvent.click(screen.getByRole('button', { name: '+ 2 more →' }));
+    expect(rows()).toHaveLength(5);
+    expect(rows().every((r) => r.dataset.kind === 'lesson')).toBe(true);
+    expect(screen.getByRole('tab', { name: /^lessons/ }).getAttribute('aria-selected')).toBe('true');
+    vi.mocked(lessons.fetchLessons).mockImplementation(real as never);
+  });
+
   it('shows all, the kinds with something waiting, and handled by agent', async () => {
     await renderInbox('/inbox');
     const labels = screen.getAllByRole('tab').map((tab) => tab.textContent ?? '');

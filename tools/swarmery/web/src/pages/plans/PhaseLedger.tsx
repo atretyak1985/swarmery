@@ -2,8 +2,8 @@
 // plan's state reads top to bottom. A click on a line opens it in place to its runs,
 // its criteria and every action the phase offers; the phase's name opens the phase's
 // own page. The running phase, else the next runnable one, is open until the operator
-// picks another: that is the one a person came to look at. Under the ledger, what a
-// run started now will use.
+// picks another: that is the one a person came to look at. PhaseRunLine, above the
+// ledger, says what a run started now will use.
 
 import { Trans, useLingui } from '@lingui/react/macro';
 import { useState } from 'react';
@@ -463,17 +463,24 @@ export function PhaseLedger({
           );
         })}
       </ol>
-      <div className="mt-3 flex flex-wrap gap-x-[22px] gap-y-1.5 font-mono text-[10.5px] leading-[normal] text-ink-faint">
-        <span>
-          {t`run model`} · <span className="text-ink-dim">{phaseRunModelLine(actions.phaseRunModel)}</span>
-        </span>
-        <span>
-          {t`effort`} · <span className="text-ink-dim">{phaseRunEffortLine(actions.phaseRunEffort)}</span>
-        </span>
-        <span>
-          {t`isolation`} · <span className="text-ink-dim">{t`worktree per phase`}</span>
-        </span>
-      </div>
+    </div>
+  );
+}
+
+/** What a run started now will use: the pickers' values, then how runs are isolated. */
+export function PhaseRunLine({ model, effort }: { model: PhaseRunModel; effort: PhaseRunEffort }): JSX.Element {
+  const { t } = useLingui();
+  return (
+    <div className="mt-3 flex flex-wrap gap-x-[22px] gap-y-1.5 font-mono text-[10.5px] leading-[normal] text-ink-faint">
+      <span>
+        {t`run model`} · <span className="text-ink-dim">{phaseRunModelLine(model)}</span>
+      </span>
+      <span>
+        {t`effort`} · <span className="text-ink-dim">{phaseRunEffortLine(effort)}</span>
+      </span>
+      <span>
+        {t`isolation`} · <span className="text-ink-dim">{t`worktree per phase`}</span>
+      </span>
     </div>
   );
 }
