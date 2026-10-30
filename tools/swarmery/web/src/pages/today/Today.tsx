@@ -1,38 +1,46 @@
-// Today (Canvas v3 phase 4, artboard 1a) — the home of both scopes: `/`
-// (All projects) and `/p/:slug` (one project). It answers "what do I do now":
-// a clock line, "The loop, this week" (LoopMap), then "Waiting on you" (top
-// Inbox items) beside "Live now" (running sessions). The previous home — the
-// fleet command deck or the project overview — follows under "Today in
-// detail", unchanged, so nothing the old home did is lost.
+// Today (handoff §3) — the home of both scopes: `/` (All projects) and `/p/:slug`
+// (one project). The list column is the event feed, what happened (EventFeed); the
+// detail is the day: the loop, what waits on you, what is live, the week's spend.
+// The previous home, the fleet command deck or the project overview, stays one
+// click down under "Today in detail", so nothing it did is lost. It mounts on open:
+// it fetches a page's worth of its own, and the home should not pay for that.
 //
 // The deck arrives as the `detail` prop: main.tsx lazy-loads ProjectOverview,
 // and a static import here would pull it into the fleet's initial bundle.
 //
 // Data is existing fetchers only (Canvas v3 D3 — no new endpoint): epics,
-// sessions, decisions, recommendations, plus the Inbox's own aggregation
-// (useInboxItems), which feeds both the loop's counts and the waiting rows.
+// sessions, decisions, recommendations, the needs-you queue and the Inbox's own
+// aggregation (useInboxItems).
 
+import { plural } from '@lingui/core/macro';
 import { Trans, useLingui } from '@lingui/react/macro';
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useParams } from 'react-router-dom';
 import { fetchEpics, fetchProjectRecommendations, fetchRecommendations, fetchSessions } from '../../api';
 import { fetchDecisions } from '../../api/decisions';
 import type { Epic, Recommendation, Session, WSMessage } from '../../api/types';
+import { PlaceLayout } from '../../components/place/PlaceLayout';
 import { fmtEyebrowClock } from '../../lib/format';
 import { loadLastProject } from '../../lib/lastProject';
-import { sessionState, useNowMs } from '../../lib/sessionState';
+import { useSessionHref } from '../../lib/sessionHref';
+import { gatesBySession, rowState } from '../../lib/sessionsView';
+import { useNowMs } from '../../lib/sessionState';
+import { useNeedsYou } from '../../lib/useNeedsYou';
 import { applySessionMessage, useLiveUpdates } from '../../lib/ws';
 import { useProjectWorkspace } from '../../workspace/ProjectContext';
 import type { InboxItem, InboxKind } from '../inbox/inboxModel';
 import { useInboxItems } from '../inbox/useInboxItems';
+import { buildFeed, feedLinks } from './feedModel';
+import { EventFeed } from './EventFeed';
 import { LiveNow } from './LiveNow';
 import { LoopMap } from './LoopMap';
-import { buildLoop, epicCounts } from './loopModel';
-import { SectionHead, WaitingOnYou } from './WaitingOnYou';
+import { buildLoop, epicCounts, sessionOutcomes } from './loopModel';
+import { SpendWeek } from './SpendWeek';
+import { WaitingOnYou } from './WaitingOnYou';
 
 const SESSION_PAGE = 100;
 
-/** Clock line, copied from Overview's EyebrowClock (not imported) plus the scope. */
+/** Clock line, as Overview's EyebrowClock, plus the scope. */
 function EyebrowClock({ scope }: { scope: string }): JSX.Element {
   const [now, setNow] = useState(() => new Date());
   useEffect(() => {
@@ -41,7 +49,7 @@ function EyebrowClock({ scope }: { scope: string }): JSX.Element {
   }, []);
   const text = fmtEyebrowClock(now);
   return (
-    <div className="font-mono text-[11px] tracking-[0.16em] text-ink-faint uppercase">
+    <div className="font-mono text-[10.5px] leading-[normal] tracking-[0.14em] text-ink-faint uppercase">
       {text} · {scope}
     </div>
   );
@@ -62,12 +70,15 @@ export function Today({ detail }: { detail: ReactNode }): JSX.Element {
   const { project, projectId } = useProjectWorkspace();
   const now = useNowMs();
   const inbox = useInboxItems(slug);
+  const needs = useNeedsYou(slug);
+  const sessionHref = useSessionHref();
 
   const [epics, setEpics] = useState<Epic[]>([]);
   const [sessions, setSessions] = useState<Session[]>([]);
   const [sessionsLoading, setSessionsLoading] = useState(true);
   const [classifier, setClassifier] = useState({ calls: 0, checked: 0 });
   const [recs, setRecs] = useState<Recommendation[]>([]);
+  const [deckOpen, setDeckOpen] = useState(false);
 
   // A project scope waits for its numeric id; the fleet asks for every epic.
   const epicScopeReady = slug === null || projectId !== null;
@@ -126,9 +137,10 @@ export function Today({ detail }: { detail: ReactNode }): JSX.Element {
     };
   }, [slug]);
 
+  const gates = useMemo(() => gatesBySession(needs.items), [needs.items]);
   const running = useMemo(
-    () => sessions.filter((s) => sessionState(s, now) === 'running'),
-    [sessions, now],
+    () => sessions.filter((s) => rowState(s, now, gates.get(s.id)) === 'working'),
+    [sessions, now, gates],
   );
 
   const stages = useMemo(() => {
@@ -137,7 +149,9 @@ export function Today({ detail }: { detail: ReactNode }): JSX.Element {
       {
         epics,
         liveSessions: running.length,
-        pendingApprovals: countKind(inbox.items, 'approval'),
+        ...sessionOutcomes(sessions, now),
+        askingSessions: gates.size,
+        phaseDecisions: needs.items.filter((i) => i.kind === 'phase_decision').length,
         stoppedPhases: counts.stoppedPhases,
         scoredRuns: counts.scoredRuns,
         farOffPlan: counts.farOffPlan,
@@ -152,38 +166,82 @@ export function Today({ detail }: { detail: ReactNode }): JSX.Element {
       slug,
       loadLastProject(),
     );
-  }, [epics, now, running.length, inbox.items, classifier, recs, slug]);
+  }, [epics, now, running.length, sessions, gates, needs.items, inbox.items, classifier, recs, slug]);
+
+  const links = useMemo(() => feedLinks(slug, sessionHref), [slug, sessionHref]);
+  const feed = useMemo(
+    () => buildFeed({ sessions, needs: needs.items, epics, inbox: inbox.items, links, nowMs: now }),
+    [sessions, needs.items, epics, inbox.items, links, now],
+  );
 
   const scopeLabel = slug === null ? t`all projects` : (project?.name ?? slug);
+  const liveCount = String(running.length);
+  const headline =
+    needs.count === 0
+      ? t`Nothing waits on you · ${liveCount} running`
+      : plural(needs.count, {
+          one: `# thing waits on you · ${liveCount} running`,
+          few: `# things wait on you · ${liveCount} running`,
+          many: `# things wait on you · ${liveCount} running`,
+          other: `# things wait on you · ${liveCount} running`,
+        });
 
   return (
-    <div data-testid="today">
-      <div className="px-4 pt-6 desk:px-9 desk:pt-[30px]">
-        <EyebrowClock scope={scopeLabel} />
-        <h1 className="m-0 mt-1.5 font-display text-[30px] leading-[1.15] font-medium tracking-[-0.01em] text-ink">
-          <Trans>The loop, this week</Trans>
-        </h1>
-        <p className="m-0 mt-1.5 text-[13px] text-ink-dim">
-          <Trans>
-            Every stage feeds the next. Numbers are the last 7 days; amber means something there is waiting on you.
-          </Trans>
-        </p>
-        <LoopMap stages={stages} />
-        <div className="mt-7 grid grid-cols-1 gap-5 desk:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]">
-          <WaitingOnYou
-            items={inbox.items}
-            count={inbox.count}
-            loading={inbox.loading}
-            slug={slug}
-            onResolved={inbox.reload}
-          />
-          <LiveNow sessions={running} epics={epics} loading={sessionsLoading} now={now} />
+    <PlaceLayout
+      // Below `desk` the feed and the day share one scroll (D-6): without this the
+      // list column shrinks to a three-row scroller of its own.
+      list={
+        <div className="flex shrink-0 flex-col desk:contents">
+          <EventFeed events={feed} now={now} loading={sessionsLoading} />
         </div>
-        <div className="mt-10">
-          <SectionHead label={t`Today in detail`} />
+      }
+      detail={
+        <div data-testid="today">
+          <div className="max-w-[1040px] px-4 pt-[22px] pb-6 desk:px-7">
+            <EyebrowClock scope={scopeLabel} />
+            <h2 className="m-0 mt-2 text-[22px] leading-[normal] font-semibold tracking-[-0.015em] text-ink">
+              {headline}
+            </h2>
+            <p className="m-0 mt-1.5 max-w-[72ch] text-[13px] leading-[1.55] text-ink-dim">
+              <Trans>
+                Every stage feeds the next. Numbers are the last 7 days; amber means something there is waiting on you.
+              </Trans>
+            </p>
+            <LoopMap stages={stages} />
+            <div className="mt-[22px] grid grid-cols-1 gap-[22px] desk:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)]">
+              <WaitingOnYou
+                items={needs.items}
+                count={needs.count}
+                loading={needs.loading}
+                links={links}
+                now={now}
+                onResolved={needs.reload}
+              />
+              <div className="min-w-0">
+                <LiveNow
+                  sessions={running}
+                  epics={epics}
+                  loading={sessionsLoading}
+                  now={now}
+                  sessionsHref={slug === null ? '/sessions' : `/p/${slug}/sessions`}
+                />
+                <SpendWeek slug={slug} />
+              </div>
+            </div>
+            <button
+              type="button"
+              aria-expanded={deckOpen}
+              onClick={() => setDeckOpen((open) => !open)}
+              className="mt-6 flex w-full cursor-pointer items-center gap-2 border-none bg-transparent p-0 font-mono text-[10px] leading-[normal] tracking-[0.12em] text-ink-faint uppercase hover:text-ink-dim"
+            >
+              <Trans>Today in detail</Trans>
+              <span aria-hidden="true" className="h-px flex-1 bg-line" />
+              <span aria-hidden="true">{deckOpen ? '▾' : '▸'}</span>
+            </button>
+          </div>
+          {deckOpen && <div data-testid="today-detail">{detail}</div>}
         </div>
-      </div>
-      <div data-testid="today-detail">{detail}</div>
-    </div>
+      }
+    />
   );
 }

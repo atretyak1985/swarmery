@@ -28,7 +28,10 @@ function epic(status: Epic['status'], phases: EpicPhase[]): Epic {
 const ZERO: LoopInputs = {
   epics: [],
   liveSessions: 0,
-  pendingApprovals: 0,
+  finishedToday: 0,
+  failedToday: 0,
+  askingSessions: 0,
+  phaseDecisions: 0,
   stoppedPhases: 0,
   scoredRuns: 0,
   farOffPlan: 0,
@@ -63,15 +66,18 @@ describe('buildLoop', () => {
   });
 
   it('marks run waiting on pending approvals and learn waiting on candidates', () => {
-    const stages = buildLoop({ ...ZERO, pendingApprovals: 2, lessonCandidates: 2 }, null);
+    const stages = buildLoop({ ...ZERO, askingSessions: 2, phaseDecisions: 1, lessonCandidates: 2 }, null);
     const run = stages.find((s) => s.id === 'run');
     const learn = stages.find((s) => s.id === 'learn');
     expect(run?.waiting).toBe(true);
-    expect(run?.alert).toBe('2 approvals waiting.');
+    expect(run?.alert).toBe('2 sessions ask for you.');
+    const plan = stages.find((s) => s.id === 'plan');
+    expect(plan?.waiting).toBe(true);
+    expect(plan?.alert).toBe('1 phase waits on a decision.');
     expect(learn?.waiting).toBe(true);
     expect(learn?.n).toBe(2);
     expect(learn?.linkLabel).toBe('Review in Inbox →');
-    expect(stages.filter((s) => s.waiting).map((s) => s.id)).toEqual(['run', 'learn']);
+    expect(stages.filter((s) => s.waiting).map((s) => s.id)).toEqual(['plan', 'run', 'learn']);
   });
 
   it('writes 1a-shaped sentences from real numbers', () => {
@@ -99,7 +105,7 @@ describe('buildLoop', () => {
     const [plan, run, measure, learn, change] = stages;
     expect(plan?.n).toBe(1);
     expect(plan?.unit).toBe('plan');
-    expect(plan?.sentence).toBe('2 phases carry a forecast — what the planner expects before anything runs.');
+    expect(plan?.sentence).toBe('2 phases carry a forecast.');
     expect(run?.sentence).toBe('1 phase stopped with nothing done.');
     expect(measure?.sentence).toBe(
       `3 landed far from the plan. The classifier labelled ${fmtCount(1434)} sessions —`,
