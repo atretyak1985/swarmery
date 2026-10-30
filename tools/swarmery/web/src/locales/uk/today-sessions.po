@@ -562,6 +562,10 @@ msgstr "Оберіть сесію…"
 msgid "claims…"
 msgstr "зайняті файли…"
 
+#: src/pages/detail/Chat.tsx
+msgid "claude"
+msgstr "claude"
+
 #: src/pages/projects/FirstRequestCard.tsx
 msgid "CLAUDE.md"
 msgstr "CLAUDE.md"
@@ -2254,6 +2258,11 @@ msgstr "написати свою"
 #: src/pages/sessions/CacheColdBadge.tsx
 msgid "writing handoff…"
 msgstr "пишу передачу…"
+
+#: src/pages/detail/Chat.tsx
+#: src/pages/detail/Chat.tsx
+msgid "you"
+msgstr "ви"
 
 #: src/pages/NeedsYou.tsx
 msgid "your own answer — or a note sent with the option you pick"

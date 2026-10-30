@@ -562,6 +562,10 @@ msgstr "Choose a session…"
 msgid "claims…"
 msgstr "claims…"
 
+#: src/pages/detail/Chat.tsx
+msgid "claude"
+msgstr "claude"
+
 #: src/pages/projects/FirstRequestCard.tsx
 msgid "CLAUDE.md"
 msgstr "CLAUDE.md"
@@ -2254,6 +2258,11 @@ msgstr "write my own"
 #: src/pages/sessions/CacheColdBadge.tsx
 msgid "writing handoff…"
 msgstr "writing handoff…"
+
+#: src/pages/detail/Chat.tsx
+#: src/pages/detail/Chat.tsx
+msgid "you"
+msgstr "you"
 
 #: src/pages/NeedsYou.tsx
 msgid "your own answer — or a note sent with the option you pick"

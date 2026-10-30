@@ -1017,7 +1017,7 @@ export function SessionPane({
               </div>
             </>
           )}
-          {tab === 'chat' && <Chat detail={detail} pending={pending} onRetry={onRetry} />}
+          {tab === 'chat' && <Chat detail={detail} pending={pending} onRetry={onRetry} gated={gate !== undefined} />}
           {tab === 'diff' && <Diffs changes={detail.fileChanges} openPath={openDiff} />}
         </div>
         {tab === 'chat' && !atBottom && (
