@@ -1,14 +1,15 @@
 // @vitest-environment jsdom
 //
-// The "Needs you" page (needs-you-queue phase 5). The claims:
+// The "Needs you" page (handoff §7). The claims:
 //
-//   1. Rows render oldest blocker first, whatever order the API answered in.
-//   2. A prod_deploy_local row offers no allow / approve (and no deny) button —
+//   1. Rows list Decide here first, then Open & tick by hand, oldest blocker first
+//      inside each, whatever order the API answered in.
+//   2. A prod_deploy_local card offers no allow / approve (and no deny) button —
 //      only "Confirm locally", the terminal instruction and Focus terminal.
-//   3. An approval row is the Approvals PendingCard (approve / deny), and that
-//      card hides approve for a riskClass 'prod-deploy' request.
+//   3. An approval card allows and denies, and hides allow for a riskClass
+//      'prod-deploy' request.
 //   4. Copy reply writes `[<session>] Re: <question>\n\n` to the clipboard; a
-//      suggestion option chip appends the option.
+//      picked suggestion appends the option, and the main button repeats the pick.
 //   5. Dismiss hides the row, survives a remount, and a new blocking episode
 //      of the same session re-surfaces.
 //   6. A WS permission_resolved frame refetches GET /api/needs-you.
@@ -29,6 +30,13 @@ vi.mock('../api', async (importOriginal) => ({
   getNeedsYou: vi.fn(),
   fetchApprovals: vi.fn(async () => []),
   resolveApproval: vi.fn(async () => ({})),
+  sendSessionMessage: vi.fn(async () => undefined),
+}));
+
+const nav = vi.hoisted(() => ({ to: vi.fn() }));
+vi.mock('react-router-dom', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('react-router-dom')>()),
+  useNavigate: () => nav.to,
 }));
 
 // Capture the page's WS subscriber so a test can push a frame through it.
@@ -110,10 +118,12 @@ function rows(): HTMLElement[] {
   return screen.queryAllByTestId('needs-you-row');
 }
 
+/** Selects the row and returns the detail, which now shows that decision. */
 function rowOf(name: string): HTMLElement {
-  const found = rows().find((r) => r.getAttribute('aria-label')?.endsWith(`: ${name}`));
+  const found = rows().find((r) => r.dataset.name === name);
   if (found === undefined) throw new Error(`no row for ${name}`);
-  return found;
+  fireEvent.click(within(found).getByRole('button'));
+  return screen.getByTestId('needs-you-detail');
 }
 
 let writeText: ReturnType<typeof vi.fn>;
@@ -129,27 +139,116 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('NeedsYou page', () => {
-  it('renders rows oldest blocker first', async () => {
+  it('lists Decide here before Open & tick by hand, oldest blocker first inside each', async () => {
     serve([AWAITING, PROD, FAILED]); // deliberately out of order
     await renderPage();
-    expect(rows().map((r) => r.dataset.kind)).toEqual(['failed', 'prod_deploy_local', 'awaiting_reply']);
-    expect(within(rowOf('nightly build')).getByText('Failed')).toBeTruthy();
+    expect(rows().map((r) => r.dataset.kind)).toEqual(['prod_deploy_local', 'awaiting_reply', 'failed']);
+    expect(screen.getByText('Decide here')).toBeTruthy();
+    expect(screen.getByText('Open & tick by hand')).toBeTruthy();
+    expect(within(rowOf('nightly build')).getByText('failed')).toBeTruthy();
+  });
+
+  it('renders every kind as a decision: an eyebrow, a heading and a main action with its key', async () => {
+    const phase = { taskId: 7, planExternalId: 'p', planTitle: 'Plan', phaseId: 4, seq: 1, name: 'One', manualOpen: 1 };
+    const decision = {
+      taskId: 7,
+      phaseId: 4,
+      decisionId: 'D-1',
+      question: 'Allow it?',
+      options: [{ id: 'reject', label: 'Reject' }],
+      guard: {},
+    };
+    const all = [
+      item({ kind: 'approval', sessionName: 'k1', requestId: 1, toolName: 'Bash' }),
+      item({ kind: 'question', sessionName: 'k2', requestId: 2, preview: 'Which?' }),
+      item({ kind: 'prod_deploy_local', sessionName: 'k3', requestId: 3 }),
+      item({ kind: 'awaiting_reply', sessionName: 'k4' }),
+      item({ kind: 'failed', sessionName: 'k5' }),
+      item({ kind: 'stalled_phase', sessionName: 'k6', phase }),
+      item({ kind: 'manual_phase', sessionName: 'k7', phase }),
+      item({ kind: 'awaiting_merge', sessionName: 'k8', phase }),
+      item({ kind: 'phase_decision', sessionName: 'k9', phase, decision }),
+      item({
+        kind: 'worktree_cleanup',
+        sessionName: 'k10',
+        cleanup: { id: 1, repoRoot: '/r', candidates: [], withoutProof: 0 },
+      }),
+    ];
+    serve(all);
+    await renderPage();
+    expect(new Set(all.map((i) => i.kind)).size).toBe(10);
+    for (const it of all) {
+      const card = rowOf(it.sessionName);
+      expect(card.dataset.kind, it.kind).toBe(it.kind);
+      expect(within(card).getByRole('heading', { level: 2 }), it.kind).toBeTruthy();
+      const buttons = within(card).getAllByRole('button');
+      expect(buttons.some((b) => /\be$/.test(b.textContent ?? '')), it.kind).toBe(true);
+    }
+  });
+
+  it('e allows the selected request; x asks for a reason, then denies', async () => {
+    vi.mocked(api.fetchApprovals).mockResolvedValue([pending(11, { sessionId: 4 })]);
+    serve([item({ kind: 'approval', sessionId: 4, sessionName: 'lint fix', requestId: 11, toolName: 'Bash' })]);
+    await renderPage();
+    await screen.findByRole('button', { name: /^allow once/ });
+    await act(async () => {
+      fireEvent.keyDown(window, { key: 'e' });
+    });
+    expect(api.resolveApproval).toHaveBeenCalledWith(11, 'approve', undefined, undefined);
+    await act(async () => {
+      fireEvent.keyDown(window, { key: 'x' });
+    });
+    expect(api.resolveApproval).toHaveBeenCalledTimes(1);
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'not this table' } });
+    await act(async () => {
+      fireEvent.keyDown(window, { key: 'x' });
+    });
+    expect(api.resolveApproval).toHaveBeenCalledWith(11, 'deny', 'not this table', undefined);
+  });
+
+  it('asks one question as a radio list, and the main button repeats the pick', async () => {
+    const ask = {
+      tool_name: 'AskUserQuestion',
+      tool_input: {
+        questions: [
+          {
+            question: 'Which layout?',
+            header: 'Layout',
+            options: [
+              { label: 'split', description: 'two panes' },
+              { label: 'stack', description: 'one column' },
+            ],
+            multiSelect: false,
+          },
+        ],
+      },
+    };
+    vi.mocked(api.fetchApprovals).mockResolvedValue([
+      pending(12, { toolName: 'AskUserQuestion', requestJson: JSON.stringify(ask) }),
+    ]);
+    serve([item({ kind: 'question', sessionName: 'layout', requestId: 12, toolName: 'AskUserQuestion' })]);
+    await renderPage();
+    const card = screen.getByTestId('needs-you-detail');
+    await within(card).findByRole('radiogroup');
+    fireEvent.click(within(card).getByRole('radio', { name: /stack/ }));
+    fireEvent.click(within(card).getByRole('button', { name: /^reply: stack/ }));
+    await waitFor(() =>
+      expect(api.resolveApproval).toHaveBeenCalledWith(12, 'answer', undefined, { 'Which layout?': 'stack' }),
+    );
   });
 
   it('offers no allow / approve / deny on a prod_deploy_local row', async () => {
     serve([PROD]);
     await renderPage();
     const row = rowOf('release train');
-    expect(within(row).getByText('Confirm locally')).toBeTruthy();
+    expect(within(row).getByText(/confirm locally/)).toBeTruthy();
     expect(within(row).getByText("Production deploy — confirm in the session's terminal")).toBeTruthy();
     expect(within(row).queryByRole('button', { name: /allow|approve/i })).toBeNull();
     expect(within(row).queryByRole('button', { name: /deny/i })).toBeNull();
-    expect(within(row).queryByRole('link', { name: /allow|approve/i })).toBeNull();
-    const focus = within(row).getByRole('link', { name: /focus the terminal/i });
-    expect(focus.getAttribute('href')).toBe('warp://action/focus_tab?id=7');
+    expect(within(row).getByRole('button', { name: /focus terminal/i })).toBeTruthy();
   });
 
-  it('renders an approval with the Approvals card, and hides approve for a prod-deploy request', async () => {
+  it('allows an approval, and hides allow for a prod-deploy request', async () => {
     const ordinary = item({ kind: 'approval', sessionId: 4, sessionName: 'lint fix', requestId: 11, toolName: 'Bash' });
     const deploy = item({ kind: 'approval', sessionId: 5, sessionName: 'ship it', requestId: 12, toolName: 'Bash' });
     vi.mocked(api.fetchApprovals).mockResolvedValue([
@@ -160,7 +259,7 @@ describe('NeedsYou page', () => {
     await renderPage();
 
     const ok = rowOf('lint fix');
-    fireEvent.click(await within(ok).findByRole('button', { name: /^approve$/i }));
+    fireEvent.click(await within(ok).findByRole('button', { name: /^allow once/ }));
     await waitFor(() => expect(api.resolveApproval).toHaveBeenCalledWith(11, 'approve', undefined, undefined));
 
     const prod = rowOf('ship it');
@@ -204,22 +303,25 @@ describe('NeedsYou page', () => {
     serve([AWAITING, suggested]);
     await renderPage();
 
-    fireEvent.click(within(rowOf('orders refactor')).getByRole('button', { name: 'Copy reply to orders refactor' }));
+    fireEvent.click(within(rowOf('orders refactor')).getByRole('button', { name: /^copy reply/ }));
     await waitFor(() =>
       expect(writeText).toHaveBeenCalledWith('[orders refactor] Re: Keep the old endpoint or remove it?\n\n'),
     );
-    expect(await within(rowOf('orders refactor')).findByText(/Copied/)).toBeTruthy();
+    expect(await screen.findByText(/Copied/)).toBeTruthy();
 
-    const chips = within(rowOf('api cleanup')).getByRole('group', { name: 'suggested replies' });
-    expect(within(chips).getByRole('button', { name: /remove \(suggested\)/ })).toBeTruthy();
-    fireEvent.click(within(chips).getByRole('button', { name: /option: keep$/ }));
+    const card = rowOf('api cleanup');
+    expect((within(card).getByRole('radio', { name: /remove/ }) as HTMLInputElement).checked).toBe(true);
+    fireEvent.click(within(card).getByRole('radio', { name: /keep/ }));
+    fireEvent.click(within(card).getByRole('button', { name: /^copy reply/ }));
     await waitFor(() => expect(writeText).toHaveBeenLastCalledWith('[api cleanup] Re: Keep the old endpoint?\n\nkeep'));
+    fireEvent.click(within(card).getByRole('button', { name: /^reply: keep/ }));
+    await waitFor(() => expect(api.sendSessionMessage).toHaveBeenCalledWith(6, 'keep'));
   });
 
   it('dismisses a row across a remount, and re-surfaces a new blocking episode', async () => {
     serve([AWAITING, FAILED]);
     await renderPage();
-    fireEvent.click(screen.getByRole('button', { name: 'Dismiss orders refactor' }));
+    fireEvent.click(within(rowOf('orders refactor')).getByRole('button', { name: /^dismiss/ }));
     expect(rows().map((r) => r.dataset.kind)).toEqual(['failed']);
 
     cleanup();
@@ -229,7 +331,7 @@ describe('NeedsYou page', () => {
     cleanup();
     serve([{ ...AWAITING, blockingSince: iso(-1) }, FAILED]);
     await renderPage();
-    expect(rows().map((r) => r.dataset.kind)).toEqual(['failed', 'awaiting_reply']);
+    expect(rows().map((r) => r.dataset.kind)).toEqual(['awaiting_reply', 'failed']);
   });
 
   it('refetches on a WS permission_resolved frame', async () => {
@@ -245,7 +347,7 @@ describe('NeedsYou page', () => {
     await waitFor(() => expect(rows()).toHaveLength(2));
   });
 
-  it('renders a manual_phase row that links to the phase Criteria tab, not a session', async () => {
+  it('opens the phase Criteria tab from a manual_phase card, not a session', async () => {
     const manual = item({
       kind: 'manual_phase',
       sessionId: 0,
@@ -267,17 +369,17 @@ describe('NeedsYou page', () => {
     });
     serve([AWAITING, manual]);
     await renderPage();
-    expect(rows().map((r) => r.dataset.kind)).toEqual(['manual_phase', 'awaiting_reply']);
+    expect(rows().map((r) => r.dataset.kind)).toEqual(['awaiting_reply', 'manual_phase']);
     const row = rowOf('Line items · Phase 3: Rollout');
-    expect(within(row).getByText('Manual check')).toBeTruthy();
+    expect(within(row).getByText('manual check')).toBeTruthy();
     expect(within(row).getByText('2 [MANUAL] criteria left — only you can close them')).toBeTruthy();
     const want = '/p/shop/plans/2026-10-01-line-items/phase/3/criteria';
-    expect(within(row).getByRole('link', { name: 'open criteria →' }).getAttribute('href')).toBe(want);
-    expect(within(row).getByRole('link', { name: 'Line items · Phase 3: Rollout' }).getAttribute('href')).toBe(want);
+    fireEvent.click(within(row).getByRole('button', { name: /^open criteria/ }));
+    expect(nav.to).toHaveBeenCalledWith(want);
     expect(within(row).queryByRole('button', { name: /copy reply|dismiss/i })).toBeNull();
   });
 
-  it('renders awaiting_merge rows that link to the phase Review tab, and to the PR once one is open', async () => {
+  it('opens the phase Review tab from awaiting_merge, and the PR once one is open', async () => {
     const mergeItem = (seq: number, landingState: 'ready' | 'pushed' | 'pr_open', prUrl?: string): NeedsYouItem =>
       item({
         kind: 'awaiting_merge',
@@ -303,30 +405,24 @@ describe('NeedsYou page', () => {
       });
     serve([AWAITING, mergeItem(1, 'ready'), mergeItem(2, 'pr_open', 'https://example.test/pr/2')]);
     await renderPage();
-    expect(rows().map((r) => r.dataset.kind)).toEqual(['awaiting_merge', 'awaiting_merge', 'awaiting_reply']);
+    expect(rows().map((r) => r.dataset.kind)).toEqual(['awaiting_reply', 'awaiting_merge', 'awaiting_merge']);
 
     const ready = rowOf('Line items · Phase 1: Land 1');
-    expect(within(ready).getByText('Awaiting merge')).toBeTruthy();
+    expect(within(ready).getByText('awaiting merge')).toBeTruthy();
     expect(within(ready).getByText('1 [LAND] criterion left — ready')).toBeTruthy();
     const reviewHref = '/p/shop/plans/2026-10-01-line-items/phase/1/review';
-    expect(within(ready).getByRole('link', { name: 'open review →' }).getAttribute('href')).toBe(reviewHref);
-    expect(within(ready).getByRole('link', { name: 'Line items · Phase 1: Land 1' }).getAttribute('href')).toBe(
-      reviewHref,
-    );
-    expect(within(ready).queryByRole('link', { name: 'open PR ↗' })).toBeNull();
+    fireEvent.click(within(ready).getByRole('button', { name: /^open review/ }));
+    expect(nav.to).toHaveBeenCalledWith(reviewHref);
+    expect(within(ready).queryByRole('button', { name: 'open PR ↗' })).toBeNull();
 
     const prOpen = rowOf('Line items · Phase 2: Land 2');
-    expect(within(prOpen).getByRole('link', { name: 'open review →' }).getAttribute('href')).toBe(
-      '/p/shop/plans/2026-10-01-line-items/phase/2/review',
-    );
-    const pr = within(prOpen).getByRole('link', { name: 'open PR ↗' });
-    expect(pr.getAttribute('href')).toBe('https://example.test/pr/2');
-    expect(pr.getAttribute('target')).toBe('_blank');
-    expect(pr.getAttribute('rel')).toBe('noopener noreferrer');
+    const open = vi.spyOn(window, 'open').mockReturnValue(null);
+    fireEvent.click(within(prOpen).getByRole('button', { name: 'open PR ↗' }));
+    expect(open).toHaveBeenCalledWith('https://example.test/pr/2', '_blank', 'noopener,noreferrer');
     expect(within(prOpen).queryByRole('button', { name: /copy reply|dismiss/i })).toBeNull();
   });
 
-  it('renders a stalled_phase row that links to the phase Runs tab and offers no restart', async () => {
+  it('opens the phase Runs tab from a stalled_phase card and offers no restart', async () => {
     const stalled = item({
       kind: 'stalled_phase',
       sessionId: 0,
@@ -349,14 +445,14 @@ describe('NeedsYou page', () => {
     });
     serve([AWAITING, stalled]);
     await renderPage();
-    expect(rows().map((r) => r.dataset.kind)).toEqual(['stalled_phase', 'awaiting_reply']);
+    expect(rows().map((r) => r.dataset.kind)).toEqual(['awaiting_reply', 'stalled_phase']);
     const row = rowOf('Line items · Phase 4: Sync');
-    expect(within(row).getByText('Stalled phase')).toBeTruthy();
+    expect(within(row).getByText('stalled phase')).toBeTruthy();
     expect(within(row).getByText('executor — no new turn for 25 min')).toBeTruthy();
     const want = '/p/shop/plans/2026-10-01-line-items/phase/4/runs';
-    expect(within(row).getByRole('link', { name: 'open phase →' }).getAttribute('href')).toBe(want);
-    expect(within(row).getByRole('link', { name: 'Line items · Phase 4: Sync' }).getAttribute('href')).toBe(want);
-    expect(within(row).queryByRole('button')).toBeNull();
+    fireEvent.click(within(row).getByRole('button', { name: /^open phase/ }));
+    expect(nav.to).toHaveBeenCalledWith(want);
+    expect(within(row).getAllByRole('button')).toHaveLength(1);
   });
 
   it('adds «open phase» to an approval a stalled phase waits on, and keeps the decision there', async () => {
@@ -383,12 +479,13 @@ describe('NeedsYou page', () => {
     await renderPage();
 
     const row = rowOf('verifier of sync');
-    expect(await within(row).findByRole('button', { name: /^approve$/i })).toBeTruthy();
+    expect(await within(row).findByRole('button', { name: /^allow once/ })).toBeTruthy();
     const open = within(row).getByRole('link', { name: 'open phase →' });
     expect(open.getAttribute('href')).toBe('/p/shop/plans/2026-10-01-line-items/phase/4/runs');
     expect(within(row).getByText('stalls Line items · Phase 4: Sync')).toBeTruthy();
-    // The title still opens the session that asked, not the phase.
-    expect(within(row).getByRole('link', { name: 'verifier of sync' }).getAttribute('href')).not.toContain('/plans/');
+    // The card still opens the session that asked, not the phase.
+    fireEvent.click(within(row).getByRole('button', { name: 'open session →' }));
+    expect(nav.to.mock.calls.at(-1)?.[0]).not.toContain('/plans/');
     expect(within(rowOf('lint fix')).queryByTestId('needs-you-stalled-on')).toBeNull();
   });
 
@@ -437,8 +534,7 @@ describe('NeedsYou page', () => {
     await renderPage();
     const row = rowOf('shop');
     expect(row.dataset.kind).toBe('worktree_cleanup');
-    expect(within(row).getByText('Worktree cleanup')).toBeTruthy();
-    expect(within(row).getByRole('link', { name: 'shop' }).getAttribute('href')).toBe('/settings');
+    expect(within(row).getByText('worktree cleanup')).toBeTruthy();
 
     const cands = within(row).getAllByTestId('cleanup-candidate');
     expect(cands).toHaveLength(2);
@@ -451,7 +547,7 @@ describe('NeedsYou page', () => {
     expect(within(cands[1]).getByText('content in main')).toBeTruthy();
     expect(within(cands[1]).getByText('T-abc: Fix the thing')).toBeTruthy();
     expect(within(cands[1]).queryByRole('link')).toBeNull();
-    expect(within(row).getByTestId('cleanup-without-proof').textContent).toBe('without proof: 3');
+    expect(within(row).getByText('without proof: 3')).toBeTruthy();
   });
 
   it('removes only the selected worktrees, after the click, then refetches', async () => {
@@ -463,7 +559,7 @@ describe('NeedsYou page', () => {
     });
     await renderPage();
     const row = rowOf('shop');
-    const remove = within(row).getByRole('button', { name: 'Remove selected' });
+    const remove = within(row).getByRole('button', { name: /^Remove selected/ });
     expect((remove as HTMLButtonElement).disabled).toBe(true);
     expect(apply).not.toHaveBeenCalled();
 
@@ -488,7 +584,7 @@ describe('NeedsYou page', () => {
     const row = rowOf('shop');
     fireEvent.click(within(row).getByRole('checkbox', { name: 'Select all worktrees' }));
     expect(within(row).getByText('2 selected')).toBeTruthy();
-    fireEvent.click(within(row).getByRole('button', { name: 'Remove selected' }));
+    fireEvent.click(within(row).getByRole('button', { name: /^Remove selected/ }));
     await waitFor(() => expect(apply).toHaveBeenCalledTimes(1));
     expect(apply.mock.calls[0][1]).toEqual(['/wt/shop/phase-41', '/wt/shop/T-abc']);
   });

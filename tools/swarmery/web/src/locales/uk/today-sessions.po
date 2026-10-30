@@ -25,10 +25,6 @@ msgstr "? питання"
 msgid "… (truncated)"
 msgstr "… (обрізано)"
 
-#: src/pages/NeedsYou.tsx
-msgid "· suggested"
-msgstr "· пропонується"
-
 #: src/pages/detail/Chat.tsx
 #: src/pages/detail/Timeline.tsx
 msgid "(empty prompt)"
@@ -38,6 +34,11 @@ msgstr "(порожній промпт)"
 #: src/pages/Overview.tsx
 msgid "(untitled session)"
 msgstr "(сесія без назви)"
+
+#. placeholder {0}: f.blocked
+#: src/pages/NeedsYou.tsx
+msgid "{0, plural, one {# blocked attempt} few {# blocked attempts} many {# blocked attempts} other {# blocked attempts}}"
+msgstr "{0, plural, one {# заблокована спроба} few {# заблоковані спроби} many {# заблокованих спроб} other {# заблокованих спроб}}"
 
 #. placeholder {0}: data.malformed
 #: src/pages/detail/ContextHogsCard.tsx
@@ -58,6 +59,11 @@ msgstr "{0, plural, one {# сесія} few {# сесії} many {# сесій} ot
 #: src/pages/detail/ContextHogsCard.tsx
 msgid "{0, plural, one {# unattributed result} few {# unattributed results} many {# unattributed results} other {# unattributed results}}"
 msgstr "{0, plural, one {# результат без атрибуції} few {# результати без атрибуції} many {# результатів без атрибуції} other {# результату без атрибуції}}"
+
+#. placeholder {0}: f.changed.length
+#: src/pages/NeedsYou.tsx
+msgid "{0, plural, one {touched # protected file} few {touched # protected files} many {touched # protected files} other {touched # protected files}}"
+msgstr "{0, plural, one {зачеплено # захищений файл} few {зачеплено # захищені файли} many {зачеплено # захищених файлів} other {зачеплено # захищених файлів}}"
 
 #: src/pages/today/loopModel.ts
 msgid "{advisorFindings, plural, one {{count} Advisor finding} few {{count} Advisor findings} many {{count} Advisor findings} other {{count} Advisor findings}}"
@@ -163,6 +169,10 @@ msgstr "{lessonCandidates, plural, one {{count} кандидат в уроки} 
 msgid "{list}. Nothing changes until you say so."
 msgstr "{list}. Нічого не зміниться без вашого слова."
 
+#: src/pages/NeedsYou.tsx
+msgid "{n, plural, one {# criterion marked [MANUAL] — only you can close it} few {# criteria marked [MANUAL] — only you can close them} many {# criteria marked [MANUAL] — only you can close them} other {# criteria marked [MANUAL] — only you can close them}}"
+msgstr "{n, plural, one {# критерій позначено [MANUAL] — закрити його можете лише ви} few {# критерії позначено [MANUAL] — закрити їх можете лише ви} many {# критеріїв позначено [MANUAL] — закрити їх можете лише ви} other {# критеріїв позначено [MANUAL] — закрити їх можете лише ви}}"
+
 #: src/pages/today/loopModel.ts
 msgid "{n, plural, one {proposal} few {proposals} many {proposals} other {proposals}}"
 msgstr "{n, plural, one {пропозиція} few {пропозиції} many {пропозицій} other {пропозиції}}"
@@ -242,6 +252,14 @@ msgstr "{tool} · питає раз на область"
 #: src/pages/detail/Timeline.tsx
 msgid "{tool} · awaiting approval"
 msgstr "{tool} · чекає погодження"
+
+#: src/pages/NeedsYou.tsx
+msgid "{tool} · destructive: asks every time, no always-allow"
+msgstr "{tool} · руйнівна дія: питає щоразу, без «завжди дозволяти»"
+
+#: src/pages/NeedsYou.tsx
+msgid "{tool} · write: asks once per scope"
+msgstr "{tool} · запис: питає раз на область"
 
 #: src/pages/projects/FirstRequestCard.tsx
 msgid "{toolCount, plural, one {MCP: {nameOnly} of # tool counted by name only — its schema is readable only from the running server.} few {MCP: {nameOnly} of # tools counted by name only — their schemas are readable only from the running server.} many {MCP: {nameOnly} of # tools counted by name only — their schemas are readable only from the running server.} other {MCP: {nameOnly} of # tools counted by name only — their schemas are readable only from the running server.}}"
@@ -324,6 +342,7 @@ msgid "a reply is being generated — Stop to cancel it."
 msgstr "відповідь генерується — «Стоп», щоб скасувати."
 
 #: src/pages/Approvals.tsx
+#: src/pages/NeedsYou.tsx
 msgid "add rule"
 msgstr "додати правило"
 
@@ -378,6 +397,7 @@ msgid "Allow (add to scope)"
 msgstr "Дозволити (додати до обсягу)"
 
 #: src/pages/detail/SessionGate.tsx
+#: src/pages/NeedsYou.tsx
 msgid "allow once"
 msgstr "дозволити раз"
 
@@ -386,6 +406,7 @@ msgid "Allowing this releases: {pathList}"
 msgstr "Дозвіл відкриває: {pathList}"
 
 #: src/pages/detail/SessionGate.tsx
+#: src/pages/NeedsYou.tsx
 msgid "always allow in {project}"
 msgstr "завжди дозволяти в {project}"
 
@@ -405,17 +426,18 @@ msgstr "аналізуємо…"
 msgid "and the loop closes when Change lowers next week's Measure"
 msgstr "а цикл замикається, коли «Зміна» знижує «Вимір» наступного тижня"
 
+#: src/pages/NeedsYou.tsx
+#: src/pages/NeedsYou.tsx
+msgid "answer"
+msgstr "відповідь"
+
 #: src/pages/Overview.tsx
 msgctxt "verb: the button that opens the question"
 msgid "answer"
-msgstr "відповісти"
-
-#: src/pages/NeedsYou.tsx
-#: src/pages/NeedsYou.tsx
-msgid "answer {decisionId}"
-msgstr "відповісти на {decisionId}"
+msgstr "відповідь"
 
 #: src/pages/Approvals.tsx
+#: src/pages/NeedsYou.tsx
 msgid "answer in terminal →"
 msgstr "відповісти в терміналі →"
 
@@ -444,6 +466,7 @@ msgid "approvals…"
 msgstr "погодження…"
 
 #: src/pages/Approvals.tsx
+#: src/pages/NeedsYou.tsx
 #: src/pages/Overview.tsx
 #: src/pages/today/WaitingOnYou.tsx
 msgid "approve"
@@ -501,6 +524,7 @@ msgid "awaiting approval · {since} — respond in the terminal or Approvals"
 msgstr "чекає погодження · {since} — дайте відповідь у терміналі або в «Погодженнях»"
 
 #: src/pages/Approvals.tsx
+#: src/pages/NeedsYou.tsx
 msgid "Bash patterns match the command PREFIX — `Bash(git *)` also matches `git status && rm -rf /`. Keep rules narrow; auto-approvals stay in History (via rule)."
 msgstr "Шаблони Bash збігаються з ПРЕФІКСОМ команди — `Bash(git *)` збігається і з `git status && rm -rf /`. Тримайте правила вузькими; автопогодження лишаються в Історії (через правило)."
 
@@ -565,6 +589,10 @@ msgstr "зайняті файли…"
 #: src/pages/detail/Chat.tsx
 msgid "claude"
 msgstr "claude"
+
+#: src/pages/NeedsYou.tsx
+msgid "Claude is asking you {count, plural, one {# question} few {# questions} many {# questions} other {# questions}}"
+msgstr "Claude ставить вам {count, plural, one {# запитання} few {# запитання} many {# запитань} other {# запитань}}"
 
 #: src/pages/projects/FirstRequestCard.tsx
 msgid "CLAUDE.md"
@@ -658,6 +686,10 @@ msgid "continue phase…"
 msgstr "продовжити фазу…"
 
 #: src/pages/NeedsYou.tsx
+msgid "contract broken: {flagList}"
+msgstr "контракт порушено: {flagList}"
+
+#: src/pages/NeedsYou.tsx
 msgid "Copied — paste it into the session"
 msgstr "Скопійовано — вставте в сесію"
 
@@ -670,20 +702,9 @@ msgid "Copy failed"
 msgstr "Не скопійовано"
 
 #: src/pages/NeedsYou.tsx
-msgid "Copy reply"
-msgstr "Копіювати відповідь"
-
 #: src/pages/NeedsYou.tsx
-msgid "Copy reply to {sessionName}"
-msgstr "Копіювати відповідь для {sessionName}"
-
-#: src/pages/NeedsYou.tsx
-msgid "Copy reply with option: {opt}"
-msgstr "Копіювати відповідь із варіантом: {opt}"
-
-#: src/pages/NeedsYou.tsx
-msgid "Copy reply with option: {opt} (suggested)"
-msgstr "Копіювати відповідь із варіантом: {opt} (пропонується)"
+msgid "copy reply"
+msgstr "скопіювати відповідь"
 
 #: src/pages/detail/HandoffCard.tsx
 msgid "copy resume command"
@@ -718,6 +739,10 @@ msgstr "дашборд"
 msgid "data flows →"
 msgstr "дані йдуть →"
 
+#: src/pages/NeedsYou.tsx
+msgid "Decide here"
+msgstr "Вирішіть тут"
+
 #: src/pages/Approvals.tsx
 msgid "delete"
 msgstr "видалити"
@@ -733,6 +758,10 @@ msgstr "відхилено"
 #: src/pages/Approvals.tsx
 #: src/pages/detail/SessionGate.tsx
 #: src/pages/detail/SessionGate.tsx
+#: src/pages/NeedsYou.tsx
+#: src/pages/NeedsYou.tsx
+#: src/pages/NeedsYou.tsx
+#: src/pages/NeedsYou.tsx
 msgid "deny"
 msgstr "відхилити"
 
@@ -740,25 +769,27 @@ msgstr "відхилити"
 msgid "deny reason"
 msgstr "причина відмови"
 
+#: src/pages/NeedsYou.tsx
+msgid "destructive: asks every time, no always-allow"
+msgstr "руйнівна дія: питає щоразу, без «завжди дозволяти»"
+
 #: src/pages/detail/SessionPane.tsx
 msgid "Diff"
 msgstr "Зміни"
 
 #: src/pages/detail/SessionPane.tsx
+#: src/pages/NeedsYou.tsx
+#: src/pages/NeedsYou.tsx
 msgid "dismiss"
 msgstr "прибрати"
-
-#: src/pages/NeedsYou.tsx
-msgid "Dismiss"
-msgstr "Прибрати"
-
-#: src/pages/NeedsYou.tsx
-msgid "Dismiss {sessionName}"
-msgstr "Прибрати {sessionName}"
 
 #: src/pages/detail/PendingRunNotice.tsx
 msgid "dispatched task"
 msgstr "відправлена задача"
+
+#: src/pages/NeedsYou.tsx
+msgid "doc copy mismatch"
+msgstr "копія документа не збігається"
 
 #: src/pages/Overview.tsx
 #: src/pages/ProjectOverview.tsx
@@ -822,6 +853,10 @@ msgstr "оцінка (~байти/4)"
 msgid "estimated split: {barLabel}"
 msgstr "оцінений розподіл: {barLabel}"
 
+#: src/pages/NeedsYou.tsx
+msgid "Every automatic criterion of this phase is green. What remains was declared as a human check when the plan was written; tick it on the phase's Criteria tab once you have verified it by hand."
+msgstr "Усі автоматичні критерії цієї фази зелені. Решту під час написання плану оголошено ручною перевіркою; позначте її на вкладці критеріїв фази, щойно перевірите власноруч."
+
 #: src/pages/Overview.tsx
 msgid "Every rule you add here removes a stop from tomorrow. Rules stay per-tool and per-project — narrow or revoke them in Approvals."
 msgstr "Кожне правило тут — на одну зупинку менше завтра. Правила діють на інструмент і проєкт — звузити чи скасувати їх можна в «Погодженнях»."
@@ -851,6 +886,7 @@ msgid "expires {expires}"
 msgstr "минає {expires}"
 
 #: src/pages/detail/SessionGate.tsx
+#: src/pages/NeedsYou.tsx
 msgid "expires in {clock}"
 msgstr "спливає за {clock}"
 
@@ -905,6 +941,10 @@ msgstr "Зайняті файли"
 msgid "files changed"
 msgstr "змінені файли"
 
+#: src/pages/NeedsYou.tsx
+msgid "filter"
+msgstr "фільтр"
+
 #: src/pages/Sessions.tsx
 msgid "filter · n:name s:state o:result"
 msgstr "фільтр · n:назва s:стан o:результат"
@@ -921,13 +961,13 @@ msgstr "перший запит…"
 msgid "Focus terminal"
 msgstr "До термінала"
 
-#: src/pages/NeedsYou.tsx
-msgid "Focus the terminal of {sessionName}"
-msgstr "Перейти до термінала сесії {sessionName}"
-
 #: src/pages/ProjectOverview.tsx
 msgid "generate insights"
 msgstr "згенерувати інсайти"
+
+#: src/pages/NeedsYou.tsx
+msgid "guard block unreadable"
+msgstr "блок guard не читається"
 
 #: src/pages/sessions/SwarmPanel.tsx
 msgid "handed to the session's mod"
@@ -1301,13 +1341,17 @@ msgstr "не доставлено: {reason}"
 msgid "not sent: {msg}"
 msgstr "не надіслано: {msg}"
 
+#: src/pages/NeedsYou.tsx
+msgid "note — recorded with the answer in the phase doc (optional)"
+msgstr "нотатка — запишеться з відповіддю в документ фази (необов'язково)"
+
 #: src/pages/Approvals.tsx
 msgid "note (optional)"
 msgstr "нотатка (необов’язково)"
 
 #: src/pages/NeedsYou.tsx
-msgid "note (optional) — recorded with the answer in the phase doc"
-msgstr "примітка (необов'язково) — записується з відповіддю в документ фази"
+msgid "Nothing blocked on you."
+msgstr "Ніщо не чекає на вас."
 
 #: src/pages/ProjectOverview.tsx
 msgid "nothing flagged"
@@ -1320,10 +1364,6 @@ msgstr "Тут порожньо. Запустіть завдання через 
 #: src/pages/Overview.tsx
 msgid "nothing idle"
 msgstr "ніхто не простоює"
-
-#: src/pages/NeedsYou.tsx
-msgid "nothing needs you — approvals, questions and sessions awaiting your reply land here live"
-msgstr "нічого не потребує вас — погодження, питання й сесії, що чекають відповіді, з’являться тут наживо"
 
 #: src/pages/Overview.tsx
 msgid "nothing notable yet today"
@@ -1377,13 +1417,17 @@ msgstr "відкрити {name} у Системі"
 msgid "open {type} in System"
 msgstr "відкрити {type} у Системі"
 
+#: src/pages/NeedsYou.tsx
+msgid "Open & tick by hand"
+msgstr "Відкрийте й позначте вручну"
+
 #: src/pages/ProjectOverview.tsx
 msgid "open board →"
 msgstr "відкрити дошку →"
 
 #: src/pages/NeedsYou.tsx
-msgid "open criteria →"
-msgstr "відкрити критерії →"
+msgid "open criteria"
+msgstr "відкрити критерії"
 
 #: src/pages/detail/CallTree.tsx
 msgid "open in System"
@@ -1394,6 +1438,9 @@ msgid "open in terminal ↗"
 msgstr "відкрити в терміналі ↗"
 
 #: src/pages/NeedsYou.tsx
+msgid "open phase"
+msgstr "відкрити фазу"
+
 #: src/pages/NeedsYou.tsx
 msgid "open phase →"
 msgstr "відкрити фазу →"
@@ -1403,12 +1450,17 @@ msgid "open PR ↗"
 msgstr "відкрити PR ↗"
 
 #: src/pages/NeedsYou.tsx
+msgid "open review"
+msgstr "відкрити рев'ю"
+
 #: src/pages/NeedsYou.tsx
 #: src/pages/NeedsYou.tsx
-msgid "open review →"
-msgstr "відкрити рев’ю →"
+#: src/pages/NeedsYou.tsx
+msgid "open session"
+msgstr "відкрити сесію"
 
 #: src/pages/Approvals.tsx
+#: src/pages/NeedsYou.tsx
 #: src/pages/NeedsYou.tsx
 #: src/pages/NeedsYou.tsx
 #: src/pages/NeedsYou.tsx
@@ -1442,6 +1494,14 @@ msgid "outcome ▾"
 msgstr "результат ▾"
 
 #: src/pages/NeedsYou.tsx
+msgid "own answer — overrides the selection"
+msgstr "своя відповідь — замінює вибране"
+
+#: src/pages/NeedsYou.tsx
+msgid "own answer…"
+msgstr "своя відповідь…"
+
+#: src/pages/NeedsYou.tsx
 msgid "Path"
 msgstr "Шлях"
 
@@ -1461,12 +1521,28 @@ msgid "Permission"
 msgstr "Дозвіл"
 
 #: src/pages/NeedsYou.tsx
+msgid "Permissions, questions, guard stops and manual checks land here the moment a session or phase stops for you."
+msgstr "Дозволи, запитання, зупинки guard і ручні перевірки з'являються тут, щойно сесія чи фаза зупиняється на вас."
+
+#: src/pages/NeedsYou.tsx
+msgid "phase {seq}"
+msgstr "фаза {seq}"
+
+#: src/pages/NeedsYou.tsx
 msgid "Phase / card"
 msgstr "Фаза / картка"
+
+#: src/pages/NeedsYou.tsx
+msgid "phase →"
+msgstr "фаза →"
 
 #: src/pages/detail/PendingRunNotice.tsx
 msgid "phase review"
 msgstr "рев’ю фази"
+
+#: src/pages/NeedsYou.tsx
+msgid "phase review →"
+msgstr "рев'ю фази →"
 
 #: src/pages/detail/PendingRunNotice.tsx
 msgid "phase run"
@@ -1536,6 +1612,7 @@ msgstr "процес"
 
 #: src/pages/Approvals.tsx
 #: src/pages/NeedsYou.tsx
+#: src/pages/NeedsYou.tsx
 msgid "Production deploy — confirm in the session's terminal"
 msgstr "Деплой у продакшн — підтвердьте в терміналі сесії"
 
@@ -1573,6 +1650,7 @@ msgid "queued, waiting for the mod to pick it up"
 msgstr "у черзі, чекає, доки мод її забере"
 
 #: src/pages/Approvals.tsx
+#: src/pages/NeedsYou.tsx
 msgid "raw"
 msgstr "сирий"
 
@@ -1638,6 +1716,9 @@ msgid "rename session"
 msgstr "перейменувати сесію"
 
 #: src/pages/detail/SessionGate.tsx
+#: src/pages/NeedsYou.tsx
+#: src/pages/NeedsYou.tsx
+#: src/pages/NeedsYou.tsx
 msgid "reply"
 msgstr "відповідь"
 
@@ -1653,6 +1734,10 @@ msgstr "відповідь відновить сесію зі збережено
 msgid "Reply to this session…  (⌘/Ctrl+Enter to send)"
 msgstr "Відповісти цій сесії…  (⌘/Ctrl+Enter — надіслати)"
 
+#: src/pages/NeedsYou.tsx
+msgid "reply: {typed}"
+msgstr "відповісти: {typed}"
+
 #: src/pages/detail/SessionPane.tsx
 msgid "resume with a reply"
 msgstr "відновити відповіддю"
@@ -1665,10 +1750,6 @@ msgstr "рев’ю"
 msgid "review →"
 msgstr "рев’ю →"
 
-#: src/pages/NeedsYou.tsx
-msgid "review in Inbox →"
-msgstr "переглянути у Вхідних →"
-
 #: src/pages/today/loopModel.ts
 msgid "Review in Inbox →"
 msgstr "Переглянути у Вхідних →"
@@ -1677,6 +1758,10 @@ msgstr "Переглянути у Вхідних →"
 msgid "Right now"
 msgstr "Зараз"
 
+#: src/pages/NeedsYou.tsx
+msgid "rule added: {added} · this request still needs your answer"
+msgstr "правило додано: {added} · цей запит усе ще чекає на вашу відповідь"
+
 #: src/pages/Approvals.tsx
 msgid "rule note"
 msgstr "нотатка правила"
@@ -1684,6 +1769,10 @@ msgstr "нотатка правила"
 #: src/pages/Approvals.tsx
 msgid "rule project scope"
 msgstr "проєкт правила"
+
+#: src/pages/NeedsYou.tsx
+msgid "rules & history →"
+msgstr "правила й історія →"
 
 #: src/pages/detail/PendingRunNotice.tsx
 msgid "run"
@@ -1736,10 +1825,6 @@ msgstr "Надіслати"
 #: src/pages/sessions/SwarmPanel.tsx
 msgid "Send a message from this session"
 msgstr "Надіслати повідомлення від цієї сесії"
-
-#: src/pages/NeedsYou.tsx
-msgid "Send my own answer"
-msgstr "Надіслати власну відповідь"
 
 #: src/pages/detail/Chat.tsx
 #: src/pages/sessions/SwarmPanel.tsx
@@ -1888,8 +1973,8 @@ msgid "source: {source}"
 msgstr "джерело: {source}"
 
 #: src/pages/NeedsYou.tsx
-msgid "stalls {planTitle} · Phase {seq}: {name}"
-msgstr "тримає {planTitle} · Фаза {seq}: {name}"
+msgid "stalls {stallPlan} · Phase {stallSeq}: {stallName}"
+msgstr "зупиняє {stallPlan} · Фаза {stallSeq}: {stallName}"
 
 #: src/pages/detail/CallTree.tsx
 msgid "started"
@@ -1936,10 +2021,6 @@ msgstr "Зупинити"
 msgid "stop asking"
 msgstr "не питати"
 
-#: src/pages/NeedsYou.tsx
-msgid "stop: {trigger}"
-msgstr "зупинка: {trigger}"
-
 #: src/pages/detail/CommandInput.tsx
 msgid "Stopping…"
 msgstr "Зупиняємо…"
@@ -1957,6 +2038,7 @@ msgid "subagents"
 msgstr "субагенти"
 
 #: src/pages/Approvals.tsx
+#: src/pages/NeedsYou.tsx
 msgid "submit answers"
 msgstr "надіслати відповіді"
 
@@ -1965,8 +2047,8 @@ msgid "subscription"
 msgstr "підписка"
 
 #: src/pages/NeedsYou.tsx
-msgid "suggested replies"
-msgstr "пропоновані відповіді"
+msgid "suggested"
+msgstr "запропоновано"
 
 #: src/pages/detail/SessionPane.tsx
 msgid "swarm"
@@ -2027,6 +2109,10 @@ msgstr "{kind} «{label}» завершено без запису транскр
 msgid "The day"
 msgstr "День"
 
+#: src/pages/NeedsYou.tsx
+msgid "The executor stopped: {trigger}"
+msgstr "Виконавець зупинився: {trigger}"
+
 #: src/pages/today/LoopMap.tsx
 #: src/pages/today/Today.tsx
 msgid "The loop, this week"
@@ -2045,8 +2131,21 @@ msgid "The sending session's permission mode let the engine's classifier refuse 
 msgstr "Через режим дозволів сесії-відправника класифікатор рушія відмовив у надсиланні. Надішліть із сесії в іншому режимі (напр., acceptEdits або bypassPermissions)."
 
 #: src/pages/detail/SessionGate.tsx
+#: src/pages/NeedsYou.tsx
 msgid "The session asks to run {tool}"
 msgstr "Сесія просить запустити {tool}"
+
+#: src/pages/NeedsYou.tsx
+msgid "The session stopped to ask rather than guess. It does nothing until it hears from you."
+msgstr "Сесія зупинилась, щоб запитати, а не вгадувати. Вона нічого не робить, доки не почує вас."
+
+#: src/pages/NeedsYou.tsx
+msgid "The session stopped to ask rather than guess. Your answer goes back to it as the tool's result."
+msgstr "Сесія зупинилась, щоб запитати, а не вгадувати. Ваша відповідь повернеться до неї як результат інструмента."
+
+#: src/pages/NeedsYou.tsx
+msgid "The session waits on you. Nothing runs until you decide."
+msgstr "Сесія чекає на вас. Нічого не запуститься, доки ви не вирішите."
 
 #: src/pages/sessions/SwarmPanel.tsx
 msgid "The session's link mod is not polling for commands. Enable the swarmery-link \"control\" option and keep the session open."
@@ -2055,10 +2154,6 @@ msgstr "Мод swarmery link цієї сесії не опитує команд�
 #: src/pages/Overview.tsx
 msgid "The spine · today"
 msgstr "Хребет дня · сьогодні"
-
-#: src/pages/NeedsYou.tsx
-msgid "the stop block broke its contract: {flagList}"
-msgstr "блок зупинки порушив контракт: {flagList}"
 
 #: src/pages/ProjectDetail.tsx
 #: src/pages/ProjectOverview.tsx
@@ -2071,6 +2166,7 @@ msgid "Thinking"
 msgstr "Думає"
 
 #: src/pages/detail/SessionGate.tsx
+#: src/pages/NeedsYou.tsx
 msgid "This is a production deploy: confirm it in the session's own terminal"
 msgstr "Це розгортання в продакшн: підтвердьте його в терміналі самої сесії"
 
@@ -2111,6 +2207,7 @@ msgid "tool calls"
 msgstr "виклики інструментів"
 
 #: src/pages/Approvals.tsx
+#: src/pages/NeedsYou.tsx
 msgid "Tool or Tool(arg glob) — e.g. Read, Bash(git *)"
 msgstr "Tool або Tool(arg glob) — напр. Read, Bash(git *)"
 
@@ -2193,6 +2290,10 @@ msgstr "очікування сьогодні"
 msgid "waiting"
 msgstr "чекає"
 
+#: src/pages/NeedsYou.tsx
+msgid "waiting {age}"
+msgstr "чекає {age}"
+
 #: src/pages/detail/SessionGate.tsx
 #: src/pages/detail/Timeline.tsx
 msgid "waiting {waited}"
@@ -2220,6 +2321,8 @@ msgid "Where your time went"
 msgstr "Куди пішов ваш час"
 
 #: src/pages/detail/SessionGate.tsx
+#: src/pages/NeedsYou.tsx
+#: src/pages/NeedsYou.tsx
 msgid "why you deny, for the session"
 msgstr "чому ви відмовляєте, для сесії"
 
@@ -2263,10 +2366,6 @@ msgstr "пишу передачу…"
 #: src/pages/detail/Chat.tsx
 msgid "you"
 msgstr "ви"
-
-#: src/pages/NeedsYou.tsx
-msgid "your own answer — or a note sent with the option you pick"
-msgstr "власна відповідь — або примітка до варіанта, який ви оберете"
 
 #: src/pages/detail/SessionGate.tsx
 msgid "your pick is pasted as the reply"

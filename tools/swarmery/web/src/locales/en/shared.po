@@ -782,10 +782,6 @@ msgstr "apply proposal failed"
 msgid "apply revision failed: {status}"
 msgstr "apply revision failed: {status}"
 
-#: src/lib/needsYou.ts
-msgid "Approval"
-msgstr "Approval"
-
 #: src/lib/notifications.ts
 msgid "Approval needed: {toolName}"
 msgstr "Approval needed: {toolName}"
@@ -910,16 +906,16 @@ msgid "auto-approve presets are configured per project — open a project's Sett
 msgstr "auto-approve presets are configured per project — open a project's Settings to set them"
 
 #: src/lib/needsYou.ts
-msgid "Awaiting merge"
-msgstr "Awaiting merge"
+msgid "awaiting merge"
+msgstr "awaiting merge"
 
 #: src/lib/sessionsView.ts
 msgid "awaiting reply"
 msgstr "awaiting reply"
 
 #: src/lib/needsYou.ts
-msgid "Awaiting your reply"
-msgstr "Awaiting your reply"
+msgid "awaiting your reply"
+msgstr "awaiting your reply"
 
 #: src/components/Sidebar.tsx
 #: src/workspace/WorkspaceShell.tsx
@@ -1265,8 +1261,8 @@ msgid "confirm detach"
 msgstr "confirm detach"
 
 #: src/lib/needsYou.ts
-msgid "Confirm locally"
-msgstr "Confirm locally"
+msgid "confirm locally"
+msgstr "confirm locally"
 
 #: src/components/SessionControls.tsx
 msgid "Confirm stop"
@@ -1864,10 +1860,10 @@ msgstr "fail"
 #: src/components/ProjectPlugins.tsx
 #: src/components/RunOutcomeModal.tsx
 #: src/components/SessionControls.tsx
+#: src/lib/needsYou.ts
 msgid "failed"
 msgstr "failed"
 
-#: src/lib/needsYou.ts
 #: src/lib/sessionsView.ts
 msgid "Failed"
 msgstr "Failed"
@@ -2058,11 +2054,8 @@ msgstr "Git push is never auto-approved unless you enable it explicitly."
 msgid "Git writes (add, commit, checkout, worktree)"
 msgstr "Git writes (add, commit, checkout, worktree)"
 
-#: src/lib/needsYou.ts
-msgid "Guard decision"
-msgstr "Guard decision"
-
 #: src/components/place/StateGlyph.tsx
+#: src/lib/needsYou.ts
 msgid "guard stop"
 msgstr "guard stop"
 
@@ -2399,12 +2392,9 @@ msgid "managed"
 msgstr "managed"
 
 #: src/components/place/StateGlyph.tsx
+#: src/lib/needsYou.ts
 msgid "manual check"
 msgstr "manual check"
-
-#: src/lib/needsYou.ts
-msgid "Manual check"
-msgstr "Manual check"
 
 #: src/api.ts
 msgid "mark criterion failed: {status}"
@@ -2893,6 +2883,7 @@ msgid "per-category overrides apply only under the unrestricted preset"
 msgstr "per-category overrides apply only under the unrestricted preset"
 
 #: src/components/place/StateGlyph.tsx
+#: src/lib/needsYou.ts
 msgid "permission"
 msgstr "permission"
 
@@ -3177,12 +3168,9 @@ msgstr "put the card back in the Inbox"
 
 #: src/components/place/DecisionCard.tsx
 #: src/components/place/StateGlyph.tsx
+#: src/lib/needsYou.ts
 msgid "question"
 msgstr "question"
-
-#: src/lib/needsYou.ts
-msgid "Question"
-msgstr "Question"
 
 #: src/components/QuestionForm.tsx
 msgid "question {number}"
@@ -3890,8 +3878,8 @@ msgid "stale"
 msgstr "stale"
 
 #: src/lib/needsYou.ts
-msgid "Stalled phase"
-msgstr "Stalled phase"
+msgid "stalled phase"
+msgstr "stalled phase"
 
 #: src/workspace/NewTaskModal.tsx
 msgid "start immediately — the dispatcher picks it up"
@@ -4630,8 +4618,8 @@ msgid "worktree"
 msgstr "worktree"
 
 #: src/lib/needsYou.ts
-msgid "Worktree cleanup"
-msgstr "Worktree cleanup"
+msgid "worktree cleanup"
+msgstr "worktree cleanup"
 
 #: src/workspace/task/TaskActions.tsx
 msgid "worktree reclaimed — nothing to re-grade"

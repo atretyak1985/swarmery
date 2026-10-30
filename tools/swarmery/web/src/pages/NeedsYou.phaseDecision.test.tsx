@@ -78,7 +78,8 @@ async function renderPage(): Promise<HTMLElement> {
   await screen.findByText(/blocked on you/);
   const row = screen.getAllByTestId('needs-you-row').find((r) => r.dataset.kind === 'phase_decision');
   if (row === undefined) throw new Error('no phase_decision row');
-  return row;
+  fireEvent.click(within(row).getByRole('button'));
+  return screen.getByTestId('needs-you-detail');
 }
 
 beforeEach(() => {
@@ -90,12 +91,10 @@ describe('NeedsYou phase_decision', () => {
   it('shows the decision, the guard badge and the question', async () => {
     serve([FAILED, DECISION]);
     const row = await renderPage();
-    expect(within(row).getByText('Guard decision')).toBeTruthy();
-    expect(within(row).getByText('D-4')).toBeTruthy();
-    expect(within(row).getByText('1 protected file changed')).toBeTruthy();
-    expect(within(row).getByText('2 blocked attempts')).toBeTruthy();
-    expect(within(row).getByText(DECISION.question)).toBeTruthy();
-    expect(within(row).getByRole('link', { name: 'open review →' }).getAttribute('href')).toContain('review');
+    expect(within(row).getByText('guard stop · D-4')).toBeTruthy();
+    expect(within(row).getByText('touched 1 protected file · 2 blocked attempts')).toBeTruthy();
+    expect(within(row).getByRole('heading', { name: DECISION.question })).toBeTruthy();
+    expect(within(row).getByRole('button', { name: 'phase review →' })).toBeTruthy();
   });
 
   it('answers with the clicked option and the note, then refetches', async () => {
@@ -104,7 +103,7 @@ describe('NeedsYou phase_decision', () => {
     const calls = vi.mocked(api.getNeedsYou).mock.calls.length;
     fireEvent.change(within(row).getByRole('textbox'), { target: { value: ' the test was wrong ' } });
     serve([]);
-    fireEvent.click(within(row).getByRole('button', { name: 'Allow (add to scope)' }));
+    fireEvent.click(within(row).getByRole('button', { name: /^answer: Allow \(add to scope\)/ }));
     await waitFor(() =>
       expect(guardApi.answerGuardDecision).toHaveBeenCalledWith(7, 31, 'D-4', 'allow-add-to-scope', 'the test was wrong'),
     );
@@ -115,7 +114,8 @@ describe('NeedsYou phase_decision', () => {
     serve([DECISION]);
     const row = await renderPage();
     vi.mocked(guardApi.answerGuardDecision).mockRejectedValueOnce(new Error('the decision is already answered'));
-    fireEvent.click(within(row).getByRole('button', { name: 'Reject' }));
+    fireEvent.click(within(row).getByRole('radio', { name: 'Reject' }));
+    fireEvent.click(within(row).getByRole('button', { name: /^answer: Reject/ }));
     expect(await within(row).findByRole('alert')).toBeTruthy();
     expect(within(row).getByRole('alert').textContent).toBe('the decision is already answered');
     expect(guardApi.answerGuardDecision).toHaveBeenCalledWith(7, 31, 'D-4', 'reject', '');

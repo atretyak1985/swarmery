@@ -242,14 +242,15 @@ export function InboxDetail({
       break;
     case 'lesson': {
       const l = item.raw;
-      title = `“${l.title}”`;
+      // The guidance IS the proposal: it is the sentence future runs get.
+      const guidance = l.guidance;
+      title = guidance === '' ? `“${l.title}”` : t`Proposed lesson: ${guidance}`;
       const offPlan = l.surpriseIndex === null ? null : l.surpriseIndex.toFixed(2);
       const recurrences = l.recurrences;
       const areas = l.areaGlobs.length > 0 ? l.areaGlobs.join(', ') : t`these areas`;
       body = (
         <>
           <Body>{l.cause !== '' ? l.cause : l.sourceParagraph}</Body>
-          {l.guidance !== '' && <Code>{l.guidance}</Code>}
           <Evidence>
             <Trans>seen {recurrences}×</Trans>
             {offPlan !== null && ` · ${UI_TERMS.surprise.ui} ${offPlan}`}

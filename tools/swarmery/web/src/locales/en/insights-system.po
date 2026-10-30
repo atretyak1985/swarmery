@@ -25,14 +25,6 @@ msgstr " · ${spent} spent"
 msgid " · auto-retires {autoRetires}"
 msgstr " · auto-retires {autoRetires}"
 
-#: src/pages/inbox/Inbox.tsx
-msgid " · expires {expires}"
-msgstr " · expires {expires}"
-
-#: src/pages/inbox/Inbox.tsx
-msgid " · fleet-wide"
-msgstr " · fleet-wide"
-
 #: src/pages/Lessons.tsx
 msgid " · linked to \"{linkedTitle}\""
 msgstr " · linked to \"{linkedTitle}\""
@@ -229,7 +221,6 @@ msgid "{errs} err"
 msgstr "{errs} err"
 
 #: src/pages/health/FrictionTriageStrip.tsx
-#: src/pages/inbox/Inbox.tsx
 #: src/pages/inbox/TriageBanner.tsx
 msgid "{failed} failed"
 msgstr "{failed} failed"
@@ -368,6 +359,10 @@ msgstr "{ok} ok"
 msgid "{okRuns} ok · {errorRuns} error · {sessions, plural, one {# sessions} few {# sessions} many {# sessions} other {# sessions}} · {projects, plural, one {# project} few {# projects} many {# projects} other {# projects}}"
 msgstr "{okRuns} ok · {errorRuns} error · {sessions, plural, one {# sessions} few {# sessions} many {# sessions} other {# sessions}} · {projects, plural, one {# project} few {# projects} many {# projects} other {# projects}}"
 
+#: src/pages/inbox/Inbox.tsx
+msgid "{openCount} to review · nothing here blocks a session"
+msgstr "{openCount} to review · nothing here blocks a session"
+
 #: src/pages/system/ItemDetail.tsx
 msgid "{percent}% err"
 msgstr "{percent}% err"
@@ -427,10 +422,6 @@ msgstr "{settledRuns, plural, one {# settled run(s)} few {# settled run(s)} many
 #: src/pages/Memory.tsx
 msgid "{size} · {closed}/{total} lines closed"
 msgstr "{size} · {closed}/{total} lines closed"
-
-#: src/pages/inbox/Inbox.tsx
-msgid "{stale} changed meanwhile"
-msgstr "{stale} changed meanwhile"
 
 #: src/pages/health/FrictionTriageStrip.tsx
 #: src/pages/inbox/TriageBanner.tsx
@@ -547,6 +538,14 @@ msgstr "▸ Run now"
 msgid "✓ always allowed"
 msgstr "✓ always allowed"
 
+#: src/pages/inbox/InboxDetail.tsx
+msgid "✓ right"
+msgstr "✓ right"
+
+#: src/pages/inbox/InboxDetail.tsx
+msgid "✓ right, all {groupSize}"
+msgstr "✓ right, all {groupSize}"
+
 #: src/pages/Analytics.tsx
 msgid "$ Cost"
 msgstr "$ Cost"
@@ -588,7 +587,7 @@ msgstr "A small local model reads each finished session and answers a few fixed 
 msgid "A task is created on the project's board with the text below, and an agent picks it up."
 msgstr "A task is created on the project's board with the text below, and an agent picks it up."
 
-#: src/pages/inbox/InboxDetail.tsx
+#: src/pages/inbox/Inbox.tsx
 #: src/pages/inbox/InboxDetail.tsx
 #: src/pages/inbox/inboxModel.ts
 #: src/pages/inbox/inboxModel.ts
@@ -604,6 +603,10 @@ msgstr "Accept"
 msgid "accept {acceptText}"
 msgstr "accept {acceptText}"
 
+#: src/pages/inbox/InboxDetail.tsx
+msgid "accept lesson"
+msgstr "accept lesson"
+
 #: src/pages/Retro.tsx
 msgid "accepted"
 msgstr "accepted"
@@ -615,14 +618,6 @@ msgstr "accepted — {until}"
 #: src/pages/Retro.tsx
 msgid "accepted — waiting for adoption"
 msgstr "accepted — waiting for adoption"
-
-#: src/pages/inbox/Inbox.tsx
-msgid "accepted {accepted}"
-msgstr "accepted {accepted}"
-
-#: src/pages/inbox/Inbox.tsx
-msgid "accepting {current} of {total}…"
-msgstr "accepting {current} of {total}…"
 
 #: src/pages/inbox/InboxDetail.tsx
 msgid "Accepting creates a task on the project's board; an agent picks it up."
@@ -671,8 +666,8 @@ msgid "Advisor"
 msgstr "Advisor"
 
 #: src/pages/inbox/inboxModel.ts
-msgid "Advisor: {recommendationTitle}"
-msgstr "Advisor: {recommendationTitle}"
+msgid "advisor noticed"
+msgstr "advisor noticed"
 
 #: src/pages/Analytics.tsx
 #: src/pages/Analytics.tsx
@@ -721,6 +716,10 @@ msgstr "agent suggestion"
 msgid "agent suggests: {suggestedValue}"
 msgstr "agent suggests: {suggestedValue}"
 
+#: src/pages/inbox/Inbox.tsx
+msgid "agent: {value}"
+msgstr "agent: {value}"
+
 #: src/pages/Analytics.tsx
 msgid "agents"
 msgstr "agents"
@@ -767,6 +766,10 @@ msgstr "all copies share one content hash — a clean promotion, no reconciliati
 #: src/pages/LessonsCalibration.tsx
 msgid "all four"
 msgstr "all four"
+
+#: src/pages/inbox/Inbox.tsx
+msgid "All reviewed."
+msgstr "All reviewed."
 
 #: src/pages/system/shared.tsx
 msgid "all scopes"
@@ -837,7 +840,6 @@ msgid "Approvals resolved"
 msgstr "Approvals resolved"
 
 #: src/pages/inbox/Inbox.tsx
-#: src/pages/inbox/InboxDetail.tsx
 #: src/pages/inbox/InboxDetail.tsx
 msgid "approve"
 msgstr "approve"
@@ -1124,10 +1126,6 @@ msgstr "check in Inbox →"
 msgid "check the classifier"
 msgstr "check the classifier"
 
-#: src/pages/inbox/inboxModel.ts
-msgid "Check the classifier · {name}"
-msgstr "Check the classifier · {name}"
-
 #: src/pages/system/docsSection.ts
 msgid "checked against the item it documents"
 msgstr "checked against the item it documents"
@@ -1141,20 +1139,8 @@ msgid "Claude Code auto mode"
 msgstr "Claude Code auto mode"
 
 #: src/pages/inbox/InboxDetail.tsx
-msgid "Claude is asking you {count, plural, one {# question} few {# questions} many {# questions} other {# questions}}"
-msgstr "Claude is asking you {count, plural, one {# question} few {# questions} many {# questions} other {# questions}}"
-
-#: src/pages/inbox/InboxDetail.tsx
-msgid "Claude is told no and looks for another way, or stops."
-msgstr "Claude is told no and looks for another way, or stops."
-
-#: src/pages/inbox/InboxDetail.tsx
 msgid "Claude refused this account: its sign-in expired, or its access was switched off."
 msgstr "Claude refused this account: its sign-in expired, or its access was switched off."
-
-#: src/pages/inbox/InboxDetail.tsx
-msgid "Claude wants to use {toolName}"
-msgstr "Claude wants to use {toolName}"
 
 #: src/pages/agent-hub/HubShell.tsx
 msgid "clear filter"
@@ -1173,6 +1159,7 @@ msgid "Closed"
 msgstr "Closed"
 
 #: src/pages/inbox/HandledList.tsx
+#: src/pages/inbox/Inbox.tsx
 msgid "closed by the agent"
 msgstr "closed by the agent"
 
@@ -1343,10 +1330,6 @@ msgstr "Dead components"
 msgid "decide something in the Inbox →"
 msgstr "decide something in the Inbox →"
 
-#: src/pages/inbox/Inbox.tsx
-msgid "Decisions that wait on you. An agent can label the classifier's guesses and close what is only informational; approvals, agent changes and alerts always wait for you."
-msgstr "Decisions that wait on you. An agent can label the classifier's guesses and close what is only informational; approvals, agent changes and alerts always wait for you."
-
 #: src/pages/learning/TurnForecastPanel.tsx
 msgid "declared confidence"
 msgstr "declared confidence"
@@ -1389,13 +1372,6 @@ msgstr "denied {deniedCount}× · of {callCount} calls"
 #: src/pages/Retro.tsx
 msgid "Denied tools"
 msgstr "Denied tools"
-
-#: src/pages/inbox/Inbox.tsx
-#: src/pages/inbox/InboxDetail.tsx
-#: src/pages/inbox/InboxDetail.tsx
-#: src/pages/inbox/InboxDetail.tsx
-msgid "deny"
-msgstr "deny"
 
 #: src/pages/system/CreateAgentForm.tsx
 msgid "description"
@@ -1444,6 +1420,8 @@ msgstr "discard my changes"
 #: src/pages/health/FrictionTriageStrip.tsx
 #: src/pages/health/FrictionTriageStrip.tsx
 #: src/pages/inbox/HandledList.tsx
+#: src/pages/inbox/Inbox.tsx
+#: src/pages/inbox/InboxDetail.tsx
 #: src/pages/inbox/InboxDetail.tsx
 #: src/pages/inbox/inboxModel.ts
 #: src/pages/inbox/inboxModel.ts
@@ -1542,8 +1520,8 @@ msgid "edit / enable / disable this hook from the System page → Hooks tab (the
 msgstr "edit / enable / disable this hook from the System page → Hooks tab (the existing write surface)"
 
 #: src/pages/inbox/InboxDetail.tsx
-msgid "edit wording"
-msgstr "edit wording"
+msgid "edit wording →"
+msgstr "edit wording →"
 
 #: src/pages/Lessons.tsx
 msgid "effectiveness:"
@@ -1677,6 +1655,7 @@ msgstr "Everything else in swarmery works without it. Until a model is set up, n
 msgid "Everything this project remembers — its instructions, Claude Code auto-memory, and Serena notes — editable with a versioned backup on every save."
 msgstr "Everything this project remembers — its instructions, Claude Code auto-memory, and Serena notes — editable with a versioned backup on every save."
 
+#: src/pages/inbox/InboxDetail.tsx
 #: src/pages/Retro.tsx
 msgid "evidence"
 msgstr "evidence"
@@ -1685,13 +1664,13 @@ msgstr "evidence"
 msgid "evidence:"
 msgstr "evidence:"
 
+#: src/pages/inbox/Inbox.tsx
+msgid "expires {expires}"
+msgstr "expires {expires}"
+
 #: src/pages/inbox/InboxDetail.tsx
 msgid "expires in {expiresIn}"
 msgstr "expires in {expiresIn}"
-
-#: src/pages/inbox/Inbox.tsx
-msgid "expires soon"
-msgstr "expires soon"
 
 #: src/pages/Architecture.tsx
 msgid "explore {exploreShare}%"
@@ -1721,6 +1700,10 @@ msgstr "File changed on disk"
 #: src/pages/Memory.tsx
 msgid "file…"
 msgstr "file…"
+
+#: src/pages/inbox/Inbox.tsx
+msgid "filter"
+msgstr "filter"
 
 #: src/pages/SystemHub.tsx
 msgid "filter {noun}…"
@@ -1778,6 +1761,10 @@ msgstr "First-pass success rate"
 #: src/pages/Retro.tsx
 msgid "fix proposed"
 msgstr "fix proposed"
+
+#: src/pages/inbox/Inbox.tsx
+msgid "fleet-wide"
+msgstr "fleet-wide"
 
 #: src/pages/system/ModsTab.tsx
 msgid "folder"
@@ -1906,6 +1893,7 @@ msgstr "Guessed {times}."
 msgid "guidance (one sentence)"
 msgstr "guidance (one sentence)"
 
+#: src/pages/inbox/Inbox.tsx
 #: src/pages/inbox/inboxModel.ts
 msgid "handled by agent"
 msgstr "handled by agent"
@@ -2022,10 +2010,6 @@ msgstr "how this project's agents are doing and what to change"
 msgid "Human-hours saved is an estimate: {formula}"
 msgstr "Human-hours saved is an estimate: {formula}"
 
-#: src/pages/inbox/InboxDetail.tsx
-msgid "I'll fix it — track this"
-msgstr "I'll fix it — track this"
-
 #: src/pages/system/InsightsTab.tsx
 msgid "identical"
 msgstr "identical"
@@ -2039,6 +2023,13 @@ msgid "idle"
 msgstr "idle"
 
 #: src/pages/inbox/InboxDetail.tsx
+msgid "if right"
+msgstr "if right"
+
+#: src/pages/inbox/InboxDetail.tsx
+msgid "if wrong"
+msgstr "if wrong"
+
 #: src/pages/inbox/InboxDetail.tsx
 msgid "if you accept"
 msgstr "if you accept"
@@ -2048,21 +2039,17 @@ msgid "if you ack"
 msgstr "if you ack"
 
 #: src/pages/inbox/InboxDetail.tsx
-#: src/pages/inbox/InboxDetail.tsx
 msgid "if you approve"
 msgstr "if you approve"
 
 #: src/pages/inbox/InboxDetail.tsx
-msgid "if you confirm"
-msgstr "if you confirm"
+#: src/pages/inbox/InboxDetail.tsx
+msgid "if you dismiss"
+msgstr "if you dismiss"
 
 #: src/pages/inbox/InboxDetail.tsx
-msgid "if you deny"
-msgstr "if you deny"
-
-#: src/pages/inbox/InboxDetail.tsx
-msgid "if you keep it"
-msgstr "if you keep it"
+msgid "if you keep"
+msgstr "if you keep"
 
 #: src/pages/inbox/InboxDetail.tsx
 msgid "if you press e"
@@ -2075,6 +2062,14 @@ msgstr "if you probe & resume"
 #: src/pages/inbox/InboxDetail.tsx
 msgid "if you reject"
 msgstr "if you reject"
+
+#: src/pages/inbox/InboxDetail.tsx
+msgid "if you retire"
+msgstr "if you retire"
+
+#: src/pages/inbox/InboxDetail.tsx
+msgid "if you track"
+msgstr "if you track"
 
 #: src/pages/Retro.tsx
 msgid "Improve"
@@ -2091,10 +2086,6 @@ msgstr "In review"
 #: src/pages/inbox/Inbox.tsx
 msgid "Inbox"
 msgstr "Inbox"
-
-#: src/pages/inbox/Inbox.tsx
-msgid "inbox kinds"
-msgstr "inbox kinds"
 
 #: src/pages/Architecture.tsx
 msgid "incremental rebuild"
@@ -2195,11 +2186,11 @@ msgstr "judgment"
 msgid "kebab-case only: lowercase letters, digits, single dashes (my-agent)"
 msgstr "kebab-case only: lowercase letters, digits, single dashes (my-agent)"
 
+#: src/pages/inbox/InboxDetail.tsx
 #: src/pages/Lessons.tsx
 msgid "keep"
 msgstr "keep"
 
-#: src/pages/inbox/InboxDetail.tsx
 #: src/pages/inbox/inboxModel.ts
 #: src/pages/inbox/inboxModel.ts
 msgid "keep it"
@@ -2258,6 +2249,10 @@ msgstr "Learning"
 #: src/pages/Lessons.tsx
 msgid "lesson #{lessonId}"
 msgstr "lesson #{lessonId}"
+
+#: src/pages/inbox/inboxModel.ts
+msgid "lesson candidate"
+msgstr "lesson candidate"
 
 #: src/pages/Retro.tsx
 msgid "lesson groups failed to load for this range — untick “Group by lesson” for the flat feed"
@@ -2322,6 +2317,7 @@ msgid "loaded into every session's first request — CLAUDE.md size, unused MCP 
 msgstr "loaded into every session's first request — CLAUDE.md size, unused MCP servers"
 
 #: src/pages/health/PhaseRunsTab.tsx
+#: src/pages/inbox/Inbox.tsx
 #: src/pages/inbox/Inbox.tsx
 #: src/pages/learning/Classifier.tsx
 #: src/pages/Lessons.tsx
@@ -2548,13 +2544,9 @@ msgstr "never used"
 msgid "New agent"
 msgstr "New agent"
 
-#: src/pages/inbox/inboxModel.ts
-msgid "new lesson"
-msgstr "new lesson"
-
-#: src/pages/inbox/inboxModel.ts
-msgid "New lesson: {lessonTitle}"
-msgstr "New lesson: {lessonTitle}"
+#: src/pages/inbox/Inbox.tsx
+msgid "New items land here after runs are measured: lesson candidates, Advisor findings, classifier checks, agent changes."
+msgstr "New items land here after runs are measured: lesson candidates, Advisor findings, classifier checks, agent changes."
 
 #: src/pages/Docs.tsx
 msgid "next →"
@@ -2897,7 +2889,6 @@ msgstr "not noise"
 msgid "not noise: {example}"
 msgstr "not noise: {example}"
 
-#: src/pages/inbox/InboxDetail.tsx
 #: src/pages/inbox/inboxModel.ts
 msgid "not useful"
 msgstr "not useful"
@@ -2913,10 +2904,6 @@ msgstr "nothing closed yet"
 #: src/pages/agent-hub/HubShell.tsx
 msgid "nothing here yet"
 msgstr "nothing here yet"
-
-#: src/pages/inbox/Inbox.tsx
-msgid "Nothing is waiting on you."
-msgstr "Nothing is waiting on you."
 
 #: src/pages/Memory.tsx
 msgid "nothing to consolidate — the index is all live"
@@ -3083,6 +3070,10 @@ msgstr "pick"
 msgid "pick a project"
 msgstr "pick a project"
 
+#: src/pages/inbox/InboxDetail.tsx
+msgid "Pick the correct answer above: it is recorded instead of the guess."
+msgstr "Pick the correct answer above: it is recorded instead of the guess."
+
 #: src/pages/system/ItemDetail.tsx
 msgid "pick two versions to diff"
 msgstr "pick two versions to diff"
@@ -3191,14 +3182,6 @@ msgstr "pricing table"
 msgid "probe & resume"
 msgstr "probe & resume"
 
-#: src/pages/inbox/InboxDetail.tsx
-msgid "Production deploy — confirm in the session's terminal. Nothing runs until you do."
-msgstr "Production deploy — confirm in the session's terminal. Nothing runs until you do."
-
-#: src/pages/inbox/InboxDetail.tsx
-msgid "Production deploy via {toolName} — confirm locally"
-msgstr "Production deploy via {toolName} — confirm locally"
-
 #: src/pages/Analytics.tsx
 msgid "Productivity"
 msgstr "Productivity"
@@ -3255,6 +3238,10 @@ msgstr "proposals"
 #: src/pages/Lessons.tsx
 msgid "proposed because reviewers raised the same finding type in this area in several phases"
 msgstr "proposed because reviewers raised the same finding type in this area in several phases"
+
+#: src/pages/inbox/InboxDetail.tsx
+msgid "Proposed lesson: {guidance}"
+msgstr "Proposed lesson: {guidance}"
 
 #: src/pages/Lessons.tsx
 msgid "Proposed retirements"
@@ -3409,6 +3396,7 @@ msgstr "restore the soft-deleted agent instead"
 msgid "resumes on its own in {resetsIn}, when the limit resets"
 msgstr "resumes on its own in {resetsIn}, when the limit resets"
 
+#: src/pages/inbox/InboxDetail.tsx
 #: src/pages/Lessons.tsx
 #: src/pages/Lessons.tsx
 msgid "retire"
@@ -3514,10 +3502,6 @@ msgstr "row"
 #: src/pages/Retro.tsx
 msgid "rule"
 msgstr "rule"
-
-#: src/pages/inbox/Inbox.tsx
-msgid "rules & history →"
-msgstr "rules & history →"
 
 #: src/pages/Memory.tsx
 msgid "run a dry run first"
@@ -3688,10 +3672,6 @@ msgstr "session {session} · turn {seq}"
 msgid "session {sessionId}"
 msgstr "session {sessionId}"
 
-#: src/pages/inbox/InboxDetail.tsx
-msgid "Session {sessionId} asked {askedAgo} ago and is waiting on you. Nothing runs until you answer."
-msgstr "Session {sessionId} asked {askedAgo} ago and is waiting on you. Nothing runs until you answer."
-
 #: src/pages/system/InsightsTab.tsx
 msgid "Session-start cost"
 msgstr "Session-start cost"
@@ -3792,6 +3772,7 @@ msgid "skills…"
 msgstr "skills…"
 
 #: src/pages/inbox/Inbox.tsx
+#: src/pages/inbox/InboxDetail.tsx
 msgid "skip"
 msgstr "skip"
 
@@ -3888,7 +3869,6 @@ msgstr "Stop using “{lessonTitle}”?"
 msgid "stop using a lesson?"
 msgstr "stop using a lesson?"
 
-#: src/pages/inbox/InboxDetail.tsx
 #: src/pages/inbox/inboxModel.ts
 #: src/pages/inbox/inboxModel.ts
 msgid "stop using it"
@@ -3992,9 +3972,6 @@ msgid "The agent has not closed anything in the last 7 days."
 msgstr "The agent has not closed anything in the last 7 days."
 
 #: src/pages/inbox/InboxDetail.tsx
-msgid "The call runs now and the session continues. Nothing else changes."
-msgstr "The call runs now and the session continues. Nothing else changes."
-
 #: src/pages/inbox/inboxModel.ts
 msgid "The candidate is closed as not useful. Nothing is added to any brief."
 msgstr "The candidate is closed as not useful. Nothing is added to any brief."
@@ -4072,6 +4049,14 @@ msgid "the item changed after this guide was written — docs.source_sha no long
 msgstr "the item changed after this guide was written — docs.source_sha no longer matches the body"
 
 #: src/pages/inbox/InboxDetail.tsx
+msgid "The label is confirmed as the ground truth for this session."
+msgstr "The label is confirmed as the ground truth for this session."
+
+#: src/pages/inbox/Inbox.tsx
+msgid "the last 7 days, each with an undo"
+msgstr "the last 7 days, each with an undo"
+
+#: src/pages/inbox/InboxDetail.tsx
 #: src/pages/inbox/inboxModel.ts
 msgid "The lesson stops appearing in briefs. Its history stays."
 msgstr "The lesson stops appearing in briefs. Its history stays."
@@ -4104,6 +4089,7 @@ msgstr "The proposal closes and this reason is held off for 30 days. The lesson 
 msgid "The proposal is marked approved; applying it opens a pull request you review."
 msgstr "The proposal is marked approved; applying it opens a pull request you review."
 
+#: src/pages/inbox/InboxDetail.tsx
 #: src/pages/inbox/inboxModel.ts
 msgid "The recommendation is closed. It reopens on its own if the rule keeps firing."
 msgstr "The recommendation is closed. It reopens on its own if the rule keeps firing."
@@ -4121,15 +4107,10 @@ msgid "The reviewer left no findings text."
 msgstr "The reviewer left no findings text."
 
 #: src/pages/inbox/InboxDetail.tsx
-msgid "The session waits for your answers; they go back to Claude as the tool's result."
-msgstr "The session waits for your answers; they go back to Claude as the tool's result."
-
-#: src/pages/inbox/InboxDetail.tsx
 msgid "the task"
 msgstr "the task"
 
 #: src/pages/health/Health.tsx
-#: src/pages/inbox/Inbox.tsx
 msgid "The triage run failed."
 msgstr "The triage run failed."
 
@@ -4265,6 +4246,7 @@ msgstr "Total wait"
 msgid "touched files it did not forecast"
 msgstr "touched files it did not forecast"
 
+#: src/pages/inbox/InboxDetail.tsx
 #: src/pages/inbox/inboxModel.ts
 #: src/pages/inbox/inboxModel.ts
 msgid "track this"
@@ -4469,10 +4451,6 @@ msgstr "vs prev {days}d"
 msgid "vs prev {prevRunsCount}"
 msgstr "vs prev {prevRunsCount}"
 
-#: src/pages/inbox/Inbox.tsx
-msgid "waiting decisions"
-msgstr "waiting decisions"
-
 #: src/pages/health/Health.tsx
 msgid "waiting on you"
 msgstr "waiting on you"
@@ -4493,13 +4471,6 @@ msgstr "We snapshot today's number as the baseline and tell you in a week whethe
 msgid "We snapshot today's number as the baseline, notice when the target changes, and a week later tell you whether it moved."
 msgstr "We snapshot today's number as the baseline, notice when the target changes, and a week later tell you whether it moved."
 
-#: src/pages/inbox/InboxDetail.tsx
-#: src/pages/inbox/InboxDetail.tsx
-#: src/pages/inbox/InboxDetail.tsx
-#: src/pages/inbox/InboxDetail.tsx
-msgid "What happened:"
-msgstr "What happened:"
-
 #: src/pages/learning/classifierModel.ts
 msgid "What kind of task was it?"
 msgstr "What kind of task was it?"
@@ -4519,10 +4490,6 @@ msgstr "when {pick} ran: {ranCell}"
 #: src/pages/Lessons.tsx
 msgid "When a phase run lands far from its forecast and its report explains why, a cheap model proposes up to two lessons, each citing evidence from that run. A candidate reaches future runs only after you accept it here. Merge it into an existing lesson when it repeats one. Active lessons are re-measured against their area's surprise; one that stops earning its place is proposed for retirement below, and retired on its own after 14 days without an answer."
 msgstr "When a phase run lands far from its forecast and its report explains why, a cheap model proposes up to two lessons, each citing evidence from that run. A candidate reaches future runs only after you accept it here. Merge it into an existing lesson when it repeats one. Active lessons are re-measured against their area's surprise; one that stops earning its place is proposed for retirement below, and retired on its own after 14 days without an answer."
-
-#: src/pages/inbox/Inbox.tsx
-msgid "when you have a minute"
-msgstr "when you have a minute"
 
 #: src/pages/Lessons.tsx
 msgid "where reality diverged"
@@ -4568,14 +4535,9 @@ msgstr "writes files"
 msgid "written by the docs generator and not reviewed yet"
 msgstr "written by the docs generator and not reviewed yet"
 
-#: src/pages/inbox/InboxDetail.tsx
 #: src/pages/system/ModsTab.tsx
 msgid "yes"
 msgstr "yes"
-
-#: src/pages/inbox/InboxDetail.tsx
-msgid "yes, all {groupSize}"
-msgstr "yes, all {groupSize}"
 
 #: src/pages/learning/classifierModel.ts
 msgid "You haven't checked any yet"

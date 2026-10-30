@@ -8,6 +8,8 @@ import { describe, expect, it } from 'vitest';
 import type { NeedsYouItem, NeedsYouKind } from '../api/types';
 import {
   dismissKey,
+  filterItems,
+  groupItems,
   kindLabel,
   oldestFirst,
   REPLY_QUOTE_MAX,
@@ -70,15 +72,38 @@ describe('replyPrefix', () => {
 });
 
 describe('kindLabel', () => {
-  it('names all five kinds', () => {
+  it('names the kinds in the eyebrow wording', () => {
     const cases: [NeedsYouKind, string][] = [
-      ['approval', 'Approval'],
-      ['question', 'Question'],
-      ['prod_deploy_local', 'Confirm locally'],
-      ['awaiting_reply', 'Awaiting your reply'],
-      ['failed', 'Failed'],
+      ['approval', 'permission'],
+      ['question', 'question'],
+      ['phase_decision', 'guard stop'],
+      ['manual_phase', 'manual check'],
+      ['prod_deploy_local', 'confirm locally'],
+      ['awaiting_reply', 'awaiting your reply'],
+      ['failed', 'failed'],
     ];
     for (const [k, label] of cases) expect(kindLabel(k), k).toBe(label);
+  });
+});
+
+describe('groupItems', () => {
+  it('puts what is finished elsewhere in its own group and leaves an empty group out', () => {
+    const kinds: NeedsYouKind[] = ['manual_phase', 'approval', 'failed', 'phase_decision'];
+    const groups = groupItems(kinds.map((kind) => item({ kind })));
+    expect(groups.map((g) => [g.id, g.items.map((i) => i.kind)])).toEqual([
+      ['decide', ['approval', 'phase_decision']],
+      ['open', ['manual_phase', 'failed']],
+    ]);
+    expect(groupItems([item({ kind: 'approval' })]).map((g) => g.id)).toEqual(['decide']);
+  });
+});
+
+describe('filterItems', () => {
+  it('matches the title or the summary, whatever the case', () => {
+    const items = [item({ sessionName: 'Rate limiter', preview: '' }), item({ sessionName: 'x', preview: 'DROP columns' })];
+    expect(filterItems(items, 'rate')).toHaveLength(1);
+    expect(filterItems(items, 'drop')).toHaveLength(1);
+    expect(filterItems(items, '  ')).toHaveLength(2);
   });
 });
 

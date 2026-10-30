@@ -782,10 +782,6 @@ msgstr "застосувати пропозицію не вдалося"
 msgid "apply revision failed: {status}"
 msgstr "застосувати ревізію не вдалося: {status}"
 
-#: src/lib/needsYou.ts
-msgid "Approval"
-msgstr "Погодження"
-
 #: src/lib/notifications.ts
 msgid "Approval needed: {toolName}"
 msgstr "Потрібне погодження: {toolName}"
@@ -910,16 +906,16 @@ msgid "auto-approve presets are configured per project — open a project's Sett
 msgstr "пресети автопогодження задаються для кожного проєкту окремо — відкрийте Налаштування проєкту, щоб їх налаштувати"
 
 #: src/lib/needsYou.ts
-msgid "Awaiting merge"
-msgstr "Очікує злиття"
+msgid "awaiting merge"
+msgstr "чекає на злиття"
 
 #: src/lib/sessionsView.ts
 msgid "awaiting reply"
 msgstr "чекає відповіді"
 
 #: src/lib/needsYou.ts
-msgid "Awaiting your reply"
-msgstr "Чекає вашої відповіді"
+msgid "awaiting your reply"
+msgstr "чекає на вашу відповідь"
 
 #: src/components/Sidebar.tsx
 #: src/workspace/WorkspaceShell.tsx
@@ -1265,8 +1261,8 @@ msgid "confirm detach"
 msgstr "підтвердити відключення"
 
 #: src/lib/needsYou.ts
-msgid "Confirm locally"
-msgstr "Підтвердити локально"
+msgid "confirm locally"
+msgstr "підтвердьте локально"
 
 #: src/components/SessionControls.tsx
 msgid "Confirm stop"
@@ -1864,10 +1860,10 @@ msgstr "провал"
 #: src/components/ProjectPlugins.tsx
 #: src/components/RunOutcomeModal.tsx
 #: src/components/SessionControls.tsx
+#: src/lib/needsYou.ts
 msgid "failed"
 msgstr "збій"
 
-#: src/lib/needsYou.ts
 #: src/lib/sessionsView.ts
 msgid "Failed"
 msgstr "Невдача"
@@ -2058,11 +2054,8 @@ msgstr "Git push ніколи не погоджується автоматичн
 msgid "Git writes (add, commit, checkout, worktree)"
 msgstr "Записи git (add, commit, checkout, worktree)"
 
-#: src/lib/needsYou.ts
-msgid "Guard decision"
-msgstr "Рішення guard"
-
 #: src/components/place/StateGlyph.tsx
+#: src/lib/needsYou.ts
 msgid "guard stop"
 msgstr "зупинка guard"
 
@@ -2399,12 +2392,9 @@ msgid "managed"
 msgstr "керований"
 
 #: src/components/place/StateGlyph.tsx
+#: src/lib/needsYou.ts
 msgid "manual check"
 msgstr "ручна перевірка"
-
-#: src/lib/needsYou.ts
-msgid "Manual check"
-msgstr "Ручна перевірка"
 
 #: src/api.ts
 msgid "mark criterion failed: {status}"
@@ -2893,6 +2883,7 @@ msgid "per-category overrides apply only under the unrestricted preset"
 msgstr "перевизначення за категоріями діють лише в пресеті «без обмежень»"
 
 #: src/components/place/StateGlyph.tsx
+#: src/lib/needsYou.ts
 msgid "permission"
 msgstr "дозвіл"
 
@@ -3177,12 +3168,9 @@ msgstr "повернути картку у Вхідних"
 
 #: src/components/place/DecisionCard.tsx
 #: src/components/place/StateGlyph.tsx
+#: src/lib/needsYou.ts
 msgid "question"
 msgstr "питання"
-
-#: src/lib/needsYou.ts
-msgid "Question"
-msgstr "Питання"
 
 #: src/components/QuestionForm.tsx
 msgid "question {number}"
@@ -3890,8 +3878,8 @@ msgid "stale"
 msgstr "застаріло"
 
 #: src/lib/needsYou.ts
-msgid "Stalled phase"
-msgstr "Фаза застрягла"
+msgid "stalled phase"
+msgstr "фаза застрягла"
 
 #: src/workspace/NewTaskModal.tsx
 msgid "start immediately — the dispatcher picks it up"
@@ -4630,8 +4618,8 @@ msgid "worktree"
 msgstr "worktree"
 
 #: src/lib/needsYou.ts
-msgid "Worktree cleanup"
-msgstr "Прибирання worktree"
+msgid "worktree cleanup"
+msgstr "прибирання worktree"
 
 #: src/workspace/task/TaskActions.tsx
 msgid "worktree reclaimed — nothing to re-grade"

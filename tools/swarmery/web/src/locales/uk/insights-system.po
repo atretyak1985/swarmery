@@ -25,14 +25,6 @@ msgstr " · витрачено ${spent}"
 msgid " · auto-retires {autoRetires}"
 msgstr " · автосписання {autoRetires}"
 
-#: src/pages/inbox/Inbox.tsx
-msgid " · expires {expires}"
-msgstr " · спливає {expires}"
-
-#: src/pages/inbox/Inbox.tsx
-msgid " · fleet-wide"
-msgstr " · для всього флоту"
-
 #: src/pages/Lessons.tsx
 msgid " · linked to \"{linkedTitle}\""
 msgstr " · пов’язано з «{linkedTitle}»"
@@ -229,7 +221,6 @@ msgid "{errs} err"
 msgstr "{errs} пом."
 
 #: src/pages/health/FrictionTriageStrip.tsx
-#: src/pages/inbox/Inbox.tsx
 #: src/pages/inbox/TriageBanner.tsx
 msgid "{failed} failed"
 msgstr "{failed} невдалих"
@@ -368,6 +359,10 @@ msgstr "{ok} ок"
 msgid "{okRuns} ok · {errorRuns} error · {sessions, plural, one {# sessions} few {# sessions} many {# sessions} other {# sessions}} · {projects, plural, one {# project} few {# projects} many {# projects} other {# projects}}"
 msgstr "{okRuns} ок · {errorRuns} з помилкою · {sessions, plural, one {# сесія} few {# сесії} many {# сесій} other {# сесії}} · {projects, plural, one {# проєкт} few {# проєкти} many {# проєктів} other {# проєкту}}"
 
+#: src/pages/inbox/Inbox.tsx
+msgid "{openCount} to review · nothing here blocks a session"
+msgstr "{openCount} на розгляд · тут нічого не блокує сесію"
+
 #: src/pages/system/ItemDetail.tsx
 msgid "{percent}% err"
 msgstr "{percent}% пом."
@@ -427,10 +422,6 @@ msgstr "{settledRuns, plural, one {# завершений запуск} few {# �
 #: src/pages/Memory.tsx
 msgid "{size} · {closed}/{total} lines closed"
 msgstr "{size} · {closed}/{total} рядків закрито"
-
-#: src/pages/inbox/Inbox.tsx
-msgid "{stale} changed meanwhile"
-msgstr "{stale} змінилися тим часом"
 
 #: src/pages/health/FrictionTriageStrip.tsx
 #: src/pages/inbox/TriageBanner.tsx
@@ -547,6 +538,14 @@ msgstr "▸ Запустити"
 msgid "✓ always allowed"
 msgstr "✓ завжди дозволено"
 
+#: src/pages/inbox/InboxDetail.tsx
+msgid "✓ right"
+msgstr "✓ правильно"
+
+#: src/pages/inbox/InboxDetail.tsx
+msgid "✓ right, all {groupSize}"
+msgstr "✓ правильно, усі {groupSize}"
+
 #: src/pages/Analytics.tsx
 msgid "$ Cost"
 msgstr "$ Вартість"
@@ -588,7 +587,7 @@ msgstr "Невелика локальна модель читає кожну з�
 msgid "A task is created on the project's board with the text below, and an agent picks it up."
 msgstr "На дошці проєкту створюється задача з текстом нижче, і її підхоплює агент."
 
-#: src/pages/inbox/InboxDetail.tsx
+#: src/pages/inbox/Inbox.tsx
 #: src/pages/inbox/InboxDetail.tsx
 #: src/pages/inbox/inboxModel.ts
 #: src/pages/inbox/inboxModel.ts
@@ -604,6 +603,10 @@ msgstr "Прийняти"
 msgid "accept {acceptText}"
 msgstr "прийняти {acceptText}"
 
+#: src/pages/inbox/InboxDetail.tsx
+msgid "accept lesson"
+msgstr "прийняти урок"
+
 #: src/pages/Retro.tsx
 msgid "accepted"
 msgstr "прийнято"
@@ -615,14 +618,6 @@ msgstr "прийнято — {until}"
 #: src/pages/Retro.tsx
 msgid "accepted — waiting for adoption"
 msgstr "прийнято — чекає на впровадження"
-
-#: src/pages/inbox/Inbox.tsx
-msgid "accepted {accepted}"
-msgstr "прийнято {accepted}"
-
-#: src/pages/inbox/Inbox.tsx
-msgid "accepting {current} of {total}…"
-msgstr "приймаємо {current} з {total}…"
 
 #: src/pages/inbox/InboxDetail.tsx
 msgid "Accepting creates a task on the project's board; an agent picks it up."
@@ -671,8 +666,8 @@ msgid "Advisor"
 msgstr "Радник"
 
 #: src/pages/inbox/inboxModel.ts
-msgid "Advisor: {recommendationTitle}"
-msgstr "Радник: {recommendationTitle}"
+msgid "advisor noticed"
+msgstr "радник помітив"
 
 #: src/pages/Analytics.tsx
 #: src/pages/Analytics.tsx
@@ -721,6 +716,10 @@ msgstr "пропозиція агента"
 msgid "agent suggests: {suggestedValue}"
 msgstr "агент пропонує: {suggestedValue}"
 
+#: src/pages/inbox/Inbox.tsx
+msgid "agent: {value}"
+msgstr "агент: {value}"
+
 #: src/pages/Analytics.tsx
 msgid "agents"
 msgstr "агенти"
@@ -767,6 +766,10 @@ msgstr "усі копії мають один хеш вмісту — чисте
 #: src/pages/LessonsCalibration.tsx
 msgid "all four"
 msgstr "усі чотири"
+
+#: src/pages/inbox/Inbox.tsx
+msgid "All reviewed."
+msgstr "Усе переглянуто."
 
 #: src/pages/system/shared.tsx
 msgid "all scopes"
@@ -837,7 +840,6 @@ msgid "Approvals resolved"
 msgstr "Вирішених погоджень"
 
 #: src/pages/inbox/Inbox.tsx
-#: src/pages/inbox/InboxDetail.tsx
 #: src/pages/inbox/InboxDetail.tsx
 msgid "approve"
 msgstr "погодити"
@@ -1124,10 +1126,6 @@ msgstr "перевірити у Вхідних →"
 msgid "check the classifier"
 msgstr "перевірити класифікатор"
 
-#: src/pages/inbox/inboxModel.ts
-msgid "Check the classifier · {name}"
-msgstr "Перевірка класифікатора · {name}"
-
 #: src/pages/system/docsSection.ts
 msgid "checked against the item it documents"
 msgstr "звірено з елементом, який документує"
@@ -1141,20 +1139,8 @@ msgid "Claude Code auto mode"
 msgstr "Авторежим Claude Code"
 
 #: src/pages/inbox/InboxDetail.tsx
-msgid "Claude is asking you {count, plural, one {# question} few {# questions} many {# questions} other {# questions}}"
-msgstr "Claude ставить вам {count, plural, one {# питання} few {# питання} many {# питань} other {# питання}}"
-
-#: src/pages/inbox/InboxDetail.tsx
-msgid "Claude is told no and looks for another way, or stops."
-msgstr "Claude отримує відмову й шукає інший шлях або зупиняється."
-
-#: src/pages/inbox/InboxDetail.tsx
 msgid "Claude refused this account: its sign-in expired, or its access was switched off."
 msgstr "Claude відхилив цей акаунт: вхід сплив або доступ вимкнули."
-
-#: src/pages/inbox/InboxDetail.tsx
-msgid "Claude wants to use {toolName}"
-msgstr "Claude хоче використати {toolName}"
 
 #: src/pages/agent-hub/HubShell.tsx
 msgid "clear filter"
@@ -1173,6 +1159,7 @@ msgid "Closed"
 msgstr "Закрито"
 
 #: src/pages/inbox/HandledList.tsx
+#: src/pages/inbox/Inbox.tsx
 msgid "closed by the agent"
 msgstr "закрив агент"
 
@@ -1343,10 +1330,6 @@ msgstr "Мертві компоненти"
 msgid "decide something in the Inbox →"
 msgstr "вирішіть щось у Вхідних →"
 
-#: src/pages/inbox/Inbox.tsx
-msgid "Decisions that wait on you. An agent can label the classifier's guesses and close what is only informational; approvals, agent changes and alerts always wait for you."
-msgstr "Рішення, що чекають на вас. Агент може позначити здогади класифікатора й закрити те, що лише інформує; погодження, зміни агентів і сповіщення завжди чекають на вас."
-
 #: src/pages/learning/TurnForecastPanel.tsx
 msgid "declared confidence"
 msgstr "заявлена упевненість"
@@ -1389,13 +1372,6 @@ msgstr "відхилено {deniedCount}× · з {callCount} викликів"
 #: src/pages/Retro.tsx
 msgid "Denied tools"
 msgstr "Заборонені інструменти"
-
-#: src/pages/inbox/Inbox.tsx
-#: src/pages/inbox/InboxDetail.tsx
-#: src/pages/inbox/InboxDetail.tsx
-#: src/pages/inbox/InboxDetail.tsx
-msgid "deny"
-msgstr "відхилити"
 
 #: src/pages/system/CreateAgentForm.tsx
 msgid "description"
@@ -1444,6 +1420,8 @@ msgstr "відкинути мої зміни"
 #: src/pages/health/FrictionTriageStrip.tsx
 #: src/pages/health/FrictionTriageStrip.tsx
 #: src/pages/inbox/HandledList.tsx
+#: src/pages/inbox/Inbox.tsx
+#: src/pages/inbox/InboxDetail.tsx
 #: src/pages/inbox/InboxDetail.tsx
 #: src/pages/inbox/inboxModel.ts
 #: src/pages/inbox/inboxModel.ts
@@ -1542,8 +1520,8 @@ msgid "edit / enable / disable this hook from the System page → Hooks tab (the
 msgstr "редагуйте / вмикайте / вимикайте цей хук зі сторінки «Система» → вкладка «Хуки» (наявна поверхня для запису)"
 
 #: src/pages/inbox/InboxDetail.tsx
-msgid "edit wording"
-msgstr "змінити формулювання"
+msgid "edit wording →"
+msgstr "змінити формулювання →"
 
 #: src/pages/Lessons.tsx
 msgid "effectiveness:"
@@ -1677,6 +1655,7 @@ msgstr "Усе інше у swarmery працює без нього. Доки м�
 msgid "Everything this project remembers — its instructions, Claude Code auto-memory, and Serena notes — editable with a versioned backup on every save."
 msgstr "Усе, що пам’ятає цей проєкт — його інструкції, автопам’ять Claude Code і нотатки Serena — можна редагувати з версійованою резервною копією при кожному збереженні."
 
+#: src/pages/inbox/InboxDetail.tsx
 #: src/pages/Retro.tsx
 msgid "evidence"
 msgstr "докази"
@@ -1685,13 +1664,13 @@ msgstr "докази"
 msgid "evidence:"
 msgstr "докази:"
 
+#: src/pages/inbox/Inbox.tsx
+msgid "expires {expires}"
+msgstr "минає {expires}"
+
 #: src/pages/inbox/InboxDetail.tsx
 msgid "expires in {expiresIn}"
 msgstr "спливає через {expiresIn}"
-
-#: src/pages/inbox/Inbox.tsx
-msgid "expires soon"
-msgstr "скоро спливає"
 
 #: src/pages/Architecture.tsx
 msgid "explore {exploreShare}%"
@@ -1721,6 +1700,10 @@ msgstr "Файл змінився на диску"
 #: src/pages/Memory.tsx
 msgid "file…"
 msgstr "файл…"
+
+#: src/pages/inbox/Inbox.tsx
+msgid "filter"
+msgstr "фільтр"
 
 #: src/pages/SystemHub.tsx
 msgid "filter {noun}…"
@@ -1778,6 +1761,10 @@ msgstr "Успіх з першої спроби"
 #: src/pages/Retro.tsx
 msgid "fix proposed"
 msgstr "запропоновано виправлення"
+
+#: src/pages/inbox/Inbox.tsx
+msgid "fleet-wide"
+msgstr "на весь флот"
 
 #: src/pages/system/ModsTab.tsx
 msgid "folder"
@@ -1906,6 +1893,7 @@ msgstr "Вгадував {times}."
 msgid "guidance (one sentence)"
 msgstr "порада (одне речення)"
 
+#: src/pages/inbox/Inbox.tsx
 #: src/pages/inbox/inboxModel.ts
 msgid "handled by agent"
 msgstr "розібрав агент"
@@ -2022,10 +2010,6 @@ msgstr "як справи в агентів цього проєкту і що з
 msgid "Human-hours saved is an estimate: {formula}"
 msgstr "Заощаджені людино-години — оцінка: {formula}"
 
-#: src/pages/inbox/InboxDetail.tsx
-msgid "I'll fix it — track this"
-msgstr "Виправлю сам — відстежувати"
-
 #: src/pages/system/InsightsTab.tsx
 msgid "identical"
 msgstr "ідентично"
@@ -2039,6 +2023,13 @@ msgid "idle"
 msgstr "простій"
 
 #: src/pages/inbox/InboxDetail.tsx
+msgid "if right"
+msgstr "якщо правильно"
+
+#: src/pages/inbox/InboxDetail.tsx
+msgid "if wrong"
+msgstr "якщо неправильно"
+
 #: src/pages/inbox/InboxDetail.tsx
 msgid "if you accept"
 msgstr "якщо приймете"
@@ -2048,20 +2039,16 @@ msgid "if you ack"
 msgstr "якщо прийняти"
 
 #: src/pages/inbox/InboxDetail.tsx
-#: src/pages/inbox/InboxDetail.tsx
 msgid "if you approve"
 msgstr "якщо погодите"
 
 #: src/pages/inbox/InboxDetail.tsx
-msgid "if you confirm"
-msgstr "якщо підтвердите"
-
 #: src/pages/inbox/InboxDetail.tsx
-msgid "if you deny"
+msgid "if you dismiss"
 msgstr "якщо відхилите"
 
 #: src/pages/inbox/InboxDetail.tsx
-msgid "if you keep it"
+msgid "if you keep"
 msgstr "якщо залишите"
 
 #: src/pages/inbox/InboxDetail.tsx
@@ -2075,6 +2062,14 @@ msgstr "якщо перевірите й відновите"
 #: src/pages/inbox/InboxDetail.tsx
 msgid "if you reject"
 msgstr "якщо відкинете"
+
+#: src/pages/inbox/InboxDetail.tsx
+msgid "if you retire"
+msgstr "якщо приберете"
+
+#: src/pages/inbox/InboxDetail.tsx
+msgid "if you track"
+msgstr "якщо відстежуватимете"
 
 #: src/pages/Retro.tsx
 msgid "Improve"
@@ -2091,10 +2086,6 @@ msgstr "На рев’ю"
 #: src/pages/inbox/Inbox.tsx
 msgid "Inbox"
 msgstr "Вхідні"
-
-#: src/pages/inbox/Inbox.tsx
-msgid "inbox kinds"
-msgstr "види вхідних"
 
 #: src/pages/Architecture.tsx
 msgid "incremental rebuild"
@@ -2195,11 +2186,11 @@ msgstr "оцінка судді"
 msgid "kebab-case only: lowercase letters, digits, single dashes (my-agent)"
 msgstr "лише kebab-case: малі літери, цифри, одинарні дефіси (my-agent)"
 
+#: src/pages/inbox/InboxDetail.tsx
 #: src/pages/Lessons.tsx
 msgid "keep"
 msgstr "залишити"
 
-#: src/pages/inbox/InboxDetail.tsx
 #: src/pages/inbox/inboxModel.ts
 #: src/pages/inbox/inboxModel.ts
 msgid "keep it"
@@ -2258,6 +2249,10 @@ msgstr "Навчання"
 #: src/pages/Lessons.tsx
 msgid "lesson #{lessonId}"
 msgstr "урок #{lessonId}"
+
+#: src/pages/inbox/inboxModel.ts
+msgid "lesson candidate"
+msgstr "кандидат в уроки"
 
 #: src/pages/Retro.tsx
 msgid "lesson groups failed to load for this range — untick “Group by lesson” for the flat feed"
@@ -2322,6 +2317,7 @@ msgid "loaded into every session's first request — CLAUDE.md size, unused MCP 
 msgstr "завантажується в перший запит кожної сесії — розмір CLAUDE.md, невикористані сервери MCP"
 
 #: src/pages/health/PhaseRunsTab.tsx
+#: src/pages/inbox/Inbox.tsx
 #: src/pages/inbox/Inbox.tsx
 #: src/pages/learning/Classifier.tsx
 #: src/pages/Lessons.tsx
@@ -2548,13 +2544,9 @@ msgstr "не використовувався"
 msgid "New agent"
 msgstr "Новий агент"
 
-#: src/pages/inbox/inboxModel.ts
-msgid "new lesson"
-msgstr "новий урок"
-
-#: src/pages/inbox/inboxModel.ts
-msgid "New lesson: {lessonTitle}"
-msgstr "Новий урок: {lessonTitle}"
+#: src/pages/inbox/Inbox.tsx
+msgid "New items land here after runs are measured: lesson candidates, Advisor findings, classifier checks, agent changes."
+msgstr "Нове з'являється тут після вимірювання запусків: кандидати в уроки, знахідки радника, перевірки класифікатора, зміни агентів."
 
 #: src/pages/Docs.tsx
 msgid "next →"
@@ -2897,7 +2889,6 @@ msgstr "не шум"
 msgid "not noise: {example}"
 msgstr "не шум: {example}"
 
-#: src/pages/inbox/InboxDetail.tsx
 #: src/pages/inbox/inboxModel.ts
 msgid "not useful"
 msgstr "не корисно"
@@ -2913,10 +2904,6 @@ msgstr "ще нічого не закрито"
 #: src/pages/agent-hub/HubShell.tsx
 msgid "nothing here yet"
 msgstr "тут ще нічого немає"
-
-#: src/pages/inbox/Inbox.tsx
-msgid "Nothing is waiting on you."
-msgstr "На вас ніщо не чекає."
 
 #: src/pages/Memory.tsx
 msgid "nothing to consolidate — the index is all live"
@@ -3083,6 +3070,10 @@ msgstr "оберіть"
 msgid "pick a project"
 msgstr "оберіть проєкт"
 
+#: src/pages/inbox/InboxDetail.tsx
+msgid "Pick the correct answer above: it is recorded instead of the guess."
+msgstr "Виберіть правильну відповідь вище: її буде записано замість припущення."
+
 #: src/pages/system/ItemDetail.tsx
 msgid "pick two versions to diff"
 msgstr "оберіть дві версії для диффу"
@@ -3191,14 +3182,6 @@ msgstr "таблиця цін"
 msgid "probe & resume"
 msgstr "перевірити й відновити"
 
-#: src/pages/inbox/InboxDetail.tsx
-msgid "Production deploy — confirm in the session's terminal. Nothing runs until you do."
-msgstr "Деплой у продакшн — підтвердьте в терміналі сесії. Доти ніщо не виконується."
-
-#: src/pages/inbox/InboxDetail.tsx
-msgid "Production deploy via {toolName} — confirm locally"
-msgstr "Деплой у продакшн через {toolName} — підтвердьте локально"
-
 #: src/pages/Analytics.tsx
 msgid "Productivity"
 msgstr "Продуктивність"
@@ -3255,6 +3238,10 @@ msgstr "пропозиції"
 #: src/pages/Lessons.tsx
 msgid "proposed because reviewers raised the same finding type in this area in several phases"
 msgstr "запропоновано, бо рев’юери знаходили той самий тип зауважень у цій зоні в кількох фазах"
+
+#: src/pages/inbox/InboxDetail.tsx
+msgid "Proposed lesson: {guidance}"
+msgstr "Пропонований урок: {guidance}"
 
 #: src/pages/Lessons.tsx
 msgid "Proposed retirements"
@@ -3409,6 +3396,7 @@ msgstr "натомість відновити м’яко видаленого �
 msgid "resumes on its own in {resetsIn}, when the limit resets"
 msgstr "відновиться само через {resetsIn}, коли ліміт скинеться"
 
+#: src/pages/inbox/InboxDetail.tsx
 #: src/pages/Lessons.tsx
 #: src/pages/Lessons.tsx
 msgid "retire"
@@ -3514,10 +3502,6 @@ msgstr "рядок"
 #: src/pages/Retro.tsx
 msgid "rule"
 msgstr "правило"
-
-#: src/pages/inbox/Inbox.tsx
-msgid "rules & history →"
-msgstr "правила й історія →"
 
 #: src/pages/Memory.tsx
 msgid "run a dry run first"
@@ -3688,10 +3672,6 @@ msgstr "сесія {session} · хід {seq}"
 msgid "session {sessionId}"
 msgstr "сесія {sessionId}"
 
-#: src/pages/inbox/InboxDetail.tsx
-msgid "Session {sessionId} asked {askedAgo} ago and is waiting on you. Nothing runs until you answer."
-msgstr "Сесія {sessionId} запитала {askedAgo} тому й чекає на вас. Доки ви не відповісте, ніщо не виконується."
-
 #: src/pages/system/InsightsTab.tsx
 msgid "Session-start cost"
 msgstr "Вартість старту сесії"
@@ -3792,6 +3772,7 @@ msgid "skills…"
 msgstr "скіли…"
 
 #: src/pages/inbox/Inbox.tsx
+#: src/pages/inbox/InboxDetail.tsx
 msgid "skip"
 msgstr "пропустити"
 
@@ -3888,7 +3869,6 @@ msgstr "Перестати застосовувати «{lessonTitle}»?"
 msgid "stop using a lesson?"
 msgstr "перестати застосовувати урок?"
 
-#: src/pages/inbox/InboxDetail.tsx
 #: src/pages/inbox/inboxModel.ts
 #: src/pages/inbox/inboxModel.ts
 msgid "stop using it"
@@ -3992,9 +3972,6 @@ msgid "The agent has not closed anything in the last 7 days."
 msgstr "За останні 7 днів агент нічого не закрив."
 
 #: src/pages/inbox/InboxDetail.tsx
-msgid "The call runs now and the session continues. Nothing else changes."
-msgstr "Виклик виконується зараз, і сесія продовжується. Більше нічого не змінюється."
-
 #: src/pages/inbox/inboxModel.ts
 msgid "The candidate is closed as not useful. Nothing is added to any brief."
 msgstr "Кандидата закрито як некорисного. У жоден бриф нічого не додається."
@@ -4072,6 +4049,14 @@ msgid "the item changed after this guide was written — docs.source_sha no long
 msgstr "елемент змінився після написання цього гайда — docs.source_sha більше не збігається з тілом"
 
 #: src/pages/inbox/InboxDetail.tsx
+msgid "The label is confirmed as the ground truth for this session."
+msgstr "Мітку буде підтверджено як істину для цієї сесії."
+
+#: src/pages/inbox/Inbox.tsx
+msgid "the last 7 days, each with an undo"
+msgstr "за останні 7 днів, кожну можна скасувати"
+
+#: src/pages/inbox/InboxDetail.tsx
 #: src/pages/inbox/inboxModel.ts
 msgid "The lesson stops appearing in briefs. Its history stays."
 msgstr "Урок перестає з’являтись у брифах. Його історія лишається."
@@ -4104,6 +4089,7 @@ msgstr "Пропозиція закривається, а цю причину в
 msgid "The proposal is marked approved; applying it opens a pull request you review."
 msgstr "Пропозицію позначено погодженою; застосування відкриє pull request, який ви переглянете."
 
+#: src/pages/inbox/InboxDetail.tsx
 #: src/pages/inbox/inboxModel.ts
 msgid "The recommendation is closed. It reopens on its own if the rule keeps firing."
 msgstr "Рекомендацію закрито. Вона відкриється знову сама, якщо правило й далі спрацьовуватиме."
@@ -4121,15 +4107,10 @@ msgid "The reviewer left no findings text."
 msgstr "Рев’юер не лишив тексту знахідок."
 
 #: src/pages/inbox/InboxDetail.tsx
-msgid "The session waits for your answers; they go back to Claude as the tool's result."
-msgstr "Сесія чекає на ваші відповіді; вони повертаються до Claude як результат інструмента."
-
-#: src/pages/inbox/InboxDetail.tsx
 msgid "the task"
 msgstr "задача"
 
 #: src/pages/health/Health.tsx
-#: src/pages/inbox/Inbox.tsx
 msgid "The triage run failed."
 msgstr "Прогін сортування не вдався."
 
@@ -4265,6 +4246,7 @@ msgstr "Усього очікування"
 msgid "touched files it did not forecast"
 msgstr "зачепив файли поза прогнозом"
 
+#: src/pages/inbox/InboxDetail.tsx
 #: src/pages/inbox/inboxModel.ts
 #: src/pages/inbox/inboxModel.ts
 msgid "track this"
@@ -4469,10 +4451,6 @@ msgstr "проти попер. {days} дн."
 msgid "vs prev {prevRunsCount}"
 msgstr "проти попер. {prevRunsCount}"
 
-#: src/pages/inbox/Inbox.tsx
-msgid "waiting decisions"
-msgstr "рішення, що чекають"
-
 #: src/pages/health/Health.tsx
 msgid "waiting on you"
 msgstr "чекає на вас"
@@ -4493,13 +4471,6 @@ msgstr "Ми фіксуємо сьогоднішнє число як базов�
 msgid "We snapshot today's number as the baseline, notice when the target changes, and a week later tell you whether it moved."
 msgstr "Ми фіксуємо сьогоднішнє число як базове, помічаємо, коли ціль змінюється, і через тиждень скажемо, чи воно зрушило."
 
-#: src/pages/inbox/InboxDetail.tsx
-#: src/pages/inbox/InboxDetail.tsx
-#: src/pages/inbox/InboxDetail.tsx
-#: src/pages/inbox/InboxDetail.tsx
-msgid "What happened:"
-msgstr "Що сталося:"
-
 #: src/pages/learning/classifierModel.ts
 msgid "What kind of task was it?"
 msgstr "Що це була за задача?"
@@ -4519,10 +4490,6 @@ msgstr "коли виконувала {pick}: {ranCell}"
 #: src/pages/Lessons.tsx
 msgid "When a phase run lands far from its forecast and its report explains why, a cheap model proposes up to two lessons, each citing evidence from that run. A candidate reaches future runs only after you accept it here. Merge it into an existing lesson when it repeats one. Active lessons are re-measured against their area's surprise; one that stops earning its place is proposed for retirement below, and retired on its own after 14 days without an answer."
 msgstr "Коли запуск фази далеко розходиться з прогнозом, а його звіт пояснює чому, дешева модель пропонує до двох уроків, кожен із доказами з того запуску. Кандидат доходить до майбутніх запусків лише після того, як ви приймете його тут. Якщо він повторює наявний урок — злийте їх. Активні уроки переміряють за несподіванкою їхньої зони; той, що перестає себе виправдовувати, пропонується списати нижче і списується сам через 14 днів без відповіді."
-
-#: src/pages/inbox/Inbox.tsx
-msgid "when you have a minute"
-msgstr "коли буде хвилинка"
 
 #: src/pages/Lessons.tsx
 msgid "where reality diverged"
@@ -4568,14 +4535,9 @@ msgstr "пише файли"
 msgid "written by the docs generator and not reviewed yet"
 msgstr "написано генератором документації і ще не вичитано"
 
-#: src/pages/inbox/InboxDetail.tsx
 #: src/pages/system/ModsTab.tsx
 msgid "yes"
 msgstr "так"
-
-#: src/pages/inbox/InboxDetail.tsx
-msgid "yes, all {groupSize}"
-msgstr "так, усі {groupSize}"
 
 #: src/pages/learning/classifierModel.ts
 msgid "You haven't checked any yet"
