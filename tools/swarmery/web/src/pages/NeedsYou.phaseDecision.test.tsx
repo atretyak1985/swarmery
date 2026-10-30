@@ -75,7 +75,7 @@ async function renderPage(): Promise<HTMLElement> {
       <NeedsYou />
     </MemoryRouter>,
   );
-  await screen.findByText(/blocked on you/);
+  await screen.findAllByTestId('needs-you-row');
   const row = screen.getAllByTestId('needs-you-row').find((r) => r.dataset.kind === 'phase_decision');
   if (row === undefined) throw new Error('no phase_decision row');
   fireEvent.click(within(row).getByRole('button'));

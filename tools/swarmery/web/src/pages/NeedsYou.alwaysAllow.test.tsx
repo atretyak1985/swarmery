@@ -73,7 +73,7 @@ async function renderPage(path = '/needs-you'): Promise<HTMLElement> {
       <NeedsYou />
     </MemoryRouter>,
   );
-  await screen.findByText(/blocked on you/);
+  await screen.findAllByTestId('needs-you-row');
   return screen.getByTestId('needs-you-detail');
 }
 
