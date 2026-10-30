@@ -135,6 +135,10 @@ msgstr "{agent}: збій у {failed} з {runs} запусків, було {was}
 msgid "{agent}: {failed} of {runs} runs failed."
 msgstr "{agent}: збій у {failed} з {runs} запусків."
 
+#: src/pages/SystemShell.tsx
+msgid "{agentCount} agents · {skillCount} skills · {hookCount} hooks · {routineCount} routines"
+msgstr "агентів: {agentCount} · скілів: {skillCount} · хуків: {hookCount} · рутин: {routineCount}"
+
 #: src/pages/Retro.tsx
 msgid "{agentRuns} in this window, and {errorEvents} across them and the orchestrator."
 msgstr "{agentRuns} у цьому вікні та {errorEvents} в них і в оркестраторі."
@@ -319,8 +323,8 @@ msgid "{head}; the change is spread across several agents."
 msgstr "{head}; зміна розподілена між кількома агентами."
 
 #: src/pages/AgentHub.tsx
-msgid "{healthLabel} · {failedPct}% failed-run share"
-msgstr "{healthLabel} · {failedPct}% невдалих запусків"
+msgid "{healthLabel} · {failed}% failed"
+msgstr "{healthLabel} · невдалих {failed}%"
 
 #: src/pages/LessonsCalibration.tsx
 msgid "{hiddenGroups} group(s) with {hiddenRuns} run(s) hidden: fewer than {minSamples} samples each."
@@ -458,6 +462,11 @@ msgstr "{runs, plural, one {# запуск} few {# запуски} many {# за�
 msgid "{runs} agent runs over {days} days — {topName} ran most."
 msgstr "{runs} запусків агентів за {days} днів — найчастіше запускався {topName}."
 
+#: src/pages/AgentHub.tsx
+#: src/pages/SystemShell.tsx
+msgid "{runs} runs / 30 d"
+msgstr "запусків за 30 днів: {runs}"
+
 #: src/pages/health/healthModel.ts
 msgid "{sessionCount, plural, one {in # session} few {in # sessions} many {in # sessions} other {in # sessions}}"
 msgstr "{sessionCount, plural, one {у # сесії} few {у # сесіях} many {у # сесіях} other {у # сесії}}"
@@ -544,6 +553,10 @@ msgstr "{uses, plural, one {охопив # запуск} few {охопив # з�
 msgid "{verified, plural, one {# change} few {# changes} many {# changes} other {# changes}}"
 msgstr "{verified, plural, one {# зміна} few {# зміни} many {# змін} other {# зміни}}"
 
+#: src/pages/AgentHub.tsx
+msgid "{version} · changed {changed}"
+msgstr "{version} · змінено {changed}"
+
 #: src/pages/Analytics.tsx
 msgid "{waitMin} min total · {resolved} resolved"
 msgstr "{waitMin} хв разом · {resolved} вирішено"
@@ -589,17 +602,12 @@ msgid "<0>Rule of thumb:</0> switch to {activeWord} only when “{agreement}” 
 msgstr "<0>Практичне правило:</0> переходьте в {activeWord} лише тоді, коли «{agreement}» вище порога для {checks}+ перевірених сесій."
 
 #: src/pages/system/HooksTab.tsx
-#: src/pages/SystemHub.tsx
 msgid "▲ no timeout"
 msgstr "▲ без тайм-ауту"
 
 #: src/pages/system/HooksTab.tsx
 msgid "▲ the command contains redacted values (•••) — saving writes the text exactly as shown"
 msgstr "▲ команда містить приховані значення (•••) — збереження запише текст саме так, як показано"
-
-#: src/pages/agent-hub/RunNow.tsx
-msgid "▸ Run now"
-msgstr "▸ Запустити"
 
 #: src/pages/health/HealthOverview.tsx
 msgid "✓ always allowed"
@@ -730,10 +738,6 @@ msgid "active"
 msgstr "активно"
 
 #: src/pages/AgentHub.tsx
-msgid "active {ago}"
-msgstr "активний {ago}"
-
-#: src/pages/AgentHub.tsx
 msgid "Activity"
 msgstr "Активність"
 
@@ -801,6 +805,10 @@ msgstr "Запуски агентів"
 msgid "Agent scorecards"
 msgstr "Табелі агентів"
 
+#: src/pages/AgentHub.tsx
+msgid "Agent sections"
+msgstr "Розділи агента"
+
 #: src/pages/inbox/InboxDetail.tsx
 msgid "agent suggestion"
 msgstr "пропозиція агента"
@@ -817,7 +825,6 @@ msgstr "агент: {value}"
 msgid "agents"
 msgstr "агенти"
 
-#: src/pages/AgentHub.tsx
 #: src/pages/health/healthPlace.ts
 #: src/pages/SystemShell.tsx
 msgid "Agents"
@@ -871,6 +878,11 @@ msgstr "усі проєкти"
 #: src/pages/inbox/Inbox.tsx
 msgid "All reviewed."
 msgstr "Усе переглянуто."
+
+#: src/pages/SystemShell.tsx
+#: src/pages/SystemShell.tsx
+msgid "All routines"
+msgstr "Усі рутини"
 
 #: src/pages/system/shared.tsx
 msgid "all scopes"
@@ -1271,10 +1283,6 @@ msgstr "Авторежим Claude Code"
 msgid "Claude refused this account: its sign-in expired, or its access was switched off."
 msgstr "Claude відхилив цей акаунт: вхід сплив або доступ вимкнули."
 
-#: src/pages/agent-hub/HubShell.tsx
-msgid "clear filter"
-msgstr "скинути фільтр"
-
 #: src/pages/system/ModsTab.tsx
 msgid "close"
 msgstr "закрити"
@@ -1292,21 +1300,21 @@ msgstr "Закрито"
 msgid "closed by the agent"
 msgstr "закрив агент"
 
-#: src/pages/SystemHub.tsx
-msgid "command"
-msgstr "команда"
-
 #: src/pages/Analytics.tsx
 msgid "Command center"
 msgstr "Центр керування"
+
+#: src/pages/SystemHub.tsx
+msgid "Command sections"
+msgstr "Розділи команди"
 
 #: src/pages/system-hub/Profiles.tsx
 msgid "command…"
 msgstr "команда…"
 
-#: src/pages/SystemHub.tsx
-msgid "commands"
-msgstr "команди"
+#: src/pages/SystemShell.tsx
+msgid "Commands"
+msgstr "Команди"
 
 #: src/pages/system/ItemDetail.tsx
 msgid "Compare"
@@ -1332,10 +1340,6 @@ msgstr "упевненість {range}"
 msgid "confident and wrong"
 msgstr "впевнений, але хибний"
 
-#: src/pages/SystemHub.tsx
-msgid "Config"
-msgstr "Конфіг"
-
 #: src/pages/knowledge/Knowledge.tsx
 msgid "consolidate · lines that went stale"
 msgstr "ущільнення · застарілі рядки"
@@ -1348,7 +1352,6 @@ msgstr "Консолідувати індекс"
 msgid "Consolidate the auto-memory index"
 msgstr "Консолідувати індекс автопам’яті"
 
-#: src/pages/SystemHub.tsx
 #: src/pages/SystemHub.tsx
 msgid "Content"
 msgstr "Вміст"
@@ -1398,6 +1401,10 @@ msgstr "копіюємо…"
 msgid "cost"
 msgstr "вартість"
 
+#: src/pages/AgentHub.tsx
+msgid "cost · 30 d"
+msgstr "вартість · 30 днів"
+
 #: src/pages/Analytics.tsx
 msgid "Cost / task"
 msgstr "Вартість / задача"
@@ -1421,6 +1428,10 @@ msgstr "вартість…"
 #: src/pages/inbox/Inbox.tsx
 msgid "couldn't load {source}"
 msgstr "не вдалося завантажити {source}"
+
+#: src/pages/SystemShell.tsx
+msgid "create · schedule · run history"
+msgstr "створення · розклад · історія запусків"
 
 #: src/pages/system/CreateAgentForm.tsx
 msgid "create agent"
@@ -1559,6 +1570,10 @@ msgstr "вимкнути хук {event} {matcher}"
 msgid "disable this hook"
 msgstr "вимкнути цей хук"
 
+#: src/pages/SystemHub.tsx
+msgid "Disable to let runs skip this hook"
+msgstr "Вимкніть, щоб запуски оминали цей хук"
+
 #: src/pages/system/HooksTab.tsx
 msgid "disabled"
 msgstr "вимкнено"
@@ -1601,7 +1616,12 @@ msgstr "розійшлися"
 msgid "doc…"
 msgstr "документ…"
 
+#: src/pages/Docs.tsx
+msgid "docs"
+msgstr "документація"
+
 #: src/pages/AgentHub.tsx
+#: src/pages/Docs.tsx
 #: src/pages/system/ItemDetail.tsx
 #: src/pages/SystemHub.tsx
 #: src/pages/SystemHub.tsx
@@ -1611,11 +1631,6 @@ msgstr "Документація"
 #: src/pages/Docs.tsx
 msgid "docs…"
 msgstr "документація…"
-
-#: src/pages/Docs.tsx
-#: src/pages/Docs.tsx
-msgid "Documentation"
-msgstr "Документація"
 
 #: src/pages/SystemShell.tsx
 msgid "documented ·"
@@ -1666,9 +1681,13 @@ msgstr "Редагувати"
 msgid "Edit — raw markdown"
 msgstr "Редагування — сирий markdown"
 
-#: src/pages/system-hub/Profiles.tsx
-msgid "edit / enable / disable this hook from the System page → Hooks tab (the existing write surface)"
-msgstr "редагуйте / вмикайте / вимикайте цей хук зі сторінки «Система» → вкладка «Хуки» (наявна поверхня для запису)"
+#: src/pages/AgentHub.tsx
+msgid "edit prompt"
+msgstr "редагувати промпт"
+
+#: src/pages/SystemHub.tsx
+msgid "edit skill"
+msgstr "редагувати скіл"
 
 #: src/pages/Lessons.tsx
 msgid "edit wording"
@@ -1682,6 +1701,10 @@ msgstr "змінити формулювання →"
 #: src/pages/Lessons.tsx
 msgid "effectiveness:"
 msgstr "ефективність:"
+
+#: src/pages/AgentHub.tsx
+msgid "effort"
+msgstr "зусилля"
 
 #: src/pages/system/HooksTab.tsx
 msgid "enable"
@@ -1702,6 +1725,10 @@ msgstr "увімкнути хук {event} {matcher}"
 #: src/pages/system/HooksTab.tsx
 msgid "enable this hook"
 msgstr "увімкнути цей хук"
+
+#: src/pages/SystemHub.tsx
+msgid "Enabled"
+msgstr "Увімкнено"
 
 #: src/pages/system/InsightsTab.tsx
 msgid "enabled in a project's settings, but not actually loadable there"
@@ -1767,10 +1794,6 @@ msgstr "Точність оцінок"
 msgid "evals {evalPassed}/{evalTotal}"
 msgstr "евали {evalPassed}/{evalTotal}"
 
-#: src/pages/system-hub/Profiles.tsx
-msgid "event"
-msgstr "подія"
-
 #: src/pages/system/ModsTab.tsx
 #: src/pages/system/ModsTab.tsx
 msgid "events"
@@ -1800,6 +1823,10 @@ msgstr "Кожен наступний запуск, що торкається {a
 #: src/pages/learning/Learning.tsx
 msgid "Every lesson, and what waits for a decision."
 msgstr "Усі уроки і те, що чекає на рішення."
+
+#: src/pages/SystemShell.tsx
+msgid "every mod on this machine"
+msgstr "усі моди на цій машині"
 
 #: src/pages/inbox/ReviewItem.tsx
 msgid "Every phase of this plan finished. A read-only reviewer read all of their run branches together, looking at the seams between phases — what one phase hands over and another expects. Nothing was blocked or re-run."
@@ -1873,6 +1900,10 @@ msgstr "невдала сесія"
 msgid "failed share by agent"
 msgstr "частка збоїв за агентами"
 
+#: src/pages/SystemHub.tsx
+msgid "file"
+msgstr "файл"
+
 #: src/pages/Memory.tsx
 msgid "File changed on disk"
 msgstr "Файл змінився на диску"
@@ -1882,24 +1913,9 @@ msgid "file…"
 msgstr "файл…"
 
 #: src/pages/inbox/Inbox.tsx
+#: src/pages/SystemShell.tsx
 msgid "filter"
 msgstr "фільтр"
-
-#: src/pages/SystemHub.tsx
-msgid "filter {noun}…"
-msgstr "фільтр: {noun}…"
-
-#: src/pages/AgentHub.tsx
-msgid "filter agents…"
-msgstr "фільтр агентів…"
-
-#: src/pages/Docs.tsx
-msgid "Filter docs"
-msgstr "Фільтр документів"
-
-#: src/pages/Docs.tsx
-msgid "filter docs…"
-msgstr "фільтр документів…"
 
 #: src/pages/Retro.tsx
 msgid "filter lesson groups…"
@@ -1921,10 +1937,6 @@ msgstr "фільтр уроків…"
 #: src/pages/Analytics.tsx
 msgid "filter usage by agent"
 msgstr "фільтр використання за агентом"
-
-#: src/pages/agent-hub/HubShell.tsx
-msgid "filter…"
-msgstr "фільтр…"
 
 #: src/pages/inbox/ReviewItem.tsx
 msgid "findings"
@@ -2105,6 +2117,10 @@ msgstr "розібрав агент"
 msgid "harness {harness}"
 msgstr "оболонка {harness}"
 
+#: src/pages/AgentHub.tsx
+msgid "health"
+msgstr "стан"
+
 #: src/pages/health/Health.tsx
 msgid "Health"
 msgstr "Здоров’я"
@@ -2137,6 +2153,10 @@ msgstr "здоров’я · тертя"
 #: src/pages/health/Health.tsx
 msgid "health · phase runs"
 msgstr "здоров’я · запуски фаз"
+
+#: src/pages/AgentHub.tsx
+msgid "health →"
+msgstr "стан →"
 
 #: src/pages/health/HealthOverview.tsx
 msgid "health…"
@@ -2175,8 +2195,6 @@ msgid "hit rate per confidence bin"
 msgstr "частка влучань за інтервалом упевненості"
 
 #: src/pages/system/ModsTab.tsx
-#: src/pages/SystemHub.tsx
-#: src/pages/SystemHub.tsx
 msgid "hook"
 msgstr "хук"
 
@@ -2196,11 +2214,6 @@ msgstr "запис хука потребує content_hash рядка — дем�
 msgid "hook…"
 msgstr "хук…"
 
-#: src/pages/SystemHub.tsx
-msgid "hooks"
-msgstr "хуки"
-
-#: src/pages/SystemHub.tsx
 #: src/pages/SystemShell.tsx
 msgid "Hooks"
 msgstr "Хуки"
@@ -2242,6 +2255,10 @@ msgstr "Як завершувалися запуски фаз, на що чек�
 msgid "How plan-phase runs ended."
 msgstr "Чим закінчились запуски фаз."
 
+#: src/pages/Docs.tsx
+msgid "how swarmery works"
+msgstr "як працює swarmery"
+
 #: src/pages/learning/Classifier.tsx
 msgid "How the modes work"
 msgstr "Як працюють режими"
@@ -2257,10 +2274,6 @@ msgstr "ідентично"
 #: src/pages/system/ItemDetail.tsx
 msgid "identical to the current content — nothing changes on disk"
 msgstr "ідентично поточному вмісту — на диску ніщо не зміниться"
-
-#: src/pages/AgentHub.tsx
-msgid "idle"
-msgstr "простій"
 
 #: src/pages/inbox/InboxDetail.tsx
 msgid "if right"
@@ -2359,12 +2372,9 @@ msgstr "Додано в {usesText} запусків. Медіана здивув
 msgid "injected when"
 msgstr "коли додається"
 
-#: src/pages/SystemHub.tsx
-msgid "insights"
-msgstr "інсайти"
-
 #: src/pages/AgentHub.tsx
-#: src/pages/SystemHub.tsx
+#: src/pages/SystemShell.tsx
+#: src/pages/SystemShell.tsx
 #: src/pages/SystemShell.tsx
 msgid "Insights"
 msgstr "Інсайти"
@@ -2417,6 +2427,10 @@ msgstr "викликів / день (30 д)"
 #: src/pages/system-hub/Profiles.tsx
 msgid "invocations 30d"
 msgstr "викликів за 30 д"
+
+#: src/pages/AgentHub.tsx
+msgid "isolation"
+msgstr "ізоляція"
 
 #: src/pages/learning/classifierModel.ts
 msgid "it is almost always sure of itself, yet {lowered}. Start checking here."
@@ -2477,10 +2491,6 @@ msgstr "L-{lessonId} перенесено в CLAUDE.md у гілці <0>{branch}
 msgid "last {lastSeen}"
 msgstr "останній {lastSeen}"
 
-#: src/pages/SystemHub.tsx
-msgid "last {lastUsed}"
-msgstr "останній {lastUsed}"
-
 #: src/pages/knowledge/Knowledge.tsx
 msgid "last changed"
 msgstr "востаннє змінено"
@@ -2496,6 +2506,10 @@ msgstr "Останній раз {ago} · у {sessions, plural, one {# сесії
 #: src/pages/health/HealthOverview.tsx
 msgid "Last seen {ago}."
 msgstr "Останній раз {ago}."
+
+#: src/pages/SystemHub.tsx
+msgid "last used"
+msgstr "востаннє використано"
 
 #: src/pages/system-hub/Profiles.tsx
 msgid "last used {lastUsed}"
@@ -2643,9 +2657,9 @@ msgstr "lsp-pack не ввімкнено для цього проєкту — у
 msgid "machine-wide"
 msgstr "на всій машині"
 
-#: src/pages/system-hub/Profiles.tsx
-msgid "managed · {managed}"
-msgstr "керований · {managed}"
+#: src/pages/SystemHub.tsx
+msgid "managed"
+msgstr "керується"
 
 #: src/pages/system/HooksTab.tsx
 msgid "managed · swarmery"
@@ -2662,10 +2676,6 @@ msgstr "карту зібрано {builtAgo}"
 #: src/pages/inbox/inboxModel.ts
 msgid "mark not useful"
 msgstr "позначити некорисним"
-
-#: src/pages/system-hub/Profiles.tsx
-msgid "matcher"
-msgstr "матчер"
 
 #: src/pages/RoutingReport.tsx
 msgid "mean cost"
@@ -2744,6 +2754,7 @@ msgstr "звіт validate мода"
 msgid "mode for {question}"
 msgstr "режим для {question}"
 
+#: src/pages/AgentHub.tsx
 #: src/pages/Analytics.tsx
 #: src/pages/learning/TurnForecastPanel.tsx
 #: src/pages/RoutingReport.tsx
@@ -2765,6 +2776,11 @@ msgstr "помірний ризик"
 #: src/pages/SystemShell.tsx
 msgid "Mods"
 msgstr "Моди"
+
+#: src/pages/SystemShell.tsx
+#: src/pages/SystemShell.tsx
+msgid "Mods audit"
+msgstr "Аудит модів"
 
 #: src/pages/system/ModsTab.tsx
 msgid "mods…"
@@ -2864,33 +2880,13 @@ msgstr "немає даних «{metric}» за {pivotWord} у цьому пер
 msgid "no {noun} in this range"
 msgstr "немає {noun} у цьому періоді"
 
-#: src/pages/SystemHub.tsx
-msgid "no {noun} on this machine"
-msgstr "на цій машині немає {noun}"
-
-#: src/pages/SystemHub.tsx
-msgid "No {noun} resolve for this project — enable a pack in Settings, or add one under .claude/."
-msgstr "Для цього проєкту не знайдено {noun} — увімкніть пакет у Налаштуваннях або додайте свій у .claude/."
-
-#: src/pages/SystemHub.tsx
-msgid "no {originScope}-scope {noun} here"
-msgstr "тут немає {noun} з областю {originScope}"
+#: src/pages/SystemShell.tsx
+msgid "no {originScope}-scope entries here"
+msgstr "тут немає записів з областю {originScope}"
 
 #: src/pages/RoutingReport.tsx
 msgid "no {pick} runs in tier {tier} above the gate yet"
 msgstr "у рівні {tier} ще немає запусків {pick} понад поріг"
-
-#: src/pages/AgentHub.tsx
-msgid "no {scopeChip}-scope agents here"
-msgstr "тут немає агентів з областю {scopeChip}"
-
-#: src/pages/AgentHub.tsx
-msgid "no agents on this machine"
-msgstr "на цій машині немає агентів"
-
-#: src/pages/AgentHub.tsx
-msgid "No agents resolve for this project — enable a pack in Settings, or add one under .claude/agents/."
-msgstr "Для цього проєкту не знайдено агентів — увімкніть пакет у Налаштуваннях або додайте свого в .claude/agents/."
 
 #: src/pages/health/HealthOverview.tsx
 msgid "No approval rule covers this tool yet. Allow it once and these runs stop asking."
@@ -2927,10 +2923,6 @@ msgstr "Даних ще немає — це питання ставиться, �
 #: src/pages/Retro.tsx
 msgid "no denied tool calls in this range"
 msgstr "у цьому періоді немає відхилених викликів інструментів"
-
-#: src/pages/Docs.tsx
-msgid "no docs match"
-msgstr "жоден документ не підходить"
 
 #: src/pages/Docs.tsx
 msgid "no docs published by the daemon"
@@ -3000,10 +2992,6 @@ msgstr "Локальну модель не налаштовано — це не�
 #: src/pages/Architecture.tsx
 msgid "no map yet — press build map to generate it"
 msgstr "карти ще немає — натисніть «зібрати карту», щоб її згенерувати"
-
-#: src/pages/agent-hub/HubShell.tsx
-msgid "no matches"
-msgstr "збігів немає"
 
 #: src/pages/Memory.tsx
 msgid "No memory files yet — this project has no CLAUDE.md, auto-memory, or Serena notes."
@@ -3118,6 +3106,10 @@ msgstr "цей агент не виконав жодної задачі"
 msgid "no tasks with retro artifacts in this range"
 msgstr "у цьому періоді немає задач з артефактами ретро"
 
+#: src/pages/SystemHub.tsx
+msgid "no timeout"
+msgstr "без тайм-ауту"
+
 #: src/pages/learning/TurnForecastPanel.tsx
 msgid "No turns with a confidence yet — calibration needs forecasts whose confidence parsed. The scored turns below still count."
 msgstr "Ще немає ходів з упевненістю — калібруванню потрібні прогнози, чию упевненість вдалося розібрати. Оцінені ходи нижче все одно враховано."
@@ -3156,8 +3148,8 @@ msgstr "шум · до {day}"
 
 #: src/pages/Memory.tsx
 #: src/pages/Memory.tsx
-#: src/pages/system-hub/Profiles.tsx
 #: src/pages/system/HooksTab.tsx
+#: src/pages/SystemHub.tsx
 msgid "none"
 msgstr "немає"
 
@@ -3213,9 +3205,13 @@ msgstr "не перевірено"
 msgid "nothing closed yet"
 msgstr "ще нічого не закрито"
 
-#: src/pages/agent-hub/HubShell.tsx
-msgid "nothing here yet"
-msgstr "тут ще нічого немає"
+#: src/pages/SystemShell.tsx
+msgid "nothing on this machine"
+msgstr "на цій машині нічого немає"
+
+#: src/pages/SystemShell.tsx
+msgid "Nothing resolves for this project — enable a pack in Settings, or add one under .claude/."
+msgstr "Для цього проєкту нічого не знайдено — увімкніть пак у налаштуваннях або додайте компонент у .claude/."
 
 #: src/pages/Memory.tsx
 msgid "nothing to consolidate — the index is all live"
@@ -3300,6 +3296,7 @@ msgstr "Оркестратор {mainCost} · {mainTokens} вихідних то�
 
 #: src/pages/Lessons.tsx
 #: src/pages/system-hub/Profiles.tsx
+#: src/pages/SystemHub.tsx
 msgid "origin"
 msgstr "джерело"
 
@@ -3354,6 +3351,11 @@ msgstr "пройдено"
 msgid "Passes / Total"
 msgstr "Пройдено / Усього"
 
+#: src/pages/SystemHub.tsx
+#: src/pages/SystemHub.tsx
+msgid "path"
+msgstr "шлях"
+
 #: src/pages/system/ModsTab.tsx
 msgid "pattern"
 msgstr "шаблон"
@@ -3369,6 +3371,10 @@ msgstr "ідеальне калібрування"
 #: src/pages/inbox/inboxModel.ts
 msgid "Permission checks are getting no verdict"
 msgstr "Перевірки дозволів лишаються без вердикту"
+
+#: src/pages/AgentHub.tsx
+msgid "permission tiers"
+msgstr "рівні дозволів"
 
 #: src/pages/agent-hub/Tabs.tsx
 msgid "phase {phase}"
@@ -3444,6 +3450,8 @@ msgstr "Дрейф плагінів"
 msgid "plugin items are read-only — edit them in the plugin's marketplace repo and adopt via /plugin update"
 msgstr "елементи плагінів лише для читання — редагуйте їх у репозиторії маркетплейсу плагіна й підтягуйте через /plugin update"
 
+#: src/pages/SystemShell.tsx
+#: src/pages/SystemShell.tsx
 #: src/pages/SystemShell.tsx
 msgid "Plugins"
 msgstr "Плагіни"
@@ -3543,9 +3551,21 @@ msgstr "проєкти"
 msgid "promote to CLAUDE.md"
 msgstr "перенести в CLAUDE.md"
 
+#: src/pages/SystemShell.tsx
+msgid "promotion · drift · dead components"
+msgstr "просування · розбіжності · мертві компоненти"
+
 #: src/pages/system/InsightsTab.tsx
 msgid "Promotion candidates"
 msgstr "Кандидати на підвищення"
+
+#: src/pages/AgentHub.tsx
+msgid "prompt"
+msgstr "промпт"
+
+#: src/pages/AgentHub.tsx
+msgid "prompt {version}"
+msgstr "промпт {version}"
 
 #: src/pages/Analytics.tsx
 msgid "Prompt-cache read ratio over the range. Higher = cheaper reads served from cache."
@@ -3840,7 +3860,7 @@ msgstr "відкочується на диску…"
 msgid "rollback to {rbWhen} — what will change on disk:"
 msgstr "відкат до {rbWhen} — що зміниться на диску:"
 
-#: src/pages/agent-hub/HubShell.tsx
+#: src/pages/SystemShell.tsx
 msgid "roster…"
 msgstr "список…"
 
@@ -3879,6 +3899,11 @@ msgstr "Зробіть пробний прогін, щоб побачити, я�
 msgid "Run an OpenAI-compatible model server: LM Studio (<0>localhost:1234</0>), Ollama (<1>localhost:11434/v1</1>), llama.cpp or vLLM. A 7–14B instruct model is enough."
 msgstr "Запустіть сервер моделі, сумісний з OpenAI: LM Studio (<0>localhost:1234</0>), Ollama (<1>localhost:11434/v1</1>), llama.cpp або vLLM. Instruct-моделі на 7–14B достатньо."
 
+#: src/pages/agent-hub/RunNow.tsx
+#: src/pages/AgentHub.tsx
+msgid "run once"
+msgstr "запустити раз"
+
 #: src/pages/health/FrictionTriageStrip.tsx
 #: src/pages/inbox/TriageBanner.tsx
 msgid "run triage"
@@ -3897,10 +3922,6 @@ msgstr "запуски"
 #: src/pages/Analytics.tsx
 msgid "Runs"
 msgstr "Запуски"
-
-#: src/pages/AgentHub.tsx
-msgid "runs 30d {runs30d}"
-msgstr "запусків за 30 дн. {runs30d}"
 
 #: src/pages/Lessons.tsx
 msgid "runs reached"
@@ -3961,8 +3982,9 @@ msgstr "збереження…"
 
 #: src/pages/knowledge/Knowledge.tsx
 #: src/pages/system-hub/Profiles.tsx
-#: src/pages/system-hub/Profiles.tsx
 #: src/pages/system/CreateAgentForm.tsx
+#: src/pages/SystemHub.tsx
+#: src/pages/SystemHub.tsx
 msgid "scope"
 msgstr "область"
 
@@ -3977,6 +3999,10 @@ msgstr "оцінений запуск фази"
 #: src/pages/Analytics.tsx
 msgid "SDLC funnel"
 msgstr "Воронка SDLC"
+
+#: src/pages/Docs.tsx
+msgid "search docs"
+msgstr "пошук у документації"
 
 #: src/pages/knowledge/Knowledge.tsx
 msgid "search memory, modules, symbols"
@@ -3998,21 +4024,9 @@ msgstr "бачили"
 msgid "seen {recurrences}×"
 msgstr "траплялось {recurrences}×"
 
-#: src/pages/SystemHub.tsx
-msgid "select a {singularNoun} to see its profile"
-msgstr "оберіть {singularNoun}, щоб побачити профіль"
-
 #: src/pages/Memory.tsx
 msgid "Select a file to view or edit."
 msgstr "Оберіть файл для перегляду чи редагування."
-
-#: src/pages/agent-hub/HubShell.tsx
-msgid "select a row"
-msgstr "оберіть рядок"
-
-#: src/pages/AgentHub.tsx
-msgid "select an agent to see its profile"
-msgstr "оберіть агента, щоб побачити профіль"
 
 #: src/pages/system/ItemDetail.tsx
 msgid "select version {versionId} for compare"
@@ -4121,7 +4135,6 @@ msgstr "схожі скіли"
 #: src/pages/Analytics.tsx
 #: src/pages/Analytics.tsx
 #: src/pages/Retro.tsx
-#: src/pages/SystemHub.tsx
 msgid "skill"
 msgstr "скіл"
 
@@ -4133,12 +4146,15 @@ msgstr "Аудит скілів"
 msgid "skill invocations"
 msgstr "виклики скілів"
 
+#: src/pages/SystemHub.tsx
+msgid "Skill sections"
+msgstr "Розділи скіла"
+
 #: src/pages/system-hub/Profiles.tsx
 msgid "skill…"
 msgstr "скіл…"
 
 #: src/pages/Analytics.tsx
-#: src/pages/SystemHub.tsx
 msgid "skills"
 msgstr "скіли"
 
@@ -4181,6 +4197,7 @@ msgstr "сортувати список"
 #: src/pages/Lessons.tsx
 #: src/pages/system/ModsTab.tsx
 #: src/pages/system/ModsTab.tsx
+#: src/pages/SystemHub.tsx
 msgid "source"
 msgstr "джерело"
 
@@ -4319,26 +4336,53 @@ msgstr "хук інсталятора swarmery — керуйте ним чер�
 msgid "symbol index"
 msgstr "індекс символів"
 
+#: src/pages/SystemHub.tsx
+msgid "system"
+msgstr "система"
+
 #: src/pages/SystemShell.tsx
 msgid "System"
 msgstr "Система"
 
-#: src/pages/SystemHub.tsx
-#: src/pages/SystemHub.tsx
-msgid "System Hub"
-msgstr "Система Hub"
+#: src/pages/AgentHub.tsx
+msgid "system · agent"
+msgstr "система · агент"
 
 #: src/pages/SystemHub.tsx
-msgid "System Hub sections"
-msgstr "Розділи Система Hub"
+msgid "system · command"
+msgstr "система · команда"
+
+#: src/pages/SystemHub.tsx
+msgid "system · hook"
+msgstr "система · хук"
+
+#: src/pages/SystemShell.tsx
+msgid "system · insights"
+msgstr "система · інсайти"
+
+#: src/pages/SystemShell.tsx
+msgid "system · mods"
+msgstr "система · моди"
+
+#: src/pages/SystemShell.tsx
+msgid "system · plugins"
+msgstr "система · плагіни"
+
+#: src/pages/SystemShell.tsx
+msgid "system · routines"
+msgstr "система · рутини"
+
+#: src/pages/SystemHub.tsx
+msgid "system · skill"
+msgstr "система · скіл"
+
+#: src/pages/SystemHub.tsx
+msgid "system · template"
+msgstr "система · шаблон"
 
 #: src/pages/system-hub/Profiles.tsx
 msgid "system is in readonly mode — copy is disabled"
 msgstr "система в режимі лише читання — копіювання вимкнено"
-
-#: src/pages/SystemShell.tsx
-msgid "System sections"
-msgstr "Розділи Система"
 
 #: src/pages/health/HealthOverview.tsx
 msgid "target"
@@ -4364,17 +4408,13 @@ msgstr "задачі проти їхніх оцінок · уроки ретро
 msgid "Tasks done"
 msgstr "Виконано задач"
 
-#: src/pages/SystemHub.tsx
-msgid "template"
-msgstr "шаблон"
-
 #: src/pages/system-hub/Profiles.tsx
 msgid "template…"
 msgstr "шаблон…"
 
-#: src/pages/SystemHub.tsx
-msgid "templates"
-msgstr "шаблони"
+#: src/pages/SystemShell.tsx
+msgid "Templates"
+msgstr "Шаблони"
 
 #: src/pages/learning/TurnForecastPanel.tsx
 msgid "tests outcome missed"
@@ -4588,7 +4628,8 @@ msgstr "рівень"
 msgid "tier {tier}, picked {pick}, ran {model}: {cell}"
 msgstr "рівень {tier}, обрано {pick}, виконала {model}: {cell}"
 
-#: src/pages/system-hub/Profiles.tsx
+#: src/pages/SystemHub.tsx
+#: src/pages/SystemHub.tsx
 msgid "timeout"
 msgstr "таймаут"
 
@@ -4641,9 +4682,9 @@ msgstr "Інструменти"
 msgid "Tooling"
 msgstr "Інструменти"
 
-#: src/pages/SystemHub.tsx
-msgid "Toolkit"
-msgstr "Інструментарій"
+#: src/pages/AgentHub.tsx
+msgid "tools"
+msgstr "інструменти"
 
 #: src/pages/Analytics.tsx
 #: src/pages/Analytics.tsx
@@ -4806,8 +4847,8 @@ msgid "usage-guide coverage: every agent, skill and command the marketplace ship
 msgstr "покриття гайдами: кожен агент, скіл і команда з маркетплейсу мусять мати блок '# How to use'"
 
 #: src/pages/SystemHub.tsx
-msgid "used 30d {used30d}"
-msgstr "вжито за 30 дн. {used30d}"
+msgid "used in {used} sessions / 30 d"
+msgstr "використано в сесіях за 30 днів: {used}"
 
 #: src/pages/system/ModsTab.tsx
 msgid "Validate report"
@@ -4967,6 +5008,10 @@ msgstr "Куди пішли гроші й токени."
 #: src/pages/RoutingReport.tsx
 msgid "Where the pick differed"
 msgstr "Де вибір відрізнявся"
+
+#: src/pages/SystemShell.tsx
+msgid "which packs a project enables"
+msgstr "які паки вмикає проєкт"
 
 #: src/pages/learning/classifierModel.ts
 msgid "Why did it fail?"

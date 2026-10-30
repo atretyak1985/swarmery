@@ -558,6 +558,10 @@ msgstr "Ask the daemon to write a handoff brief for this session"
 msgid "asked at step {steps}"
 msgstr "asked at step {steps}"
 
+#: src/pages/ProjectSettings.tsx
+msgid "auto-approve preset · account"
+msgstr "auto-approve preset · account"
+
 #: src/pages/Approvals.tsx
 msgid "Auto-approve rules"
 msgstr "Auto-approve rules"
@@ -1013,6 +1017,10 @@ msgstr "filter · n:name s:state o:result"
 msgid "filter events"
 msgstr "filter events"
 
+#: src/pages/ProjectSettings.tsx
+msgid "filter settings"
+msgstr "filter settings"
+
 #: src/pages/ProjectDetail.tsx
 msgid "first request"
 msgstr "first request"
@@ -1206,8 +1214,11 @@ msgstr "local to this project"
 msgid "manage plugins + detach in <0>Settings →</0>"
 msgstr "manage plugins + detach in <0>Settings →</0>"
 
-#: src/pages/ProjectDetail.tsx
 #: src/pages/ProjectSettings.tsx
+msgid "marketplace"
+msgstr "marketplace"
+
+#: src/pages/ProjectDetail.tsx
 msgid "marketplace: {marketplace}"
 msgstr "marketplace: {marketplace}"
 
@@ -1598,9 +1609,17 @@ msgstr "own answer — overrides the selection"
 msgid "own answer…"
 msgstr "own answer…"
 
+#: src/pages/ProjectSettings.tsx
+msgid "path"
+msgstr "path"
+
 #: src/pages/NeedsYou.tsx
 msgid "Path"
 msgstr "Path"
+
+#: src/pages/ProjectSettings.tsx
+msgid "path · archive · detach"
+msgstr "path · archive · detach"
 
 #: src/pages/Approvals.tsx
 #: src/pages/sessions/SwarmPanel.tsx
@@ -1723,6 +1742,11 @@ msgstr "Plans →"
 msgid "plugins"
 msgstr "plugins"
 
+#: src/pages/ProjectSettings.tsx
+#: src/pages/ProjectSettings.tsx
+msgid "Plugins"
+msgstr "Plugins"
+
 #: src/pages/NeedsYou.tsx
 msgid "PR merged"
 msgstr "PR merged"
@@ -1746,8 +1770,13 @@ msgid "Production deploy — confirm in the session's terminal"
 msgstr "Production deploy — confirm in the session's terminal"
 
 #: src/pages/Projects.tsx
+#: src/pages/ProjectSettings.tsx
 msgid "project"
 msgstr "project"
+
+#: src/pages/ProjectSettings.tsx
+msgid "Project"
+msgstr "Project"
 
 #: src/pages/ProjectDetail.tsx
 #: src/pages/ProjectOverview.tsx
@@ -2015,9 +2044,12 @@ msgstr "session…"
 
 #: src/pages/ProjectDetail.tsx
 #: src/pages/Projects.tsx
+#: src/pages/ProjectSettings.tsx
 msgid "sessions"
 msgstr "sessions"
 
+#: src/pages/ProjectSettings.tsx
+#: src/pages/ProjectSettings.tsx
 #: src/pages/Sessions.tsx
 msgid "Sessions"
 msgstr "Sessions"
@@ -2037,8 +2069,15 @@ msgid "sessions…"
 msgstr "sessions…"
 
 #: src/pages/ProjectSettings.tsx
+#: src/pages/ProjectSettings.tsx
+#: src/pages/ProjectSettings.tsx
 msgid "settings"
 msgstr "settings"
+
+#: src/pages/ProjectSettings.tsx
+#: src/pages/ProjectSettings.tsx
+msgid "Settings"
+msgstr "Settings"
 
 #: src/pages/ProjectSettings.tsx
 msgid "settings…"
@@ -2454,6 +2493,10 @@ msgstr "Waiting on you"
 msgid "what happened · newest first"
 msgstr "what happened · newest first"
 
+#: src/pages/ProjectSettings.tsx
+msgid "What its runs may do without asking, and which account they use."
+msgstr "What its runs may do without asking, and which account they use."
+
 #: src/pages/sessions/SwarmPanel.tsx
 msgid "What should the other session know?"
 msgstr "What should the other session know?"
@@ -2465,6 +2508,10 @@ msgstr "Where work sits"
 #: src/pages/Overview.tsx
 msgid "Where your time went"
 msgstr "Where your time went"
+
+#: src/pages/ProjectSettings.tsx
+msgid "which packs this project enables"
+msgstr "which packs this project enables"
 
 #: src/pages/detail/SessionGate.tsx
 #: src/pages/NeedsYou.tsx

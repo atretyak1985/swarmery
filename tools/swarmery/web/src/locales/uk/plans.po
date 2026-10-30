@@ -720,9 +720,15 @@ msgid "Decisions and criteria: {total} ids"
 msgstr "Рішення й критерії: {total} ідентифікаторів"
 
 #: src/pages/Routines.tsx
+#: src/pages/Routines.tsx
 msgid "Delete"
 msgstr "Видалити"
 
+#: src/pages/Routines.tsx
+msgid "delete routine"
+msgstr "видалити рутину"
+
+#: src/pages/Routines.tsx
 #: src/pages/Routines.tsx
 msgid "Delete routine?"
 msgstr "Видалити рутину?"
@@ -875,6 +881,10 @@ msgstr "редагувати рутину"
 msgid "Edit routine"
 msgstr "Редагувати рутину"
 
+#: src/pages/Routines.tsx
+msgid "edit schedule"
+msgstr "змінити розклад"
+
 #: src/pages/Plans.tsx
 msgid "edited {ago} ago"
 msgstr "змінено {ago} тому"
@@ -899,6 +909,10 @@ msgstr "увімкнути / вимкнути"
 #: src/pages/Routines.tsx
 msgid "enable webhook trigger ({webhookRoute})"
 msgstr "увімкнути тригер вебхука ({webhookRoute})"
+
+#: src/pages/Routines.tsx
+msgid "Enabled"
+msgstr "Увімкнено"
 
 #: src/pages/planning/RunningPlanPanel.tsx
 msgid "End the interview? The planner will write the full plan to the workspace."
@@ -1054,6 +1068,7 @@ msgid "From phase diagnosis"
 msgstr "З діагностики фази"
 
 #: src/pages/Routines.tsx
+#: src/pages/Routines.tsx
 msgid "global"
 msgstr "глобально"
 
@@ -1201,6 +1216,10 @@ msgstr "останній {lastRun}"
 msgid "last landing failure: {landingError}"
 msgstr "остання невдача здачі: {landingError}"
 
+#: src/pages/Routines.tsx
+msgid "last run"
+msgstr "останній запуск"
+
 #: src/pages/Plans.tsx
 msgid "last run: done"
 msgstr "останній запуск: готово"
@@ -1345,6 +1364,7 @@ msgstr "Називає файл налаштувань — вкажіть, зв�
 
 #: src/pages/Routines.tsx
 #: src/pages/Routines.tsx
+#: src/pages/Routines.tsx
 msgid "never run"
 msgstr "не запускали"
 
@@ -1372,6 +1392,10 @@ msgstr "наступний {nextRun}"
 #: src/pages/PlanningMode.tsx
 msgid "next idea"
 msgstr "наступна ідея"
+
+#: src/pages/Routines.tsx
+msgid "next run"
+msgstr "наступний запуск"
 
 #: src/pages/Routines.tsx
 msgid "nightly advisor re-run"
@@ -1425,6 +1449,7 @@ msgstr "без прогнозу — ця фаза не має розділу ## 
 msgid "No lesson was proposed: the report has no Where reality diverged paragraph."
 msgstr "Урок не пропонується: у звіті немає абзацу «Where reality diverged»."
 
+#: src/pages/Routines.tsx
 #: src/pages/Routines.tsx
 msgid "no next run"
 msgstr "наступного запуску немає"
@@ -1682,6 +1707,10 @@ msgstr "понад 4 год"
 msgid "Pause"
 msgstr "Пауза"
 
+#: src/pages/Routines.tsx
+msgid "Pause to stop the schedule; run once still works"
+msgstr "Пауза зупиняє розклад; разовий запуск лишається доступним"
+
 #: src/pages/Plans.tsx
 msgid "paused"
 msgstr "на паузі"
@@ -1702,6 +1731,7 @@ msgstr "за документом, інакше high (effort не передає
 msgid "perm {permissionMode}"
 msgstr "дозволи {permissionMode}"
 
+#: src/pages/Routines.tsx
 #: src/pages/Routines.tsx
 msgid "Permanently delete <0>{routineName}</0> and its run history? This cannot be undone."
 msgstr "Назавжди видалити <0>{routineName}</0> та історію її запусків? Це незворотно."
@@ -2290,8 +2320,13 @@ msgid "Run failed"
 msgstr "Запуск невдалий"
 
 #: src/pages/Routines.tsx
+#: src/pages/Routines.tsx
 msgid "Run history"
 msgstr "Історія запусків"
+
+#: src/pages/Routines.tsx
+msgid "run now"
+msgstr "запустити зараз"
 
 #: src/pages/Routines.tsx
 msgid "Run now"
@@ -2367,8 +2402,16 @@ msgid "Saving…"
 msgstr "Збереження…"
 
 #: src/pages/Routines.tsx
+msgid "schedule"
+msgstr "розклад"
+
+#: src/pages/Routines.tsx
 msgid "Scheduled automation — cron / webhook / manual, with typed steps and run history."
 msgstr "Автоматизація за розкладом — cron / вебхук / вручну, з типізованими кроками й історією запусків."
+
+#: src/pages/Routines.tsx
+msgid "scope"
+msgstr "область"
 
 #: src/pages/Routines.tsx
 msgid "Scope"
@@ -2608,6 +2651,10 @@ msgstr "несподіванка {index} · {top}"
 #: src/pages/plans/ForecastVsActual.tsx
 msgid "surprise vector"
 msgstr "вектор несподіванки"
+
+#: src/pages/Routines.tsx
+msgid "system · routine"
+msgstr "система · рутина"
 
 #: src/pages/Routines.tsx
 msgid "task prompt (board card body)"
@@ -2886,6 +2933,10 @@ msgstr "зачепила {count} {areas}{offNote}"
 msgid "Transform your idea into a plan"
 msgstr "Перетворіть ідею на план"
 
+#: src/pages/Routines.tsx
+msgid "trigger"
+msgstr "тригер"
+
 #. placeholder {0}: h.turnSeq
 #: src/pages/plans/WorkaroundHits.tsx
 msgid "turn {0}"
@@ -2965,6 +3016,7 @@ msgstr "чекає на фазу {waitingOn}"
 msgid "waits on decision {id}"
 msgstr "чекає на рішення {id}"
 
+#: src/pages/Routines.tsx
 #: src/pages/Routines.tsx
 msgid "webhook"
 msgstr "вебхук"

@@ -558,6 +558,10 @@ msgstr "Попросити демон написати бриф передачі
 msgid "asked at step {steps}"
 msgstr "запитано на кроці {steps}"
 
+#: src/pages/ProjectSettings.tsx
+msgid "auto-approve preset · account"
+msgstr "пресет автосхвалення · акаунт"
+
 #: src/pages/Approvals.tsx
 msgid "Auto-approve rules"
 msgstr "Правила автопогодження"
@@ -1013,6 +1017,10 @@ msgstr "фільтр · n:назва s:стан o:результат"
 msgid "filter events"
 msgstr "фільтр подій"
 
+#: src/pages/ProjectSettings.tsx
+msgid "filter settings"
+msgstr "фільтр налаштувань"
+
 #: src/pages/ProjectDetail.tsx
 msgid "first request"
 msgstr "перший запит"
@@ -1206,8 +1214,11 @@ msgstr "локально для цього проєкту"
 msgid "manage plugins + detach in <0>Settings →</0>"
 msgstr "керування плагінами й від’єднання — у <0>Налаштування →</0>"
 
-#: src/pages/ProjectDetail.tsx
 #: src/pages/ProjectSettings.tsx
+msgid "marketplace"
+msgstr "маркетплейс"
+
+#: src/pages/ProjectDetail.tsx
 msgid "marketplace: {marketplace}"
 msgstr "маркетплейс: {marketplace}"
 
@@ -1598,9 +1609,17 @@ msgstr "власна відповідь — замінює вибране"
 msgid "own answer…"
 msgstr "власна відповідь…"
 
+#: src/pages/ProjectSettings.tsx
+msgid "path"
+msgstr "шлях"
+
 #: src/pages/NeedsYou.tsx
 msgid "Path"
 msgstr "Шлях"
+
+#: src/pages/ProjectSettings.tsx
+msgid "path · archive · detach"
+msgstr "шлях · архів · від'єднання"
 
 #: src/pages/Approvals.tsx
 #: src/pages/sessions/SwarmPanel.tsx
@@ -1723,6 +1742,11 @@ msgstr "Плани →"
 msgid "plugins"
 msgstr "плагіни"
 
+#: src/pages/ProjectSettings.tsx
+#: src/pages/ProjectSettings.tsx
+msgid "Plugins"
+msgstr "Плагіни"
+
 #: src/pages/NeedsYou.tsx
 msgid "PR merged"
 msgstr "PR злито"
@@ -1746,8 +1770,13 @@ msgid "Production deploy — confirm in the session's terminal"
 msgstr "Деплой у продакшн — підтвердьте в терміналі сесії"
 
 #: src/pages/Projects.tsx
+#: src/pages/ProjectSettings.tsx
 msgid "project"
 msgstr "проєкт"
+
+#: src/pages/ProjectSettings.tsx
+msgid "Project"
+msgstr "Проєкт"
 
 #: src/pages/ProjectDetail.tsx
 #: src/pages/ProjectOverview.tsx
@@ -2015,9 +2044,12 @@ msgstr "сесія…"
 
 #: src/pages/ProjectDetail.tsx
 #: src/pages/Projects.tsx
+#: src/pages/ProjectSettings.tsx
 msgid "sessions"
 msgstr "сесії"
 
+#: src/pages/ProjectSettings.tsx
+#: src/pages/ProjectSettings.tsx
 #: src/pages/Sessions.tsx
 msgid "Sessions"
 msgstr "Сесії"
@@ -2037,8 +2069,15 @@ msgid "sessions…"
 msgstr "сесії…"
 
 #: src/pages/ProjectSettings.tsx
+#: src/pages/ProjectSettings.tsx
+#: src/pages/ProjectSettings.tsx
 msgid "settings"
 msgstr "налаштування"
+
+#: src/pages/ProjectSettings.tsx
+#: src/pages/ProjectSettings.tsx
+msgid "Settings"
+msgstr "Налаштування"
 
 #: src/pages/ProjectSettings.tsx
 msgid "settings…"
@@ -2454,6 +2493,10 @@ msgstr "Чекає на вас"
 msgid "what happened · newest first"
 msgstr "що сталося · спершу новіше"
 
+#: src/pages/ProjectSettings.tsx
+msgid "What its runs may do without asking, and which account they use."
+msgstr "Що його запуски можуть робити без запиту і який акаунт вони використовують."
+
 #: src/pages/sessions/SwarmPanel.tsx
 msgid "What should the other session know?"
 msgstr "Що має знати інша сесія?"
@@ -2465,6 +2508,10 @@ msgstr "Де лежить робота"
 #: src/pages/Overview.tsx
 msgid "Where your time went"
 msgstr "Куди пішов ваш час"
+
+#: src/pages/ProjectSettings.tsx
+msgid "which packs this project enables"
+msgstr "які паки вмикає цей проєкт"
 
 #: src/pages/detail/SessionGate.tsx
 #: src/pages/NeedsYou.tsx

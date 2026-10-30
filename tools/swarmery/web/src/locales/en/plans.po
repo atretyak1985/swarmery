@@ -720,9 +720,15 @@ msgid "Decisions and criteria: {total} ids"
 msgstr "Decisions and criteria: {total} ids"
 
 #: src/pages/Routines.tsx
+#: src/pages/Routines.tsx
 msgid "Delete"
 msgstr "Delete"
 
+#: src/pages/Routines.tsx
+msgid "delete routine"
+msgstr "delete routine"
+
+#: src/pages/Routines.tsx
 #: src/pages/Routines.tsx
 msgid "Delete routine?"
 msgstr "Delete routine?"
@@ -875,6 +881,10 @@ msgstr "edit routine"
 msgid "Edit routine"
 msgstr "Edit routine"
 
+#: src/pages/Routines.tsx
+msgid "edit schedule"
+msgstr "edit schedule"
+
 #: src/pages/Plans.tsx
 msgid "edited {ago} ago"
 msgstr "edited {ago} ago"
@@ -899,6 +909,10 @@ msgstr "enable / disable"
 #: src/pages/Routines.tsx
 msgid "enable webhook trigger ({webhookRoute})"
 msgstr "enable webhook trigger ({webhookRoute})"
+
+#: src/pages/Routines.tsx
+msgid "Enabled"
+msgstr "Enabled"
 
 #: src/pages/planning/RunningPlanPanel.tsx
 msgid "End the interview? The planner will write the full plan to the workspace."
@@ -1054,6 +1068,7 @@ msgid "From phase diagnosis"
 msgstr "From phase diagnosis"
 
 #: src/pages/Routines.tsx
+#: src/pages/Routines.tsx
 msgid "global"
 msgstr "global"
 
@@ -1201,6 +1216,10 @@ msgstr "last {lastRun}"
 msgid "last landing failure: {landingError}"
 msgstr "last landing failure: {landingError}"
 
+#: src/pages/Routines.tsx
+msgid "last run"
+msgstr "last run"
+
 #: src/pages/Plans.tsx
 msgid "last run: done"
 msgstr "last run: done"
@@ -1345,6 +1364,7 @@ msgstr "Names a settings file — cite where Claude Code reads it (config-channe
 
 #: src/pages/Routines.tsx
 #: src/pages/Routines.tsx
+#: src/pages/Routines.tsx
 msgid "never run"
 msgstr "never run"
 
@@ -1372,6 +1392,10 @@ msgstr "next {nextRun}"
 #: src/pages/PlanningMode.tsx
 msgid "next idea"
 msgstr "next idea"
+
+#: src/pages/Routines.tsx
+msgid "next run"
+msgstr "next run"
 
 #: src/pages/Routines.tsx
 msgid "nightly advisor re-run"
@@ -1425,6 +1449,7 @@ msgstr "no forecast — this phase declares no ## Forecast, so there is nothing 
 msgid "No lesson was proposed: the report has no Where reality diverged paragraph."
 msgstr "No lesson was proposed: the report has no Where reality diverged paragraph."
 
+#: src/pages/Routines.tsx
 #: src/pages/Routines.tsx
 msgid "no next run"
 msgstr "no next run"
@@ -1682,6 +1707,10 @@ msgstr "over 4 h"
 msgid "Pause"
 msgstr "Pause"
 
+#: src/pages/Routines.tsx
+msgid "Pause to stop the schedule; run once still works"
+msgstr "Pause to stop the schedule; run once still works"
+
 #: src/pages/Plans.tsx
 msgid "paused"
 msgstr "paused"
@@ -1702,6 +1731,7 @@ msgstr "per-doc, else high (no effort sent)"
 msgid "perm {permissionMode}"
 msgstr "perm {permissionMode}"
 
+#: src/pages/Routines.tsx
 #: src/pages/Routines.tsx
 msgid "Permanently delete <0>{routineName}</0> and its run history? This cannot be undone."
 msgstr "Permanently delete <0>{routineName}</0> and its run history? This cannot be undone."
@@ -2290,8 +2320,13 @@ msgid "Run failed"
 msgstr "Run failed"
 
 #: src/pages/Routines.tsx
+#: src/pages/Routines.tsx
 msgid "Run history"
 msgstr "Run history"
+
+#: src/pages/Routines.tsx
+msgid "run now"
+msgstr "run now"
 
 #: src/pages/Routines.tsx
 msgid "Run now"
@@ -2367,8 +2402,16 @@ msgid "Saving…"
 msgstr "Saving…"
 
 #: src/pages/Routines.tsx
+msgid "schedule"
+msgstr "schedule"
+
+#: src/pages/Routines.tsx
 msgid "Scheduled automation — cron / webhook / manual, with typed steps and run history."
 msgstr "Scheduled automation — cron / webhook / manual, with typed steps and run history."
+
+#: src/pages/Routines.tsx
+msgid "scope"
+msgstr "scope"
 
 #: src/pages/Routines.tsx
 msgid "Scope"
@@ -2608,6 +2651,10 @@ msgstr "surprise {index} · {top}"
 #: src/pages/plans/ForecastVsActual.tsx
 msgid "surprise vector"
 msgstr "surprise vector"
+
+#: src/pages/Routines.tsx
+msgid "system · routine"
+msgstr "system · routine"
 
 #: src/pages/Routines.tsx
 msgid "task prompt (board card body)"
@@ -2886,6 +2933,10 @@ msgstr "touched {count} {areas}{offNote}"
 msgid "Transform your idea into a plan"
 msgstr "Transform your idea into a plan"
 
+#: src/pages/Routines.tsx
+msgid "trigger"
+msgstr "trigger"
+
 #. placeholder {0}: h.turnSeq
 #: src/pages/plans/WorkaroundHits.tsx
 msgid "turn {0}"
@@ -2965,6 +3016,7 @@ msgstr "waiting on phase {waitingOn}"
 msgid "waits on decision {id}"
 msgstr "waits on decision {id}"
 
+#: src/pages/Routines.tsx
 #: src/pages/Routines.tsx
 msgid "webhook"
 msgstr "webhook"
