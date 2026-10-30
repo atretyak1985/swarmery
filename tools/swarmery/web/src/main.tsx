@@ -36,6 +36,7 @@ import { Docs } from './pages/Docs';
 import { Architecture } from './pages/Architecture';
 import { Serena } from './pages/Serena';
 import { Graphify } from './pages/Graphify';
+import { FleetPlaceRedirect } from './workspace/FleetPlaceRedirect';
 import { ProjectDetailRedirect } from './workspace/ProjectDetailRedirect';
 import { PLANS_ROUTE_PATHS } from './pages/plans/plansUrl';
 import { Today } from './pages/today/Today';
@@ -320,6 +321,10 @@ const router = createBrowserRouter([
             ),
           },
           { path: 'routines', element: <Navigate to="/system/routines" replace /> },
+          // Project places have no fleet page: these addresses land on the last
+          // project, or the project list (never the not-found screen).
+          { path: 'plans/*', element: <FleetPlaceRedirect /> },
+          { path: 'knowledge', element: <FleetPlaceRedirect /> },
           // The fill handle below marks embedded pages: the shell stops
           // scrolling and the page fills the leftover height, scrolling inside
           // its own pane instead of under a second scrollbar (lib/fillRoute.ts).
