@@ -4,6 +4,7 @@
 
 import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
+import { useTheme } from '../../lib/theme';
 
 /** Summary colour carries state only: amber-ish needs-you, red failed. */
 export type SummaryTone = 'default' | 'needs' | 'failed';
@@ -27,6 +28,7 @@ export interface ListRowProps {
   /** Tailwind text class for the #PR, in its status colour. */
   prTone?: string;
   selected?: boolean;
+  /** Overrides the Settings → Appearance preference, which is the default. */
   compact?: boolean;
   /** A session with no title yet: the placeholder reads as one. */
   untitled?: boolean;
@@ -45,13 +47,14 @@ export function ListRow({
   pr,
   prTone = 'text-ink-faint',
   selected = false,
-  compact = false,
+  compact,
   untitled = false,
   to,
   onSelect,
 }: ListRowProps): JSX.Element {
+  const { compact: compactRows } = useTheme();
   const className = `grid w-full cursor-pointer grid-cols-[18px_minmax(0,1fr)_auto] items-start gap-[10px] border-l-2 pr-[14px] pl-3 text-left leading-[normal] transition-colors ${
-    compact ? 'py-1.5' : 'py-[9px]'
+    (compact ?? compactRows) ? 'py-1.5' : 'py-[9px]'
   } ${selected ? 'border-brand bg-sel' : 'border-transparent hover:bg-surface'}`;
 
   const body = (

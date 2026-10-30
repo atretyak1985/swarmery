@@ -10,7 +10,7 @@
 // and Settings all have this one shape.
 
 import { useLingui } from '@lingui/react/macro';
-import { useCallback, useMemo, useState, type ReactNode } from 'react';
+import { Fragment, useCallback, useMemo, useState, type ReactNode } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { ListGroup, type GroupTone } from './ListGroup';
 import { ListPane } from './ListPane';
@@ -98,6 +98,8 @@ export interface PageAction {
   disabled?: boolean;
   /** Tooltip, in the app's data-tip form. */
   tip?: string;
+  /** A control with behaviour of its own (a picker), in place of the button. */
+  node?: ReactNode;
 }
 
 export interface PageLink {
@@ -135,7 +137,8 @@ export interface PageDetailProps {
 const ACTION_BASE =
   'rounded-[7px] border bg-transparent px-3 py-1.5 font-mono text-[11.5px] leading-[normal] whitespace-nowrap transition-colors disabled:opacity-50';
 
-function actionClass(tone: PageTone | undefined): string {
+/** Exported for a control that owns its own behaviour but sits in the actions row. */
+export function actionClass(tone: PageTone | undefined): string {
   if (tone === undefined) return `${ACTION_BASE} cursor-pointer border-line-strong text-ink-2 hover:text-ink`;
   const fill = tone === 'brand' ? 'bg-brand-bg' : '';
   return `${ACTION_BASE} cursor-pointer font-bold ${TEXT_TONE[tone]} border-current ${fill}`;
@@ -360,7 +363,7 @@ function ActionsBlock({ actions, link }: { actions: readonly PageAction[]; link?
   return (
     <div className="mt-[22px] flex flex-wrap items-center gap-2">
       {actions.map((action) => (
-        <ActionButton key={action.key ?? action.label} action={action} />
+        <Fragment key={action.key ?? action.label}>{action.node ?? <ActionButton action={action} />}</Fragment>
       ))}
       {link !== undefined &&
         (link.to !== undefined ? (
@@ -509,6 +512,7 @@ export function PagePlace({
   secondaryHint = '—',
   onSecondary,
   narrow,
+  after,
 }: {
   title: string;
   sub?: string;
@@ -524,6 +528,9 @@ export function PagePlace({
   secondaryHint?: string;
   onSecondary?: () => void;
   narrow?: NarrowPane;
+  /** Under the groups, in the list's own scroll: a filter that must not move the
+   * header's geometry, or a note about the list. */
+  after?: ReactNode;
 }): JSX.Element {
   const { t } = useLingui();
   const [query, setQuery] = useState('');
@@ -602,6 +609,7 @@ export function PagePlace({
               </ListGroup>
             );
           })}
+          {after}
         </ListPane>
       }
       detail={detail}

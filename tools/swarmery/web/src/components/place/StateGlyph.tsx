@@ -5,6 +5,7 @@
 import type { MessageDescriptor } from '@lingui/core';
 import { msg } from '@lingui/core/macro';
 import { useLingui } from '@lingui/react/macro';
+import { useTheme } from '../../lib/theme';
 
 export type GlyphState =
   | 'needs'
@@ -52,6 +53,7 @@ export function StateGlyph({
   className?: string;
 }): JSX.Element {
   const { i18n } = useLingui();
+  const { motion } = useTheme();
   const def = GLYPHS[state];
   return (
     <span
@@ -59,7 +61,7 @@ export function StateGlyph({
       aria-label={i18n._(def.label)}
       data-state={state}
       style={{ fontSize: size }}
-      className={`inline-block w-[18px] origin-center text-center font-mono leading-[18px] ${def.tone} ${def.motion} ${className}`}
+      className={`inline-block w-[18px] origin-center text-center font-mono leading-[18px] ${def.tone} ${motion ? def.motion : ''} ${className}`}
     >
       {def.glyph}
     </span>
