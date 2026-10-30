@@ -521,7 +521,7 @@
   body {
     /* Base fill only — the amber wash lives on .app-shell (the outermost app
        container) so it sits under the whole app without repeating per route. */
-    @apply bg-bg font-sans text-[14px] leading-normal text-ink;
+    @apply bg-bg font-sans text-[13px] leading-normal text-ink;
     -webkit-font-smoothing: antialiased;
   }
   button {
