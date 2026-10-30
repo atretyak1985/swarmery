@@ -148,7 +148,6 @@ export function AgentDetail({
     ...(tools !== undefined ? [{ k: t`tools`, v: listValue(tools) }] : []),
     ...(permission !== undefined ? [{ k: t`permission tiers`, v: permission }] : []),
     ...(effort !== undefined ? [{ k: t`effort`, v: effort }] : []),
-    ...(isolation !== undefined ? [{ k: t`isolation`, v: isolation }] : []),
     { k: t`health`, v: t`${healthLabel} · ${failed}% failed`, tone: health.tone },
     { k: t`cost · 30 d`, v: fmtCost(profile.cost30d) },
   ];
@@ -173,6 +172,22 @@ export function AgentDetail({
       title={profile.name}
       lead={profile.description}
       kv={kv}
+      // The agent's own frontmatter says this, and the Definition section is what
+      // changes it, so the switch reads the value and does not write one.
+      toggles={
+        item === null
+          ? []
+          : [
+              {
+                key: 'isolation',
+                label: t`Worktree isolation`,
+                hint: t`Edits land in an isolated git worktree · set in Definition`,
+                on: isolation === 'worktree',
+                disabled: true,
+                onChange: () => undefined,
+              },
+            ]
+      }
       actions={[
         { key: 'edit', label: t`edit prompt`, onClick: () => onTab('definition') },
         ...(boardParked()

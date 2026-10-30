@@ -157,8 +157,9 @@ function MachineDetail(): JSX.Element {
           tone: unreachable ? 'red' : 'green',
         },
         ...(health !== null ? [{ k: t`version`, v: `${versionLabel(health)} · :7777` }] : []),
-        { k: t`auto-approve`, v: t`auto-approve presets are configured per project — open a project's Settings to set them` },
       ]}
+      // A preset is scoped to one project (PermissionPresets takes a projectId).
+      paras={[t`auto-approve presets are configured per project — open a project's Settings to set them`]}
     >
       {/* The janitor sweeps every project on this machine without being asked, so
           this is the account of what it did. */}

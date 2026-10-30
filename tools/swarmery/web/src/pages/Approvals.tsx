@@ -716,7 +716,7 @@ export function Approvals(): JSX.Element {
     <div className="px-4 pb-10 desk:px-10 desk:pb-[60px]">
       {/* Header stays pinned; only the pending/history context below scrolls. */}
       <div className="sticky top-0 z-10 -mx-4 border-b border-line bg-bg px-4 pt-6 pb-3.5 desk:-mx-10 desk:px-10 desk:pt-[34px]">
-        <h1 className="font-display text-[26px] font-medium tracking-[-0.01em] desk:text-[30px]">
+        <h1 className="text-[22px] leading-tight font-semibold tracking-[-0.015em] text-ink">
           <Trans>Waiting on you</Trans>
         </h1>
         <div className="mt-1.5 font-mono text-[11px] text-ink-dim">

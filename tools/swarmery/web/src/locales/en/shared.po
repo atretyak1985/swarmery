@@ -915,7 +915,6 @@ msgid "auto playbook"
 msgstr "auto playbook"
 
 #: src/components/PermissionPresets.tsx
-#: src/pages/Settings.tsx
 msgid "auto-approve"
 msgstr "auto-approve"
 

@@ -1697,6 +1697,10 @@ msgstr "редагувати формулювання"
 msgid "edit wording →"
 msgstr "змінити формулювання →"
 
+#: src/pages/AgentHub.tsx
+msgid "Edits land in an isolated git worktree · set in Definition"
+msgstr "Правки йдуть в ізольоване робоче дерево git · задається в Definition"
+
 #: src/pages/Lessons.tsx
 #: src/pages/Lessons.tsx
 msgid "effectiveness:"
@@ -2428,10 +2432,6 @@ msgstr "викликів / день (30 д)"
 msgid "invocations 30d"
 msgstr "викликів за 30 д"
 
-#: src/pages/AgentHub.tsx
-msgid "isolation"
-msgstr "ізоляція"
-
 #: src/pages/learning/classifierModel.ts
 msgid "it is almost always sure of itself, yet {lowered}. Start checking here."
 msgstr "він майже завжди впевнений у собі, і все ж {lowered}. Почніть перевірку звідси."
@@ -2659,7 +2659,7 @@ msgstr "на всій машині"
 
 #: src/pages/SystemHub.tsx
 msgid "managed"
-msgstr "керується"
+msgstr "керований"
 
 #: src/pages/system/HooksTab.tsx
 msgid "managed · swarmery"
@@ -5032,6 +5032,10 @@ msgstr "виконується…"
 #: src/pages/Memory.tsx
 msgid "workspace…"
 msgstr "робочий простір…"
+
+#: src/pages/AgentHub.tsx
+msgid "Worktree isolation"
+msgstr "Ізоляція робочого дерева"
 
 #: src/pages/system/shared.tsx
 msgid "worst active lint finding: {severity}"

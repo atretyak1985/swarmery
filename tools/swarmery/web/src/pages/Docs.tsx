@@ -195,7 +195,7 @@ export function Docs(): JSX.Element {
             translation of this doc (or an older build ignored the parameter): say
             so instead of passing English off silently. */}
         {locale === 'uk' && doc.lang !== 'uk' && (
-          <p className="mt-3 max-w-[70ch] rounded-lg border border-line bg-surface2 px-3 py-2 text-[12px] text-ink-dim">
+          <p className="mt-3 max-w-[546px] rounded-lg border border-line bg-surface2 px-3 py-2 text-[12px] text-ink-dim">
             <Trans>This document is not translated yet; the English original is shown.</Trans>
           </p>
         )}
@@ -203,11 +203,11 @@ export function Docs(): JSX.Element {
           <div className="min-w-0">
             {/* The one surface that renders a single body per page, so it owns the
                 heading-id namespace the deep links resolve against. */}
-            <div className="docs-article mt-[18px] max-w-[70ch] text-[13.5px] leading-[1.65] text-ink-2">
+            <div className="docs-article mt-[18px] max-w-[546px] text-[13.5px] leading-[1.65] text-pretty text-ink-2 [&>p]:!mb-2.5">
               <Markdown text={rendered.body} anchors codeLabels />
             </div>
             {(prev !== null || next !== null) && (
-              <div className="mt-9 flex max-w-[70ch] justify-between gap-3.5 border-t border-line pt-[18px]">
+              <div className="mt-9 flex max-w-[546px] justify-between gap-3.5 border-t border-line pt-[18px]">
                 {prev !== null && (
                   <Link to={`/docs/${prev.slug}`} className="min-w-0 transition-opacity hover:opacity-80">
                     <div className="font-mono text-[10px] tracking-[0.12em] text-ink-faint uppercase">

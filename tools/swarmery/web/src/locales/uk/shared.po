@@ -915,7 +915,6 @@ msgid "auto playbook"
 msgstr "авто-плейбук"
 
 #: src/components/PermissionPresets.tsx
-#: src/pages/Settings.tsx
 msgid "auto-approve"
 msgstr "автопогодження"
 

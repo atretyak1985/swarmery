@@ -1697,6 +1697,10 @@ msgstr "edit wording"
 msgid "edit wording →"
 msgstr "edit wording →"
 
+#: src/pages/AgentHub.tsx
+msgid "Edits land in an isolated git worktree · set in Definition"
+msgstr "Edits land in an isolated git worktree · set in Definition"
+
 #: src/pages/Lessons.tsx
 #: src/pages/Lessons.tsx
 msgid "effectiveness:"
@@ -2427,10 +2431,6 @@ msgstr "invocations / day (30d)"
 #: src/pages/system-hub/Profiles.tsx
 msgid "invocations 30d"
 msgstr "invocations 30d"
-
-#: src/pages/AgentHub.tsx
-msgid "isolation"
-msgstr "isolation"
 
 #: src/pages/learning/classifierModel.ts
 msgid "it is almost always sure of itself, yet {lowered}. Start checking here."
@@ -5032,6 +5032,10 @@ msgstr "working…"
 #: src/pages/Memory.tsx
 msgid "workspace…"
 msgstr "workspace…"
+
+#: src/pages/AgentHub.tsx
+msgid "Worktree isolation"
+msgstr "Worktree isolation"
 
 #: src/pages/system/shared.tsx
 msgid "worst active lint finding: {severity}"

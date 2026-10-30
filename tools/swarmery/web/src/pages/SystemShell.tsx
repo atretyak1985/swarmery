@@ -80,9 +80,8 @@ function parsePath(splat: string): { group: SystemGroup | null; item: string | n
   return { group: isGroup(first) ? first : null, item: second === undefined || second === '' ? null : second };
 }
 
-type Rosters = Record<CatalogCategory, RosterRow[]>;
-
-const NO_ROSTERS: Rosters = { skills: [], commands: [], templates: [], hooks: [] };
+/** A category is absent until its roster lands: "loading" must not read as "none". */
+type Rosters = Partial<Record<CatalogCategory, RosterRow[]>>;
 
 export function SystemShell(): JSX.Element {
   const { t } = useLingui();
@@ -103,7 +102,7 @@ export function SystemShell(): JSX.Element {
 
   const [originScope, setOriginScope] = useState<OriginScope>(null);
   const [agents, setAgents] = useState<AgentRosterRow[] | null>(null);
-  const [rosters, setRosters] = useState<Rosters>(NO_ROSTERS);
+  const [rosters, setRosters] = useState<Rosters>({});
   const [routines, setRoutines] = useState<Routine[]>([]);
   const [summary, setSummary] = useState<SystemHubSummary | null>(null);
   const [projectNames, setProjectNames] = useState<Record<string, string>>({});
@@ -167,7 +166,7 @@ export function SystemShell(): JSX.Element {
   );
   const visibleRoster = useCallback(
     (category: CatalogCategory): RosterRow[] =>
-      rosters[category].filter((r) => originScope === null || rowScope(r) === originScope),
+      (rosters[category] ?? []).filter((r) => originScope === null || rowScope(r) === originScope),
     [rosters, originScope],
   );
 
@@ -257,7 +256,8 @@ export function SystemShell(): JSX.Element {
 
   const detail = (): JSX.Element => {
     if (group === 'agents' || isCatalog(group)) {
-      if (group === 'agents' && agents === null) return <Loading label={t`roster…`} />;
+      const loading = group === 'agents' ? agents === null : rosters[group] === undefined;
+      if (loading && item === null) return <Loading label={t`roster…`} />;
       if (selected === null) return <Empty>{emptyText()}</Empty>;
     }
     if (group === 'agents') {
@@ -282,7 +282,7 @@ export function SystemShell(): JSX.Element {
           key={`${group}:${String(selected)}`}
           category={group}
           selectedKey={selected ?? ''}
-          row={rosters[group].find((r) => rowKey(r) === selected)}
+          row={rosters[group]?.find((r) => rowKey(r) === selected)}
           tabParam={searchParams.get('tab')}
           onTab={onTab}
           scopeSlug={scopeSlug}
@@ -353,8 +353,8 @@ export function SystemShell(): JSX.Element {
 
   const counts = {
     agents: String(agents?.length ?? 0),
-    skills: String(rosters.skills.length),
-    hooks: String(rosters.hooks.length),
+    skills: String(rosters.skills?.length ?? 0),
+    hooks: String(rosters.hooks?.length ?? 0),
     routines: String(routines.length),
   };
   const { agents: agentCount, skills: skillCount, hooks: hookCount, routines: routineCount } = counts;
