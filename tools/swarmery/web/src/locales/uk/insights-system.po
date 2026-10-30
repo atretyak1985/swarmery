@@ -200,6 +200,10 @@ msgstr "{count, plural, one {# тертя можна прибрати сього
 msgid "{count, plural, one {# task} few {# tasks} many {# tasks} other {# tasks}}"
 msgstr "{count, plural, one {# задача} few {# задачі} many {# задач} other {# задачі}}"
 
+#: src/pages/health/Health.tsx
+msgid "{count} d"
+msgstr "{count} д"
+
 #: src/pages/health/ModCostPanel.tsx
 msgid "{count} sessions with the session mod · {total} · {divergingCount} differ by more than 10 %"
 msgstr "сесій із модом сесії: {count} · {total} · розходяться більш ніж на 10 %: {divergingCount}"
@@ -215,6 +219,11 @@ msgstr "{d, plural, one {# день} few {# дні} many {# днів} other {# �
 #: src/pages/system/ItemDetail.tsx
 msgid "{day}: {runs, plural, one {# run} few {# runs} many {# runs} other {# runs}}"
 msgstr "{day}: {runs, plural, one {# запуск} few {# запуски} many {# запусків} other {# запуску}}"
+
+#: src/pages/health/Health.tsx
+#: src/pages/health/healthPlace.ts
+msgid "{dayCount} d"
+msgstr "{dayCount} д"
 
 #: src/pages/Retro.tsx
 msgid "{delegations} delegations: {ok} ok, {redispatched} re-dispatched"

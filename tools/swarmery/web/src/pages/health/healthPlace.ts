@@ -109,7 +109,8 @@ export function advisorOpenCount(
 }
 
 export function healthGroups({ agents, friction, recs, proposals, days }: HealthPlaceInput): PlaceGroup[] {
-  const window = `${String(days)} d`;
+  const dayCount = String(days);
+  const window = t`${dayCount} d`;
   const removable = friction !== null ? frictionCount(friction) : 0;
   const removableText = friction !== null ? removableSummary(friction) : undefined;
   const deniedTools = friction !== null ? uncoveredDenied(friction) : [];

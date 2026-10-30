@@ -200,6 +200,10 @@ msgstr "{count, plural, one {# friction you can remove today.} few {# frictions 
 msgid "{count, plural, one {# task} few {# tasks} many {# tasks} other {# tasks}}"
 msgstr "{count, plural, one {# task} few {# tasks} many {# tasks} other {# tasks}}"
 
+#: src/pages/health/Health.tsx
+msgid "{count} d"
+msgstr "{count} d"
+
 #: src/pages/health/ModCostPanel.tsx
 msgid "{count} sessions with the session mod · {total} · {divergingCount} differ by more than 10 %"
 msgstr "{count} sessions with the session mod · {total} · {divergingCount} differ by more than 10 %"
@@ -215,6 +219,11 @@ msgstr "{d, plural, one {# day} few {# days} many {# days} other {# days}}"
 #: src/pages/system/ItemDetail.tsx
 msgid "{day}: {runs, plural, one {# run} few {# runs} many {# runs} other {# runs}}"
 msgstr "{day}: {runs, plural, one {# run} few {# runs} many {# runs} other {# runs}}"
+
+#: src/pages/health/Health.tsx
+#: src/pages/health/healthPlace.ts
+msgid "{dayCount} d"
+msgstr "{dayCount} d"
 
 #: src/pages/Retro.tsx
 msgid "{delegations} delegations: {ok} ok, {redispatched} re-dispatched"

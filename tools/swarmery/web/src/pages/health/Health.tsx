@@ -65,7 +65,6 @@ import { OPEN_PROPOSALS, OPEN_RECS, healthGroups } from './healthPlace';
 const Retro = lazy(() => import('../Retro').then((m) => ({ default: m.Retro })));
 const Analytics = lazy(() => import('../Analytics').then((m) => ({ default: m.Analytics })));
 
-const RANGE_OPTIONS = HEALTH_PRESETS.map((d) => ({ value: String(d), label: `${String(d)} d` }));
 
 /** Statuses the counts split, fetched in one call. */
 const VERIFIED_RECS = ['verified'] as const;
@@ -218,7 +217,12 @@ export function Health(): JSX.Element {
   const toFrictionRow = useCallback((key: string): void => pick('friction', key), [pick]);
   const toAgents = useCallback((): void => pick('agents'), [pick]);
 
-  const windowLabel = `${String(days)} d`;
+  const dayCount = String(days);
+  const windowLabel = t`${dayCount} d`;
+  const rangeOptions = HEALTH_PRESETS.map((preset) => {
+    const count = String(preset);
+    return { value: count, label: t`${count} d` };
+  });
   const sectionFallback = <Loading label={t`loading…`} />;
   const retro = (section: 'agents' | 'friction' | 'estimates' | 'advisor'): JSX.Element => (
     <Suspense fallback={sectionFallback}>
@@ -348,7 +352,7 @@ export function Health(): JSX.Element {
       detail={
         <div className="relative">
           <div className="px-4 pt-3 desk:absolute desk:top-3 desk:right-7 desk:z-10 desk:p-0">
-            <Segmented label={t`Range`} options={RANGE_OPTIONS} value={String(days)} onChange={setDays} />
+            <Segmented label={t`Range`} options={rangeOptions} value={String(days)} onChange={setDays} />
           </div>
           {detail()}
         </div>
