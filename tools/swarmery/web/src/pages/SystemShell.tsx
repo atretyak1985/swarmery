@@ -1,156 +1,137 @@
-// System shell — the single top-level "System" destination that hosts its
-// sections (Agents · Skills · Plugins · Hooks · Mods · Routines · Insights) as
-// TABS. It is a thin OUTER tab bar over existing pages: Agents embeds
-// <AgentHub>; Skills (the skills/commands/templates catalog, formerly
-// "Toolkit"), Hooks and Insights embed <SystemHub>; Routines embeds <Routines
-// embedded> (phase 8, /routines redirects here); Plugins embeds
-// <ProjectPlugins> under a project and an empty state in the fleet; Mods embeds
-// <ModsTab> (machine-wide mod audit, mods-swarmery-link phase 9). Nothing is
-// reimplemented — the embedded pages suppress their own heading and hand URL
-// ownership to this shell.
+// System (v4, handoff §3, §9): the single "System" destination in the frame every
+// place shares. Its sections are the accordion groups of the list: Agents · Skills ·
+// Commands · Templates · Hooks · Routines · Plugins · Mods · Insights. Skills,
+// Commands and Templates were one tab with sub-pills; here each is a group.
 //
-// Routing: /system/:tab (fleet) and /p/:slug/system/:tab (workspace). The active
-// tab is the first path segment after /system; each embedded hub keeps its own
-// detail sub-tabs on ?tab= and (for Agents) its selection in the
-// /system/agents/:id path via the routeBase we pass. Bare /system redirects to
-// Agents; the retired /system/toolkit(/…) lands on Skills.
+// Routing: /system/:group(/:item) (fleet) and /p/:slug/system/:group(/:item)
+// (workspace). The open group is the first path segment and the selected row the
+// next one; `?tab=` stays the section of the detail. The old URLs all land: bare
+// /system on Agents, the retired /system/toolkit(/…) on Skills (keeping the deeper
+// path, so /system/skills/commands opens Commands), /agents(/:id) and
+// /system-hub(/:category(/:id)) through the redirects in AgentHub and SystemHub.
 //
-// Canvas v3 2a lists no Hooks tab; it is kept on purpose (dropping it would
-// remove a working view) — a recorded deviation, not an oversight.
+// In PROJECT mode (a concrete :slug) the rosters are the project's EFFECTIVE system,
+// its own components PLUS the global ones PLUS the built-ins of the packs it enables,
+// never another project's locals. The narrowing is the server's; the origin filter
+// under the list only slices what arrived.
 
-import type { MessageDescriptor } from '@lingui/core';
-import { msg } from '@lingui/core/macro';
 import { Trans, useLingui } from '@lingui/react/macro';
-import { useEffect, useMemo, useState } from 'react';
-import { Navigate, useLocation, useNavigate, useParams } from 'react-router-dom';
-import type { SystemHubSummary, SystemSummary } from '../api/types';
-import { fetchSystemHubSummary } from '../api/systemHub';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Navigate, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import type { AgentRosterRow, Routine, SystemHubSummary, SystemSummary } from '../api/types';
+import { fetchProjects, fetchRoutines } from '../api';
+import { fetchAgentRoster } from '../api/agentHub';
 import { fetchSystemSummary } from '../api/system';
+import { fetchSystemHubSummary } from '../api/systemHub';
+import { PageDetail, PagePlace, type PlaceGroup, type PlaceItem } from '../components/place/PageDetail';
 import { ProjectPlugins } from '../components/ProjectPlugins';
 import { ScopeChip } from '../components/ScopeChip';
 import { Empty, Loading } from '../components/ui';
+import { fmtAgo } from '../lib/format';
 import { useProjectScope, useScope } from '../lib/scope';
 import { useLiveUpdates } from '../lib/ws';
-import { AgentHub } from './AgentHub';
-import { Routines } from './Routines';
-import { SystemHub } from './SystemHub';
+import { AgentDetail, agentItem } from './AgentHub';
+import { RoutineDetail, Routines, describeCron } from './Routines';
+import { CATALOG, type CatalogCategory, CatalogDetail, type RosterRow, fetchRoster, rosterItem, rowKey, rowScope } from './SystemHub';
+import { InsightsTab } from './system/InsightsTab';
 import { ModsTab } from './system/ModsTab';
 import { FiltersRow } from './system/shared';
 import { SkillsToExtendHint } from './system/SkillsToExtendHint';
 
-/** Origin scope of a catalog row — where the component is DEFINED (the user's
- * ~/.claude + the plugin cache = global; a project's own .claude/ = project).
- * Distinct from the project SCOPE chip next to it, which picks *which* project's
- * effective catalog is listed. */
+/** Origin of a catalog row: where the component is DEFINED (the user's ~/.claude + the
+ * plugin cache = global; a project's own .claude/ = project). */
 type OriginScope = 'global' | 'project' | null;
 
-type SystemTab = 'agents' | 'skills' | 'plugins' | 'hooks' | 'mods' | 'routines' | 'insights';
-const TABS: SystemTab[] = ['agents', 'skills', 'plugins', 'hooks', 'mods', 'routines', 'insights'];
-const TAB_LABELS: Record<SystemTab, MessageDescriptor> = {
-  agents: msg`Agents`,
-  skills: msg`Skills`,
-  plugins: msg`Plugins`,
-  hooks: msg`Hooks`,
-  mods: msg`Mods`,
-  routines: msg`Routines`,
-  insights: msg`Insights`,
-};
+const GROUPS = [
+  'agents',
+  'skills',
+  'commands',
+  'templates',
+  'hooks',
+  'routines',
+  'plugins',
+  'mods',
+  'insights',
+] as const;
+type SystemGroup = (typeof GROUPS)[number];
 
-/** Retired tab slugs → their new home (phase 8 renamed Toolkit to Skills). */
-const RENAMED_TABS: Record<string, SystemTab> = { toolkit: 'skills' };
+/** Retired slugs → their new home (phase 8 renamed Toolkit to Skills). */
+const RENAMED: Record<string, SystemGroup> = { toolkit: 'skills' };
 
-/** Tabs without per-row origin scope: the origin chips are hidden there rather
- * than rendered inert. */
-const NO_ORIGIN_FILTER: ReadonlySet<SystemTab> = new Set(['plugins', 'mods', 'routines', 'insights']);
+/** Groups whose rows have an origin: the filter is hidden on the others. */
+const ORIGIN_GROUPS: ReadonlySet<SystemGroup> = new Set(['agents', 'skills', 'commands', 'templates', 'hooks']);
 
-function parseTab(value: string | undefined): SystemTab | null {
-  return (TABS as string[]).includes(value ?? '') ? (value as SystemTab) : null;
+const ALL_ROUTINES = 'all';
+
+function isGroup(value: string): value is SystemGroup {
+  return (GROUPS as readonly string[]).includes(value);
 }
 
+function isCatalog(value: SystemGroup): value is CatalogCategory {
+  return (CATALOG as readonly string[]).includes(value);
+}
+
+/** `skills/commands/12` is how a deep toolkit link spells Commands, row 12. */
+function parsePath(splat: string): { group: SystemGroup | null; item: string | null } {
+  const [first = '', second, third] = splat.split('/');
+  if (first === 'skills' && (second === 'commands' || second === 'templates')) {
+    return { group: second, item: third ?? null };
+  }
+  return { group: isGroup(first) ? first : null, item: second === undefined || second === '' ? null : second };
+}
+
+type Rosters = Record<CatalogCategory, RosterRow[]>;
+
+const NO_ROSTERS: Rosters = { skills: [], commands: [], templates: [], hooks: [] };
+
 export function SystemShell(): JSX.Element {
-  const { i18n, t } = useLingui();
+  const { t } = useLingui();
   const params = useParams();
   const navigate = useNavigate();
   const location = useLocation();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { scope } = useScope();
 
-  // Workspace mount (/p/:slug/system/*) carries the slug; fleet mode uses the
-  // global scope switcher. Either narrows the rollup window + template scope.
-  // In PROJECT mode (a concrete :slug in the route) the embedded hubs show the
-  // project's EFFECTIVE system — its own components PLUS the global ones PLUS
-  // the built-ins of the packs it enables — never another project's locals. The
-  // narrowing is the server's (?projectId=); fleet mode keeps the full catalog.
   const slug = params.slug;
   const projectScoped = slug !== undefined;
-  // The scope REFERENCE (URL slug or the global scope chip). This shell's own
-  // summary fetch needs it as a NUMERIC id — /api/system/* template matchers
-  // accept the DB path slug or the id only — but the embedded hubs re-resolve it
-  // themselves, so they get the reference verbatim (handing them a resolved id
-  // would make `null while resolving` indistinguishable from `no scope`, and
-  // they would fetch the whole fleet).
-  const scopeRef = slug ?? scope;
-  // scopePending: the unscoped summary counts the WHOLE machine, so firing it
-  // while the project list resolves lets it land last and show fleet badges over
-  // a project page.
-  const { id: scopeSlug, pending: scopePending } = useProjectScope(scopeRef);
+  // The scope REFERENCE (URL slug or the global scope chip), resolved to the numeric
+  // id every /api/system/* endpoint accepts. scopePending gates each fetch: the
+  // unscoped rosters are the whole machine, and firing them while the project list
+  // resolves lets them land last and show the fleet over a project page.
+  const { id: scopeSlug, pending: scopePending } = useProjectScope(slug ?? scope);
   const base = projectScoped ? `/p/${slug}/system` : '/system';
 
-  // Origin-scope filter, hoisted OUT of the Agents tab so one control narrows
-  // every roster (Agents · Toolkit · Hooks). Filtering stays client-side inside
-  // each hub — the rosters are already the effective catalog for the project
-  // scope, and these chips only slice what arrived. Insights is an advisory
-  // inbox with no per-row scope, so the chips are hidden there rather than
-  // rendered inert.
   const [originScope, setOriginScope] = useState<OriginScope>(null);
-
-  // Active tab = first path segment after the base (params['*'] is the splat).
-  const splat = params['*'] ?? '';
-  const [firstSeg = '', ...restSegs] = splat.split('/');
-  const tab = parseTab(firstSeg);
-  const renamed = RENAMED_TABS[firstSeg];
-
-  // Tab-bar count badges (agents · toolkit total · hooks · insights) from the
-  // hub summary; live-refreshed on registry edits like the hubs themselves.
+  const [agents, setAgents] = useState<AgentRosterRow[] | null>(null);
+  const [rosters, setRosters] = useState<Rosters>(NO_ROSTERS);
+  const [routines, setRoutines] = useState<Routine[]>([]);
   const [summary, setSummary] = useState<SystemHubSummary | null>(null);
-  useEffect(() => {
-    let cancelled = false;
-    if (scopePending) return;
-    const load = (): void => {
-      fetchSystemHubSummary(scopeSlug ?? undefined)
-        .then((s) => {
-          if (!cancelled) setSummary(s);
-        })
-        .catch(() => {
-          if (!cancelled) setSummary(null);
-        });
-    };
-    load();
-    return () => {
-      cancelled = true;
-    };
-  }, [scopeSlug, scopePending]);
-  useLiveUpdates(
-    (msg) => {
-      if (msg.type === 'system_item_updated') {
-        fetchSystemHubSummary(scopeSlug ?? undefined)
-          .then(setSummary)
-          .catch(() => setSummary(null));
-      }
-    },
-    () => {
-      fetchSystemHubSummary(scopeSlug ?? undefined)
-        .then(setSummary)
-        .catch(() => setSummary(null));
-    },
-  );
-
-  // Usage-guide coverage. A separate fetch on purpose: the hub summary
-  // (/api/system/hub/summary) carries only the nav badge counts, while the
-  // docs block lives on /api/system/summary (systemDocsCoverageDTO). Coverage
-  // is the whole point of the docs contract -- "we went through every item"
-  // has to be a number on the page, not a claim in a commit message -- so it
-  // belongs in the header rather than only in the Insights tab.
+  const [projectNames, setProjectNames] = useState<Record<string, string>>({});
+  const [refreshKey, setRefreshKey] = useState(0);
+  // Coverage is a separate fetch on purpose: the hub summary carries only the
+  // counts, the docs block lives on /api/system/summary. "We went through every
+  // item" has to be a number on the page, not a claim in a commit message.
   const [docs, setDocs] = useState<SystemSummary['docs'] | null>(null);
+
+  const load = useCallback((): void => {
+    if (scopePending) return;
+    fetchAgentRoster(scopeSlug ?? undefined)
+      .then((r) => setAgents(r.agents))
+      .catch(() => setAgents([]));
+    for (const category of CATALOG) {
+      fetchRoster(category, scopeSlug)
+        .then((rows) => setRosters((prev) => ({ ...prev, [category]: rows })))
+        .catch(() => setRosters((prev) => ({ ...prev, [category]: [] })));
+    }
+    fetchRoutines(scopeSlug === null ? undefined : Number(scopeSlug))
+      .then(setRoutines)
+      .catch(() => setRoutines([]));
+    fetchSystemHubSummary(scopeSlug ?? undefined)
+      .then(setSummary)
+      .catch(() => setSummary(null));
+  }, [scopeSlug, scopePending]);
+  useEffect(load, [load]);
+
   useEffect(() => {
     let cancelled = false;
     fetchSystemSummary()
@@ -160,220 +141,261 @@ export function SystemShell(): JSX.Element {
       .catch(() => {
         if (!cancelled) setDocs(null);
       });
+    fetchProjects()
+      .then((ps) => {
+        if (!cancelled) setProjectNames(Object.fromEntries(ps.map((p) => [p.slug, p.name ?? p.slug])));
+      })
+      .catch(() => {
+        if (!cancelled) setProjectNames({});
+      });
     return () => {
       cancelled = true;
     };
   }, []);
 
-  const badges: Record<SystemTab, number | undefined> = useMemo(
-    () =>
-      summary === null
-        ? {
-            agents: undefined,
-            skills: undefined,
-            plugins: undefined,
-            hooks: undefined,
-            mods: undefined,
-            routines: undefined,
-            insights: undefined,
-          }
-        : {
-            agents: summary.agents,
-            skills: summary.skills + summary.commands + summary.templates,
-            // The hub summary carries no plugin or routine count.
-            plugins: undefined,
-            hooks: summary.hooks,
-            // The hub summary carries no mod count either.
-            mods: undefined,
-            routines: undefined,
-            insights: summary.insights,
-          },
-    [summary],
+  const changed = useCallback((): void => {
+    setRefreshKey((k) => k + 1);
+    load();
+  }, [load]);
+  useLiveUpdates((msg) => {
+    if (msg.type === 'system_item_updated') changed();
+  }, changed);
+
+  const visibleAgents = useMemo(
+    () => (agents ?? []).filter((a) => originScope === null || a.scope === originScope),
+    [agents, originScope],
+  );
+  const visibleRoster = useCallback(
+    (category: CatalogCategory): RosterRow[] =>
+      rosters[category].filter((r) => originScope === null || rowScope(r) === originScope),
+    [rosters, originScope],
   );
 
-  // Retired /system/toolkit(/…) → the same place under Skills, keeping any
-  // deeper selection and the query. `replace` so back doesn't loop.
-  if (renamed !== undefined) {
-    const rest = restSegs.length > 0 ? `/${restSegs.join('/')}` : '';
-    return <Navigate to={{ pathname: `${base}/${renamed}${rest}`, search: location.search }} replace />;
-  }
-  // Bare /system → Agents tab (default).
-  if (tab === null) {
-    return <Navigate to={`${base}/agents`} replace />;
-  }
+  const splat = params['*'] ?? '';
+  const renamed = RENAMED[splat.split('/')[0] ?? ''];
+  const { group, item } = parsePath(splat);
 
-  const goTab = (next: SystemTab): void => {
-    if (next !== tab) navigate(`${base}/${next}`);
+  // Retired /system/toolkit(/…) → the same place under Skills, keeping any deeper
+  // selection and the query. `replace` so back doesn't loop.
+  if (renamed !== undefined) {
+    const rest = splat.split('/').slice(1).join('/');
+    return (
+      <Navigate to={{ pathname: `${base}/${renamed}${rest !== '' ? `/${rest}` : ''}`, search: location.search }} replace />
+    );
+  }
+  if (group === null) return <Navigate to={`${base}/agents`} replace />;
+
+  const onTab = (tab: string): void => {
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        if (tab === 'overview') next.delete('tab');
+        else next.set('tab', tab);
+        return next;
+      },
+      { replace: true },
+    );
   };
 
-  return (
-    <div className="flex h-full min-h-0 flex-col px-4 pt-6 desk:px-10 desk:pt-[34px]">
-      <h1 className="mb-3 font-display text-[30px] leading-tight font-medium tracking-[-0.01em]">
-        <Trans>System</Trans>
-      </h1>
-      {/* Own row, NOT inside the tablist below: a non-tab child would break
-          that element's role contract. This shell resolves scopeSlug for every
-          embedded hub, so the chip belongs here rather than in each hub. */}
-      <div className="mb-3 flex shrink-0 flex-wrap items-center gap-x-3 gap-y-2">
-        <ScopeChip />
-        {!NO_ORIGIN_FILTER.has(tab) && (
-          <FiltersRow inline scope={originScope} onScope={setOriginScope} />
-        )}
-        {docs !== null && docs.total > 0 && (
-          <span
-            className="font-mono text-[11px] text-ink-dim"
-            data-tip={t`usage-guide coverage: every agent, skill and command the marketplace ships must carry a '# How to use' block`}
-          >
-            <span className={docs.documented === docs.total ? 'text-green' : 'text-amber'}>
-              {docs.documented}/{docs.total}
-            </span>
-            <span className="text-ink-faint"> <Trans>documented ·</Trans> </span>
-            <span className={docs.reviewed === docs.total ? 'text-green' : 'text-amber'}>
-              {docs.reviewed}/{docs.total}
-            </span>
-            <span className="text-ink-faint"> <Trans>reviewed</Trans></span>
-          </span>
-        )}
-      </div>
-      <div
-        className="mb-4 flex gap-1 overflow-x-auto border-b border-line [-webkit-overflow-scrolling:touch]"
-        role="tablist"
-        aria-label={t`System sections`}
-      >
-        {TABS.map((tabId) => {
-          const active = tabId === tab;
-          const badge = badges[tabId];
-          return (
-            <button
-              key={tabId}
-              type="button"
-              role="tab"
-              aria-selected={active}
-              onClick={() => goTab(tabId)}
-              className={`-mb-px flex shrink-0 items-center gap-1.5 border-b-2 px-3.5 py-[8px] text-[13px] font-medium whitespace-nowrap transition-colors ${
-                active ? 'border-brand text-brand' : 'border-transparent text-ink-dim hover:text-ink'
-              }`}
-            >
-              {i18n._(TAB_LABELS[tabId])}
-              {badge !== undefined && badge > 0 && (
-                <span className="inline-flex h-[16px] min-w-[16px] items-center justify-center rounded-full bg-line-strong px-1 font-mono text-[9.5px] font-bold text-ink-dim">
-                  {badge}
-                </span>
-              )}
-            </button>
-          );
-        })}
-      </div>
+  const routineItem = (routine: Routine): PlaceItem => ({
+    key: routine.id,
+    glyph: '↻',
+    glyphTone: routine.enabled ? 'faint' : 'amber',
+    title: routine.name,
+    summary: describeCron(routine.cronExpr),
+    ...(routine.lastRunAt ? { age: fmtAgo(routine.lastRunAt) } : {}),
+  });
 
-      {/* The active tab's embedded hub owns the pane below (its own roster,
-          search, detail rail and detail sub-tabs). Each hub manages its own
-          internal selection/sub-tab state; the outer tab lives in the URL. */}
-      <div className="min-h-0 flex-1">
-        <SystemTabPanel
-          tab={tab}
-          base={base}
-          scopeRef={scopeRef}
-          projectId={scopeSlug}
-          projectScoped={projectScoped}
-          originScope={originScope}
-        />
-      </div>
-    </div>
-  );
-}
+  const groups: PlaceGroup[] = [
+    {
+      key: 'agents',
+      label: t`Agents`,
+      items: visibleAgents.map((agent) => {
+        const runs = String(agent.runs30d);
+        return agentItem(agent, projectNames, t`${runs} runs / 30 d`);
+      }),
+    },
+    { key: 'skills', label: t`Skills`, items: visibleRoster('skills').map(rosterItem) },
+    { key: 'commands', label: t`Commands`, items: visibleRoster('commands').map(rosterItem) },
+    { key: 'templates', label: t`Templates`, items: visibleRoster('templates').map(rosterItem) },
+    { key: 'hooks', label: t`Hooks`, items: visibleRoster('hooks').map(rosterItem) },
+    {
+      key: 'routines',
+      label: t`Routines`,
+      count: routines.length,
+      items: [
+        ...routines.map(routineItem),
+        { key: ALL_ROUTINES, glyph: '↻', title: t`All routines`, summary: t`create · schedule · run history` },
+      ],
+    },
+    {
+      key: 'plugins',
+      label: t`Plugins`,
+      items: [{ key: 'list', glyph: '▦', title: t`Plugins`, summary: t`which packs a project enables` }],
+    },
+    {
+      key: 'mods',
+      label: t`Mods`,
+      items: [{ key: 'audit', glyph: '◇', title: t`Mods audit`, summary: t`every mod on this machine` }],
+    },
+    {
+      key: 'insights',
+      label: t`Insights`,
+      ...(summary !== null ? { count: summary.insights } : {}),
+      items: [{ key: 'inbox', glyph: '◆', title: t`Insights`, summary: t`promotion · drift · dead components` }],
+    },
+  ];
 
-/** Mounts the embedded hub for the active tab. Agents → AgentHub (roster +
- * selection-gated detail); Toolkit/Hooks/Insights → SystemHub pinned to the
- * matching category. Each receives an explicit routeBase so its internal
- * navigation stays on the /system tree. */
-function SystemTabPanel({
-  tab,
-  base,
-  scopeRef,
-  projectId,
-  projectScoped,
-  originScope,
-}: {
-  tab: SystemTab;
-  base: string;
-  /** Resolved numeric project id (as a string) for the Plugins tab, or null
-   * while resolving / in the fleet. */
-  projectId: string | null;
-  /** Project REFERENCE (URL slug / global scope value), not a resolved id —
-   * each hub resolves it and gates its own fetches while that is in flight. */
-  scopeRef: string | null;
-  /** PROJECT mode (/p/:slug/system): the hubs list the project's effective
-   * system rather than the machine-wide catalog. */
-  projectScoped: boolean;
-  /** Shell-owned origin-scope filter (all scopes / global / project) — the hub
-   * slices its roster by it instead of rendering chips of its own. */
-  originScope: OriginScope;
-}): JSX.Element {
-  const { t } = useLingui();
-  if (tab === 'agents') {
-    // The skills-to-extend hint sits above the roster: the moment someone
-    // browses agents is the moment to ask whether a skill already does it.
-    return (
-      <div className="flex h-full min-h-0 flex-col">
-        <SkillsToExtendHint insightsHref={`${base}/insights#skill-audit`} />
-        <div className="min-h-0 flex-1">
-          <AgentHub
-            embedded
-            routeBase={`${base}/agents`}
-            scopeSlug={scopeRef}
-            projectScoped={projectScoped}
-            originScope={originScope}
-          />
-        </div>
-      </div>
-    );
-  }
-  if (tab === 'routines') {
-    return (
-      <div className="h-full overflow-y-auto">
-        <Routines embedded />
-      </div>
-    );
-  }
-  if (tab === 'mods') {
-    // Mods are a machine-wide audit (the plugin cache + CLAUDE_CODE_PLUGIN_DIRS),
-    // so a project scope lists the same set.
-    return (
-      <div className="h-full overflow-y-auto">
-        <ModsTab />
-      </div>
-    );
-  }
-  if (tab === 'plugins') {
-    // Plugins are enabled per project: the fleet has no single list to show.
-    if (!projectScoped) {
+  const open = groups.find((g) => g.key === group);
+  const selected = item ?? open?.items[0]?.key ?? null;
+
+  const emptyText = (): string => {
+    if (originScope !== null) return t`no ${originScope}-scope entries here`;
+    if (projectScoped) return t`Nothing resolves for this project — enable a pack in Settings, or add one under .claude/.`;
+    return t`nothing on this machine`;
+  };
+
+  const detail = (): JSX.Element => {
+    if (group === 'agents' || isCatalog(group)) {
+      if (group === 'agents' && agents === null) return <Loading label={t`roster…`} />;
+      if (selected === null) return <Empty>{emptyText()}</Empty>;
+    }
+    if (group === 'agents') {
+      if (selected === null || !/^\d+$/.test(selected)) return <Empty>{emptyText()}</Empty>;
       return (
-        <Empty>
-          <Trans>Plugins are enabled per project — pick one in the switcher.</Trans>
-        </Empty>
+        <AgentDetail
+          key={selected}
+          id={Number(selected)}
+          tabParam={searchParams.get('tab')}
+          onTab={onTab}
+          scopeSlug={scopeSlug}
+          projectNames={projectNames}
+          healthHref={projectScoped ? `/p/${slug}/health?tab=agents` : '/health?tab=agents'}
+          refreshKey={refreshKey}
+          onChanged={changed}
+        />
+      );
+    }
+    if (isCatalog(group)) {
+      return (
+        <CatalogDetail
+          key={`${group}:${String(selected)}`}
+          category={group}
+          selectedKey={selected ?? ''}
+          row={rosters[group].find((r) => rowKey(r) === selected)}
+          tabParam={searchParams.get('tab')}
+          onTab={onTab}
+          scopeSlug={scopeSlug}
+          projectNames={projectNames}
+          defRefresh={refreshKey}
+          onChanged={changed}
+        />
+      );
+    }
+    if (group === 'routines') {
+      const routine = routines.find((r) => r.id === selected);
+      if (routine !== undefined) {
+        return (
+          <RoutineDetail
+            key={routine.id}
+            routine={routine}
+            onChanged={load}
+            onDeleted={() => {
+              load();
+              navigate(`${base}/routines`, { replace: true });
+            }}
+          />
+        );
+      }
+      return (
+        <PageDetail kind={t`system · routines`} title={t`All routines`}>
+          <div className="mt-[18px]">
+            <Routines embedded onChanged={load} />
+          </div>
+        </PageDetail>
+      );
+    }
+    if (group === 'plugins') {
+      // Plugins are enabled per project: the fleet has no single list to show.
+      return (
+        <PageDetail
+          kind={t`system · plugins`}
+          title={t`Plugins`}
+          {...(projectScoped ? {} : { lead: t`Plugins are enabled per project — pick one in the switcher.` })}
+        >
+          {projectScoped && (
+            <div className="mt-[18px]">
+              {scopeSlug === null ? <Loading label={t`plugins…`} /> : <ProjectPlugins projectId={Number(scopeSlug)} />}
+            </div>
+          )}
+        </PageDetail>
+      );
+    }
+    if (group === 'mods') {
+      // A machine-wide audit (the plugin cache + CLAUDE_CODE_PLUGIN_DIRS), so a
+      // project scope lists the same set.
+      return (
+        <PageDetail kind={t`system · mods`} title={t`Mods audit`}>
+          <div className="mt-[18px]">
+            <ModsTab />
+          </div>
+        </PageDetail>
       );
     }
     return (
-      <div className="h-full overflow-y-auto">
-        {projectId === null ? (
-          <Loading label={t`plugins…`} />
-        ) : (
-          <ProjectPlugins projectId={Number(projectId)} />
-        )}
-      </div>
+      <PageDetail kind={t`system · insights`} title={t`Insights`}>
+        <div className="mt-[18px]">
+          <InsightsTab refreshKey={refreshKey} projectNames={projectNames} projectId={scopeSlug} />
+        </div>
+      </PageDetail>
     );
-  }
-  // Skills (with the skills/commands/templates sub-pills), Hooks and Insights
-  // map straight to their SystemHub categories.
-  const forceCategory = tab; // 'skills' | 'hooks' | 'insights'
+  };
+
+  const counts = {
+    agents: String(agents?.length ?? 0),
+    skills: String(rosters.skills.length),
+    hooks: String(rosters.hooks.length),
+    routines: String(routines.length),
+  };
+  const { agents: agentCount, skills: skillCount, hooks: hookCount, routines: routineCount } = counts;
+
   return (
-    <SystemHub
-      embedded
-      forceCategory={forceCategory}
-      routeBase={`${base}/${tab}`}
-      scopeSlug={scopeRef}
-      projectScoped={projectScoped}
-      originScope={originScope}
+    <PagePlace
+      title={t`System`}
+      sub={t`${agentCount} agents · ${skillCount} skills · ${hookCount} hooks · ${routineCount} routines`}
+      searchHint={t`filter`}
+      groups={groups}
+      openGroup={group}
+      selected={selected}
+      onOpenGroup={(key) => navigate(`${base}/${key}`)}
+      onSelect={(key, groupKey) =>
+        navigate(`${base}/${groupKey}/${encodeURIComponent(key)}${location.search}`, { replace: true })
+      }
+      detail={detail()}
+      after={
+        <div className="mt-2 flex flex-col gap-2 border-t border-line px-[14px] py-3">
+          <ScopeChip />
+          {ORIGIN_GROUPS.has(group) && <FiltersRow inline scope={originScope} onScope={setOriginScope} />}
+          {docs !== null && docs.total > 0 && (
+            <span
+              className="font-mono text-[10.5px] text-ink-faint"
+              data-tip={t`usage-guide coverage: every agent, skill and command the marketplace ships must carry a '# How to use' block`}
+            >
+              <span className={docs.documented === docs.total ? 'text-green' : 'text-amber'}>
+                {docs.documented}/{docs.total}
+              </span>
+              <span> <Trans>documented ·</Trans> </span>
+              <span className={docs.reviewed === docs.total ? 'text-green' : 'text-amber'}>
+                {docs.reviewed}/{docs.total}
+              </span>
+              <span> <Trans>reviewed</Trans></span>
+            </span>
+          )}
+          {/* The moment someone browses agents is the moment to ask whether a skill
+              already does it. */}
+          {group === 'agents' && <SkillsToExtendHint insightsHref={`${base}/insights#skill-audit`} />}
+        </div>
+      }
     />
   );
 }

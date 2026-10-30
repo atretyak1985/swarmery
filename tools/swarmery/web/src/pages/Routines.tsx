@@ -22,6 +22,7 @@ import { fmtAgo } from '../lib/format';
 import { findProject } from '../lib/projectSlug';
 import { ScopeChip } from '../components/ScopeChip';
 import { useScope } from '../lib/scope';
+import { PageDetail } from '../components/place/PageDetail';
 import { ConfirmDialog, Empty, ErrorBox, Loading, SectionTitle } from '../components/ui';
 import { useDiscardGuard } from '../components/useDiscardGuard';
 import { ProjectName } from '../components/ProjectName';
@@ -31,7 +32,7 @@ import { ProjectName } from '../components/ProjectName';
 /** describeCron renders a terse human summary of the 5-field expressions the
  * UI is likely to produce; anything exotic falls back to the raw expression.
  * This is a display aid only — the daemon owns real parsing/validation. */
-function describeCron(expr: string): string {
+export function describeCron(expr: string): string {
   const e = expr.trim();
   if (e === '') return t`manual / webhook only`;
   const parts = e.split(/\s+/);
@@ -150,24 +151,14 @@ function prettyDetail(detail: string): string {
 
 /* ------------------------------------------------------------------ row */
 
-function RoutineRow({
-  routine,
-  onEdit,
-  onChanged,
-}: {
-  routine: Routine;
-  onEdit: (r: Routine) => void;
-  onChanged: () => void;
-}): JSX.Element {
+/** Enable/disable and run-now, shared by the list row and the detail page. */
+function useRoutineActions(
+  routine: Routine,
+  onChanged: () => void,
+): { busy: boolean; flash: string | null; toggle: () => Promise<void>; run: () => Promise<void> } {
   const { t } = useLingui();
-  const { projects } = useScope();
-  const [expanded, setExpanded] = useState(false);
   const [busy, setBusy] = useState(false);
   const [flash, setFlash] = useState<string | null>(null);
-
-  const project = routine.projectId !== null ? projects.find((p) => p.id === routine.projectId) : null;
-  const lastRun = routine.lastRunAt ? fmtAgo(routine.lastRunAt) : null;
-  const nextRun = routine.nextRunAt ? fmtAgo(routine.nextRunAt) : null;
 
   const toggle = async (): Promise<void> => {
     setBusy(true);
@@ -187,13 +178,34 @@ function RoutineRow({
     try {
       const res = await runRoutine(routine.id);
       setFlash(res.status === 'started' ? t`run started` : t`busy — already running`);
-      if (expanded) onChanged();
+      onChanged();
     } catch (e) {
       setFlash(e instanceof Error ? e.message : String(e));
     } finally {
       setBusy(false);
     }
   };
+
+  return { busy, flash, toggle, run };
+}
+
+function RoutineRow({
+  routine,
+  onEdit,
+  onChanged,
+}: {
+  routine: Routine;
+  onEdit: (r: Routine) => void;
+  onChanged: () => void;
+}): JSX.Element {
+  const { t } = useLingui();
+  const { projects } = useScope();
+  const [expanded, setExpanded] = useState(false);
+  const { busy, flash, toggle, run } = useRoutineActions(routine, onChanged);
+
+  const project = routine.projectId !== null ? projects.find((p) => p.id === routine.projectId) : null;
+  const lastRun = routine.lastRunAt ? fmtAgo(routine.lastRunAt) : null;
+  const nextRun = routine.nextRunAt ? fmtAgo(routine.nextRunAt) : null;
 
   return (
     <li className="rounded-xl border border-line bg-surface">
@@ -676,11 +688,113 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   );
 }
 
+/* ------------------------------------------------------------------ detail */
+
+/** One routine as a System detail: schedule, the enable switch, run now, its
+ * editor and its run history. `onDeleted` hands the selection back to the list. */
+export function RoutineDetail({
+  routine,
+  onChanged,
+  onDeleted,
+}: {
+  routine: Routine;
+  onChanged: () => void;
+  onDeleted: () => void;
+}): JSX.Element {
+  const { t } = useLingui();
+  const { projects } = useScope();
+  const { busy, flash, toggle, run } = useRoutineActions(routine, onChanged);
+  const [editing, setEditing] = useState(false);
+  const [confirmDel, setConfirmDel] = useState(false);
+  const [delBusy, setDelBusy] = useState(false);
+  const [delErr, setDelErr] = useState<string | null>(null);
+
+  const project = routine.projectId !== null ? projects.find((p) => p.id === routine.projectId) : undefined;
+  const schedule = describeCron(routine.cronExpr);
+  const routineName = routine.name;
+
+  const doDelete = async (): Promise<void> => {
+    setDelBusy(true);
+    try {
+      await deleteRoutine(routine.id);
+      setConfirmDel(false);
+      onDeleted();
+    } catch (e) {
+      setDelErr(e instanceof Error ? e.message : String(e));
+    } finally {
+      setDelBusy(false);
+    }
+  };
+
+  return (
+    <PageDetail
+      kind={t`system · routine`}
+      meta={schedule}
+      title={routine.name}
+      kv={[
+        { k: t`schedule`, v: routine.cronExpr === '' ? schedule : `${schedule} · ${routine.cronExpr}` },
+        { k: t`last run`, v: routine.lastRunAt ? fmtAgo(routine.lastRunAt) : t`never run` },
+        { k: t`next run`, v: routine.nextRunAt ? fmtAgo(routine.nextRunAt) : t`no next run` },
+        { k: t`scope`, v: project?.name ?? project?.slug ?? t`global` },
+        ...(routine.hasWebhook ? [{ k: t`trigger`, v: t`webhook` }] : []),
+      ]}
+      toggles={[
+        {
+          key: 'enabled',
+          label: t`Enabled`,
+          hint: t`Pause to stop the schedule; run once still works`,
+          on: routine.enabled,
+          disabled: busy,
+          onChange: () => void toggle(),
+        },
+      ]}
+      actions={[
+        { key: 'run', label: t`run now`, tone: 'brand', disabled: busy, onClick: () => void run() },
+        { key: 'edit', label: t`edit schedule`, onClick: () => setEditing(true) },
+      ]}
+      link={{ label: t`delete routine`, onClick: () => setConfirmDel(true) }}
+    >
+      {flash !== null && <div className="mt-3 font-mono text-[10.5px] text-ink-dim">{flash}</div>}
+      {delErr !== null && <ErrorBox message={delErr} />}
+      <div className="mt-[18px] max-w-[760px]">
+        <SectionTitle>
+          <Trans>Run history</Trans>
+        </SectionTitle>
+        <div className="mt-2">
+          <RunHistory id={routine.id} />
+        </div>
+      </div>
+      {editing && <RoutineEditor routine={routine} onClose={() => setEditing(false)} onSaved={onChanged} />}
+      <ConfirmDialog
+        open={confirmDel}
+        title={t`Delete routine?`}
+        confirmLabel={t`Delete`}
+        danger
+        busy={delBusy}
+        onConfirm={doDelete}
+        onCancel={() => setConfirmDel(false)}
+      >
+        <Trans>
+          Permanently delete <span className="font-semibold text-ink">{routineName}</span> and its run
+          history? This cannot be undone.
+        </Trans>
+      </ConfirmDialog>
+    </PageDetail>
+  );
+}
+
 /* -------------------------------------------------------------------- page */
 
 /** `embedded` (System → Routines tab): the shell owns the page heading and the
  * scope chip, so only the description line and the create action render. */
-export function Routines({ embedded = false }: { embedded?: boolean } = {}): JSX.Element {
+export function Routines({
+  embedded = false,
+  onChanged,
+}: {
+  embedded?: boolean;
+  /** A routine was created, edited, toggled or deleted: the System list refreshes. */
+  onChanged?: () => void;
+} = {}): JSX.Element {
   const { t } = useLingui();
   const { scope, projects } = useScope();
   const scopeProjectId = useMemo(() => {
@@ -702,6 +816,10 @@ export function Routines({ embedded = false }: { embedded?: boolean } = {}): JSX
   }, [scopeProjectId]);
 
   useEffect(load, [load]);
+  const changed = useCallback((): void => {
+    load();
+    onChanged?.();
+  }, [load, onChanged]);
   const routineName = confirmDel?.name ?? '';
 
   const doDelete = async (): Promise<void> => {
@@ -710,7 +828,7 @@ export function Routines({ embedded = false }: { embedded?: boolean } = {}): JSX
     try {
       await deleteRoutine(confirmDel.id);
       setConfirmDel(null);
-      load();
+      changed();
     } catch (e) {
       setErr(e instanceof Error ? e.message : String(e));
     } finally {
@@ -760,7 +878,7 @@ export function Routines({ embedded = false }: { embedded?: boolean } = {}): JSX
         {routines !== null && routines.length > 0 && (
           <ul className="flex flex-col gap-2.5">
             {routines.map((r) => (
-              <RoutineRow key={r.id} routine={r} onEdit={setEditing} onChanged={load} />
+              <RoutineRow key={r.id} routine={r} onEdit={setEditing} onChanged={changed} />
             ))}
           </ul>
         )}
@@ -770,7 +888,7 @@ export function Routines({ embedded = false }: { embedded?: boolean } = {}): JSX
         <RoutineEditor
           routine={editing}
           onClose={() => setEditing(null)}
-          onSaved={load}
+          onSaved={changed}
         />
       )}
 

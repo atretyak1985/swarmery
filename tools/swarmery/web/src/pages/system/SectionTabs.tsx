@@ -112,3 +112,41 @@ export function SectionPanel({
     </div>
   );
 }
+
+/** The sections of a detail that the design's blocks cannot express: one tablist
+ * and its one mounted panel, under the blocks. */
+export function DetailSections({
+  tabs,
+  labels,
+  active,
+  onSelect,
+  idPrefix,
+  ariaLabel,
+  children,
+}: {
+  tabs: readonly string[];
+  labels: Record<string, string>;
+  active: string;
+  onSelect: (tab: string) => void;
+  idPrefix: string;
+  ariaLabel: string;
+  children: ReactNode;
+}): JSX.Element {
+  return (
+    <div className="mt-5">
+      <SectionTabs
+        tabs={tabs}
+        labels={labels}
+        active={active}
+        onSelect={onSelect}
+        idPrefix={idPrefix}
+        ariaLabel={ariaLabel}
+      />
+      <div className="mt-4">
+        <SectionPanel idPrefix={idPrefix} tab={active}>
+          {children}
+        </SectionPanel>
+      </div>
+    </div>
+  );
+}

@@ -215,50 +215,9 @@ export function HookProfile({ id }: { id: number }): JSX.Element {
 
   if (error !== null) return <ErrorBox message={error} onRetry={load} />;
   if (hub === null) return <Loading label={t`hook…`} />;
-  const managed = hub.managed;
 
   return (
-    <div className="space-y-4">
-      <div className="rounded-xl border border-line bg-bg px-3.5 py-3">
-        <div className="grid grid-cols-2 gap-x-4 gap-y-2 font-mono text-[11.5px]">
-          <div>
-            <span className="text-ink-faint">
-              <Trans>event</Trans>
-            </span>{' '}
-            <span className="text-ink">{hub.event}</span>
-          </div>
-          <div>
-            <span className="text-ink-faint">
-              <Trans>matcher</Trans>
-            </span>{' '}
-            <span className="text-ink">{hub.matcher ?? '*'}</span>
-          </div>
-          <div>
-            <span className="text-ink-faint">
-              <Trans>timeout</Trans>
-            </span>{' '}
-            <span className={hub.timeout === null ? 'text-amber' : 'text-ink'}>
-              {hub.timeout === null ? t`none` : `${String(hub.timeout)}s`}
-            </span>
-          </div>
-          <div>
-            <span className="text-ink-faint">
-              <Trans>scope</Trans>
-            </span>{' '}
-            <span className="text-ink">{hub.scope}</span>
-          </div>
-        </div>
-        <div className="mt-2 overflow-x-auto rounded-md bg-surface px-2.5 py-1.5 font-mono text-[11px] whitespace-pre text-ink-2">
-          {hub.command}
-        </div>
-        <div className="mt-1 font-mono text-[10.5px] break-all text-ink-faint">{hub.sourceFile}</div>
-        {hub.managed !== null && (
-          <div className="mt-1.5 inline-block rounded-full border border-brand/40 px-2 py-px font-mono text-[10px] text-brand">
-            <Trans>managed · {managed}</Trans>
-          </div>
-        )}
-      </div>
-
+    <div className="mt-[18px] max-w-[720px] space-y-4">
       {hub.lint.length > 0 && (
         <div>
           <div className="mb-1.5 font-mono text-[10px] tracking-[0.1em] text-ink-faint uppercase">
@@ -290,12 +249,6 @@ export function HookProfile({ id }: { id: number }): JSX.Element {
         </div>
       )}
 
-      <div className="font-mono text-[10.5px] text-ink-faint">
-        <Trans>
-          edit / enable / disable this hook from the System page → Hooks tab (the existing write
-          surface)
-        </Trans>
-      </div>
     </div>
   );
 }
