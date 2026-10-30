@@ -1,38 +1,42 @@
-// The Inbox (Canvas v3 phase 3, artboards 1b + 2b): one place for every
-// decision that waits on the operator, fleet (/inbox) or one project
-// (/p/:slug/inbox). Header per 1b, tabs per kind (?tab=), then the phase-2
-// SplitPane — list left, detail right, j/k move, e primary, x deny/dismiss,
-// s skip. The old Approvals page stays reachable at approvals/manage for
-// rules and history.
+// The Inbox (handoff §1, §8): what waits on the operator without blocking a
+// session, fleet (/inbox) or one project (/p/:slug/inbox). A list grouped by kind,
+// one decision in the detail; j/k move, e is the primary, x the secondary, and an
+// item leaves once it is decided. Approvals and questions are decided in Needs you
+// (`?tab=approvals` goes there); rules and history stay at approvals/manage.
+//
+// The triage banner is gone (handoff §11): the agent only proposes here, as an
+// `agent: <value>` tag on the row and a suggestion in the detail. What it closed on
+// its own stays reachable as the last group, each with an undo.
 
 import { Trans, useLingui } from '@lingui/react/macro';
-import { useEffect, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
-import { SplitPane, type SplitPaneKey } from '../../components/SplitPane';
-import { Tabs, useTabParam } from '../../components/Tabs';
-import { TriageConflictError, acceptTriageVerdict } from '../../api/triage';
+import { useEffect, useMemo, useState } from 'react';
+import { Navigate, useParams, useSearchParams } from 'react-router-dom';
+import { ListGroup } from '../../components/place/ListGroup';
+import { ListPane } from '../../components/place/ListPane';
+import { ListRow } from '../../components/place/ListRow';
+import { PlaceLayout } from '../../components/place/PlaceLayout';
+import { StateGlyph } from '../../components/place/StateGlyph';
+import { Loading } from '../../components/ui';
+import { TriageConflictError } from '../../api/triage';
+import { compactSpan } from '../../lib/sessionsView';
+import { stepKey } from '../../lib/useGlobalKeys';
 import { HandledList } from './HandledList';
 import { InboxDetail, denyAction, primaryAction } from './InboxDetail';
-import { ReviewRow } from './ReviewItem';
-import { TriageBanner } from './TriageBanner';
 import {
   INBOX_TABS,
-  agentOffer,
   KIND_META,
-  TRIAGE_INBOX_KINDS,
-  ageLabel,
   expiresInLabel,
-  filterTab,
+  filterItems,
+  groupByKind,
+  reviewable,
   suggestionActionLabel,
-  suggestionBreakdown,
-  tabCounts,
-  waitingLine,
+  valueWording,
   type InboxItem,
-  type InboxTabId,
 } from './inboxModel';
 import { FLEET_WIDE_KINDS, useInboxItems } from './useInboxItems';
 
-const TAB_IDS: readonly InboxTabId[] = INBOX_TABS.map((tabDef) => tabDef.id);
+/** The row that opens the agent's closed items in the detail. */
+const HANDLED = 'handled';
 
 /** Wall clock for the expiry countdowns. */
 function useNow(periodMs: number): number {
@@ -44,45 +48,66 @@ function useNow(periodMs: number): number {
   return now;
 }
 
-function GroupLabel({ urgent }: { urgent: boolean }): JSX.Element {
+/** The kind dot: 9px in the 18px glyph box, the kind's own colour. */
+function KindDot({ item }: { item: InboxItem }): JSX.Element {
   return (
-    <div
-      className={`px-3.5 pt-2 pb-[3px] font-mono text-[9.5px] tracking-[0.12em] uppercase ${urgent ? 'text-amber' : 'text-ink-faint'}`}
+    <span
+      aria-hidden="true"
+      className={`inline-block w-[18px] text-center font-mono text-[9px] leading-[18px] ${KIND_META[item.kind].text}`}
     >
-      {urgent ? <Trans>expires soon</Trans> : <Trans>when you have a minute</Trans>}
-    </div>
+      ●
+    </span>
   );
 }
 
 export function Inbox(): JSX.Element {
-  const { t } = useLingui();
   const { slug } = useParams<{ slug?: string }>();
-  const scope = slug ?? null;
+  const [params] = useSearchParams();
+  const tab = params.get('tab');
+  if (tab === 'approvals') {
+    const to = slug === undefined ? '/needs-you?tab=approvals' : `/p/${slug}/needs-you?tab=approvals`;
+    return <Navigate to={to} replace />;
+  }
+  return <InboxPlace scope={slug ?? null} tab={tab} />;
+}
+
+function InboxPlace({ scope, tab }: { scope: string | null; tab: string | null }): JSX.Element {
+  const { t } = useLingui();
   const { items, loading, errors, reload, triage } = useInboxItems(scope, true);
-  const [tab, setTab] = useTabParam<InboxTabId>('tab', TAB_IDS, 'all');
+  const [query, setQuery] = useState('');
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
-  const [dismissedRunId, setDismissedRunId] = useState<number | null>(null);
-  const [acceptResult, setAcceptResult] = useState<string | null>(null);
-  const [accepting, setAccepting] = useState(false);
-  const [dismissedError, setDismissedError] = useState<string | null>(null);
   const now = useNow(1000);
 
-  const visible = filterTab(items, tab);
-  const selected = visible.find((i) => i.key === selectedId) ?? visible[0];
-  const counts = tabCounts(items, triage.handled.length);
-  const firstUrgent = visible.find((i) => i.urgent)?.key;
-  const firstCalm = visible.find((i) => !i.urgent)?.key;
+  const open = useMemo(() => reviewable(items), [items]);
+  const groups = useMemo(() => groupByKind(filterItems(open, query)), [open, query]);
+  const ordered = useMemo(() => groups.flatMap((g) => g.items), [groups]);
+  const handledCount = triage.handled.length;
+  const showHandled = handledCount > 0 || tab === HANDLED;
+  const keysInList = [...ordered.map((i) => i.key), ...(showHandled ? [HANDLED] : [])];
+
+  // Old links name a kind: they open on it, and the rest of the list stays in view.
+  const tabKind = INBOX_TABS.find((tabDef) => tabDef.id === tab)?.kind;
+  const onHandled = selectedId === HANDLED || (selectedId === null && tab === HANDLED);
+  const selected = onHandled
+    ? undefined
+    : (ordered.find((i) => i.key === selectedId) ?? ordered.find((i) => i.kind === tabKind) ?? ordered[0]);
+  const currentKey = onHandled ? HANDLED : (selected?.key ?? null);
+
+  const select = (key: string | undefined): void => {
+    if (key === undefined) return;
+    setSelectedId(key);
+    setActionError(null);
+  };
 
   const neighbour = (item: InboxItem): string | null => {
-    const idx = visible.findIndex((i) => i.key === item.key);
-    return visible[idx + 1]?.key ?? visible[idx - 1]?.key ?? null;
+    const idx = ordered.findIndex((i) => i.key === item.key);
+    return ordered[idx + 1]?.key ?? ordered[idx - 1]?.key ?? null;
   };
 
   const run = (item: InboxItem, action: () => Promise<unknown>): void => {
-    // One write at a time: a single-item action and "accept all" never overlap.
-    if (busy || accepting) return;
+    if (busy) return;
     const next = neighbour(item);
     setBusy(true);
     setActionError(null);
@@ -103,228 +128,151 @@ export function Inbox(): JSX.Element {
       .finally(() => setBusy(false));
   };
 
-  const breakdown = suggestionBreakdown(triage.open);
+  const skip = (item: InboxItem): void => select(neighbour(item) ?? item.key);
 
-  // One after another, never stopping at a failure. Fix-task suggestions are not
-  // in `breakdown.acceptable`: the operator opens and reads those one by one.
-  const acceptAll = (): void => {
-    if (accepting || busy) return;
-    const todo = breakdown.acceptable;
-    setAccepting(true);
-    setAcceptResult(null);
-    setActionError(null);
-    void (async () => {
-      let accepted = 0;
-      let failed = 0;
-      let stale = 0;
-      for (const [i, v] of todo.entries()) {
-        const current = String(i + 1);
-        const total = String(todo.length);
-        setAcceptResult(t`accepting ${current} of ${total}…`);
-        try {
-          await acceptTriageVerdict(v.id);
-          accepted += 1;
-        } catch (e) {
-          if (e instanceof TriageConflictError) stale += 1;
-          else failed += 1;
-        }
-      }
-      const parts = [t`accepted ${accepted}`];
-      if (failed > 0) parts.push(t`${failed} failed`);
-      if (stale > 0) parts.push(t`${stale} changed meanwhile`);
-      setAcceptResult(parts.join(' · '));
-      reload();
-      triage.reload();
-      setAccepting(false);
-    })();
-  };
-
-  // The error line has one identity (this start attempt, or that failed run), so
-  // dismissing it hides exactly that error and a later one shows again.
-  const lastRun = triage.lastRun;
-  const runFailed = lastRun?.status === 'failed';
-  const runError = triage.startError ?? (runFailed ? lastRun.error || t`The triage run failed.` : null);
-  const errorKey =
-    triage.startError !== null ? `start:${triage.startError}` : runFailed ? `run:${String(lastRun.id)}` : null;
-  const bannerError = errorKey !== null && dismissedError === errorKey ? null : runError;
-  // The banner's count is the run's cap: a click covers exactly the items it shows.
-  const offer = agentOffer(items, now);
-
-  const primaryLabel =
+  const primaryHint =
     selected?.suggestion !== undefined && !selected.suggestion.sample
       ? suggestionActionLabel(selected.suggestion.value)
       : selected?.kind === 'review'
         ? t`ack`
-        : t`approve`;
+        : selected?.kind === 'proposal'
+          ? t`approve`
+          : t`accept`;
+  const secondaryHint =
+    selected === undefined || selected.kind === 'review' || selected.kind === 'alert'
+      ? undefined
+      : selected.kind === 'classifier'
+        ? t`skip`
+        : t`dismiss`;
+  const openCount = String(open.length);
 
-  const keymap: SplitPaneKey<InboxItem>[] = [
-    {
-      key: 'e',
-      label: primaryLabel,
-      run: (item) => {
-        const a = primaryAction(item);
-        if (a !== null) run(item, a);
-      },
-    },
-    {
-      key: 'x',
-      label: t`deny`,
-      run: (item) => {
-        const a = denyAction(item);
-        if (a !== null) run(item, a);
-      },
-    },
-    { key: 's', label: t`skip`, run: (item) => setSelectedId(neighbour(item) ?? item.key) },
-  ];
+  const summaryOf = (item: InboxItem): string => {
+    const expires = item.urgent && item.expiresIso !== undefined ? expiresInLabel(item.expiresIso, now) : null;
+    return [
+      item.context,
+      ...(expires === null ? [] : [t`expires ${expires}`]),
+      ...(scope !== null && FLEET_WIDE_KINDS.has(item.kind) ? [t`fleet-wide`] : []),
+    ].join(' · ');
+  };
+
+  const agentTag = (item: InboxItem): string | undefined => {
+    if (item.suggestion === undefined) return undefined;
+    const value = valueWording(item.suggestion.value);
+    return t`agent: ${value}`;
+  };
 
   return (
-    <div className="flex h-full min-h-0 flex-col">
-      <header className="px-9 pt-[30px] pb-0">
-        <div className="flex items-baseline gap-2.5">
-          <h1 className="m-0 font-display text-[30px] leading-[1.15] font-medium tracking-[-0.01em] text-ink">
-            <Trans>Inbox</Trans>
-          </h1>
-          <span className="font-mono text-[11px] text-ink-faint">
-            {loading ? t`loading…` : waitingLine(items, now)}
-          </span>
-          {tab === 'approvals' && (
-            <Link to="../approvals/manage" relative="path" className="ml-auto font-mono text-[10.5px] text-ink-faint hover:text-ink-dim">
-              <Trans>rules &amp; history →</Trans>
-            </Link>
-          )}
-        </div>
-        <p className="mt-1.5 max-w-[66ch] text-[13px] text-ink-dim">
-          <Trans>
-            Decisions that wait on you. An agent can label the classifier's guesses and close what is only
-            informational; approvals, agent changes and alerts always wait for you.
-          </Trans>
-        </p>
-        <div className="mt-4">
-          <Tabs
-            ariaLabel={t`inbox kinds`}
-            tabs={INBOX_TABS.map((tabDef) => ({ id: tabDef.id, label: tabDef.label, count: counts[tabDef.id] }))}
-            value={tab}
-            onChange={(id) => {
-              setTab(id);
-              setSelectedId(null);
-            }}
-          />
-        </div>
-      </header>
-
-      <TriageBanner
-        offer={offer}
-        running={triage.run === null ? null : { done: triage.run.done, total: triage.run.total }}
-        summary={
-          lastRun === null || runFailed
-            ? null
-            : { applied: lastRun.applied, suggested: lastRun.suggested, failed: lastRun.failed }
-        }
-        error={bannerError}
-        suggestions={{
-          total: breakdown.acceptable.length + breakdown.fixTasks,
-          acceptable: breakdown.acceptable.length,
-          fixTasks: breakdown.fixTasks,
-          parts: breakdown.parts,
-        }}
-        acceptResult={acceptResult}
-        dismissed={lastRun !== null && dismissedRunId === lastRun.id}
-        busy={accepting}
-        onStart={() => {
-          setAcceptResult(null);
-          setDismissedError(null);
-          void triage.start({ kinds: TRIAGE_INBOX_KINDS, cap: offer.agent });
-        }}
-        onAcceptAll={acceptAll}
-        onOpenHandled={() => {
-          setTab('handled');
-          setSelectedId(null);
-        }}
-        onDismiss={() => setDismissedRunId(lastRun?.id ?? null)}
-        onDismissError={() => setDismissedError(errorKey)}
-      />
-
-
-      {errors.length > 0 && (
-        <div className="flex flex-wrap gap-3 border-b border-line px-9 py-2 font-mono text-[11px] text-red">
-          {errors.map((k) => {
-            const source = INBOX_TABS.find((tabDef) => tabDef.kind === k)?.label ?? k;
-            return (
-              <span key={k} role="alert">
-                <Trans>couldn't load {source}</Trans>
-              </span>
-            );
-          })}
-        </div>
-      )}
-
-      <div className="min-h-0 flex-1 px-9">
-        {tab === 'handled' ? (
-          <HandledList
-            verdicts={triage.handled}
-            onChanged={() => {
-              reload();
-              triage.reload();
-            }}
-            now={now}
-          />
-        ) : !loading && visible.length === 0 ? (
-          <div className="py-10 text-[13px] text-ink-dim">
-            <Trans>Nothing is waiting on you.</Trans>
-          </div>
-        ) : (
-          <SplitPane
-            ariaLabel={t`waiting decisions`}
-            items={visible}
-            getId={(i) => i.key}
-            selectedId={selected?.key ?? null}
-            onSelect={(id) => {
-              setSelectedId(id);
-              setActionError(null);
-            }}
-            keymap={keymap}
-            renderRow={(item, isSelected) => {
-              const expires =
-                item.urgent && item.expiresIso !== undefined ? expiresInLabel(item.expiresIso, now) : null;
-              return (
-                <>
-                  {item.key === firstUrgent && <GroupLabel urgent />}
-                  {item.key === firstCalm && firstUrgent !== undefined && <GroupLabel urgent={false} />}
-                  {item.kind === 'review' ? (
-                    <ReviewRow review={item.raw} selected={isSelected} now={now} />
-                  ) : (
-                  <div className="flex gap-2.5 px-3.5 py-2.5">
-                    <span className={`mt-[5px] h-[7px] w-[7px] shrink-0 rounded-full ${KIND_META[item.kind].dot}`} />
-                    <div className="min-w-0">
-                      <div className={`truncate text-[12.5px] ${isSelected ? 'font-medium text-ink' : 'text-ink-2'}`}>
-                        {item.title}
-                      </div>
-                      <div className="mt-0.5 truncate font-mono text-[10.5px] text-ink-faint">
-                        {item.context} · {ageLabel(item.ageIso, now)}
-                        {expires !== null && t` · expires ${expires}`}
-                        {scope !== null && FLEET_WIDE_KINDS.has(item.kind) && t` · fleet-wide`}
-                      </div>
-                    </div>
-                  </div>
-                  )}
-                </>
-              );
-            }}
-            renderDetail={(item) => (
-              <InboxDetail
-                key={item.key}
-                item={item}
-                fleetWide={scope !== null && FLEET_WIDE_KINDS.has(item.kind)}
-                busy={busy}
-                error={actionError}
-                onAct={(a) => run(item, a)}
-                now={now}
-                audit={triage.audit}
+    <PlaceLayout
+      list={
+        <ListPane
+          title={t`Inbox`}
+          sub={loading ? t`loading…` : t`${openCount} to review · nothing here blocks a session`}
+          query={query}
+          onQueryChange={setQuery}
+          searchHint={t`filter`}
+          keys={{
+            onNext: () => select(stepKey(keysInList, currentKey, 1)),
+            onPrev: () => select(stepKey(keysInList, currentKey, -1)),
+            onPrimary: () => {
+              if (selected === undefined) return;
+              const a = primaryAction(selected);
+              if (a !== null) run(selected, a);
+            },
+            onSecondary: () => {
+              if (selected === undefined) return;
+              const a = denyAction(selected);
+              if (a !== null) run(selected, a);
+              else if (selected.kind === 'classifier') skip(selected);
+            },
+          }}
+          primaryHint={primaryHint}
+          {...(secondaryHint === undefined ? {} : { secondaryHint })}
+        >
+          {loading && <Loading label={t`loading…`} />}
+          {groups.map((g) => (
+            <ListGroup key={g.kind} label={KIND_META[g.kind].label} count={g.items.length}>
+              {g.items.map((item) => (
+                <div key={item.key} data-testid="inbox-row" data-kind={item.kind}>
+                  <ListRow
+                    glyph={<KindDot item={item} />}
+                    title={item.title}
+                    tag={agentTag(item)}
+                    summary={summaryOf(item)}
+                    age={compactSpan(now - Date.parse(item.ageIso))}
+                    selected={item.key === currentKey}
+                    onSelect={() => select(item.key)}
+                  />
+                </div>
+              ))}
+            </ListGroup>
+          ))}
+          {showHandled && (
+            <ListGroup label={t`handled by agent`} count={handledCount}>
+              <ListRow
+                glyph={<StateGlyph state="done" size={11} />}
+                title={t`closed by the agent`}
+                summary={t`the last 7 days, each with an undo`}
+                selected={onHandled}
+                onSelect={() => select(HANDLED)}
               />
-            )}
-          />
-        )}
-      </div>
-    </div>
+            </ListGroup>
+          )}
+        </ListPane>
+      }
+      detail={
+        <>
+          {errors.length > 0 && (
+            <div className="flex flex-wrap gap-3 border-b border-line px-7 py-2 font-mono text-[11px] text-red">
+              {errors.map((k) => {
+                const source = INBOX_TABS.find((tabDef) => tabDef.kind === k)?.label ?? k;
+                return (
+                  <span key={k} role="alert">
+                    <Trans>couldn't load {source}</Trans>
+                  </span>
+                );
+              })}
+            </div>
+          )}
+          {onHandled ? (
+            <div className="px-7">
+              <HandledList
+                verdicts={triage.handled}
+                onChanged={() => {
+                  reload();
+                  triage.reload();
+                }}
+                now={now}
+              />
+            </div>
+          ) : selected !== undefined ? (
+            <InboxDetail
+              key={selected.key}
+              item={selected}
+              fleetWide={scope !== null && FLEET_WIDE_KINDS.has(selected.kind)}
+              busy={busy}
+              error={actionError}
+              onAct={(a) => run(selected, a)}
+              onSkip={() => skip(selected)}
+              now={now}
+              audit={triage.audit}
+            />
+          ) : (
+            !loading && (
+              <div className="flex h-full flex-col items-center justify-center px-7 text-center text-ink-3">
+                <div className="text-[18px] font-medium text-ink-2">
+                  <Trans>All reviewed.</Trans>
+                </div>
+                <div className="mt-1.5 max-w-[42ch] text-[12.5px] leading-[1.55]">
+                  <Trans>
+                    New items land here after runs are measured: lesson candidates, Advisor findings, classifier checks,
+                    agent changes.
+                  </Trans>
+                </div>
+              </div>
+            )
+          )}
+        </>
+      }
+    />
   );
 }

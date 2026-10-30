@@ -140,15 +140,16 @@ function ws(node: JSX.Element): JSX.Element {
   return <Suspense fallback={<RouteLoading what={msg`workspace…`} />}>{node}</Suspense>;
 }
 
-/** /p/:slug/approvals → the project Inbox's approvals tab. Waits for the global
- * scope to settle on this project first: on a cold visit ProjectWorkspaceProvider
- * calls setScope(slug) in the same commit, and its setSearchParams (built from the
- * pre-redirect query) would otherwise overwrite ?tab=approvals with ?scope=. */
+/** /p/:slug/approvals → the project's Needs you, on a permission. Waits for the
+ * global scope to settle on this project first: on a cold visit
+ * ProjectWorkspaceProvider calls setScope(slug) in the same commit, and its
+ * setSearchParams (built from the pre-redirect query) would otherwise overwrite
+ * ?tab=approvals with ?scope=. */
 function ProjectApprovalsRedirect(): JSX.Element | null {
   const { slug = '' } = useParams<{ slug: string }>();
   const { scope } = useScope();
   if (scope !== slug) return null;
-  return <Navigate to={`/p/${slug}/inbox?tab=approvals`} replace />;
+  return <Navigate to={`/p/${slug}/needs-you?tab=approvals`} replace />;
 }
 
 /** /p/:slug/{analytics,retro} → a Health tab. Same scope wait as
@@ -217,10 +218,11 @@ const router = createBrowserRouter([
         children: [
           // Today (Canvas v3 phase 4): the loop map over the old command deck.
           { index: true, element: <Today detail={<Overview />} /> },
-          // Inbox (Canvas v3 phase 3) replaces /approvals as the place; the old
-          // page keeps rules + history at approvals/manage.
+          // Inbox holds what does not block; approvals moved to Needs you (handoff
+          // §3), which offers always-allow. The old page keeps rules + history at
+          // approvals/manage.
           { path: 'inbox', element: <Inbox />, handle: { fill: true } },
-          { path: 'approvals', element: <Navigate to="/inbox?tab=approvals" replace /> },
+          { path: 'approvals', element: <Navigate to="/needs-you?tab=approvals" replace /> },
           { path: 'approvals/manage', element: <Approvals /> },
           // Needs you: every session blocker, oldest first (GET /api/needs-you).
           { path: 'needs-you', element: <NeedsYou /> },
