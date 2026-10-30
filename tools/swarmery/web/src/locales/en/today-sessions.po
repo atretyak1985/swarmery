@@ -35,6 +35,11 @@ msgstr "(empty prompt)"
 msgid "(untitled session)"
 msgstr "(untitled session)"
 
+#. placeholder {0}: i.phaseDecisions
+#: src/pages/today/loopModel.ts
+msgid "{0, plural, one {{decisions} phase waits on a decision.} few {{decisions} phases wait on a decision.} many {{decisions} phases wait on a decision.} other {{decisions} phases wait on a decision.}}"
+msgstr "{0, plural, one {{decisions} phase waits on a decision.} few {{decisions} phases wait on a decision.} many {{decisions} phases wait on a decision.} other {{decisions} phases wait on a decision.}}"
+
 #. placeholder {0}: f.blocked
 #: src/pages/NeedsYou.tsx
 msgid "{0, plural, one {# blocked attempt} few {# blocked attempts} many {# blocked attempts} other {# blocked attempts}}"
@@ -55,6 +60,11 @@ msgstr "{0, plural, one {# project · {onboardedCount} onboarded} few {# project
 msgid "{0, plural, one {# session} few {# sessions} many {# sessions} other {# sessions}}"
 msgstr "{0, plural, one {# session} few {# sessions} many {# sessions} other {# sessions}}"
 
+#. placeholder {0}: needs.count
+#: src/pages/today/Today.tsx
+msgid "{0, plural, one {# thing waits on you · {liveCount} running} few {# things wait on you · {liveCount} running} many {# things wait on you · {liveCount} running} other {# things wait on you · {liveCount} running}}"
+msgstr "{0, plural, one {# thing waits on you · {liveCount} running} few {# things wait on you · {liveCount} running} many {# things wait on you · {liveCount} running} other {# things wait on you · {liveCount} running}}"
+
 #. placeholder {0}: data.uninspected
 #: src/pages/detail/ContextHogsCard.tsx
 msgid "{0, plural, one {# unattributed result} few {# unattributed results} many {# unattributed results} other {# unattributed results}}"
@@ -72,6 +82,10 @@ msgstr "{advisorFindings, plural, one {{count} Advisor finding} few {{count} Adv
 #: src/pages/detail/Chat.tsx
 msgid "{agents, plural, one {ran {count} agent} few {ran {count} agents} many {ran {count} agents} other {ran {count} agents}}"
 msgstr "{agents, plural, one {ran {count} agent} few {ran {count} agents} many {ran {count} agents} other {ran {count} agents}}"
+
+#: src/pages/today/loopModel.ts
+msgid "{askingSessions, plural, one {{count} session asks for you.} few {{count} sessions ask for you.} many {{count} sessions ask for you.} other {{count} sessions ask for you.}}"
+msgstr "{askingSessions, plural, one {{count} session asks for you.} few {{count} sessions ask for you.} many {{count} sessions ask for you.} other {{count} sessions ask for you.}}"
 
 #: src/pages/Overview.tsx
 msgid "{autoPct}% of requests · no stop"
@@ -125,13 +139,21 @@ msgstr "{events} events"
 msgid "{farOff} landed far from the plan."
 msgstr "{farOff} landed far from the plan."
 
+#: src/pages/today/loopModel.ts
+msgid "{finished} finished today, {failed} failed."
+msgstr "{finished} finished today, {failed} failed."
+
+#: src/pages/today/loopModel.ts
+msgid "{finished} finished today."
+msgstr "{finished} finished today."
+
 #: src/pages/Overview.tsx
 msgid "{first} · +{extra} more"
 msgstr "{first} · +{extra} more"
 
 #: src/pages/today/loopModel.ts
-msgid "{forecasted, plural, one {{count} phase carries a forecast — what the planner expects before anything runs.} few {{count} phases carry a forecast — what the planner expects before anything runs.} many {{count} phases carry a forecast — what the planner expects before anything runs.} other {{count} phases carry a forecast — what the planner expects before anything runs.}}"
-msgstr "{forecasted, plural, one {{count} phase carries a forecast — what the planner expects before anything runs.} few {{count} phases carry a forecast — what the planner expects before anything runs.} many {{count} phases carry a forecast — what the planner expects before anything runs.} other {{count} phases carry a forecast — what the planner expects before anything runs.}}"
+msgid "{forecasted, plural, one {{count} phase carries a forecast.} few {{count} phases carry a forecast.} many {{count} phases carry a forecast.} other {{count} phases carry a forecast.}}"
+msgstr "{forecasted, plural, one {{count} phase carries a forecast.} few {{count} phases carry a forecast.} many {{count} phases carry a forecast.} other {{count} phases carry a forecast.}}"
 
 #: src/pages/today/loopModel.ts
 msgid "{gatheringProof, plural, one {{count} change still gathering proof.} few {{count} changes still gathering proof.} many {{count} changes still gathering proof.} other {{count} changes still gathering proof.}}"
@@ -177,9 +199,46 @@ msgstr "{n, plural, one {# criterion marked [MANUAL] — only you can close it} 
 msgid "{n, plural, one {proposal} few {proposals} many {proposals} other {proposals}}"
 msgstr "{n, plural, one {proposal} few {proposals} many {proposals} other {proposals}}"
 
-#: src/pages/today/loopModel.ts
-msgid "{pendingApprovals, plural, one {{count} approval waiting.} few {{count} approvals waiting.} many {{count} approvals waiting.} other {{count} approvals waiting.}}"
-msgstr "{pendingApprovals, plural, one {{count} approval waiting.} few {{count} approvals waiting.} many {{count} approvals waiting.} other {{count} approvals waiting.}}"
+#: src/pages/today/feedModel.ts
+msgid "{name} asked a question"
+msgstr "{name} asked a question"
+
+#: src/pages/today/feedModel.ts
+msgid "{name} asked for a destructive permission"
+msgstr "{name} asked for a destructive permission"
+
+#: src/pages/today/feedModel.ts
+msgid "{name} asked for a permission"
+msgstr "{name} asked for a permission"
+
+#: src/pages/today/feedModel.ts
+#: src/pages/today/feedModel.ts
+msgid "{name} failed"
+msgstr "{name} failed"
+
+#: src/pages/today/feedModel.ts
+msgid "{name} finished"
+msgstr "{name} finished"
+
+#: src/pages/today/feedModel.ts
+msgid "{name} is waiting for your reply"
+msgstr "{name} is waiting for your reply"
+
+#: src/pages/today/feedModel.ts
+msgid "{name} is waiting on you"
+msgstr "{name} is waiting on you"
+
+#: src/pages/today/feedModel.ts
+msgid "{name} session started"
+msgstr "{name} session started"
+
+#: src/pages/today/feedModel.ts
+msgid "{name} was stopped"
+msgstr "{name} was stopped"
+
+#: src/pages/today/feedModel.ts
+msgid "{name} went quiet"
+msgstr "{name} went quiet"
 
 #: src/pages/Approvals.tsx
 msgid "{pendingCount} pending · {resolvedTodayCount} resolved today · a pause is a feature, not a failure"
@@ -346,9 +405,17 @@ msgstr "a reply is being generated — Stop to cancel it."
 msgid "add rule"
 msgstr "add rule"
 
+#: src/pages/today/feedModel.ts
+msgid "Advisor noticed: {title}"
+msgstr "Advisor noticed: {title}"
+
 #: src/pages/detail/CallTree.tsx
 msgid "agent"
 msgstr "agent"
+
+#: src/pages/today/feedModel.ts
+msgid "Agent change proposed: {title}"
+msgstr "Agent change proposed: {title}"
 
 #: src/pages/detail/DetailRail.tsx
 #: src/pages/detail/SummaryChips.tsx
@@ -421,10 +488,6 @@ msgstr "analyzing transcript…"
 #: src/pages/ProjectOverview.tsx
 msgid "analyzing…"
 msgstr "analyzing…"
-
-#: src/pages/today/LoopMap.tsx
-msgid "and the loop closes when Change lowers next week's Measure"
-msgstr "and the loop closes when Change lowers next week's Measure"
 
 #: src/pages/NeedsYou.tsx
 #: src/pages/NeedsYou.tsx
@@ -735,10 +798,6 @@ msgstr "daemon telemetry"
 msgid "dashboard"
 msgstr "dashboard"
 
-#: src/pages/today/LoopMap.tsx
-msgid "data flows →"
-msgstr "data flows →"
-
 #: src/pages/NeedsYou.tsx
 msgid "Decide here"
 msgstr "Decide here"
@@ -950,6 +1009,10 @@ msgstr "filter"
 msgid "filter · n:name s:state o:result"
 msgstr "filter · n:name s:state o:result"
 
+#: src/pages/today/EventFeed.tsx
+msgid "filter events"
+msgstr "filter events"
+
 #: src/pages/ProjectDetail.tsx
 msgid "first request"
 msgstr "first request"
@@ -969,6 +1032,14 @@ msgstr "generate insights"
 #: src/pages/NeedsYou.tsx
 msgid "guard block unreadable"
 msgstr "guard block unreadable"
+
+#: src/pages/today/feedModel.ts
+msgid "Guard stopped phase {seq}"
+msgstr "Guard stopped phase {seq}"
+
+#: src/pages/today/feedModel.ts
+msgid "Guard stopped phase {seq} · {decision}"
+msgstr "Guard stopped phase {seq} · {decision}"
 
 #: src/pages/sessions/SwarmPanel.tsx
 msgid "handed to the session's mod"
@@ -1029,10 +1100,6 @@ msgstr "in progress"
 msgid "in review"
 msgstr "in review"
 
-#: src/pages/today/WaitingOnYou.tsx
-msgid "Inbox · {count} →"
-msgstr "Inbox · {count} →"
-
 #: src/pages/today/loopModel.ts
 msgid "Inbox →"
 msgstr "Inbox →"
@@ -1087,6 +1154,14 @@ msgstr "Latest"
 msgid "Learn"
 msgstr "Learn"
 
+#: src/pages/today/feedModel.ts
+msgid "Lesson may have stopped helping: {title}"
+msgstr "Lesson may have stopped helping: {title}"
+
+#: src/pages/today/feedModel.ts
+msgid "Lesson proposed: {title}"
+msgstr "Lesson proposed: {title}"
+
 #: src/pages/today/loopModel.ts
 msgid "live"
 msgstr "live"
@@ -1116,6 +1191,7 @@ msgstr "loading trace…"
 msgid "loading…"
 msgstr "loading…"
 
+#: src/pages/today/EventFeed.tsx
 #: src/pages/today/LiveNow.tsx
 #: src/pages/today/WaitingOnYou.tsx
 msgid "Loading…"
@@ -1185,6 +1261,10 @@ msgstr "Needs triage"
 msgid "Needs you"
 msgstr "Needs you"
 
+#: src/pages/today/WaitingOnYou.tsx
+msgid "Needs you · {count} →"
+msgstr "Needs you · {count} →"
+
 #: src/pages/NeedsYou.tsx
 msgid "needs you…"
 msgstr "needs you…"
@@ -1212,6 +1292,10 @@ msgstr "no errors — clean day"
 #: src/pages/Overview.tsx
 msgid "no errors for this day"
 msgstr "no errors for this day"
+
+#: src/pages/today/EventFeed.tsx
+msgid "No event matches."
+msgstr "No event matches."
 
 #: src/pages/detail/Timeline.tsx
 msgid "no events in this session yet"
@@ -1362,6 +1446,10 @@ msgstr "Nothing blocked on you."
 msgid "nothing flagged"
 msgstr "nothing flagged"
 
+#: src/pages/today/EventFeed.tsx
+msgid "Nothing happened yet. Sessions, plan runs and decisions land here."
+msgstr "Nothing happened yet. Sessions, plan runs and decisions land here."
+
 #: src/pages/Sessions.tsx
 msgid "Nothing here. Dispatch a task with + new, or widen the project scope."
 msgstr "Nothing here. Dispatch a task with + new, or widen the project scope."
@@ -1379,8 +1467,8 @@ msgid "Nothing running right now. Sessions show up here the moment one starts."
 msgstr "Nothing running right now. Sessions show up here the moment one starts."
 
 #: src/pages/today/LiveNow.tsx
-msgid "Nothing running. A session shows up here the moment it starts."
-msgstr "Nothing running. A session shows up here the moment it starts."
+msgid "Nothing running."
+msgstr "Nothing running."
 
 #: src/pages/today/loopModel.ts
 msgid "Nothing to review. Lessons and Advisor findings land here after runs are measured."
@@ -1390,9 +1478,13 @@ msgstr "Nothing to review. Lessons and Advisor findings land here after runs are
 msgid "Nothing waited on you today."
 msgstr "Nothing waited on you today."
 
+#: src/pages/today/Today.tsx
+msgid "Nothing waits on you · {liveCount} running"
+msgstr "Nothing waits on you · {liveCount} running"
+
 #: src/pages/today/WaitingOnYou.tsx
-msgid "Nothing waiting on you. Approvals, lessons and Advisor findings land here."
-msgstr "Nothing waiting on you. Approvals, lessons and Advisor findings land here."
+msgid "Nothing waits on you."
+msgstr "Nothing waits on you."
 
 #: src/pages/Approvals.tsx
 msgid "off"
@@ -1533,6 +1625,38 @@ msgstr "Permissions, questions, guard stops and manual checks land here the mome
 msgid "phase {seq}"
 msgstr "phase {seq}"
 
+#: src/pages/today/feedModel.ts
+msgid "Phase {seq} is waiting to merge"
+msgstr "Phase {seq} is waiting to merge"
+
+#: src/pages/today/feedModel.ts
+msgid "Phase {seq} needs a manual check"
+msgstr "Phase {seq} needs a manual check"
+
+#: src/pages/today/feedModel.ts
+msgid "Phase {seq} of {plan} failed"
+msgstr "Phase {seq} of {plan} failed"
+
+#: src/pages/today/feedModel.ts
+msgid "Phase {seq} of {plan} finished"
+msgstr "Phase {seq} of {plan} finished"
+
+#: src/pages/today/feedModel.ts
+msgid "Phase {seq} of {plan} finished in part"
+msgstr "Phase {seq} of {plan} finished in part"
+
+#: src/pages/today/feedModel.ts
+msgid "Phase {seq} of {plan} started"
+msgstr "Phase {seq} of {plan} started"
+
+#: src/pages/today/feedModel.ts
+msgid "Phase {seq} of {plan} stopped with nothing done"
+msgstr "Phase {seq} of {plan} stopped with nothing done"
+
+#: src/pages/today/feedModel.ts
+msgid "Phase {seq} stalled"
+msgstr "Phase {seq} stalled"
+
 #: src/pages/NeedsYou.tsx
 msgid "Phase / card"
 msgstr "Phase / card"
@@ -1646,6 +1770,10 @@ msgstr "Proof"
 msgid "Proof →"
 msgstr "Proof →"
 
+#: src/pages/today/loopModel.ts
+msgid "proven"
+msgstr "proven"
+
 #: src/pages/detail/SessionPane.tsx
 msgid "queue a message · delivered after this step"
 msgstr "queue a message · delivered after this step"
@@ -1747,10 +1875,6 @@ msgstr "reply: {typed}"
 msgid "resume with a reply"
 msgstr "resume with a reply"
 
-#: src/pages/today/WaitingOnYou.tsx
-msgid "review"
-msgstr "review"
-
 #: src/pages/Overview.tsx
 msgid "review →"
 msgstr "review →"
@@ -1758,6 +1882,10 @@ msgstr "review →"
 #: src/pages/today/loopModel.ts
 msgid "Review in Inbox →"
 msgstr "Review in Inbox →"
+
+#: src/pages/today/loopModel.ts
+msgid "Review in Inbox."
+msgstr "Review in Inbox."
 
 #: src/pages/ProjectOverview.tsx
 msgid "Right now"
@@ -1894,6 +2022,7 @@ msgstr "sessions"
 msgid "Sessions"
 msgstr "Sessions"
 
+#: src/pages/today/LiveNow.tsx
 #: src/pages/today/loopModel.ts
 msgid "Sessions →"
 msgstr "Sessions →"
@@ -1976,6 +2105,10 @@ msgstr "sorted by risk · deletions first"
 #: src/pages/ProjectOverview.tsx
 msgid "source: {source}"
 msgstr "source: {source}"
+
+#: src/pages/today/SpendWeek.tsx
+msgid "Spend · 7 days"
+msgstr "Spend · 7 days"
 
 #: src/pages/NeedsYou.tsx
 msgid "stalls {stallPlan} · Phase {stallSeq}: {stallName}"
@@ -2119,7 +2252,6 @@ msgid "The executor stopped: {trigger}"
 msgstr "The executor stopped: {trigger}"
 
 #: src/pages/today/LoopMap.tsx
-#: src/pages/today/Today.tsx
 msgid "The loop, this week"
 msgstr "The loop, this week"
 
@@ -2186,6 +2318,15 @@ msgstr "to"
 #: src/pages/ProjectOverview.tsx
 msgid "to do"
 msgstr "to do"
+
+#: src/pages/today/SpendWeek.tsx
+msgid "today"
+msgstr "today"
+
+#: src/pages/today/EventFeed.tsx
+#: src/pages/today/EventFeed.tsx
+msgid "Today"
+msgstr "Today"
 
 #: src/pages/today/Today.tsx
 msgid "Today in detail"
@@ -2262,6 +2403,10 @@ msgstr "unpin {name}"
 msgid "untitled session"
 msgstr "untitled session"
 
+#: src/pages/today/feedModel.ts
+msgid "Untitled session"
+msgstr "Untitled session"
+
 #: src/pages/Projects.tsx
 msgid "up vs previous week"
 msgstr "up vs previous week"
@@ -2273,10 +2418,6 @@ msgstr "usage · agents · skills · files"
 #: src/pages/detail/PendingRunNotice.tsx
 msgid "verification run"
 msgstr "verification run"
-
-#: src/pages/today/loopModel.ts
-msgid "verified"
-msgstr "verified"
 
 #: src/pages/Approvals.tsx
 msgid "via {via}"
@@ -2304,14 +2445,14 @@ msgstr "waiting {age}"
 msgid "waiting {waited}"
 msgstr "waiting {waited}"
 
-#: src/pages/today/LiveNow.tsx
-msgid "waiting on you"
-msgstr "waiting on you"
-
 #: src/pages/Approvals.tsx
 #: src/pages/today/WaitingOnYou.tsx
 msgid "Waiting on you"
 msgstr "Waiting on you"
+
+#: src/pages/today/EventFeed.tsx
+msgid "what happened · newest first"
+msgstr "what happened · newest first"
 
 #: src/pages/sessions/SwarmPanel.tsx
 msgid "What should the other session know?"
@@ -2359,6 +2500,10 @@ msgstr "Worktrees of finished phases and cards whose content is already in main.
 msgid "Worktrees ready to remove in {repoRoot}"
 msgstr "Worktrees ready to remove in {repoRoot}"
 
+#: src/pages/today/feedModel.ts
+msgid "Worktrees to clean up in {name}"
+msgstr "Worktrees to clean up in {name}"
+
 #: src/pages/detail/SessionGate.tsx
 msgid "write my own"
 msgstr "write my own"
@@ -2366,6 +2511,10 @@ msgstr "write my own"
 #: src/pages/sessions/CacheColdBadge.tsx
 msgid "writing handoff…"
 msgstr "writing handoff…"
+
+#: src/pages/today/EventFeed.tsx
+msgid "Yesterday"
+msgstr "Yesterday"
 
 #: src/pages/detail/Chat.tsx
 #: src/pages/detail/Chat.tsx

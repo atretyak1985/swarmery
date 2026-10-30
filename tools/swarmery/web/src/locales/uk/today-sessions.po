@@ -35,6 +35,11 @@ msgstr "(порожній промпт)"
 msgid "(untitled session)"
 msgstr "(сесія без назви)"
 
+#. placeholder {0}: i.phaseDecisions
+#: src/pages/today/loopModel.ts
+msgid "{0, plural, one {{decisions} phase waits on a decision.} few {{decisions} phases wait on a decision.} many {{decisions} phases wait on a decision.} other {{decisions} phases wait on a decision.}}"
+msgstr "{0, plural, one {{decisions} фаза чекає на рішення.} few {{decisions} фази чекають на рішення.} many {{decisions} фаз чекають на рішення.} other {{decisions} фази чекають на рішення.}}"
+
 #. placeholder {0}: f.blocked
 #: src/pages/NeedsYou.tsx
 msgid "{0, plural, one {# blocked attempt} few {# blocked attempts} many {# blocked attempts} other {# blocked attempts}}"
@@ -55,6 +60,11 @@ msgstr "{0, plural, one {# проєкт · {onboardedCount} підключено
 msgid "{0, plural, one {# session} few {# sessions} many {# sessions} other {# sessions}}"
 msgstr "{0, plural, one {# сесія} few {# сесії} many {# сесій} other {# сесії}}"
 
+#. placeholder {0}: needs.count
+#: src/pages/today/Today.tsx
+msgid "{0, plural, one {# thing waits on you · {liveCount} running} few {# things wait on you · {liveCount} running} many {# things wait on you · {liveCount} running} other {# things wait on you · {liveCount} running}}"
+msgstr "{0, plural, one {# справа чекає на вас · працює: {liveCount}} few {# справи чекають на вас · працює: {liveCount}} many {# справ чекають на вас · працює: {liveCount}} other {# справи чекають на вас · працює: {liveCount}}}"
+
 #. placeholder {0}: data.uninspected
 #: src/pages/detail/ContextHogsCard.tsx
 msgid "{0, plural, one {# unattributed result} few {# unattributed results} many {# unattributed results} other {# unattributed results}}"
@@ -72,6 +82,10 @@ msgstr "{advisorFindings, plural, one {{count} знахідка радника} 
 #: src/pages/detail/Chat.tsx
 msgid "{agents, plural, one {ran {count} agent} few {ran {count} agents} many {ran {count} agents} other {ran {count} agents}}"
 msgstr "{agents, plural, one {запущено {count} агента} few {запущено {count} агенти} many {запущено {count} агентів} other {запущено {count} агента}}"
+
+#: src/pages/today/loopModel.ts
+msgid "{askingSessions, plural, one {{count} session asks for you.} few {{count} sessions ask for you.} many {{count} sessions ask for you.} other {{count} sessions ask for you.}}"
+msgstr "{askingSessions, plural, one {{count} сесія кличе вас.} few {{count} сесії кличуть вас.} many {{count} сесій кличуть вас.} other {{count} сесії кличуть вас.}}"
 
 #: src/pages/Overview.tsx
 msgid "{autoPct}% of requests · no stop"
@@ -125,13 +139,21 @@ msgstr "подій: {events}"
 msgid "{farOff} landed far from the plan."
 msgstr "Далеко від плану: {farOff}."
 
+#: src/pages/today/loopModel.ts
+msgid "{finished} finished today, {failed} failed."
+msgstr "Сьогодні завершено: {finished}, зі збоєм: {failed}."
+
+#: src/pages/today/loopModel.ts
+msgid "{finished} finished today."
+msgstr "Сьогодні завершено: {finished}."
+
 #: src/pages/Overview.tsx
 msgid "{first} · +{extra} more"
 msgstr "{first} · ще +{extra}"
 
 #: src/pages/today/loopModel.ts
-msgid "{forecasted, plural, one {{count} phase carries a forecast — what the planner expects before anything runs.} few {{count} phases carry a forecast — what the planner expects before anything runs.} many {{count} phases carry a forecast — what the planner expects before anything runs.} other {{count} phases carry a forecast — what the planner expects before anything runs.}}"
-msgstr "{forecasted, plural, one {{count} фаза має прогноз — те, чого планувальник очікує ще до запуску.} few {{count} фази мають прогноз — те, чого планувальник очікує ще до запуску.} many {{count} фаз мають прогноз — те, чого планувальник очікує ще до запуску.} other {{count} фази мають прогноз — те, чого планувальник очікує ще до запуску.}}"
+msgid "{forecasted, plural, one {{count} phase carries a forecast.} few {{count} phases carry a forecast.} many {{count} phases carry a forecast.} other {{count} phases carry a forecast.}}"
+msgstr "{forecasted, plural, one {{count} фаза має прогноз.} few {{count} фази мають прогноз.} many {{count} фаз мають прогноз.} other {{count} фази мають прогноз.}}"
 
 #: src/pages/today/loopModel.ts
 msgid "{gatheringProof, plural, one {{count} change still gathering proof.} few {{count} changes still gathering proof.} many {{count} changes still gathering proof.} other {{count} changes still gathering proof.}}"
@@ -177,9 +199,46 @@ msgstr "{n, plural, one {# критерій позначено [MANUAL] — за
 msgid "{n, plural, one {proposal} few {proposals} many {proposals} other {proposals}}"
 msgstr "{n, plural, one {пропозиція} few {пропозиції} many {пропозицій} other {пропозиції}}"
 
-#: src/pages/today/loopModel.ts
-msgid "{pendingApprovals, plural, one {{count} approval waiting.} few {{count} approvals waiting.} many {{count} approvals waiting.} other {{count} approvals waiting.}}"
-msgstr "{pendingApprovals, plural, one {{count} погодження чекає.} few {{count} погодження чекають.} many {{count} погоджень чекають.} other {{count} погодження чекає.}}"
+#: src/pages/today/feedModel.ts
+msgid "{name} asked a question"
+msgstr "{name}: запитання до вас"
+
+#: src/pages/today/feedModel.ts
+msgid "{name} asked for a destructive permission"
+msgstr "{name}: запит руйнівного дозволу"
+
+#: src/pages/today/feedModel.ts
+msgid "{name} asked for a permission"
+msgstr "{name}: запит дозволу"
+
+#: src/pages/today/feedModel.ts
+#: src/pages/today/feedModel.ts
+msgid "{name} failed"
+msgstr "{name}: збій"
+
+#: src/pages/today/feedModel.ts
+msgid "{name} finished"
+msgstr "{name}: завершено"
+
+#: src/pages/today/feedModel.ts
+msgid "{name} is waiting for your reply"
+msgstr "{name}: чекає вашої відповіді"
+
+#: src/pages/today/feedModel.ts
+msgid "{name} is waiting on you"
+msgstr "{name}: чекає на вас"
+
+#: src/pages/today/feedModel.ts
+msgid "{name} session started"
+msgstr "{name}: сесію запущено"
+
+#: src/pages/today/feedModel.ts
+msgid "{name} was stopped"
+msgstr "{name}: зупинено"
+
+#: src/pages/today/feedModel.ts
+msgid "{name} went quiet"
+msgstr "{name}: без активності"
 
 #: src/pages/Approvals.tsx
 msgid "{pendingCount} pending · {resolvedTodayCount} resolved today · a pause is a feature, not a failure"
@@ -346,9 +405,17 @@ msgstr "відповідь генерується — «Стоп», щоб ск�
 msgid "add rule"
 msgstr "додати правило"
 
+#: src/pages/today/feedModel.ts
+msgid "Advisor noticed: {title}"
+msgstr "Радник помітив: {title}"
+
 #: src/pages/detail/CallTree.tsx
 msgid "agent"
 msgstr "агент"
+
+#: src/pages/today/feedModel.ts
+msgid "Agent change proposed: {title}"
+msgstr "Запропоновано зміну агента: {title}"
 
 #: src/pages/detail/DetailRail.tsx
 #: src/pages/detail/SummaryChips.tsx
@@ -421,10 +488,6 @@ msgstr "аналізуємо транскрипт…"
 #: src/pages/ProjectOverview.tsx
 msgid "analyzing…"
 msgstr "аналізуємо…"
-
-#: src/pages/today/LoopMap.tsx
-msgid "and the loop closes when Change lowers next week's Measure"
-msgstr "а цикл замикається, коли «Зміна» знижує «Вимір» наступного тижня"
 
 #: src/pages/NeedsYou.tsx
 #: src/pages/NeedsYou.tsx
@@ -735,10 +798,6 @@ msgstr "телеметрія демона"
 msgid "dashboard"
 msgstr "дашборд"
 
-#: src/pages/today/LoopMap.tsx
-msgid "data flows →"
-msgstr "дані йдуть →"
-
 #: src/pages/NeedsYou.tsx
 msgid "Decide here"
 msgstr "Вирішіть тут"
@@ -950,6 +1009,10 @@ msgstr "фільтр"
 msgid "filter · n:name s:state o:result"
 msgstr "фільтр · n:назва s:стан o:результат"
 
+#: src/pages/today/EventFeed.tsx
+msgid "filter events"
+msgstr "фільтр подій"
+
 #: src/pages/ProjectDetail.tsx
 msgid "first request"
 msgstr "перший запит"
@@ -969,6 +1032,14 @@ msgstr "згенерувати інсайти"
 #: src/pages/NeedsYou.tsx
 msgid "guard block unreadable"
 msgstr "блок guard не прочитати"
+
+#: src/pages/today/feedModel.ts
+msgid "Guard stopped phase {seq}"
+msgstr "Guard зупинив фазу {seq}"
+
+#: src/pages/today/feedModel.ts
+msgid "Guard stopped phase {seq} · {decision}"
+msgstr "Guard зупинив фазу {seq} · {decision}"
 
 #: src/pages/sessions/SwarmPanel.tsx
 msgid "handed to the session's mod"
@@ -1029,10 +1100,6 @@ msgstr "у роботі"
 msgid "in review"
 msgstr "на рев’ю"
 
-#: src/pages/today/WaitingOnYou.tsx
-msgid "Inbox · {count} →"
-msgstr "Вхідні · {count} →"
-
 #: src/pages/today/loopModel.ts
 msgid "Inbox →"
 msgstr "Вхідні →"
@@ -1087,6 +1154,14 @@ msgstr "Останнє"
 msgid "Learn"
 msgstr "Навчання"
 
+#: src/pages/today/feedModel.ts
+msgid "Lesson may have stopped helping: {title}"
+msgstr "Урок, можливо, більше не допомагає: {title}"
+
+#: src/pages/today/feedModel.ts
+msgid "Lesson proposed: {title}"
+msgstr "Запропоновано урок: {title}"
+
 #: src/pages/today/loopModel.ts
 msgid "live"
 msgstr "наживо"
@@ -1116,6 +1191,7 @@ msgstr "завантажуємо трасу…"
 msgid "loading…"
 msgstr "завантаження…"
 
+#: src/pages/today/EventFeed.tsx
 #: src/pages/today/LiveNow.tsx
 #: src/pages/today/WaitingOnYou.tsx
 msgid "Loading…"
@@ -1185,6 +1261,10 @@ msgstr "Потребує сортування"
 msgid "Needs you"
 msgstr "Потребує вас"
 
+#: src/pages/today/WaitingOnYou.tsx
+msgid "Needs you · {count} →"
+msgstr "Потребує вас · {count} →"
+
 #: src/pages/NeedsYou.tsx
 msgid "needs you…"
 msgstr "needs you…"
@@ -1212,6 +1292,10 @@ msgstr "без помилок — чистий день"
 #: src/pages/Overview.tsx
 msgid "no errors for this day"
 msgstr "за цей день помилок немає"
+
+#: src/pages/today/EventFeed.tsx
+msgid "No event matches."
+msgstr "Жодної відповідної події."
 
 #: src/pages/detail/Timeline.tsx
 msgid "no events in this session yet"
@@ -1362,6 +1446,10 @@ msgstr "Ніщо не чекає на вас."
 msgid "nothing flagged"
 msgstr "нічого не позначено"
 
+#: src/pages/today/EventFeed.tsx
+msgid "Nothing happened yet. Sessions, plan runs and decisions land here."
+msgstr "Поки нічого не сталося. Сесії, запуски планів і рішення з'являються тут."
+
 #: src/pages/Sessions.tsx
 msgid "Nothing here. Dispatch a task with + new, or widen the project scope."
 msgstr "Тут порожньо. Запустіть завдання через + new або розширте вибір проєкту."
@@ -1379,8 +1467,8 @@ msgid "Nothing running right now. Sessions show up here the moment one starts."
 msgstr "Зараз нічого не працює. Сесії з’являться тут, щойно одна стартує."
 
 #: src/pages/today/LiveNow.tsx
-msgid "Nothing running. A session shows up here the moment it starts."
-msgstr "Нічого не працює. Сесія з’явиться тут, щойно стартує."
+msgid "Nothing running."
+msgstr "Нічого не працює."
 
 #: src/pages/today/loopModel.ts
 msgid "Nothing to review. Lessons and Advisor findings land here after runs are measured."
@@ -1390,9 +1478,13 @@ msgstr "Нічого переглядати. Уроки й знахідки ра
 msgid "Nothing waited on you today."
 msgstr "Сьогодні ніщо на вас не чекало."
 
+#: src/pages/today/Today.tsx
+msgid "Nothing waits on you · {liveCount} running"
+msgstr "Ніщо не чекає на вас · працює: {liveCount}"
+
 #: src/pages/today/WaitingOnYou.tsx
-msgid "Nothing waiting on you. Approvals, lessons and Advisor findings land here."
-msgstr "Ніщо на вас не чекає. Погодження, уроки й знахідки радника з’являться тут."
+msgid "Nothing waits on you."
+msgstr "Ніщо не чекає на вас."
 
 #: src/pages/Approvals.tsx
 msgid "off"
@@ -1533,6 +1625,38 @@ msgstr "Дозволи, запитання, зупинки guard і ручні �
 msgid "phase {seq}"
 msgstr "фаза {seq}"
 
+#: src/pages/today/feedModel.ts
+msgid "Phase {seq} is waiting to merge"
+msgstr "Фаза {seq} чекає на злиття"
+
+#: src/pages/today/feedModel.ts
+msgid "Phase {seq} needs a manual check"
+msgstr "Фаза {seq} потребує ручної перевірки"
+
+#: src/pages/today/feedModel.ts
+msgid "Phase {seq} of {plan} failed"
+msgstr "Фаза {seq} плану {plan}: збій"
+
+#: src/pages/today/feedModel.ts
+msgid "Phase {seq} of {plan} finished"
+msgstr "Фаза {seq} плану {plan}: завершено"
+
+#: src/pages/today/feedModel.ts
+msgid "Phase {seq} of {plan} finished in part"
+msgstr "Фаза {seq} плану {plan}: завершено частково"
+
+#: src/pages/today/feedModel.ts
+msgid "Phase {seq} of {plan} started"
+msgstr "Фаза {seq} плану {plan}: запущено"
+
+#: src/pages/today/feedModel.ts
+msgid "Phase {seq} of {plan} stopped with nothing done"
+msgstr "Фаза {seq} плану {plan}: зупинилась, нічого не зробивши"
+
+#: src/pages/today/feedModel.ts
+msgid "Phase {seq} stalled"
+msgstr "Фаза {seq} застрягла"
+
 #: src/pages/NeedsYou.tsx
 msgid "Phase / card"
 msgstr "Фаза / картка"
@@ -1646,6 +1770,10 @@ msgstr "Доказ"
 msgid "Proof →"
 msgstr "Докази →"
 
+#: src/pages/today/loopModel.ts
+msgid "proven"
+msgstr "доведено"
+
 #: src/pages/detail/SessionPane.tsx
 msgid "queue a message · delivered after this step"
 msgstr "поставити повідомлення в чергу · надійде після цього кроку"
@@ -1747,10 +1875,6 @@ msgstr "відповісти: {typed}"
 msgid "resume with a reply"
 msgstr "відновити відповіддю"
 
-#: src/pages/today/WaitingOnYou.tsx
-msgid "review"
-msgstr "рев’ю"
-
 #: src/pages/Overview.tsx
 msgid "review →"
 msgstr "рев’ю →"
@@ -1758,6 +1882,10 @@ msgstr "рев’ю →"
 #: src/pages/today/loopModel.ts
 msgid "Review in Inbox →"
 msgstr "Переглянути у Вхідних →"
+
+#: src/pages/today/loopModel.ts
+msgid "Review in Inbox."
+msgstr "Перегляньте у Вхідних."
 
 #: src/pages/ProjectOverview.tsx
 msgid "Right now"
@@ -1894,6 +2022,7 @@ msgstr "сесії"
 msgid "Sessions"
 msgstr "Сесії"
 
+#: src/pages/today/LiveNow.tsx
 #: src/pages/today/loopModel.ts
 msgid "Sessions →"
 msgstr "Сесії →"
@@ -1976,6 +2105,10 @@ msgstr "за ризиком · спершу видалення"
 #: src/pages/ProjectOverview.tsx
 msgid "source: {source}"
 msgstr "джерело: {source}"
+
+#: src/pages/today/SpendWeek.tsx
+msgid "Spend · 7 days"
+msgstr "Витрати · 7 днів"
 
 #: src/pages/NeedsYou.tsx
 msgid "stalls {stallPlan} · Phase {stallSeq}: {stallName}"
@@ -2119,7 +2252,6 @@ msgid "The executor stopped: {trigger}"
 msgstr "Виконавець зупинився: {trigger}"
 
 #: src/pages/today/LoopMap.tsx
-#: src/pages/today/Today.tsx
 msgid "The loop, this week"
 msgstr "Цикл цього тижня"
 
@@ -2186,6 +2318,15 @@ msgstr "до"
 #: src/pages/ProjectOverview.tsx
 msgid "to do"
 msgstr "до роботи"
+
+#: src/pages/today/SpendWeek.tsx
+msgid "today"
+msgstr "сьогодні"
+
+#: src/pages/today/EventFeed.tsx
+#: src/pages/today/EventFeed.tsx
+msgid "Today"
+msgstr "Сьогодні"
 
 #: src/pages/today/Today.tsx
 msgid "Today in detail"
@@ -2262,6 +2403,10 @@ msgstr "відкріпити {name}"
 msgid "untitled session"
 msgstr "сесія без назви"
 
+#: src/pages/today/feedModel.ts
+msgid "Untitled session"
+msgstr "Сесія без назви"
+
 #: src/pages/Projects.tsx
 msgid "up vs previous week"
 msgstr "більше, ніж минулого тижня"
@@ -2273,10 +2418,6 @@ msgstr "використання · агенти · скіли · файли"
 #: src/pages/detail/PendingRunNotice.tsx
 msgid "verification run"
 msgstr "запуск перевірки"
-
-#: src/pages/today/loopModel.ts
-msgid "verified"
-msgstr "підтверджено"
 
 #: src/pages/Approvals.tsx
 msgid "via {via}"
@@ -2304,14 +2445,14 @@ msgstr "чекає {age}"
 msgid "waiting {waited}"
 msgstr "чекає {waited}"
 
-#: src/pages/today/LiveNow.tsx
-msgid "waiting on you"
-msgstr "чекає на вас"
-
 #: src/pages/Approvals.tsx
 #: src/pages/today/WaitingOnYou.tsx
 msgid "Waiting on you"
 msgstr "Чекає на вас"
+
+#: src/pages/today/EventFeed.tsx
+msgid "what happened · newest first"
+msgstr "що сталося · спершу новіше"
 
 #: src/pages/sessions/SwarmPanel.tsx
 msgid "What should the other session know?"
@@ -2359,6 +2500,10 @@ msgstr "Worktree завершених фаз і карток, чий вміст 
 msgid "Worktrees ready to remove in {repoRoot}"
 msgstr "Worktree, готові до видалення, у {repoRoot}"
 
+#: src/pages/today/feedModel.ts
+msgid "Worktrees to clean up in {name}"
+msgstr "Worktree до прибирання в {name}"
+
 #: src/pages/detail/SessionGate.tsx
 msgid "write my own"
 msgstr "написати свою"
@@ -2366,6 +2511,10 @@ msgstr "написати свою"
 #: src/pages/sessions/CacheColdBadge.tsx
 msgid "writing handoff…"
 msgstr "пишу передачу…"
+
+#: src/pages/today/EventFeed.tsx
+msgid "Yesterday"
+msgstr "Учора"
 
 #: src/pages/detail/Chat.tsx
 #: src/pages/detail/Chat.tsx

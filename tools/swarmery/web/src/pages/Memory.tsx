@@ -34,7 +34,7 @@ import { fmtAgo } from '../lib/format';
 import { ConfirmDialog, Empty, ErrorBox, Loading } from '../components/ui';
 import { StaleFactsPanel } from './memory/StaleFactsPanel';
 
-const KIND_LABELS: Record<MemoryKind, MessageDescriptor> = {
+export const KIND_LABELS: Record<MemoryKind, MessageDescriptor> = {
   'claude-md': msg`Project instructions`,
   'auto-memory': msg`Auto-memory`,
   serena: msg`Serena`,
@@ -44,7 +44,7 @@ const KIND_LABELS: Record<MemoryKind, MessageDescriptor> = {
 const KIND_ORDER: MemoryKind[] = ['claude-md', 'auto-memory', 'serena'];
 
 /** Human-friendly byte size for the file list. */
-function fmtBytes(n: number): string {
+export function fmtBytes(n: number): string {
   if (n < 1024) return `${String(n)} B`;
   if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
   return `${(n / (1024 * 1024)).toFixed(1)} MB`;
@@ -68,7 +68,15 @@ function groupByKind(files: MemoryFile[]): FileGroup[] {
   );
 }
 
-export function Memory(): JSX.Element {
+/**
+ * Without props: the whole page. `panels` is the file-independent half for the
+ * Knowledge detail, where the list column carries the files: the consolidate panel
+ * and the stale facts, with `onOpenFile` sending a stale line to that file's row.
+ */
+export function Memory({
+  panels = false,
+  onOpenFile,
+}: { panels?: boolean; onOpenFile?: (path: string) => void } = {}): JSX.Element {
   const { t } = useLingui();
   const { slug, projectId, loading: projLoading } = useProjectWorkspace();
 
@@ -142,6 +150,21 @@ export function Memory(): JSX.Element {
     );
   if (listError !== null) return wrap(<ErrorBox message={listError} onRetry={loadList} />);
   if (files === null) return wrap(<Loading label={t`memory…`} />);
+
+  if (panels) {
+    return (
+      <>
+        {autoMemoryDir !== null && <ConsolidatePanel dir={autoMemoryDir} onApplied={onSaved} />}
+        <StaleFactsPanel
+          report={lint}
+          loading={lint === null && lintError === null}
+          error={lintError}
+          onOpen={onOpenFile ?? setSelected}
+          onRetry={loadLint}
+        />
+      </>
+    );
+  }
 
   return (
     <div className="flex min-h-0 flex-1 flex-col px-4 pt-5 pb-10 desk:px-8 desk:pt-7">
@@ -456,7 +479,7 @@ function FileList({
 
 type EditorView = 'edit' | 'preview';
 
-function MemoryEditor({
+export function MemoryEditor({
   project,
   path,
   onSaved,

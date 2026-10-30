@@ -2,10 +2,11 @@
 //
 // Learning (Canvas v3 phase 6). The claims:
 //
-//   1. /learning renders four tabs, Lessons first with its candidate count,
-//      and the embedded Lessons tab carries no page heading or calibration.
-//   2. `?tab=classifier` selects the classifier: sentence titles, the words
-//      off · watching · acting, and no code-name mode on screen.
+//   1. /learning renders three accordion groups, Lessons first and open with its
+//      lessons as rows, one page heading and no calibration panel.
+//   2. `?tab=classifier` opens The classifier: sentence titles, the words
+//      off · watching · acting, and no code-name mode on screen. `?tab=honesty`
+//      opens the same group on its Forecast honesty row.
 //   3. Choosing "watching" calls putDecisionMode with 'shadow'.
 //   4. Proof renders its empty state and performs no network call.
 //
@@ -96,6 +97,11 @@ function lesson(id: number): lessons.Lesson {
   };
 }
 
+/** A group header of the accordion: its label, then its count. */
+function group(name: string): HTMLElement {
+  return screen.getByRole('button', { name: new RegExp(`^${name}\\s*\\d+$`) });
+}
+
 function renderAt(url: string): void {
   render(
     <MemoryRouter initialEntries={[url]}>
@@ -128,33 +134,36 @@ afterEach(() => {
 });
 
 describe('Learning', () => {
-  it('renders four tabs with Lessons first and its candidate count', async () => {
+  it('renders three groups with Lessons open first and its lessons as rows', async () => {
     renderAt('/learning');
-    const tabs = screen.getAllByRole('tab');
-    expect(tabs.map((t) => t.textContent?.replace(/\d+$/, ''))).toEqual([
-      'Lessons',
-      'The classifier',
-      'Forecast honesty',
-      'Proof',
-    ]);
-    expect(tabs[0]?.getAttribute('aria-selected')).toBe('true');
-    await waitFor(() => expect(tabs[0]?.textContent).toBe('Lessons3'));
-    expect(lessons.fetchLessons).toHaveBeenCalledWith('candidate');
-    // Embedded: one page heading (Learning) and no calibration panel.
+    const list = within(screen.getByRole('region', { name: 'Learning' }));
+    expect(list.getAllByRole('button', { expanded: true })).toHaveLength(1);
+    expect(list.getAllByRole('button', { expanded: false })).toHaveLength(2);
+    await waitFor(() => expect(group('Lessons').textContent).toMatch(/3/));
+    expect(group('Lessons').getAttribute('aria-expanded')).toBe('true');
+    expect(lessons.fetchLessons).toHaveBeenCalledWith();
+    expect(await screen.findByRole('button', { name: /lesson 1/ })).toBeTruthy();
+    // One page heading (Learning) and no calibration panel.
     expect(screen.getAllByRole('heading', { level: 1 }).map((h) => h.textContent)).toEqual(['Learning']);
     expect(screen.queryByText('How honest forecasts are')).toBeNull();
   });
 
+  it('opens a lesson as a page with its actions', async () => {
+    renderAt('/learning');
+    expect(await screen.findByRole('heading', { level: 2, name: 'lesson 1' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'accept' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'dismiss' })).toBeTruthy();
+  });
+
   it('selects the classifier from ?tab= and speaks in sentences and mode words', async () => {
     renderAt('/learning?tab=classifier');
-    expect(screen.getByRole('tab', { name: 'The classifier' }).getAttribute('aria-selected')).toBe('true');
+    expect(group('The classifier').getAttribute('aria-expanded')).toBe('true');
     expect(await screen.findByText('What kind of task was it?')).toBeTruthy();
     expect(screen.getByText('d2.task_type')).toBeTruthy();
     expect(screen.getByText('Why did it fail?')).toBeTruthy();
     const sw = screen.getByRole('group', { name: 'mode for What kind of task was it?' });
     expect(within(sw).getAllByRole('button').map((b) => b.textContent)).toEqual(['off', 'watching', 'acting']);
-    const panel = screen.getByRole('tabpanel');
-    expect(panel.textContent).not.toMatch(/\bshadow\b|\bactive\b/);
+    expect(document.body.textContent).not.toMatch(/\bshadow\b|\bactive\b/);
     const link = screen.getAllByRole('link', { name: 'check in Inbox →' })[0];
     expect(link?.getAttribute('href')).toBe('/inbox?tab=classifier');
   });
@@ -174,8 +183,9 @@ describe('Learning', () => {
     );
   });
 
-  it('renders the calibration panel under Forecast honesty', async () => {
+  it('renders the calibration panel under Forecast honesty, inside The classifier', async () => {
     renderAt('/learning?tab=honesty');
+    expect(group('The classifier').getAttribute('aria-expanded')).toBe('true');
     expect(await screen.findByText('How honest forecasts are')).toBeTruthy();
     expect(screen.getByText('calibration')).toBeTruthy();
   });

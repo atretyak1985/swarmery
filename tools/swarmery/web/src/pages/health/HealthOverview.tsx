@@ -1,45 +1,76 @@
-// Health → Overview (Canvas v3 phase 5, artboard 2c): the one sentence about
-// the fleet, the three agents that moved it, and the friction the operator can
-// remove right now — one denied tool no rule covers (with "+ always allow")
-// and the most repeated error. Everything past that lives one tab over.
+// Health's detail pages (handoff §9): the one sentence about the fleet with its
+// failed share by agent, the friction the operator can remove right now, and one
+// page per friction, Advisor finding and agent. All of them are blocks of
+// PageDetail; the boards the blocks cannot express stay on the group's first row.
 
 import { plural, t } from '@lingui/core/macro';
 import { Trans, useLingui } from '@lingui/react/macro';
-import { useCallback, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { createApprovalRule } from '../../api';
-import type { RetroAgentRow, RetroAgentsResp, RetroFrictionResp } from '../../api/types';
-import { ErrorBox, Loading } from '../../components/ui';
-import { fmtAgo } from '../../lib/format';
+import type {
+  HealthAutoMode,
+  Recommendation,
+  RetroAgentRow,
+  RetroAgentsResp,
+  RetroDeniedTool,
+  RetroErrorGroup,
+  RetroFrictionResp,
+} from '../../api/types';
+import { ImproveModal } from '../../components/ImproveModal';
 import {
-  type HealthTab,
+  PageDetail,
+  type PageAction,
+  type PageBar,
+  type PageKv,
+  type PageRow,
+  type PageTone,
+} from '../../components/place/PageDetail';
+import type { NumberItem } from '../../components/place/NumbersStrip';
+import { ErrorBox, Loading } from '../../components/ui';
+import { fmtAgo, fmtDurationMs } from '../../lib/format';
+import { HOT_FAILED_PCT, agentMove, agentsByFailure } from './healthPlace';
+import {
+  type AutoModeTone,
+  autoModeRow,
   fmtPct,
   oneSentence,
-  topAgents,
   uncoveredDenied,
   untriagedErrors,
+  windowCell,
 } from './healthModel';
 
-const LABEL = 'font-mono text-[10px] tracking-[0.14em] text-ink-faint uppercase';
+const AUTO_MODE_TONE: Record<AutoModeTone, string> = {
+  quiet: 'text-ink-faint',
+  seen: 'text-amber',
+  alerting: 'text-red',
+};
 
-/** Tone of an agent row: improved → green, still high → amber, else muted. */
-function agentTone(row: RetroAgentRow): { text: string; bar: string } {
-  const now = row.error_rate * 100;
-  const prev = row.prev.runs > 0 ? row.prev.error_rate * 100 : null;
-  if (prev !== null && prev - now >= 2) return { text: 'text-green', bar: 'bg-green' };
-  if (now >= 15) return { text: 'text-amber', bar: 'bg-amber' };
-  return { text: 'text-ink-3', bar: 'bg-ink-3' };
-}
-
-function agentFigure(row: RetroAgentRow): string {
-  const now = row.error_rate * 100;
-  const prev = row.prev.runs > 0 ? row.prev.error_rate * 100 : null;
-  const nowPct = fmtPct(now);
-  if (prev !== null && Math.abs(prev - now) >= 2) {
-    const prevPct = fmtPct(prev);
-    return t`${prevPct} → ${nowPct} failed`;
-  }
-  const runs = row.runs;
-  return t`${nowPct} failed · ${plural(runs, { one: '# runs', few: '# runs', many: '# runs', other: '# runs' })}`;
+/**
+ * Whether Claude Code's server-side auto mode permission check is answering — a
+ * fact about the machine, not about the range or the project. The state is
+ * carried by the words, the colour only repeats it.
+ */
+function AutoModeRow({ mode, inboxHref }: { mode: HealthAutoMode; inboxHref: string }): JSX.Element {
+  const { t } = useLingui();
+  const row = autoModeRow(mode, mode.lastAt !== null ? fmtAgo(mode.lastAt) : null);
+  return (
+    <div
+      role="status"
+      aria-label={t`Auto mode permission check`}
+      className="mt-[18px] flex max-w-[760px] flex-wrap items-baseline gap-x-3 gap-y-1 border-b border-line py-2"
+    >
+      <span className="font-mono text-[10px] tracking-[0.12em] text-ink-faint uppercase">
+        <Trans>Auto mode permission check</Trans>
+      </span>
+      <span className={`font-mono text-[11px] ${AUTO_MODE_TONE[row.tone]}`}>{row.text}</span>
+      {mode.alerting && (
+        <Link to={inboxHref} className="font-mono text-[11px] font-semibold text-red hover:underline">
+          <Trans>alerting → Inbox</Trans>
+        </Link>
+      )}
+    </div>
+  );
 }
 
 function sameErrorLine(count: number): string {
@@ -51,33 +82,112 @@ function lastSeenLine(ago: string, sessions: number): string {
   return t`Last seen ${ago} · in ${plural(sessions, { one: '# session', few: '# sessions', many: '# sessions', other: '# sessions' })}.`;
 }
 
-function AgentRow({ row }: { row: RetroAgentRow }): JSX.Element {
-  const tone = agentTone(row);
-  const width = Math.min(100, Math.max(0, Math.round(row.error_rate * 100)));
+/** The design's title: "142 runs in 30 days, 11 % failed — down from 19 %." */
+function fleetTitle(agents: RetroAgentsResp, days: number): string {
+  const cell = windowCell(agents);
+  const runs = cell.runs;
+  const head = plural(runs, { one: '# run', few: '# runs', many: '# runs', other: '# runs' });
+  const window = String(days);
+  const failed = fmtPct(cell.failedPct);
+  const prev = cell.prevFailedPct;
+  if (prev === null || Math.round(prev) === Math.round(cell.failedPct)) return t`${head} in ${window} days, ${failed} failed.`;
+  const was = fmtPct(prev);
+  return cell.failedPct < prev
+    ? t`${head} in ${window} days, ${failed} failed — down from ${was}.`
+    : t`${head} in ${window} days, ${failed} failed — up from ${was}.`;
+}
+
+/** The one sentence: which way the rate moved and whose runs moved it. */
+function fleetLead(agents: RetroAgentsResp): string {
+  const hot = agents.agents.filter((row) => row.error_rate * 100 >= HOT_FAILED_PCT).length;
+  const line = String(HOT_FAILED_PCT);
+  const sentence = oneSentence(agents);
+  return hot > 0
+    ? `${sentence} ${plural(hot, {
+        one: `# agent still sits above the ${line} % line.`,
+        few: `# agents still sit above the ${line} % line.`,
+        many: `# agents still sit above the ${line} % line.`,
+        other: `# agents still sit above the ${line} % line.`,
+      })}`
+    : sentence;
+}
+
+function fleetStats(agents: RetroAgentsResp): NumberItem[] {
+  const cell = windowCell(agents);
+  const prev = cell.prevFailedPct;
+  const tone = prev === null ? 'default' : cell.failedPct < prev ? 'green' : cell.failedPct > prev ? 'red' : 'default';
+  return [
+    { label: t`runs`, value: String(cell.runs) },
+    { label: t`failed`, value: fmtPct(cell.failedPct), tone },
+    ...(prev !== null ? [{ label: t`was`, value: fmtPct(prev), tone: 'faint' as const }] : []),
+    { label: t`spent`, value: `$${String(Math.round(cell.costUsd))}`, tone: 'brand' },
+  ];
+}
+
+function failedBars(agents: RetroAgentsResp): PageBar[] {
+  return agentsByFailure(agents).map((row) => {
+    const now = row.error_rate * 100;
+    return {
+      label: row.agent,
+      percent: now,
+      value: fmtPct(now),
+      tone: now >= HOT_FAILED_PCT ? 'brand' : 'green',
+    };
+  });
+}
+
+export function FleetDetail({
+  agents,
+  error,
+  onRetry,
+  scopeLabel,
+  days,
+  decisions,
+  autoMode,
+  alertsHref,
+}: {
+  agents: RetroAgentsResp | null;
+  error: string | null;
+  onRetry: () => void;
+  scopeLabel: string;
+  days: number;
+  decisions: readonly PageRow[];
+  /** Absent while the daemon is unreachable or older than the field: no row. */
+  autoMode: HealthAutoMode | undefined;
+  alertsHref: string;
+}): JSX.Element {
+  const { t } = useLingui();
+  if (error !== null) {
+    return (
+      <div className="px-7 py-5">
+        <ErrorBox message={error} onRetry={onRetry} />
+      </div>
+    );
+  }
+  if (agents === null) return <Loading label={t`health…`} />;
   return (
-    <div className="flex items-center gap-3 rounded-[10px] border border-line px-3 py-2.5">
-      <span className="min-w-0 flex-1 truncate text-[12.5px] text-ink">{row.agent}</span>
-      <span className={`font-mono text-[11px] ${tone.text}`}>{agentFigure(row)}</span>
-      <span className="h-1.5 w-[120px] shrink-0 overflow-hidden rounded-[3px] bg-line" aria-hidden="true">
-        <span className={`block h-full ${tone.bar}`} style={{ width: `${String(width)}%` }} />
-      </span>
-    </div>
+    <PageDetail
+      kind={t`health · fleet`}
+      kindTone="brand"
+      meta={`${scopeLabel} · ${String(days)} d`}
+      title={fleetTitle(agents, days)}
+      lead={fleetLead(agents)}
+      stats={fleetStats(agents)}
+      barsTitle={t`failed share by agent`}
+      bars={failedBars(agents)}
+      rowsTitle={t`decisions`}
+      rows={decisions}
+    >
+      {autoMode !== undefined && <AutoModeRow mode={autoMode} inboxHref={alertsHref} />}
+    </PageDetail>
   );
 }
 
-function DeniedCard({
-  tool,
-  denied,
-  calls,
-  onDetails,
-}: {
-  tool: string;
-  denied: number;
-  calls: number;
-  onDetails: () => void;
-}): JSX.Element {
-  const { t } = useLingui();
-  const [state, setState] = useState<'idle' | 'busy' | 'done'>('idle');
+type AllowState = 'idle' | 'busy' | 'done';
+
+/** "+ always allow": a fleet-wide rule for a tool no rule covers. */
+function useAlwaysAllow(tool: string): { state: AllowState; failed: string | null; allow: () => void } {
+  const [state, setState] = useState<AllowState>('idle');
   const [failed, setFailed] = useState<string | null>(null);
   const allow = useCallback((): void => {
     if (state !== 'idle') return;
@@ -91,141 +201,215 @@ function DeniedCard({
         setState('idle');
       });
   }, [state, tool]);
-  const deniedCount = String(denied);
-  const callCount = String(calls);
+  return { state, failed, allow };
+}
+
+function allowAction(tool: string, state: AllowState, allow: () => void): PageAction {
+  if (state === 'done') return { label: t`✓ always allowed`, tone: 'green', disabled: true };
+  return {
+    label: state === 'busy' ? '…' : t`always allow ${tool}`,
+    tone: 'brand',
+    onClick: allow,
+    disabled: state === 'busy',
+    tip: t`auto-approve every ${tool} request, in every project`,
+  };
+}
+
+function deniedRow(denied: RetroDeniedTool, onOpen: (key: string) => void): PageRow {
+  const tool = denied.tool;
+  const deniedCount = String(denied.denied);
+  const callCount = String(denied.calls);
+  return {
+    key: `denied:${tool}`,
+    glyph: '▲',
+    glyphTone: 'brand',
+    label: tool,
+    sub: t`denied ${deniedCount}× · of ${callCount} calls`,
+    right: t`+ always allow`,
+    rightTone: 'brand',
+    onClick: () => onOpen(`denied:${tool}`),
+  };
+}
+
+function errorRow(group: RetroErrorGroup, onOpen: (key: string) => void): PageRow {
+  return {
+    key: `error:${group.key}`,
+    glyph: '✗',
+    glyphTone: 'red',
+    label: group.example,
+    sub: sameErrorLine(group.count),
+    age: fmtAgo(group.last_ts),
+    onClick: () => onOpen(`error:${group.key}`),
+  };
+}
+
+export function RemovableDetail({
+  friction,
+  onOpen,
+  onBoard,
+}: {
+  friction: RetroFrictionResp | null;
+  /** Opens a friction row by key. */
+  onOpen: (key: string) => void;
+  onBoard: () => void;
+}): JSX.Element {
+  const { t } = useLingui();
+  const deniedTools = useMemo(() => (friction !== null ? uncoveredDenied(friction) : []), [friction]);
+  const errors = useMemo(() => (friction !== null ? untriagedErrors(friction) : []), [friction]);
+  const count = deniedTools.length + errors.length;
+  const top = deniedTools[0];
+  const { state, failed, allow } = useAlwaysAllow(top?.tool ?? '');
   return (
-    <div className="rounded-[10px] border border-line px-3 py-2.5">
-      <div className="flex items-baseline gap-2">
-        <span className="font-mono text-[12px] text-ink">{tool}</span>
-        <span className="font-mono text-[10.5px] text-ink-faint">
-          <Trans>
-            denied {deniedCount}× · of {callCount} calls
-          </Trans>
-        </span>
-      </div>
-      <div className="mt-1.5 flex gap-1.5">
-        {state === 'done' ? (
-          <span className="rounded-md border border-green/40 px-2.5 py-[3px] font-mono text-[10.5px] text-green">
-            <Trans>✓ always allowed</Trans>
-          </span>
-        ) : (
-          <button
-            type="button"
-            onClick={allow}
-            disabled={state === 'busy'}
-            data-tip={t`auto-approve every ${tool} request, in every project`}
-            className="rounded-md border border-amber/50 px-2.5 py-[3px] font-mono text-[10.5px] font-semibold text-amber transition-colors hover:bg-amber/10 disabled:opacity-50"
-          >
-            {state === 'busy' ? '…' : t`+ always allow`}
-          </button>
-        )}
-        <button
-          type="button"
-          onClick={onDetails}
-          className="rounded-md border border-line-strong px-2.5 py-[3px] font-mono text-[10.5px] text-ink-3 transition-colors hover:text-ink"
-        >
-          <Trans>see friction</Trans>
-        </button>
-      </div>
+    <PageDetail
+      kind={t`health · friction`}
+      kindTone="brand"
+      meta={t`things you can remove today`}
+      title={
+        friction === null
+          ? t`The friction board is unavailable right now.`
+          : count === 0
+            ? t`Nothing to remove: no tool was denied without a rule and no error repeated in this window.`
+            : plural(count, {
+                one: '# friction you can remove today.',
+                few: '# frictions you can remove today.',
+                many: '# frictions you can remove today.',
+                other: '# frictions you can remove today.',
+              })
+      }
+      {...(count > 0 ? { lead: t`Tools you deny every time, and errors that repeat across sessions.` } : {})}
+      rowsTitle={t`friction`}
+      rows={[...deniedTools.map((d) => deniedRow(d, onOpen)), ...errors.map((g) => errorRow(g, onOpen))]}
+      actions={top !== undefined ? [allowAction(top.tool, state, allow)] : []}
+      link={{ label: t`see friction`, onClick: onBoard }}
+    >
       {failed !== null && <div className="mt-1.5 font-mono text-[10.5px] text-red">{failed}</div>}
-    </div>
+    </PageDetail>
   );
 }
 
-export function HealthOverview({
-  agents,
-  friction,
-  error,
-  onRetry,
-  onTab,
+export function DeniedDetail({ denied, onBoard }: { denied: RetroDeniedTool; onBoard: () => void }): JSX.Element {
+  const { t } = useLingui();
+  const tool = denied.tool;
+  const deniedCount = String(denied.denied);
+  const callCount = String(denied.calls);
+  const { state, failed, allow } = useAlwaysAllow(tool);
+  return (
+    <PageDetail
+      kind={t`health · friction`}
+      kindTone="brand"
+      title={t`${tool} denied ${deniedCount} of ${callCount} times`}
+      lead={t`No approval rule covers this tool yet. Allow it once and these runs stop asking.`}
+      kv={[
+        { k: t`denied`, v: deniedCount },
+        { k: t`calls`, v: callCount },
+      ]}
+      actions={[allowAction(tool, state, allow)]}
+      link={{ label: t`friction board →`, onClick: onBoard }}
+    >
+      {failed !== null && <div className="mt-1.5 font-mono text-[10.5px] text-red">{failed}</div>}
+    </PageDetail>
+  );
+}
+
+export function ErrorDetail({ group, onBoard }: { group: RetroErrorGroup; onBoard: () => void }): JSX.Element {
+  const { t } = useLingui();
+  return (
+    <PageDetail
+      kind={t`health · friction`}
+      kindTone="red"
+      meta={sameErrorLine(group.count)}
+      title={group.example}
+      lead={lastSeenLine(fmtAgo(group.last_ts), group.sessions.length)}
+      kv={[
+        { k: t`times`, v: String(group.count) },
+        { k: t`sessions`, v: String(group.sessions.length) },
+        { k: t`last seen`, v: fmtAgo(group.last_ts) },
+      ]}
+      link={{ label: t`friction board →`, onClick: onBoard }}
+    />
+  );
+}
+
+/** One recommendation as a page: Health's Advisor group and Learning's Proof. */
+export function RecDetail({
+  rec,
+  kind,
+  kindTone = 'blue',
+  inboxHref,
 }: {
-  agents: RetroAgentsResp | null;
-  friction: RetroFrictionResp | null;
-  error: string | null;
-  onRetry: () => void;
-  onTab: (tab: HealthTab) => void;
+  rec: Recommendation;
+  kind: string;
+  kindTone?: PageTone;
+  inboxHref: string;
 }): JSX.Element {
   const { t } = useLingui();
-  if (error !== null) {
-    return (
-      <div className="px-7 py-5">
-        <ErrorBox message={error} onRetry={onRetry} />
-      </div>
-    );
-  }
-  if (agents === null) return <Loading label={t`health…`} />;
-
-  const rows = topAgents(agents, 3);
-  const denied = friction !== null ? uncoveredDenied(friction)[0] : undefined;
-  const repeated = friction !== null ? untriagedErrors(friction)[0] : undefined;
-  const agentCount = String(agents.agents.length);
-
+  const rule = rec.rule;
+  const target = rec.target;
+  const kv: PageKv[] = [
+    { k: t`rule`, v: rule },
+    { k: t`target`, v: target },
+    { k: t`raised`, v: fmtAgo(rec.created_at) },
+  ];
+  if (rec.baseline !== null) kv.push({ k: rec.baseline.metric, v: String(rec.baseline.value) });
   return (
-    <div className="grid gap-[22px] px-4 pt-[22px] pb-[26px] desk:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)] desk:px-7">
-      <section>
-        <div className={LABEL}>
-          <Trans>The one sentence</Trans>
-        </div>
-        <p className="mt-2 font-display text-[19px] leading-[1.35] font-medium text-balance text-ink">
-          {oneSentence(agents)}
-        </p>
-        {rows.length > 0 && (
-          <div className="mt-3.5 flex flex-col gap-2">
-            {rows.map((row) => (
-              <AgentRow key={row.agent} row={row} />
-            ))}
-          </div>
-        )}
-        <button
-          type="button"
-          onClick={() => onTab('agents')}
-          className="mt-2 font-mono text-[10.5px] text-ink-faint transition-colors hover:text-ink"
-        >
-          <Trans>all {agentCount} agents → Agents tab</Trans>
-        </button>
-      </section>
+    <PageDetail
+      kind={kind}
+      kindTone={kindTone}
+      meta={`${rule} · ${target}`}
+      title={rec.title}
+      lead={rec.detail}
+      kv={kv}
+      link={{ label: t`decide in Inbox →`, to: inboxHref }}
+    />
+  );
+}
 
-      <section>
-        <div className={LABEL}>
-          <Trans>Friction you can remove today</Trans>
-        </div>
-        <div className="mt-2 flex flex-col gap-2">
-          {denied !== undefined && (
-            <DeniedCard
-              tool={denied.tool}
-              denied={denied.denied}
-              calls={denied.calls}
-              onDetails={() => onTab('friction')}
-            />
-          )}
-          {repeated !== undefined && (
-            <div className="rounded-[10px] border border-line px-3 py-2.5">
-              <div className="flex min-w-0 items-baseline gap-2">
-                <span className="shrink-0 text-[12px] text-ink">
-                  {sameErrorLine(repeated.count)}
-                </span>
-                <span className="min-w-0 truncate font-mono text-[10.5px] text-ink-faint">
-                  {repeated.example}
-                </span>
-              </div>
-              <div className="mt-1 text-[11.5px] text-ink-3">
-                {lastSeenLine(fmtAgo(repeated.last_ts), repeated.sessions.length)}
-              </div>
-            </div>
-          )}
-          {friction === null ? (
-            <p className="text-[12px] text-ink-dim">
-              <Trans>The friction board is unavailable right now.</Trans>
-            </p>
-          ) : denied === undefined && repeated === undefined ? (
-            <p className="text-[12px] text-ink-dim">
-              <Trans>
-                Nothing to remove: no tool was denied without a rule and no error repeated in this window.
-              </Trans>
-            </p>
-          ) : null}
-        </div>
-      </section>
-    </div>
+export function AgentDetail({
+  row,
+  systemHref,
+  onAll,
+}: {
+  row: RetroAgentRow;
+  systemHref: string;
+  onAll: () => void;
+}): JSX.Element {
+  const { t } = useLingui();
+  const [improving, setImproving] = useState(false);
+  const { now, prev, drop } = agentMove(row);
+  const hot = now >= HOT_FAILED_PCT;
+  const agent = row.agent;
+  const failed = fmtPct(now);
+  const runs = String(row.runs);
+  const was = prev !== null ? fmtPct(prev) : '';
+  const tone: PageTone = hot ? 'brand' : 'green';
+  const kv: PageKv[] = [
+    { k: t`sessions`, v: String(row.sessions) },
+    { k: t`errors`, v: String(row.errors) },
+  ];
+  if (row.avg_ms !== null) kv.push({ k: t`average run`, v: fmtDurationMs(row.avg_ms) });
+  if (row.p95_ms !== null) kv.push({ k: t`p95 run`, v: fmtDurationMs(row.p95_ms) });
+  if (row.success_rate !== null) kv.push({ k: t`judged success`, v: fmtPct(row.success_rate * 100) });
+  if (row.re_dispatch_rate !== null) kv.push({ k: t`re-dispatched`, v: fmtPct(row.re_dispatch_rate * 100) });
+  return (
+    <>
+      <PageDetail
+        kind={t`health · agent`}
+        kindTone={tone}
+        title={drop !== null && drop >= 2 ? t`${agent}: ${failed} of ${runs} runs failed, down from ${was}.` : t`${agent}: ${failed} of ${runs} runs failed.`}
+        stats={[
+          { label: t`runs`, value: runs },
+          { label: t`failed`, value: failed, tone },
+          ...(prev !== null ? [{ label: t`before`, value: was, tone: 'faint' as const }] : []),
+          { label: t`spent`, value: `$${String(Math.round(row.cost_usd))}`, tone: 'brand' },
+        ]}
+        kv={kv}
+        actions={[
+          { label: t`open in System`, to: systemHref },
+          { label: t`propose a change`, tone: 'brand', onClick: () => setImproving(true) },
+        ]}
+        link={{ label: t`all agents →`, onClick: onAll }}
+      />
+      {improving && <ImproveModal row={row} onClose={() => setImproving(false)} onGenerated={() => undefined} />}
+    </>
   );
 }

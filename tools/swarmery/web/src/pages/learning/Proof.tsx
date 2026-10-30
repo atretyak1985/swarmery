@@ -1,21 +1,21 @@
-// Learning → Proof, "Because of you" (Canvas v3 phase 6, artboard 1f). The
-// feed of the operator's decisions and their measured effect has no backend yet
-// (decision D2), so this ships as the teaching empty state: what a row will be,
-// and when it gets verified. It performs no fetch.
+// Learning → Proof, "Because of you": what a Proof row is and when it gets
+// verified. The rows themselves are the recommendations you accepted, in the list;
+// this is the teaching page below them, the only one when there are none yet. It
+// performs no fetch.
 
 import { Trans } from '@lingui/react/macro';
 import { Link } from 'react-router-dom';
 
 export function Proof({ inboxHref }: { inboxHref: string }): JSX.Element {
   return (
-    <section aria-labelledby="proof-heading" className="max-w-[64ch]">
+    <section aria-labelledby="proof-heading" className="max-w-[70ch] px-4 pt-[22px] pb-10 desk:px-7">
       <h2
         id="proof-heading"
-        className="m-0 font-display text-[22px] leading-[1.15] font-medium tracking-[-0.01em] text-ink"
+        className="m-0 text-[22px] leading-tight font-semibold tracking-[-0.015em] text-ink"
       >
         <Trans>Because of you</Trans>
       </h2>
-      <p className="mt-[6px] text-[13px] text-ink-dim">
+      <p className="mt-2 text-[14px] leading-[1.55] text-pretty text-ink-2">
         <Trans>
           Each row is something you accepted, what the system did with it, and whether the number it
           was meant to move actually moved. Verification needs a week of traffic and a 20 % change.

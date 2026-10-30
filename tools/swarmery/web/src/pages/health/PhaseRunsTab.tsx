@@ -130,11 +130,11 @@ export function PhaseRunsTab({ from: initialFrom, to: initialTo }: PhaseRunsTabP
   }, [from, to]);
 
   return (
-    <section className="px-4 py-4 desk:px-7" aria-labelledby="phase-runs-heading">
-      <h2 id="phase-runs-heading" className="text-sm text-ink">
+    <section className="mt-2" aria-labelledby="phase-runs-heading">
+      <h3 id="phase-runs-heading" className="sr-only">
         <Trans>Phase runs</Trans>
-      </h2>
-      <p className="mt-1 max-w-2xl text-[12px] text-ink-dim">
+      </h3>
+      <p className="max-w-[70ch] text-[14px] leading-[1.55] text-pretty text-ink-2">
         <Trans>
           How plan-phase runs ended, what the noops were waiting on, what the router and the verifier did, and how
           many finished phases came back. Rows marked (est.) are read from the runs&apos; own words, not a recorded

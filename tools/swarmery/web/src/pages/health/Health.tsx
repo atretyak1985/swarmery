@@ -1,17 +1,16 @@
-// Health (Canvas v3 phase 5, artboard 2c): one place for "how is the agent
-// fleet doing and what should change", replacing /analytics and /retro.
+// Health (v4, handoff §3, §9): one place for "how is the agent fleet doing and
+// what should change", in the frame every place shares: the seven old tabs are the
+// accordion groups of the list, and the row picked there is a detail page.
 //
-// A sticky StatusStrip answers the three questions (this window · waiting on
-// you · because of you) over ONE date range, then tabs: Overview · Agents ·
-// Friction · Estimates · Phase runs · Advisor · Cost & tokens. The range and the tab both
-// live in the URL (`?days=30&tab=agents`), so a view is shareable and the old
-// routes can redirect onto a specific tab. The retro and analytics pages render
-// embedded (their own range rows hidden) and are lazy — Analytics pulls in
-// Recharts, so it loads only when the Cost tab is opened.
+// `?tab=` is the open group and `?item=` the row in it, `?days=` the one range for
+// everything, so a view is shareable and the retired /analytics and /retro routes
+// still redirect onto a group. The retro and analytics pages render embedded (their
+// own range rows hidden) and lazy, because Analytics pulls in Recharts. What they
+// show that the design's blocks cannot express stays there, inside the detail.
 
-import { Trans, useLingui } from '@lingui/react/macro';
+import { useLingui } from '@lingui/react/macro';
 import { Suspense, lazy, useCallback, useEffect, useMemo, useState } from 'react';
-import { Link, useParams, useSearchParams } from 'react-router-dom';
+import { useParams, useSearchParams } from 'react-router-dom';
 import {
   type AnalyticsRange,
   fetchProjectRecommendations,
@@ -22,96 +21,64 @@ import {
 } from '../../api';
 import type {
   AgentChangeProposal,
-  HealthAutoMode,
   Recommendation,
   RetroAgentsResp,
   RetroFrictionResp,
 } from '../../api/types';
-import { StatusStrip, type StatusCell } from '../../components/StatusStrip';
-import { type TabItem, Tabs, useTabParam } from '../../components/Tabs';
+import {
+  PageDetail,
+  PagePlace,
+  type PageRow,
+  Segmented,
+  usePlaceParams,
+} from '../../components/place/PageDetail';
 import { Loading } from '../../components/ui';
-import { fmtAgo, isoDay } from '../../lib/format';
+import { isoDay } from '../../lib/format';
 import { useHealth } from '../../lib/health';
 import { PLACES, type PlaceId } from '../../lib/nav';
 import { useScope } from '../../lib/scope';
+import { CalibrationPanel } from '../LessonsCalibration';
 import { useTriageRun } from '../inbox/useTriageRun';
 import { FrictionTriageStrip } from './FrictionTriageStrip';
-import { HealthOverview } from './HealthOverview';
+import { AgentDetail, DeniedDetail, ErrorDetail, FleetDetail, RecDetail, RemovableDetail } from './HealthOverview';
 import { PhaseRunsTab } from './PhaseRunsTab';
 import {
-  type AutoModeTone,
   DEFAULT_DAYS,
   HEALTH_PRESETS,
   HEALTH_TABS,
   type HealthPreset,
   type HealthTab,
-  autoModeRow,
   becauseText,
   countProposals,
   countRecs,
   daysFromParam,
-  frictionCount,
   frictionRunCap,
+  placeSub,
   rangeFor,
+  uncoveredDenied,
   untriagedErrors,
   waitingText,
   windowCell,
-  windowCellText,
 } from './healthModel';
+import { OPEN_PROPOSALS, OPEN_RECS, healthGroups } from './healthPlace';
 
 const Retro = lazy(() => import('../Retro').then((m) => ({ default: m.Retro })));
 const Analytics = lazy(() => import('../Analytics').then((m) => ({ default: m.Analytics })));
 
 const RANGE_OPTIONS = HEALTH_PRESETS.map((d) => ({ value: String(d), label: `${String(d)} d` }));
 
-/** Statuses the strip counts, fetched in one call and split client-side. */
-const OPEN_RECS = ['proposed'] as const;
+/** Statuses the counts split, fetched in one call. */
 const VERIFIED_RECS = ['verified'] as const;
 const GATHERING_RECS = ['accepted', 'adopted'] as const;
-const OPEN_PROPOSALS = ['proposed', 'needs_target'] as const;
 
-/** What the Friction tab's trigger visits: the error groups and the failing agents, nothing from the Inbox. */
+/** What the Friction group's trigger visits: the error groups and the failing agents, nothing from the Inbox. */
 const FRICTION_TRIAGE_KINDS = ['friction', 'agent'] as const;
 
 function placeHref(id: PlaceId, slug: string | null): string {
   return PLACES.find((p) => p.id === id)?.href(slug) ?? '/';
 }
 
-const AUTO_MODE_TONE: Record<AutoModeTone, string> = {
-  quiet: 'text-ink-faint',
-  seen: 'text-amber',
-  alerting: 'text-red',
-};
-
-/**
- * Whether Claude Code's server-side auto mode permission check is answering —
- * a fact about the machine, not about the range or the project, so it sits
- * above the Overview rather than inside a windowed section. The state is
- * carried by the words, the colour only repeats it.
- */
-function AutoModeRow({ mode, inboxHref }: { mode: HealthAutoMode; inboxHref: string }): JSX.Element {
-  const { t } = useLingui();
-  const row = autoModeRow(mode, mode.lastAt !== null ? fmtAgo(mode.lastAt) : null);
-  return (
-    <div
-      role="status"
-      aria-label={t`Auto mode permission check`}
-      className="flex flex-wrap items-baseline gap-x-3 gap-y-1 border-b border-line px-4 py-2.5 desk:px-7"
-    >
-      <span className="font-mono text-[10px] tracking-[0.14em] text-ink-faint uppercase">
-        <Trans>Auto mode permission check</Trans>
-      </span>
-      <span className={`font-mono text-[11px] ${AUTO_MODE_TONE[row.tone]}`}>{row.text}</span>
-      {mode.alerting && (
-        <Link to={inboxHref} className="font-mono text-[11px] font-semibold text-red hover:underline">
-          <Trans>alerting → Inbox</Trans>
-        </Link>
-      )}
-    </div>
-  );
-}
-
-/** `?days=` as the one range for every tab; the default is left out of the URL. */
+/** `?days=` as the one range for every group; the default is left out of the URL. */
 function useDaysParam(): [HealthPreset, (days: string) => void] {
   const [params, setParams] = useSearchParams();
   const days = daysFromParam(params.get('days'));
@@ -138,7 +105,7 @@ export function Health(): JSX.Element {
   const { slug } = useParams<{ slug: string }>();
   const projectSlug = slug ?? null;
   const { scope } = useScope();
-  const [tab, setTab] = useTabParam<HealthTab>('tab', HEALTH_TABS, 'overview');
+  const { tab, item, pick } = usePlaceParams<HealthTab>(HEALTH_TABS, 'overview');
   const [days, setDays] = useDaysParam();
   const today = isoDay();
 
@@ -167,15 +134,15 @@ export function Health(): JSX.Element {
   }, [range]);
   useEffect(load, [load]);
 
-  // A mute lifted on the Friction tab changes the tab count and the overview card.
+  // A mute lifted on the board changes the group count and the overview.
   const reloadFriction = useCallback((): void => {
     fetchRetroFriction(range)
       .then(setFriction)
       .catch(() => setFriction(null));
   }, [range]);
 
-  // The Friction tab's own triage trigger. When its run ends, the friction data
-  // is refetched twice over, as the unmute path does: Health's copy (tab count,
+  // The Friction group's own triage trigger. When its run ends, the friction data
+  // is refetched twice over, as the unmute path does: Health's copy (group count,
   // overview) and the embedded Retro panel's copy (bumped key).
   const [frictionReloadKey, setFrictionReloadKey] = useState(0);
   const onFrictionRunEnd = useCallback((): void => {
@@ -204,7 +171,7 @@ export function Health(): JSX.Element {
 
   // Decisions are not windowed: loaded once per scope. On a project page the
   // recommendations are the project's own, as on the project Today, so the
-  // strip counts match the project Inbox it links to.
+  // counts match the project Inbox they link to.
   useEffect(() => {
     const status = [...OPEN_RECS, ...VERIFIED_RECS, ...GATHERING_RECS].join(',');
     (projectSlug === null ? fetchRecommendations(status) : fetchProjectRecommendations(projectSlug, status))
@@ -215,112 +182,86 @@ export function Health(): JSX.Element {
       .catch(() => setProposals(null));
   }, [projectSlug]);
 
-  const cells = useMemo<StatusCell[]>(() => {
-    const out: StatusCell[] = [];
-    if (agents !== null) {
-      const c = windowCell(agents);
-      const wc = windowCellText(c);
-      const spent = String(Math.round(c.costUsd));
-      out.push({
-        label: t`this window`,
-        value: wc.value,
-        delta: (
-          <>
-            {wc.delta !== null && <span className={wc.better ? 'text-green' : 'text-red'}>{wc.delta}</span>}
-            {t` · $${spent} spent`}
-          </>
-        ),
-      });
-    } else {
-      out.push({ label: t`this window`, value: '…' });
-    }
+  const decisions = useMemo<PageRow[]>(() => {
     const findings = recs !== null ? countRecs(recs, OPEN_RECS) : 0;
     const rewrites = proposals !== null ? countProposals(proposals, OPEN_PROPOSALS) : 0;
-    out.push({
-      label: t`waiting on you`,
-      value: waitingText(findings, rewrites),
-      delta: (
-        <span className="text-amber">
-          <Trans>→ Inbox</Trans>
-        </span>
-      ),
-      href: placeHref('inbox', projectSlug),
-      tone: findings + rewrites > 0 ? 'amber' : 'neutral',
-    });
-    out.push({
-      label: t`because of you`,
-      value: becauseText(
-        recs !== null ? countRecs(recs, VERIFIED_RECS) : 0,
-        recs !== null ? countRecs(recs, GATHERING_RECS) : 0,
-      ),
-      delta: (
-        <span className="text-ink-faint">
-          <Trans>→ Proof</Trans>
-        </span>
-      ),
-      href: `${placeHref('learning', projectSlug)}?tab=proof`,
-    });
-    return out;
-  }, [agents, recs, proposals, projectSlug, t]);
+    return [
+      {
+        key: 'waiting',
+        glyph: '●',
+        glyphTone: findings + rewrites > 0 ? 'amber' : 'faint',
+        label: t`waiting on you`,
+        sub: waitingText(findings, rewrites),
+        right: t`→ Inbox`,
+        rightTone: 'amber',
+        to: placeHref('inbox', projectSlug),
+      },
+      {
+        key: 'because',
+        glyph: '✓',
+        label: t`because of you`,
+        sub: becauseText(
+          recs !== null ? countRecs(recs, VERIFIED_RECS) : 0,
+          recs !== null ? countRecs(recs, GATHERING_RECS) : 0,
+        ),
+        right: t`→ Proof`,
+        rightTone: 'faint',
+        to: `${placeHref('learning', projectSlug)}?tab=proof`,
+      },
+    ];
+  }, [recs, proposals, projectSlug, t]);
 
-  const advisorOpen =
-    recs !== null || proposals !== null
-      ? (recs !== null ? countRecs(recs, OPEN_RECS) : 0) +
-        (proposals !== null ? countProposals(proposals, OPEN_PROPOSALS) : 0)
-      : null;
+  const groups = healthGroups({ agents, friction, recs, proposals, days });
+  const openGroup = groups.find((g) => g.key === tab) ?? groups[0];
+  const selected = openGroup?.items.find((i) => i.key === item)?.key ?? openGroup?.items[0]?.key ?? null;
+  const toBoard = useCallback((): void => pick('friction'), [pick]);
+  const toFrictionRow = useCallback((key: string): void => pick('friction', key), [pick]);
+  const toAgents = useCallback((): void => pick('agents'), [pick]);
 
-  const tabs: TabItem<HealthTab>[] = [
-    { id: 'overview', label: t`Overview` },
-    { id: 'agents', label: t`Agents`, ...(agents !== null ? { count: agents.agents.length } : {}) },
-    {
-      id: 'friction',
-      label: t`Friction`,
-      ...(friction !== null && frictionCount(friction) > 0 ? { count: frictionCount(friction) } : {}),
-    },
-    { id: 'estimates', label: t`Estimates` },
-    { id: 'phaseruns', label: t`Phase runs` },
-    {
-      id: 'advisor',
-      label: t`Advisor`,
-      ...(advisorOpen !== null && advisorOpen > 0 ? { count: t`${advisorOpen} open` } : {}),
-    },
-    { id: 'cost', label: t`Cost & tokens` },
-  ];
-
-  return (
-    <div>
-      <StatusStrip
-        title={t`Health`}
-        subtitle={
-          projectSlug === null
-            ? t`how the agent fleet is doing and what to change`
-            : t`how this project's agents are doing and what to change`
-        }
-        range={{ value: String(days), options: RANGE_OPTIONS, onChange: setDays }}
-        cells={cells}
-        tabs={<Tabs tabs={tabs} value={tab} onChange={setTab} ariaLabel={t`Health`} />}
+  const windowLabel = `${String(days)} d`;
+  const sectionFallback = <Loading label={t`loading…`} />;
+  const retro = (section: 'agents' | 'friction' | 'estimates' | 'advisor'): JSX.Element => (
+    <Suspense fallback={sectionFallback}>
+      <Retro
+        section={section}
+        range={range}
+        inboxHref={`${placeHref('inbox', projectSlug)}?tab=advisor`}
+        onFrictionChanged={reloadFriction}
+        frictionReloadKey={frictionReloadKey}
       />
-      {tab === 'overview' && autoMode !== undefined && (
-        <AutoModeRow mode={autoMode} inboxHref={`${placeHref('inbox', projectSlug)}?tab=alerts`} />
-      )}
-      <div role="tabpanel" aria-label={tabs.find((item) => item.id === tab)?.label}>
-        {tab === 'overview' ? (
-          <HealthOverview
-            agents={agents}
+    </Suspense>
+  );
+
+  const detail = (): JSX.Element => {
+    switch (tab) {
+      case 'overview':
+        return selected === 'removable' ? (
+          <RemovableDetail
+            key={friction !== null ? uncoveredDenied(friction)[0]?.tool : undefined}
             friction={friction}
+            onOpen={toFrictionRow}
+            onBoard={toBoard}
+          />
+        ) : (
+          <FleetDetail
+            agents={agents}
             error={error}
             onRetry={load}
-            onTab={setTab}
+            scopeLabel={projectSlug ?? t`all projects`}
+            days={days}
+            decisions={decisions}
+            autoMode={autoMode}
+            alertsHref={`${placeHref('inbox', projectSlug)}?tab=alerts`}
           />
-        ) : tab === 'phaseruns' ? (
-          <PhaseRunsTab from={range.from} to={range.to} />
-        ) : tab === 'cost' ? (
-          <Suspense fallback={<Loading label={t`cost…`} />}>
-            <Analytics range={{ from: range.from, to: range.to }} />
-          </Suspense>
-        ) : (
-          <>
-            {tab === 'friction' && (
+        );
+      case 'friction': {
+        const denied = friction !== null ? uncoveredDenied(friction).find((d) => `denied:${d.tool}` === selected) : undefined;
+        if (denied !== undefined) return <DeniedDetail key={denied.tool} denied={denied} onBoard={toBoard} />;
+        const group = friction !== null ? untriagedErrors(friction).find((g) => `error:${g.key}` === selected) : undefined;
+        if (group !== undefined) return <ErrorDetail group={group} onBoard={toBoard} />;
+        return (
+          <PageDetail kind={t`health · friction`} kindTone="brand" meta={windowLabel} title={t`Tools you deny and errors that repeat.`}>
+            <div className="mt-3">
               <FrictionTriageStrip
                 untriaged={friction !== null ? untriagedErrors(friction).length : 0}
                 running={triage.run === null ? null : { done: triage.run.done, total: triage.run.total }}
@@ -336,19 +277,82 @@ export function Health(): JSX.Element {
                 onDismiss={() => setDismissedRunId(lastRun?.id ?? null)}
                 onDismissError={() => setDismissedError(errorKey)}
               />
-            )}
-            <Suspense fallback={<Loading label={`${tab}…`} />}>
-              <Retro
-                section={tab}
-                range={range}
-                inboxHref={`${placeHref('inbox', projectSlug)}?tab=advisor`}
-                onFrictionChanged={reloadFriction}
-                frictionReloadKey={frictionReloadKey}
-              />
+            </div>
+            {retro('friction')}
+          </PageDetail>
+        );
+      }
+      case 'estimates':
+        return selected === 'honesty' ? (
+          <PageDetail kind={t`health · estimates`} meta={windowLabel} title={t`Forecast honesty`}>
+            <CalibrationPanel />
+          </PageDetail>
+        ) : (
+          <PageDetail kind={t`health · estimates`} meta={windowLabel} title={t`How estimates landed, and what the runs taught.`}>
+            {retro('estimates')}
+          </PageDetail>
+        );
+      case 'phaseruns':
+        return (
+          <PageDetail kind={t`health · phase runs`} meta={windowLabel} title={t`How plan-phase runs ended.`}>
+            <PhaseRunsTab from={range.from} to={range.to} />
+          </PageDetail>
+        );
+      case 'advisor': {
+        const rec = recs?.find((r) => `rec:${String(r.id)}` === selected);
+        if (rec !== undefined) {
+          return <RecDetail rec={rec} kind={t`advisor · open`} inboxHref={`${placeHref('inbox', projectSlug)}?tab=advisor`} />;
+        }
+        return (
+          <PageDetail kind={t`advisor · open`} kindTone="blue" meta={windowLabel} title={t`What the Advisor found and what waits on you.`}>
+            {retro('advisor')}
+          </PageDetail>
+        );
+      }
+      case 'cost':
+        return (
+          <PageDetail kind={t`health · cost`} kindTone="brand" meta={windowLabel} title={t`Where the money and tokens went.`}>
+            <Suspense fallback={<Loading label={t`cost…`} />}>
+              <Analytics range={{ from: range.from, to: range.to }} />
             </Suspense>
-          </>
-        )}
-      </div>
-    </div>
+          </PageDetail>
+        );
+      case 'agents': {
+        const row = agents?.agents.find((a) => `agent:${a.agent}` === selected);
+        if (row !== undefined) {
+          return (
+            <AgentDetail key={row.agent} row={row} systemHref={placeHref('system', projectSlug)} onAll={toAgents} />
+          );
+        }
+        return (
+          <PageDetail kind={t`health · agent`} meta={windowLabel} title={t`Every agent, scored over this window.`}>
+            {retro('agents')}
+          </PageDetail>
+        );
+      }
+    }
+  };
+
+  return (
+    <PagePlace
+      title={t`Health`}
+      {...(agents !== null ? { sub: placeSub(windowCell(agents), days) } : {})}
+      groups={groups}
+      openGroup={tab}
+      selected={selected}
+      onOpenGroup={(key) => pick(key as HealthTab)}
+      onSelect={(key, group) => {
+        const first = groups.find((g) => g.key === group)?.items[0]?.key;
+        pick(group as HealthTab, key === first ? null : key);
+      }}
+      detail={
+        <div className="relative">
+          <div className="px-4 pt-3 desk:absolute desk:top-3 desk:right-7 desk:z-10 desk:p-0">
+            <Segmented label={t`Range`} options={RANGE_OPTIONS} value={String(days)} onChange={setDays} />
+          </div>
+          {detail()}
+        </div>
+      }
+    />
   );
 }

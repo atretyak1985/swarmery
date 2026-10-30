@@ -189,6 +189,21 @@ export function windowCellText(c: WindowCell): { value: string; delta: string | 
   return { value, delta: t`${arrow} from ${prevPct}`, better };
 }
 
+/** The list's mono line: "142 runs · 30 d · 11 % failed, down from 19 %". */
+export function placeSub(c: WindowCell, days: number): string {
+  const runs = c.runs;
+  const head = plural(runs, { one: '# run', few: '# runs', many: '# runs', other: '# runs' });
+  const window = String(days);
+  const failed = fmtPct(c.failedPct);
+  if (c.prevFailedPct === null || Math.round(c.prevFailedPct) === Math.round(c.failedPct)) {
+    return t`${head} · ${window} d · ${failed} failed`;
+  }
+  const prev = fmtPct(c.prevFailedPct);
+  return c.failedPct < c.prevFailedPct
+    ? t`${head} · ${window} d · ${failed} failed, down from ${prev}`
+    : t`${head} · ${window} d · ${failed} failed, up from ${prev}`;
+}
+
 /* ----- friction ----- */
 
 /** Denied tools no approval rule covers yet, most denied first. */
