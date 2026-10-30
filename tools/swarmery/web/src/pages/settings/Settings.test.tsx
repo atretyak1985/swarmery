@@ -18,6 +18,7 @@ import type { ReactNode } from 'react';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ListRow } from '../../components/place/ListRow';
+import { StateGlyph } from '../../components/place/StateGlyph';
 import { ThemeProvider } from '../../lib/theme';
 import { Settings } from '../Settings';
 
@@ -130,6 +131,22 @@ describe('Settings', () => {
     fireEvent.click(screen.getByRole('switch', { name: 'Compact rows' }));
     expect(probe().className).toContain('py-1.5');
     expect(stored().compact).toBe(true);
+  });
+
+  it('stops the state glyphs when motion is off', () => {
+    render(
+      <ThemeProvider>
+        <MemoryRouter initialEntries={['/settings']}>
+          <Settings />
+          <StateGlyph state="working" />
+        </MemoryRouter>
+      </ThemeProvider>,
+    );
+    const glyph = (): HTMLElement => screen.getByRole('img', { name: 'working' });
+    expect(glyph().className).toContain('animate-glyph-spin');
+    fireEvent.click(screen.getByRole('switch', { name: 'Motion' }));
+    expect(glyph().className).not.toContain('animate-glyph-spin');
+    expect(stored().motion).toBe(false);
   });
 
   it('restores compact and motion from storage, and keeps an older stored choice whole', () => {
