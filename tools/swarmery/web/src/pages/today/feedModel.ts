@@ -65,14 +65,9 @@ export function feedLinks(slug: string | null, session: (id: number) => string):
   return { session, needsYou: `${root}/needs-you`, inbox: `${root}/inbox` };
 }
 
-/** Where a blocker is answered: its session's gate, or its phase. */
+/** Where a blocker is answered: its own decision in Needs you. */
 export function blockerHref(item: NeedsYouItem, links: FeedLinks): string {
-  if (item.sessionId > 0) return links.session(item.sessionId);
-  if (item.phase === undefined || item.phase.planExternalId === '') return links.needsYou;
-  return plansPath(item.projectSlug, {
-    plan: item.phase.planExternalId,
-    detail: { kind: 'phase', seq: item.phase.seq, tab: 'review' },
-  });
+  return `${links.needsYou}?item=${encodeURIComponent(itemKey(item))}`;
 }
 
 function needsTitle(item: NeedsYouItem): string {

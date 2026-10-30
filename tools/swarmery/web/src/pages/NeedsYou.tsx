@@ -970,12 +970,16 @@ export function NeedsYou(): JSX.Element {
   // `/inbox?tab=approvals` and `/approvals` land here on a permission, where the
   // always-allow control is; a session's gate names its own with `&request=`. A
   // request that has since been answered falls back to the first permission.
+  // `?item=` (a Today row) names the exact decision; one already gone falls back
+  // like the rest, and a click in the list wins over the URL.
   const wantedRequest = params.get('request');
+  const wantedItem = params.get('item');
   const wanted =
-    params.get('tab') === 'approvals'
+    ordered.find((i) => itemKey(i) === wantedItem) ??
+    (params.get('tab') === 'approvals'
       ? (ordered.find((i) => i.requestId !== null && String(i.requestId) === wantedRequest) ??
         ordered.find((i) => i.kind === 'approval'))
-      : undefined;
+      : undefined);
   const selected = ordered.find((i) => itemKey(i) === selectedKey) ?? wanted ?? ordered[0];
   const currentKey = selected === undefined ? null : itemKey(selected);
 

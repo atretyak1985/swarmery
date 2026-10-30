@@ -23,6 +23,7 @@ import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as api from '../api';
 import type { NeedsYouItem, PermissionRequest, WSMessage } from '../api/types';
+import { itemKey } from '../lib/needsYou';
 import { NeedsYou } from './NeedsYou';
 
 vi.mock('../api', async (importOriginal) => ({
@@ -105,9 +106,9 @@ function serve(items: NeedsYouItem[]): void {
   vi.mocked(api.getNeedsYou).mockResolvedValue({ items, generatedAt: new Date(NOW).toISOString() });
 }
 
-async function renderPage(): Promise<void> {
+async function renderPage(url = '/needs-you'): Promise<void> {
   render(
-    <MemoryRouter initialEntries={['/needs-you']}>
+    <MemoryRouter initialEntries={[url]}>
       <NeedsYou />
     </MemoryRouter>,
   );
@@ -204,6 +205,20 @@ describe('NeedsYou page', () => {
       fireEvent.keyDown(window, { key: 'x' });
     });
     expect(api.resolveApproval).toHaveBeenCalledWith(11, 'deny', 'not this table', undefined);
+  });
+
+  it('opens the decision ?item= names, falls back when it is gone, and a click wins', async () => {
+    const first = item({ kind: 'awaiting_reply', sessionName: 'older', sessionId: 1, blockingSince: iso(-60) });
+    const second = item({ kind: 'awaiting_reply', sessionName: 'newer', sessionId: 2, blockingSince: iso(-5) });
+    serve([first, second]);
+    await renderPage(`/needs-you?item=${encodeURIComponent(itemKey(second))}`);
+    const detail = (): string | null => screen.getByTestId('needs-you-detail').textContent;
+    await waitFor(() => expect(detail()).toContain('newer'));
+    fireEvent.click(screen.getByRole('button', { name: /older/ }));
+    await waitFor(() => expect(detail()).toContain('older'));
+    cleanup();
+    await renderPage('/needs-you?item=gone%3A1');
+    await waitFor(() => expect(detail()).toContain('older'));
   });
 
   it('asks one question as a radio list, and the main button repeats the pick', async () => {

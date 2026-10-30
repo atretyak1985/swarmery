@@ -213,7 +213,7 @@ describe('Today', () => {
     const waiting = screen.getByTestId('waiting-on-you');
     expect(within(waiting).getAllByTestId('waiting-row')).toHaveLength(4);
     expect(within(waiting).getByText('Needs you · 5 →').getAttribute('href')).toBe('/needs-you');
-    expect(within(waiting).getAllByTestId('waiting-row')[0]?.getAttribute('href')).toBe('/sessions/41');
+    expect(within(waiting).getAllByTestId('waiting-row')[0]?.getAttribute('href')).toMatch(/^\/needs-you\?item=.+/);
 
     const live = screen.getByTestId('live-now');
     await waitFor(() => {

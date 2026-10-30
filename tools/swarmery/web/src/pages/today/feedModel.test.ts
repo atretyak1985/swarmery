@@ -5,6 +5,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Epic, EpicPhase, NeedsYouItem, Session } from '../../api/types';
 import type { InboxItem } from '../inbox/inboxModel';
+import { itemKey } from '../../lib/needsYou';
 import { blockerHref, buildFeed, feedLinks, filterFeed, groupFeed, type FeedEvent, type FeedInputs } from './feedModel';
 
 const NOW = new Date('2026-10-30T12:00:00').getTime();
@@ -92,7 +93,7 @@ const event = (key: string, at: string): FeedEvent => ({
 });
 
 describe('buildFeed', () => {
-  it('tells a session the queue holds once, as the blocker, and opens its gate', () => {
+  it('tells a session the queue holds once, as the blocker, and opens its decision', () => {
     const events = buildFeed(
       inputs({ sessions: [session(1, { status: 'active', endedAt: iso(0.1) })], needs: [blocker({})] }),
     );
@@ -101,7 +102,7 @@ describe('buildFeed', () => {
       title: 'Session 1 asked for a permission',
       state: 'needs',
       summary: 'orders-api · npm ci',
-      to: '/sessions/1',
+      to: expect.stringMatching(/^\/needs-you\?item=/),
     });
   });
 
@@ -127,7 +128,7 @@ describe('buildFeed', () => {
     expect(events[1]).toMatchObject({
       state: 'failed',
       summary: 'orders-api · criterion-impossible',
-      to: '/p/orders-api/plans/plan-1/phase/3/review',
+      to: expect.stringMatching(/^\/needs-you\?item=/),
     });
   });
 
@@ -189,8 +190,10 @@ describe('buildFeed', () => {
 describe('blockerHref', () => {
   it('stays in the project mount for a session blocker and falls back to the queue', () => {
     const scoped = feedLinks('orders-api', (id) => `/p/orders-api/sessions/${String(id)}`);
-    expect(blockerHref(blocker({}), scoped)).toBe('/p/orders-api/sessions/1');
-    expect(blockerHref(blocker({ kind: 'worktree_cleanup', sessionId: 0 }), scoped)).toBe('/p/orders-api/needs-you');
+    const session = blocker({});
+    expect(blockerHref(session, scoped)).toBe(`/p/orders-api/needs-you?item=${encodeURIComponent(itemKey(session))}`);
+    const cleanup = blocker({ kind: 'worktree_cleanup', sessionId: 0 });
+    expect(blockerHref(cleanup, scoped)).toBe(`/p/orders-api/needs-you?item=${encodeURIComponent(itemKey(cleanup))}`);
   });
 });
 

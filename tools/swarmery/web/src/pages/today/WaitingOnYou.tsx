@@ -1,6 +1,6 @@
 // "Waiting on you" (handoff §3): the first four blockers of the needs-you queue:
-// sessions asking first, then guard stops, then the rest. A row opens what it blocks on: the session, whose gate card
-// decides it, or the phase. A plain permission can still be approved in place, as
+// sessions asking first, then guard stops, then the rest. A row opens its own decision
+// in Needs you (`?item=`). A plain permission can still be approved in place, as
 // the old home did: the action shows over the age on hover or keyboard focus, so at
 // rest the row is the design's one link.
 
