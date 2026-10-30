@@ -107,13 +107,17 @@ export function HealthFooter(): JSX.Element {
           )}
         </span>
       </button>
-      <div className="mt-1 flex flex-wrap items-center justify-between gap-x-2 text-ink-faint">
-        <span>{reset}</span>
-        <span className="flex min-w-0 items-center gap-1">
+      {/* One line, whatever the width: a wrap here lifts the whole bottom cluster.
+          The clock keeps its width and health gives way, its text in the tooltip. */}
+      <div className="mt-1 flex items-center justify-between gap-2 text-ink-faint">
+        <span className="shrink-0">{reset}</span>
+        <span className="flex min-w-0 items-center justify-end gap-1">
           {MOCK ? (
             <>
               <span aria-hidden="true" className="h-1.5 w-1.5 shrink-0 rounded-full bg-amber" />
-              <span className="truncate">{t`mock data`}</span>
+              <span className="truncate" data-tip={t`mock data`}>
+                {t`mock`}
+              </span>
             </>
           ) : (
             <>
@@ -122,7 +126,9 @@ export function HealthFooter(): JSX.Element {
                 className={`h-1.5 w-1.5 shrink-0 rounded-full ${unreachable ? 'bg-red' : 'bg-green'}`}
               />
               {unreachable ? (
-                <span className="truncate text-red">{t`daemon unreachable`}</span>
+                <span className="truncate text-red" data-tip={t`daemon unreachable`}>
+                  {t`daemon unreachable`}
+                </span>
               ) : (
                 <span className="truncate" data-tip={t`daemon healthy`} title={health === null ? undefined : versionTitle(health)}>
                   {health === null ? t`daemon healthy` : versionLabel(health)}

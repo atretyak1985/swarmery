@@ -1445,6 +1445,7 @@ msgstr "daemon healthy"
 
 #: src/App.tsx
 #: src/components/HealthFooter.tsx
+#: src/components/HealthFooter.tsx
 #: src/pages/Settings.tsx
 #: src/workspace/WorkspaceShell.tsx
 msgid "daemon unreachable"
@@ -2412,6 +2413,10 @@ msgstr "Migrate routine config to v2"
 #: src/components/ProjectPlugins.tsx
 msgid "missing: {missing}"
 msgstr "missing: {missing}"
+
+#: src/components/HealthFooter.tsx
+msgid "mock"
+msgstr "mock"
 
 #: src/App.tsx
 #: src/components/HealthFooter.tsx

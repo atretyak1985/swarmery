@@ -1445,6 +1445,7 @@ msgstr "демон здоровий"
 
 #: src/App.tsx
 #: src/components/HealthFooter.tsx
+#: src/components/HealthFooter.tsx
 #: src/pages/Settings.tsx
 #: src/workspace/WorkspaceShell.tsx
 msgid "daemon unreachable"
@@ -2412,6 +2413,10 @@ msgstr "Перенести конфіг рутин на v2"
 #: src/components/ProjectPlugins.tsx
 msgid "missing: {missing}"
 msgstr "відсутні: {missing}"
+
+#: src/components/HealthFooter.tsx
+msgid "mock"
+msgstr "мок"
 
 #: src/App.tsx
 #: src/components/HealthFooter.tsx
