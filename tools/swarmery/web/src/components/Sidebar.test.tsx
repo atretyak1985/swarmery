@@ -184,7 +184,7 @@ describe('Sidebar', () => {
   it('dims project-only places under All projects and routes them through the last project', () => {
     window.localStorage.setItem('swarmery.lastProject', 'shop');
     renderSidebar({ slug: null });
-    for (const name of ['Plans', 'Knowledge']) expect(row(name).className).toContain('opacity-60');
+    for (const name of ['Plans', 'Knowledge']) expect(row(name).getAttribute('title')).toContain('opens in a project');
     for (const name of ['Today', 'Inbox', 'Sessions', 'Health']) {
       expect(row(name).className).not.toContain('opacity-60');
     }
@@ -205,9 +205,13 @@ describe('Sidebar', () => {
     expect(screen.getByRole('button', { name: 'switch project' }).textContent).toContain('shop');
   });
 
-  it('never dims inside a project', () => {
-    renderSidebar({ slug: 'shop' }, '/p/shop');
+  it('renders project-only places like any other row, explaining the hop only under All projects', () => {
+    renderSidebar({ slug: null });
     expect(row('Plans').className).not.toContain('opacity-60');
+    expect(row('Knowledge').className).not.toContain('opacity-60');
+    cleanup();
+    renderSidebar({ slug: 'shop' }, '/p/shop');
+    expect(row('Plans').getAttribute('title')).toBeNull();
   });
 
   it('shows the Sessions live dot only while sessions are live', () => {

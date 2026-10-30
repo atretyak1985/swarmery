@@ -12,7 +12,7 @@
 //   - every automatic correction is a REPLACE — Back from its result leaves the
 //     Plans place instead of bouncing (SC-5), including the legacy numeric
 //     `?task=`/`?plan=` hand-off, which must also keep `?scope=` (SC-7);
-//   - the Active/Done/Archived filter lives in the URL (SC-6);
+//   - `?status=` names the group `/plans` lands in, and a plan's group follows it (SC-6);
 //   - moving between the child routes re-renders the page, it does not remount
 //     it (the epics are fetched once for a whole click-and-Back sequence).
 //
@@ -269,10 +269,9 @@ async function back(r: Router): Promise<void> {
   });
 }
 
-/** The plan-list items (the only links carrying aria-current — phase 2 made
- * them anchors). */
+/** The plan-list items: every link inside a list group. */
 function listItems(): HTMLElement[] {
-  return screen.getAllByRole('link').filter((b) => b.hasAttribute('aria-current'));
+  return [...document.querySelectorAll<HTMLElement>('[data-plan-group] a')];
 }
 function listItem(title: string): HTMLElement {
   const item = listItems().find((b) => b.textContent?.includes(title));
@@ -288,13 +287,10 @@ function selectedTab(tablist: string): string | null {
     .getAllByRole('tab')
     .find((t) => t.getAttribute('aria-selected') === 'true')?.textContent ?? null;
 }
-function filterTab(name: 'active' | 'done' | 'archived'): HTMLElement {
-  const list = screen.getByRole('tablist', { name: 'plan status filter' });
-  const tab = within(list)
-    .getAllByRole('tab')
-    .find((t) => t.textContent?.startsWith(name));
-  if (tab === undefined) throw new Error(`no filter tab ${name}`);
-  return tab;
+/** The list group the selected plan sits in. */
+function selectedGroup(): string | null {
+  const row = listItems().find((b) => b.getAttribute('aria-current') === 'true');
+  return row?.closest<HTMLElement>('[data-plan-group]')?.dataset.planGroup ?? null;
 }
 function phasePanel(): HTMLElement | null {
   return screen.queryByRole('region', { name: /^(Beta|Shipped) [0-9]+$/ });
@@ -324,23 +320,23 @@ afterEach(() => {
   localStorage.clear();
 });
 
-describe('SC-1 — a plan URL selects that plan and its filter', () => {
+describe('SC-1 — a plan URL selects that plan and its group', () => {
   it('opens a non-first Active plan directly, with no correction', async () => {
     const r = mount(`${BASE}/${B.externalId}`);
     await waitFor(() => {
       expect(selectedPlan()).toContain('Beta');
     });
-    expect(selectedTab('plan status filter')).toMatch(/^active/);
+    expect(selectedGroup()).toBe('active');
     expect(at(r)).toBe(`${BASE}/${B.externalId}`);
     expect(phasePanel()).toBeNull();
   });
 
-  it('opens a Done plan under the Done filter', async () => {
+  it('opens a Done plan in the Done group', async () => {
     const r = mount(`${BASE}/${DONE.externalId}`);
     await waitFor(() => {
       expect(selectedPlan()).toContain('Shipped');
     });
-    expect(selectedTab('plan status filter')).toMatch(/^done/);
+    expect(selectedGroup()).toBe('done');
     expect(at(r)).toBe(`${BASE}/${DONE.externalId}`);
   });
 
@@ -520,10 +516,12 @@ describe('SC-4 — every click is one history entry; Back retraces them', () => 
     await waitFor(() => {
       expect(selectedTab('plan details tabs')).toBe('Plan');
     });
-    const key = r.state.location.key;
     fireEvent.click(listItem('Beta'));
+    await waitFor(() => {
+      expect(r.state.historyAction).toBe('REPLACE');
+    });
     expect(at(r)).toBe(`${BASE}/${B.externalId}/details/plan`);
-    expect(r.state.location.key).toBe(key);
+    expect(selectedTab('plan details tabs')).toBe('Plan');
   });
 
   it('the child-route moves re-render the page — they do not remount it', async () => {
@@ -580,45 +578,54 @@ describe('SC-5 — corrections replace; Back never bounces', () => {
   });
 });
 
-describe('SC-6 — the status filter is in the URL', () => {
-  it('Done: one push, lands on the first Done plan; Back returns to the Active plan in one step', async () => {
+describe('SC-6 — ?status= still lands in a group', () => {
+  it('?status=done lands on the first Done plan by replace; Back returns to the Active plan', async () => {
     const r = mount(`${BASE}/${B.externalId}`);
     await waitFor(() => {
       expect(selectedPlan()).toContain('Beta');
     });
-    fireEvent.click(filterTab('done'));
+    await act(async () => {
+      await r.navigate(`${BASE}?status=done`);
+    });
     await settled(r, `${BASE}/${DONE.externalId}`);
-    expect(selectedTab('plan status filter')).toMatch(/^done/);
+    expect(r.state.historyAction).toBe('REPLACE');
     await waitFor(() => {
       expect(selectedPlan()).toContain('Shipped');
     });
+    expect(selectedGroup()).toBe('done');
 
     await back(r);
     await settled(r, `${BASE}/${B.externalId}`);
     await waitFor(() => {
       expect(selectedPlan()).toContain('Beta');
     });
-    expect(selectedTab('plan status filter')).toMatch(/^active/);
+    expect(selectedGroup()).toBe('active');
   });
 
   it('an empty ?status=archived shows the empty state and stays put', async () => {
     const r = mount(`${BASE}?status=archived`);
     await screen.findByText('no archived plans');
-    expect(selectedTab('plan status filter')).toMatch(/^archived/);
     await new Promise((res) => setTimeout(res, 50));
     expect(at(r)).toBe(`${BASE}?status=archived`);
   });
 
-  it('clicking an empty filter is one entry and stays on the empty state', async () => {
-    const r = mount(`${BASE}/${A.externalId}`);
+  it('an archived plan moves to the Archived group and keeps its own URL', async () => {
+    epics = [A, { ...B, status: 'archived' }, DONE];
+    const r = mount(`${BASE}/${B.externalId}`);
+    await waitFor(() => {
+      expect(selectedPlan()).toContain('Beta');
+    });
+    expect(selectedGroup()).toBe('archived');
+    expect(at(r)).toBe(`${BASE}/${B.externalId}`);
+  });
+
+  it('the list shows every group at once, not one status', async () => {
+    mount(`${BASE}/${A.externalId}`);
     await waitFor(() => {
       expect(selectedPlan()).toContain('Alpha');
     });
-    fireEvent.click(filterTab('archived'));
-    await settled(r, `${BASE}?status=archived`);
-    await screen.findByText('no archived plans');
-    await back(r);
-    await settled(r, `${BASE}/${A.externalId}`);
+    expect(listItem('Beta').closest<HTMLElement>('[data-plan-group]')?.dataset.planGroup).toBe('active');
+    expect(listItem('Shipped').closest<HTMLElement>('[data-plan-group]')?.dataset.planGroup).toBe('done');
   });
 });
 
@@ -649,11 +656,11 @@ describe('SC-7 — the numeric ?task= / ?plan= hand-off resolves by replace', ()
     });
   });
 
-  it('a Done plan’s id lands under the Done filter', async () => {
+  it('a Done plan’s id lands in the Done group', async () => {
     const r = mount(`${BASE}?task=3`);
     await settled(r, `${BASE}/${DONE.externalId}`);
     await waitFor(() => {
-      expect(selectedTab('plan status filter')).toMatch(/^done/);
+      expect(selectedGroup()).toBe('done');
     });
   });
 
@@ -670,7 +677,7 @@ describe('PlansPlace — a plan path is the Plans tab', () => {
     await waitFor(() => {
       expect(selectedPlan()).toContain('Beta');
     });
-    expect(selectedTab('Plans')).toBe('Plans');
+    expect(screen.queryByRole('tablist', { name: 'Plans' })).toBeNull();
   });
 });
 
@@ -747,7 +754,8 @@ describe('"review the open revision →" links a revision the loaded list does n
     // Alpha's list loads empty; the 409 then names revision 77, staged meanwhile.
     openRevisionOnStart = 77;
     const r = mount(`${BASE}/${A.externalId}`);
-    fireEvent.click(await screen.findByRole('button', { name: 'Revise plan' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'plan actions' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Revise plan' }));
     const modal = screen.getByRole('dialog', { name: 'Revise this plan' });
     fireEvent.change(within(modal).getByLabelText('what should change, and why'), {
       target: { value: 'tighten phase 2' },

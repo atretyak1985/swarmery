@@ -28,6 +28,12 @@ import { useNowMs } from '../../lib/sessionState';
 import { PendingCard } from '../Approvals';
 import type { PaneActions } from './SessionPane';
 
+/** Needs you, on this request: the always-allow rules live on its card there. */
+function needsYouHref(slug: string | undefined, requestId: number | null): string {
+  const query = requestId === null ? 'tab=approvals' : `tab=approvals&request=${String(requestId)}`;
+  return `${slug === undefined ? '' : `/p/${slug}`}/needs-you?${query}`;
+}
+
 export function gateTier(item: NeedsYouItem, request: PermissionRequest | null): DecisionTier {
   if (item.kind === 'prod_deploy_local' || request?.riskClass === 'prod-deploy') return 'destructive';
   if (item.kind === 'question' || item.kind === 'awaiting_reply') return 'question';
@@ -201,7 +207,7 @@ export function SessionGate({
           ? {
               extra: {
                 label: t`always allow in ${project}`,
-                onClick: () => navigate(slug === undefined ? '/inbox?tab=approvals' : `/p/${slug}/inbox?tab=approvals`),
+                onClick: () => navigate(needsYouHref(slug, item.requestId)),
               },
             }
           : {})}

@@ -13,7 +13,7 @@ msgstr ""
 "Language-Team: \n"
 "Plural-Forms: \n"
 
-#: src/pages/Plans.tsx
+#: src/pages/plans/PlanRunControls.tsx
 msgid " — agent {agent}"
 msgstr " — agent {agent}"
 
@@ -86,10 +86,6 @@ msgstr "{changeShort} open"
 msgid "{changeShort} opened"
 msgstr "{changeShort} opened"
 
-#: src/pages/Plans.tsx
-msgid "{count, plural, one {# phase} few {# phases} many {# phases} other {# phases}}"
-msgstr "{count, plural, one {# phase} few {# phases} many {# phases} other {# phases}}"
-
 #: src/pages/Playbooks.tsx
 msgid "{count, plural, one {# stage} few {# stages} many {# stages} other {# stages}}"
 msgstr "{count, plural, one {# stage} few {# stages} many {# stages} other {# stages}}"
@@ -154,6 +150,10 @@ msgstr "{label}: {subject} is open in {count} sessions — {listing}"
 msgid "{label}: {subject} is open in session {shortId} ({liveNote})"
 msgstr "{label}: {subject} is open in session {shortId} ({liveNote})"
 
+#: src/pages/plans/planModel.ts
+msgid "{landed} of {total} phases landed"
+msgstr "{landed} of {total} phases landed"
+
 #: src/pages/plans/forecastStoryModel.ts
 msgid "{m, plural, one {# minute} few {# minutes} many {# minutes} other {# minutes}}"
 msgstr "{m, plural, one {# minute} few {# minutes} many {# minutes} other {# minutes}}"
@@ -161,6 +161,22 @@ msgstr "{m, plural, one {# minute} few {# minutes} many {# minutes} other {# min
 #: src/pages/plans/forecastStoryModel.ts
 msgid "{n, plural, one {area} few {areas} many {areas} other {areas}}"
 msgstr "{n, plural, one {area} few {areas} many {areas} other {areas}}"
+
+#: src/pages/plans/planModel.ts
+msgid "{needs, plural, one {# needs you} few {# need you} many {# need you} other {# need you}}"
+msgstr "{needs, plural, one {# needs you} few {# need you} many {# need you} other {# need you}}"
+
+#: src/pages/plans/PlanHeader.tsx
+msgid "{needs, plural, one {# phase waits on a decision from you} few {# phases wait on a decision from you} many {# phases wait on a decision from you} other {# phases wait on a decision from you}}"
+msgstr "{needs, plural, one {# phase waits on a decision from you} few {# phases wait on a decision from you} many {# phases wait on a decision from you} other {# phases wait on a decision from you}}"
+
+#: src/pages/plans/PlanList.tsx
+msgid "{phases, plural, one {# phase needs you} few {# phases need you} many {# phases need you} other {# phases need you}}"
+msgstr "{phases, plural, one {# phase needs you} few {# phases need you} many {# phases need you} other {# phases need you}}"
+
+#: src/pages/plans/PlanList.tsx
+msgid "{plans, plural, one {# plan} few {# plans} many {# plans} other {# plans}}"
+msgstr "{plans, plural, one {# plan} few {# plans} many {# plans} other {# plans}}"
 
 #: src/pages/plans/ForecastStory.tsx
 msgid "{prior} vs {posterior}"
@@ -174,6 +190,10 @@ msgstr "{s, plural, one {# second} few {# seconds} many {# seconds} other {# sec
 msgid "{size} phase"
 msgstr "{size} phase"
 
+#: src/pages/plans/PlanHeader.tsx
+msgid "{stagedCount, plural, one {# revision staged · review →} few {# revisions staged · review →} many {# revisions staged · review →} other {# revisions staged · review →}}"
+msgstr "{stagedCount, plural, one {# revision staged · review →} few {# revisions staged · review →} many {# revisions staged · review →} other {# revisions staged · review →}}"
+
 #: src/pages/PlanningMode.tsx
 msgid "{stagedDocCount, plural, one {# plan doc staged as a diff — review it per file, then Apply or Reject. Nothing has been written yet.} few {# plan docs staged as a diff — review it per file, then Apply or Reject. Nothing has been written yet.} many {# plan docs staged as a diff — review it per file, then Apply or Reject. Nothing has been written yet.} other {# plan docs staged as a diff — review it per file, then Apply or Reject. Nothing has been written yet.}}"
 msgstr "{stagedDocCount, plural, one {# plan doc staged as a diff — review it per file, then Apply or Reject. Nothing has been written yet.} few {# plan docs staged as a diff — review it per file, then Apply or Reject. Nothing has been written yet.} many {# plan docs staged as a diff — review it per file, then Apply or Reject. Nothing has been written yet.} other {# plan docs staged as a diff — review it per file, then Apply or Reject. Nothing has been written yet.}}"
@@ -186,7 +206,7 @@ msgstr "{summary} — click for forecast vs actual"
 msgid "{surpriseTerm} {index} · nothing gates on this"
 msgstr "{surpriseTerm} {index} · nothing gates on this"
 
-#: src/pages/Plans.tsx
+#: src/pages/plans/plansTarget.ts
 msgid "{tab} · Phase {seq} — {title} · {tail}"
 msgstr "{tab} · Phase {seq} — {title} · {tail}"
 
@@ -198,7 +218,7 @@ msgstr "{ticked} of the {total} criteria ticked"
 msgid "{title} — plan details"
 msgstr "{title} — plan details"
 
-#: src/pages/Plans.tsx
+#: src/pages/plans/plansTarget.ts
 msgid "{title} · Plans · {tail}"
 msgstr "{title} · Plans · {tail}"
 
@@ -222,26 +242,34 @@ msgstr "↑↓ next phase"
 msgid "<0>{amnestyEligible}</0> {amnestyEligible, plural, one {captured card in Triage has} few {captured cards in Triage have} many {captured cards in Triage have} other {captured cards in Triage have}} passed the auto-archive date."
 msgstr "<0>{amnestyEligible}</0> {amnestyEligible, plural, one {captured card in Triage has} few {captured cards in Triage have} many {captured cards in Triage have} other {captured cards in Triage have}} passed the auto-archive date."
 
-#: src/pages/Plans.tsx
-msgid "▶ Retry plan"
-msgstr "▶ Retry plan"
+#: src/pages/plans/PlanHeader.tsx
+msgid "▶ resume plan"
+msgstr "▶ resume plan"
 
-#: src/pages/Plans.tsx
+#: src/pages/plans/PlanHeader.tsx
+msgid "▶ retry plan"
+msgstr "▶ retry plan"
+
+#: src/pages/plans/PlanRunControls.tsx
 msgid "▶ Run"
 msgstr "▶ Run"
 
-#: src/pages/Plans.tsx
-msgid "▶ Run plan"
-msgstr "▶ Run plan"
+#: src/pages/plans/PlanHeader.tsx
+msgid "▶ run plan"
+msgstr "▶ run plan"
 
 #: src/pages/Plans.tsx
-#: src/pages/Plans.tsx
+#: src/pages/plans/PlanHeader.tsx
 msgid "✓ summary"
 msgstr "✓ summary"
 
-#: src/pages/Plans.tsx
-msgid "❐ open plan README"
-msgstr "❐ open plan README"
+#: src/pages/plans/PlanHeader.tsx
+msgid "❐ README"
+msgstr "❐ README"
+
+#: src/pages/plans/PlanHeader.tsx
+msgid "❚❚ pause plan"
+msgstr "❚❚ pause plan"
 
 #: src/pages/plans/ReviewFindings.tsx
 msgid "1 review round"
@@ -276,10 +304,6 @@ msgid "a medium"
 msgstr "a medium"
 
 #: src/pages/Plans.tsx
-msgid "a phase run is active — cancel it before running the whole plan"
-msgstr "a phase run is active — cancel it before running the whole plan"
-
-#: src/pages/Plans.tsx
 msgid "a phase run is already starting"
 msgstr "a phase run is already starting"
 
@@ -295,7 +319,7 @@ msgstr "a read-only verifier could NOT confirm the ticked criteria — open the 
 msgid "A revise wizard interviews you against <0>{planTitle}</0> and stages its changes as a diff — nothing is written until you approve it."
 msgstr "A revise wizard interviews you against <0>{planTitle}</0> and stages its changes as a diff — nothing is written until you approve it."
 
-#: src/pages/Plans.tsx
+#: src/pages/plans/PlanHeader.tsx
 msgid "a run owns the plan docs — revise once it finishes"
 msgstr "a run owns the plan docs — revise once it finishes"
 
@@ -318,7 +342,7 @@ msgstr "acceptance criteria"
 msgid "activated"
 msgstr "activated"
 
-#: src/pages/Plans.tsx
+#: src/pages/plans/plansTarget.ts
 msgid "active"
 msgstr "active"
 
@@ -338,7 +362,7 @@ msgstr "add step"
 msgid "advisory, never a gate"
 msgstr "advisory, never a gate"
 
-#: src/pages/Plans.tsx
+#: src/pages/plans/PlanRunControls.tsx
 msgid "agent"
 msgstr "agent"
 
@@ -349,6 +373,10 @@ msgstr "agent's full report"
 #: src/pages/Plans.tsx
 msgid "all ({totalCount})"
 msgstr "all ({totalCount})"
+
+#: src/pages/plans/planModel.ts
+msgid "all landed"
+msgstr "all landed"
 
 #: src/pages/Plans.tsx
 msgid "all phases"
@@ -414,15 +442,13 @@ msgstr "applying…"
 msgid "approved"
 msgstr "approved"
 
-#: src/pages/Plans.tsx
-#: src/pages/Plans.tsx
-#: src/pages/Plans.tsx
-msgid "Archive"
-msgstr "Archive"
-
 #: src/pages/Board.tsx
 msgid "Archive <0>{amnestyMatched}</0> {amnestyMatched, plural, one {captured card} few {captured cards} many {captured cards} other {captured cards}}? They stay findable in Archived."
 msgstr "Archive <0>{amnestyMatched}</0> {amnestyMatched, plural, one {captured card} few {captured cards} many {captured cards} other {captured cards}}? They stay findable in Archived."
+
+#: src/pages/plans/PlanHeader.tsx
+msgid "Archive plan"
+msgstr "Archive plan"
 
 #: src/pages/Board.tsx
 msgid "Archive them"
@@ -432,13 +458,19 @@ msgstr "Archive them"
 msgid "Archive this plan? The task folder moves to the archive/ zone."
 msgstr "Archive this plan? The task folder moves to the archive/ zone."
 
-#: src/pages/Plans.tsx
+#: src/pages/plans/PlanHeader.tsx
+#: src/pages/plans/plansTarget.ts
 msgid "archived"
 msgstr "archived"
 
 #: src/pages/Board.tsx
+#: src/pages/plans/PlanList.tsx
 msgid "Archived"
 msgstr "Archived"
+
+#: src/pages/plans/PlanHeader.tsx
+msgid "archived · shown under Archived in the list; nothing runs"
+msgstr "archived · shown under Archived in the list; nothing runs"
 
 #: src/pages/Board.tsx
 msgid "archiving…"
@@ -466,13 +498,17 @@ msgstr "as {outcome}"
 msgid "as forecast"
 msgstr "as forecast"
 
-#: src/pages/Plans.tsx
+#: src/pages/plans/PlanRunControls.tsx
 msgid "auto"
 msgstr "auto"
 
 #: src/pages/planning/RunningPlanPanel.tsx
 msgid "Back"
 msgstr "Back"
+
+#: src/pages/plans/PlanHeader.tsx
+msgid "back in the list; runs and history stayed"
+msgstr "back in the list; runs and history stayed"
 
 #: src/pages/Plans.tsx
 msgid "back to the phase list (Esc)"
@@ -495,9 +531,9 @@ msgstr "blocked"
 msgid "Board"
 msgstr "Board"
 
-#: src/pages/Plans.tsx
-msgid "board card {cardId}"
-msgstr "board card {cardId}"
+#: src/pages/plans/PlanHeader.tsx
+msgid "board card {card}"
+msgstr "board card {card}"
 
 #: src/pages/Routines.tsx
 msgid "board column (default: triage)"
@@ -521,8 +557,8 @@ msgstr "by {decidedBy}"
 
 #: src/pages/Board.tsx
 #: src/pages/PlanningMode.tsx
-#: src/pages/Plans.tsx
 #: src/pages/plans/PhaseReopens.tsx
+#: src/pages/plans/PlanRunControls.tsx
 msgid "cancel"
 msgstr "cancel"
 
@@ -531,12 +567,12 @@ msgstr "cancel"
 #: src/pages/planning/RevisionReview.tsx
 #: src/pages/Plans.tsx
 #: src/pages/Plans.tsx
-#: src/pages/Plans.tsx
+#: src/pages/plans/PlanRunControls.tsx
 #: src/pages/Routines.tsx
 msgid "Cancel"
 msgstr "Cancel"
 
-#: src/pages/Plans.tsx
+#: src/pages/plans/PlanList.tsx
 msgid "card"
 msgstr "card"
 
@@ -664,6 +700,10 @@ msgstr "Create"
 #: src/pages/Plans.tsx
 msgid "created {created}"
 msgstr "created {created}"
+
+#: src/pages/plans/PlanHeader.tsx
+msgid "criteria"
+msgstr "criteria"
 
 #: src/pages/plans/PhasePanel.tsx
 msgid "Criteria"
@@ -796,7 +836,7 @@ msgstr "dismiss"
 msgid "dismiss notice"
 msgstr "dismiss notice"
 
-#: src/pages/Plans.tsx
+#: src/pages/plans/PlanRunControls.tsx
 msgid "dispatch an implementer + a fresh reviewer per phase"
 msgstr "dispatch an implementer + a fresh reviewer per phase"
 
@@ -823,11 +863,12 @@ msgid "doing nothing"
 msgstr "doing nothing"
 
 #: src/pages/Plans.tsx
-#: src/pages/Plans.tsx
+#: src/pages/plans/plansTarget.ts
 msgid "done"
 msgstr "done"
 
 #: src/pages/Board.tsx
+#: src/pages/plans/PlanList.tsx
 #: src/pages/Routines.tsx
 msgid "Done"
 msgstr "Done"
@@ -857,8 +898,8 @@ msgstr "duration"
 msgid "e.g. Add a bulk-export button to the reports page that streams a CSV…"
 msgstr "e.g. Add a bulk-export button to the reports page that streams a CSV…"
 
-#: src/pages/Plans.tsx
 #: src/pages/plans/PhasePanel.tsx
+#: src/pages/plans/plansTarget.ts
 #: src/pages/Routines.tsx
 msgid "Edit"
 msgstr "Edit"
@@ -866,6 +907,10 @@ msgstr "Edit"
 #: src/pages/Plans.tsx
 msgid "edit doc"
 msgstr "edit doc"
+
+#: src/pages/plans/PlanHeader.tsx
+msgid "Edit phases"
+msgstr "Edit phases"
 
 #: src/pages/Routines.tsx
 msgid "edit routine"
@@ -934,7 +979,7 @@ msgstr "every minute"
 msgid "evidence"
 msgstr "evidence"
 
-#: src/pages/Plans.tsx
+#: src/pages/plans/PlanRunControls.tsx
 msgid "execution mode"
 msgstr "execution mode"
 
@@ -965,7 +1010,7 @@ msgstr "fable 5.1 — most capable, ~2.5× cost"
 msgid "failed"
 msgstr "failed"
 
-#: src/pages/Plans.tsx
+#: src/pages/plans/usePlanDoc.ts
 msgid "failed to load {path}: {reason}"
 msgstr "failed to load {path}: {reason}"
 
@@ -988,6 +1033,10 @@ msgstr "filter by label"
 #: src/pages/Board.tsx
 msgid "filter by state"
 msgstr "filter by state"
+
+#: src/pages/plans/PlanList.tsx
+msgid "filter plans"
+msgstr "filter plans"
 
 #: src/pages/plans/PhaseReview.tsx
 msgid "Find {changeShort}"
@@ -1077,7 +1126,7 @@ msgstr "guard block unreadable"
 msgid "guard check"
 msgstr "guard check"
 
-#: src/pages/Plans.tsx
+#: src/pages/plans/PlanHeader.tsx
 msgid "hand the whole plan to one agent, headlessly, in an isolated worktree"
 msgstr "hand the whole plan to one agent, headlessly, in an isolated worktree"
 
@@ -1144,8 +1193,8 @@ msgstr "in a failure"
 msgid "in plain words"
 msgstr "in plain words"
 
-#: src/pages/Plans.tsx
 #: src/pages/plans/PhasePanel.tsx
+#: src/pages/plans/plansTarget.ts
 msgid "In plain words"
 msgstr "In plain words"
 
@@ -1161,7 +1210,7 @@ msgstr "inferred"
 msgid "inferred from files this session edited under plan/"
 msgstr "inferred from files this session edited under plan/"
 
-#: src/pages/Plans.tsx
+#: src/pages/plans/PlanRunControls.tsx
 msgid "inline"
 msgstr "inline"
 
@@ -1169,7 +1218,7 @@ msgstr "inline"
 msgid "interactive review"
 msgstr "interactive review"
 
-#: src/pages/Plans.tsx
+#: src/pages/plans/PlanHeader.tsx
 msgid "interview against this plan and stage the changes as a reviewable diff"
 msgstr "interview against this plan and stage the changes as a reviewable diff"
 
@@ -1213,7 +1262,7 @@ msgstr "latest reasoning"
 msgid "legacy review"
 msgstr "legacy review"
 
-#: src/pages/Plans.tsx
+#: src/pages/plans/PlanRunControls.tsx
 msgid "let the run-plan skill triage the route from the phase DAG"
 msgstr "let the run-plan skill triage the route from the phase DAG"
 
@@ -1234,8 +1283,8 @@ msgid "loading criteria…"
 msgstr "loading criteria…"
 
 #: src/pages/Board.tsx
-#: src/pages/Plans.tsx
 #: src/pages/plans/PlainSummary.tsx
+#: src/pages/plans/PlanRunControls.tsx
 msgid "loading…"
 msgstr "loading…"
 
@@ -1319,7 +1368,7 @@ msgstr "missed"
 msgid "missing"
 msgstr "missing"
 
-#: src/pages/Plans.tsx
+#: src/pages/plans/PlanRunControls.tsx
 msgid "mode"
 msgstr "mode"
 
@@ -1330,6 +1379,10 @@ msgstr "model {model}"
 #: src/pages/Routines.tsx
 msgid "model override (optional, e.g. sonnet)"
 msgstr "model override (optional, e.g. sonnet)"
+
+#: src/pages/plans/PlanHeader.tsx
+msgid "moves it to Archived; runs and history stay"
+msgstr "moves it to Archived; runs and history stay"
 
 #: src/pages/plans/ForecastVsActual.tsx
 msgid "n/a"
@@ -1342,6 +1395,14 @@ msgstr "Name"
 #: src/pages/plans/CriterionLint.tsx
 msgid "Names a settings file — cite where Claude Code reads it (config-channels)"
 msgstr "Names a settings file — cite where Claude Code reads it (config-channels)"
+
+#: src/pages/plans/PlanHeader.tsx
+msgid "need you"
+msgstr "need you"
+
+#: src/pages/plans/PlanHeader.tsx
+msgid "Needs you →"
+msgstr "Needs you →"
 
 #: src/pages/Routines.tsx
 #: src/pages/Routines.tsx
@@ -1405,10 +1466,6 @@ msgstr "no code touched"
 msgid "no content change"
 msgstr "no content change"
 
-#: src/pages/Plans.tsx
-msgid "no epics yet — a plan under this project's workspace (a <0>plan/</0> dir with a phase table) becomes an epic here"
-msgstr "no epics yet — a plan under this project's workspace (a <0>plan/</0> dir with a phase table) becomes an epic here"
-
 #: src/pages/plans/ReviewFindings.tsx
 msgid "No findings."
 msgstr "No findings."
@@ -1449,9 +1506,17 @@ msgstr "no phase-doc edits for a while — the executor may be stuck"
 msgid "No plan file changes. The note (optional) is recorded on the revision."
 msgstr "No plan file changes. The note (optional) is recorded on the revision."
 
+#: src/pages/plans/PlanList.tsx
+msgid "No plan matches this filter."
+msgstr "No plan matches this filter."
+
 #: src/pages/plans/DecisionTable.tsx
 msgid "no plan review yet"
 msgstr "no plan review yet"
+
+#: src/pages/plans/PlanList.tsx
+msgid "No plans in this project yet. A plan/ dir with a phase table under the workspace becomes a plan here, or start one with + new."
+msgstr "No plans in this project yet. A plan/ dir with a phase table under the workspace becomes a plan here, or start one with + new."
 
 #: src/pages/Playbooks.tsx
 msgid "no playbooks"
@@ -1543,6 +1608,10 @@ msgstr "Not run yet."
 msgid "not scored — the run’s actuals are not recorded yet, or nothing about it was measurable"
 msgstr "not scored — the run’s actuals are not recorded yet, or nothing about it was measurable"
 
+#: src/pages/plans/planModel.ts
+msgid "not started"
+msgstr "not started"
+
 #: src/pages/plans/DecisionTable.tsx
 #: src/pages/plans/DecisionTable.tsx
 msgid "not verified"
@@ -1559,6 +1628,10 @@ msgstr "note (optional)"
 #: src/pages/plans/forecastStoryModel.ts
 msgid "Nothing follows: the run landed on plan."
 msgstr "Nothing follows: the run landed on plan."
+
+#: src/pages/plans/PlanHeader.tsx
+msgid "nothing new starts until you resume"
+msgstr "nothing new starts until you resume"
 
 #: src/pages/plans/PlainSummary.tsx
 msgid "nothing to explain yet — the doc has no text for this"
@@ -1625,7 +1698,7 @@ msgstr "open in terminal"
 msgid "open Phase {seq} — {name} details"
 msgstr "open Phase {seq} — {name} details"
 
-#: src/pages/Plans.tsx
+#: src/pages/plans/PlanHeader.tsx
 msgid "open plan details"
 msgstr "open plan details"
 
@@ -1678,13 +1751,22 @@ msgstr "outcome {priorOutcome} → {posteriorOutcome}"
 msgid "over 4 h"
 msgstr "over 4 h"
 
-#: src/pages/Plans.tsx
-msgid "Pause"
-msgstr "Pause"
+#: src/pages/plans/PlanHeader.tsx
+msgid "Pause plan"
+msgstr "Pause plan"
 
-#: src/pages/Plans.tsx
+#: src/pages/plans/planModel.ts
+#: src/pages/plans/plansTarget.ts
 msgid "paused"
 msgstr "paused"
+
+#: src/pages/plans/PlanHeader.tsx
+msgid "paused · nothing new starts until you resume"
+msgstr "paused · nothing new starts until you resume"
+
+#: src/pages/plans/PlanHeader.tsx
+msgid "paused · the run in flight keeps going; nothing new starts after it"
+msgstr "paused · the run in flight keeps going; nothing new starts after it"
 
 #: src/pages/Plans.tsx
 msgid "pending"
@@ -1729,7 +1811,7 @@ msgstr "phase {seq}"
 msgid "Phase {seq}"
 msgstr "Phase {seq}"
 
-#: src/pages/Plans.tsx
+#: src/pages/plans/plansTarget.ts
 msgid "Phase {seq} not found in {planTitle}"
 msgstr "Phase {seq} not found in {planTitle}"
 
@@ -1746,9 +1828,17 @@ msgstr "phase run effort"
 msgid "phase run model"
 msgstr "phase run model"
 
+#: src/pages/plans/planModel.ts
+msgid "phase running"
+msgstr "phase running"
+
 #: src/pages/plans/DecisionTable.tsx
 msgid "phases"
 msgstr "phases"
+
+#: src/pages/plans/PlanHeader.tsx
+msgid "phases landed"
+msgstr "phases landed"
 
 #: src/pages/planning/QuestionCard.tsx
 msgid "pick any that apply"
@@ -1764,22 +1854,27 @@ msgstr "Places where the agent changed the plan"
 
 #: src/pages/Plans.tsx
 #: src/pages/Plans.tsx
-#: src/pages/Plans.tsx
-#: src/pages/Plans.tsx
+#: src/pages/plans/PlanHeader.tsx
+#: src/pages/plans/PlanHeader.tsx
 msgid "plan"
 msgstr "plan"
 
-#: src/pages/Plans.tsx
+#: src/pages/plans/plansTarget.ts
 msgid "Plan"
 msgstr "Plan"
 
-#: src/pages/Plans.tsx
+#: src/pages/plans/plansTarget.ts
 msgid "Plan {externalId} not found — showing the plan list"
 msgstr "Plan {externalId} not found — showing the plan list"
 
-#: src/pages/Plans.tsx
+#: src/pages/plans/plansTarget.ts
 msgid "Plan #{id} not found"
 msgstr "Plan #{id} not found"
+
+#: src/pages/plans/PlanHeader.tsx
+#: src/pages/plans/PlanHeader.tsx
+msgid "plan actions"
+msgstr "plan actions"
 
 #: src/pages/Plans.tsx
 msgid "plan details tabs"
@@ -1792,7 +1887,7 @@ msgstr "plan doc source"
 #: src/pages/Plans.tsx
 #: src/pages/Plans.tsx
 #: src/pages/Plans.tsx
-#: src/pages/Plans.tsx
+#: src/pages/plans/PlanHeader.tsx
 msgid "plan is not active"
 msgstr "plan is not active"
 
@@ -1812,7 +1907,7 @@ msgstr "plan review passed"
 msgid "Plan round"
 msgstr "Plan round"
 
-#: src/pages/Plans.tsx
+#: src/pages/plans/PlanRunControls.tsx
 msgid "plan run failed"
 msgstr "plan run failed"
 
@@ -1823,10 +1918,6 @@ msgstr "plan saved at <0>{planDir}</0>"
 #: src/pages/Plans.tsx
 msgid "plan sessions"
 msgstr "plan sessions"
-
-#: src/pages/Plans.tsx
-msgid "plan status filter"
-msgstr "plan status filter"
 
 #: src/pages/Plans.tsx
 msgid "plan summary"
@@ -1888,12 +1979,14 @@ msgstr "Planning run failed"
 msgid "planning…"
 msgstr "planning…"
 
+#: src/pages/plans/PlanList.tsx
+#: src/pages/plans/PlanList.tsx
 #: src/pages/plans/PlansPlace.tsx
 #: src/pages/plans/PlansPlace.tsx
 msgid "Plans"
 msgstr "Plans"
 
-#: src/pages/Plans.tsx
+#: src/pages/plans/plansTarget.ts
 msgid "Plans · {tail}"
 msgstr "Plans · {tail}"
 
@@ -2117,14 +2210,6 @@ msgid "resolved in the plan round"
 msgstr "resolved in the plan round"
 
 #: src/pages/Plans.tsx
-msgid "Restore"
-msgstr "Restore"
-
-#: src/pages/Plans.tsx
-msgid "Resume"
-msgstr "Resume"
-
-#: src/pages/Plans.tsx
 #: src/pages/Plans.tsx
 msgid "Retry run"
 msgstr "Retry run"
@@ -2216,7 +2301,7 @@ msgstr "review…"
 msgid "reviewer"
 msgstr "reviewer"
 
-#: src/pages/Plans.tsx
+#: src/pages/plans/PlanHeader.tsx
 msgid "Revise plan"
 msgstr "Revise plan"
 
@@ -2237,7 +2322,7 @@ msgstr "Revising"
 msgid "revision {revisionIndex} — how much reading the code changed the expectation"
 msgstr "revision {revisionIndex} — how much reading the code changed the expectation"
 
-#: src/pages/Plans.tsx
+#: src/pages/plans/plansTarget.ts
 msgid "Revision #{id} not found"
 msgstr "Revision #{id} not found"
 
@@ -2249,7 +2334,7 @@ msgstr "Revision staged"
 msgid "revision…"
 msgstr "revision…"
 
-#: src/pages/Plans.tsx
+#: src/pages/plans/plansTarget.ts
 msgid "Revisions"
 msgstr "Revisions"
 
@@ -2285,7 +2370,7 @@ msgstr "Run anyway"
 msgid "run failed"
 msgstr "run failed"
 
-#: src/pages/Plans.tsx
+#: src/pages/plans/PlanRunControls.tsx
 msgid "Run failed"
 msgstr "Run failed"
 
@@ -2333,7 +2418,7 @@ msgstr "Running"
 msgid "running plan"
 msgstr "running plan"
 
-#: src/pages/Plans.tsx
+#: src/pages/plans/PlanRunControls.tsx
 msgid "Running plan"
 msgstr "Running plan"
 
@@ -2403,7 +2488,7 @@ msgid "Sends the phase back to its agent: your feedback is appended to the next 
 msgstr "Sends the phase back to its agent: your feedback is appended to the next run's prompt."
 
 #: src/pages/Plans.tsx
-#: src/pages/Plans.tsx
+#: src/pages/plans/PlanRunControls.tsx
 msgid "session"
 msgstr "session"
 
@@ -2477,21 +2562,25 @@ msgstr "sonnet 5 — faster, cheaper"
 msgid "spawns run with --permission-mode {permissionMode}"
 msgstr "spawns run with --permission-mode {permissionMode}"
 
-#: src/pages/Plans.tsx
+#: src/pages/plans/plansTarget.ts
 msgid "Spec"
 msgstr "Spec"
 
-#: src/pages/Plans.tsx
+#: src/pages/plans/PlanHeader.tsx
 msgid "spec {specCovered}/{specTotal}"
 msgstr "spec {specCovered}/{specTotal}"
 
-#: src/pages/Plans.tsx
+#: src/pages/plans/PlanHeader.tsx
 msgid "spec coverage — criteria covered by at least one phase"
 msgstr "spec coverage — criteria covered by at least one phase"
 
 #: src/pages/Plans.tsx
 msgid "spec…"
 msgstr "spec…"
+
+#: src/pages/plans/PlanHeader.tsx
+msgid "spent"
+msgstr "spent"
 
 #: src/pages/Playbooks.tsx
 msgid "stage chain"
@@ -2576,11 +2665,15 @@ msgstr "Steps"
 msgid "stop: {trigger}"
 msgstr "stop: {trigger}"
 
+#: src/pages/plans/PlanHeader.tsx
+msgid "stops new runs from starting; the run in flight keeps going"
+msgstr "stops new runs from starting; the run in flight keeps going"
+
 #: src/pages/plans/PhasePanel.tsx
 msgid "Story"
 msgstr "Story"
 
-#: src/pages/Plans.tsx
+#: src/pages/plans/PlanRunControls.tsx
 msgid "subagent-driven"
 msgstr "subagent-driven"
 
@@ -2588,7 +2681,7 @@ msgstr "subagent-driven"
 msgid "Submit answer"
 msgstr "Submit answer"
 
-#: src/pages/Plans.tsx
+#: src/pages/plans/plansTarget.ts
 msgid "Summary"
 msgstr "Summary"
 
@@ -2617,7 +2710,7 @@ msgstr "task prompt (board card body)"
 msgid "task title"
 msgstr "task title"
 
-#: src/pages/Plans.tsx
+#: src/pages/plans/PlanRunControls.tsx
 msgid "tech-lead (default)"
 msgstr "tech-lead (default)"
 
@@ -2641,7 +2734,7 @@ msgstr "The agent's own words where it went around something. Read these first; 
 msgid "the Completion Report carries no “Where reality diverged” paragraph"
 msgstr "the Completion Report carries no “Where reality diverged” paragraph"
 
-#: src/pages/Plans.tsx
+#: src/pages/plans/PlanRunControls.tsx
 msgid "the controller implements the phases itself, no dispatch"
 msgstr "the controller implements the phases itself, no dispatch"
 
@@ -2750,6 +2843,10 @@ msgstr "The plan review could not check the code. An id without a cited report r
 msgid "The plan takes shape here as you answer — each reply rebuilds it."
 msgstr "The plan takes shape here as you answer — each reply rebuilds it."
 
+#: src/pages/plans/PlanHeader.tsx
+msgid "the plan's README: goal, phases, decisions"
+msgstr "the plan's README: goal, phases, decisions"
+
 #: src/pages/planning/QuestionCard.tsx
 msgid "the planner is asking"
 msgstr "the planner is asking"
@@ -2761,6 +2858,10 @@ msgstr "The planner run ended without a reply. Adjust the idea below (it is pref
 #: src/pages/plans/forecastStoryModel.ts
 msgid "The planner was {percent} % sure"
 msgstr "The planner was {percent} % sure"
+
+#: src/pages/plans/PlanHeader.tsx
+msgid "the README holds the phase table: reorder, rename by hand"
+msgstr "the README holds the phase table: reorder, rename by hand"
 
 #: src/pages/plans/ReviewFindings.tsx
 msgid "the reviewer wrote no readable kind: review block — its own words are in the doc"
@@ -2774,7 +2875,7 @@ msgstr "the run changed protected paths: {changedList}"
 msgid "the run ended its turn with criteria unticked and was resumed {resumed}× — {tip}"
 msgstr "the run ended its turn with criteria unticked and was resumed {resumed}× — {tip}"
 
-#: src/pages/Plans.tsx
+#: src/pages/plans/PlanRunControls.tsx
 msgid "the run executes core's <0>run-plan</0> skill headlessly in an isolated worktree: it commits per phase but never pushes, and stops with PLAN BLOCKED if a phase needs a human."
 msgstr "the run executes core's <0>run-plan</0> skill headlessly in an isolated worktree: it commits per phase but never pushes, and stops with PLAN BLOCKED if a phase needs a human."
 
@@ -2818,7 +2919,7 @@ msgstr "the run's diff, verdict and landing controls"
 msgid "the verifier could not conclude (env or timeout) — this is not a failing grade"
 msgstr "the verifier could not conclude (env or timeout) — this is not a failing grade"
 
-#: src/pages/Plans.tsx
+#: src/pages/plans/PlanRunControls.tsx
 msgid "the whole plan is running{agentPart} (mode: {mode})"
 msgstr "the whole plan is running{agentPart} (mode: {mode})"
 
@@ -2899,6 +3000,10 @@ msgstr "type"
 msgid "un-tick this criterion in the doc"
 msgstr "un-tick this criterion in the doc"
 
+#: src/pages/plans/PlanHeader.tsx
+msgid "Unarchive"
+msgstr "Unarchive"
+
 #: src/pages/Plans.tsx
 msgid "uncovered"
 msgstr "uncovered"
@@ -2929,6 +3034,10 @@ msgstr "unreported"
 #: src/pages/Plans.tsx
 msgid "unverified"
 msgstr "unverified"
+
+#: src/pages/plans/PlanHeader.tsx
+msgid "updated {ago} ago"
+msgstr "updated {ago} ago"
 
 #: src/pages/plans/VerifyVerdictChip.tsx
 msgid "verified"
@@ -3002,7 +3111,7 @@ msgstr "what was done"
 msgid "what was done — the executor's Completion Report and execution record"
 msgstr "what was done — the executor's Completion Report and execution record"
 
-#: src/pages/Plans.tsx
+#: src/pages/plans/PlanHeader.tsx
 msgid "what was shipped — per-phase executed work"
 msgstr "what was shipped — per-phase executed work"
 

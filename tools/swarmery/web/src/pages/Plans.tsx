@@ -1,15 +1,11 @@
-// Plans / Epics (fusion phase 10 + plans-page-lifecycle phase 2): a workspace
-// plan IS an epic. This tab lists the project's epics (plan dirs the ingester
-// parsed) behind Active/Done/Archived filter tabs, drills into a phase
-// timeline (seq order, depends-on badges, per-phase progress, derived status
-// chips), offers plan lifecycle controls (Pause / Resume / Archive / Restore —
-// file operations on the daemon side), and opens any plan doc for EDITING in
-// the existing drawer — the workspace folder becomes invisible infrastructure
-// (read, edit, track from the platform; files stay the storage).
+// Plans (Swarmery v4 handoff §6): a workspace plan IS an epic. The list column
+// (plans/PlanList) holds every plan of the project in groups, the detail column a
+// plan: its header (plans/PlanHeader), then the phases. Plan lifecycle (Pause /
+// Resume / Archive / Restore) is a file operation on the daemon side, and any plan
+// doc opens for EDITING inline — the workspace folder becomes invisible
+// infrastructure (read, edit, track from the platform; files stay the storage).
 //
-// Details are INLINE and full-width: the plan list column stays visible on the
-// left, and the detail panel REPLACES the phase list in the main column, under
-// the plan header (title, status, progress, lifecycle buttons) — plan docs and
+// A detail REPLACES the phase list, under the plan header — plan docs and
 // completion reports get the whole column instead of a 360px rail. The "← all
 // phases" control (or Escape) sits ABOVE the panel, not inside its header,
 // where it used to get lost against the panel's own identity block.
@@ -28,8 +24,8 @@
 // (clicking a criterion PATCHes that exact `- [ ]`↔`- [x]` line).
 //
 // Running work: a phase runs headlessly from its own doc (the phase-run
-// mechanism), and the WHOLE plan can be handed to one agent instead — "Run
-// plan" in the action row opens an inline agent + mode picker and POSTs
+// mechanism), and the WHOLE plan can be handed to one agent instead — "run
+// plan" in the header opens an inline agent + mode picker and POSTs
 // /api/epics/{taskId}/run. That run drives core's `run-plan` skill; its progress
 // shows up as the phase docs' checkboxes ticking, not as per-phase run chips, so
 // per-phase Run buttons stand down while it owns the docs.
@@ -45,7 +41,7 @@
 // (column moves on legacy-linked board tasks) AND on `plan_updated` (checkbox
 // flips, lifecycle transitions, plan rescans) so progress ticks without a reload.
 
-import { i18n, type MessageDescriptor } from '@lingui/core';
+import type { MessageDescriptor } from '@lingui/core';
 import { msg, plural, t } from '@lingui/core/macro';
 import { Trans, useLingui } from '@lingui/react/macro';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
@@ -59,7 +55,6 @@ import {
   useParams,
 } from 'react-router-dom';
 import type {
-  BoardColumn,
   DecisionHoldRef,
   Epic,
   EpicPhase,
@@ -87,7 +82,6 @@ import {
   type PhaseRunBranchError,
   type RevisionStartError,
 } from '../api';
-import { fetchSystemItems } from '../api/system';
 import type { PlanRunMode, RunEvent, TerminalSession } from '../api/types';
 import { useProjectWorkspace } from '../workspace/ProjectContext';
 import { useLiveUpdates } from '../lib/ws';
@@ -109,7 +103,7 @@ import { CriterionLint } from './plans/CriterionLint';
 import { DecisionTable } from './plans/DecisionTable';
 import { LandCriterionAction } from './plans/LandCriterionAction';
 import { PhaseCard, type PhaseCardAction } from './plans/PhaseCard';
-import { PHASE_TABS, PhasePanel, type PhaseTab } from './plans/PhasePanel';
+import { PhasePanel } from './plans/PhasePanel';
 import { PhaseReopens } from './plans/PhaseReopens';
 import { TerminalBadge, useTerminalSessions } from './plans/TerminalBadge';
 import { PhaseReview } from './plans/PhaseReview';
@@ -121,82 +115,41 @@ import { reverifyAction, useReverify, type Reverify } from './plans/useReverify'
 import { hasReviewTab, NEUTRAL_TERMS, showsReviewTab } from './plans/landingModel';
 import { WorkaroundHits } from './plans/WorkaroundHits';
 import { useProjectVcs } from '../lib/useProjectVcs';
+import { PlaceLayout } from '../components/place/PlaceLayout';
+import { tabParamHref } from '../components/Tabs';
+import { PlanHeader } from './plans/PlanHeader';
+import { PlanList } from './plans/PlanList';
+import {
+  computeResolvedSeqs,
+  extractSection,
+  phaseStatus,
+  planComplete,
+  type PhaseStatus,
+} from './plans/planModel';
+import {
+  canonicalPlansTarget,
+  EPIC_STATUS_LABEL,
+  PLAN_DETAIL_TAB_LABEL,
+  epicFilterOf,
+  FILTER_LABEL,
+  plansTitle,
+  revisionNotFound,
+  staleNotice,
+  type DetailSel,
+  type DetailTarget,
+  type EpicFilter,
+  type PhaseDetailTab,
+} from './plans/plansTarget';
 import {
   parsePlansRoute,
   plansHref,
   sameHref,
-  type ParsedPlansRoute,
   type PlanDetailTab,
-  type PlansDetail,
   type PlansRouteParams,
-  type PlansStatus,
   type PlansTarget,
 } from './plans/plansUrl';
+import { usePlanDoc } from './plans/usePlanDoc';
 
-/** A board column that counts as "resolved" for the dependency gate. */
-function isResolvedColumn(col: BoardColumn | null): boolean {
-  return col === 'done' || col === 'archived';
-}
-
-type PhaseStatus = 'pending' | 'in_progress' | 'done' | 'unverified' | 'unreported' | 'blocked';
-
-/** Derives a phase's display status from checkbox progress, a live run, and the
- * dependency gate. The result stays a coarse LIFECYCLE state — whether a process
- * is attached to it is resolved by `phaseChip` at the call site. */
-function phaseStatus(p: EpicPhase, resolvedSeqs: Set<number>): PhaseStatus {
-  // An activated phase whose board task is resolved is done regardless of
-  // checkbox progress — the board is the source of truth once dispatched.
-  if (isResolvedColumn(p.boardColumn)) return 'done';
-  // THE completion gate, computed by the daemon (internal/phasegate) — not a
-  // client-side `done === total`, which is how this file used to answer and how it
-  // came to disagree with the daemon about the same row. `unverified` means the
-  // criteria are all ticked and the verification the doc asked for never landed.
-  if (p.completionState === 'complete') return 'done';
-  if (p.completionState === 'unverified') return 'unverified';
-  if (p.completionState === 'unreported') return 'unreported';
-  // The doc's own `Status: In progress` marker wins over the dependency gate —
-  // an executor writing it is literally working on the phase right now.
-  // (`done` must be earned by ticking every checkbox; a `done` marker alone is ignored.)
-  if (p.docStatus === 'in_progress') return 'in_progress';
-  // A run in flight is the strongest statement that can be made about a phase —
-  // stronger than a dependency gate computed from checkboxes the run is in the
-  // middle of ticking. Without this a phase whose dependency sits at 11/12
-  // renders `blocked` while its executor is demonstrably working.
-  if (p.runState === 'running') return 'in_progress';
-  if (p.dependsOn.some((seq) => !resolvedSeqs.has(seq))) return 'blocked';
-  if (p.checkboxesDone > 0 || p.boardColumn === 'in_progress' || p.boardColumn === 'in_review')
-    return 'in_progress';
-  return 'pending';
-}
-
-/** Which seq numbers are "resolved" — their board task is done/archived OR the
- * daemon's completion gate calls them complete. Renders depends-on badges and
- * feeds the phase-status derivation.
- *
- * The gate, never a local derivation: a process that exited 0 having ticked
- * nothing is not a completed phase, and neither is one whose criteria are all
- * ticked while the verification it asked for never landed. Re-deriving either
- * rule here is what let the client offer a Run button the daemon then refuses. */
-function computeResolvedSeqs(phases: EpicPhase[]): Set<number> {
-  const s = new Set<number>();
-  for (const p of phases) {
-    // `completionState`, never a local checkbox comparison: the daemon's dependency
-    // gate refuses a fully-ticked phase whose verification never landed, and a
-    // client that marked it resolved would offer a Run button the daemon then
-    // rejects. One gate, one answer.
-    if (isResolvedColumn(p.boardColumn) || p.completionState === 'complete') s.add(p.seq);
-  }
-  return s;
-}
-
-/** A plan is complete when every phase reads done — the gate for the plan
- * rail's Summary tab. */
-function planComplete(epic: Epic, resolvedSeqs: Set<number>): boolean {
-  return (
-    epic.phases.length > 0 &&
-    epic.phases.every((p) => phaseStatus(p, resolvedSeqs) === 'done')
-  );
-}
 
 /** Re-renders on an interval so elapsed labels (doc activity, running phases)
  * stay fresh. */
@@ -719,216 +672,6 @@ const STATUS_BADGE: Record<Epic['status'], string> = {
   archived: 'border-line text-ink-faint',
 };
 
-/** Which lifecycle buttons a plan in a given status offers. */
-const LIFECYCLE_ACTIONS: Record<
-  Epic['status'],
-  { action: EpicLifecycleAction; label: MessageDescriptor }[]
-> = {
-  active: [
-    { action: 'pause', label: msg`Pause` },
-    { action: 'archive', label: msg`Archive` },
-  ],
-  paused: [
-    { action: 'resume', label: msg`Resume` },
-    { action: 'archive', label: msg`Archive` },
-  ],
-  done: [{ action: 'archive', label: msg`Archive` }],
-  archived: [{ action: 'restore', label: msg`Restore` }],
-};
-
-/** The Active/Done/Archived filter — the URL's `?status=` (plansUrl.ts). */
-type EpicFilter = PlansStatus;
-const FILTERS: EpicFilter[] = ['active', 'done', 'archived'];
-/** What a plan status reads as — the status badge, and the filter tabs (the CSS
- * capitalizes those). The keys are the daemon's status codes. */
-const EPIC_STATUS_LABEL: Record<Epic['status'], MessageDescriptor> = {
-  active: msg`active`,
-  paused: msg`paused`,
-  done: msg`done`,
-  archived: msg`archived`,
-};
-const FILTER_LABEL: Record<EpicFilter, MessageDescriptor> = EPIC_STATUS_LABEL;
-
-/** The plan-list row's tooltip on its board-card chip. */
-function boardCardTip(cardId: string): string {
-  return t`board card ${cardId}`;
-}
-
-/** The stale-link notice for a revision id the plan does not have (SC-8). */
-function revisionNotFound(revId: number): string {
-  const id = String(revId);
-  return t`Revision #${id} not found`;
-}
-
-/** "3 phases" under a plan in the list. */
-function phaseCountLabel(count: number): string {
-  return plural(count, { one: '# phase', few: '# phases', many: '# phases', other: '# phases' });
-}
-
-/** Which filter tab an epic belongs to (paused plans live under Active). */
-function epicFilterOf(status: Epic['status']): EpicFilter {
-  return status === 'active' || status === 'paused' ? 'active' : status;
-}
-
-// PlanDetailTab (plan/spec/summary/revisions/edit) lives in plans/plansUrl.ts:
-// it is part of the URL scheme now.
-
-/** Phase panel tabs (story/criteria/runs/report/edit). Report always exists —
- * an empty note beats hiding it ("where do I read the summary?" was a dead end). */
-type PhaseDetailTab = PhaseTab;
-
-/** What the inline detail panel shows: one phase's details, or the plan's (both
- * tabbed). `null` means "no details — show the phase list".
- *
- * The phase is addressed by SEQ, not by `epic_phases.id`: a plan rescan
- * (wsingest/epics.go applyEpics) DELETEs and re-INSERTs every phase row, so the
- * surrogate id churns on each rescan — and a rescan is exactly what a checkbox
- * tick triggers. Keying by id made the open panel close, or silently jump to
- * whichever phase inherited the old id. Seq is the plan's own numbering and
- * survives. */
-type DetailTarget =
-  | { kind: 'phase'; seq: number; tab: PhaseDetailTab }
-  | { kind: 'plan'; tab: PlanDetailTab };
-
-/** Same selection with the phase resolved against the current epic. */
-type DetailSel =
-  | { kind: 'phase'; phase: EpicPhase; tab: PhaseDetailTab }
-  | { kind: 'plan'; tab: PlanDetailTab };
-
-/** Which URL-named level did not exist — named by the stale-link notice (SC-8).
- * `task` is the numeric `?task=`/`?plan=` hand-off (NaN for a non-numeric id). */
-type PlansMissing =
-  | { kind: 'plan'; externalId: string }
-  | { kind: 'task'; taskId: number }
-  | { kind: 'phase'; seq: number; planTitle: string }
-  | null;
-
-/** The one-line notice for a link whose target is gone; null when nothing is.
- * `search` supplies a non-numeric legacy id verbatim. */
-function staleNotice(missing: PlansMissing, search: string): string | null {
-  if (missing === null) return null;
-  switch (missing.kind) {
-    case 'plan': {
-      const externalId = missing.externalId;
-      return t`Plan ${externalId} not found — showing the plan list`;
-    }
-    case 'task': {
-      const q = new URLSearchParams(search);
-      const id = Number.isNaN(missing.taskId) ? (q.get('task') ?? q.get('plan') ?? '') : String(missing.taskId);
-      return t`Plan #${id} not found`;
-    }
-    case 'phase': {
-      const seq = String(missing.seq);
-      const planTitle = missing.planTitle;
-      return t`Phase ${seq} not found in ${planTitle}`;
-    }
-  }
-}
-
-/** A click the page handles itself — not a new-tab / new-window / download
- * gesture, which belongs to the browser. */
-function isPlainClick(e: { button: number; metaKey: boolean; ctrlKey: boolean; shiftKey: boolean; altKey: boolean }): boolean {
-  return e.button === 0 && !e.metaKey && !e.ctrlKey && !e.shiftKey && !e.altKey;
-}
-
-/** Plan-details tab labels, as PlanDetailPanel shows them (Revisions without its count). */
-const PLAN_DETAIL_TAB_LABEL: Record<PlanDetailTab, MessageDescriptor> = {
-  plan: msg`Plan`,
-  plain: msg`In plain words`,
-  spec: msg`Spec`,
-  summary: msg`Summary`,
-  revisions: msg`Revisions`,
-  edit: msg`Edit`,
-};
-
-/**
- * `document.title` of the Plans tab (SC-11):
- *   phase         `Runs · Phase 3 — <plan> · <project> — Swarmery`
- *   plan details  `Revisions — <plan> · <project> — Swarmery`
- *   plan          `<plan> · Plans · <project> — Swarmery`
- *   no plan       `Plans · <project> — Swarmery`
- * A phase the plan does not have reads as the plan (the URL is about to be
- * corrected to it).
- */
-function plansTitle(epic: Epic | null, detail: DetailTarget | null, project: string): string {
-  const tail = `${project} — Swarmery`;
-  if (epic === null) return t`Plans · ${tail}`;
-  const title = epic.title;
-  if (detail?.kind === 'phase' && epic.phases.some((p) => p.seq === detail.seq)) {
-    const def = PHASE_TABS.find((d) => d.id === detail.tab);
-    const tab = def !== undefined ? i18n._(def.label) : detail.tab;
-    const seq = String(detail.seq);
-    return t`${tab} · Phase ${seq} — ${title} · ${tail}`;
-  }
-  if (detail?.kind === 'plan') {
-    const tab = i18n._(PLAN_DETAIL_TAB_LABEL[detail.tab]);
-    return `${tab} — ${title} · ${tail}`;
-  }
-  return t`${title} · Plans · ${tail}`;
-}
-
-/**
- * The canonical target for a parsed Plans URL against the loaded epics: the
- * numeric `?task=`/`?plan=` hand-off resolved to its externalId, the first plan
- * of the filter chosen when none is named, an unknown plan / phase dropped to
- * the nearest valid level, and an unavailable tab mapped to the tab its panel
- * already falls back to (Edit on a done phase → Report; Summary on an
- * incomplete plan or Spec without a spec.md → Plan).
- *
- * Pure and deterministic in (route, epics), so replacing to it is idempotent:
- * its own output parses back to the same target. A revision id is validated
- * separately, against the revisions EpicDetail fetches.
- */
-function canonicalPlansTarget(
-  route: ParsedPlansRoute,
-  epics: Epic[],
-): { target: PlansTarget; missing: PlansMissing } {
-  const listOf = (f: EpicFilter, missing: PlansMissing): { target: PlansTarget; missing: PlansMissing } => {
-    const first = epics.find((e) => epicFilterOf(e.status) === f);
-    return { target: first !== undefined ? { plan: first.externalId } : { plan: null, status: f }, missing };
-  };
-
-  if (route.plan === null) {
-    if (route.legacy === null) return listOf(route.status ?? 'active', null);
-    const { taskId, phaseSeq, wantRevisions } = route.legacy;
-    const epic = epics.find((e) => e.taskId === taskId);
-    if (epic === undefined) return listOf('active', { kind: 'task', taskId });
-    if (wantRevisions) {
-      return { target: { plan: epic.externalId, detail: { kind: 'plan', tab: 'revisions' } }, missing: null };
-    }
-    if (phaseSeq === null) return { target: { plan: epic.externalId }, missing: null };
-    return epic.phases.some((p) => p.seq === phaseSeq)
-      ? { target: { plan: epic.externalId, detail: { kind: 'phase', seq: phaseSeq, tab: 'story' } }, missing: null }
-      : { target: { plan: epic.externalId }, missing: { kind: 'phase', seq: phaseSeq, planTitle: epic.title } };
-  }
-
-  const epic = epics.find((e) => e.externalId === route.plan);
-  if (epic === undefined) return listOf('active', { kind: 'plan', externalId: route.plan });
-  const d = route.detail;
-  if (d === null) return { target: { plan: epic.externalId }, missing: null };
-  const resolvedSeqs = computeResolvedSeqs(epic.phases);
-  if (d.kind === 'phase') {
-    const p = epic.phases.find((x) => x.seq === d.seq);
-    if (p === undefined) {
-      return { target: { plan: epic.externalId }, missing: { kind: 'phase', seq: d.seq, planTitle: epic.title } };
-    }
-    // Edit on a done phase → Report; Review on a phase that never ran → Runs
-    // (the tabs each panel falls back to).
-    const tab: PhaseDetailTab =
-      d.tab === 'edit' && phaseStatus(p, resolvedSeqs) === 'done'
-        ? 'report'
-        : d.tab === 'review' && !showsReviewTab(p)
-          ? 'runs'
-          : d.tab;
-    return { target: { plan: epic.externalId, detail: { kind: 'phase', seq: d.seq, tab } }, missing: null };
-  }
-  const complete = planComplete(epic, resolvedSeqs);
-  const tab: PlanDetailTab =
-    (d.tab === 'summary' && !complete) || (d.tab === 'spec' && !epic.hasSpec) ? 'plan' : d.tab;
-  const detail: PlansDetail =
-    tab === 'revisions' && d.revId !== undefined ? { kind: 'plan', tab, revId: d.revId } : { kind: 'plan', tab };
-  return { target: { plan: epic.externalId, detail }, missing: null };
-}
 
 export function Plans(): JSX.Element {
   const { t, i18n } = useLingui();
@@ -1082,11 +825,6 @@ export function Plans(): JSX.Element {
     () => (epics ?? []).filter((e) => epicFilterOf(e.status) === filter),
     [epics, filter],
   );
-  const counts = useMemo(() => {
-    const c: Record<EpicFilter, number> = { active: 0, done: 0, archived: 0 };
-    for (const e of epics ?? []) c[epicFilterOf(e.status)] += 1;
-    return c;
-  }, [epics]);
 
   // Machine corrections, all replace (a correction is not a step): `/plans` →
   // the first plan of its filter (an EMPTY filter stays put, empty state);
@@ -1317,18 +1055,6 @@ export function Plans(): JSX.Element {
     );
   }
   if (epics === null) return <Loading label={t`epics…`} />;
-  if (epics.length === 0) {
-    return (
-      <div className="px-4 py-8 desk:px-8">
-        <Empty>
-          <Trans>
-            no epics yet — a plan under this project&apos;s workspace (a{' '}
-            <code className="font-mono text-[11px]">plan/</code> dir with a phase table) becomes an epic here
-          </Trans>
-        </Empty>
-      </div>
-    );
-  }
 
   // Resolve the selection against the CURRENT epic — a refetch can drop the
   // referenced phase (plan rescan), in which case the panel closes itself and
@@ -1344,137 +1070,60 @@ export function Plans(): JSX.Element {
     }
   }
 
+  const openDetails = (): void => {
+    if (activeEpic !== null) go({ plan: activeEpic.externalId, detail: { kind: 'plan', tab: 'plan' } });
+  };
+  const newPlanHref = `/p/${encodeURIComponent(slug)}/plans${tabParamHref(location.search, 'tab', 'new', 'plans')}`;
+
   return (
-    <div className="flex min-h-0 flex-1 flex-col px-3 py-4 desk:px-6">
-      {actionError !== null && (
-        <div
-          role="alert"
-          className="mb-3 flex items-center gap-2 rounded-lg border border-red/40 bg-red/10 px-3 py-1.5 font-mono text-[11px] text-red"
-        >
-          <span className="min-w-0 flex-1">{actionError}</span>
-          <button type="button" onClick={() => setActionError(null)} aria-label={t`dismiss`} className="text-red/70">
-            ×
-          </button>
-        </div>
-      )}
-      {/* A stale link's notice (SC-8): the actionError strip's shape, in amber —
-          the page did land somewhere valid, nothing failed. */}
-      {notice !== null && (
-        <div
-          role="status"
-          className="mb-3 flex items-center gap-2 rounded-lg border border-amber/40 bg-amber/10 px-3 py-1.5 font-mono text-[11px] text-amber"
-        >
-          <span className="min-w-0 flex-1">{notice}</span>
-          <button type="button" onClick={() => setNotice(null)} aria-label={t`dismiss notice`} className="text-amber/70">
-            ×
-          </button>
-        </div>
-      )}
-
-      <div className="flex min-h-0 flex-1 gap-5">
-        {/* Epic list behind status filter tabs. */}
-        <div className="flex w-[280px] shrink-0 flex-col">
-          <div className="mb-2 flex items-center gap-1" role="tablist" aria-label={t`plan status filter`}>
-            {FILTERS.map((f) => (
-              <Link
-                key={f}
-                role="tab"
-                aria-selected={filter === f}
-                // A real link to the plan-less filter URL: one push, then the
-                // correction effect REPLACES it with that filter's first plan
-                // (or leaves an empty filter on its empty state). Re-clicking
-                // the current filter is not a step — and must not re-pick its
-                // first plan — so that plain click is swallowed.
-                to={plansHref(slug, { plan: null, status: f }, location.search)}
-                onClick={(ev) => {
-                  if (f === filter && isPlainClick(ev)) ev.preventDefault();
-                }}
-                className={`rounded-md border px-2 py-1 font-mono text-[10.5px] capitalize transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-brand ${
-                  filter === f
-                    ? 'border-line-strong bg-surface2 text-brand'
-                    : 'border-transparent text-ink-dim hover:text-ink'
-                }`}
+    <>
+      <PlaceLayout
+        narrow={detail !== null ? 'detail' : 'both'}
+        list={
+          <PlanList
+            epics={epics}
+            selectedTaskId={selected}
+            // A row is a real link (Cmd-click opens a new tab). The selected one links
+            // to where we are, so re-clicking it keeps its open details.
+            hrefOf={(e) => (e.taskId === selected ? here : plansHref(slug, { plan: e.externalId }, location.search))}
+            onStep={(e) => go({ plan: e.externalId })}
+            onPrimary={openDetails}
+            onNew={() => navigate(newPlanHref)}
+          />
+        }
+        detail={
+          <div className="max-w-[1040px] px-4 pt-[22px] pb-10 desk:px-7">
+            {actionError !== null && (
+              <div
+                role="alert"
+                className="mb-3 flex items-center gap-2 rounded-lg border border-red/40 bg-red/10 px-3 py-1.5 font-mono text-[11px] text-red"
               >
-                {i18n._(FILTER_LABEL[f])} ({counts[f]})
-              </Link>
-            ))}
-          </div>
-          <div className="min-h-0 flex-1 space-y-1.5 overflow-y-auto pr-1">
-            {filtered.length === 0 ? (
-              <Empty>
-                <Trans>no {filterLabel} plans</Trans>
-              </Empty>
-            ) : (
-              filtered.map((e) => (
-                // The row is a real link to the plan (Cmd-click opens it in a new tab)
-                // AND hosts CopyIdBadge's own <button>. Interactive content can't nest
-                // inside an <a> (invalid HTML, and the chip's "copy id: …" would fold
-                // into the link's name), so the link is the title and stretches over
-                // the whole row with an ::after overlay. The chips that need their own
-                // pointer (copy, the card tooltip) sit above that overlay (relative z-10).
-                <div
-                  key={e.taskId}
-                  className={`relative rounded-lg border px-3 py-2.5 transition-colors ${
-                    selected === e.taskId
-                      ? 'border-line-strong bg-surface2'
-                      : 'border-line bg-surface/40 hover:border-line-strong'
-                  }`}
-                >
-                  <div className="flex items-center gap-1.5">
-                    <Link
-                      to={plansHref(slug, { plan: e.externalId }, location.search)}
-                      // A plain click is one push. Re-clicking the selected plan keeps
-                      // its open details, as before.
-                      onClick={(ev) => {
-                        if (selected === e.taskId && isPlainClick(ev)) ev.preventDefault();
-                      }}
-                      aria-current={selected === e.taskId}
-                      className="min-w-0 flex-1 truncate text-[13px] font-medium text-ink after:absolute after:inset-0 after:rounded-lg focus:outline-none focus-visible:after:outline focus-visible:after:outline-2 focus-visible:after:outline-offset-1 focus-visible:after:outline-brand"
-                    >
-                      {e.title}
-                    </Link>
-                    {/* A micro-plan: this plan IS a dispatched board card, materialized so its
-                        outcome is evidence in a doc rather than a column someone dragged it to.
-                        The chip is what makes the two views of one unit of work navigable. */}
-                    {e.cardExternalId !== null && (
-                      <span
-                        data-tip={boardCardTip(e.cardExternalId)}
-                        className="relative z-10 shrink-0 rounded border border-line px-1 py-px font-mono text-[9px] text-ink-dim"
-                      >
-                        <Trans>card</Trans>
-                      </span>
-                    )}
-                  </div>
-                  <div className="mt-0.5 flex min-w-0 items-center gap-1.5 font-mono text-[10px] text-ink-faint">
-                    {/* The chip shrinks and ellipsizes before the row scrolls — a
-                        `yyyy-mm-dd-slug` plan id can run past this column's width,
-                        and copying still copies the FULL id regardless of how much
-                        of it is visually truncated. */}
-                    <CopyIdBadge id={e.externalId} label={t`plan`} truncate className="relative z-10 min-w-0 flex-1" />
-                    {e.startedAt !== null && <span className="shrink-0">{e.startedAt.slice(0, 10)}</span>}
-                    <span className="shrink-0">{phaseCountLabel(e.phases.length)}</span>
-                  </div>
-                  <ProgressBar done={e.rollup.done} total={e.rollup.total} className="mt-2" />
-                </div>
-              ))
-            )}
-          </div>
-        </div>
-
-        {/* Epic detail: phase timeline. */}
-        <div className="flex min-w-0 flex-1 flex-col overflow-y-auto">
-          {activeEpic === null ? (
-            <>
-              {/* Invisible spacer — same height as the tablist above the list column so the
-                  empty states in both columns share the same vertical baseline. */}
-              <div className="mb-2 flex items-center gap-1 opacity-0 pointer-events-none" aria-hidden="true">
-                <span className="rounded-md border px-2 py-1 font-mono text-[10.5px]">{'\u00a0'}</span>
+                <span className="min-w-0 flex-1">{actionError}</span>
+                <button type="button" onClick={() => setActionError(null)} aria-label={t`dismiss`} className="text-red/70">
+                  ×
+                </button>
               </div>
-              <Empty>
-                <Trans>select an epic</Trans>
-              </Empty>
-            </>
-          ) : (
+            )}
+            {/* A stale link's notice (SC-8): the actionError strip's shape, in amber —
+                the page did land somewhere valid, nothing failed. */}
+            {notice !== null && (
+              <div
+                role="status"
+                className="mb-3 flex items-center gap-2 rounded-lg border border-amber/40 bg-amber/10 px-3 py-1.5 font-mono text-[11px] text-amber"
+              >
+                <span className="min-w-0 flex-1">{notice}</span>
+                <button type="button" onClick={() => setNotice(null)} aria-label={t`dismiss notice`} className="text-amber/70">
+                  ×
+                </button>
+              </div>
+            )}
+            {activeEpic === null ? (
+              epics.length === 0 ? null : (
+                <Empty>
+                  {filtered.length === 0 ? <Trans>no {filterLabel} plans</Trans> : <Trans>select an epic</Trans>}
+                </Empty>
+              )
+            ) : (
             <EpicDetail
               epic={activeEpic}
               detail={detail}
@@ -1519,9 +1168,10 @@ export function Plans(): JSX.Element {
               terms={vcs?.terms ?? null}
               onOpenOutcome={setOutcomeFor}
             />
-          )}
-        </div>
-      </div>
+            )}
+          </div>
+        }
+      />
 
       {/* Why a run did not move the phase. Read-only, so it opens over any
           state — including a live plan run, where only its write actions
@@ -1567,7 +1217,7 @@ export function Plans(): JSX.Element {
           onRetry={() => startPlanRun(planDirty.taskId, planDirty.agent, planDirty.mode)}
         />
       )}
-    </div>
+    </>
   );
 }
 
@@ -1651,7 +1301,7 @@ function EpicDetail({
    * until it loads — the Review tab then uses the terms its own response carries. */
   terms: ProviderTerms | null;
 }): JSX.Element {
-  const { t, i18n } = useLingui();
+  const { t } = useLingui();
   const resolvedSeqs = useMemo(() => computeResolvedSeqs(epic.phases), [epic.phases]);
   const complete = planComplete(epic, resolvedSeqs);
   const now = useNow(1000);
@@ -1758,111 +1408,39 @@ function EpicDetail({
     };
   }, [open, onCloseDetail]);
 
-  const specCovered = epic.spec?.covered ?? 0;
-  const specTotal = epic.spec?.total ?? 0;
-
   return (
-    <div className="pr-1">
-      <div className="mb-3 flex items-baseline justify-between gap-3">
-        <div className="flex min-w-0 items-baseline gap-2">
-          {/* The plan title opens the plan rail — same click-to-detail idiom
-              as the phase rows below. */}
-          <button
-            type="button"
-            onClick={() => onOpenPlan('plan')}
-            data-tip={t`open plan details`}
-            className="min-w-0 truncate text-left text-[15px] font-semibold text-ink transition-colors hover:text-brand"
-          >
-            {epic.title}
-          </button>
-          <span
-            className={`shrink-0 rounded border px-1.5 py-px font-mono text-[9.5px] ${STATUS_BADGE[epic.status]}`}
-          >
-            {i18n._(EPIC_STATUS_LABEL[epic.status])}
-          </span>
-          <CopyIdBadge id={epic.externalId} label={t`plan`} className="shrink-0" />
-          <TerminalBadge sessions={planTerminal} scope="plan" />
+    <div>
+      <PlanHeader
+        epic={epic}
+        resolvedSeqs={resolvedSeqs}
+        complete={complete}
+        now={now}
+        terminal={planTerminal}
+        busyLifecycle={busyLifecycle}
+        onLifecycle={onLifecycle}
+        planRunBusy={planRunBusy}
+        phaseRunActive={phaseRunActive}
+        onRunPlan={onRunPlan}
+        onCancelPlanRun={onCancelPlanRun}
+        onOpenPlan={onOpenPlan}
+        stagedCount={stagedCount}
+        reviseBusy={reviseBusy}
+        onRevise={() => {
+          setReviseErr(null);
+          setReviseOpenRevId(null);
+          setReviseOpen(true);
+        }}
+      />
+
+      {/* Leaving the details is the first thing offered while they are open. */}
+      {detail !== null && (
+        <div className="mt-[22px]">
+          <BackToPhases onBack={onCloseDetail} />
         </div>
-        <span className="shrink-0 font-mono text-[11px] text-ink-dim">
-          {epic.rollup.done}/{epic.rollup.total} ({Math.round(epic.rollup.pct)}%)
-        </span>
-      </div>
-      <div className="mb-4 flex flex-wrap items-center gap-1.5">
-        {/* Leaving the details is the first thing offered while they are open,
-            in the same row as the plan actions. */}
-        {detail !== null && <BackToPhases onBack={onCloseDetail} />}
-        <button
-          type="button"
-          onClick={() => onOpenPlan('plan')}
-          className="rounded-md border border-line px-2 py-1 font-mono text-[10.5px] text-ink-dim transition-colors hover:border-line-strong hover:text-ink"
-        >
-          <Trans>❐ open plan README</Trans>
-        </button>
-        {LIFECYCLE_ACTIONS[epic.status].map(({ action, label }) => (
-          <button
-            key={action}
-            type="button"
-            disabled={busyLifecycle}
-            onClick={() => onLifecycle(epic, action)}
-            className="rounded-md border border-line-strong bg-surface2 px-2 py-1 font-mono text-[10.5px] text-ink-dim transition-colors hover:bg-surface2/70 hover:text-ink disabled:cursor-not-allowed disabled:border-line disabled:text-ink-faint"
-          >
-            {busyLifecycle ? '…' : i18n._(label)}
-          </button>
-        ))}
-        <button
-          type="button"
-          disabled={reviseBusy || planRunning || phaseRunActive}
-          data-tip={
-            planRunning || phaseRunActive
-              ? t`a run owns the plan docs — revise once it finishes`
-              : t`interview against this plan and stage the changes as a reviewable diff`
-          }
-          onClick={() => {
-            setReviseErr(null);
-            setReviseOpenRevId(null);
-            setReviseOpen(true);
-          }}
-          className="rounded-md border border-brand/40 px-2 py-1 font-mono text-[10.5px] text-brand transition-colors hover:bg-brand/10 disabled:cursor-not-allowed disabled:border-line disabled:text-ink-faint"
-        >
-          <Trans>Revise plan</Trans>
-        </button>
-        {complete && (
-          <button
-            type="button"
-            onClick={() => onOpenPlan('summary')}
-            data-tip={t`what was shipped — per-phase executed work`}
-            className="rounded-md border border-green/40 px-2 py-1 font-mono text-[10.5px] text-green transition-colors hover:bg-green/10"
-          >
-            <Trans>✓ summary</Trans>
-          </button>
-        )}
-        {epic.hasSpec && epic.spec !== null && (
-          <span
-            data-tip={t`spec coverage — criteria covered by at least one phase`}
-            className={`rounded-md border px-2 py-1 font-mono text-[10.5px] ${
-              epic.spec.covered < epic.spec.total
-                ? 'border-amber/40 text-amber'
-                : 'border-green/40 text-green'
-            }`}
-          >
-            <Trans>
-              spec {specCovered}/{specTotal}
-            </Trans>
-          </span>
-        )}
-        <PlanRunControls
-          epic={epic}
-          complete={complete}
-          now={now}
-          busy={planRunBusy}
-          phaseRunActive={phaseRunActive}
-          onRun={onRunPlan}
-          onCancel={onCancelPlanRun}
-        />
-      </div>
+      )}
 
       {runMsg !== null && (
-        <div className="mb-2 flex items-start gap-2 rounded-md border border-red/40 bg-red/10 px-2.5 py-1.5 font-mono text-[10.5px] text-red">
+        <div className="mt-3 flex items-start gap-2 rounded-md border border-red/40 bg-red/10 px-2.5 py-1.5 font-mono text-[10.5px] text-red">
           <div className="min-w-0 flex-1">
             <span>{runMsg}</span>
             {runBranches.length > 0 && (
@@ -1897,7 +1475,7 @@ function EpicDetail({
           window, plan list and app sidebar open) the sessions column wraps
           under them instead of squeezing the phase cards until their run
           chips spill out — the longer Ukrainian labels made that visible. */}
-      <div className="flex min-w-0 flex-wrap items-start gap-4">
+      <div className="mt-[22px] flex min-w-0 flex-wrap items-start gap-4">
         <div className="min-w-0 flex-1 basis-[22rem]">
           {/* Above the phase area, not in the plan header: the header's control is
               the WHOLE-PLAN run, which reads SWARMERY_PLANRUN_MODEL and is out of
@@ -2560,52 +2138,6 @@ function extractChecks(md: string): Check[] {
   return out;
 }
 
-/** The body of one `## <heading>` markdown section (up to the next `## `
- * heading), or null when the doc has no such section / it is empty. */
-function extractSection(md: string, heading: string): string | null {
-  const lines = md.split('\n');
-  const want = `## ${heading}`.toLowerCase();
-  const start = lines.findIndex((l) => l.trim().toLowerCase() === want);
-  if (start === -1) return null;
-  const body: string[] = [];
-  for (const line of lines.slice(start + 1)) {
-    if (/^##\s/.test(line)) break;
-    body.push(line);
-  }
-  const text = body.join('\n').trim();
-  return text === '' ? null : text;
-}
-
-/** Lazily fetches one plan doc; errors fold into the returned text (same
- * behaviour the old details modal had). `version` re-triggers the fetch when
- * the doc changes server-side (docUpdatedAt from a plan_updated refetch). The
- * setter lets a local write (checkbox toggle, Save) adopt the server's response
- * without waiting for the next refetch. */
-function usePlanDoc(
-  taskId: number,
-  path: string,
-  version: string | null,
-): [string | null, (text: string) => void] {
-  const [text, setText] = useState<string | null>(null);
-  useEffect(() => {
-    let alive = true;
-    setText(null);
-    fetchPlanDoc(taskId, path)
-      .then((d) => {
-        if (alive) setText(d.content);
-      })
-      .catch((e: unknown) => {
-        if (alive) {
-          const reason = e instanceof Error ? e.message : String(e);
-          setText(t`failed to load ${path}: ${reason}`);
-        }
-      });
-    return () => {
-      alive = false;
-    };
-  }, [taskId, path, version]);
-  return [text, setText];
-}
 
 /** The back-out control. Lives in the plan's action row (first, ahead of "open
  * plan README" / lifecycle), not inside the detail panel's header where it used
@@ -2626,243 +2158,6 @@ function BackToPhases({ onBack }: { onBack: () => void }): JSX.Element {
   );
 }
 
-/** The execution modes offered when starting a whole-plan run. The run-plan
- * skill triages its own ROUTE (sequential / parallel group / workflow) from the
- * phase DAG — the UI must not duplicate that, since it needs the graph to be
- * meaningful. What the skill cannot derive is the call an interactive session
- * always asks about: dispatch per-phase executors, or do the work inline. */
-const PLAN_RUN_MODES: { id: PlanRunMode; label: MessageDescriptor; hint: MessageDescriptor }[] = [
-  { id: 'auto', label: msg`auto`, hint: msg`let the run-plan skill triage the route from the phase DAG` },
-  {
-    id: 'subagents',
-    label: msg`subagent-driven`,
-    hint: msg`dispatch an implementer + a fresh reviewer per phase`,
-  },
-  { id: 'inline', label: msg`inline`, hint: msg`the controller implements the phases itself, no dispatch` },
-];
-
-/** Whole-plan run controls in the plan action row: a Run plan button that opens
- * an inline agent+mode picker, the live chip (elapsed + session link + Cancel)
- * while a run is in flight, and the failure chip + Retry afterwards. */
-function PlanRunControls({
-  epic,
-  complete,
-  now,
-  busy,
-  phaseRunActive,
-  onRun,
-  onCancel,
-}: {
-  epic: Epic;
-  complete: boolean;
-  now: number;
-  busy: boolean;
-  phaseRunActive: boolean;
-  onRun: (agent: string, mode: PlanRunMode) => void;
-  onCancel: () => void;
-}): JSX.Element | null {
-  const { t } = useLingui();
-  const [open, setOpen] = useState(false);
-  const sessionHref = useSessionHref();
-  const run = epic.planRun;
-
-  if (run?.runState === 'running') {
-    const agent = run.agent;
-    const mode = run.mode;
-    const agentPart = agent !== null ? t` — agent ${agent}` : '';
-    return (
-      <span className="flex items-center gap-1.5">
-        <span
-          className="inline-flex items-center gap-1 rounded-md border border-brand/40 bg-brand/10 px-2 py-1 font-mono text-[10.5px] text-brand"
-          data-tip={t`the whole plan is running${agentPart} (mode: ${mode})`}
-        >
-          <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-brand" />
-          <Trans>Running plan</Trans>
-          {run.runStartedAt !== null ? ` · ${fmtElapsed(run.runStartedAt, now)}` : ''}
-        </span>
-        {run.runSessionUuid !== null && (
-          <Link
-            to={sessionHref(run.runSessionUuid)}
-            className="font-mono text-[10.5px] text-ink-dim underline-offset-2 transition-colors hover:text-brand hover:underline"
-          >
-            <Trans>session</Trans>
-          </Link>
-        )}
-        <button
-          type="button"
-          disabled={busy}
-          onClick={onCancel}
-          className="rounded-md border border-red/40 px-2 py-1 font-mono text-[10.5px] text-red transition-colors hover:bg-red/10 disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          <Trans>Cancel</Trans>
-        </button>
-      </span>
-    );
-  }
-
-  // A finished plan has nothing left to hand over; the ✓ summary button next to
-  // this one is the right affordance there.
-  if (complete) return null;
-
-  const failed = run?.runState === 'failed';
-  const disabled = busy || phaseRunActive || epic.status !== 'active';
-  const title = phaseRunActive
-    ? t`a phase run is active — cancel it before running the whole plan`
-    : epic.status !== 'active'
-      ? t`plan is not active`
-      : t`hand the whole plan to one agent, headlessly, in an isolated worktree`;
-
-  return (
-    <>
-      <span className="flex items-center gap-1.5">
-        {failed && (
-          <span
-            className="rounded-md border border-red/40 bg-red/10 px-2 py-1 font-mono text-[10.5px] text-red"
-            data-tip={run?.runError ?? t`plan run failed`}
-          >
-            <Trans>Run failed</Trans>
-          </span>
-        )}
-        <button
-          type="button"
-          disabled={disabled}
-          data-tip={title}
-          onClick={() => setOpen((v) => !v)}
-          aria-expanded={open}
-          className={`rounded-md border px-2 py-1 font-mono text-[10.5px] transition-colors disabled:cursor-not-allowed disabled:border-line disabled:text-ink-faint ${
-            failed ? 'border-red/40 text-red hover:bg-red/10' : 'border-brand/40 text-brand hover:bg-brand/10'
-          }`}
-        >
-          {busy ? '…' : failed ? t`▶ Retry plan` : t`▶ Run plan`}
-        </button>
-      </span>
-      {open && (
-        <PlanRunDialog
-          initialAgent={run?.agent ?? ''}
-          initialMode={run?.mode ?? 'auto'}
-          onCancel={() => setOpen(false)}
-          onRun={(agent, mode) => {
-            setOpen(false);
-            onRun(agent, mode);
-          }}
-        />
-      )}
-    </>
-  );
-}
-
-/** The inline "how should this run?" panel — agent + execution mode. Inline
- * rather than modal, matching the rest of this page. It takes the full row so
- * it reads as a step, not as a dropdown hanging off the button. */
-function PlanRunDialog({
-  initialAgent,
-  initialMode,
-  onRun,
-  onCancel,
-}: {
-  initialAgent: string;
-  initialMode: PlanRunMode;
-  onRun: (agent: string, mode: PlanRunMode) => void;
-  onCancel: () => void;
-}): JSX.Element {
-  const { t, i18n } = useLingui();
-  const [agent, setAgent] = useState(initialAgent);
-  const [mode, setMode] = useState<PlanRunMode>(initialMode);
-  const [agents, setAgents] = useState<string[] | null>(null);
-
-  // The picker is the reason this is a panel and not a bare button: the agent
-  // list is only worth fetching once someone actually opens it.
-  useEffect(() => {
-    let alive = true;
-    fetchSystemItems('agents')
-      .then((items) => {
-        if (!alive) return;
-        const names = [...new Set(items.map((i) => i.name))].sort((a, b) => a.localeCompare(b));
-        setAgents(names);
-      })
-      .catch(() => {
-        if (alive) setAgents([]); // the free-text field still works
-      });
-    return () => {
-      alive = false;
-    };
-  }, []);
-
-  const modeDef = PLAN_RUN_MODES.find((m) => m.id === mode);
-  const modeHint = modeDef !== undefined ? i18n._(modeDef.hint) : '';
-
-  return (
-    <div className="mt-1 w-full rounded-lg border border-line bg-surface/60 px-3 py-2.5">
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-        <label className="flex items-center gap-1.5">
-          <span className="font-mono text-[10px] uppercase tracking-wider text-ink-faint">
-            <Trans>agent</Trans>
-          </span>
-          <input
-            list="plan-run-agents"
-            value={agent}
-            onChange={(e) => setAgent(e.target.value)}
-            placeholder={agents === null ? t`loading…` : t`tech-lead (default)`}
-            className="w-[190px] rounded-md border border-line bg-field px-2 py-1 font-mono text-[11px] text-ink outline-none focus:border-ink-dim"
-          />
-          <datalist id="plan-run-agents">
-            {(agents ?? []).map((a) => (
-              <option key={a} value={a} />
-            ))}
-          </datalist>
-        </label>
-
-        <div className="flex items-center gap-1.5" role="radiogroup" aria-label={t`execution mode`}>
-          <span className="font-mono text-[10px] uppercase tracking-wider text-ink-faint">
-            <Trans>mode</Trans>
-          </span>
-          {PLAN_RUN_MODES.map((m) => (
-            <button
-              key={m.id}
-              type="button"
-              role="radio"
-              aria-checked={mode === m.id}
-              data-tip={i18n._(m.hint)}
-              onClick={() => setMode(m.id)}
-              className={`rounded-md border px-2 py-1 font-mono text-[10.5px] transition-colors ${
-                mode === m.id
-                  ? 'border-brand/50 bg-brand/10 text-brand'
-                  : 'border-line text-ink-dim hover:border-line-strong hover:text-ink'
-              }`}
-            >
-              {i18n._(m.label)}
-            </button>
-          ))}
-        </div>
-
-        <div className="ml-auto flex items-center gap-1.5">
-          <button
-            type="button"
-            onClick={onCancel}
-            className="rounded-md border border-line px-2 py-1 font-mono text-[10.5px] text-ink-dim transition-colors hover:text-ink"
-          >
-            <Trans>cancel</Trans>
-          </button>
-          <button
-            type="button"
-            onClick={() => onRun(agent.trim(), mode)}
-            className="rounded-md border border-brand/50 bg-brand/10 px-2.5 py-1 font-mono text-[10.5px] text-brand transition-colors hover:bg-brand/20"
-          >
-            <Trans>▶ Run</Trans>
-          </button>
-        </div>
-      </div>
-      <p className="mt-2 font-mono text-[10px] leading-relaxed text-ink-faint">
-        {modeHint} ·{' '}
-        <Trans>
-          the run executes core&apos;s <code className="text-ink-dim">run-plan</code> skill headlessly in an
-          isolated worktree: it commits per phase but never pushes, and stops with PLAN BLOCKED if a phase needs a
-          human.
-        </Trans>
-      </p>
-    </div>
-  );
-}
 
 /** Shell of the inline detail panel: an identity header, an optional tab bar
  * and the body — full column width (the parent column owns the scroll), so

@@ -7,8 +7,8 @@
 // each shell keeps its compact header, so all of that stays reachable.
 //
 // Rows come from lib/nav.ts — eleven places in three groups (main, Improve, the
-// bottom cluster). Project-only places (Plans, Knowledge) stay visible under All
-// projects, dimmed, and resolve through the last-visited project so muscle
+// bottom cluster). Project-only places (Plans, Knowledge) read like any other row
+// under All projects and resolve through the last-visited project, so muscle
 // memory never breaks. Three badges: Inbox (decisions that block nothing), Needs
 // you (everything blocked on the operator, sessions and phases) and Sessions (the
 // sessions in that state). Sessions shows a live dot while it has no badge.
@@ -293,19 +293,19 @@ function SidebarRow({
   live: boolean;
 }): JSX.Element {
   const { t } = useLingui();
-  const dimmed = slug === null && place.projectOnly;
+  const viaLastProject = slug === null && place.projectOnly;
   const label = place.label;
   // Amber is for what blocks: Inbox blocks nothing, so its badge stays grey.
   const urgent = place.id === 'needs-you' || place.id === 'sessions';
   const glyphTone = active && place.section !== 'bottom' ? 'text-brand' : 'text-ink-faint';
   return (
     <Link
-      to={resolvePlaceHref(place, slug, dimmed ? loadLastProject() : null)}
+      to={resolvePlaceHref(place, slug, viaLastProject ? loadLastProject() : null)}
       aria-current={active ? 'page' : undefined}
-      title={dimmed ? t`${label} — opens in a project` : undefined}
+      title={viaLastProject ? t`${label} — opens in a project` : undefined}
       className={`flex shrink-0 items-center gap-2 rounded-[7px] px-2 py-1.5 text-[13px] leading-[normal] font-medium transition-colors ${
         active ? 'bg-surface2 text-ink' : 'text-ink-dim hover:bg-surface2/50 hover:text-ink'
-      } ${dimmed ? 'opacity-60' : ''}`}
+      }`}
     >
       <span aria-hidden="true" className={`w-4 shrink-0 text-center font-mono text-[12px] ${glyphTone}`}>
         {place.glyph}
@@ -387,7 +387,7 @@ export function MobileNav({
             aria-current={active ? 'page' : undefined}
             className={`flex flex-col items-center gap-[3px] rounded-lg px-1.5 py-1 text-[10.5px] transition-colors ${
               active ? 'font-medium text-brand' : 'text-ink-faint hover:text-ink'
-            } ${slug === null && place.projectOnly ? 'opacity-60' : ''}`}
+            }`}
           >
             <span className="relative text-[17px] leading-none" aria-hidden="true">
               {place.glyph}
