@@ -107,14 +107,14 @@ function renderAt(url: string): void {
 afterEach(cleanup);
 
 describe('SystemShell', () => {
-  it('is one accordion of nine groups, with no tab bar', async () => {
+  it('is one tab per group, nine of them, under lower-case labels', async () => {
     renderAt('/system/agents');
     await screen.findByText('agent detail 11');
-    expect(screen.queryAllByRole('tab')).toEqual([]);
-    for (const group of ['Agents', 'Skills', 'Commands', 'Templates', 'Hooks', 'Routines', 'Plugins', 'Mods', 'Insights']) {
-      expect(screen.getByRole('button', { name: new RegExp(`^${group}`) })).toBeTruthy();
+    expect(screen.getAllByRole('tab')).toHaveLength(9);
+    for (const group of ['agents', 'skills', 'commands', 'templates', 'hooks', 'routines', 'plugins', 'mods', 'insights']) {
+      expect(screen.getByRole('tab', { name: new RegExp(`^${group}`) })).toBeTruthy();
     }
-    // One group open: its rows show, another group's do not, its count does.
+    // One group picked: its rows show, another group's do not, its count does.
     expect(screen.getByRole('button', { name: /planner/ })).toBeTruthy();
     expect(screen.queryByRole('button', { name: /plan-phase/ })).toBeNull();
   });
@@ -135,9 +135,9 @@ describe('SystemShell', () => {
     expect(await screen.findByText('agent detail 12')).toBeTruthy();
   });
 
-  it('opening another group closes the previous one', async () => {
+  it('picking another tab replaces the previous rows', async () => {
     renderAt('/system/agents');
-    fireEvent.click(await screen.findByRole('button', { name: /^Skills/ }));
+    fireEvent.click(await screen.findByRole('tab', { name: /^skills/ }));
     await waitFor(() => expect(screen.getByTestId('where').textContent).toBe('/system/skills'));
     expect(await screen.findByText('catalog detail · skills · 21')).toBeTruthy();
     expect(screen.queryByRole('button', { name: /planner/ })).toBeNull();

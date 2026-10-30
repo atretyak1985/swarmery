@@ -57,7 +57,7 @@ function renderAt(url: string): void {
 }
 
 function group(name: string): HTMLElement {
-  return screen.getByRole('button', { name: new RegExp(`^${name}\\s*\\d+$`) });
+  return screen.getByRole('tab', { name: new RegExp(`^${name.toLowerCase()}\\s*\\d*$`) });
 }
 
 beforeEach(() => {
@@ -81,17 +81,17 @@ describe('Knowledge', () => {
   it('renders three groups in order, Memory open with one row per file', async () => {
     renderAt('/p/shop/knowledge');
     const list = within(screen.getByRole('region', { name: 'Knowledge' }));
-    expect(list.getAllByRole('button', { expanded: true })).toHaveLength(1);
-    expect(group('Memory').getAttribute('aria-expanded')).toBe('true');
+    expect(list.getAllByRole('tab')).toHaveLength(3);
+    expect(list.getAllByRole('tab', { selected: true })).toHaveLength(1);
+    expect(group('Memory').getAttribute('aria-selected')).toBe('true');
     expect(await screen.findByText('editor of /repo/CLAUDE.md')).toBeTruthy();
     expect(screen.getByRole('heading', { level: 2, name: 'CLAUDE.md' })).toBeTruthy();
-    expect(group('Tooling').getAttribute('aria-expanded')).toBe('false');
-    expect(screen.queryByRole('tab')).toBeNull();
+    expect(group('Tooling').getAttribute('aria-selected')).toBe('false');
   });
 
   it('opens Tooling on the row named by ?tab=graphify', async () => {
     renderAt('/p/shop/knowledge?tab=graphify');
-    expect(group('Tooling').getAttribute('aria-expanded')).toBe('true');
+    expect(group('Tooling').getAttribute('aria-selected')).toBe('true');
     expect(await screen.findByText('graphify body')).toBeTruthy();
     expect(screen.queryByText('memory panels')).toBeNull();
   });
@@ -113,7 +113,7 @@ describe('Knowledge', () => {
 
   it('falls back to Memory for a stale ?tab=docs link', async () => {
     renderAt('/p/shop/knowledge?tab=docs');
-    expect(group('Memory').getAttribute('aria-expanded')).toBe('true');
+    expect(group('Memory').getAttribute('aria-selected')).toBe('true');
     expect(await screen.findByText('editor of /repo/CLAUDE.md')).toBeTruthy();
   });
 });

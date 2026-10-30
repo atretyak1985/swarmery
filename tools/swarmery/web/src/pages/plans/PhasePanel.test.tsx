@@ -71,7 +71,7 @@ function phase(seq: number, over: Partial<EpicPhase> = {}): EpicPhase {
 }
 
 const scored = phase(2, { name: 'API: bidding mode, journal', surprise: SURPRISE });
-const epic = { taskId: 7, phases: [phase(1), scored, phase(3)] } as unknown as Epic;
+const epic = { taskId: 7, title: 'Bids', phases: [phase(1), scored, phase(3)] } as unknown as Epic;
 
 function renderPanel(over: Partial<PhasePanelProps> = {}) {
   const props: PhasePanelProps = {
@@ -98,12 +98,18 @@ function renderPanel(over: Partial<PhasePanelProps> = {}) {
 }
 
 describe('PhasePanel', () => {
-  it('is an inline region (not a dialog) titled by the phase, with the "Phase n of m" subtitle', () => {
+  it('is a region titled by the phase (not a dialog), and says where the phase stands', () => {
     renderPanel();
     expect(screen.getByRole('region', { name: 'API: bidding mode, journal' })).toBeTruthy();
     expect(screen.queryByRole('dialog')).toBeNull();
     expect(phasePanelSubtitle(epic, scored)).toBe('Phase 2 of 3 · 0/8 criteria');
-    expect(screen.getByText('Phase 2 of 3 · 0/8 criteria')).toBeTruthy();
+    expect(screen.getByText('phase 2 of 3')).toBeTruthy();
+  });
+
+  it('the breadcrumb goes back to the plan', () => {
+    const p = renderPanel({ onBack: vi.fn() });
+    fireEvent.click(screen.getByRole('button', { name: /Bids/ }));
+    expect(p.onBack).toHaveBeenCalledTimes(1);
   });
 
   it('takes focus on open so a keyboard user lands on the content', () => {
@@ -117,7 +123,13 @@ describe('PhasePanel', () => {
     fireEvent.keyDown(document, { key: 'ArrowUp' });
     expect(p.onNext).toHaveBeenCalledTimes(1);
     expect(p.onPrev).toHaveBeenCalledTimes(1);
-    expect(screen.getByText('↑↓ next phase')).toBeTruthy();
+  });
+
+  it('the arrow buttons step too, and stand down at the ends', () => {
+    const p = renderPanel({ onPrev: undefined });
+    fireEvent.click(screen.getByRole('button', { name: 'next phase' }));
+    expect(p.onNext).toHaveBeenCalledTimes(1);
+    expect((screen.getByRole('button', { name: 'previous phase' }) as HTMLButtonElement).disabled).toBe(true);
   });
 
   it('the arrows leave a text field alone', () => {
@@ -126,18 +138,19 @@ describe('PhasePanel', () => {
     expect(p.onNext).not.toHaveBeenCalled();
   });
 
-  it('shows Story · Criteria · Runs · Report · Edit and switches tabs', () => {
-    const p = renderPanel();
+  it('shows the six tabs with their counts and switches them', () => {
+    const p = renderPanel({ tabCounts: { criteria: '0/8' } });
     const tabs = screen.getAllByRole('tab').map((t) => t.textContent);
-    expect(tabs).toEqual(['Story', 'In plain words', 'Criteria0/8', 'Runs', 'Report', 'Edit']);
+    expect(tabs).toEqual(['Story', 'Plain words', 'Criteria0/8', 'Runs', 'Review', 'Report']);
     expect(screen.getByRole('tab', { name: 'Story' }).getAttribute('aria-selected')).toBe('true');
     fireEvent.click(screen.getByRole('tab', { name: /Criteria/ }));
     expect(p.onTab).toHaveBeenCalledWith('criteria');
   });
 
-  it('retires the Edit tab on a done phase', () => {
-    renderPanel({ editable: false });
+  it('puts the actions on the tabs line; Edit is one of them, not a tab', () => {
+    renderPanel({ actions: <button type="button">edit</button> });
     expect(screen.queryByRole('tab', { name: 'Edit' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'edit' })).toBeTruthy();
   });
 
   it('Story renders the phase card and the forecast story, breakdown folded', () => {

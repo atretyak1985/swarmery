@@ -158,10 +158,6 @@ msgstr "{0, plural, one {same error {count}× in # session} few {same error {cou
 msgid "{action} · agent's suggestion"
 msgstr "{action} · agent's suggestion"
 
-#: src/pages/inbox/HandledList.tsx
-msgid "{age} ago"
-msgstr "{age} ago"
-
 #: src/pages/SystemShell.tsx
 msgid "{agentCount} agents · {skillCount} skills · {hookCount} hooks · {routineCount} routines"
 msgstr "{agentCount} agents · {skillCount} skills · {hookCount} hooks · {routineCount} routines"
@@ -318,6 +314,10 @@ msgstr "{groups, plural, one {# group(s)} few {# group(s)} many {# group(s)} oth
 msgid "{groups} · agents are checked by rule"
 msgstr "{groups} · agents are checked by rule"
 
+#: src/pages/inbox/Inbox.tsx
+msgid "{handledCount} closed by the agent · 7 d · undo any of them"
+msgstr "{handledCount} closed by the agent · 7 d · undo any of them"
+
 #: src/pages/health/healthPlace.ts
 msgid "{head} · {failed} failed"
 msgstr "{head} · {failed} failed"
@@ -385,6 +385,10 @@ msgstr "{inForce, plural, one {# lesson in force} few {# lessons in force} many 
 #: src/pages/system/ItemDetail.tsx
 msgid "{itemName} sections"
 msgstr "{itemName} sections"
+
+#: src/pages/inbox/HandledDetail.tsx
+msgid "{kind} · {age} ago"
+msgstr "{kind} · {age} ago"
 
 #: src/pages/health/PhaseRunsTab.tsx
 msgid "{label} (est.)"
@@ -621,6 +625,10 @@ msgstr "→ Proof"
 msgid "⇄ transpose"
 msgstr "⇄ transpose"
 
+#: src/pages/inbox/Inbox.tsx
+msgid "+ {count} more →"
+msgstr "+ {count} more →"
+
 #: src/pages/health/HealthOverview.tsx
 msgid "+ always allow"
 msgstr "+ always allow"
@@ -824,6 +832,10 @@ msgstr "Agent"
 msgid "agent change"
 msgstr "agent change"
 
+#: src/pages/inbox/inboxModel.ts
+msgid "agent changes"
+msgstr "agent changes"
+
 #: src/pages/health/FrictionTriageStrip.tsx
 #: src/pages/inbox/TriageBanner.tsx
 msgid "agent closed {applied} · left {leftText}"
@@ -919,6 +931,7 @@ msgstr "all four"
 msgid "all projects"
 msgstr "all projects"
 
+#: src/pages/inbox/Inbox.tsx
 #: src/pages/inbox/Inbox.tsx
 msgid "All reviewed."
 msgstr "All reviewed."
@@ -1319,6 +1332,10 @@ msgstr "checked against the item it documents"
 msgid "classifier"
 msgstr "classifier"
 
+#: src/pages/learning/Learning.tsx
+msgid "Classifier"
+msgstr "Classifier"
+
 #: src/pages/inbox/inboxModel.ts
 msgid "Claude Code auto mode"
 msgstr "Claude Code auto mode"
@@ -1338,11 +1355,6 @@ msgstr "close detail"
 #: src/pages/Retro.tsx
 msgid "Closed"
 msgstr "Closed"
-
-#: src/pages/inbox/HandledList.tsx
-#: src/pages/inbox/Inbox.tsx
-msgid "closed by the agent"
-msgstr "closed by the agent"
 
 #: src/pages/Analytics.tsx
 msgid "Command center"
@@ -1624,7 +1636,6 @@ msgstr "discard my changes"
 
 #: src/pages/health/FrictionTriageStrip.tsx
 #: src/pages/health/FrictionTriageStrip.tsx
-#: src/pages/inbox/HandledList.tsx
 #: src/pages/inbox/Inbox.tsx
 #: src/pages/inbox/InboxDetail.tsx
 #: src/pages/inbox/InboxDetail.tsx
@@ -2152,7 +2163,7 @@ msgstr "Guessed {times}."
 msgid "guidance (one sentence)"
 msgstr "guidance (one sentence)"
 
-#: src/pages/inbox/Inbox.tsx
+#: src/pages/inbox/HandledDetail.tsx
 #: src/pages/inbox/inboxModel.ts
 msgid "handled by agent"
 msgstr "handled by agent"
@@ -2384,6 +2395,7 @@ msgstr "In progress"
 msgid "In review"
 msgstr "In review"
 
+#: src/pages/inbox/Inbox.tsx
 #: src/pages/inbox/Inbox.tsx
 msgid "Inbox"
 msgstr "Inbox"
@@ -3245,6 +3257,10 @@ msgstr "not validated"
 msgid "nothing closed yet"
 msgstr "nothing closed yet"
 
+#: src/pages/inbox/Inbox.tsx
+msgid "Nothing here."
+msgstr "Nothing here."
+
 #: src/pages/SystemShell.tsx
 msgid "nothing on this machine"
 msgstr "nothing on this machine"
@@ -3612,16 +3628,12 @@ msgid "Prompt-cache read ratio over the range. Higher = cheaper reads served fro
 msgstr "Prompt-cache read ratio over the range. Higher = cheaper reads served from cache."
 
 #: src/pages/learning/Learning.tsx
-msgid "proof · {word}"
-msgstr "proof · {word}"
+msgid "Proof"
+msgstr "Proof"
 
 #: src/pages/learning/Learning.tsx
-msgid "Proof · did the change help?"
-msgstr "Proof · did the change help?"
-
-#: src/pages/inbox/inboxModel.ts
-msgid "proposals"
-msgstr "proposals"
+msgid "proof · {word}"
+msgstr "proof · {word}"
 
 #: src/pages/health/HealthOverview.tsx
 msgid "propose a change"
@@ -3815,6 +3827,10 @@ msgstr "resumes on its own in {resetsIn}, when the limit resets"
 #: src/pages/Lessons.tsx
 msgid "retire"
 msgstr "retire"
+
+#: src/pages/inbox/inboxModel.ts
+msgid "retire a lesson?"
+msgstr "retire a lesson?"
 
 #: src/pages/learning/Learning.tsx
 msgid "retirements · every status"
@@ -4322,7 +4338,6 @@ msgid "Stop using “{lessonTitle}”?"
 msgstr "Stop using “{lessonTitle}”?"
 
 #: src/pages/inbox/inboxModel.ts
-#: src/pages/inbox/inboxModel.ts
 msgid "stop using a lesson?"
 msgstr "stop using a lesson?"
 
@@ -4460,7 +4475,7 @@ msgstr "tests outcome missed"
 msgid "The account is checked for real — its sign-in, then one short model call. If it answers, runs start again at once; if not, it stays paused and you see why."
 msgstr "The account is checked for real — its sign-in, then one short model call. If it answers, runs start again at once; if not, it stays paused and you see why."
 
-#: src/pages/inbox/HandledList.tsx
+#: src/pages/inbox/Inbox.tsx
 msgid "The agent has not closed anything in the last 7 days."
 msgstr "The agent has not closed anything in the last 7 days."
 
@@ -4468,10 +4483,6 @@ msgstr "The agent has not closed anything in the last 7 days."
 #: src/pages/inbox/inboxModel.ts
 msgid "The candidate is closed as not useful. Nothing is added to any brief."
 msgstr "The candidate is closed as not useful. Nothing is added to any brief."
-
-#: src/pages/learning/Learning.tsx
-msgid "The classifier"
-msgstr "The classifier"
 
 #: src/pages/system/HooksTab.tsx
 msgid "The command will <0>stop executing in Claude Code</0> — {event} no longer triggers it. The entry stays in the settings file (parked under <1>_swarmery_disabled_hooks</1>) and can be re-enabled here."
@@ -4544,10 +4555,6 @@ msgstr "the item changed after this guide was written — docs.source_sha no lon
 #: src/pages/inbox/InboxDetail.tsx
 msgid "The label is confirmed as the ground truth for this session."
 msgstr "The label is confirmed as the ground truth for this session."
-
-#: src/pages/inbox/Inbox.tsx
-msgid "the last 7 days, each with an undo"
-msgstr "the last 7 days, each with an undo"
 
 #: src/pages/inbox/InboxDetail.tsx
 #: src/pages/inbox/inboxModel.ts
@@ -4814,13 +4821,10 @@ msgstr "two How-to-use blocks"
 msgid "two versions selected"
 msgstr "two versions selected"
 
-#: src/pages/inbox/HandledList.tsx
+#: src/pages/inbox/HandledDetail.tsx
+#: src/pages/inbox/Inbox.tsx
 msgid "undo"
 msgstr "undo"
-
-#: src/pages/inbox/HandledList.tsx
-msgid "undo {title}"
-msgstr "undo {title}"
 
 #: src/pages/system/InsightsTab.tsx
 msgid "Undocumented components"

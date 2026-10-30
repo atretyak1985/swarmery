@@ -66,7 +66,6 @@ const BAND_FILL: Record<OffPlanBand, string> = {
 };
 
 function StageLabel({ stage }: { stage: PhaseStage }): JSX.Element {
-  useLingui();
   return (
     <span className={`hidden font-mono text-[11px] leading-[normal] desk:block ${STAGE_TONE[stage]}`}>
       {stageLabel(stage)}

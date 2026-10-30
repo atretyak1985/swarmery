@@ -274,8 +274,7 @@ export function EpicDetail({
       )}
 
       {/* The plan's details open in place of the ledger; "← all phases" (or Escape)
-          backs out to it. The sessions stay under either. A phase's page has its own
-          way back and lists its own runs. */}
+          backs out to it. The sessions stay under either, and under a phase's Runs. */}
       <div className={`${onPhasePage ? '' : 'mt-[22px]'} min-w-0`}>
           {detail?.kind === 'phase' ? (
             <PhaseDetailPanel
@@ -343,7 +342,16 @@ export function EpicDetail({
               onOpenOutcome={onOpenOutcome}
             />
           )}
-        {!onPhasePage && <PlanSessions epic={epic} activePhaseId={null} sessions={sessions} err={sessionsErr} />}
+        {/* Mounted through a phase's other tabs: the operator's pick of the slice
+            belongs to the plan and has to outlive them. */}
+        <div hidden={onPhasePage && detail.tab !== 'runs'}>
+          <PlanSessions
+            epic={epic}
+            activePhaseId={detail?.kind === 'phase' ? detail.phase.id : null}
+            sessions={sessions}
+            err={sessionsErr}
+          />
+        </div>
       </div>
 
       <ReviseModal

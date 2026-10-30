@@ -158,10 +158,6 @@ msgstr "{0, plural, one {та сама помилка {count}× у # сесії}
 msgid "{action} · agent's suggestion"
 msgstr "{action} · пропозиція агента"
 
-#: src/pages/inbox/HandledList.tsx
-msgid "{age} ago"
-msgstr "{age} тому"
-
 #: src/pages/SystemShell.tsx
 msgid "{agentCount} agents · {skillCount} skills · {hookCount} hooks · {routineCount} routines"
 msgstr "агентів: {agentCount} · скілів: {skillCount} · хуків: {hookCount} · рутин: {routineCount}"
@@ -318,6 +314,10 @@ msgstr "{groups, plural, one {# група} few {# групи} many {# груп}
 msgid "{groups} · agents are checked by rule"
 msgstr "{groups} · агентів перевіряють за правилом"
 
+#: src/pages/inbox/Inbox.tsx
+msgid "{handledCount} closed by the agent · 7 d · undo any of them"
+msgstr "{handledCount} закрито агентом · 7 дн · будь-яке можна скасувати"
+
 #: src/pages/health/healthPlace.ts
 msgid "{head} · {failed} failed"
 msgstr "{head} · збій {failed}"
@@ -385,6 +385,10 @@ msgstr "{inForce, plural, one {# урок у силі} few {# уроки у си
 #: src/pages/system/ItemDetail.tsx
 msgid "{itemName} sections"
 msgstr "Розділи {itemName}"
+
+#: src/pages/inbox/HandledDetail.tsx
+msgid "{kind} · {age} ago"
+msgstr "{kind} · {age} тому"
 
 #: src/pages/health/PhaseRunsTab.tsx
 msgid "{label} (est.)"
@@ -621,6 +625,10 @@ msgstr "→ Доказ"
 msgid "⇄ transpose"
 msgstr "⇄ транспонувати"
 
+#: src/pages/inbox/Inbox.tsx
+msgid "+ {count} more →"
+msgstr "+ ще {count} →"
+
 #: src/pages/health/HealthOverview.tsx
 msgid "+ always allow"
 msgstr "+ завжди дозволяти"
@@ -824,6 +832,10 @@ msgstr "Агент"
 msgid "agent change"
 msgstr "зміна агента"
 
+#: src/pages/inbox/inboxModel.ts
+msgid "agent changes"
+msgstr "зміни агентів"
+
 #: src/pages/health/FrictionTriageStrip.tsx
 #: src/pages/inbox/TriageBanner.tsx
 msgid "agent closed {applied} · left {leftText}"
@@ -919,6 +931,7 @@ msgstr "усі чотири"
 msgid "all projects"
 msgstr "усі проєкти"
 
+#: src/pages/inbox/Inbox.tsx
 #: src/pages/inbox/Inbox.tsx
 msgid "All reviewed."
 msgstr "Усе переглянуто."
@@ -1319,6 +1332,10 @@ msgstr "звірено з елементом, який документує"
 msgid "classifier"
 msgstr "класифікатор"
 
+#: src/pages/learning/Learning.tsx
+msgid "Classifier"
+msgstr "Класифікатор"
+
 #: src/pages/inbox/inboxModel.ts
 msgid "Claude Code auto mode"
 msgstr "Авторежим Claude Code"
@@ -1338,11 +1355,6 @@ msgstr "закрити деталі"
 #: src/pages/Retro.tsx
 msgid "Closed"
 msgstr "Закрито"
-
-#: src/pages/inbox/HandledList.tsx
-#: src/pages/inbox/Inbox.tsx
-msgid "closed by the agent"
-msgstr "закрив агент"
 
 #: src/pages/Analytics.tsx
 msgid "Command center"
@@ -1624,7 +1636,6 @@ msgstr "відкинути мої зміни"
 
 #: src/pages/health/FrictionTriageStrip.tsx
 #: src/pages/health/FrictionTriageStrip.tsx
-#: src/pages/inbox/HandledList.tsx
 #: src/pages/inbox/Inbox.tsx
 #: src/pages/inbox/InboxDetail.tsx
 #: src/pages/inbox/InboxDetail.tsx
@@ -2152,7 +2163,7 @@ msgstr "Вгадував {times}."
 msgid "guidance (one sentence)"
 msgstr "порада (одне речення)"
 
-#: src/pages/inbox/Inbox.tsx
+#: src/pages/inbox/HandledDetail.tsx
 #: src/pages/inbox/inboxModel.ts
 msgid "handled by agent"
 msgstr "розібрав агент"
@@ -2384,6 +2395,7 @@ msgstr "У роботі"
 msgid "In review"
 msgstr "На рев’ю"
 
+#: src/pages/inbox/Inbox.tsx
 #: src/pages/inbox/Inbox.tsx
 msgid "Inbox"
 msgstr "Вхідні"
@@ -3245,6 +3257,10 @@ msgstr "не перевірено"
 msgid "nothing closed yet"
 msgstr "ще нічого не закрито"
 
+#: src/pages/inbox/Inbox.tsx
+msgid "Nothing here."
+msgstr "Тут нічого немає."
+
 #: src/pages/SystemShell.tsx
 msgid "nothing on this machine"
 msgstr "на цій машині нічого немає"
@@ -3612,16 +3628,12 @@ msgid "Prompt-cache read ratio over the range. Higher = cheaper reads served fro
 msgstr "Частка читань із кешу промптів за період. Вище = більше дешевих читань із кешу."
 
 #: src/pages/learning/Learning.tsx
-msgid "proof · {word}"
-msgstr "доказ · {word}"
+msgid "Proof"
+msgstr "Доказ"
 
 #: src/pages/learning/Learning.tsx
-msgid "Proof · did the change help?"
-msgstr "Докази · чи допомогла зміна?"
-
-#: src/pages/inbox/inboxModel.ts
-msgid "proposals"
-msgstr "пропозиції"
+msgid "proof · {word}"
+msgstr "доказ · {word}"
 
 #: src/pages/health/HealthOverview.tsx
 msgid "propose a change"
@@ -3815,6 +3827,10 @@ msgstr "відновиться само через {resetsIn}, коли лімі
 #: src/pages/Lessons.tsx
 msgid "retire"
 msgstr "списати"
+
+#: src/pages/inbox/inboxModel.ts
+msgid "retire a lesson?"
+msgstr "перестати застосовувати урок?"
 
 #: src/pages/learning/Learning.tsx
 msgid "retirements · every status"
@@ -4322,7 +4338,6 @@ msgid "Stop using “{lessonTitle}”?"
 msgstr "Перестати застосовувати «{lessonTitle}»?"
 
 #: src/pages/inbox/inboxModel.ts
-#: src/pages/inbox/inboxModel.ts
 msgid "stop using a lesson?"
 msgstr "перестати застосовувати урок?"
 
@@ -4460,7 +4475,7 @@ msgstr "не вгадав результат тестів"
 msgid "The account is checked for real — its sign-in, then one short model call. If it answers, runs start again at once; if not, it stays paused and you see why."
 msgstr "Акаунт перевіряється по-справжньому: спершу вхід, потім один короткий виклик моделі. Якщо він відповідає, запуски одразу відновлюються; якщо ні — акаунт лишається на паузі, і ви бачите чому."
 
-#: src/pages/inbox/HandledList.tsx
+#: src/pages/inbox/Inbox.tsx
 msgid "The agent has not closed anything in the last 7 days."
 msgstr "За останні 7 днів агент нічого не закрив."
 
@@ -4468,10 +4483,6 @@ msgstr "За останні 7 днів агент нічого не закрив
 #: src/pages/inbox/inboxModel.ts
 msgid "The candidate is closed as not useful. Nothing is added to any brief."
 msgstr "Кандидата закрито як некорисного. У жоден бриф нічого не додається."
-
-#: src/pages/learning/Learning.tsx
-msgid "The classifier"
-msgstr "Класифікатор"
 
 #: src/pages/system/HooksTab.tsx
 msgid "The command will <0>stop executing in Claude Code</0> — {event} no longer triggers it. The entry stays in the settings file (parked under <1>_swarmery_disabled_hooks</1>) and can be re-enabled here."
@@ -4544,10 +4555,6 @@ msgstr "елемент змінився після написання цього
 #: src/pages/inbox/InboxDetail.tsx
 msgid "The label is confirmed as the ground truth for this session."
 msgstr "Мітку буде підтверджено як істину для цієї сесії."
-
-#: src/pages/inbox/Inbox.tsx
-msgid "the last 7 days, each with an undo"
-msgstr "за останні 7 днів, кожну можна скасувати"
 
 #: src/pages/inbox/InboxDetail.tsx
 #: src/pages/inbox/inboxModel.ts
@@ -4814,13 +4821,10 @@ msgstr "два блоки How to use"
 msgid "two versions selected"
 msgstr "обрано дві версії"
 
-#: src/pages/inbox/HandledList.tsx
+#: src/pages/inbox/HandledDetail.tsx
+#: src/pages/inbox/Inbox.tsx
 msgid "undo"
 msgstr "скасувати"
-
-#: src/pages/inbox/HandledList.tsx
-msgid "undo {title}"
-msgstr "скасувати {title}"
 
 #: src/pages/system/InsightsTab.tsx
 msgid "Undocumented components"

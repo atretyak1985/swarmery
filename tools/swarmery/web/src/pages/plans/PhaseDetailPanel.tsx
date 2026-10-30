@@ -63,6 +63,11 @@ const KIND_CHIP: Record<CriterionKind, string> = {
   land: 'rounded-full border-blue text-blue',
 };
 
+const KIND_MARK = {
+  manual: '[MANUAL]', // i18n-ignore — the doc's own marker
+  land: '[LAND]', // i18n-ignore — the doc's own marker
+} as const;
+
 const KIND_TAG = /\[(MANUAL|LAND)\]/i;
 
 /** The doc's `[MANUAL]`/`[LAND]` marker, and the criterion without it. */
@@ -121,7 +126,7 @@ function ChecksList({
             <span
               className={`border px-[7px] py-px font-mono text-[10px] leading-[normal] font-bold whitespace-nowrap ${KIND_CHIP[kind]}`}
             >
-              {kind === 'auto' ? t`auto` : kind === 'manual' ? '[MANUAL]' : '[LAND]'}
+              {kind === 'auto' ? t`auto` : KIND_MARK[kind]}
             </span>
           </li>
         );
@@ -571,14 +576,15 @@ export function PhaseDetailPanel({
                 ← #{seq}
               </span>
             ))}
-            <ReverifyButton action={again} size="panel" className="ml-auto" />
-            {primary !== null && (
+            {/* The header's actions name what the page is waiting for, so a phase that
+                waits on the operator keeps its run here. */}
+            {needsYou && primary !== null && (
               <button
                 type="button"
                 disabled={primary.disabled}
                 data-tip={'tip' in primary ? primary.tip : undefined}
                 onClick={primary.onClick}
-                className={`${again === null ? 'ml-auto' : ''} rounded-md border px-2 py-1 font-mono text-[10px] transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${running ? 'border-red/40 text-red hover:bg-red/10' : runButtonCls(phase.runOutcome)}`}
+                className={`ml-auto rounded-md border px-2 py-1 font-mono text-[10px] transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${running ? 'border-red/40 text-red hover:bg-red/10' : runButtonCls(phase.runOutcome)}`}
               >
                 {primary.label}
               </button>

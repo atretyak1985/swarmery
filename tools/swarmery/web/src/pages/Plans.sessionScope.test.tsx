@@ -270,13 +270,15 @@ async function mountPlans(): Promise<void> {
   });
 }
 
+/** A phase opens as a page; the sessions sit under its Runs tab. */
 function openPhase(_seq: number, name: string): void {
   fireEvent.click(screen.getByRole('link', { name }));
+  fireEvent.click(screen.getByRole('tab', { name: /^Runs/ }));
 }
 
-/** A phase opens inline, in place of the list; "← all phases" above it backs out. */
+/** The breadcrumb goes back to the plan. */
 function backToPhases(): void {
-  fireEvent.click(screen.getByRole('button', { name: 'all phases' }));
+  fireEvent.click(screen.getByRole('button', { name: /^← / }));
 }
 
 /** The header toggle. Its accessible name carries the STATE (counts + which

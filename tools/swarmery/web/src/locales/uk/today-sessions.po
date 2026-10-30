@@ -437,6 +437,10 @@ msgstr "Агенти відпрацювали без зупинок."
 msgid "Agents waited <0>{waited}</0> on you today."
 msgstr "Сьогодні агенти чекали на вас <0>{waited}</0>."
 
+#: src/pages/Sessions.tsx
+msgid "all"
+msgstr "усі"
+
 #: src/pages/Overview.tsx
 msgid "all approvals →"
 msgstr "усі погодження →"
@@ -875,6 +879,7 @@ msgstr "копія документа не збігається"
 
 #: src/pages/Overview.tsx
 #: src/pages/ProjectOverview.tsx
+#: src/pages/Sessions.tsx
 msgid "done"
 msgstr "готово"
 
@@ -1287,6 +1292,10 @@ msgstr "Потребує уваги"
 msgid "Needs triage"
 msgstr "Потребує сортування"
 
+#: src/pages/Sessions.tsx
+msgid "needs you"
+msgstr "потребує вас"
+
 #: src/pages/NeedsYou.tsx
 #: src/pages/Sessions.tsx
 msgid "Needs you"
@@ -1473,6 +1482,10 @@ msgstr "нотатка (необов’язково)"
 msgid "Nothing blocked on you."
 msgstr "Ніщо не чекає на вас."
 
+#: src/pages/Sessions.tsx
+msgid "Nothing finished today yet."
+msgstr "Сьогодні ще нічого не завершено."
+
 #: src/pages/ProjectOverview.tsx
 msgid "nothing flagged"
 msgstr "нічого не позначено"
@@ -1488,6 +1501,22 @@ msgstr "Тут порожньо. Запустіть завдання через 
 #: src/pages/Overview.tsx
 msgid "nothing idle"
 msgstr "ніхто не простоює"
+
+#: src/pages/NeedsYou.tsx
+msgid "Nothing is blocked on you. Permissions, questions, guard stops and manual checks land here live."
+msgstr "Ніщо не чекає на вас. Дозволи, запитання, зупинки guard і ручні перевірки з’являються тут одразу."
+
+#: src/pages/Sessions.tsx
+msgid "Nothing is running."
+msgstr "Нічого не виконується."
+
+#: src/pages/NeedsYou.tsx
+msgid "Nothing matches."
+msgstr "Нічого не знайдено."
+
+#: src/pages/Sessions.tsx
+msgid "Nothing needs you."
+msgstr "Нічого не потребує вас."
 
 #: src/pages/Overview.tsx
 msgid "nothing notable yet today"
@@ -2075,6 +2104,7 @@ msgstr "сесії"
 #: src/pages/ProjectSettings.tsx
 #: src/pages/ProjectSettings.tsx
 #: src/pages/Sessions.tsx
+#: src/pages/Sessions.tsx
 msgid "Sessions"
 msgstr "Сесії"
 
@@ -2549,6 +2579,7 @@ msgstr "без доказу: {withoutProof}"
 
 #: src/pages/Overview.tsx
 #: src/pages/Overview.tsx
+#: src/pages/Sessions.tsx
 #: src/pages/today/LiveNow.tsx
 msgid "working"
 msgstr "працює"

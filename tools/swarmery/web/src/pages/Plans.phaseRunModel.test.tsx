@@ -296,6 +296,8 @@ describe('which model a finished run used (SC-6)', () => {
           runEndedAt: '2026-09-18T10:00:00Z',
           completionState: 'complete',
         }),
+        // An open phase keeps the plan on the active tab, where the page lands.
+        phase({ id: 2, seq: 2, docRelPath: 'phase-2.md' }),
       ]),
     ];
     render(
