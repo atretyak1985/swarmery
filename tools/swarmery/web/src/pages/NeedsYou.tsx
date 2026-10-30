@@ -31,6 +31,7 @@ import { Trans, useLingui } from '@lingui/react/macro';
 import {
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -139,7 +140,10 @@ interface CardContext {
 /** A card's published `e` / `x`, renewed every render so they close over its state. */
 function useCardKeys(ctx: CardContext, primary?: () => void, secondary?: () => void): void {
   const { keys, busy } = ctx;
-  useEffect(() => {
+  // A layout effect: the keys are published in the same commit as the card, not a
+  // passive-effect tick later, when a window keydown could still see the old ones
+  // (or none) — and a card that unmounts retires them in that commit too.
+  useLayoutEffect(() => {
     keys.current = { primary: busy ? undefined : primary, secondary: busy ? undefined : secondary };
     // Once the card is gone its keys must not answer a request that left the queue.
     return () => {
@@ -957,9 +961,10 @@ export function NeedsYou(): JSX.Element {
       .then((result) => onOk?.(result))
       .catch((e: unknown) => setActionError(e instanceof Error ? e.message : String(e)))
       .finally(() => {
-        setBusy(false);
-        reload();
         loadRequests();
+        // Busy holds until the queue refetch lands: the answered card is still on
+        // screen until then, and `e` / `x` must not answer it a second time.
+        void reload().finally(() => setBusy(false));
       });
   };
 

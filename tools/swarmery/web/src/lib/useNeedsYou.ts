@@ -54,7 +54,8 @@ export interface NeedsYouState {
   count: number;
   loading: boolean;
   error: string | null;
-  reload: () => void;
+  /** Resolves once the refetch settled (it never rejects). */
+  reload: () => Promise<void>;
   dismiss: (item: NeedsYouItem) => void;
 }
 
@@ -66,10 +67,10 @@ export function useNeedsYou(scope: string | null): NeedsYouState {
   // Drops a slow response that lands after a newer load (or a scope switch).
   const generation = useRef(0);
 
-  const reload = useCallback((): void => {
+  const reload = useCallback((): Promise<void> => {
     generation.current += 1;
     const mine = generation.current;
-    getNeedsYou(scope)
+    return getNeedsYou(scope)
       .then((r) => {
         if (mine !== generation.current) return;
         setAll(r.items);
@@ -86,7 +87,7 @@ export function useNeedsYou(scope: string | null): NeedsYouState {
 
   useEffect(() => {
     setLoading(true);
-    reload();
+    void reload();
   }, [reload]);
 
   useEffect(() => {
@@ -121,7 +122,7 @@ export function useNeedsYou(scope: string | null): NeedsYouState {
     (msg: WSMessage): void => {
       if (!REFETCH_ON.has(msg.type)) return;
       if (timer.current !== null) clearTimeout(timer.current);
-      timer.current = setTimeout(reload, REFETCH_DEBOUNCE_MS);
+      timer.current = setTimeout(() => void reload(), REFETCH_DEBOUNCE_MS);
     },
     [reload],
   );

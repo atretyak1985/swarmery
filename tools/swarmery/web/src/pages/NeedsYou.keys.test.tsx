@@ -87,6 +87,29 @@ describe('NeedsYou keys', () => {
     expect(api.resolveApproval).toHaveBeenCalledTimes(1);
   });
 
+  it('does nothing on e while the queue refetch after an answer is still pending', async () => {
+    serve([ITEM]);
+    await renderPage();
+    let release: () => void = () => undefined;
+    vi.mocked(api.getNeedsYou).mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          release = () => resolve({ items: [], generatedAt: new Date(NOW).toISOString() });
+        }),
+    );
+    await act(async () => {
+      fireEvent.keyDown(window, { key: 'e' });
+    });
+    // The answered card is still on screen; its keys must stay dead.
+    await act(async () => {
+      fireEvent.keyDown(window, { key: 'e' });
+    });
+    expect(api.resolveApproval).toHaveBeenCalledTimes(1);
+    await act(async () => release());
+    await screen.findByText('Nothing blocked on you.');
+    expect(api.resolveApproval).toHaveBeenCalledTimes(1);
+  });
+
   it('names what e does on a prod-deploy request: it denies', async () => {
     vi.mocked(api.fetchApprovals).mockResolvedValue([{ ...REQUEST, riskClass: 'prod-deploy' }]);
     serve([ITEM]);
