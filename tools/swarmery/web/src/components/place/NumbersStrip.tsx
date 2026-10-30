@@ -2,10 +2,11 @@
 // 9.5px label under it, and on the numbers that have a limit a 64px bar. It stands
 // in for the chips the old screens scattered around a title.
 
-export type NumberTone = 'default' | 'brand' | 'amber' | 'green' | 'red';
+export type NumberTone = 'default' | 'faint' | 'brand' | 'amber' | 'green' | 'red';
 
 const VALUE_TONE: Record<NumberTone, string> = {
   default: 'text-ink',
+  faint: 'text-ink-faint',
   brand: 'text-brand',
   amber: 'text-amber',
   green: 'text-green',
@@ -14,6 +15,7 @@ const VALUE_TONE: Record<NumberTone, string> = {
 
 const BAR_TONE: Record<NumberTone, string> = {
   default: 'bg-ink-dim',
+  faint: 'bg-ink-faint',
   brand: 'bg-brand',
   amber: 'bg-amber',
   green: 'bg-green',

@@ -1,22 +1,99 @@
-// Learning (Canvas v3 phase 6, artboards 1e/1f): one place replacing /lessons
-// and /decisions, with tabs Lessons · The classifier · Forecast honesty · Proof.
-// The tab lives in `?tab=` so the retired routes redirect onto a specific tab.
-// Lessons, decisions and calibration take no project, so /p/:slug/learning
-// shows the same fleet data; only the Inbox links follow the scope.
+// Learning (v4, handoff §3, §9): one place replacing /lessons and /decisions, in
+// the frame every place shares. The accordion groups are Lessons · Proof · The
+// classifier, and honesty lives inside The classifier as its own row. `?tab=`
+// keeps naming the old four tabs, so the retired routes still land on a group.
+// Lessons, decisions and calibration take no project, so /p/:slug/learning shows
+// the same fleet data; the Inbox links and the Proof rows follow the scope.
 
-import { Trans, useLingui } from '@lingui/react/macro';
-import { useEffect, useState } from 'react';
+import { plural, t as tr } from '@lingui/core/macro';
+import { useLingui } from '@lingui/react/macro';
+import { useCallback, useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { fetchLessons } from '../../api/lessons';
-import { type TabItem, Tabs, useTabParam } from '../../components/Tabs';
+import { fetchProjectRecommendations, fetchRecommendations } from '../../api';
+import { type Lesson, fetchLessons } from '../../api/lessons';
+import type { Recommendation } from '../../api/types';
+import { PageDetail, PagePlace, type PageTone, type PlaceGroup, type PlaceItem, usePlaceParams } from '../../components/place/PageDetail';
+import { fmtAgo } from '../../lib/format';
 import { PLACES } from '../../lib/nav';
-import { Lessons } from '../Lessons';
+import { LessonDetail, Lessons } from '../Lessons';
 import { CalibrationPanel } from '../LessonsCalibration';
+import { RecDetail } from '../health/HealthOverview';
 import { Classifier } from './Classifier';
 import { Proof } from './Proof';
 
 export const LEARNING_TABS = ['lessons', 'classifier', 'honesty', 'proof'] as const;
 export type LearningTab = (typeof LEARNING_TABS)[number];
+
+/** Which recommendations are proof: the ones you took, by how they turned out. */
+const PROOF_RECS = ['verified', 'accepted', 'adopted'] as const;
+
+/** The evidence note a verify pass leaves when nothing moved. */
+const NO_EFFECT_NOTE = 'no measurable improvement';
+
+type ProofVerdict = 'proven' | 'gathering' | 'none';
+
+function proofVerdict(rec: Recommendation): ProofVerdict {
+  const note = (rec.evidence as { note?: unknown } | null)?.note;
+  if (typeof note === 'string' && note.includes(NO_EFFECT_NOTE)) return 'none';
+  return rec.status === 'verified' ? 'proven' : 'gathering';
+}
+
+const VERDICT_TONE: Record<ProofVerdict, PageTone> = { proven: 'green', gathering: 'brand', none: 'red' };
+const VERDICT_GLYPH: Record<ProofVerdict, string> = { proven: '✓', gathering: '✽', none: '✗' };
+
+function verdictWord(verdict: ProofVerdict): string {
+  if (verdict === 'proven') return tr`proven`;
+  return verdict === 'gathering' ? tr`gathering` : tr`no effect`;
+}
+
+function lessonItem(lesson: Lesson): PlaceItem {
+  const eff = lesson.effectiveness ?? null;
+  const uses = eff?.uses ?? 0;
+  const before = eff?.medianBefore?.toFixed(2) ?? null;
+  const after = eff?.medianAfter?.toFixed(2) ?? null;
+  const active = lesson.status === 'active';
+  const status = active ? tr`in force` : tr`candidate`;
+  const reached = plural(uses, {
+    one: 'reached # run',
+    few: 'reached # runs',
+    many: 'reached # runs',
+    other: 'reached # runs',
+  });
+  return {
+    key: `lesson:${String(lesson.id)}`,
+    glyph: active ? '●' : '○',
+    glyphSmall: true,
+    glyphTone: active ? 'purple' : 'faint',
+    title: lesson.title,
+    ...(lesson.planId !== '' ? { tag: lesson.planId } : {}),
+    summary: uses > 0 ? `${status} · ${reached}` : status,
+    ...(before !== null && after !== null
+      ? { right: `${before}→${after}`, rightTone: (eff?.medianDrop ?? 0) > 0 ? ('green' as const) : ('faint' as const) }
+      : active && uses > 0
+        ? { right: tr`gathering` }
+        : {}),
+  };
+}
+
+function proofItem(rec: Recommendation): PlaceItem {
+  const verdict = proofVerdict(rec);
+  const rule = rec.rule;
+  const target = rec.target;
+  return {
+    key: `proof:${String(rec.id)}`,
+    glyph: VERDICT_GLYPH[verdict],
+    glyphTone: VERDICT_TONE[verdict],
+    title: rec.title,
+    summary: `${rule} · ${target}`,
+    age: fmtAgo(rec.updated_at),
+    right: verdictWord(verdict),
+    rightTone: VERDICT_TONE[verdict],
+  };
+}
+
+function groupOf(tab: LearningTab): string {
+  return tab === 'honesty' ? 'classifier' : tab;
+}
 
 function inboxHref(slug: string | null): string {
   return PLACES.find((p) => p.id === 'inbox')?.href(slug) ?? '/inbox';
@@ -26,47 +103,147 @@ export function Learning(): JSX.Element {
   const { t } = useLingui();
   const { slug } = useParams<{ slug: string }>();
   const projectSlug = slug ?? null;
-  const [tab, setTab] = useTabParam<LearningTab>('tab', LEARNING_TABS, 'lessons');
-  const [candidates, setCandidates] = useState<number | null>(null);
+  const { tab, item, pick } = usePlaceParams<LearningTab>(LEARNING_TABS, 'lessons');
+  const [lessons, setLessons] = useState<Lesson[] | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [lessonError, setLessonError] = useState<string | null>(null);
+  const [recs, setRecs] = useState<Recommendation[] | null>(null);
+
+  const loadLessons = useCallback((): void => {
+    fetchLessons()
+      .then(setLessons)
+      .catch(() => setLessons(null));
+  }, []);
+  useEffect(loadLessons, [loadLessons]);
 
   useEffect(() => {
-    fetchLessons('candidate')
-      .then((ls) => setCandidates(ls.length))
-      .catch(() => setCandidates(null));
-  }, []);
+    const status = PROOF_RECS.join(',');
+    (projectSlug === null ? fetchRecommendations(status) : fetchProjectRecommendations(projectSlug, status))
+      .then((r) => setRecs(r.recommendations))
+      .catch(() => setRecs(null));
+  }, [projectSlug]);
+
+  const act = useCallback(
+    (run: () => Promise<Lesson>): void => {
+      setBusy(true);
+      setLessonError(null);
+      run()
+        .then(loadLessons)
+        .catch((e: unknown) => setLessonError(String(e)))
+        .finally(() => setBusy(false));
+    },
+    [loadLessons],
+  );
 
   const inbox = inboxHref(projectSlug);
-  const tabs: TabItem<LearningTab>[] = [
-    { id: 'lessons', label: t`Lessons`, ...(candidates !== null && candidates > 0 ? { count: candidates } : {}) },
-    { id: 'classifier', label: t`The classifier` },
-    { id: 'honesty', label: t`Forecast honesty` },
-    { id: 'proof', label: t`Proof` },
+  const live = (lessons ?? []).filter((l) => l.status === 'active' || l.status === 'candidate');
+  const ordered = [...live.filter((l) => l.status === 'active'), ...live.filter((l) => l.status === 'candidate')];
+  const candidates = live.length - live.filter((l) => l.status === 'active').length;
+  const proof = (recs ?? []).filter((r) => (PROOF_RECS as readonly string[]).includes(r.status));
+
+  const groups: PlaceGroup[] = [
+    {
+      key: 'lessons',
+      label: t`Lessons`,
+      tone: 'purple',
+      count: ordered.length,
+      items: [
+        ...ordered.map(lessonItem),
+        {
+          key: 'queue',
+          glyph: '▤',
+          title: t`Review queue`,
+          summary: candidates > 0 ? t`${String(candidates)} candidates · retirements · every status` : t`retirements · every status`,
+        },
+      ],
+    },
+    {
+      key: 'proof',
+      label: t`Proof · did the change help?`,
+      tone: 'green',
+      count: proof.length,
+      items: [
+        ...proof.map(proofItem),
+        { key: 'because', glyph: '◇', title: t`Because of you`, summary: t`what a proof row is and when it is verified` },
+      ],
+    },
+    {
+      key: 'classifier',
+      label: t`The classifier`,
+      tone: 'green',
+      items: [
+        { key: 'calibration', glyph: '◐', title: t`Calibration`, summary: t`what the model labels · how often you agree` },
+        { key: 'honesty', glyph: '≈', title: t`Forecast honesty`, summary: t`how close forecasts land` },
+      ],
+    },
   ];
 
-  return (
-    <div className="px-9 pt-[30px] pb-[34px]">
-      <div className="flex flex-wrap items-baseline gap-[10px]">
-        <h1 className="m-0 font-display text-[30px] leading-[1.15] font-medium tracking-[-0.01em] text-ink">
-          <Trans>Learning</Trans>
-        </h1>
-        <span className="font-mono text-[11px] text-ink-faint">
-          <Trans>lessons · the classifier · forecast honesty</Trans>
-        </span>
-      </div>
-      <div className="mt-[14px]">
-        <Tabs tabs={tabs} value={tab} onChange={setTab} ariaLabel={t`Learning`} />
-      </div>
-      <div role="tabpanel" aria-label={tabs.find((item) => item.id === tab)?.label} className="mt-4">
-        {tab === 'lessons' ? (
-          <Lessons embedded />
-        ) : tab === 'classifier' ? (
+  const group = groupOf(tab);
+  const open = groups.find((g) => g.key === group) ?? groups[0];
+  const selected = tab === 'honesty' ? 'honesty' : (open?.items.find((i) => i.key === item)?.key ?? open?.items[0]?.key ?? null);
+
+  const detail = (): JSX.Element => {
+    if (group === 'lessons') {
+      const lesson = ordered.find((l) => `lesson:${String(l.id)}` === selected);
+      if (lesson !== undefined) {
+        return (
+          <>
+            {lessonError !== null && (
+              <div role="alert" className="px-7 pt-3 text-[12px] text-red">
+                {lessonError}
+              </div>
+            )}
+            <LessonDetail key={lesson.id} lesson={lesson} busy={busy} act={act} />
+          </>
+        );
+      }
+      return (
+        <PageDetail kind={t`lessons`} kindTone="purple" title={t`Every lesson, and what waits for a decision.`}>
+          <div className="mt-2">
+            <Lessons embedded />
+          </div>
+        </PageDetail>
+      );
+    }
+    if (group === 'proof') {
+      const rec = proof.find((r) => `proof:${String(r.id)}` === selected);
+      if (rec !== undefined) {
+        const verdict = proofVerdict(rec);
+        const word = verdictWord(verdict);
+        return <RecDetail rec={rec} kind={t`proof · ${word}`} kindTone={VERDICT_TONE[verdict]} inboxHref={inbox} />;
+      }
+      return <Proof inboxHref={inbox} />;
+    }
+    return selected === 'honesty' ? (
+      <PageDetail kind={t`learning · forecast honesty`} title={t`Forecast honesty`}>
+        <CalibrationPanel />
+      </PageDetail>
+    ) : (
+      <PageDetail kind={t`learning · classifier`} kindTone="green" title={t`What the local model labels, and how it does.`}>
+        <div className="mt-3">
           <Classifier inboxHref={`${inbox}?tab=classifier`} />
-        ) : tab === 'honesty' ? (
-          <CalibrationPanel />
-        ) : (
-          <Proof inboxHref={inbox} />
-        )}
-      </div>
-    </div>
+        </div>
+      </PageDetail>
+    );
+  };
+
+  return (
+    <PagePlace
+      title={t`Learning`}
+      sub={t`${String(ordered.length - candidates)} lessons in force · ${String(candidates)} candidates`}
+      searchHint={t`filter lessons`}
+      groups={groups}
+      openGroup={group}
+      selected={selected}
+      onOpenGroup={(key) => pick(key as LearningTab)}
+      onSelect={(key) => {
+        if (group === 'classifier') {
+          pick(key === 'honesty' ? 'honesty' : 'classifier');
+          return;
+        }
+        pick(tab, key === open?.items[0]?.key ? null : key);
+      }}
+      detail={detail()}
+    />
   );
 }
