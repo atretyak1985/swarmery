@@ -526,19 +526,19 @@ msgstr "З’явиться, коли ви приймете зміну і вон
 
 #: src/pages/Approvals.tsx
 msgid "Approvals"
-msgstr "Дозволи"
+msgstr "Погодження"
 
 #: src/pages/Approvals.tsx
 msgid "approvals · history"
-msgstr "дозволи · історія"
+msgstr "погодження · історія"
 
 #: src/pages/Approvals.tsx
 msgid "approvals · pending"
-msgstr "дозволи · в очікуванні"
+msgstr "погодження · в очікуванні"
 
 #: src/pages/Approvals.tsx
 msgid "approvals · rules"
-msgstr "дозволи · правила"
+msgstr "погодження · правила"
 
 #: src/pages/Approvals.tsx
 msgid "approvals…"
