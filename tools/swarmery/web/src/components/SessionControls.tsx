@@ -132,8 +132,11 @@ export function SessionControls({
   session,
   compact = false,
   className = '',
+  promptOpen: promptOpenAtStart = false,
 }: {
   session: Session;
+  /** Mount with the prompt box already open: `redirect` asked for it. */
+  promptOpen?: boolean;
   /** Card layout: no inline reason line (the tip and the screen-reader
    * description still carry it). */
   compact?: boolean;
@@ -142,7 +145,7 @@ export function SessionControls({
   const { t } = useLingui();
   const reasonId = useId();
   const [confirmingStop, setConfirmingStop] = useState(false);
-  const [promptOpen, setPromptOpen] = useState(false);
+  const [promptOpen, setPromptOpen] = useState(promptOpenAtStart);
   const [text, setText] = useState('');
   const [asUser, setAsUser] = useState(false);
   const [tracked, setTracked] = useState<TrackedByKind>({});

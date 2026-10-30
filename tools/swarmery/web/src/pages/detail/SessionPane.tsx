@@ -65,6 +65,7 @@ import { SwarmPanel } from '../sessions/SwarmPanel';
 import { scrollToDiffGroup } from './diffJump';
 import { Chat, type PendingSend } from './Chat';
 import { CommandInput } from './CommandInput';
+import { redirectChannel } from './redirectChannel';
 import { SummaryChips } from './SummaryChips';
 import { DetailRail } from './DetailRail';
 import { PendingRunNotice } from './PendingRunNotice';
@@ -554,6 +555,8 @@ export function SessionPane({
     wantComposer.current = false;
     composerRef.current.focus();
   }, [tab, loaded]);
+  // With the composer off, `redirect` goes through the link mod's prompt instead.
+  const [linkPrompt, setLinkPrompt] = useState(false);
 
   // `e` with no gate is the composer; SessionGate takes both keys while it is up.
   useEffect(() => {
@@ -785,6 +788,7 @@ export function SessionPane({
   if ((detail.coldRestarts ?? 0) > 0) numbers.push({ label: t`cold restarts`, value: String(detail.coldRestarts) });
 
   const live = state === 'working' || state === 'pending';
+  const redirect = redirectChannel(detail);
   const killable = killSlotKind(detail);
   const focusHref = safeHref(gate?.termFocusUrl ?? null, TERM_FOCUS_SCHEMES);
   const outcome = detail.outcome ?? null;
@@ -935,8 +939,19 @@ export function SessionPane({
           <div className="flex flex-wrap items-center gap-0.5 pb-0.5">
             {/* No `pause` (plan D-13): stopSession ends the process and records it
                 as finished, so the word would lie. */}
-            {state === 'working' && (
-              <button type="button" onClick={openComposer} className={BUTTON}>
+            {state === 'working' && redirect !== null && (
+              <button
+                type="button"
+                onClick={
+                  redirect === 'composer'
+                    ? openComposer
+                    : () => {
+                        setLinkPrompt(true);
+                        setTab('chat');
+                      }
+                }
+                className={BUTTON}
+              >
                 {t`redirect`}
               </button>
             )}
@@ -1031,6 +1046,7 @@ export function SessionPane({
             <Trans>Latest</Trans>
           </button>
         )}
+        {tab === 'chat' && linkPrompt && redirect === 'link' && <SessionControls session={detail} promptOpen />}
         {tab === 'chat' && (
           <CommandInput
             sessionId={detail.id}

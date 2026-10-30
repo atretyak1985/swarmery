@@ -21,10 +21,7 @@ import { useLingui } from '@lingui/react/macro';
 import { useEffect, useState, type RefObject } from 'react';
 import type { ProcState } from '../../api/types';
 import { cancelSessionMessage, killSession, sendSessionMessage } from '../../api';
-
-function hasLiveProcess(procState: ProcState | null | undefined): boolean {
-  return procState === 'running' || procState === 'orphaned';
-}
+import { hasLiveProcess } from './redirectChannel';
 
 export function CommandInput({
   sessionId,
