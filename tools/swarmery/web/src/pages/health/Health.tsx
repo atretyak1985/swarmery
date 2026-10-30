@@ -339,6 +339,7 @@ export function Health(): JSX.Element {
 
   return (
     <PagePlace
+      tabbed
       title={t`Health`}
       {...(agents !== null ? { sub: placeSub(windowCell(agents), days) } : {})}
       groups={groups}

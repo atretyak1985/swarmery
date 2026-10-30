@@ -6,9 +6,11 @@
 // With no :id the first row is open, as the design opens it, and the URL stays.
 // An id may be a row id or a session uuid: the notch app opens /sessions/<uuid>.
 //
-// Structure. Groups: Needs you, Working, Done today, then Earlier (the design has
-// no older sessions, the product does, and the infinite scroll stays there) and a
-// closed Plan runs group, which keeps the fan-out audit view. FileContentionBanner
+// Structure. Tabs under the header: all, needs you, working, done. In `all` the
+// groups are Needs you, Working, Done today, then Earlier (the design has no older
+// sessions, the product does, and the infinite scroll stays there) and a closed
+// Plan runs group, which keeps the fan-out audit view; any other tab is its one
+// group without a head. FileContentionBanner
 // stays at the top of the list: it renders null unless two live sessions share a
 // file. The filter chips went into the field (`n:name s:state o:result`); the
 // controls with no place in the field (accounts, bulk continue-phase, a leftover
@@ -49,6 +51,7 @@ import { BULK_PROMPT_MAX, BulkPromptBar } from '../components/BulkPromptBar';
 import { FileContentionBanner } from '../components/FileContentionBanner';
 import { ListGroup, type GroupTone } from '../components/place/ListGroup';
 import { ListPane } from '../components/place/ListPane';
+import { ListEmpty, ListTabs } from '../components/place/ListTabs';
 import { PlaceLayout } from '../components/place/PlaceLayout';
 import { PlanRunCard } from '../components/PlanRunCard';
 import { ScopeChip } from '../components/ScopeChip';
@@ -57,6 +60,8 @@ import { Empty, ErrorBox, Loading } from '../components/ui';
 import { SessionPane, type PaneActions } from './detail/SessionPane';
 
 const PAGE_LIMIT = 100;
+
+type SessionTab = 'all' | 'needs' | 'working' | 'done';
 
 /** `+ new` is the palette's dispatch (plan D-5), and the Sidebar owns the palette. */
 function openPalette(): void {
@@ -111,6 +116,7 @@ function SessionsPlace(): JSX.Element {
   const [query, setQuery] = useState('');
   // null = every subscription (migration 0047); a key narrows to one account.
   const [account, setAccount] = useState<string | null>(null);
+  const [listTab, setListTab] = useState<SessionTab>('all');
   const [runsOpen, setRunsOpen] = useState(false);
   const [expanded, setExpanded] = useState<ReadonlySet<number>>(new Set());
   const [sessions, setSessions] = useState<Session[] | null>(null);
@@ -241,7 +247,8 @@ function SessionsPlace(): JSX.Element {
     .filter((s) => account === null || accountKey(s) === account)
     .sort((a, b) => b.startedAt.localeCompare(a.startedAt));
   const groups = buildGroups(sorted, nowMs, gates);
-  const ordered = [...groups.needs, ...groups.working, ...groups.done, ...groups.earlier];
+  const everyRow = [...groups.needs, ...groups.working, ...groups.done, ...groups.earlier];
+  const ordered = listTab === 'all' ? everyRow : groups[listTab];
   const rowKeys = ordered.map((s) => String(s.id));
   const days = buildDays(sorted);
   const runs = runsOnly(days).flatMap((d) => d.items.flatMap((it) => (it.kind === 'run' ? [it.group] : [])));
@@ -253,7 +260,8 @@ function SessionsPlace(): JSX.Element {
   useEffect(() => {
     if (id === undefined) setAutoId(openId);
   }, [id, openId]);
-  const openRow = ordered.find((s) => String(s.id) === openId || s.sessionUuid === openId);
+  // From every row, not the tab's: a session stays open when its tab is left.
+  const openRow = everyRow.find((s) => String(s.id) === openId || s.sessionUuid === openId);
   const openKey = openRow === undefined ? openId : String(openRow.id);
 
   // j/k moves the selection; keep the moved-to row in view.
@@ -320,7 +328,7 @@ function SessionsPlace(): JSX.Element {
 
   const group = (key: SessionGroup, label: string, tone: GroupTone): JSX.Element | null =>
     groups[key].length === 0 ? null : (
-      <ListGroup key={key} label={label} count={groups[key].length} tone={tone}>
+      <ListGroup key={key} label={label} count={groups[key].length} tone={tone} hideHead={listTab !== 'all'}>
         {groups[key].map(row)}
       </ListGroup>
     );
@@ -339,6 +347,16 @@ function SessionsPlace(): JSX.Element {
       <ErrorBox message={error} onRetry={load} />
     ) : sessions === null ? (
       <Loading label={t`sessions…`} />
+    ) : ordered.length === 0 && listTab !== 'all' && query === '' && account === null ? (
+      <ListEmpty>
+        {listTab === 'needs' ? (
+          <Trans>Nothing needs you.</Trans>
+        ) : listTab === 'working' ? (
+          <Trans>Nothing is running.</Trans>
+        ) : (
+          <Trans>Nothing finished today yet.</Trans>
+        )}
+      </ListEmpty>
     ) : ordered.length === 0 ? (
       <Empty>
         {query !== '' ? (
@@ -385,6 +403,19 @@ function SessionsPlace(): JSX.Element {
           </>
         ) : undefined
       }
+      strip={
+        <ListTabs
+          tabs={[
+            { id: 'all', label: t`all`, count: everyRow.length },
+            { id: 'needs', label: t`needs you`, count: groups.needs.length, needs: true },
+            { id: 'working', label: t`working`, count: groups.working.length },
+            { id: 'done', label: t`done`, count: groups.done.length },
+          ]}
+          value={listTab}
+          onChange={setListTab}
+          ariaLabel={t`Sessions`}
+        />
+      }
       empty={emptyList}
       keys={{
         onNext: () => step(1),
@@ -411,10 +442,10 @@ function SessionsPlace(): JSX.Element {
             />
           </div>
         )}
-        {group('needs', t`Needs you`, 'amber')}
-        {group('working', t`Working`, 'green')}
-        {group('done', t`Done today`, 'default')}
-        {runs.length > 0 && (
+        {(listTab === 'all' || listTab === 'needs') && group('needs', t`Needs you`, 'amber')}
+        {(listTab === 'all' || listTab === 'working') && group('working', t`Working`, 'green')}
+        {(listTab === 'all' || listTab === 'done') && group('done', t`Done today`, 'default')}
+        {listTab === 'all' && runs.length > 0 && (
           <ListGroup
             label={t`Plan runs`}
             count={runs.length}
@@ -436,7 +467,7 @@ function SessionsPlace(): JSX.Element {
             </div>
           </ListGroup>
         )}
-        {group('earlier', t`Earlier`, 'default')}
+        {listTab === 'all' && group('earlier', t`Earlier`, 'default')}
         {nextCursor !== null && (
           <div ref={sentinelRef} className="py-6 text-center font-mono text-[11px] text-ink-faint">
             <Trans>loading more…</Trans>

@@ -49,7 +49,7 @@ import { useProjectWorkspace } from '../workspace/ProjectContext';
 import { EpicDetail } from './plans/EpicDetail';
 import { PHASE_RUN_EFFORT_KEY, PHASE_RUN_MODEL_KEY, type PhaseRunEffort, type PhaseRunModel, readStoredPhaseRunEffort, readStoredPhaseRunModel } from './plans/PhaseRunPickers';
 import { PlanList } from './plans/PlanList';
-import { canonicalPlansTarget, epicFilterOf, FILTER_LABEL, plansTitle, revisionNotFound, staleNotice, type DetailSel, type DetailTarget, type EpicFilter } from './plans/plansTarget';
+import { canonicalPlansTarget, FILTER_LABEL, planFilterOf, plansTitle, revisionNotFound, staleNotice, type DetailSel, type DetailTarget, type EpicFilter } from './plans/plansTarget';
 import { parsePlansRoute, plansHref, sameHref, type PlansRouteParams, type PlansTarget } from './plans/plansUrl';
 import { reverifyAction, useReverify } from './plans/useReverify';
 
@@ -100,7 +100,7 @@ export function Plans(): JSX.Element {
   );
   // A named plan decides its own filter (a lifecycle move to Archived keeps the
   // URL on the plan and the filter follows); otherwise `?status=`, default Active.
-  const filter: EpicFilter = urlEpic !== null ? epicFilterOf(urlEpic.status) : (route.status ?? 'active');
+  const filter: EpicFilter = urlEpic !== null ? planFilterOf(urlEpic) : (route.status ?? 'active');
   const selected = urlEpic?.taskId ?? null; // taskId — everything keyed by it keeps working
   const detailTarget: DetailTarget | null =
     route.detail === null
@@ -202,7 +202,7 @@ export function Plans(): JSX.Element {
   }, [anyRunning, reload]);
 
   const filtered = useMemo(
-    () => (epics ?? []).filter((e) => epicFilterOf(e.status) === filter),
+    () => (epics ?? []).filter((e) => planFilterOf(e) === filter),
     [epics, filter],
   );
 
@@ -462,6 +462,8 @@ export function Plans(): JSX.Element {
         list={
           <PlanList
             epics={epics}
+            filter={filter}
+            onFilter={(status) => go({ plan: null, status })}
             selectedTaskId={selected}
             // A row is a real link (Cmd-click opens a new tab). The selected one links
             // to where we are, so re-clicking it keeps its open details.

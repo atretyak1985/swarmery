@@ -27,6 +27,13 @@ export function epicFilterOf(status: Epic['status']): EpicFilter {
   return status === 'active' || status === 'paused' ? 'active' : status;
 }
 
+/** Which tab of the list a plan sits in. A plan whose every phase landed is done
+ * whatever its status still says, as the design's list has it. */
+export function planFilterOf(epic: Epic): EpicFilter {
+  const filter = epicFilterOf(epic.status);
+  return filter === 'active' && planComplete(epic, computeResolvedSeqs(epic.phases)) ? 'done' : filter;
+}
+
 /** The stale-link notice for a revision id the plan does not have (SC-8). */
 export function revisionNotFound(revId: number): string {
   const id = String(revId);
@@ -141,7 +148,7 @@ export function canonicalPlansTarget(
   epics: Epic[],
 ): { target: PlansTarget; missing: PlansMissing } {
   const listOf = (f: EpicFilter, missing: PlansMissing): { target: PlansTarget; missing: PlansMissing } => {
-    const first = epics.find((e) => epicFilterOf(e.status) === f);
+    const first = epics.find((e) => planFilterOf(e) === f);
     return { target: first !== undefined ? { plan: first.externalId } : { plan: null, status: f }, missing };
   };
 

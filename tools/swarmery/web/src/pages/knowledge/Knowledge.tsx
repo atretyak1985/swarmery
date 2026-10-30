@@ -137,6 +137,7 @@ export function Knowledge(): JSX.Element {
 
   return (
     <PagePlace
+      tabbed
       title={t`Knowledge`}
       sub={t`what this project remembers`}
       searchHint={t`search memory, modules, symbols`}

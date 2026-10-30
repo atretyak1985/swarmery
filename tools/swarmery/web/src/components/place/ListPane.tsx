@@ -17,6 +17,7 @@ export function ListPane({
   searchHint,
   onNew,
   tabs,
+  strip,
   empty,
   keys = {},
   primaryHint,
@@ -33,6 +34,8 @@ export function ListPane({
   onNew?: () => void;
   /** Optional filter row under the search field. */
   tabs?: ReactNode;
+  /** The list's tab strip (ListTabs), on the header's foot. */
+  strip?: ReactNode;
   /** Rendered instead of the groups when there is nothing to list. */
   empty?: ReactNode;
   keys?: ListKeys;
@@ -74,6 +77,7 @@ export function ListPane({
           )}
         </div>
         {tabs !== undefined && <div className="mt-[10px] flex flex-wrap gap-1">{tabs}</div>}
+        {strip}
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto">{empty ?? children}</div>
       <div className="hidden flex-wrap gap-x-3 gap-y-1 border-t border-line px-[14px] py-2 font-mono text-[10px] leading-[normal] text-ink-faint desk:flex">

@@ -4,10 +4,10 @@
 // on the right. Whatever the blocks cannot express (an existing chart, an editor)
 // comes in as `children` under them, so a screen moves here without losing a panel.
 //
-// `PagePlace` is the rest of such a place: the list column run as an accordion,
-// and `usePlaceParams` keeps the group and the row in `?tab=`/`?item=`, so an old
-// tab link still opens the right group. Health, Learning, Knowledge, System, Docs
-// and Settings all have this one shape.
+// `PagePlace` is the rest of such a place: the list column, its groups run as tabs
+// (`tabbed`: Health, Learning, Knowledge, System) or as an accordion (Docs,
+// Settings), and `usePlaceParams` keeps the group and the row in `?tab=`/`?item=`,
+// so an old tab link still opens the right group.
 
 import { useLingui } from '@lingui/react/macro';
 import { Fragment, useCallback, useMemo, useState, type ReactNode } from 'react';
@@ -15,6 +15,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { ListGroup, type GroupTone } from './ListGroup';
 import { ListPane } from './ListPane';
 import { ListRow } from './ListRow';
+import { ListTabs } from './ListTabs';
 import { NumbersStrip, type NumberItem } from './NumbersStrip';
 import { PlaceLayout, type NarrowPane } from './PlaceLayout';
 
@@ -463,6 +464,8 @@ export interface PlaceGroup {
   tone?: GroupTone;
   /** What the header counts when that is not the rows, e.g. a row that opens the whole board. */
   count?: number;
+  /** The tab shows no number: an overview is not a count of anything. */
+  noTabCount?: boolean;
   items: readonly PlaceItem[];
 }
 
@@ -498,7 +501,7 @@ function matches(item: PlaceItem, needle: string): boolean {
   return item.title.toLowerCase().includes(needle) || (item.summary ?? '').toLowerCase().includes(needle);
 }
 
-/** The whole of a §9 place: the accordion list beside `detail`. */
+/** The whole of a §9 place: the list, in tabs or as an accordion, beside `detail`. */
 export function PagePlace({
   title,
   sub,
@@ -513,6 +516,7 @@ export function PagePlace({
   onSecondary,
   narrow,
   after,
+  tabbed = false,
 }: {
   title: string;
   sub?: string;
@@ -531,6 +535,8 @@ export function PagePlace({
   /** Under the groups, in the list's own scroll: a filter that must not move the
    * header's geometry, or a note about the list. */
   after?: ReactNode;
+  /** One tab per group, only the picked group's rows, and no group heads. */
+  tabbed?: boolean;
 }): JSX.Element {
   const { t } = useLingui();
   const [query, setQuery] = useState('');
@@ -569,11 +575,27 @@ export function PagePlace({
             ...(onSecondary !== undefined ? { onSecondary } : {}),
           }}
           secondaryHint={secondaryHint}
+          {...(tabbed
+            ? {
+                strip: (
+                  <ListTabs
+                    tabs={visible.map((group) => ({
+                      id: group.key,
+                      label: group.label.toLowerCase(),
+                      count: group.noTabCount === true || visible.length < 2 ? 0 : (group.count ?? group.items.length),
+                    }))}
+                    value={open?.key ?? ''}
+                    onChange={onOpenGroup}
+                    ariaLabel={title}
+                  />
+                ),
+              }
+            : {})}
           {...(visible.length === 0
             ? { empty: <div className="px-[14px] py-3 font-mono text-[11px] text-ink-faint">{emptyText}</div> }
             : {})}
         >
-          {visible.map((group) => {
+          {(tabbed ? visible.filter((group) => group.key === open?.key) : visible).map((group) => {
             const isOpen = group.key === open?.key;
             return (
               <ListGroup
@@ -582,6 +604,7 @@ export function PagePlace({
                 count={group.count ?? group.items.length}
                 {...(group.tone !== undefined ? { tone: group.tone } : {})}
                 open={isOpen}
+                hideHead={tabbed}
                 onToggle={() => onOpenGroup(group.key)}
               >
                 {group.items.map((item) => (

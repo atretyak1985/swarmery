@@ -361,6 +361,7 @@ export function SystemShell(): JSX.Element {
 
   return (
     <PagePlace
+      tabbed
       title={t`System`}
       sub={t`${agentCount} agents · ${skillCount} skills · ${hookCount} hooks · ${routineCount} routines`}
       searchHint={t`filter`}

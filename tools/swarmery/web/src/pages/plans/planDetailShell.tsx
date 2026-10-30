@@ -72,7 +72,7 @@ export function DetailTabs<T extends string>({
 }): JSX.Element {
   return (
     <div
-      className="flex shrink-0 gap-1 overflow-x-auto border-b border-line px-4"
+      className="flex shrink-0 flex-wrap gap-0.5 border-b border-line px-4"
       role="tablist"
       aria-label={label}
     >

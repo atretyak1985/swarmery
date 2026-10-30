@@ -1,29 +1,20 @@
-// The list column of Plans (handoff §6): every plan of the project in one list,
-// grouped, so a plan's place in its life is read off the list rather than chosen
-// with a filter. Archived plans sit in their own group (§6.8). Done is a group of
-// its own too: the design's fixture has no finished plan, and on a real project they
-// would otherwise bury the running ones. `?status=` still works: it names the group
-// `/plans` lands in (plansTarget.ts).
+// The list column of Plans (handoff §6, design update): the project's plans in three
+// tabs — active, done, archived — so finished plans do not bury the running ones. The
+// tab is the URL's: a named plan decides it (planFilterOf), otherwise `?status=`, and
+// picking a tab lands on that tab's first plan (plansTarget.ts).
 
-import type { MessageDescriptor } from '@lingui/core';
-import { msg, plural } from '@lingui/core/macro';
+import { plural } from '@lingui/core/macro';
 import { useLingui } from '@lingui/react/macro';
 import { useMemo, useState } from 'react';
 import type { Epic } from '../../api/types';
-import { ListGroup } from '../../components/place/ListGroup';
 import { ListPane, type ListKeys } from '../../components/place/ListPane';
 import { ListRow } from '../../components/place/ListRow';
+import { ListEmpty, ListTabs } from '../../components/place/ListTabs';
 import { StateGlyph } from '../../components/place/StateGlyph';
 import { compactSpan } from '../../lib/sessionsView';
 import { useNowMs } from '../../lib/sessionState';
 import { computeResolvedSeqs, needYouCount, planGlyph, planSummary, planUpdatedAt } from './planModel';
-import { epicFilterOf, type EpicFilter } from './plansTarget';
-
-const GROUPS: readonly { key: EpicFilter; label: MessageDescriptor }[] = [
-  { key: 'active', label: msg`Plans` },
-  { key: 'done', label: msg`Done` },
-  { key: 'archived', label: msg`Archived` },
-];
+import { planFilterOf, type EpicFilter } from './plansTarget';
 
 /** The list's mono line: `2 plans · 3 phases need you`. */
 function listSub(plans: number, phases: number): string {
@@ -40,6 +31,8 @@ function listSub(plans: number, phases: number): string {
 
 export function PlanList({
   epics,
+  filter,
+  onFilter,
   selectedTaskId,
   hrefOf,
   onStep,
@@ -47,6 +40,9 @@ export function PlanList({
   onNew,
 }: {
   epics: Epic[];
+  /** The tab on screen. */
+  filter: EpicFilter;
+  onFilter: (filter: EpicFilter) => void;
   selectedTaskId: number | null;
   /** A row's link. The selected row links to where we are, which keeps open details. */
   hrefOf: (epic: Epic) => string;
@@ -56,24 +52,18 @@ export function PlanList({
   onPrimary: () => void;
   onNew: () => void;
 }): JSX.Element {
-  const { t, i18n } = useLingui();
+  const { t } = useLingui();
   const nowMs = useNowMs(30000);
   const [query, setQuery] = useState('');
   const q = query.trim().toLowerCase();
   const visible = useMemo(() => epics.filter((e) => q === '' || e.title.toLowerCase().includes(q)), [epics, q]);
-  const groups = useMemo(
-    () =>
-      GROUPS.map((g) => ({ ...g, epics: visible.filter((e) => epicFilterOf(e.status) === g.key) })).filter(
-        (g) => g.epics.length > 0,
-      ),
-    [visible],
-  );
-  const ordered = groups.flatMap((g) => g.epics);
+  const shown = useMemo(() => visible.filter((e) => planFilterOf(e) === filter), [visible, filter]);
+  const countOf = (f: EpicFilter): number => visible.filter((e) => planFilterOf(e) === f).length;
 
   const step = (by: number): void => {
-    if (ordered.length === 0) return;
-    const at = ordered.findIndex((e) => e.taskId === selectedTaskId);
-    const next = ordered[Math.min(Math.max(at + by, 0), ordered.length - 1)];
+    if (shown.length === 0) return;
+    const at = shown.findIndex((e) => e.taskId === selectedTaskId);
+    const next = shown[Math.min(Math.max(at + by, 0), shown.length - 1)];
     if (next !== undefined && next.taskId !== selectedTaskId) onStep(next);
   };
   const keys: ListKeys = { onNext: () => step(1), onPrev: () => step(-1), onPrimary };
@@ -90,6 +80,18 @@ export function PlanList({
       searchHint={t`filter plans`}
       onNew={onNew}
       keys={keys}
+      strip={
+        <ListTabs
+          tabs={[
+            { id: 'active', label: t`active`, count: countOf('active') },
+            { id: 'done', label: t`done`, count: countOf('done') },
+            { id: 'archived', label: t`archived`, count: countOf('archived') },
+          ]}
+          value={filter}
+          onChange={onFilter}
+          ariaLabel={t`Plans`}
+        />
+      }
       empty={
         epics.length === 0 ? (
           <div className="px-[14px] py-4 text-[12.5px] leading-[1.5] text-ink-dim">
@@ -97,33 +99,37 @@ export function PlanList({
           </div>
         ) : visible.length === 0 ? (
           <div className="px-[14px] py-4 text-[12.5px] leading-[1.5] text-ink-dim">{t`No plan matches this filter.`}</div>
+        ) : shown.length === 0 ? (
+          <ListEmpty>
+            {filter === 'archived'
+              ? t`Nothing archived.`
+              : filter === 'done'
+                ? t`No plan has landed every phase yet.`
+                : t`No active plans. Start one with + new.`}
+          </ListEmpty>
         ) : undefined
       }
     >
-      {groups.map((group) => (
-        <div key={group.key} data-plan-group={group.key}>
-          <ListGroup label={i18n._(group.label)} count={group.epics.length}>
-            {group.epics.map((e) => {
-              const resolved = computeResolvedSeqs(e.phases);
-              const updated = planUpdatedAt(e);
-              return (
-                <ListRow
-                  key={e.taskId}
-                  glyph={<StateGlyph state={planGlyph(e, resolved)} />}
-                  title={e.title}
-                  // A micro-plan IS a dispatched board card: the header names the card.
-                  tag={e.cardExternalId !== null ? t`card` : undefined}
-                  summary={planSummary(e, resolved)}
-                  summaryTone={needYouCount(e) > 0 ? 'needs' : e.planRun?.runState === 'failed' ? 'failed' : 'default'}
-                  age={updated === null ? undefined : compactSpan(nowMs - new Date(updated).getTime())}
-                  selected={e.taskId === selectedTaskId}
-                  to={hrefOf(e)}
-                />
-              );
-            })}
-          </ListGroup>
-        </div>
-      ))}
+      <div data-plan-group={filter}>
+        {shown.map((e) => {
+          const resolved = computeResolvedSeqs(e.phases);
+          const updated = planUpdatedAt(e);
+          return (
+            <ListRow
+              key={e.taskId}
+              glyph={<StateGlyph state={planGlyph(e, resolved)} />}
+              title={e.title}
+              // A micro-plan IS a dispatched board card: the header names the card.
+              tag={e.cardExternalId !== null ? t`card` : undefined}
+              summary={planSummary(e, resolved)}
+              summaryTone={needYouCount(e) > 0 ? 'needs' : e.planRun?.runState === 'failed' ? 'failed' : 'default'}
+              age={updated === null ? undefined : compactSpan(nowMs - new Date(updated).getTime())}
+              selected={e.taskId === selectedTaskId}
+              to={hrefOf(e)}
+            />
+          );
+        })}
+      </div>
     </ListPane>
   );
 }
