@@ -189,6 +189,13 @@ describe('PhaseLedger', () => {
     expect(screen.getAllByRole('combobox')).toHaveLength(2);
   });
 
+  it('leaves the pickers out while the phase waits on the operator, and keeps Run', () => {
+    mount([{ ...idle, checkboxesDone: 2, manualOpen: 1 } as EpicPhase]);
+    fireEvent.click(row('Phase 1 — Design bucket'));
+    expect(screen.getByRole('button', { name: 'Run phase' })).toBeTruthy();
+    expect(screen.queryAllByRole('combobox')).toHaveLength(0);
+  });
+
   it('disables Run on a plan that is not active', () => {
     mount([live, idle], [], 'paused');
     fireEvent.click(row('Phase 1 — Design bucket'));

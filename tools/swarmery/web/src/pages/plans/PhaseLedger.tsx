@@ -430,8 +430,10 @@ export function PhaseLedger({
                     <PhaseLinks phase={p} status={status} phaseHref={phaseHref} />
                     <PhaseActions {...actions} epic={epic} phase={p} status={status} depsUnmet={depsUnmet} />
                   </div>
-                  {/* They govern exactly the Run and Retry on the line above. */}
-                  {status !== 'done' && p.runState !== 'running' && (
+                  {/* They govern exactly the Run and Retry on the line above, so they
+                      show where starting a run is the next move: not while the phase
+                      waits on the operator. An open phase has them too. */}
+                  {status !== 'done' && p.runState !== 'running' && !phaseNeedsYou(p) && (
                     <div className="mt-1.5 flex flex-wrap items-center justify-end gap-x-3 gap-y-1">
                       <PhaseRunModelPicker
                         value={actions.phaseRunModel}
