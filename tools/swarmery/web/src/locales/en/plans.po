@@ -17,7 +17,7 @@ msgstr ""
 msgid " — agent {agent}"
 msgstr " — agent {agent}"
 
-#: src/pages/Plans.tsx
+#: src/pages/plans/PlanSessions.tsx
 msgid " · live"
 msgstr " · live"
 
@@ -94,7 +94,7 @@ msgstr "{count, plural, one {# stage} few {# stages} many {# stages} other {# st
 msgid "{day} at {time}"
 msgstr "{day} at {time}"
 
-#: src/pages/Plans.tsx
+#: src/pages/plans/PlanDetailPanel.tsx
 msgid "{docCount, plural, one {# doc} few {# docs} many {# docs} other {# docs}}"
 msgstr "{docCount, plural, one {# doc} few {# docs} many {# docs} other {# docs}}"
 
@@ -102,7 +102,7 @@ msgstr "{docCount, plural, one {# doc} few {# docs} many {# docs} other {# docs}
 msgid "{docCount, plural, one {# plan doc will change on disk: {docs}. This is the one irreversible step.} few {# plan docs will change on disk: {docs}. This is the one irreversible step.} many {# plan docs will change on disk: {docs}. This is the one irreversible step.} other {# plan docs will change on disk: {docs}. This is the one irreversible step.}}"
 msgstr "{docCount, plural, one {# plan doc will change on disk: {docs}. This is the one irreversible step.} few {# plan docs will change on disk: {docs}. This is the one irreversible step.} many {# plan docs will change on disk: {docs}. This is the one irreversible step.} other {# plan docs will change on disk: {docs}. This is the one irreversible step.}}"
 
-#: src/pages/Plans.tsx
+#: src/pages/plans/phaseChips.tsx
 msgid "{done} of {total} checkboxes done"
 msgstr "{done} of {total} checkboxes done"
 
@@ -110,7 +110,7 @@ msgstr "{done} of {total} checkboxes done"
 msgid "{done} of {total} criteria"
 msgstr "{done} of {total} criteria"
 
-#: src/pages/Plans.tsx
+#: src/pages/plans/PhaseDetailPanel.tsx
 msgid "{done}/{total} acceptance criteria met · full list on the Criteria tab"
 msgstr "{done}/{total} acceptance criteria met · full list on the Criteria tab"
 
@@ -122,11 +122,11 @@ msgstr "{done}/{total} criteria"
 msgid "{doneCount} done"
 msgstr "{doneCount} done"
 
-#: src/pages/Plans.tsx
+#: src/pages/plans/PhaseRunPickers.tsx
 msgid "{first} → fell back to {last}"
 msgstr "{first} → fell back to {last}"
 
-#: src/pages/Plans.tsx
+#: src/pages/plans/PlanDetailPanel.tsx
 msgid "{from} → {docPath} (rename)"
 msgstr "{from} → {docPath} (rename)"
 
@@ -214,7 +214,7 @@ msgstr "{tab} · Phase {seq} — {title} · {tail}"
 msgid "{ticked} of the {total} criteria ticked"
 msgstr "{ticked} of the {total} criteria ticked"
 
-#: src/pages/Plans.tsx
+#: src/pages/plans/PlanDetailPanel.tsx
 msgid "{title} — plan details"
 msgstr "{title} — plan details"
 
@@ -230,7 +230,7 @@ msgstr "{title} lane"
 msgid "{title}: {count} findings"
 msgstr "{title}: {count} findings"
 
-#: src/pages/Plans.tsx
+#: src/pages/plans/PhaseRunPickers.tsx
 msgid "{turns, plural, one {{model} (# turn)} few {{model} (# turns)} many {{model} (# turns)} other {{model} (# turns)}}"
 msgstr "{turns, plural, one {{model} (# turn)} few {{model} (# turns)} many {{model} (# turns)} other {{model} (# turns)}}"
 
@@ -258,7 +258,7 @@ msgstr "▶ Run"
 msgid "▶ run plan"
 msgstr "▶ run plan"
 
-#: src/pages/Plans.tsx
+#: src/pages/plans/PhaseList.tsx
 #: src/pages/plans/PlanHeader.tsx
 msgid "✓ summary"
 msgstr "✓ summary"
@@ -328,17 +328,17 @@ msgid "a small"
 msgstr "a small"
 
 #: src/pages/Plans.tsx
-#: src/pages/Plans.tsx
-#: src/pages/Plans.tsx
+#: src/pages/plans/PhaseDetailPanel.tsx
+#: src/pages/plans/PhaseList.tsx
 msgid "a whole-plan run is executing this plan"
 msgstr "a whole-plan run is executing this plan"
 
 #: src/pages/planning/RunningPlanPanel.tsx
-#: src/pages/Plans.tsx
+#: src/pages/plans/PhaseDetailPanel.tsx
 msgid "acceptance criteria"
 msgstr "acceptance criteria"
 
-#: src/pages/Plans.tsx
+#: src/pages/plans/PhaseList.tsx
 msgid "activated"
 msgstr "activated"
 
@@ -346,7 +346,7 @@ msgstr "activated"
 msgid "active"
 msgstr "active"
 
-#: src/pages/Plans.tsx
+#: src/pages/plans/phaseChips.tsx
 msgid "active · {ago} ago"
 msgstr "active · {ago} ago"
 
@@ -370,7 +370,7 @@ msgstr "agent"
 msgid "agent's full report"
 msgstr "agent's full report"
 
-#: src/pages/Plans.tsx
+#: src/pages/plans/PlanSessions.tsx
 msgid "all ({totalCount})"
 msgstr "all ({totalCount})"
 
@@ -378,7 +378,7 @@ msgstr "all ({totalCount})"
 msgid "all landed"
 msgstr "all landed"
 
-#: src/pages/Plans.tsx
+#: src/pages/plans/EpicDetail.tsx
 msgid "all phases"
 msgstr "all phases"
 
@@ -414,7 +414,7 @@ msgstr "answer the planner…"
 msgid "answering…"
 msgstr "answering…"
 
-#: src/pages/Plans.tsx
+#: src/pages/plans/PlanDetailPanel.tsx
 msgid "applied"
 msgstr "applied"
 
@@ -510,7 +510,7 @@ msgstr "Back"
 msgid "back in the list; runs and history stayed"
 msgstr "back in the list; runs and history stayed"
 
-#: src/pages/Plans.tsx
+#: src/pages/plans/EpicDetail.tsx
 msgid "back to the phase list (Esc)"
 msgstr "back to the phase list (Esc)"
 
@@ -522,7 +522,7 @@ msgstr "backfilled"
 msgid "bands & outcome"
 msgstr "bands & outcome"
 
-#: src/pages/Plans.tsx
+#: src/pages/plans/phaseChips.tsx
 msgid "blocked"
 msgstr "blocked"
 
@@ -565,8 +565,8 @@ msgstr "cancel"
 #: src/pages/planning/RefineModal.tsx
 #: src/pages/planning/ReviseModal.tsx
 #: src/pages/planning/RevisionReview.tsx
-#: src/pages/Plans.tsx
-#: src/pages/Plans.tsx
+#: src/pages/plans/PhaseDetailPanel.tsx
+#: src/pages/plans/PhaseList.tsx
 #: src/pages/plans/PlanRunControls.tsx
 #: src/pages/Routines.tsx
 msgid "Cancel"
@@ -685,11 +685,11 @@ msgstr "counting…"
 msgid "counts per chip"
 msgstr "counts per chip"
 
-#: src/pages/Plans.tsx
+#: src/pages/plans/PlanDetailPanel.tsx
 msgid "coverage"
 msgstr "coverage"
 
-#: src/pages/Plans.tsx
+#: src/pages/plans/PlanDetailPanel.tsx
 msgid "covered by phase {phase} — {name}"
 msgstr "covered by phase {phase} — {name}"
 
@@ -697,7 +697,7 @@ msgstr "covered by phase {phase} — {name}"
 msgid "Create"
 msgstr "Create"
 
-#: src/pages/Plans.tsx
+#: src/pages/plans/PlanDetailPanel.tsx
 msgid "created {created}"
 msgstr "created {created}"
 
@@ -713,7 +713,7 @@ msgstr "Criteria"
 msgid "criteria to untick"
 msgstr "criteria to untick"
 
-#: src/pages/Plans.tsx
+#: src/pages/plans/PhaseDetailPanel.tsx
 msgid "criteria…"
 msgstr "criteria…"
 
@@ -737,11 +737,11 @@ msgstr "daemon review"
 msgid "daily at {time}"
 msgstr "daily at {time}"
 
-#: src/pages/Plans.tsx
+#: src/pages/plans/PlanDetailPanel.tsx
 msgid "decided {decided}"
 msgstr "decided {decided}"
 
-#: src/pages/Plans.tsx
+#: src/pages/plans/PlanDetailPanel.tsx
 msgid "decided {decided} by {by}"
 msgstr "decided {decided} by {by}"
 
@@ -771,13 +771,13 @@ msgstr "Delete routine?"
 msgid "Delete this routine"
 msgstr "Delete this routine"
 
-#: src/pages/Plans.tsx
-#: src/pages/Plans.tsx
+#: src/pages/plans/PhaseDetailPanel.tsx
+#: src/pages/plans/PhaseList.tsx
 msgid "dependency pending"
 msgstr "dependency pending"
 
-#: src/pages/Plans.tsx
-#: src/pages/Plans.tsx
+#: src/pages/plans/PhaseDetailPanel.tsx
+#: src/pages/plans/PhaseList.tsx
 msgid "dependency resolved"
 msgstr "dependency resolved"
 
@@ -822,7 +822,7 @@ msgstr "Discard new routine?"
 msgid "Discard note?"
 msgstr "Discard note?"
 
-#: src/pages/Plans.tsx
+#: src/pages/plans/planDetailShell.tsx
 msgid "Discard unsaved changes to {path}?"
 msgstr "Discard unsaved changes to {path}?"
 
@@ -840,8 +840,8 @@ msgstr "dismiss notice"
 msgid "dispatch an implementer + a fresh reviewer per phase"
 msgstr "dispatch an implementer + a fresh reviewer per phase"
 
-#: src/pages/Plans.tsx
-#: src/pages/Plans.tsx
+#: src/pages/plans/PhaseDetailPanel.tsx
+#: src/pages/plans/PlanDetailPanel.tsx
 msgid "doc"
 msgstr "doc"
 
@@ -849,12 +849,12 @@ msgstr "doc"
 msgid "doc copy mismatch"
 msgstr "doc copy mismatch"
 
-#: src/pages/Plans.tsx
+#: src/pages/plans/PhaseRunPickers.tsx
 msgid "doc: {shortName}"
 msgstr "doc: {shortName}"
 
-#: src/pages/Plans.tsx
-#: src/pages/Plans.tsx
+#: src/pages/plans/PhaseDetailPanel.tsx
+#: src/pages/plans/planDetailShell.tsx
 msgid "doc…"
 msgstr "doc…"
 
@@ -862,7 +862,7 @@ msgstr "doc…"
 msgid "doing nothing"
 msgstr "doing nothing"
 
-#: src/pages/Plans.tsx
+#: src/pages/plans/phaseChips.tsx
 #: src/pages/plans/plansTarget.ts
 msgid "done"
 msgstr "done"
@@ -904,7 +904,7 @@ msgstr "e.g. Add a bulk-export button to the reports page that streams a CSV…"
 msgid "Edit"
 msgstr "Edit"
 
-#: src/pages/Plans.tsx
+#: src/pages/plans/PhaseList.tsx
 msgid "edit doc"
 msgstr "edit doc"
 
@@ -920,7 +920,7 @@ msgstr "edit routine"
 msgid "Edit routine"
 msgstr "Edit routine"
 
-#: src/pages/Plans.tsx
+#: src/pages/plans/phaseChips.tsx
 msgid "edited {ago} ago"
 msgstr "edited {ago} ago"
 
@@ -928,7 +928,7 @@ msgstr "edited {ago} ago"
 msgid "edited {edited}"
 msgstr "edited {edited}"
 
-#: src/pages/Plans.tsx
+#: src/pages/plans/PhaseRunPickers.tsx
 msgid "effort"
 msgstr "effort"
 
@@ -983,8 +983,8 @@ msgstr "evidence"
 msgid "execution mode"
 msgstr "execution mode"
 
-#: src/pages/Plans.tsx
-#: src/pages/Plans.tsx
+#: src/pages/plans/PhaseDetailPanel.tsx
+#: src/pages/plans/PlanDetailPanel.tsx
 msgid "execution record"
 msgstr "execution record"
 
@@ -1001,12 +1001,12 @@ msgid "expensive to change"
 msgstr "expensive to change"
 
 #: src/pages/PlanningMode.tsx
-#: src/pages/Plans.tsx
+#: src/pages/plans/PhaseRunPickers.tsx
 msgid "fable 5.1 — most capable, ~2.5× cost"
 msgstr "fable 5.1 — most capable, ~2.5× cost"
 
-#: src/pages/Plans.tsx
-#: src/pages/Plans.tsx
+#: src/pages/plans/phaseChips.tsx
+#: src/pages/plans/PlanDetailPanel.tsx
 msgid "failed"
 msgstr "failed"
 
@@ -1134,8 +1134,8 @@ msgstr "hand the whole plan to one agent, headlessly, in an isolated worktree"
 msgid "happened"
 msgstr "happened"
 
-#: src/pages/Plans.tsx
-#: src/pages/Plans.tsx
+#: src/pages/plans/PhaseDetailPanel.tsx
+#: src/pages/plans/PhaseList.tsx
 msgid "headless run in progress"
 msgstr "headless run in progress"
 
@@ -1147,7 +1147,7 @@ msgstr "held"
 msgid "hide {id}"
 msgstr "hide {id}"
 
-#: src/pages/Plans.tsx
+#: src/pages/plans/PhaseRunPickers.tsx
 msgid "high — implementation"
 msgstr "high — implementation"
 
@@ -1156,7 +1156,7 @@ msgid "high — planning"
 msgstr "high — planning"
 
 #: src/pages/Board.tsx
-#: src/pages/Plans.tsx
+#: src/pages/plans/PlanDetailPanel.tsx
 msgid "history"
 msgstr "history"
 
@@ -1171,7 +1171,7 @@ msgstr "History"
 msgid "hourly at :{minute}"
 msgstr "hourly at :{minute}"
 
-#: src/pages/Plans.tsx
+#: src/pages/plans/PhaseRunPickers.tsx
 msgid "how hard every Run phase / Retry run on this plan thinks. Leave it on the default to let each phase doc's own **Effort:** line decide (and the daemon's knob where a doc declares none); choosing one here overrides every doc on the plan. Note that NO effort is not the cheap end — an unpinned claude run thinks at xhigh, the deepest setting. The whole-plan run is not affected."
 msgstr "how hard every Run phase / Retry run on this plan thinks. Leave it on the default to let each phase doc's own **Effort:** line decide (and the daemon's knob where a doc declares none); choosing one here overrides every doc on the plan. Note that NO effort is not the cheap end — an unpinned claude run thinks at xhigh, the deepest setting. The whole-plan run is not affected."
 
@@ -1188,8 +1188,8 @@ msgstr "id"
 msgid "in a failure"
 msgstr "in a failure"
 
-#: src/pages/Plans.tsx
-#: src/pages/Plans.tsx
+#: src/pages/plans/PhaseDetailPanel.tsx
+#: src/pages/plans/PlanDetailPanel.tsx
 msgid "in plain words"
 msgstr "in plain words"
 
@@ -1202,11 +1202,11 @@ msgstr "In plain words"
 msgid "incomplete"
 msgstr "incomplete"
 
-#: src/pages/Plans.tsx
+#: src/pages/plans/PlanSessions.tsx
 msgid "inferred"
 msgstr "inferred"
 
-#: src/pages/Plans.tsx
+#: src/pages/plans/PlanSessions.tsx
 msgid "inferred from files this session edited under plan/"
 msgstr "inferred from files this session edited under plan/"
 
@@ -1250,7 +1250,7 @@ msgstr "last {lastRun}"
 msgid "last landing failure: {landingError}"
 msgstr "last landing failure: {landingError}"
 
-#: src/pages/Plans.tsx
+#: src/pages/plans/phaseChips.tsx
 msgid "last run: done"
 msgstr "last run: done"
 
@@ -1266,11 +1266,11 @@ msgstr "legacy review"
 msgid "let the run-plan skill triage the route from the phase DAG"
 msgstr "let the run-plan skill triage the route from the phase DAG"
 
-#: src/pages/Plans.tsx
+#: src/pages/plans/PlanSessions.tsx
 msgid "linked"
 msgstr "linked"
 
-#: src/pages/Plans.tsx
+#: src/pages/plans/PlanSessions.tsx
 msgid "linked to this plan by the daemon"
 msgstr "linked to this plan by the daemon"
 
@@ -1301,7 +1301,7 @@ msgid "looks like a landing/manual criterion — a run cannot close it"
 msgstr "looks like a landing/manual criterion — a run cannot close it"
 
 #: src/pages/PlanningMode.tsx
-#: src/pages/Plans.tsx
+#: src/pages/plans/PhaseRunPickers.tsx
 msgid "low — mechanical work"
 msgstr "low — mechanical work"
 
@@ -1338,12 +1338,12 @@ msgid "mark expensive"
 msgstr "mark expensive"
 
 #: src/pages/PlanningMode.tsx
-#: src/pages/Plans.tsx
+#: src/pages/plans/PhaseRunPickers.tsx
 msgid "max — no ceiling"
 msgstr "max — no ceiling"
 
 #: src/pages/PlanningMode.tsx
-#: src/pages/Plans.tsx
+#: src/pages/plans/PhaseRunPickers.tsx
 msgid "medium — scoped work"
 msgstr "medium — scoped work"
 
@@ -1446,7 +1446,7 @@ msgstr "no"
 msgid "no {filterLabel} plans"
 msgstr "no {filterLabel} plans"
 
-#: src/pages/Plans.tsx
+#: src/pages/plans/phaseChips.tsx
 msgid "no activity · {ago}"
 msgstr "no activity · {ago}"
 
@@ -1454,7 +1454,7 @@ msgstr "no activity · {ago}"
 msgid "no areas to compare"
 msgstr "no areas to compare"
 
-#: src/pages/Plans.tsx
+#: src/pages/plans/PhaseDetailPanel.tsx
 msgid "no checkboxes in this doc"
 msgstr "no checkboxes in this doc"
 
@@ -1494,11 +1494,11 @@ msgstr "No open or merged {changeShort} found for {branch} — push and open one
 msgid "No open or merged {changeShort} found for this phase's run branch — push and open one here, or open it on the host and look again."
 msgstr "No open or merged {changeShort} found for this phase's run branch — push and open one here, or open it on the host and look again."
 
-#: src/pages/Plans.tsx
+#: src/pages/plans/PlanDetailPanel.tsx
 msgid "no phase declares it covers this criterion"
 msgstr "no phase declares it covers this criterion"
 
-#: src/pages/Plans.tsx
+#: src/pages/plans/phaseChips.tsx
 msgid "no phase-doc edits for a while — the executor may be stuck"
 msgstr "no phase-doc edits for a while — the executor may be stuck"
 
@@ -1526,7 +1526,7 @@ msgstr "no playbooks"
 msgid "no reason recorded"
 msgstr "no reason recorded"
 
-#: src/pages/Plans.tsx
+#: src/pages/plans/PlanDetailPanel.tsx
 msgid "no revisions — \"Revise plan\" in the action row starts one"
 msgstr "no revisions — \"Revise plan\" in the action row starts one"
 
@@ -1542,19 +1542,19 @@ msgstr "No runs yet."
 msgid "no schedule"
 msgstr "no schedule"
 
-#: src/pages/Plans.tsx
+#: src/pages/plans/PlanSessions.tsx
 msgid "no sessions for this phase"
 msgstr "no sessions for this phase"
 
-#: src/pages/Plans.tsx
+#: src/pages/plans/PlanSessions.tsx
 msgid "no sessions ran this plan"
 msgstr "no sessions ran this plan"
 
-#: src/pages/Plans.tsx
+#: src/pages/plans/PhaseDetailPanel.tsx
 msgid "no summary of the work written — the executor left neither a <0>## Completion Report</0> nor an <1>## Execution record</1> section in this phase doc"
 msgstr "no summary of the work written — the executor left neither a <0>## Completion Report</0> nor an <1>## Execution record</1> section in this phase doc"
 
-#: src/pages/Plans.tsx
+#: src/pages/plans/PlanDetailPanel.tsx
 msgid "no summary written for this phase"
 msgstr "no summary written for this phase"
 
@@ -1694,7 +1694,7 @@ msgstr "Open in Review →"
 msgid "open in terminal"
 msgstr "open in terminal"
 
-#: src/pages/Plans.tsx
+#: src/pages/plans/PhaseList.tsx
 msgid "open Phase {seq} — {name} details"
 msgstr "open Phase {seq} — {name} details"
 
@@ -1730,7 +1730,7 @@ msgstr "operator"
 msgid "Operator"
 msgstr "Operator"
 
-#: src/pages/Plans.tsx
+#: src/pages/plans/PhaseRunPickers.tsx
 msgid "opus 5.5"
 msgstr "opus 5.5"
 
@@ -1768,15 +1768,15 @@ msgstr "paused · nothing new starts until you resume"
 msgid "paused · the run in flight keeps going; nothing new starts after it"
 msgstr "paused · the run in flight keeps going; nothing new starts after it"
 
-#: src/pages/Plans.tsx
+#: src/pages/plans/phaseChips.tsx
 msgid "pending"
 msgstr "pending"
 
-#: src/pages/Plans.tsx
+#: src/pages/plans/PhaseRunPickers.tsx
 msgid "per-doc, else {PHASE_RUN_DEFAULT_MODEL_LABEL} (no model sent)"
 msgstr "per-doc, else {PHASE_RUN_DEFAULT_MODEL_LABEL} (no model sent)"
 
-#: src/pages/Plans.tsx
+#: src/pages/plans/PhaseRunPickers.tsx
 msgid "per-doc, else high (no effort sent)"
 msgstr "per-doc, else high (no effort sent)"
 
@@ -1792,7 +1792,7 @@ msgstr "Permanently delete <0>{routineName}</0> and its run history? This cannot
 msgid "permission pending"
 msgstr "permission pending"
 
-#: src/pages/Plans.tsx
+#: src/pages/plans/PlanDetailPanel.tsx
 msgid "phase {phase} covers {cid}, which the spec never declares"
 msgstr "phase {phase} covers {cid}, which the spec never declares"
 
@@ -1804,10 +1804,10 @@ msgstr "Phase {position} of {count}"
 msgid "phase {seq}"
 msgstr "phase {seq}"
 
-#: src/pages/Plans.tsx
-#: src/pages/Plans.tsx
 #: src/pages/plans/PhaseCard.tsx
+#: src/pages/plans/PhaseList.tsx
 #: src/pages/plans/PhasePanel.tsx
+#: src/pages/plans/PlanDetailPanel.tsx
 msgid "Phase {seq}"
 msgstr "Phase {seq}"
 
@@ -1819,12 +1819,12 @@ msgstr "Phase {seq} not found in {planTitle}"
 msgid "phase details tabs"
 msgstr "phase details tabs"
 
-#: src/pages/Plans.tsx
+#: src/pages/plans/PhaseRunPickers.tsx
 msgid "phase run effort"
 msgstr "phase run effort"
 
-#: src/pages/Plans.tsx
-#: src/pages/Plans.tsx
+#: src/pages/plans/PhaseRunPickers.tsx
+#: src/pages/plans/PhaseRunPickers.tsx
 msgid "phase run model"
 msgstr "phase run model"
 
@@ -1852,10 +1852,10 @@ msgstr "pick one"
 msgid "Places where the agent changed the plan"
 msgstr "Places where the agent changed the plan"
 
-#: src/pages/Plans.tsx
-#: src/pages/Plans.tsx
+#: src/pages/plans/PlanDetailPanel.tsx
 #: src/pages/plans/PlanHeader.tsx
 #: src/pages/plans/PlanHeader.tsx
+#: src/pages/plans/PlanSessions.tsx
 msgid "plan"
 msgstr "plan"
 
@@ -1876,17 +1876,17 @@ msgstr "Plan #{id} not found"
 msgid "plan actions"
 msgstr "plan actions"
 
-#: src/pages/Plans.tsx
+#: src/pages/plans/PlanDetailPanel.tsx
 msgid "plan details tabs"
 msgstr "plan details tabs"
 
-#: src/pages/Plans.tsx
+#: src/pages/plans/planDetailShell.tsx
 msgid "plan doc source"
 msgstr "plan doc source"
 
 #: src/pages/Plans.tsx
-#: src/pages/Plans.tsx
-#: src/pages/Plans.tsx
+#: src/pages/plans/PhaseDetailPanel.tsx
+#: src/pages/plans/PhaseList.tsx
 #: src/pages/plans/PlanHeader.tsx
 msgid "plan is not active"
 msgstr "plan is not active"
@@ -1915,11 +1915,11 @@ msgstr "plan run failed"
 msgid "plan saved at <0>{planDir}</0>"
 msgstr "plan saved at <0>{planDir}</0>"
 
-#: src/pages/Plans.tsx
+#: src/pages/plans/PlanSessions.tsx
 msgid "plan sessions"
 msgstr "plan sessions"
 
-#: src/pages/Plans.tsx
+#: src/pages/plans/PlanDetailPanel.tsx
 msgid "plan summary"
 msgstr "plan summary"
 
@@ -2071,11 +2071,11 @@ msgstr "Questions, answers, and AI reasoning for each plan update."
 msgid "Queued — waiting for a dispatch slot"
 msgstr "Queued — waiting for a dispatch slot"
 
-#: src/pages/Plans.tsx
+#: src/pages/plans/phaseChips.tsx
 msgid "ran · {done}/{total}"
 msgstr "ran · {done}/{total}"
 
-#: src/pages/Plans.tsx
+#: src/pages/plans/phaseChips.tsx
 msgid "ran · no progress"
 msgstr "ran · no progress"
 
@@ -2091,7 +2091,7 @@ msgstr "read the change request's status from the code host now"
 msgid "reading the repo and preparing the next question…"
 msgstr "reading the repo and preparing the next question…"
 
-#: src/pages/Plans.tsx
+#: src/pages/plans/PlanDetailPanel.tsx
 msgid "readme…"
 msgstr "readme…"
 
@@ -2141,7 +2141,7 @@ msgstr "Reject"
 msgid "Reject this revision?"
 msgstr "Reject this revision?"
 
-#: src/pages/Plans.tsx
+#: src/pages/plans/PlanDetailPanel.tsx
 msgid "rejected"
 msgstr "rejected"
 
@@ -2209,8 +2209,8 @@ msgstr "resolved in round {resolvedBy}"
 msgid "resolved in the plan round"
 msgstr "resolved in the plan round"
 
-#: src/pages/Plans.tsx
-#: src/pages/Plans.tsx
+#: src/pages/plans/PhaseDetailPanel.tsx
+#: src/pages/plans/PhaseList.tsx
 msgid "Retry run"
 msgstr "Retry run"
 
@@ -2230,7 +2230,7 @@ msgstr "Return to agent…"
 msgid "returned to agent"
 msgstr "returned to agent"
 
-#: src/pages/Plans.tsx
+#: src/pages/plans/planDetailShell.tsx
 msgid "revert"
 msgstr "revert"
 
@@ -2338,11 +2338,11 @@ msgstr "revision…"
 msgid "Revisions"
 msgstr "Revisions"
 
-#: src/pages/Plans.tsx
+#: src/pages/plans/PlanDetailPanel.tsx
 msgid "Revisions ({staged})"
 msgstr "Revisions ({staged})"
 
-#: src/pages/Plans.tsx
+#: src/pages/plans/PlanDetailPanel.tsx
 msgid "revisions…"
 msgstr "revisions…"
 
@@ -2362,11 +2362,11 @@ msgstr "Routines"
 msgid "routines…"
 msgstr "routines…"
 
-#: src/pages/Plans.tsx
+#: src/pages/plans/EpicDetail.tsx
 msgid "Run anyway"
 msgstr "Run anyway"
 
-#: src/pages/Plans.tsx
+#: src/pages/plans/PhaseDetailPanel.tsx
 msgid "run failed"
 msgstr "run failed"
 
@@ -2382,8 +2382,8 @@ msgstr "Run history"
 msgid "Run now"
 msgstr "Run now"
 
-#: src/pages/Plans.tsx
-#: src/pages/Plans.tsx
+#: src/pages/plans/PhaseDetailPanel.tsx
+#: src/pages/plans/PhaseList.tsx
 msgid "Run phase"
 msgstr "Run phase"
 
@@ -2391,12 +2391,12 @@ msgstr "Run phase"
 msgid "run started"
 msgstr "run started"
 
-#: src/pages/Plans.tsx
+#: src/pages/plans/EpicDetail.tsx
 msgid "run this phase again even though nothing has changed since it blocked"
 msgstr "run this phase again even though nothing has changed since it blocked"
 
-#: src/pages/Plans.tsx
-#: src/pages/Plans.tsx
+#: src/pages/plans/PhaseDetailPanel.tsx
+#: src/pages/plans/PhaseList.tsx
 msgid "run this phase headlessly in an isolated worktree"
 msgstr "run this phase headlessly in an isolated worktree"
 
@@ -2404,13 +2404,13 @@ msgstr "run this phase headlessly in an isolated worktree"
 msgid "run_one (one catch-up)"
 msgstr "run_one (one catch-up)"
 
-#: src/pages/Plans.tsx
+#: src/pages/plans/phaseChips.tsx
 msgid "running"
 msgstr "running"
 
 #: src/pages/Board.tsx
-#: src/pages/Plans.tsx
-#: src/pages/Plans.tsx
+#: src/pages/plans/PhaseDetailPanel.tsx
+#: src/pages/plans/PhaseList.tsx
 msgid "Running"
 msgstr "Running"
 
@@ -2430,20 +2430,20 @@ msgstr "Runs"
 msgid "runs…"
 msgstr "runs…"
 
-#: src/pages/Plans.tsx
+#: src/pages/plans/planDetailShell.tsx
 #: src/pages/Routines.tsx
 msgid "Save"
 msgstr "Save"
 
-#: src/pages/Plans.tsx
+#: src/pages/plans/planDetailShell.tsx
 msgid "saved"
 msgstr "saved"
 
-#: src/pages/Plans.tsx
+#: src/pages/plans/planDetailShell.tsx
 msgid "saved · backup written"
 msgstr "saved · backup written"
 
-#: src/pages/Plans.tsx
+#: src/pages/plans/planDetailShell.tsx
 msgid "saving…"
 msgstr "saving…"
 
@@ -2487,24 +2487,24 @@ msgstr "sending…"
 msgid "Sends the phase back to its agent: your feedback is appended to the next run's prompt."
 msgstr "Sends the phase back to its agent: your feedback is appended to the next run's prompt."
 
-#: src/pages/Plans.tsx
+#: src/pages/plans/PhaseList.tsx
 #: src/pages/plans/PlanRunControls.tsx
 msgid "session"
 msgstr "session"
 
-#: src/pages/Plans.tsx
+#: src/pages/plans/PhaseDetailPanel.tsx
 msgid "session →"
 msgstr "session →"
 
-#: src/pages/Plans.tsx
+#: src/pages/plans/PlanSessions.tsx
 msgid "session scope: all {totalCount} sessions of the plan"
 msgstr "session scope: all {totalCount} sessions of the plan"
 
-#: src/pages/Plans.tsx
+#: src/pages/plans/PlanSessions.tsx
 msgid "session scope: phase {seqLabel} only, {phaseCount} of {totalCount} sessions"
 msgstr "session scope: phase {seqLabel} only, {phaseCount} of {totalCount} sessions"
 
-#: src/pages/Plans.tsx
+#: src/pages/plans/PlanSessions.tsx
 msgid "sessions"
 msgstr "sessions"
 
@@ -2532,11 +2532,11 @@ msgstr "Show fewer"
 msgid "show the score breakdown"
 msgstr "show the score breakdown"
 
-#: src/pages/Plans.tsx
+#: src/pages/plans/PlanSessions.tsx
 msgid "showing every session of the plan — click to narrow to this phase"
 msgstr "showing every session of the plan — click to narrow to this phase"
 
-#: src/pages/Plans.tsx
+#: src/pages/plans/PlanSessions.tsx
 msgid "showing this phase only — click for every session of the plan"
 msgstr "showing this phase only — click for every session of the plan"
 
@@ -2554,7 +2554,7 @@ msgid "skip (drop missed)"
 msgstr "skip (drop missed)"
 
 #: src/pages/PlanningMode.tsx
-#: src/pages/Plans.tsx
+#: src/pages/plans/PhaseRunPickers.tsx
 msgid "sonnet 5 — faster, cheaper"
 msgstr "sonnet 5 — faster, cheaper"
 
@@ -2574,7 +2574,7 @@ msgstr "spec {specCovered}/{specTotal}"
 msgid "spec coverage — criteria covered by at least one phase"
 msgstr "spec coverage — criteria covered by at least one phase"
 
-#: src/pages/Plans.tsx
+#: src/pages/plans/PlanDetailPanel.tsx
 msgid "spec…"
 msgstr "spec…"
 
@@ -2586,11 +2586,11 @@ msgstr "spent"
 msgid "stage chain"
 msgstr "stage chain"
 
-#: src/pages/Plans.tsx
+#: src/pages/plans/PlanDetailPanel.tsx
 msgid "staged"
 msgstr "staged"
 
-#: src/pages/Plans.tsx
+#: src/pages/plans/PlanDetailPanel.tsx
 msgid "staged — awaiting your decision"
 msgstr "staged — awaiting your decision"
 
@@ -2631,7 +2631,7 @@ msgstr "Start planning"
 msgid "Start revision"
 msgstr "Start revision"
 
-#: src/pages/Plans.tsx
+#: src/pages/plans/phaseChips.tsx
 msgid "started"
 msgstr "started"
 
@@ -2685,12 +2685,12 @@ msgstr "Submit answer"
 msgid "Summary"
 msgstr "Summary"
 
-#: src/pages/Plans.tsx
-#: src/pages/Plans.tsx
+#: src/pages/plans/PhaseDetailPanel.tsx
+#: src/pages/plans/PlanDetailPanel.tsx
 msgid "summary…"
 msgstr "summary…"
 
-#: src/pages/Plans.tsx
+#: src/pages/plans/PlanDetailPanel.tsx
 msgid "superseded"
 msgstr "superseded"
 
@@ -2742,7 +2742,7 @@ msgstr "the controller implements the phases itself, no dispatch"
 msgid "The diff was not measured, so we can't say which areas it touched."
 msgstr "The diff was not measured, so we can't say which areas it touched."
 
-#: src/pages/Plans.tsx
+#: src/pages/plans/phaseChips.tsx
 msgid "the executor is actively editing this phase doc"
 msgstr "the executor is actively editing this phase doc"
 
@@ -2766,7 +2766,7 @@ msgstr "The last run finished without ticking a single criterion."
 msgid "The last run ticked some criteria but did not finish the phase."
 msgstr "The last run ticked some criteria but did not finish the phase."
 
-#: src/pages/Plans.tsx
+#: src/pages/plans/PhaseRunPickers.tsx
 msgid "the last run used {runModel} (from its session)"
 msgstr "the last run used {runModel} (from its session)"
 
@@ -2774,7 +2774,7 @@ msgstr "the last run used {runModel} (from its session)"
 msgid "the live file changed since this revision was staged — reload before applying"
 msgstr "the live file changed since this revision was staged — reload before applying"
 
-#: src/pages/Plans.tsx
+#: src/pages/plans/PhaseRunPickers.tsx
 msgid "the model every Run phase / Retry run on this plan starts with. Leave it on the default to let each phase doc's own **Model:** line decide (and the daemon's knob where a doc declares none); choosing one here overrides every doc on the plan. The whole-plan run is not affected."
 msgstr "the model every Run phase / Retry run on this plan starts with. Leave it on the default to let each phase doc's own **Model:** line decide (and the daemon's knob where a doc declares none); choosing one here overrides every doc on the plan. The whole-plan run is not affected."
 
@@ -2794,15 +2794,15 @@ msgstr "The note you typed will be lost."
 msgid "the option the planner would pick itself"
 msgstr "the option the planner would pick itself"
 
-#: src/pages/Plans.tsx
+#: src/pages/plans/PhaseRunPickers.tsx
 msgid "the phase doc asks for {docModel} — this run will use it"
 msgstr "the phase doc asks for {docModel} — this run will use it"
 
-#: src/pages/Plans.tsx
+#: src/pages/plans/PhaseRunPickers.tsx
 msgid "the phase doc asks for {docModel}, but the picker above is set to {picked} and overrides it for this run"
 msgstr "the phase doc asks for {docModel}, but the picker above is set to {picked} and overrides it for this run"
 
-#: src/pages/Plans.tsx
+#: src/pages/plans/PhaseRunPickers.tsx
 msgid "the phase doc declares **Model:** {docModel}, which is not a model this daemon knows (opus, sonnet, fable) — a run will be refused until the line is fixed"
 msgstr "the phase doc declares **Model:** {docModel}, which is not a model this daemon knows (opus, sonnet, fable) — a run will be refused until the line is fixed"
 
@@ -2871,7 +2871,7 @@ msgstr "the reviewer wrote no readable kind: review block — its own words are 
 msgid "the run changed protected paths: {changedList}"
 msgstr "the run changed protected paths: {changedList}"
 
-#: src/pages/Plans.tsx
+#: src/pages/plans/phaseChips.tsx
 msgid "the run ended its turn with criteria unticked and was resumed {resumed}× — {tip}"
 msgstr "the run ended its turn with criteria unticked and was resumed {resumed}× — {tip}"
 
@@ -2879,11 +2879,11 @@ msgstr "the run ended its turn with criteria unticked and was resumed {resumed}�
 msgid "the run executes core's <0>run-plan</0> skill headlessly in an isolated worktree: it commits per phase but never pushes, and stops with PLAN BLOCKED if a phase needs a human."
 msgstr "the run executes core's <0>run-plan</0> skill headlessly in an isolated worktree: it commits per phase but never pushes, and stops with PLAN BLOCKED if a phase needs a human."
 
-#: src/pages/Plans.tsx
+#: src/pages/plans/phaseChips.tsx
 msgid "the run failed — click for why"
 msgstr "the run failed — click for why"
 
-#: src/pages/Plans.tsx
+#: src/pages/plans/phaseChips.tsx
 msgid "the run finished but ticked no acceptance criteria — click for why"
 msgstr "the run finished but ticked no acceptance criteria — click for why"
 
@@ -2895,15 +2895,15 @@ msgstr "the run is still live"
 msgid "the run is still live — land it once it finishes"
 msgstr "the run is still live — land it once it finishes"
 
-#: src/pages/Plans.tsx
+#: src/pages/plans/phaseChips.tsx
 msgid "the run ticked every acceptance criterion"
 msgstr "the run ticked every acceptance criterion"
 
-#: src/pages/Plans.tsx
+#: src/pages/plans/phaseChips.tsx
 msgid "the run ticked every criterion ({total}/{total}); the doc has since changed to {done}/{total}"
 msgstr "the run ticked every criterion ({total}/{total}); the doc has since changed to {done}/{total}"
 
-#: src/pages/Plans.tsx
+#: src/pages/plans/phaseChips.tsx
 msgid "the run ticked some criteria but did not finish the phase — click for why"
 msgstr "the run ticked some criteria but did not finish the phase — click for why"
 
@@ -2927,7 +2927,7 @@ msgstr "the whole plan is running{agentPart} (mode: {mode})"
 msgid "the wizard finished; its staged diff is being picked up by the daemon…"
 msgstr "the wizard finished; its staged diff is being picked up by the daemon…"
 
-#: src/pages/Plans.tsx
+#: src/pages/plans/PhaseDetailPanel.tsx
 msgid "this doc was changed by an applied revision {revisedAgo} — <0>see Revisions</0>"
 msgstr "this doc was changed by an applied revision {revisedAgo} — <0>see Revisions</0>"
 
@@ -2947,7 +2947,7 @@ msgstr "this phase declares no ## Forecast, so its run has nothing to be scored 
 msgid "This phase has no run branch yet — run it first; there is nothing to push."
 msgstr "This phase has no run branch yet — run it first; there is nothing to push."
 
-#: src/pages/Plans.tsx
+#: src/pages/plans/PlanSessions.tsx
 msgid "this phase has no sessions of its own — showing the whole plan; click to narrow anyway"
 msgstr "this phase has no sessions of its own — showing the whole plan; click to narrow anyway"
 
@@ -2967,11 +2967,11 @@ msgstr "This plan declares no decisions and no spec criteria in the machine shap
 msgid "This project sets vcs.forkRemote, and landing through a fork is not supported yet — remove it to land to origin, or push and open the {change} by hand."
 msgstr "This project sets vcs.forkRemote, and landing through a fork is not supported yet — remove it to land to origin, or push and open the {change} by hand."
 
-#: src/pages/Plans.tsx
+#: src/pages/plans/PhaseRunPickers.tsx
 msgid "this run changed model mid-flight: {trail}"
 msgstr "this run changed model mid-flight: {trail}"
 
-#: src/pages/Plans.tsx
+#: src/pages/plans/PhaseDetailPanel.tsx
 msgid "tick this criterion in the doc"
 msgstr "tick this criterion in the doc"
 
@@ -2996,7 +2996,7 @@ msgstr "turn {0}"
 msgid "type"
 msgstr "type"
 
-#: src/pages/Plans.tsx
+#: src/pages/plans/PhaseDetailPanel.tsx
 msgid "un-tick this criterion in the doc"
 msgstr "un-tick this criterion in the doc"
 
@@ -3004,7 +3004,7 @@ msgstr "un-tick this criterion in the doc"
 msgid "Unarchive"
 msgstr "Unarchive"
 
-#: src/pages/Plans.tsx
+#: src/pages/plans/PlanDetailPanel.tsx
 msgid "uncovered"
 msgstr "uncovered"
 
@@ -3027,11 +3027,11 @@ msgstr "unknown project — pick one from the switcher"
 msgid "unparsable"
 msgstr "unparsable"
 
-#: src/pages/Plans.tsx
+#: src/pages/plans/phaseChips.tsx
 msgid "unreported"
 msgstr "unreported"
 
-#: src/pages/Plans.tsx
+#: src/pages/plans/phaseChips.tsx
 msgid "unverified"
 msgstr "unverified"
 
@@ -3064,8 +3064,8 @@ msgstr "verify inconclusive"
 msgid "verifying…"
 msgstr "verifying…"
 
-#: src/pages/Plans.tsx
-#: src/pages/Plans.tsx
+#: src/pages/plans/PhaseDetailPanel.tsx
+#: src/pages/plans/PhaseList.tsx
 msgid "waiting on phase {waitingOn}"
 msgstr "waiting on phase {waitingOn}"
 
@@ -3102,12 +3102,12 @@ msgstr "what slipped through"
 msgid "what to fix on the next pass"
 msgstr "what to fix on the next pass"
 
-#: src/pages/Plans.tsx
-#: src/pages/Plans.tsx
+#: src/pages/plans/PhaseDetailPanel.tsx
+#: src/pages/plans/PlanDetailPanel.tsx
 msgid "what was done"
 msgstr "what was done"
 
-#: src/pages/Plans.tsx
+#: src/pages/plans/PhaseList.tsx
 msgid "what was done — the executor's Completion Report and execution record"
 msgstr "what was done — the executor's Completion Report and execution record"
 
@@ -3115,7 +3115,7 @@ msgstr "what was done — the executor's Completion Report and execution record"
 msgid "what was shipped — per-phase executed work"
 msgstr "what was shipped — per-phase executed work"
 
-#: src/pages/Plans.tsx
+#: src/pages/plans/phaseChips.tsx
 msgid "when this phase doc was last edited — no run is attached to it"
 msgstr "when this phase doc was last edited — no run is attached to it"
 
@@ -3132,7 +3132,7 @@ msgstr "where reality diverged"
 msgid "why"
 msgstr "why"
 
-#: src/pages/Plans.tsx
+#: src/pages/plans/PhaseDetailPanel.tsx
 msgid "why it did not move"
 msgstr "why it did not move"
 
@@ -3179,7 +3179,7 @@ msgid "written to the doc after the run had already changed another file — not
 msgstr "written to the doc after the run had already changed another file — not a prediction, so calibration skips it"
 
 #: src/pages/PlanningMode.tsx
-#: src/pages/Plans.tsx
+#: src/pages/plans/PhaseRunPickers.tsx
 msgid "xhigh — deepest, slowest"
 msgstr "xhigh — deepest, slowest"
 
