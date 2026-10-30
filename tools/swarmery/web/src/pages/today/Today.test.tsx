@@ -250,7 +250,7 @@ describe('Today', () => {
     expect(api.getNeedsYou).toHaveBeenCalledWith('orders-api');
     expect(api.fetchProjectRecommendations).toHaveBeenCalledWith('orders-api', 'verified,accepted,adopted');
     await waitFor(() => {
-      expect(within(screen.getByTestId('spend-week')).getByText('$35.00')).toBeTruthy();
+      expect(within(screen.getByTestId('spend-week')).getByText('$35')).toBeTruthy();
     });
     fireEvent.click(screen.getByRole('button', { name: /Today in detail/ }));
     expect(within(screen.getByTestId('today-detail')).getByText('project overview deck')).toBeTruthy();

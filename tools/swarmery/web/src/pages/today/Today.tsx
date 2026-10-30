@@ -34,7 +34,7 @@ import { buildFeed, feedLinks } from './feedModel';
 import { EventFeed } from './EventFeed';
 import { LiveNow } from './LiveNow';
 import { LoopMap } from './LoopMap';
-import { buildLoop, epicCounts } from './loopModel';
+import { buildLoop, epicCounts, sessionOutcomes } from './loopModel';
 import { SpendWeek } from './SpendWeek';
 import { WaitingOnYou } from './WaitingOnYou';
 
@@ -149,6 +149,7 @@ export function Today({ detail }: { detail: ReactNode }): JSX.Element {
       {
         epics,
         liveSessions: running.length,
+        ...sessionOutcomes(sessions, now),
         askingSessions: gates.size,
         phaseDecisions: needs.items.filter((i) => i.kind === 'phase_decision').length,
         stoppedPhases: counts.stoppedPhases,
@@ -165,7 +166,7 @@ export function Today({ detail }: { detail: ReactNode }): JSX.Element {
       slug,
       loadLastProject(),
     );
-  }, [epics, now, running.length, gates, needs.items, inbox.items, classifier, recs, slug]);
+  }, [epics, now, running.length, sessions, gates, needs.items, inbox.items, classifier, recs, slug]);
 
   const links = useMemo(() => feedLinks(slug, sessionHref), [slug, sessionHref]);
   const feed = useMemo(

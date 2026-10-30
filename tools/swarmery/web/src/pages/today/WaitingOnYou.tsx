@@ -1,5 +1,5 @@
-// "Waiting on you" (handoff §3): the first four blockers of the needs-you queue,
-// in that page's order. A row opens what it blocks on: the session, whose gate card
+// "Waiting on you" (handoff §3): the first four blockers of the needs-you queue:
+// sessions asking first, then guard stops, then the rest. A row opens what it blocks on: the session, whose gate card
 // decides it, or the phase. A plain permission can still be approved in place, as
 // the old home did: the action shows over the age on hover or keyboard focus, so at
 // rest the row is the design's one link.
@@ -9,12 +9,18 @@ import { useState } from 'react';
 import { resolveApproval } from '../../api';
 import type { NeedsYouItem } from '../../api/types';
 import { StateGlyph } from '../../components/place/StateGlyph';
-import { groupItems, itemGlyph, itemKey } from '../../lib/needsYou';
+import { itemGlyph, itemKey } from '../../lib/needsYou';
 import { compactSpan } from '../../lib/sessionsView';
 import { blockerHref, type FeedLinks } from './feedModel';
 import { PanelEmpty, PanelList, PanelRow, SectionHead, SectionLink } from './panel';
 
 export const WAITING_ROWS = 4;
+
+/** A session stands idle until answered, a stopped phase next, the rest can wait. */
+function urgency(item: NeedsYouItem): number {
+  if (item.sessionId > 0) return 0;
+  return item.kind === 'phase_decision' ? 1 : 2;
+}
 
 function ApproveButton({ requestId, onResolved }: { requestId: number; onResolved: () => void }): JSX.Element {
   const [busy, setBusy] = useState(false);
@@ -80,9 +86,7 @@ export function WaitingOnYou({
   onResolved: () => void;
 }): JSX.Element {
   const { t } = useLingui();
-  const top = groupItems(items)
-    .flatMap((g) => g.items)
-    .slice(0, WAITING_ROWS);
+  const top = [...items].sort((a, b) => urgency(a) - urgency(b)).slice(0, WAITING_ROWS);
   return (
     <section data-testid="waiting-on-you" className="min-w-0">
       <SectionHead label={t`Waiting on you`} tone="brand">

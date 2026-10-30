@@ -14,6 +14,9 @@ const DAYS = 7;
 
 const dayCost = (p: StatsSeriesPoint): number => p.cost_usd ?? 0;
 
+/** The week reads in whole dollars; a day keeps its cents. */
+const wholeDollars = (n: number | null): string => (n === null ? '—' : `$${String(Math.round(n))}`);
+
 export function SpendWeek({ slug }: { slug: string | null }): JSX.Element {
   const { t } = useLingui();
   const [series, setSeries] = useState<StatsSeriesPoint[] | null>(null);
@@ -38,7 +41,7 @@ export function SpendWeek({ slug }: { slug: string | null }): JSX.Element {
   return (
     <section data-testid="spend-week" className="mt-4 min-w-0">
       <SectionHead label={t`Spend · 7 days`}>
-        <span className="font-mono text-[10.5px] leading-[normal] text-ink-dim">{fmtCost(total)}</span>
+        <span className="font-mono text-[10.5px] leading-[normal] text-ink-dim">{wholeDollars(total)}</span>
       </SectionHead>
       {days.length > 0 && (
         <>
@@ -48,7 +51,7 @@ export function SpendWeek({ slug }: { slug: string | null }): JSX.Element {
                 key={p.day}
                 data-tip={fmtCost(p.cost_usd)}
                 style={{ height: `${String(top > 0 ? Math.round((dayCost(p) / top) * 100) : 0)}%` }}
-                className={`min-h-px flex-1 rounded-t-[2px] ${i === days.length - 1 ? 'bg-brand' : 'bg-line-strong'}`}
+                className={`min-h-px flex-1 rounded-t-[2px] ${i === days.length - 1 ? 'bg-amber' : 'bg-line-strong'}`}
               />
             ))}
           </div>

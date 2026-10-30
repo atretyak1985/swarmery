@@ -1,7 +1,6 @@
-// The swarmery link mod's live usage on a session — ONE renderer for the three
-// places that show it (Sessions card, SessionDetail header, the Today command
-// deck's Live now rows), so the wording, the thresholds and the source marker
-// cannot drift between them.
+// The swarmery link mod's live usage on a session, on the session's own detail.
+// List rows carry no chips (handoff §4), so this is the one renderer: the wording,
+// the thresholds and the source marker live here.
 //
 // What it draws, when the session carries `link`:
 //   ● source dot  — green "live from session mod" while link.live (the server's

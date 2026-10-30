@@ -28,6 +28,8 @@ function epic(status: Epic['status'], phases: EpicPhase[]): Epic {
 const ZERO: LoopInputs = {
   epics: [],
   liveSessions: 0,
+  finishedToday: 0,
+  failedToday: 0,
   askingSessions: 0,
   phaseDecisions: 0,
   stoppedPhases: 0,
@@ -103,7 +105,7 @@ describe('buildLoop', () => {
     const [plan, run, measure, learn, change] = stages;
     expect(plan?.n).toBe(1);
     expect(plan?.unit).toBe('plan');
-    expect(plan?.sentence).toBe('2 phases carry a forecast — what the planner expects before anything runs.');
+    expect(plan?.sentence).toBe('2 phases carry a forecast.');
     expect(run?.sentence).toBe('1 phase stopped with nothing done.');
     expect(measure?.sentence).toBe(
       `3 landed far from the plan. The classifier labelled ${fmtCount(1434)} sessions —`,
