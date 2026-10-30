@@ -1,15 +1,15 @@
 @import 'tailwindcss';
 
-/* Swarmery Canvas dark editorial theme (Swarmery-handoff/Canvas.dc.html) —
- * implemented as drawn. Tailwind v4 theme.
+/* Swarmery v4 theme (Swarmery v4.dc.html) — token NAMES are stable, the values
+ * come from the design (--bg2→surface, --bg3→surface2, --line2→line-strong,
+ * --ink3→ink-dim, --dim→ink-faint, --accent→brand). Tailwind v4 theme.
  *
- * Surfaces: warm near-black page (#0E0F12) under a faint amber corner glow;
- * card tone (#131519), a field tone (#15171C) for inputs / idle nav / bare
- * buttons, and a raised tone (#1B1E24) for hover fills, active nav, prompt
- * bubbles and inline code.
+ * Surfaces: warm near-black page (#0E0F12); card tone (#131519), a field tone
+ * (#15171C) for inputs / bare buttons, and a raised tone (#1A1C22) for hover
+ * fills, the active nav row, prompt bubbles and inline code.
  * Hairlines: graphite (#23262E) default, a stronger interactive variant
- * (#2A2E37) for chips/menus/fields, a strongest (#3A3F4A) for the active nav
- * row, and a soft inner divider (#1C1F26).
+ * (#30343D) for chips/menus/fields, a strongest (#3A3F4A), and a soft inner
+ * divider (#1C1F26).
  * Ink: WARM cream scale from #ECE7DF down to a faint #5C616B for mono labels.
  * Brand accent: amber #E8A13A — links, active nav, tabs, wordmark mark, cost.
  * Status set stays SEMANTIC: green = running/ok, amber = waiting/approval,
@@ -21,11 +21,12 @@
   --color-bg: #0e0f12; /* page background — warm near-black */
   --color-surface: #131519; /* cards, panels, sheets */
   --color-field: #15171c; /* inputs, idle nav pill, bare buttons */
-  --color-surface2: #1b1e24; /* raised / hover fill, active nav, prompt bubbles, code chips */
+  --color-surface2: #1a1c22; /* raised / hover fill, active nav, prompt bubbles, code chips */
+  --color-sel: var(--color-surface2); /* the selected list row (design --sel) */
 
   /* ---- hairlines ---- */
   --color-line: #23262e; /* default graphite border */
-  --color-line-strong: #2a2e37; /* stronger — chips, menus, field borders */
+  --color-line-strong: #30343d; /* stronger — chips, menus, field borders */
   --color-line-soft: #1c1f26; /* softer inner row divider */
   --color-line-stronger: #3a3f4a; /* strongest — active nav row (Canvas v3) */
 
@@ -47,8 +48,14 @@
   --color-green: #58c08a; /* running / ok / approve */
   --color-amber: #e8a13a; /* waiting / approval */
   --color-red: #e5675f; /* error / deny */
-  --color-blue: #6fb4f0; /* subagent track / info — kept from stored palette */
+  --color-blue: #6fa8dc; /* subagent track / info */
   --color-purple: #c58be0; /* a 4th project hue */
+
+  /* ---- status tints — the fill behind a badge, a picked option, a primary
+     action. Derived from the hue so every palette and mode re-tints itself. ---- */
+  --color-brand-bg: color-mix(in srgb, var(--color-brand) 12%, transparent);
+  --color-green-bg: color-mix(in srgb, var(--color-green) 12%, transparent);
+  --color-red-bg: color-mix(in srgb, var(--color-red) 12%, transparent);
 
   /* ---- chart strokes (Analytics/Sparkline) — theme-aware, read via
      getComputedStyle at render since Recharts/SVG props can't take CSS vars
@@ -72,12 +79,13 @@
   --color-series-7: #b0a0f0;
   --color-series-8: #e88ab0;
 
-  /* ---- type — Canvas triad ---- */
-  --font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif;
+  /* ---- type — v4 pair. font-display stays a name of its own so its users did
+     not have to change; it is the same family as the UI now (D-2). ---- */
+  --font-sans: 'IBM Plex Sans', system-ui, sans-serif;
   --font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', monospace;
-  --font-display: 'Fraunces', ui-serif, Georgia, 'Times New Roman', serif;
+  --font-display: 'IBM Plex Sans', system-ui, sans-serif;
 
-  /* sidebar breakpoint (Canvas fixed 66px icon rail) */
+  /* sidebar breakpoint — below it one column, list then detail (D-6) */
   --breakpoint-desk: 900px;
   /* right-rail breakpoint (Canvas: deck rail collapses under 1280px) */
   --breakpoint-wide: 1280px;
@@ -91,6 +99,14 @@
     }
     50% {
       box-shadow: 0 0 0 7px rgb(88 192 138 / 0);
+    }
+  }
+
+  /* working state glyph — one slow turn */
+  --animate-glyph-spin: glyph-spin 2.4s linear infinite;
+  @keyframes glyph-spin {
+    to {
+      transform: rotate(360deg);
     }
   }
 
@@ -124,34 +140,37 @@
  */
 :root[data-mode='light'] {
   /* ---- surfaces ---- */
-  --color-bg: #f6f2ea; /* page — warm off-white, not pure white */
+  --color-bg: #f7f5f0; /* page — warm off-white, not pure white */
   --color-surface: #ffffff; /* cards, panels, sheets — brightest surface */
   --color-field: #f0ebe1; /* inputs, idle nav pill, bare buttons */
-  --color-surface2: #ede6d8; /* raised / hover fill, active nav, prompt bubbles, code chips */
+  --color-surface2: #f1eee6; /* raised / hover fill, active nav, prompt bubbles, code chips */
 
   /* ---- hairlines ---- */
-  --color-line: #ded5c4; /* default hairline */
-  --color-line-strong: #cbbfa8; /* stronger — chips, menus, field borders */
+  --color-line: #e3ded1; /* default hairline */
+  --color-line-strong: #d5cfc0; /* stronger — chips, menus, field borders */
   --color-line-soft: #e6dfd0; /* softer inner row divider */
   --color-line-stronger: #a59370; /* strongest — active nav row */
 
   /* ---- ink scale (dark warm ink, mirrors the cream scale's roles) ---- */
-  --color-ink: #2a2620; /* primary text */
-  --color-ink-2: #514c44; /* secondary body text */
+  --color-ink: #201c16; /* primary text */
+  --color-ink-2: #3b372f; /* secondary body text */
   --color-ink-3: #655f56; /* tertiary — row why-lines, descriptions (AA 4.5:1 on the raised surface, was #6f6a61 = 4.32) */
-  --color-ink-dim: #726d64; /* muted captions, project labels */
-  --color-ink-faint: #787368; /* faint mono micro-labels, timestamps, arrows (4.2:1 on bg) */
+  --color-ink-dim: #6e685c; /* muted captions, project labels */
+  --color-ink-faint: #787368; /* faint mono micro-labels, timestamps, arrows. Deliberately NOT
+    the design's #8d8779, which is only about 3.3:1 on the page (plan D-7). */
 
-  /* ---- brand · amber accent (deeper for text-on-white; dot/accent uses
-     could stay #e8a13a but text roles must clear 4.5:1 on --color-bg) ---- */
-  --color-brand: #93590c;
+  /* ---- brand · amber accent ---- */
+  --color-brand: #b0730f;
 
-  /* ---- status / semantic — darkened/saturated to clear AA on light ---- */
-  --color-green: #237a4e;
-  --color-amber: #93590c;
-  --color-red: #b8382f;
-  --color-blue: #1f6bb8;
-  --color-purple: #8a3fac;
+  /* ---- status / semantic ---- */
+  --color-green: #2e7d4f;
+  --color-amber: #b0730f;
+  --color-red: #c74a42;
+  --color-blue: #1f5fa8;
+  --color-purple: #7b4fa3;
+  --color-brand-bg: color-mix(in srgb, var(--color-brand) 10%, transparent);
+  --color-green-bg: color-mix(in srgb, var(--color-green) 10%, transparent);
+  --color-red-bg: color-mix(in srgb, var(--color-red) 10%, transparent);
 
   /* ---- chart strokes ---- */
   --color-chart-grid: #00000012;
@@ -516,7 +535,7 @@
   }
   :root[data-mode='light'] ::selection {
     /* Same amber tint, lower alpha — 0.25 reads too saturated over white. */
-    background: rgb(147 89 12 / 0.16);
+    background: rgb(176 115 15 / 0.16);
   }
 }
 
@@ -538,32 +557,16 @@
       1;
   }
 
-  /* App shell base: page fill with a single soft amber wash anchored off the
-     top-right corner — barely perceptible, just warming the area near the
-     wordmark, fading to transparent with no hard edge. Set once on the
-     outermost shell so it never scrolls or repeats per route; panels/cards
-     keep their own flat fills over this base. Light mode uses a fainter,
-     more desaturated wash (the same tint reads garish on a bright ground). */
+  /* App shell base: the flat page fill, set once on the outermost shell. */
   .app-shell {
     background-color: var(--color-bg);
-    background-image: radial-gradient(
-      circle at 78% -5%,
-      color-mix(in srgb, var(--color-brand-mark) 5%, transparent),
-      transparent 45%
-    );
-  }
-  :root[data-mode='light'] .app-shell {
-    background-image: radial-gradient(
-      circle at 78% -5%,
-      color-mix(in srgb, var(--color-brand-mark) 3%, transparent),
-      transparent 45%
-    );
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .animate-pulse-dot,
-  .animate-blink-dot {
+  .animate-blink-dot,
+  .animate-glyph-spin {
     animation: none;
   }
 }
@@ -583,7 +586,7 @@
  *
  * Heading levels are offset by one on purpose: the pane owns the <h1>, so the
  * renderer maps `#`→h2 and `##`→h3. h3 is therefore the doc's section heading
- * and carries the design's 17px Fraunces; h2/h4/h5 are derived steps around it.
+ * and carries the 17px display face; h2/h4/h5 are derived steps around it.
  * ==========================================================================*/
 
 .docs-article p {
