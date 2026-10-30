@@ -188,7 +188,13 @@ export function Today({ detail }: { detail: ReactNode }): JSX.Element {
 
   return (
     <PlaceLayout
-      list={<EventFeed events={feed} now={now} loading={sessionsLoading} />}
+      // Below `desk` the feed and the day share one scroll (D-6): without this the
+      // list column shrinks to a three-row scroller of its own.
+      list={
+        <div className="flex shrink-0 flex-col desk:contents">
+          <EventFeed events={feed} now={now} loading={sessionsLoading} />
+        </div>
+      }
       detail={
         <div data-testid="today">
           <div className="max-w-[1040px] px-4 pt-[22px] pb-6 desk:px-7">
