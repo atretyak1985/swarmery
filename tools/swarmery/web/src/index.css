@@ -574,7 +574,7 @@
 /* ============================================================================
  * Docs article body (Canvas v2 — pages/Docs.tsx).
  *
- * The doc pane needs its own reading metrics — 12px paragraph rhythm, serif
+ * The doc pane needs its own reading metrics — 12px paragraph rhythm, its own
  * section headings, a recessed code block — but <Markdown> (lib/markdown.tsx)
  * is shared with Chat, Plans and memory views and must NOT change. So the
  * metrics live here, scoped to `.docs-article`, which only that one pane wears.
