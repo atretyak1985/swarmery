@@ -1053,6 +1053,10 @@ msgstr "invocations"
 msgid "Ionizing"
 msgstr "Ionizing"
 
+#: src/pages/NeedsYou.tsx
+msgid "janitor journal →"
+msgstr "janitor journal →"
+
 #: src/pages/detail/SessionPane.tsx
 msgid "Jump to latest"
 msgstr "Jump to latest"

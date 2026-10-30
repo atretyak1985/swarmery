@@ -535,6 +535,8 @@ describe('NeedsYou page', () => {
     const row = rowOf('shop');
     expect(row.dataset.kind).toBe('worktree_cleanup');
     expect(within(row).getByText('worktree cleanup')).toBeTruthy();
+    fireEvent.click(within(row).getByRole('button', { name: 'janitor journal →' }));
+    expect(nav.to).toHaveBeenCalledWith('/settings');
 
     const cands = within(row).getAllByTestId('cleanup-candidate');
     expect(cands).toHaveLength(2);

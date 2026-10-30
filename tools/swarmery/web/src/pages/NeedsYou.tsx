@@ -851,6 +851,7 @@ function WorktreeCleanup({ ctx }: { ctx: CardContext }): JSX.Element | null {
         disabled: busy || selected.size === 0,
       }}
       foot={t`without proof: ${withoutProof}`}
+      link={{ label: t`janitor journal →`, onClick: () => ctx.go('/settings') }}
     />
   );
 }

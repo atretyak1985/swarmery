@@ -1053,6 +1053,10 @@ msgstr "виклики"
 msgid "Ionizing"
 msgstr "Іонізує"
 
+#: src/pages/NeedsYou.tsx
+msgid "janitor journal →"
+msgstr "журнал прибирання →"
+
 #: src/pages/detail/SessionPane.tsx
 msgid "Jump to latest"
 msgstr "До останнього"
