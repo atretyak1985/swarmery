@@ -7,7 +7,8 @@
 //      second press saves that rule for this project.
 //   2. The request itself still waits for an answer.
 //   3. A prod-deploy request offers no always-allow at all.
-//   4. ?tab=approvals opens on a permission, not on whatever is oldest.
+//   4. ?tab=approvals opens on a permission, not on whatever is oldest, and
+//      &request= opens on that request; one already answered falls back.
 
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -119,5 +120,24 @@ describe('NeedsYou always allow', () => {
     vi.mocked(api.getNeedsYou).mockResolvedValue({ items: [reply, ITEM], generatedAt: new Date(NOW).toISOString() });
     const card = await renderPage('/needs-you?tab=approvals');
     expect(card.dataset.kind).toBe('approval');
+  });
+
+  describe('with &request=', () => {
+    const second: NeedsYouItem = { ...ITEM, sessionId: 5, sessionUuid: 'u-5', sessionName: 'build', requestId: 12, preview: 'npm run build' };
+
+    beforeEach(() => {
+      vi.mocked(api.getNeedsYou).mockResolvedValue({ items: [ITEM, second], generatedAt: new Date(NOW).toISOString() });
+      vi.mocked(api.fetchApprovals).mockResolvedValue([pending(), pending({ id: 12, sessionId: 5 })]);
+    });
+
+    it('opens on that request, not the first permission', async () => {
+      const card = await renderPage('/needs-you?tab=approvals&request=12');
+      expect(await within(card).findByText('npm run build')).toBeTruthy();
+    });
+
+    it('falls back to the first permission when the request is gone', async () => {
+      const card = await renderPage('/needs-you?tab=approvals&request=99');
+      expect(await within(card).findByText('npm run lint')).toBeTruthy();
+    });
   });
 });

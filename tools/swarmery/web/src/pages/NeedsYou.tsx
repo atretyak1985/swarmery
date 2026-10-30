@@ -968,8 +968,14 @@ export function NeedsYou(): JSX.Element {
   const ordered = useMemo(() => groups.flatMap((g) => g.items), [groups]);
   const orderedKeys = ordered.map(itemKey);
   // `/inbox?tab=approvals` and `/approvals` land here on a permission, where the
-  // always-allow control is.
-  const wanted = params.get('tab') === 'approvals' ? ordered.find((i) => i.kind === 'approval') : undefined;
+  // always-allow control is; a session's gate names its own with `&request=`. A
+  // request that has since been answered falls back to the first permission.
+  const wantedRequest = params.get('request');
+  const wanted =
+    params.get('tab') === 'approvals'
+      ? (ordered.find((i) => i.requestId !== null && String(i.requestId) === wantedRequest) ??
+        ordered.find((i) => i.kind === 'approval'))
+      : undefined;
   const selected = ordered.find((i) => itemKey(i) === selectedKey) ?? wanted ?? ordered[0];
   const currentKey = selected === undefined ? null : itemKey(selected);
 
