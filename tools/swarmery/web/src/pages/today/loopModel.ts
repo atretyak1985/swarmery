@@ -2,8 +2,8 @@
 //
 // Five stages, Plan → Run → Measure → Learn → Change, each answering one
 // question with one number, one sentence and a link to the place that holds
-// it. `waiting` marks a stage where something waits on the operator (the card
-// turns amber); `alert` is the part of the sentence that says what.
+// it. `waiting` marks a stage where something waits on the operator (the cell
+// turns to the accent); `alert` is the line under the sentence that says what.
 //
 // Every number comes from an existing fetcher (Today.tsx wires them); the
 // epic-derived ones are counted here by `epicCounts`. A stage with no data
@@ -40,7 +40,10 @@ export interface Stage {
 export interface LoopInputs {
   epics: readonly Epic[];
   liveSessions: number;
-  pendingApprovals: number;
+  /** Sessions blocked on the operator: the needs-you queue's session gates. */
+  askingSessions: number;
+  /** Phases a guard stopped: the needs-you queue's phase decisions. */
+  phaseDecisions: number;
   stoppedPhases: number;
   scoredRuns: number;
   farOffPlan: number;
@@ -108,6 +111,7 @@ function planStage(i: LoopInputs, href: string): Stage {
       other: `${count} phases carry a forecast — what the planner expects before anything runs.`,
     });
   }
+  const decisions = fmtCount(i.phaseDecisions);
   return {
     id: 'plan',
     step: 1,
@@ -115,16 +119,24 @@ function planStage(i: LoopInputs, href: string): Stage {
     n: plans,
     unit: plural(plans, { one: 'plan', few: 'plans', many: 'plans', other: 'plans' }),
     sentence,
-    alert: '',
+    alert:
+      i.phaseDecisions > 0
+        ? plural(i.phaseDecisions, {
+            one: `${decisions} phase waits on a decision.`,
+            few: `${decisions} phases wait on a decision.`,
+            many: `${decisions} phases wait on a decision.`,
+            other: `${decisions} phases wait on a decision.`,
+          })
+        : '',
     href,
     linkLabel: t`Plans →`,
-    waiting: false,
+    waiting: i.phaseDecisions > 0,
   };
 }
 
 function runStage(i: LoopInputs, href: string): Stage {
   const parts: string[] = [];
-  const { stoppedPhases, pendingApprovals } = i;
+  const { stoppedPhases, askingSessions } = i;
   if (stoppedPhases > 0) {
     const count = fmtCount(stoppedPhases);
     parts.push(
@@ -136,14 +148,14 @@ function runStage(i: LoopInputs, href: string): Stage {
       }),
     );
   }
-  const count = fmtCount(pendingApprovals);
+  const count = fmtCount(askingSessions);
   const alert =
-    pendingApprovals > 0
-      ? plural(pendingApprovals, {
-          one: `${count} approval waiting.`,
-          few: `${count} approvals waiting.`,
-          many: `${count} approvals waiting.`,
-          other: `${count} approvals waiting.`,
+    askingSessions > 0
+      ? plural(askingSessions, {
+          one: `${count} session asks for you.`,
+          few: `${count} sessions ask for you.`,
+          many: `${count} sessions ask for you.`,
+          other: `${count} sessions ask for you.`,
         })
       : '';
   let sentence = parts.join(' ');
@@ -163,7 +175,7 @@ function runStage(i: LoopInputs, href: string): Stage {
     alert,
     href,
     linkLabel: t`Sessions →`,
-    waiting: pendingApprovals > 0,
+    waiting: askingSessions > 0,
   };
 }
 
@@ -268,7 +280,7 @@ function learnStage(i: LoopInputs, href: string): Stage {
     n,
     unit: plural(n, { one: 'proposal', few: 'proposals', many: 'proposals', other: 'proposals' }),
     sentence,
-    alert: '',
+    alert: n > 0 ? t`Review in Inbox.` : '',
     href,
     linkLabel: n > 0 ? t`Review in Inbox →` : t`Inbox →`,
     waiting: n > 0,
@@ -305,7 +317,7 @@ function changeStage(i: LoopInputs, href: string): Stage {
     step: 5,
     title: t`Change`,
     n: verifiedChanges,
-    unit: t`verified`,
+    unit: t`proven`,
     sentence:
       parts.length === 0
         ? t`Appears after you accept a change and it has run long enough to prove itself.`

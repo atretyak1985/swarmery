@@ -1,18 +1,17 @@
-// "Live now" (Canvas v3 phase 4, artboard 1a): the running sessions of the
-// scope, newest first. A session that is a plan phase's run (its uuid is the
-// phase's runSessionUuid and the phase is running) shows the phase's progress
-// ("Task n/m") and the model the run is on; any other shows how long it has
-// been going and what it has cost. Each row opens the session detail in the
-// current mount (lib/sessionHref.ts).
+// "Live now" (handoff §3): the working sessions of the scope. One row each, no
+// chips (§4): a session that is a plan phase's run (its uuid is the phase's
+// runSessionUuid and the phase is running) shows the phase's progress ("Task n/m")
+// and the model the run is on; any other shows how long it has been going and what
+// it has cost. The link mod's live usage stays on the session's numbers strip. Each
+// row opens the session detail in the current mount (lib/sessionHref.ts).
 
 import { Trans, useLingui } from '@lingui/react/macro';
-import { Link } from 'react-router-dom';
-import { SessionLinkChips } from '../../components/SessionLinkChips';
 import type { Epic, EpicPhase, Session } from '../../api/types';
+import { StateGlyph } from '../../components/place/StateGlyph';
 import { fmtCost, projectLabel } from '../../lib/format';
 import { useSessionHref } from '../../lib/sessionHref';
-import { ageLabel } from '../inbox/inboxModel';
-import { SectionHead } from './WaitingOnYou';
+import { compactSpan } from '../../lib/sessionsView';
+import { PanelEmpty, PanelList, PanelRow, SectionHead, SectionLink } from './panel';
 
 export const LIVE_ROWS = 5;
 
@@ -46,27 +45,18 @@ function Row({ s, phase, now }: { s: Session; phase: EpicPhase | undefined; now:
     right = t`Task ${done}/${total}`;
     sub = t`${project} · ${model} · plan run`;
   } else {
-    const state = s.status === 'waiting_approval' ? t`waiting on you` : t`working`;
-    right = ageLabel(s.startedAt, now);
-    sub = `${project} · ${state} · ${fmtCost(s.costUsd ?? null)}`;
+    right = compactSpan(now - Date.parse(s.startedAt));
+    sub = `${project} · ${t`working`} · ${fmtCost(s.costUsd ?? null)}`;
   }
   return (
-    <li>
-      <Link
-        to={sessionHref(s.id)}
-        data-testid="live-row"
-        className="block rounded-[10px] border border-line bg-surface px-3 py-2.5 hover:border-line-strong"
-      >
-        <div className="flex items-center gap-2">
-          <span aria-hidden className="size-[7px] shrink-0 rounded-full bg-green" />
-          <span className="min-w-0 flex-1 truncate text-[12.5px] text-ink">{title}</span>
-          <span className="shrink-0 font-mono text-[10px] text-ink-faint">{right}</span>
-        </div>
-        <div className="mt-1 truncate font-mono text-[10.5px] text-ink-faint">{sub}</div>
-        {/* The link mod's live usage — renders nothing for a session without it. */}
-        <SessionLinkChips session={s} className="mt-1.5 flex-wrap" />
-      </Link>
-    </li>
+    <PanelRow
+      testId="live-row"
+      to={sessionHref(s.id)}
+      glyph={<StateGlyph state="working" />}
+      title={title}
+      summary={sub}
+      age={right}
+    />
   );
 }
 
@@ -75,11 +65,13 @@ export function LiveNow({
   epics,
   loading,
   now,
+  sessionsHref,
 }: {
   sessions: readonly Session[];
   epics: readonly Epic[];
   loading: boolean;
   now: number;
+  sessionsHref: string;
 }): JSX.Element {
   const { t } = useLingui();
   const phases = runningPhases(epics);
@@ -87,24 +79,27 @@ export function LiveNow({
   const extra = sessions.length - LIVE_ROWS;
   return (
     <section data-testid="live-now" className="min-w-0">
-      <SectionHead label={t`Live now`}>
+      <SectionHead label={t`Live now`} tone="green">
         {extra > 0 && (
-          <span className="font-mono text-[10.5px] text-ink-faint">
+          <span className="font-mono text-[10.5px] leading-[normal] text-ink-faint">
             <Trans>+{extra} more</Trans>
           </span>
         )}
+        <SectionLink to={sessionsHref}>
+          <Trans>Sessions →</Trans>
+        </SectionLink>
       </SectionHead>
-      {top.length === 0 ? (
-        <p className="mt-2.5 rounded-[10px] border border-line bg-surface px-3 py-2.5 text-[12.5px] text-ink-dim">
-          {loading ? t`Loading…` : t`Nothing running. A session shows up here the moment it starts.`}
-        </p>
-      ) : (
-        <ul className="m-0 mt-2.5 flex list-none flex-col gap-1.5 p-0">
-          {top.map((s) => (
-            <Row key={s.id} s={s} phase={phases.get(s.sessionUuid)} now={now} />
-          ))}
-        </ul>
-      )}
+      <div className="mt-2">
+        {top.length === 0 ? (
+          <PanelEmpty>{loading ? t`Loading…` : t`Nothing running.`}</PanelEmpty>
+        ) : (
+          <PanelList>
+            {top.map((s) => (
+              <Row key={s.id} s={s} phase={phases.get(s.sessionUuid)} now={now} />
+            ))}
+          </PanelList>
+        )}
+      </div>
     </section>
   );
 }
