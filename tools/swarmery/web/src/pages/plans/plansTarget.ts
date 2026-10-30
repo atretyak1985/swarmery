@@ -5,7 +5,6 @@
 import { i18n, type MessageDescriptor } from '@lingui/core';
 import { msg, t } from '@lingui/core/macro';
 import type { Epic, EpicPhase } from '../../api/types';
-import { showsReviewTab } from './landingModel';
 import { PHASE_TABS, type PhaseTab } from './PhasePanel';
 import { computeResolvedSeqs, phaseStatus, planComplete } from './planModel';
 import type { ParsedPlansRoute, PlanDetailTab, PlansDetail, PlansStatus, PlansTarget } from './plansUrl';
@@ -176,14 +175,8 @@ export function canonicalPlansTarget(
     if (p === undefined) {
       return { target: { plan: epic.externalId }, missing: { kind: 'phase', seq: d.seq, planTitle: epic.title } };
     }
-    // Edit on a done phase → Report; Review on a phase that never ran → Runs
-    // (the tabs each panel falls back to).
-    const tab: PhaseDetailTab =
-      d.tab === 'edit' && phaseStatus(p, resolvedSeqs) === 'done'
-        ? 'report'
-        : d.tab === 'review' && !showsReviewTab(p)
-          ? 'runs'
-          : d.tab;
+    // Edit on a done phase → Report (the tab the page falls back to).
+    const tab: PhaseDetailTab = d.tab === 'edit' && phaseStatus(p, resolvedSeqs) === 'done' ? 'report' : d.tab;
     return { target: { plan: epic.externalId, detail: { kind: 'phase', seq: d.seq, tab } }, missing: null };
   }
   const complete = planComplete(epic, resolvedSeqs);

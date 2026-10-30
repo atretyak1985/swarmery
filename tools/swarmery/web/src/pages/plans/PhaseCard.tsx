@@ -81,6 +81,9 @@ export interface PhaseCardProps {
   /** Where the phase's open agent stop is answered (the Needs you page). null
    *  (or absent) renders the stop without a link. */
   stopHref?: string | null;
+  /** On the phase page, whose head already carries the name and the state: no
+   *  frame, and the chips alone where the card has its header. */
+  embedded?: boolean;
 }
 
 /** Whether `p` is a path on this origin: it starts with one `/` that a browser
@@ -282,6 +285,7 @@ export function PhaseCard({
   terms = null,
   decisionHref,
   stopHref = null,
+  embedded = false,
 }: PhaseCardProps): JSX.Element {
   const { i18n, t } = useLingui();
   const story = forecastStory(phase);
@@ -313,35 +317,48 @@ export function PhaseCard({
     meta.push(t`edited ${edited}`);
   }
 
-  return (
-    <article data-testid="phase-card" className="rounded-xl border border-line bg-surface px-5 py-[18px]">
-      <div className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.1em] text-ink-faint">
-        <span>
-          <Trans>Phase {seq}</Trans> · {phase.checkboxesDone}/{phase.checkboxesTotal}
-        </span>
-        {model !== null && (
-          <>
-            <span aria-hidden="true">·</span>
-            <span>{modelShortName(model)}</span>
-          </>
-        )}
-        <span className="ml-auto flex items-center gap-1.5">
-          <StalledBadge stall={phase.stalled} />
-          {terms != null && phase.landing != null && <LandingChip landing={phase.landing} terms={terms} />}
-          {band !== null && <OffPlanChip band={band} compact />}
-        </span>
-      </div>
-      <div className="mt-1.5 text-[15px] font-medium leading-[1.35] text-ink">{phase.name}</div>
+  const chips = (
+    <>
+      <StalledBadge stall={phase.stalled} />
+      {terms != null && phase.landing != null && <LandingChip landing={phase.landing} terms={terms} />}
+      {band !== null && <OffPlanChip band={band} compact />}
+    </>
+  );
 
-      <div className="mt-3 flex items-start gap-2.5 rounded-[10px] border border-line bg-bg px-3 py-2.5">
-        <span className={`mt-[5px] h-2 w-2 shrink-0 rounded-full ${dot}`} />
-        <div className="min-w-0">
-          <div className="text-[13px] font-medium text-ink">{title}</div>
-          {detail !== null && detail !== '' && (
-            <div className="mt-[3px] text-[12px] leading-[1.5] text-ink-3">{detail}</div>
-          )}
-        </div>
-      </div>
+  return (
+    <article
+      data-testid="phase-card"
+      className={embedded ? undefined : 'rounded-xl border border-line bg-surface px-5 py-[18px]'}
+    >
+      {embedded ? (
+        <div className="flex flex-wrap items-center gap-1.5 empty:hidden">{chips}</div>
+      ) : (
+        <>
+          <div className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.1em] text-ink-faint">
+            <span>
+              <Trans>Phase {seq}</Trans> · {phase.checkboxesDone}/{phase.checkboxesTotal}
+            </span>
+            {model !== null && (
+              <>
+                <span aria-hidden="true">·</span>
+                <span>{modelShortName(model)}</span>
+              </>
+            )}
+            <span className="ml-auto flex items-center gap-1.5">{chips}</span>
+          </div>
+          <div className="mt-1.5 text-[15px] font-medium leading-[1.35] text-ink">{phase.name}</div>
+
+          <div className="mt-3 flex items-start gap-2.5 rounded-[10px] border border-line bg-bg px-3 py-2.5">
+            <span className={`mt-[5px] h-2 w-2 shrink-0 rounded-full ${dot}`} />
+            <div className="min-w-0">
+              <div className="text-[13px] font-medium text-ink">{title}</div>
+              {detail !== null && detail !== '' && (
+                <div className="mt-[3px] text-[12px] leading-[1.5] text-ink-3">{detail}</div>
+              )}
+            </div>
+          </div>
+        </>
+      )}
 
       {phase.decisionHold != null && phase.decisionHold.decisions.length > 0 && (
         <DecisionHoldNote hold={phase.decisionHold} hrefFor={decisionHref} />

@@ -60,6 +60,7 @@ import { ChannelBadge } from '../components/ChannelBadge';
 import { DecisionCard, type DecisionCardProps } from '../components/place/DecisionCard';
 import { ListGroup } from '../components/place/ListGroup';
 import { ListPane } from '../components/place/ListPane';
+import { ListEmpty } from '../components/place/ListTabs';
 import { ListRow } from '../components/place/ListRow';
 import { PlaceLayout } from '../components/place/PlaceLayout';
 import { StateGlyph } from '../components/place/StateGlyph';
@@ -1059,6 +1060,17 @@ export function NeedsYou(): JSX.Element {
           }}
           {...(primaryHint === undefined ? {} : { primaryHint })}
           {...(secondaryHint === undefined ? {} : { secondaryHint })}
+          {...(!loading && error === null && groups.length === 0
+            ? {
+                empty: (
+                  <ListEmpty>
+                    {query.trim() !== ''
+                      ? t`Nothing matches.`
+                      : t`Nothing is blocked on you. Permissions, questions, guard stops and manual checks land here live.`}
+                  </ListEmpty>
+                ),
+              }
+            : {})}
         >
           {loading && error === null && <Loading label={t`needs you…`} />}
           {groups.map((g) => (

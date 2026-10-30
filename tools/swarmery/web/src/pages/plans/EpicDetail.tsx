@@ -1,4 +1,5 @@
-// A plan on screen: its header, then the phases or an open detail.
+// A plan on screen: its header, then the phases or the plan's details. An open
+// phase is a page of its own and takes the whole column.
 
 import { Trans, useLingui } from '@lingui/react/macro';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -12,7 +13,7 @@ import { NEUTRAL_TERMS } from './landingModel';
 import { useNow } from './phaseChips';
 import { PhaseDetailPanel } from './PhaseDetailPanel';
 import { PhaseLedger } from './PhaseLedger';
-import { type PhaseRunEffort, PhaseRunEffortPicker, type PhaseRunModel, PhaseRunModelPicker } from './PhaseRunPickers';
+import type { PhaseRunEffort, PhaseRunModel } from './PhaseRunPickers';
 import { PlanDetailPanel } from './PlanDetailPanel';
 import { PlanHeader } from './PlanHeader';
 import { computeResolvedSeqs, planComplete } from './planModel';
@@ -210,9 +211,11 @@ export function EpicDetail({
     };
   }, [open, onCloseDetail]);
 
+  const onPhasePage = detail?.kind === 'phase';
+
   return (
     <div>
-      <PlanHeader
+      {!onPhasePage && <PlanHeader
         epic={epic}
         resolvedSeqs={resolvedSeqs}
         complete={complete}
@@ -232,17 +235,17 @@ export function EpicDetail({
           setReviseOpenRevId(null);
           setReviseOpen(true);
         }}
-      />
+      />}
 
       {/* Leaving the details is the first thing offered while they are open. */}
-      {detail !== null && (
+      {detail?.kind === 'plan' && (
         <div className="mt-[22px]">
           <BackToPhases onBack={onCloseDetail} />
         </div>
       )}
 
       {runMsg !== null && (
-        <div className="mt-3 flex items-start gap-2 rounded-md border border-red/40 bg-red/10 px-2.5 py-1.5 font-mono text-[10.5px] text-red">
+        <div className={`${onPhasePage ? 'mb-3' : 'mt-3'} flex items-start gap-2 rounded-md border border-red/40 bg-red/10 px-2.5 py-1.5 font-mono text-[10.5px] text-red`}>
           <div className="min-w-0 flex-1">
             <span>{runMsg}</span>
             {runBranches.length > 0 && (
@@ -270,24 +273,10 @@ export function EpicDetail({
         </div>
       )}
 
-      {/* A detail — a phase or the plan itself — opens INLINE, in place of the
-          ledger, so it gets the whole column; "← all phases" (or Escape) above the
-          panel backs out to the ledger. The sessions stay under either. */}
-      <div className="mt-[22px] min-w-0">
-        {detail?.kind === 'phase' && (
-          <div className="mb-2 flex flex-wrap items-center justify-end gap-x-3 gap-y-1.5">
-            <PhaseRunModelPicker
-              value={phaseRunModel}
-              onChange={onPhaseRunModel}
-              disabled={runBusy !== null || planRunning}
-            />
-            <PhaseRunEffortPicker
-              value={phaseRunEffort}
-              onChange={onPhaseRunEffort}
-              disabled={runBusy !== null || planRunning}
-            />
-          </div>
-        )}
+      {/* The plan's details open in place of the ledger; "← all phases" (or Escape)
+          backs out to it. The sessions stay under either. A phase's page has its own
+          way back and lists its own runs. */}
+      <div className={`${onPhasePage ? '' : 'mt-[22px]'} min-w-0`}>
           {detail?.kind === 'phase' ? (
             <PhaseDetailPanel
               epic={epic}
@@ -296,9 +285,15 @@ export function EpicDetail({
               onTab={(t) => onOpenPhase(detail.phase.seq, t)}
               tabHref={(t) => phaseHref(detail.phase.seq, t)}
               onStep={(seq) => onOpenPhase(seq, detail.tab)}
+              onBack={onCloseDetail}
+              sessions={sessions}
+              now={now}
               runBusy={runBusy}
               planRunning={planRunning}
               phaseRunModel={phaseRunModel}
+              onPhaseRunModel={onPhaseRunModel}
+              phaseRunEffort={phaseRunEffort}
+              onPhaseRunEffort={onPhaseRunEffort}
               onRetry={() => onRun(detail.phase.id)}
               onCancelRun={() => onCancelRun(detail.phase.id)}
               reverify={reverify}
@@ -348,12 +343,7 @@ export function EpicDetail({
               onOpenOutcome={onOpenOutcome}
             />
           )}
-        <PlanSessions
-          epic={epic}
-          activePhaseId={detail !== null && detail.kind === 'phase' ? detail.phase.id : null}
-          sessions={sessions}
-          err={sessionsErr}
-        />
+        {!onPhasePage && <PlanSessions epic={epic} activePhaseId={null} sessions={sessions} err={sessionsErr} />}
       </div>
 
       <ReviseModal
