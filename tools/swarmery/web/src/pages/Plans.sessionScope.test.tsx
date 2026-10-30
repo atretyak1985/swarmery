@@ -270,7 +270,7 @@ async function mountPlans(): Promise<void> {
   });
 }
 
-function openPhase(seq: number, name: string): void {
+function openPhase(_seq: number, name: string): void {
   fireEvent.click(screen.getByRole('link', { name }));
 }
 

@@ -95,9 +95,9 @@ export function planSpent(epic: Epic): number | null {
   return priced.length === 0 ? null : priced.reduce((sum, c) => sum + c, 0);
 }
 
-/** Whole dollars, as the design has them, once cents stop mattering. */
+/** Whole dollars, as the design has them, and cents only below a dollar. */
 export function fmtSpent(usd: number): string {
-  return usd < 10 ? `$${usd.toFixed(2)}` : `$${Math.round(usd).toString()}`;
+  return usd < 1 ? `$${usd.toFixed(2)}` : `$${Math.round(usd).toString()}`;
 }
 
 /** The latest sign of life on the plan: a phase doc written, or a run started. */

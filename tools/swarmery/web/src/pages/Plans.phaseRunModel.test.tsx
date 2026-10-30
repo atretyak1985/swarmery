@@ -345,7 +345,7 @@ describe('which model a finished run used (SC-6)', () => {
     render(
       <PlansAtRoute />,
     );
-    await screen.findByText(/Running/);
+    await screen.findByText(/^running/);
     expect(screen.queryByText('opus')).toBeNull();
   });
 

@@ -2480,7 +2480,6 @@ msgstr "running"
 
 #: src/pages/Board.tsx
 #: src/pages/plans/PhaseDetailPanel.tsx
-#: src/pages/plans/PhaseLedger.tsx
 msgid "Running"
 msgstr "Running"
 

@@ -81,6 +81,7 @@ describe('planSpent', () => {
 describe('fmtSpent', () => {
   it('keeps cents only where they matter', () => {
     expect(fmtSpent(0.4)).toBe('$0.40');
+    expect(fmtSpent(8)).toBe('$8');
     expect(fmtSpent(85.6)).toBe('$86');
   });
 });

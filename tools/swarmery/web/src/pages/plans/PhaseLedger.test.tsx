@@ -142,7 +142,7 @@ describe('PhaseLedger', () => {
 
   it('sums a phase’s runs, counts them, and links each to its session', () => {
     mount([done], [run(1, 12, 'spec + ADR', 6), run(2, 12, 'pass', 2)]);
-    expect(within(row('Phase 2 — Limiter core')).getByText('$8.00')).toBeTruthy();
+    expect(within(row('Phase 2 — Limiter core')).getByText('$8')).toBeTruthy();
     expect(within(row('Phase 2 — Limiter core')).getByText(/^2 /)).toBeTruthy();
     fireEvent.click(row('Phase 2 — Limiter core'));
     const links = within(screen.getByRole('list', { name: 'runs of phase 2' })).getAllByRole('link');

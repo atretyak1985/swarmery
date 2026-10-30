@@ -144,14 +144,10 @@ function PhaseActions({
   epic,
   phase: p,
   status,
-  now,
   depsUnmet,
   runBusy,
   planRunning,
   phaseRunModel,
-  onPhaseRunModel,
-  phaseRunEffort,
-  onPhaseRunEffort,
   onOpenPhase,
   onRun,
   onCancelRun,
@@ -186,7 +182,8 @@ function PhaseActions({
     </>
   );
   return (
-    <div className="mt-2 flex flex-wrap items-center gap-1.5">
+    // The chips are taller than the criteria line and must not push the rows below.
+    <div className="-my-1 ml-auto flex flex-wrap items-center gap-1.5">
       {/* Legacy chip: phases activated into a board task before the plan↔board
           decoupling still show their board column for historical context. */}
       {p.activatedAt !== null && (
@@ -203,17 +200,11 @@ function PhaseActions({
       {status === 'in_progress' && <PhaseActivity docUpdatedAt={p.docUpdatedAt} running={running} />}
       {running ? (
         <>
-          <span
-            className="inline-flex items-center gap-1 rounded border border-brand/40 bg-brand/10 px-1.5 py-px font-mono text-[9.5px] text-brand"
-            data-tip={t`headless run in progress`}
-          >
-            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-brand" />
-            <Trans>Running</Trans>
-            {p.runStartedAt !== null ? ` · ${fmtElapsed(p.runStartedAt, now)}` : ''}
-          </span>
+          {/* The line's note says how long it has run. */}
           {p.runSessionUuid !== null && (
             <Link
               to={sessionHref(p.runSessionUuid)}
+              data-tip={t`headless run in progress`}
               className="font-mono text-[9.5px] text-ink-dim underline-offset-2 transition-colors hover:text-brand hover:underline"
             >
               <Trans>session</Trans>
@@ -252,9 +243,6 @@ function PhaseActions({
           >
             {runBusy === p.id ? '…' : isUnresolvedOutcome(p.runOutcome) ? t`Retry run` : t`Run phase`}
           </button>
-          {/* They govern exactly the Run and Retry beside them. */}
-          <PhaseRunModelPicker value={phaseRunModel} onChange={onPhaseRunModel} disabled={runBusy !== null || planRunning} />
-          <PhaseRunEffortPicker value={phaseRunEffort} onChange={onPhaseRunEffort} disabled={runBusy !== null || planRunning} />
         </>
       )}
     </div>
@@ -281,7 +269,7 @@ function PhaseLinks({
     ...(status === 'done' ? [] : [{ tab: 'edit' as const, label: t`edit doc` }]),
   ];
   return (
-    <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 font-mono text-[10.5px] leading-[normal] text-ink-faint">
+    <div className="flex flex-wrap gap-x-3 gap-y-1 font-mono text-[10.5px] leading-[normal] text-ink-faint">
       {links.map(({ tab, label }) => (
         <Link key={tab} to={phaseHref(phase.seq, tab)} className="transition-colors hover:text-brand">
           {label}
@@ -429,15 +417,34 @@ export function PhaseLedger({
                       ))}
                     </div>
                   )}
-                  {/* The criteria tab is where they are ticked. */}
-                  <Link
-                    to={phaseHref(p.seq, 'criteria')}
-                    className="mt-1.5 block font-mono text-[10.5px] leading-[normal] text-ink-faint transition-colors hover:text-brand"
-                  >
-                    <Trans>criteria</Trans> · {criteriaLine(p)}
-                  </Link>
-                  <PhaseActions {...actions} epic={epic} phase={p} status={status} depsUnmet={depsUnmet} />
-                  <PhaseLinks phase={p} status={status} phaseHref={phaseHref} />
+                  {/* One line, as the design's criteria line is: a running phase's
+                      expansion keeps the design's height. */}
+                  <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1">
+                    {/* The criteria tab is where they are ticked. */}
+                    <Link
+                      to={phaseHref(p.seq, 'criteria')}
+                      className="font-mono text-[10.5px] leading-[normal] text-ink-faint transition-colors hover:text-brand"
+                    >
+                      <Trans>criteria</Trans> · {criteriaLine(p)}
+                    </Link>
+                    <PhaseLinks phase={p} status={status} phaseHref={phaseHref} />
+                    <PhaseActions {...actions} epic={epic} phase={p} status={status} depsUnmet={depsUnmet} />
+                  </div>
+                  {/* They govern exactly the Run and Retry on the line above. */}
+                  {status !== 'done' && p.runState !== 'running' && (
+                    <div className="mt-1.5 flex flex-wrap items-center justify-end gap-x-3 gap-y-1">
+                      <PhaseRunModelPicker
+                        value={actions.phaseRunModel}
+                        onChange={actions.onPhaseRunModel}
+                        disabled={actions.runBusy !== null || actions.planRunning}
+                      />
+                      <PhaseRunEffortPicker
+                        value={actions.phaseRunEffort}
+                        onChange={actions.onPhaseRunEffort}
+                        disabled={actions.runBusy !== null || actions.planRunning}
+                      />
+                    </div>
+                  )}
                 </div>
               )}
             </li>
