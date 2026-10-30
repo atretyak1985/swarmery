@@ -110,19 +110,20 @@ export function ProjectSwitcher({
             focusOption(1);
           }
         }}
-        className="flex w-full items-center gap-2 rounded-[9px] border border-line-strong bg-field px-[10px] py-[7px] text-left transition-colors hover:border-line-strong hover:bg-surface2 aria-expanded:border-[#4a4e58] aria-expanded:bg-surface2"
+        className="flex w-full items-center gap-[7px] rounded-[7px] border border-line bg-bg px-[9px] py-1.5 text-left whitespace-nowrap transition-colors hover:border-line-strong aria-expanded:border-line-strong"
       >
-        {/* Project swatch (artboard 2b: a 7px square with 2px corners); the
-            All-projects state shows a neutral hollow swatch instead. */}
+        {/* Project swatch; All projects is the neutral grey one. */}
         <span
           aria-hidden="true"
-          className={`h-[7px] w-[7px] shrink-0 rounded-[2px] ${allProjects ? 'border border-ink-faint' : ''}`}
+          className={`h-[7px] w-[7px] shrink-0 rounded-full ${allProjects ? 'bg-ink-dim' : ''}`}
           style={allProjects ? undefined : { backgroundColor: colorFor(current?.slug ?? currentSlug) }}
         />
-        <span className="min-w-0 flex-1 truncate font-display text-[13px] leading-[normal] font-semibold text-ink">
+        <span
+          className={`min-w-0 flex-1 truncate font-mono text-[11px] leading-[normal] ${allProjects ? 'text-ink-dim' : 'text-ink-2'}`}
+        >
           {label}
         </span>
-        <span aria-hidden="true" className="text-[9px] text-ink-faint">
+        <span aria-hidden="true" className="font-mono text-[11px] leading-[normal] text-ink-faint">
           ▾
         </span>
       </button>

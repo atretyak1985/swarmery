@@ -78,7 +78,8 @@ export function ListPane({
       <div className="min-h-0 flex-1 overflow-y-auto">{empty ?? children}</div>
       <div className="flex flex-wrap gap-x-3 gap-y-1 border-t border-line px-[14px] py-2 font-mono text-[10px] leading-[normal] text-ink-faint">
         <span>{t`j/k select`}</span>
-        <span>{`e ${primaryHint ?? t`open`}`}</span>
+        {/* A msgid of its own: bare "open" is taken by the status, "відкрито". */}
+        <span>{primaryHint === undefined ? t`e open` : `e ${primaryHint}`}</span>
         {secondaryHint !== undefined && <span>{`x ${secondaryHint}`}</span>}
         <span>{t`1–5 places`}</span>
         <span>{t`t theme`}</span>

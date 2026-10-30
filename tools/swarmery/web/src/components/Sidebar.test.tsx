@@ -3,14 +3,16 @@
 // The one sidebar (Canvas v3 phase 1). The claims:
 //
 //   1. It renders the eleven places in both scopes, and numeric badges only on
-//      Inbox and Needs you — every other nav badge was retired with the old rails.
+//      Inbox, Needs you and Sessions.
 //   2. Under All projects the project-only places (Plans, Knowledge) are still
 //      there, dimmed, and link through the last-visited project — or to the
 //      project list when none was ever opened.
-//   3. Sessions shows a live dot only while a session is live.
+//   3. Sessions shows a live dot while a session is live and nothing needs you.
 //   4. ⌘K / Ctrl+K opens the command palette (the sidebar owns the listener).
-//   5. useSidebarSignals feeds Inbox = the Inbox's own count (useInboxItems) and
-//      Needs you = the queue's undismissed count (useNeedsYou).
+//   5. 1–5 go to the main places, t flips the theme, and neither fires in a field.
+//   6. useSidebarSignals feeds Inbox = the non-blocking part of the Inbox's items,
+//      Needs you = the queue's undismissed count, Sessions = the distinct sessions
+//      held up in that queue.
 //
 // Runs with the rest of the web suite: `npm test` (vitest, also a swarmery-ci
 // step). On its own: `npx vitest run src/components/Sidebar.test.tsx`.
@@ -18,10 +20,12 @@
 // checking, so NOTHING type-checks this file — treat its types as documentation.
 
 import { act, cleanup, fireEvent, render, screen, within } from '../test/render';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter, useLocation } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { Sidebar, useSidebarSignals } from './Sidebar';
+import { Sidebar, sessionsNeedingYou, useSidebarSignals } from './Sidebar';
 import { fetchSessions, fetchStatsOverview } from '../api';
+import type { NeedsYouItem } from '../api/types';
+import { ThemeProvider } from '../lib/theme';
 
 vi.mock('../api', () => ({
   fetchApprovals: vi.fn(async () => [{ id: 1 }, { id: 2 }]),
@@ -31,14 +35,32 @@ vi.mock('../api', () => ({
 
 vi.mock('../lib/ws', () => ({ useLiveUpdates: () => undefined }));
 
-// The badge is the Inbox's six-source aggregate; its own suite covers the sources.
+// The badge counts the Inbox's aggregate minus approvals, which moved to Needs you;
+// its own suite covers the sources.
 vi.mock('../pages/inbox/useInboxItems', () => ({
-  useInboxItems: () => ({ items: [], count: 5, loading: false, errors: [], reload: () => undefined }),
+  useInboxItems: () => ({
+    items: [{ kind: 'lesson' }, { kind: 'advisor' }, { kind: 'approval' }, { kind: 'retire' }],
+    count: 4,
+    loading: false,
+    errors: [],
+    reload: () => undefined,
+  }),
 }));
 
 // The Needs you badge is the queue's own count; NeedsYou.test.tsx covers the queue.
 vi.mock('../lib/useNeedsYou', () => ({
-  useNeedsYou: () => ({ items: [], count: 3, loading: false, error: null, reload: () => undefined, dismiss: () => undefined }),
+  useNeedsYou: () => ({
+    items: [
+      { kind: 'approval', sessionId: 7 },
+      { kind: 'question', sessionId: 7 },
+      { kind: 'manual_phase', sessionId: 0 },
+    ],
+    count: 3,
+    loading: false,
+    error: null,
+    reload: () => undefined,
+    dismiss: () => undefined,
+  }),
 }));
 
 // The palette is its own feature; here it only has to appear.
@@ -46,18 +68,35 @@ vi.mock('./CommandPalette', () => ({
   CommandPalette: () => <div role="dialog" aria-label="command palette" />,
 }));
 
+// The footer has its own suite and its own pollers.
+vi.mock('./HealthFooter', () => ({ HealthFooter: () => null }));
+
+function Where(): JSX.Element {
+  return <output aria-label="where">{useLocation().pathname}</output>;
+}
+
 function renderSidebar(
-  props: { slug: string | null; inboxCount?: number; needsYouCount?: number; liveSessions?: boolean },
+  props: {
+    slug: string | null;
+    inboxCount?: number;
+    needsYouCount?: number;
+    sessionsNeedCount?: number;
+    liveSessions?: boolean;
+  },
   path = '/',
 ): void {
   render(
     <MemoryRouter initialEntries={[path]}>
-      <Sidebar
-        slug={props.slug}
-        inboxCount={props.inboxCount ?? 0}
-        needsYouCount={props.needsYouCount ?? 0}
-        liveSessions={props.liveSessions ?? false}
-      />
+      <ThemeProvider>
+        <Sidebar
+          slug={props.slug}
+          inboxCount={props.inboxCount ?? 0}
+          needsYouCount={props.needsYouCount ?? 0}
+          sessionsNeedCount={props.sessionsNeedCount ?? 0}
+          liveSessions={props.liveSessions ?? false}
+        />
+        <Where />
+      </ThemeProvider>
     </MemoryRouter>,
   );
 }
@@ -117,6 +156,31 @@ describe('Sidebar', () => {
     expect(row('Inbox').textContent).toBe('☐Inbox');
   });
 
+  it('keeps amber for what blocks: Needs you and Sessions, never Inbox', () => {
+    renderSidebar({ slug: null, inboxCount: 5, needsYouCount: 7, sessionsNeedCount: 2 });
+    expect(within(row('Needs you')).getByText('7').className).toContain('text-brand');
+    expect(within(row('Sessions')).getByText('2').className).toContain('text-brand');
+    expect(within(row('Inbox')).getByText('5').className).not.toContain('text-brand');
+  });
+
+  it('never badges System', () => {
+    renderSidebar({ slug: null, inboxCount: 5, needsYouCount: 7, sessionsNeedCount: 2 });
+    expect(row('System').textContent).toBe('☷System');
+  });
+
+  it('is the 196px rail', () => {
+    renderSidebar({ slug: null });
+    expect(rail().className).toContain('w-[196px]');
+  });
+
+  it('carries the wordmark home, on the fleet and inside a project', () => {
+    renderSidebar({ slug: null });
+    expect(within(rail()).getByRole('link', { name: 'swarmery home' }).getAttribute('href')).toBe('/');
+    cleanup();
+    renderSidebar({ slug: 'shop' }, '/p/shop');
+    expect(within(rail()).getByRole('link', { name: 'back to all projects' }).getAttribute('href')).toBe('/');
+  });
+
   it('dims project-only places under All projects and routes them through the last project', () => {
     window.localStorage.setItem('swarmery.lastProject', 'shop');
     renderSidebar({ slug: null });
@@ -154,6 +218,12 @@ describe('Sidebar', () => {
     expect(within(row('Sessions')).getByRole('img', { name: 'live sessions' })).toBeTruthy();
   });
 
+  it('gives the Sessions row the badge instead of the dot when sessions need you', () => {
+    renderSidebar({ slug: null, liveSessions: true, sessionsNeedCount: 2 });
+    expect(screen.queryByRole('img', { name: 'live sessions' })).toBeNull();
+    expect(within(row('Sessions')).getByText('2')).toBeTruthy();
+  });
+
   it('marks the place owning the current path, including absorbed pages', () => {
     renderSidebar({ slug: 'shop' }, '/p/shop/serena');
     expect(row('Knowledge').getAttribute('aria-current')).toBe('page');
@@ -167,18 +237,67 @@ describe('Sidebar', () => {
     expect(screen.getByRole('dialog', { name: 'command palette' })).toBeTruthy();
     fireEvent.keyDown(window, { key: 'k', ctrlKey: true }); // toggles closed
     expect(screen.queryByRole('dialog', { name: 'command palette' })).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: /search & actions/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Search & actions/ }));
     expect(screen.getByRole('dialog', { name: 'command palette' })).toBeTruthy();
+  });
+
+  it('goes to the five main places on 1–5, in the design order', () => {
+    renderSidebar({ slug: 'shop' }, '/p/shop');
+    const where = (): string | null => screen.getByRole('status', { name: 'where' }).textContent;
+    const expected: [string, string][] = [
+      ['2', '/p/shop/inbox'],
+      ['3', '/p/shop/needs-you'],
+      ['4', '/p/shop/sessions'],
+      ['5', '/p/shop/plans'],
+      ['1', '/p/shop'],
+    ];
+    for (const [key, path] of expected) {
+      fireEvent.keyDown(window, { key });
+      expect(where()).toBe(path);
+    }
+  });
+
+  it('flips the theme on t and on the rail button', () => {
+    renderSidebar({ slug: null });
+    const before = document.documentElement.dataset.mode;
+    fireEvent.keyDown(window, { key: 't' });
+    const after = document.documentElement.dataset.mode;
+    expect(after).not.toBe(before);
+    fireEvent.click(screen.getByRole('button', { name: 'theme' }));
+    expect(document.documentElement.dataset.mode).toBe(before);
+  });
+
+  it('leaves 1–5 and t alone while typing in a field', () => {
+    renderSidebar({ slug: 'shop' }, '/p/shop');
+    const before = document.documentElement.dataset.mode;
+    const field = document.body.appendChild(document.createElement('input'));
+    fireEvent.keyDown(field, { key: '5' });
+    fireEvent.keyDown(field, { key: 't' });
+    field.remove();
+    expect(screen.getByRole('status', { name: 'where' }).textContent).toBe('/p/shop');
+    expect(document.documentElement.dataset.mode).toBe(before);
+  });
+});
+
+describe('sessionsNeedingYou', () => {
+  const item = (kind: string, sessionId: number): NeedsYouItem => ({ kind, sessionId }) as NeedsYouItem;
+
+  it('counts one session once, however many requests it holds', () => {
+    expect(sessionsNeedingYou([item('approval', 1), item('question', 1), item('awaiting_reply', 2)])).toBe(2);
+  });
+
+  it('leaves out phases and failures: they wait on you without being held-up sessions', () => {
+    expect(sessionsNeedingYou([item('manual_phase', 0), item('awaiting_merge', 0), item('failed', 3)])).toBe(0);
   });
 });
 
 function SignalsProbe(): JSX.Element {
   const s = useSidebarSignals();
-  return <output>{`${s.inboxCount}|${s.needsYouCount}|${String(s.liveSessions)}`}</output>;
+  return <output>{`${s.inboxCount}|${s.needsYouCount}|${s.sessionsNeedCount}|${String(s.liveSessions)}`}</output>;
 }
 
 describe('useSidebarSignals', () => {
-  it('takes the Inbox count from useInboxItems and the Needs you count from useNeedsYou', async () => {
+  it('counts the Inbox without approvals, the whole queue, and the sessions held up in it', async () => {
     render(
       <MemoryRouter>
         <SignalsProbe />
@@ -187,7 +306,7 @@ describe('useSidebarSignals', () => {
     await act(async () => {
       await Promise.resolve();
     });
-    expect(screen.getByRole('status').textContent).toBe('5|3|true');
+    expect(screen.getByRole('status').textContent).toBe('3|3|1|true');
   });
 
   // The live dot is a now-property: one active session is enough. It must come
@@ -217,6 +336,6 @@ describe('useSidebarSignals', () => {
     await act(async () => {
       await Promise.resolve();
     });
-    expect(screen.getByRole('status').textContent).toBe('5|3|false');
+    expect(screen.getByRole('status').textContent).toBe('3|3|1|false');
   });
 });

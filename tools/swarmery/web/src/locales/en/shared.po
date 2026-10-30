@@ -304,6 +304,10 @@ msgstr "{sec} s ago"
 msgid "{sessions, plural, one {# session ❯} few {# sessions ❯} many {# sessions ❯} other {# sessions ❯}}"
 msgstr "{sessions, plural, one {# session ❯} few {# sessions ❯} many {# sessions ❯} other {# sessions ❯}}"
 
+#: src/components/HealthFooter.tsx
+msgid "{spend} today"
+msgstr "{spend} today"
+
 #: src/components/PluginConfigModal.tsx
 msgid "{suggestionCount} suggested by probe"
 msgstr "{suggestionCount} suggested by probe"
@@ -378,6 +382,10 @@ msgstr "⇧ Land"
 msgid "+ add account"
 msgstr "+ add account"
 
+#: src/components/place/ListPane.tsx
+msgid "+ new"
+msgstr "+ new"
+
 #: src/components/NewProjectButton.tsx
 msgid "+ new project"
 msgstr "+ new project"
@@ -414,13 +422,13 @@ msgstr "<0>branch ·</0> From Review, Re-run and a failed verify both send the c
 msgid "≈ approximate — this range overlaps pruned days (daily rollups), so older detail is missing"
 msgstr "≈ approximate — this range overlaps pruned days (daily rollups), so older detail is missing"
 
-#: src/components/Sidebar.tsx
-msgid "⌘K search & actions"
-msgstr "⌘K search & actions"
-
 #: src/lib/docFigures.tsx
 msgid "⌸ Terminal"
 msgstr "⌸ Terminal"
+
+#: src/components/CommandPalette.tsx
+msgid "⏎ new session: \"{text}\""
+msgstr "⏎ new session: \"{text}\""
 
 #: src/workspace/task/TaskActions.tsx
 #: src/workspace/TaskCard.tsx
@@ -474,6 +482,10 @@ msgstr "❙❙ Pause"
 #: src/lib/docFigures.tsx
 msgid "🗑 Discard"
 msgstr "🗑 Discard"
+
+#: src/components/place/ListPane.tsx
+msgid "1–5 places"
+msgstr "1–5 places"
 
 #: src/lib/docFigures.tsx
 msgid "2 done · 237 archived"
@@ -897,6 +909,7 @@ msgstr "awaiting reply · {owed}"
 msgid "Awaiting your reply"
 msgstr "Awaiting your reply"
 
+#: src/components/Sidebar.tsx
 #: src/workspace/WorkspaceShell.tsx
 msgid "back to all projects"
 msgstr "back to all projects"
@@ -937,6 +950,10 @@ msgstr "Blocker: {summary}"
 #: src/components/RunOutcomeModal.tsx
 msgid "blockers"
 msgstr "blockers"
+
+#: src/components/CommandPalette.tsx
+msgid "Board"
+msgstr "Board"
 
 #: src/components/AccountsSection.tsx
 msgid "bound projects ({boundCount})"
@@ -1420,6 +1437,7 @@ msgstr "daemon"
 
 #: src/App.tsx
 #: src/components/HealthFooter.tsx
+#: src/components/HealthFooter.tsx
 #: src/pages/Settings.tsx
 #: src/workspace/WorkspaceShell.tsx
 msgid "daemon healthy"
@@ -1554,6 +1572,10 @@ msgstr "depends on: {dep}"
 msgid "derived from transcript"
 msgstr "derived from transcript"
 
+#: src/components/place/DecisionCard.tsx
+msgid "destructive"
+msgstr "destructive"
+
 #: src/components/ProjectActions.tsx
 msgid "detach"
 msgstr "detach"
@@ -1679,6 +1701,10 @@ msgstr "Dismiss"
 msgid "Dismiss the dashboard locked notice"
 msgstr "Dismiss the dashboard locked notice"
 
+#: src/components/CommandPalette.tsx
+msgid "Dispatch"
+msgstr "Dispatch"
+
 #: src/workspace/boardModel.ts
 msgid "dispatch error: {why}"
 msgstr "dispatch error: {why}"
@@ -1737,6 +1763,7 @@ msgstr "docs: {configDocs}"
 #: src/components/CreateAccountModal.tsx
 #: src/components/DetachModal.tsx
 #: src/components/NewProjectButton.tsx
+#: src/components/place/StateGlyph.tsx
 #: src/components/PlanRunCard.tsx
 #: src/components/SessionControls.tsx
 #: src/lib/sessionsView.ts
@@ -1756,6 +1783,10 @@ msgstr "duplicate"
 #: src/api.ts
 msgid "duplicate playbook failed: {status}"
 msgstr "duplicate playbook failed: {status}"
+
+#: src/components/place/ListPane.tsx
+msgid "e open"
+msgstr "e open"
 
 #: src/components/ProjectPlugins.tsx
 msgid "edit"
@@ -1817,6 +1848,7 @@ msgstr "extract failed: {status}"
 msgid "fail"
 msgstr "fail"
 
+#: src/components/place/StateGlyph.tsx
 #: src/components/ProjectPlugins.tsx
 #: src/components/RunOutcomeModal.tsx
 #: src/components/SessionControls.tsx
@@ -2005,6 +2037,10 @@ msgstr "Git writes (add, commit, checkout, worktree)"
 msgid "Guard decision"
 msgstr "Guard decision"
 
+#: src/components/place/StateGlyph.tsx
+msgid "guard stop"
+msgstr "guard stop"
+
 #: src/pages/docsRail.ts
 msgid "Guides"
 msgstr "Guides"
@@ -2017,6 +2053,7 @@ msgstr "Handoff"
 msgid "headless run in progress"
 msgstr "headless run in progress"
 
+#: src/components/CommandPalette.tsx
 #: src/lib/nav.ts
 msgid "Health"
 msgstr "Health"
@@ -2119,6 +2156,7 @@ msgstr "In Progress"
 msgid "In Review"
 msgstr "In Review"
 
+#: src/components/CommandPalette.tsx
 #: src/lib/docFigures.tsx
 #: src/lib/nav.ts
 #: src/workspace/boardModel.ts
@@ -2148,6 +2186,18 @@ msgstr "Its commits will be lost."
 #: src/components/SplitPane.tsx
 msgid "j/k move"
 msgstr "j/k move"
+
+#: src/components/place/ListPane.tsx
+msgid "j/k select"
+msgstr "j/k select"
+
+#: src/components/CommandPalette.tsx
+msgid "jump to a session, plan, place… or type a task and press ⏎ to dispatch"
+msgstr "jump to a session, plan, place… or type a task and press ⏎ to dispatch"
+
+#: src/components/Sidebar.tsx
+msgid "jump to anything, or type a task and dispatch it"
+msgstr "jump to anything, or type a task and dispatch it"
 
 #: src/components/NewProjectButton.tsx
 msgid "kebab-case only ([a-z0-9-])"
@@ -2182,6 +2232,7 @@ msgstr "killed"
 msgid "killing…"
 msgstr "killing…"
 
+#: src/components/CommandPalette.tsx
 #: src/lib/nav.ts
 msgid "Knowledge"
 msgstr "Knowledge"
@@ -2233,6 +2284,7 @@ msgstr "Last updated: {updatedAt}"
 msgid "later"
 msgstr "later"
 
+#: src/components/CommandPalette.tsx
 #: src/lib/nav.ts
 msgid "Learning"
 msgstr "Learning"
@@ -2321,6 +2373,10 @@ msgstr "main"
 msgid "managed"
 msgstr "managed"
 
+#: src/components/place/StateGlyph.tsx
+msgid "manual check"
+msgstr "manual check"
+
 #: src/lib/needsYou.ts
 msgid "Manual check"
 msgstr "Manual check"
@@ -2358,6 +2414,7 @@ msgid "missing: {missing}"
 msgstr "missing: {missing}"
 
 #: src/App.tsx
+#: src/components/HealthFooter.tsx
 #: src/workspace/WorkspaceShell.tsx
 msgid "mock data"
 msgstr "mock data"
@@ -2407,6 +2464,11 @@ msgstr "needs {needs}"
 msgid "needs me"
 msgstr "needs me"
 
+#: src/components/place/StateGlyph.tsx
+msgid "needs you"
+msgstr "needs you"
+
+#: src/components/CommandPalette.tsx
 #: src/lib/nav.ts
 msgid "Needs you"
 msgstr "Needs you"
@@ -2801,9 +2863,17 @@ msgstr "pause this project"
 msgid "paused"
 msgstr "paused"
 
+#: src/components/place/StateGlyph.tsx
+msgid "pending"
+msgstr "pending"
+
 #: src/components/PermissionPresets.tsx
 msgid "per-category overrides apply only under the unrestricted preset"
 msgstr "per-category overrides apply only under the unrestricted preset"
+
+#: src/components/place/StateGlyph.tsx
+msgid "permission"
+msgstr "permission"
 
 #: src/components/PermissionPresets.tsx
 #: src/components/PermissionPresets.tsx
@@ -2863,6 +2933,10 @@ msgstr "plain-language summary failed: {status}"
 msgid "plan"
 msgstr "plan"
 
+#: src/components/HealthFooter.tsx
+msgid "plan {percent} %"
+msgstr "plan {percent} %"
+
 #: src/workspace/boardModel.ts
 msgid "plan {planId}"
 msgstr "plan {planId}"
@@ -2916,6 +2990,7 @@ msgstr "plan unknown"
 msgid "planner's guess"
 msgstr "planner's guess"
 
+#: src/components/CommandPalette.tsx
 #: src/lib/nav.ts
 msgid "Plans"
 msgstr "Plans"
@@ -2934,6 +3009,10 @@ msgstr "playbook end"
 #: src/workspace/TaskCard.tsx
 msgid "playbook: {playbook}"
 msgstr "playbook: {playbook}"
+
+#: src/components/CommandPalette.tsx
+msgid "Playbooks"
+msgstr "Playbooks"
 
 #: src/components/ProjectActions.tsx
 msgid "plugin is not enabled for this project"
@@ -3069,6 +3148,11 @@ msgstr "Pushes <0>{taskBranch}</0> to <1>origin</1> and opens a pull request wit
 #: src/workspace/task/TaskActions.tsx
 msgid "put the card back in the Inbox"
 msgstr "put the card back in the Inbox"
+
+#: src/components/place/DecisionCard.tsx
+#: src/components/place/StateGlyph.tsx
+msgid "question"
+msgstr "question"
 
 #: src/lib/needsYou.ts
 msgid "Question"
@@ -3288,6 +3372,10 @@ msgstr "rerun failed"
 #: src/components/PermissionPresets.tsx
 msgid "reset"
 msgstr "reset"
+
+#: src/components/HealthFooter.tsx
+msgid "resets {at}"
+msgstr "resets {at}"
 
 #: src/components/usage/format.ts
 msgid "resets in {days}d"
@@ -3525,6 +3613,10 @@ msgstr "Schema + migration"
 msgid "Search"
 msgstr "Search"
 
+#: src/components/Sidebar.tsx
+msgid "Search & actions"
+msgstr "Search & actions"
+
 #: src/workspace/ProjectSwitcher.tsx
 msgid "search projects"
 msgstr "search projects"
@@ -3532,10 +3624,6 @@ msgstr "search projects"
 #: src/workspace/ProjectSwitcher.tsx
 msgid "search projects…"
 msgstr "search projects…"
-
-#: src/components/CommandPalette.tsx
-msgid "search sessions, messages, files…"
-msgstr "search sessions, messages, files…"
 
 #: src/lib/sessionsView.ts
 msgid "second"
@@ -3649,6 +3737,7 @@ msgstr "set account failed: {status}"
 msgid "set preset failed: {status}"
 msgstr "set preset failed: {status}"
 
+#: src/components/CommandPalette.tsx
 #: src/lib/nav.ts
 #: src/pages/Settings.tsx
 #: src/pages/Settings.tsx
@@ -3763,6 +3852,10 @@ msgstr "source"
 msgid "spawned by verification to repair {externalId}"
 msgstr "spawned by verification to repair {externalId}"
 
+#: src/components/HealthFooter.tsx
+msgid "spend today · plan window"
+msgstr "spend today · plan window"
+
 #: src/workspace/boardModel.ts
 msgid "stale"
 msgstr "stale"
@@ -3828,6 +3921,10 @@ msgstr "Stop turn"
 msgid "stop using this lesson?"
 msgstr "stop using this lesson?"
 
+#: src/components/place/StateGlyph.tsx
+msgid "stopped"
+msgstr "stopped"
+
 #: src/components/StopButton.tsx
 msgid "stopping…"
 msgstr "stopping…"
@@ -3840,6 +3937,7 @@ msgstr "submit answers"
 msgid "subscription account"
 msgstr "subscription account"
 
+#: src/components/HealthFooter.tsx
 #: src/components/usage/UsageChip.tsx
 #: src/components/usage/UsageChip.tsx
 #: src/components/usage/UsageModal.tsx
@@ -3871,6 +3969,7 @@ msgid "Swarm"
 msgstr "Swarm"
 
 #: src/App.tsx
+#: src/components/Sidebar.tsx
 msgid "swarmery home"
 msgstr "swarmery home"
 
@@ -3907,6 +4006,10 @@ msgstr "System"
 #: src/main.tsx
 msgid "system…"
 msgstr "system…"
+
+#: src/components/place/ListPane.tsx
+msgid "t theme"
+msgstr "t theme"
 
 #: src/components/usage/UsageConnect.tsx
 msgid "tab didn't open? authorize here"
@@ -4098,9 +4201,14 @@ msgstr "The worktree limit (default 4)"
 msgid "the worktree was reclaimed, so there is nothing left to grade — re-run the card instead"
 msgstr "the worktree was reclaimed, so there is nothing left to grade — re-run the card instead"
 
+#: src/components/Sidebar.tsx
 #: src/theme/ThemePicker.tsx
 msgid "theme"
 msgstr "theme"
+
+#: src/components/Sidebar.tsx
+msgid "theme · t"
+msgstr "theme · t"
 
 #: src/theme/ThemePicker.tsx
 #: src/theme/ThemePicker.tsx
@@ -4454,6 +4562,10 @@ msgstr "will remove"
 msgid "will restore"
 msgstr "will restore"
 
+#: src/components/place/StateGlyph.tsx
+msgid "working"
+msgstr "working"
+
 #: src/lib/docFigures.tsx
 #: src/workspace/boardModel.ts
 msgid "Working"
@@ -4482,6 +4594,10 @@ msgstr "worktree reclaimed — nothing to re-grade"
 #: src/pages/Settings.tsx
 msgid "worktrees"
 msgstr "worktrees"
+
+#: src/components/place/DecisionCard.tsx
+msgid "write"
+msgstr "write"
 
 #: src/workspace/task/TaskActions.tsx
 msgid "write the evidence first — a close with no evidence cannot be audited"

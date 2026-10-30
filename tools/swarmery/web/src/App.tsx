@@ -1,13 +1,11 @@
-// App shell: a full-width top header (SW◆RMERY wordmark at left, and a live
-// daemon status at right) with a bottom border. Below it, the one Sidebar
-// (components/Sidebar.tsx — Canvas v3: project switcher on top, ten places
-// from lib/nav.ts, ⌘K at the bottom) in its All-projects state; <main> owns the
-// scroll. Mobile drops the sidebar for a flat fixed bottom nav fed by the same
-// nav model.
+// App shell: the one Sidebar (components/Sidebar.tsx — Swarmery v4: wordmark and
+// switches, project switcher, eleven places from lib/nav.ts, ⌘K, usage and
+// health at the bottom) in its All-projects state, beside <main>, which owns the
+// scroll. There is no top header on desktop. Below `desk` the sidebar is hidden,
+// so a compact header keeps the wordmark, the switches, usage and daemon status,
+// and a flat fixed bottom nav is fed by the same nav model.
 //
-// The Inbox row carries the only nav badge — the Inbox's own six-source count
-// (pages/inbox/useInboxItems.ts, via useSidebarSignals; the shell fetches no
-// badge of its own) — and Sessions a green dot while any session is live.
+// The badges come from useSidebarSignals; the shell fetches none of its own.
 
 import { Trans, useLingui } from '@lingui/react/macro';
 import { useState } from 'react';
@@ -51,7 +49,7 @@ function AppShell(): JSX.Element {
   // Does the active route own its vertical scroll? Declared on the route itself
   // (main.tsx `handle: { fill: true }`), never matched on the pathname here.
   const fill = useFillRoute();
-  const { inboxCount, needsYouCount, liveSessions } = useSidebarSignals();
+  const { inboxCount, needsYouCount, sessionsNeedCount, liveSessions } = useSidebarSignals();
   const { t } = useLingui();
 
   const daemonOk = !unreachable;
@@ -62,15 +60,13 @@ function AppShell(): JSX.Element {
         never scroll — the scroller is <main> below (or the page, on fill routes).
         Same guard as workspace/WorkspaceShell.tsx. */}
     <div className="app-shell flex h-dvh flex-col overflow-hidden">
-      {/* Full-width top header: wordmark, status. */}
-      <header className="header-hairline relative z-20 flex h-14 shrink-0 items-center gap-4 bg-bg px-4 desk:px-6">
-        {/* Fixed-width block on desktop (24px pad + 172px + 16px gap = 212px) so
-            the header's content edge lines up with the sidebar edge — identical
-            to the project shell's header, so nothing shifts between shells. */}
+      {/* Below `desk` only: wordmark, switches, usage, status. On desktop they
+          live on the sidebar. */}
+      <header className="header-hairline relative z-20 flex h-14 shrink-0 items-center gap-4 bg-bg px-4 desk:hidden">
         <Link
           to="/"
           aria-label={t`swarmery home`}
-          className="flex min-w-0 items-center font-sans text-[16px] leading-none font-extrabold tracking-[0.09em] text-ink uppercase transition-opacity hover:opacity-80 desk:w-[172px] desk:shrink-0"
+          className="flex min-w-0 items-center font-sans text-[16px] leading-none font-extrabold tracking-[0.09em] text-ink uppercase transition-opacity hover:opacity-80"
         >
           <Wordmark />
         </Link>
@@ -112,8 +108,20 @@ function AppShell(): JSX.Element {
       <AccountReadyBanner />
 
       <div className="flex min-h-0 flex-1">
-        {/* Desktop sidebar (212px, desk and up) in its All-projects state. */}
-        <Sidebar slug={null} inboxCount={inboxCount} needsYouCount={needsYouCount} liveSessions={liveSessions} />
+        {/* Desktop sidebar (196px, desk and up) in its All-projects state. */}
+        <Sidebar
+          slug={null}
+          inboxCount={inboxCount}
+          needsYouCount={needsYouCount}
+          sessionsNeedCount={sessionsNeedCount}
+          liveSessions={liveSessions}
+        >
+          {!MOCK && (
+            <div className="mt-[18px] px-2">
+              <NewProjectButton />
+            </div>
+          )}
+        </Sidebar>
 
         {/* Fill routes (lib/fillRoute.ts) own their own scroll: this container
             hands it over — overflow-hidden plus the flex/min-h-0 chain the page

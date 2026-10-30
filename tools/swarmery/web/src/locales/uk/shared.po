@@ -304,6 +304,10 @@ msgstr "{sec} с тому"
 msgid "{sessions, plural, one {# session ❯} few {# sessions ❯} many {# sessions ❯} other {# sessions ❯}}"
 msgstr "{sessions, plural, one {# сесія ❯} few {# сесії ❯} many {# сесій ❯} other {# сесії ❯}}"
 
+#: src/components/HealthFooter.tsx
+msgid "{spend} today"
+msgstr "{spend} сьогодні"
+
 #: src/components/PluginConfigModal.tsx
 msgid "{suggestionCount} suggested by probe"
 msgstr "{suggestionCount} запропонував зонд"
@@ -378,6 +382,10 @@ msgstr "⇧ Влити"
 msgid "+ add account"
 msgstr "+ додати акаунт"
 
+#: src/components/place/ListPane.tsx
+msgid "+ new"
+msgstr "+ нова"
+
 #: src/components/NewProjectButton.tsx
 msgid "+ new project"
 msgstr "+ новий проєкт"
@@ -414,13 +422,13 @@ msgstr "<0>гілка ·</0> З рев’ю і «Перезапуск», і не
 msgid "≈ approximate — this range overlaps pruned days (daily rollups), so older detail is missing"
 msgstr "≈ приблизно — діапазон захоплює вже згорнуті дні (денні зведення), тож старіших деталей немає"
 
-#: src/components/Sidebar.tsx
-msgid "⌘K search & actions"
-msgstr "⌘K пошук і дії"
-
 #: src/lib/docFigures.tsx
 msgid "⌸ Terminal"
 msgstr "⌸ Термінал"
+
+#: src/components/CommandPalette.tsx
+msgid "⏎ new session: \"{text}\""
+msgstr "⏎ нова сесія: \"{text}\""
 
 #: src/workspace/task/TaskActions.tsx
 #: src/workspace/TaskCard.tsx
@@ -474,6 +482,10 @@ msgstr "❙❙ Пауза"
 #: src/lib/docFigures.tsx
 msgid "🗑 Discard"
 msgstr "🗑 Відкинути"
+
+#: src/components/place/ListPane.tsx
+msgid "1–5 places"
+msgstr "1–5 місця"
 
 #: src/lib/docFigures.tsx
 msgid "2 done · 237 archived"
@@ -897,6 +909,7 @@ msgstr "чекає відповіді · {owed}"
 msgid "Awaiting your reply"
 msgstr "Чекає вашої відповіді"
 
+#: src/components/Sidebar.tsx
 #: src/workspace/WorkspaceShell.tsx
 msgid "back to all projects"
 msgstr "до всіх проєктів"
@@ -937,6 +950,10 @@ msgstr "Блокер: {summary}"
 #: src/components/RunOutcomeModal.tsx
 msgid "blockers"
 msgstr "блокери"
+
+#: src/components/CommandPalette.tsx
+msgid "Board"
+msgstr "Дошка"
 
 #: src/components/AccountsSection.tsx
 msgid "bound projects ({boundCount})"
@@ -1420,6 +1437,7 @@ msgstr "демон"
 
 #: src/App.tsx
 #: src/components/HealthFooter.tsx
+#: src/components/HealthFooter.tsx
 #: src/pages/Settings.tsx
 #: src/workspace/WorkspaceShell.tsx
 msgid "daemon healthy"
@@ -1554,6 +1572,10 @@ msgstr "залежить від: {dep}"
 msgid "derived from transcript"
 msgstr "виведено з транскрипту"
 
+#: src/components/place/DecisionCard.tsx
+msgid "destructive"
+msgstr "руйнівне"
+
 #: src/components/ProjectActions.tsx
 msgid "detach"
 msgstr "відключити"
@@ -1679,6 +1701,10 @@ msgstr "Прибрати"
 msgid "Dismiss the dashboard locked notice"
 msgstr "Прибрати сповіщення про заблокований дашборд"
 
+#: src/components/CommandPalette.tsx
+msgid "Dispatch"
+msgstr "Відправити"
+
 #: src/workspace/boardModel.ts
 msgid "dispatch error: {why}"
 msgstr "помилка відправки: {why}"
@@ -1737,6 +1763,7 @@ msgstr "документація: {configDocs}"
 #: src/components/CreateAccountModal.tsx
 #: src/components/DetachModal.tsx
 #: src/components/NewProjectButton.tsx
+#: src/components/place/StateGlyph.tsx
 #: src/components/PlanRunCard.tsx
 #: src/components/SessionControls.tsx
 #: src/lib/sessionsView.ts
@@ -1756,6 +1783,10 @@ msgstr "дублікат"
 #: src/api.ts
 msgid "duplicate playbook failed: {status}"
 msgstr "дублювати плейбук не вдалося: {status}"
+
+#: src/components/place/ListPane.tsx
+msgid "e open"
+msgstr "e відкрити"
 
 #: src/components/ProjectPlugins.tsx
 msgid "edit"
@@ -1817,6 +1848,7 @@ msgstr "видобування не вдалося: {status}"
 msgid "fail"
 msgstr "провал"
 
+#: src/components/place/StateGlyph.tsx
 #: src/components/ProjectPlugins.tsx
 #: src/components/RunOutcomeModal.tsx
 #: src/components/SessionControls.tsx
@@ -2005,6 +2037,10 @@ msgstr "Записи git (add, commit, checkout, worktree)"
 msgid "Guard decision"
 msgstr "Рішення guard"
 
+#: src/components/place/StateGlyph.tsx
+msgid "guard stop"
+msgstr "зупинка guard"
+
 #: src/pages/docsRail.ts
 msgid "Guides"
 msgstr "Посібники"
@@ -2017,6 +2053,7 @@ msgstr "Передача"
 msgid "headless run in progress"
 msgstr "триває фоновий запуск"
 
+#: src/components/CommandPalette.tsx
 #: src/lib/nav.ts
 msgid "Health"
 msgstr "Здоров’я"
@@ -2119,6 +2156,7 @@ msgstr "У роботі"
 msgid "In Review"
 msgstr "На рев’ю"
 
+#: src/components/CommandPalette.tsx
 #: src/lib/docFigures.tsx
 #: src/lib/nav.ts
 #: src/workspace/boardModel.ts
@@ -2148,6 +2186,18 @@ msgstr "Її коміти буде втрачено."
 #: src/components/SplitPane.tsx
 msgid "j/k move"
 msgstr "j/k рух"
+
+#: src/components/place/ListPane.tsx
+msgid "j/k select"
+msgstr "j/k вибір"
+
+#: src/components/CommandPalette.tsx
+msgid "jump to a session, plan, place… or type a task and press ⏎ to dispatch"
+msgstr "перейдіть до сесії, плану, місця… або введіть задачу й натисніть ⏎, щоб відправити"
+
+#: src/components/Sidebar.tsx
+msgid "jump to anything, or type a task and dispatch it"
+msgstr "перейдіть куди завгодно або введіть задачу й відправте її"
 
 #: src/components/NewProjectButton.tsx
 msgid "kebab-case only ([a-z0-9-])"
@@ -2182,6 +2232,7 @@ msgstr "вбито"
 msgid "killing…"
 msgstr "вбиваємо…"
 
+#: src/components/CommandPalette.tsx
 #: src/lib/nav.ts
 msgid "Knowledge"
 msgstr "Знання"
@@ -2233,6 +2284,7 @@ msgstr "Оновлено: {updatedAt}"
 msgid "later"
 msgstr "пізніше"
 
+#: src/components/CommandPalette.tsx
 #: src/lib/nav.ts
 msgid "Learning"
 msgstr "Навчання"
@@ -2321,6 +2373,10 @@ msgstr "основне"
 msgid "managed"
 msgstr "керований"
 
+#: src/components/place/StateGlyph.tsx
+msgid "manual check"
+msgstr "ручна перевірка"
+
 #: src/lib/needsYou.ts
 msgid "Manual check"
 msgstr "Ручна перевірка"
@@ -2358,6 +2414,7 @@ msgid "missing: {missing}"
 msgstr "відсутні: {missing}"
 
 #: src/App.tsx
+#: src/components/HealthFooter.tsx
 #: src/workspace/WorkspaceShell.tsx
 msgid "mock data"
 msgstr "тестові дані"
@@ -2407,6 +2464,11 @@ msgstr "потребує {needs}"
 msgid "needs me"
 msgstr "чекає мене"
 
+#: src/components/place/StateGlyph.tsx
+msgid "needs you"
+msgstr "потребує вас"
+
+#: src/components/CommandPalette.tsx
 #: src/lib/nav.ts
 msgid "Needs you"
 msgstr "Потребує вас"
@@ -2801,9 +2863,17 @@ msgstr "поставити проєкт на паузу"
 msgid "paused"
 msgstr "на паузі"
 
+#: src/components/place/StateGlyph.tsx
+msgid "pending"
+msgstr "очікує"
+
 #: src/components/PermissionPresets.tsx
 msgid "per-category overrides apply only under the unrestricted preset"
 msgstr "перевизначення за категоріями діють лише в пресеті «без обмежень»"
+
+#: src/components/place/StateGlyph.tsx
+msgid "permission"
+msgstr "дозвіл"
 
 #: src/components/PermissionPresets.tsx
 #: src/components/PermissionPresets.tsx
@@ -2863,6 +2933,10 @@ msgstr "не вдалося підготувати пояснення: {status}"
 msgid "plan"
 msgstr "план"
 
+#: src/components/HealthFooter.tsx
+msgid "plan {percent} %"
+msgstr "план {percent} %"
+
 #: src/workspace/boardModel.ts
 msgid "plan {planId}"
 msgstr "план {planId}"
@@ -2916,6 +2990,7 @@ msgstr "план невідомий"
 msgid "planner's guess"
 msgstr "здогад планувальника"
 
+#: src/components/CommandPalette.tsx
 #: src/lib/nav.ts
 msgid "Plans"
 msgstr "Плани"
@@ -2934,6 +3009,10 @@ msgstr "кінець плейбука"
 #: src/workspace/TaskCard.tsx
 msgid "playbook: {playbook}"
 msgstr "плейбук: {playbook}"
+
+#: src/components/CommandPalette.tsx
+msgid "Playbooks"
+msgstr "Плейбуки"
 
 #: src/components/ProjectActions.tsx
 msgid "plugin is not enabled for this project"
@@ -3069,6 +3148,11 @@ msgstr "Пушить <0>{taskBranch}</0> в <1>origin</1>, відкриває п
 #: src/workspace/task/TaskActions.tsx
 msgid "put the card back in the Inbox"
 msgstr "повернути картку у Вхідних"
+
+#: src/components/place/DecisionCard.tsx
+#: src/components/place/StateGlyph.tsx
+msgid "question"
+msgstr "питання"
 
 #: src/lib/needsYou.ts
 msgid "Question"
@@ -3288,6 +3372,10 @@ msgstr "перезапуск не вдався"
 #: src/components/PermissionPresets.tsx
 msgid "reset"
 msgstr "скинути"
+
+#: src/components/HealthFooter.tsx
+msgid "resets {at}"
+msgstr "скидання {at}"
 
 #: src/components/usage/format.ts
 msgid "resets in {days}d"
@@ -3525,6 +3613,10 @@ msgstr "Схема + міграція"
 msgid "Search"
 msgstr "Пошук"
 
+#: src/components/Sidebar.tsx
+msgid "Search & actions"
+msgstr "Пошук і дії"
+
 #: src/workspace/ProjectSwitcher.tsx
 msgid "search projects"
 msgstr "шукати проєкти"
@@ -3532,10 +3624,6 @@ msgstr "шукати проєкти"
 #: src/workspace/ProjectSwitcher.tsx
 msgid "search projects…"
 msgstr "шукати проєкти…"
-
-#: src/components/CommandPalette.tsx
-msgid "search sessions, messages, files…"
-msgstr "шукати сесії, повідомлення, файли…"
 
 #: src/lib/sessionsView.ts
 msgid "second"
@@ -3649,6 +3737,7 @@ msgstr "зміна акаунта не вдалася: {status}"
 msgid "set preset failed: {status}"
 msgstr "зміна пресета не вдалася: {status}"
 
+#: src/components/CommandPalette.tsx
 #: src/lib/nav.ts
 #: src/pages/Settings.tsx
 #: src/pages/Settings.tsx
@@ -3763,6 +3852,10 @@ msgstr "джерело"
 msgid "spawned by verification to repair {externalId}"
 msgstr "створено перевіркою для виправлення {externalId}"
 
+#: src/components/HealthFooter.tsx
+msgid "spend today · plan window"
+msgstr "витрати сьогодні · вікно плану"
+
 #: src/workspace/boardModel.ts
 msgid "stale"
 msgstr "застаріло"
@@ -3828,6 +3921,10 @@ msgstr "Зупинити хід"
 msgid "stop using this lesson?"
 msgstr "списати цей урок?"
 
+#: src/components/place/StateGlyph.tsx
+msgid "stopped"
+msgstr "зупинено"
+
 #: src/components/StopButton.tsx
 msgid "stopping…"
 msgstr "зупинка…"
@@ -3840,6 +3937,7 @@ msgstr "надіслати відповіді"
 msgid "subscription account"
 msgstr "акаунт підписки"
 
+#: src/components/HealthFooter.tsx
 #: src/components/usage/UsageChip.tsx
 #: src/components/usage/UsageChip.tsx
 #: src/components/usage/UsageModal.tsx
@@ -3871,6 +3969,7 @@ msgid "Swarm"
 msgstr "Swarm"
 
 #: src/App.tsx
+#: src/components/Sidebar.tsx
 msgid "swarmery home"
 msgstr "головна swarmery"
 
@@ -3907,6 +4006,10 @@ msgstr "Система"
 #: src/main.tsx
 msgid "system…"
 msgstr "система…"
+
+#: src/components/place/ListPane.tsx
+msgid "t theme"
+msgstr "t тема"
 
 #: src/components/usage/UsageConnect.tsx
 msgid "tab didn't open? authorize here"
@@ -4098,9 +4201,14 @@ msgstr "Ліміт worktree (за умовчанням 4)"
 msgid "the worktree was reclaimed, so there is nothing left to grade — re-run the card instead"
 msgstr "worktree вже забрано, тож оцінювати нічого — натомість перезапустіть картку"
 
+#: src/components/Sidebar.tsx
 #: src/theme/ThemePicker.tsx
 msgid "theme"
 msgstr "тема"
+
+#: src/components/Sidebar.tsx
+msgid "theme · t"
+msgstr "тема · t"
 
 #: src/theme/ThemePicker.tsx
 #: src/theme/ThemePicker.tsx
@@ -4454,6 +4562,10 @@ msgstr "буде видалено"
 msgid "will restore"
 msgstr "буде відновлено"
 
+#: src/components/place/StateGlyph.tsx
+msgid "working"
+msgstr "працює"
+
 #: src/lib/docFigures.tsx
 #: src/workspace/boardModel.ts
 msgid "Working"
@@ -4482,6 +4594,10 @@ msgstr "worktree забрано — нічого переоцінювати"
 #: src/pages/Settings.tsx
 msgid "worktrees"
 msgstr "worktree"
+
+#: src/components/place/DecisionCard.tsx
+msgid "write"
+msgstr "запис"
 
 #: src/workspace/task/TaskActions.tsx
 msgid "write the evidence first — a close with no evidence cannot be audited"
