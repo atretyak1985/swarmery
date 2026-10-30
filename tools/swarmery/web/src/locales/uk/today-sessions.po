@@ -269,11 +269,11 @@ msgstr "← сесії"
 
 #: src/pages/detail/SessionPane.tsx
 msgid "→ changed to"
-msgstr ""
+msgstr "→ змінено на"
 
 #: src/pages/detail/SessionPane.tsx
 msgid "→ fell back to"
-msgstr ""
+msgstr "→ відкат на"
 
 #: src/pages/Approvals.tsx
 msgid "+ add rule"
