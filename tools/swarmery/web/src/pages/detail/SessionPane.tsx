@@ -41,6 +41,7 @@ import { fmtCost, fmtTokens, projectLabel } from '../../lib/format';
 import { useProjectColor } from '../../lib/projectColors';
 import { safeHref } from '../../lib/safeHref';
 import { accountLabel } from '../../lib/sessionAccount';
+import { modelShortName, sessionModelFallback } from '../../lib/sessionModelChip';
 import { compactSpan, rowState, stateSentence, type RowState } from '../../lib/sessionsView';
 import { useNowMs } from '../../lib/sessionState';
 import { ConflictBadge } from '../../lib/swarm';
@@ -85,6 +86,11 @@ export function parseTab(value: string | null): Tab {
 }
 
 const TERM_FOCUS_SCHEMES: readonly string[] = ['warp:'];
+
+/** Context occupancy (tokens), matching advisor R9's danger line: a fat context is
+ * the fat-session cost driver. */
+const CONTEXT_WARN = 150_000;
+const CONTEXT_DANGER = 300_000;
 
 const TITLE_CLASS = 'text-[22px] leading-[1.25] font-semibold tracking-[-0.015em]';
 
@@ -751,6 +757,7 @@ export function SessionPane({
   const chatCount = detail.turns.filter((turn) => turn.text !== null && turn.text !== '').length;
   const diffCount = new Set(detail.fileChanges.map((c) => c.filePath)).size;
   const model = detail.modelLast ?? detail.model;
+  const moved = sessionModelFallback(detail);
   const account = accountLabel(detail);
   const contextPct = detail.link?.contextPct ?? null;
   const elapsedMs = new Date(detail.endedAt ?? nowMs).getTime() - new Date(detail.startedAt).getTime();
@@ -767,8 +774,10 @@ export function SessionPane({
       barPercent: contextPct,
     });
   } else if (detail.contextTokens != null) {
-    // No link mod: the window size is unknown, so no percentage and no bar.
-    numbers.push({ label: t`context`, value: fmtTokens(detail.contextTokens) });
+    // No link mod: the window size is unknown, so no percentage and no bar. The
+    // fat-session thresholds still warn: every turn re-reads this context.
+    const heavy = detail.contextTokens >= CONTEXT_DANGER ? 'red' : detail.contextTokens >= CONTEXT_WARN ? 'amber' : 'default';
+    numbers.push({ label: t`context`, value: fmtTokens(detail.contextTokens), tone: heavy });
   }
   numbers.push({ label: t`elapsed`, value: compactSpan(elapsedMs) });
   if (facts.errors > 0) numbers.push({ label: t`errors`, value: String(facts.errors), tone: 'red' });
@@ -826,7 +835,16 @@ export function SessionPane({
           {model !== null && (
             <>
               <span aria-hidden="true">·</span>
-              <span>{model}</span>
+              {/* Both ends of a move: amber and "fell back to" are kept for a move
+                  down, the thing that explains a weaker answer. */}
+              {moved === null ? (
+                <span>{model}</span>
+              ) : (
+                <span className={moved.fellBack ? 'text-amber' : undefined}>
+                  {modelShortName(moved.from)} {moved.fellBack ? t`→ fell back to` : t`→ changed to`}{' '}
+                  {modelShortName(moved.to)}
+                </span>
+              )}
             </>
           )}
           {detail.gitBranch !== null && (

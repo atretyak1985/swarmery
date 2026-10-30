@@ -267,6 +267,14 @@ msgstr "← projects"
 msgid "← sessions"
 msgstr "← sessions"
 
+#: src/pages/detail/SessionPane.tsx
+msgid "→ changed to"
+msgstr "→ changed to"
+
+#: src/pages/detail/SessionPane.tsx
+msgid "→ fell back to"
+msgstr "→ fell back to"
+
 #: src/pages/Approvals.tsx
 msgid "+ add rule"
 msgstr "+ add rule"

@@ -113,6 +113,7 @@ export function SessionGate({
   const single = questions?.length === 1 && questions[0]?.multiSelect === false ? questions[0] : null;
   const suggested = item.kind === 'awaiting_reply' ? (item.suggestion?.options ?? []) : [];
   const options = single !== null ? single.options.map((o) => o.label) : suggested;
+  const consequences = single?.options.map((o) => o.description) ?? [];
   const pickedLabel = options[pick] ?? null;
 
   const tier = gateTier(item, request);
@@ -184,7 +185,10 @@ export function SessionGate({
         expires={clock === null ? t`waiting ${waited}` : t`expires in ${clock}`}
         title={headline}
         {...(!asks && item.preview !== '' ? { code: item.preview } : {})}
-        options={options.map((label, i) => ({ id: String(i), label }))}
+        options={options.map((label, i) => {
+          const consequence = consequences[i];
+          return consequence ? { id: String(i), label, consequence } : { id: String(i), label };
+        })}
         picked={options.length > 0 ? String(pick) : null}
         onPick={(picked) => setPick(Number(picked))}
         {...(denying ? { note: { value: reason, onChange: setReason, placeholder: t`why you deny, for the session` } } : {})}

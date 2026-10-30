@@ -267,6 +267,14 @@ msgstr "← проєкти"
 msgid "← sessions"
 msgstr "← сесії"
 
+#: src/pages/detail/SessionPane.tsx
+msgid "→ changed to"
+msgstr ""
+
+#: src/pages/detail/SessionPane.tsx
+msgid "→ fell back to"
+msgstr ""
+
 #: src/pages/Approvals.tsx
 msgid "+ add rule"
 msgstr "+ додати правило"
