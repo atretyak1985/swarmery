@@ -232,13 +232,20 @@ describe('the detail', () => {
   });
 
   it.each([
-    ['working', '/sessions/2', ['pause', 'redirect', 'stop']],
+    ['working', '/sessions/2', ['redirect', 'stop']],
     ['done', '/sessions/3', ['session outcome', 'extract tasks']],
     ['failed', '/sessions/4', ['resume with a reply']],
   ])('offers the %s actions beside the tabs', async (_state, path, names) => {
     open(path);
     await screen.findByRole('tab', { name: /Steps/ });
     for (const name of names) expect(screen.getByRole('button', { name })).toBeTruthy();
+  });
+
+  // Plan D-13: stopSession ends the process, so nothing calls it a pause.
+  it('offers no pause on a working session', async () => {
+    open('/sessions/2');
+    await screen.findByRole('button', { name: 'redirect' });
+    expect(screen.queryByRole('button', { name: /pause/i })).toBeNull();
   });
 
   it('keeps Kill, the outcome, extract tasks and the remote controls in ⋯', async () => {

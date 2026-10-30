@@ -933,14 +933,12 @@ export function SessionPane({
           </TabButton>
           <span className="flex-1" />
           <div className="flex flex-wrap items-center gap-0.5 pb-0.5">
+            {/* No `pause` (plan D-13): stopSession ends the process and records it
+                as finished, so the word would lie. */}
             {state === 'working' && (
-              <span className={`${BUTTON} inline-flex items-center gap-1 !px-0 !py-0`}>
-                <StopButton session={detail} label={t`pause`} className="py-1.5 pl-3 text-ink-2 hover:text-ink" />
-                <span aria-hidden="true">·</span>
-                <button type="button" onClick={openComposer} className="py-1.5 pr-3 text-ink-2 hover:text-ink">
-                  {t`redirect`}
-                </button>
-              </span>
+              <button type="button" onClick={openComposer} className={BUTTON}>
+                {t`redirect`}
+              </button>
             )}
             {live &&
               (killable === 'killable' ? (

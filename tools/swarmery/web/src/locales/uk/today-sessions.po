@@ -1441,10 +1441,6 @@ msgstr "результат ▾"
 msgid "Path"
 msgstr "Шлях"
 
-#: src/pages/detail/SessionPane.tsx
-msgid "pause"
-msgstr "пауза"
-
 #: src/pages/Approvals.tsx
 #: src/pages/sessions/SwarmPanel.tsx
 msgid "pending"
