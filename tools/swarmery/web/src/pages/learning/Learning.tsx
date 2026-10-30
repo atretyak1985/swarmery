@@ -20,24 +20,13 @@ import { CalibrationPanel } from '../LessonsCalibration';
 import { RecDetail } from '../health/HealthOverview';
 import { Classifier } from './Classifier';
 import { Proof } from './Proof';
+import { proofVerdict, type ProofVerdict } from './proofVerdict';
 
 export const LEARNING_TABS = ['lessons', 'classifier', 'honesty', 'proof'] as const;
 export type LearningTab = (typeof LEARNING_TABS)[number];
 
 /** Which recommendations are proof: the ones you took, by how they turned out. */
 const PROOF_RECS = ['verified', 'accepted', 'adopted'] as const;
-
-/** The evidence note a verify pass leaves when nothing moved. */
-// i18n-ignore — matched against the daemon's note, never rendered
-const NO_EFFECT_NOTE = 'no measurable improvement';
-
-type ProofVerdict = 'proven' | 'gathering' | 'none';
-
-function proofVerdict(rec: Recommendation): ProofVerdict {
-  const note = (rec.evidence as { note?: unknown } | null)?.note;
-  if (typeof note === 'string' && note.includes(NO_EFFECT_NOTE)) return 'none';
-  return rec.status === 'verified' ? 'proven' : 'gathering';
-}
 
 const VERDICT_TONE: Record<ProofVerdict, PageTone> = { proven: 'green', gathering: 'brand', none: 'red' };
 const VERDICT_GLYPH: Record<ProofVerdict, string> = { proven: '✓', gathering: '✽', none: '✗' };
