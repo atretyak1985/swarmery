@@ -1,31 +1,21 @@
-// One plan run as ONE row in the day timeline (Sessions redesign).
+// One plan run as ONE card in the list's Plan runs group, the audit view of the
+// fan-out (the groups above list each of its sessions on its own row).
 //
 // A plan run fans out into a controller session plus one session per phase, and
 // every one of them opens with the same boilerplate prompt ("You are the
-// controller for an ENTIRE approved implementation plan…"). Flat, those rows are
-// indistinguishable AND they bury the day list. So the run collapses to a single
-// bordered card: caret · PLAN RUN pill · project · plan title · status · tallies
-// · "open plan →". Expanding fans the rows out INDENTED and identified by role
-// (`ctl` / `#5`), never by their boilerplate title.
-//
-// The card is the filter unit: Sessions keeps it whole when any row matches the
-// status chip (lib/sessionsView), so a filter never shows half a run.
+// controller for an ENTIRE approved implementation plan…"). So the run collapses
+// to a single card: caret · plan title · plan run · project · tallies · "open
+// plan →". Expanding fans the rows out identified by role (`ctl` / `#5`), never
+// by their boilerplate title. A category gets no colour (handoff §4): the tag is
+// grey text.
 
 import { plural } from '@lingui/core/macro';
 import { Trans, useLingui } from '@lingui/react/macro';
 import { Link } from 'react-router-dom';
 import { projectLabel } from '../lib/format';
 import { plansTaskHref } from '../pages/plans/plansUrl';
-import { useProjectColor } from '../lib/projectColors';
-import {
-  planRowNotes,
-  planRowTag,
-  planRowTitle,
-  runIsRunning,
-  statusSummary,
-  type PlanRun,
-} from '../lib/sessionsView';
-import { SessionCard } from './SessionCard';
+import { planRowNotes, planRowTag, planRowTitle, statusSummary, type PlanRun } from '../lib/sessionsView';
+import { SessionRow } from './SessionRow';
 
 export function PlanRunCard({
   run,
@@ -46,11 +36,9 @@ export function PlanRunCard({
   nowById?: Record<number, string>;
 }): JSX.Element {
   const { t } = useLingui();
-  const colorFor = useProjectColor();
   // A run knows its plan's task id, not its externalId: hand off through the
   // permanent ?task= resolver, which replaces to the canonical plan path.
   const plansHref = plansTaskHref(slug ?? run.projectSlug, run.taskId);
-  const running = runIsRunning(run.rows);
   const notes = planRowNotes(run.rows);
   const count = run.rows.length;
   const sessions = plural(count, { one: '# session', few: '# sessions', many: '# sessions', other: '# sessions' });
@@ -59,11 +47,11 @@ export function PlanRunCard({
   const runTitle = run.title;
 
   return (
-    <div className="mb-2.5 overflow-hidden rounded-xl border border-line bg-surface">
-      {/* role=button + a nested stopPropagation link mirrors SessionCard: an <a>
-          intercepts clicks before React's synthetic system can stop them, so the
-          "open plan →" link must live OUTSIDE any anchor and cancel bubbling
-          itself — otherwise opening the plan would also toggle the card. */}
+    <div className="mb-2 overflow-hidden rounded-[8px] border border-line bg-surface">
+      {/* role=button + a nested stopPropagation link: an <a> intercepts clicks
+          before React's synthetic system can stop them, so "open plan →" lives
+          outside any anchor and cancels bubbling itself, or opening the plan
+          would also toggle the card. */}
       <div
         role="button"
         tabIndex={0}
@@ -76,70 +64,41 @@ export function PlanRunCard({
             onToggle();
           }
         }}
-        className="flex min-h-[44px] cursor-pointer flex-wrap items-center gap-x-2.5 gap-y-1 px-3 py-2.5 transition-colors hover:bg-surface2 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-brand"
+        className="cursor-pointer px-3 py-2 transition-colors hover:bg-surface2 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-brand"
       >
-        <span aria-hidden="true" className="w-2 shrink-0 font-mono text-[10.5px] text-ink-faint">
-          {expanded ? '▾' : '▸'}
-        </span>
-        {/* Purple, not a status hue: the pill says WHAT the row is, and must not
-            read as another state beside the running/done chip. --color-purple is
-            re-tuned per palette, so it clears AA in light mode too. */}
-        <span className="shrink-0 rounded-full border border-purple/40 bg-purple/15 px-[7px] py-0.5 font-mono text-[9.5px] tracking-[0.1em] whitespace-nowrap text-purple uppercase">
-          <Trans>plan run</Trans>
-        </span>
-        {!hideProject && (
-          <span className="flex shrink-0 items-center gap-1.5">
-            <span
-              aria-hidden="true"
-              className="h-[7px] w-[7px] shrink-0 rounded-full"
-              style={{ backgroundColor: colorFor(run.projectSlug) }}
-            />
-            <span
-              className="max-w-[130px] truncate font-mono text-[11px]"
-              style={{ color: colorFor(run.projectSlug) }}
-            >
-              {projectLabel(run.projectName, run.projectSlug)}
-            </span>
+        <div className="flex min-w-0 items-baseline gap-1.5">
+          <span aria-hidden="true" className="w-2 shrink-0 font-mono text-[10.5px] text-ink-faint">
+            {expanded ? '▾' : '▸'}
           </span>
-        )}
-        {/* The title is the row's identity, so it keeps a floor width and the
-            meta line is the one that gives way (min-w-0) at narrow widths. */}
-        <span className="flex min-w-0 flex-1 basis-[13rem] items-baseline gap-2.5">
-          <span className="min-w-[7rem] shrink truncate text-[13.5px] font-semibold">
-            {run.title}
+          <span className="min-w-0 truncate text-[13px] font-medium text-ink">{run.title}</span>
+          <span className="shrink-0 font-mono text-[10px] text-ink-faint">
+            <Trans>plan run</Trans>
           </span>
-          <span className="min-w-0 shrink truncate font-mono text-[10.5px] text-ink-dim">
-            {meta}
+        </div>
+        <div className="mt-0.5 flex min-w-0 items-baseline justify-between gap-2 pl-[14px] font-mono text-[10.5px] text-ink-dim">
+          <span className="min-w-0 truncate">
+            {hideProject ? meta : `${projectLabel(run.projectName, run.projectSlug)} · ${meta}`}
           </span>
-        </span>
-        <span
-          className={`shrink-0 rounded-full border px-[9px] py-0.5 font-mono text-[10.5px] whitespace-nowrap ${
-            running ? 'border-green/40 text-green' : 'border-line-strong text-ink-dim'
-          }`}
-        >
-          {running ? t`running` : t`done`}
-        </span>
-        <Link
-          to={plansHref}
-          onClick={(e) => e.stopPropagation()}
-          className="shrink-0 rounded px-1 py-1.5 font-mono text-[10.5px] whitespace-nowrap text-ink-dim transition-colors hover:text-brand focus-visible:outline-2 focus-visible:outline-brand"
-        >
-          <Trans>open plan →</Trans>
-        </Link>
+          <Link
+            to={plansHref}
+            onClick={(e) => e.stopPropagation()}
+            className="shrink-0 whitespace-nowrap transition-colors hover:text-brand focus-visible:outline-2 focus-visible:outline-brand"
+          >
+            <Trans>open plan →</Trans>
+          </Link>
+        </div>
       </div>
       {expanded && (
-        <div className="divide-y divide-line-soft border-t border-line-soft pl-2 desk:pl-5">
+        <div className="border-t border-line-soft">
           {run.rows.map((s) => (
-            <SessionCard
+            <SessionRow
               key={s.id}
               session={s}
               now={nowById[s.id] ?? null}
-              flat
-              dense
               hideProject
-              roleTag={planRowTag(s)}
+              tag={planRowTag(s)}
               label={planRowTitle(s)}
-              subline={notes.get(s.id) ?? null}
+              note={notes.get(s.id) ?? null}
             />
           ))}
         </div>

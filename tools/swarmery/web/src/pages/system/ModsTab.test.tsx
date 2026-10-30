@@ -166,7 +166,7 @@ describe('ModsTab', () => {
     finish(RESCAN);
     expect(await screen.findByRole('button', { name: /broken/ })).toBeTruthy();
     expect(listMock).toHaveBeenCalledTimes(2);
-    expect(screen.getByText('rescan: 2 mods · 2 validated · 1 parse errors · 0 removed')).toBeTruthy();
+    expect(screen.getByText('rescan: 2 mods · 2 validated · 1 parse error · 0 removed')).toBeTruthy();
     expect((screen.getByRole('button', { name: 'Rescan' }) as HTMLButtonElement).disabled).toBe(false);
   });
 

@@ -4,6 +4,7 @@
 import { i18n, type MessageDescriptor } from '@lingui/core';
 import { msg } from '@lingui/core/macro';
 import type { NeedsYouItem, NeedsYouKind } from '../api/types';
+import type { GlyphState } from '../components/place/StateGlyph';
 
 /** The quoted question is clipped so a pasted reply stays readable. */
 export const REPLY_QUOTE_MAX = 300;
@@ -24,21 +25,75 @@ export function replyWithOption(item: NeedsYouItem, option: string): string {
 }
 
 const KIND_LABELS: Record<NeedsYouKind, MessageDescriptor> = {
-  approval: msg`Approval`,
-  stalled_phase: msg`Stalled phase`,
-  question: msg`Question`,
-  phase_decision: msg`Guard decision`,
-  prod_deploy_local: msg`Confirm locally`,
-  awaiting_reply: msg`Awaiting your reply`,
-  failed: msg`Failed`,
-  manual_phase: msg`Manual check`,
-  awaiting_merge: msg`Awaiting merge`,
-  worktree_cleanup: msg`Worktree cleanup`,
+  approval: msg`permission`,
+  stalled_phase: msg`stalled phase`,
+  question: msg`question`,
+  phase_decision: msg`guard stop`,
+  prod_deploy_local: msg`confirm locally`,
+  awaiting_reply: msg`awaiting your reply`,
+  failed: msg`failed`,
+  manual_phase: msg`manual check`,
+  awaiting_merge: msg`awaiting merge`,
+  worktree_cleanup: msg`worktree cleanup`,
 };
 
 /** The kind's label in the active locale (looked up at call time). */
 export function kindLabel(k: NeedsYouKind): string {
   return i18n._(KIND_LABELS[k]);
+}
+
+/** Decide here, or open another screen and finish it there (handoff §3). */
+export type NeedsYouGroupId = 'decide' | 'open';
+
+const OPEN_ELSEWHERE: ReadonlySet<NeedsYouKind> = new Set<NeedsYouKind>([
+  'manual_phase',
+  'awaiting_merge',
+  'stalled_phase',
+  'failed',
+]);
+
+export interface NeedsYouGroup {
+  id: NeedsYouGroupId;
+  items: NeedsYouItem[];
+}
+
+/** The list's groups in order; a group with nothing in it is left out. */
+export function groupItems(items: readonly NeedsYouItem[]): NeedsYouGroup[] {
+  const groups: NeedsYouGroup[] = [
+    { id: 'decide', items: items.filter((i) => !OPEN_ELSEWHERE.has(i.kind)) },
+    { id: 'open', items: items.filter((i) => OPEN_ELSEWHERE.has(i.kind)) },
+  ];
+  return groups.filter((g) => g.items.length > 0);
+}
+
+const GLYPHS: Record<NeedsYouKind, GlyphState> = {
+  approval: 'permission',
+  stalled_phase: 'stopped',
+  question: 'question',
+  phase_decision: 'guard',
+  prod_deploy_local: 'permission',
+  awaiting_reply: 'question',
+  failed: 'failed',
+  manual_phase: 'manual',
+  awaiting_merge: 'pending',
+  worktree_cleanup: 'pending',
+};
+
+/** The list row's state glyph. */
+export function itemGlyph(k: NeedsYouKind): GlyphState {
+  return GLYPHS[k];
+}
+
+/** A row's identity in the list; one session can hold several requests at once. */
+export function itemKey(item: NeedsYouItem): string {
+  return `${dismissKey(item)}:${String(item.requestId)}`;
+}
+
+/** The list's filter: the row's title or its one-line summary. */
+export function filterItems(items: readonly NeedsYouItem[], query: string): NeedsYouItem[] {
+  const q = query.trim().toLowerCase();
+  if (q === '') return [...items];
+  return items.filter((i) => i.sessionName.toLowerCase().includes(q) || i.preview.toLowerCase().includes(q));
 }
 
 /**

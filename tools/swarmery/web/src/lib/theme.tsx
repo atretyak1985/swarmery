@@ -1,7 +1,9 @@
-// Theme provider (Fusion phase 16): mode (light/dark/system) + curated palette.
+// Theme provider (Fusion phase 16): mode (light/dark/system) + curated palette,
+// plus the two v4 display preferences: compact rows and state-glyph motion. Those
+// two have no <html> attribute: ListRow and StateGlyph read them from this context.
 //
-// Persists `{mode, palette}` as JSON to localStorage `swarmery.theme` and applies
-// three attributes on <html>:
+// Persists `{mode, palette, compact, motion}` as JSON to localStorage
+// `swarmery.theme` and applies three attributes on <html>:
 //   data-mode    — the RESOLVED mode (system → light|dark), the CSS source of
 //                  truth for the light overrides in index.css.
 //   data-theme   — mirror of data-mode, kept for any legacy/external reader.
@@ -42,7 +44,18 @@ const STORAGE_KEY = 'swarmery.theme';
 interface ThemeChoice {
   mode: Mode;
   palette: PaletteId;
+  /** Tighter rows in every list: ListRow takes 6px of vertical padding, not 9px. */
+  compact: boolean;
+  /** Spinning and pulsing state glyphs. */
+  motion: boolean;
 }
+
+const DEFAULT_CHOICE: ThemeChoice = {
+  mode: DEFAULT_MODE,
+  palette: DEFAULT_PALETTE,
+  compact: false,
+  motion: true,
+};
 
 interface ThemeValue {
   /** User's mode choice (may be `system`). */
@@ -51,8 +64,14 @@ interface ThemeValue {
   palette: PaletteId;
   /** Mode actually applied to the DOM (system already resolved). */
   theme: ResolvedMode;
+  /** Tighter list rows; persisted locally. */
+  compact: boolean;
+  /** State glyphs animate; persisted locally. */
+  motion: boolean;
   setMode: (next: Mode) => void;
   setPalette: (next: PaletteId) => void;
+  setCompact: (next: boolean) => void;
+  setMotion: (next: boolean) => void;
   /** Legacy light↔dark flip. On `system` it snaps to the opposite of the
    *  currently-resolved mode (leaving `system` for an explicit choice). */
   toggle: () => void;
@@ -62,28 +81,33 @@ const ThemeContext = createContext<ThemeValue>({
   mode: DEFAULT_MODE,
   palette: DEFAULT_PALETTE,
   theme: 'dark',
+  compact: DEFAULT_CHOICE.compact,
+  motion: DEFAULT_CHOICE.motion,
   setMode: () => undefined,
   setPalette: () => undefined,
+  setCompact: () => undefined,
+  setMotion: () => undefined,
   toggle: () => undefined,
 });
 
 function readStored(): ThemeChoice {
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY);
-    if (raw === null) return { mode: DEFAULT_MODE, palette: DEFAULT_PALETTE };
+    if (raw === null) return DEFAULT_CHOICE;
     // Legacy value: a bare 'light' | 'dark' string (pre-phase-16).
-    if (raw === 'light' || raw === 'dark') return { mode: raw, palette: DEFAULT_PALETTE };
+    if (raw === 'light' || raw === 'dark') return { ...DEFAULT_CHOICE, mode: raw };
     const parsed: unknown = JSON.parse(raw);
-    if (typeof parsed !== 'object' || parsed === null) {
-      return { mode: DEFAULT_MODE, palette: DEFAULT_PALETTE };
-    }
+    if (typeof parsed !== 'object' || parsed === null) return DEFAULT_CHOICE;
     const rec = parsed as Record<string, unknown>;
     return {
       mode: isMode(rec.mode) ? rec.mode : DEFAULT_MODE,
       palette: isPaletteId(rec.palette) ? rec.palette : DEFAULT_PALETTE,
+      compact: rec.compact === true,
+      // Absent means on: a stored choice from before this field keeps its motion.
+      motion: rec.motion !== false,
     };
   } catch {
-    return { mode: DEFAULT_MODE, palette: DEFAULT_PALETTE }; // storage/JSON disabled
+    return DEFAULT_CHOICE; // storage/JSON disabled
   }
 }
 
@@ -121,11 +145,10 @@ function applyAttributes(resolved: ResolvedMode, palette: PaletteId): void {
 }
 
 export function ThemeProvider({ children }: { children: ReactNode }): JSX.Element {
-  const initial = readStored();
-  const [mode, setModeState] = useState<Mode>(initial.mode);
-  const [palette, setPaletteState] = useState<PaletteId>(initial.palette);
+  const [choice, setChoice] = useState<ThemeChoice>(readStored);
   const [systemDark, setSystemDark] = useState<boolean>(systemPrefersDark);
 
+  const { mode, palette, compact, motion } = choice;
   const resolved = resolveMode(mode, systemDark);
 
   // Track the OS preference live so `system` follows a theme switch without a
@@ -148,29 +171,27 @@ export function ThemeProvider({ children }: { children: ReactNode }): JSX.Elemen
     applyAttributes(resolved, palette);
   }, [resolved, palette]);
 
-  const setMode = useCallback(
-    (next: Mode): void => {
-      setModeState(next);
-      persist({ mode: next, palette });
+  const update = useCallback(
+    (patch: Partial<ThemeChoice>): void => {
+      const next = { ...choice, ...patch };
+      setChoice(next);
+      persist(next);
     },
-    [palette],
+    [choice],
   );
 
-  const setPalette = useCallback(
-    (next: PaletteId): void => {
-      setPaletteState(next);
-      persist({ mode, palette: next });
-    },
-    [mode],
-  );
+  const setMode = useCallback((next: Mode): void => update({ mode: next }), [update]);
+  const setPalette = useCallback((next: PaletteId): void => update({ palette: next }), [update]);
+  const setCompact = useCallback((next: boolean): void => update({ compact: next }), [update]);
+  const setMotion = useCallback((next: boolean): void => update({ motion: next }), [update]);
 
   const toggle = useCallback((): void => {
     setMode(resolved === 'light' ? 'dark' : 'light');
   }, [resolved, setMode]);
 
   const value = useMemo(
-    () => ({ mode, palette, theme: resolved, setMode, setPalette, toggle }),
-    [mode, palette, resolved, setMode, setPalette, toggle],
+    () => ({ mode, palette, theme: resolved, compact, motion, setMode, setPalette, setCompact, setMotion, toggle }),
+    [mode, palette, resolved, compact, motion, setMode, setPalette, setCompact, setMotion, toggle],
   );
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
 }

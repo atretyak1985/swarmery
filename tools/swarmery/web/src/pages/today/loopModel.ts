@@ -2,8 +2,8 @@
 //
 // Five stages, Plan → Run → Measure → Learn → Change, each answering one
 // question with one number, one sentence and a link to the place that holds
-// it. `waiting` marks a stage where something waits on the operator (the card
-// turns amber); `alert` is the part of the sentence that says what.
+// it. `waiting` marks a stage where something waits on the operator (the cell
+// turns to the accent); `alert` is the line under the sentence that says what.
 //
 // Every number comes from an existing fetcher (Today.tsx wires them); the
 // epic-derived ones are counted here by `epicCounts`. A stage with no data
@@ -16,9 +16,11 @@
 // which would format them with the locale's own separators.
 
 import { plural, t } from '@lingui/core/macro';
-import type { Epic } from '../../api/types';
+import type { Epic, Session } from '../../api/types';
+import { isoDay } from '../../lib/format';
 import { offPlanBand } from '../../lib/offPlan';
 import { PLACES, resolvePlaceHref, type PlaceId } from '../../lib/nav';
+import { rowState } from '../../lib/sessionsView';
 
 export type StageId = 'plan' | 'run' | 'measure' | 'learn' | 'change';
 
@@ -40,7 +42,12 @@ export interface Stage {
 export interface LoopInputs {
   epics: readonly Epic[];
   liveSessions: number;
-  pendingApprovals: number;
+  finishedToday: number;
+  failedToday: number;
+  /** Sessions blocked on the operator: the needs-you queue's session gates. */
+  askingSessions: number;
+  /** Phases a guard stopped: the needs-you queue's phase decisions. */
+  phaseDecisions: number;
   stoppedPhases: number;
   scoredRuns: number;
   farOffPlan: number;
@@ -86,6 +93,23 @@ export function epicCounts(
   return { scoredRuns, farOffPlan, stoppedPhases };
 }
 
+/** How the scope's sessions ended today, for the Run stage. */
+export function sessionOutcomes(
+  sessions: readonly Session[],
+  now: number = Date.now(),
+): { finishedToday: number; failedToday: number } {
+  const today = isoDay(new Date(now));
+  let finishedToday = 0;
+  let failedToday = 0;
+  for (const s of sessions) {
+    if (isoDay(new Date(s.endedAt ?? s.startedAt)) !== today) continue;
+    const state = rowState(s, now);
+    if (state === 'done') finishedToday += 1;
+    if (state === 'failed') failedToday += 1;
+  }
+  return { finishedToday, failedToday };
+}
+
 function placeHref(id: PlaceId, slug: string | null, lastProject: string | null): string {
   const place = PLACES.find((p) => p.id === id);
   return place === undefined ? '/' : resolvePlaceHref(place, slug, lastProject);
@@ -102,12 +126,13 @@ function planStage(i: LoopInputs, href: string): Stage {
   else {
     const count = fmtCount(forecasted);
     sentence = plural(forecasted, {
-      one: `${count} phase carries a forecast — what the planner expects before anything runs.`,
-      few: `${count} phases carry a forecast — what the planner expects before anything runs.`,
-      many: `${count} phases carry a forecast — what the planner expects before anything runs.`,
-      other: `${count} phases carry a forecast — what the planner expects before anything runs.`,
+      one: `${count} phase carries a forecast.`,
+      few: `${count} phases carry a forecast.`,
+      many: `${count} phases carry a forecast.`,
+      other: `${count} phases carry a forecast.`,
     });
   }
+  const decisions = fmtCount(i.phaseDecisions);
   return {
     id: 'plan',
     step: 1,
@@ -115,16 +140,29 @@ function planStage(i: LoopInputs, href: string): Stage {
     n: plans,
     unit: plural(plans, { one: 'plan', few: 'plans', many: 'plans', other: 'plans' }),
     sentence,
-    alert: '',
+    alert:
+      i.phaseDecisions > 0
+        ? plural(i.phaseDecisions, {
+            one: `${decisions} phase waits on a decision.`,
+            few: `${decisions} phases wait on a decision.`,
+            many: `${decisions} phases wait on a decision.`,
+            other: `${decisions} phases wait on a decision.`,
+          })
+        : '',
     href,
     linkLabel: t`Plans →`,
-    waiting: false,
+    waiting: i.phaseDecisions > 0,
   };
 }
 
 function runStage(i: LoopInputs, href: string): Stage {
   const parts: string[] = [];
-  const { stoppedPhases, pendingApprovals } = i;
+  const { stoppedPhases, askingSessions } = i;
+  if (i.finishedToday + i.failedToday > 0) {
+    const finished = fmtCount(i.finishedToday);
+    const failed = fmtCount(i.failedToday);
+    parts.push(i.failedToday > 0 ? t`${finished} finished today, ${failed} failed.` : t`${finished} finished today.`);
+  }
   if (stoppedPhases > 0) {
     const count = fmtCount(stoppedPhases);
     parts.push(
@@ -136,14 +174,14 @@ function runStage(i: LoopInputs, href: string): Stage {
       }),
     );
   }
-  const count = fmtCount(pendingApprovals);
+  const count = fmtCount(askingSessions);
   const alert =
-    pendingApprovals > 0
-      ? plural(pendingApprovals, {
-          one: `${count} approval waiting.`,
-          few: `${count} approvals waiting.`,
-          many: `${count} approvals waiting.`,
-          other: `${count} approvals waiting.`,
+    askingSessions > 0
+      ? plural(askingSessions, {
+          one: `${count} session asks for you.`,
+          few: `${count} sessions ask for you.`,
+          many: `${count} sessions ask for you.`,
+          other: `${count} sessions ask for you.`,
         })
       : '';
   let sentence = parts.join(' ');
@@ -163,7 +201,7 @@ function runStage(i: LoopInputs, href: string): Stage {
     alert,
     href,
     linkLabel: t`Sessions →`,
-    waiting: pendingApprovals > 0,
+    waiting: askingSessions > 0,
   };
 }
 
@@ -185,8 +223,16 @@ function measureStage(i: LoopInputs, href: string): Stage {
   }
   const parts: string[] = [];
   if (scoredRuns > 0) {
-    const farOff = fmtCount(i.farOffPlan);
-    parts.push(i.farOffPlan > 0 ? t`${farOff} landed far from the plan.` : t`All landed close to the plan.`);
+    parts.push(
+      i.farOffPlan > 0
+        ? plural(i.farOffPlan, {
+            one: '# landed far from the plan.',
+            few: '# landed far from the plan.',
+            many: '# landed far from the plan.',
+            other: '# landed far from the plan.',
+          })
+        : t`All landed close to the plan.`,
+    );
   }
   let alert = '';
   if (classifierCalls > 0) {
@@ -268,7 +314,7 @@ function learnStage(i: LoopInputs, href: string): Stage {
     n,
     unit: plural(n, { one: 'proposal', few: 'proposals', many: 'proposals', other: 'proposals' }),
     sentence,
-    alert: '',
+    alert: n > 0 ? t`Review in Inbox.` : '',
     href,
     linkLabel: n > 0 ? t`Review in Inbox →` : t`Inbox →`,
     waiting: n > 0,
@@ -305,7 +351,7 @@ function changeStage(i: LoopInputs, href: string): Stage {
     step: 5,
     title: t`Change`,
     n: verifiedChanges,
-    unit: t`verified`,
+    unit: t`proven`,
     sentence:
       parts.length === 0
         ? t`Appears after you accept a change and it has run long enough to prove itself.`

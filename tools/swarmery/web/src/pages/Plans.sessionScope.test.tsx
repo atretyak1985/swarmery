@@ -263,13 +263,15 @@ async function mountPlans(): Promise<void> {
   render(
     <PlansAtRoute />,
   );
+  // Folded under the ledger until the operator opens it.
+  fireEvent.click(await screen.findByRole('button', { name: 'sessions' }));
   await waitFor(() => {
     expect(rowTitles().some((t) => t.includes('controller run'))).toBe(true);
   });
 }
 
-function openPhase(seq: number, name: string): void {
-  fireEvent.click(screen.getByRole('button', { name: `open Phase ${String(seq)} — ${name} details` }));
+function openPhase(_seq: number, name: string): void {
+  fireEvent.click(screen.getByRole('link', { name }));
 }
 
 /** A phase opens inline, in place of the list; "← all phases" above it backs out. */
@@ -473,6 +475,7 @@ describe('plan sessions column — a plan that never ran', () => {
     render(
       <PlansAtRoute />,
     );
+    fireEvent.click(await screen.findByRole('button', { name: 'sessions' }));
     await screen.findByText('no sessions ran this plan');
 
     openPhase(1, 'Never ran');

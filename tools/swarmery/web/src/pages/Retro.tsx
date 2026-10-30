@@ -1963,7 +1963,7 @@ export function Retro({
     <div
       className={
         embedded
-          ? 'px-4 pt-1 pb-10 desk:px-7 desk:pb-[60px]'
+          ? 'pt-1'
           : 'px-4 pt-6 pb-10 desk:px-10 desk:pt-[34px] desk:pb-[60px]'
       }
     >

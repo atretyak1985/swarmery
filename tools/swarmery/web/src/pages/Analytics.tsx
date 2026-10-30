@@ -1452,7 +1452,7 @@ export function Analytics({
     <div
       className={
         embedded
-          ? 'px-4 pt-5 pb-10 desk:px-7 desk:pb-[60px]'
+          ? 'pt-5'
           : 'px-4 pt-6 pb-10 desk:px-10 desk:pt-[34px] desk:pb-[60px]'
       }
     >

@@ -122,7 +122,7 @@ describe('PlanRunCard', () => {
     expect(screen.getAllByText(/dispatches phases in dependency order/).length).toBeGreaterThan(0);
     // … while the phase row's only text is its tag + name (+ the mono meta
     // line, which is model/branch/time — never prompt text).
-    const row = screen.getAllByText('day-first timeline')[0]?.closest('[role="link"]');
+    const row = screen.getAllByText('day-first timeline')[0]?.closest('a');
     expect(row).toBeTruthy();
     expect(row?.textContent ?? '').not.toContain('You are executing');
   });

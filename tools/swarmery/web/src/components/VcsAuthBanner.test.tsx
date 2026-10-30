@@ -97,12 +97,26 @@ describe('VcsAuthBanner', () => {
 
   it('an unknown status (CLI missing, host unreachable) never claims "not signed in"', async () => {
     api.getProjectVcs.mockResolvedValue(vcs({}, { status: 'unknown' }));
-    render(<VcsAuthBanner projectId={3} />);
+    render(<VcsAuthBanner projectId={3} placement="status" />);
     expect(await screen.findByText('Host A repository · sign-in status unknown')).toBeTruthy();
     expect(screen.queryByText(/not signed in/)).toBeNull();
     expect(screen.queryByText(/sign-in expired/)).toBeNull();
-    expect(banner()?.getAttribute('data-status')).toBe('unknown');
+    expect(banner()).toBeNull();
     expect(screen.getByRole('button', { name: 'Re-check' })).toBeTruthy();
+  });
+
+  it('puts only a warning above the page: "could not tell" leaves the frame alone', async () => {
+    api.getProjectVcs.mockResolvedValue(vcs({}, { status: 'unknown' }));
+    const { container } = render(<VcsAuthBanner projectId={3} />);
+    await settle();
+    expect(container.firstChild).toBeNull();
+  });
+
+  it('keeps a real warning out of the status bar', async () => {
+    api.getProjectVcs.mockResolvedValue(vcs({}, { status: 'expired', login: 'octo', source: 'store' }));
+    const { container } = render(<VcsAuthBanner projectId={3} placement="status" />);
+    await settle();
+    expect(container.firstChild).toBeNull();
   });
 
   it('explains the SSH remote + missing token case with terms', async () => {

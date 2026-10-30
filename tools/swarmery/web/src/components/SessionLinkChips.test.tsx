@@ -11,7 +11,8 @@
 //      session mod" while link.live, "derived from transcript" once stale.
 //   4. A mod cost more than 10 % away from the pricing table is highlighted
 //      with visible and screen-reader text; within 10 % it is not.
-//   5. The Today command deck's Live now row renders the same chips.
+//   5. Today's Live now row draws no chips (handoff §4): that usage lives on the
+//      session's own detail.
 //
 // Runs with the rest of the web suite: `npm test`. On its own:
 // `npx vitest run src/components/SessionLinkChips.test.tsx`.
@@ -22,7 +23,7 @@ import type { Session, SessionLink } from '../api/types';
 import { fmtTime } from '../lib/format';
 import { LiveNow } from '../pages/today/LiveNow';
 import { cleanup, render, screen, within } from '../test/render';
-import { SessionCard } from './SessionCard';
+import { SessionLinkChips } from './SessionLinkChips';
 
 afterEach(cleanup);
 
@@ -77,7 +78,7 @@ function makeSession(over: Partial<Session> = {}): Session {
 function renderCard(session: Session): HTMLElement {
   const { container } = render(
     <MemoryRouter>
-      <SessionCard session={session} />
+      <SessionLinkChips session={session} />
     </MemoryRouter>,
   );
   return container;
@@ -142,8 +143,8 @@ describe('SessionLinkChips on the session card', () => {
   });
 });
 
-describe('SessionLinkChips on the command deck', () => {
-  it('renders the chips in a Live now row, and nothing for a row without link', () => {
+describe('Live now rows', () => {
+  it('draw no chips, with or without link', () => {
     render(
       <MemoryRouter>
         <LiveNow
@@ -151,12 +152,14 @@ describe('SessionLinkChips on the command deck', () => {
           epics={[]}
           loading={false}
           now={Date.now()}
+          sessionsHref="/sessions"
         />
       </MemoryRouter>,
     );
     const rows = screen.getAllByTestId('live-row');
-    expect(within(rows[0]).getByTestId('link-context').textContent).toBe('ctx 78 %');
-    expect(within(rows[0]).getByRole('img', { name: 'live from session mod' })).toBeTruthy();
+    expect(rows).toHaveLength(2);
+    expect(within(rows[0]).queryByTestId('link-context')).toBeNull();
+    expect(within(rows[0]).queryByTestId('session-link')).toBeNull();
     expect(within(rows[1]).queryByTestId('session-link')).toBeNull();
   });
 });

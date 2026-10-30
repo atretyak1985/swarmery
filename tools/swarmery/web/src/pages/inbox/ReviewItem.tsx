@@ -1,14 +1,13 @@
 // The Inbox's `review` kind: a plan branch review (phase_reviews scope=plan)
 // that read every phase's run branch once the plan was complete, looking at the
 // seams between phases. It is advisory — it blocked nothing and re-ran nothing —
-// so the one decision is to acknowledge it. Two pieces live here: the list card
-// (verdict badge, findings count, plan, started) and the detail body (the
-// findings, monospace and scrollable, and the link to the plan). InboxDetail
-// owns the Ack button, bound to `e` like every kind's primary.
+// so the one decision is to acknowledge it. The list row is the shared ListRow;
+// what lives here is the detail body (the findings, monospace and scrollable, and
+// the link to the plan). InboxDetail owns the Ack button, bound to `e` like every
+// kind's primary.
 //
 // The verdict badge is shared with the phase panel's Runs tab (plans/RunsReviewBlock).
 
-import { t } from '@lingui/core/macro';
 import { Trans, useLingui } from '@lingui/react/macro';
 import { Link } from 'react-router-dom';
 import type { Review, ReviewVerdict } from '../../api/reviews';
@@ -32,35 +31,6 @@ export function ReviewVerdictBadge({ verdict, detail = '' }: { verdict: ReviewVe
     >
       <Trans>review {verdictWord}</Trans>
     </span>
-  );
-}
-
-function planName(r: Review): string {
-  return r.planTitle === '' ? t`plan #${{ id: String(r.taskId) }}` : r.planTitle;
-}
-
-/** The list card of a plan review. No link here: the row itself is the selectable option. */
-export function ReviewRow({ review, selected, now }: { review: Review; selected: boolean; now: number }): JSX.Element {
-  const plan = planName(review);
-  const findingsText = findingsLabel(review.findings);
-  const age = ageLabel(review.startedAt, now);
-  return (
-    <div className="flex gap-2.5 px-3.5 py-2.5">
-      <span className="mt-[5px] h-[7px] w-[7px] shrink-0 rounded-full bg-brand" />
-      <div className="min-w-0">
-        <div className={`truncate text-[12.5px] ${selected ? 'font-medium text-ink' : 'text-ink-2'}`}>
-          <Trans>Plan review: {plan}</Trans>
-        </div>
-        <div className="mt-1 flex min-w-0 items-center gap-1.5 font-mono text-[10.5px] text-ink-faint">
-          <ReviewVerdictBadge verdict={review.verdict} />
-          <span className="truncate">
-            <Trans>
-              {findingsText} · started {age} ago
-            </Trans>
-          </span>
-        </div>
-      </div>
-    </div>
   );
 }
 

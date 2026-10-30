@@ -37,7 +37,16 @@ export function killSlotKind(session: Session): KillSlotKind {
  * Terminal proc states (e.g. `dead`) render a disabled "exited" tag instead of
  * disappearing outright — see `killSlotKind`.
  */
-export function KillButton({ session }: { session: Session }): JSX.Element | null {
+export function KillButton({
+  session,
+  label,
+  className,
+}: {
+  session: Session;
+  /** The resting label and look, for a host with its own buttons. */
+  label?: string;
+  className?: string;
+}): JSX.Element | null {
   const { t } = useLingui();
   const [confirming, setConfirming] = useState(false);
   const [killing, setKilling] = useState(false);
@@ -123,9 +132,12 @@ export function KillButton({ session }: { session: Session }): JSX.Element | nul
     <button
       type="button"
       onClick={(e) => { stop(e); setConfirming(true); }}
-      className="rounded border border-ink-dim/30 px-2 py-0.5 font-mono text-[10.5px] font-medium text-ink-dim transition-colors hover:border-red-500/40 hover:text-red-500"
+      className={
+        className ??
+        'rounded border border-ink-dim/30 px-2 py-0.5 font-mono text-[10.5px] font-medium text-ink-dim transition-colors hover:border-red-500/40 hover:text-red-500'
+      }
     >
-      <Trans>Kill</Trans>
+      {label ?? <Trans>Kill</Trans>}
     </button>
   );
 }

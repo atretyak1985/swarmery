@@ -6,6 +6,13 @@
 // an empty input backs out. No dedicated /files page by design (YAGNI): the
 // palette IS the reverse-lookup surface.
 //
+// It is also the way to the places left out of the sidebar (Board, Playbooks:
+// plan decision D-3) and to dispatch: text longer than 8 characters offers, as its
+// first row, a new card in Todo for the project in scope, and Todo is what starts
+// the dispatcher (D-5). With nothing in scope the card goes to the last project,
+// which the row names; with no project at all the row is not offered. Text that
+// names a place navigates on Enter and keeps the dispatch row last.
+//
 // Snippets arrive with non-HTML ⟦…⟧ markers; <Snippet> splits on them and
 // renders amber marks — transcript prose never touches innerHTML.
 
@@ -22,13 +29,17 @@ import {
 import { useNavigate } from 'react-router-dom';
 import type {
   FileSession,
+  Project,
   SearchFile,
   SearchProject,
   SearchResponse,
   SearchSession,
   SearchTurn,
 } from '../api/types';
-import { fetchFileSessions, fetchSearch } from '../api';
+import { createBoardTask, fetchFileSessions, fetchSearch } from '../api';
+import { projectLabel } from '../lib/format';
+import { loadLastProject } from '../lib/lastProject';
+import { displaySlug, findProject } from '../lib/projectSlug';
 import { useScope } from '../lib/scope';
 
 interface NavEntry {
@@ -39,13 +50,36 @@ interface NavEntry {
 /** Static client-side navigation targets — always available, no fetch. */
 const NAV_ENTRIES: NavEntry[] = [
   { label: msg`Overview`, to: '/' },
+  { label: msg`Inbox`, to: '/inbox' },
+  { label: msg`Needs you`, to: '/needs-you' },
   { label: msg`Sessions`, to: '/sessions' },
+  { label: msg`Health`, to: '/health' },
+  { label: msg`Learning`, to: '/learning' },
   { label: msg`Analytics`, to: '/analytics' },
   { label: msg`Approvals`, to: '/approvals' },
   { label: msg`Projects`, to: '/projects' },
   { label: msg`System`, to: '/system' },
   { label: msg`Docs`, to: '/docs' },
+  { label: msg`Settings`, to: '/settings' },
 ];
+
+/** Targets that exist only inside a project: offered once there is one. Board and
+ * Playbooks are off the sidebar on purpose, so this is their way in (D-3). */
+const PROJECT_NAV_ENTRIES: NavEntry[] = [
+  { label: msg`Plans`, to: 'plans' },
+  { label: msg`Knowledge`, to: 'knowledge' },
+  { label: msg`Board`, to: 'board' },
+  { label: msg`Playbooks`, to: 'playbooks' },
+];
+
+/** Longer than this, typed text is offered as a task to dispatch. */
+const DISPATCH_AFTER_CHARS = 8;
+
+interface PaletteProject {
+  row: Project;
+  /** The slug its /p/ routes answer to. */
+  slug: string;
+}
 
 type PaletteItem =
   | { kind: 'session'; session: SearchSession }
@@ -53,15 +87,23 @@ type PaletteItem =
   | { kind: 'file'; file: SearchFile }
   | { kind: 'project'; project: SearchProject }
   | { kind: 'nav'; nav: NavEntry }
-  | { kind: 'fileSession'; fs: FileSession };
+  | { kind: 'fileSession'; fs: FileSession }
+  | { kind: 'dispatch'; text: string; project: PaletteProject };
 
 interface Section {
   title: string;
   items: PaletteItem[];
 }
 
-function sectionsFor(query: string, results: SearchResponse | null, i18n: I18n): Section[] {
-  const q = query.trim().toLowerCase();
+function sectionsFor(
+  query: string,
+  results: SearchResponse | null,
+  i18n: I18n,
+  project: PaletteProject | null,
+  settled: boolean,
+): Section[] {
+  const text = query.trim();
+  const q = text.toLowerCase();
   const sections: Section[] = [];
   if (results !== null) {
     if (results.sessions.length > 0) {
@@ -90,30 +132,57 @@ function sectionsFor(query: string, results: SearchResponse | null, i18n: I18n):
     }
   }
   // Match what the operator reads: the label in the active locale.
-  const nav = NAV_ENTRIES.filter((n) => q === '' || i18n._(n.label).toLowerCase().includes(q));
+  const entries =
+    project === null
+      ? NAV_ENTRIES
+      : [...NAV_ENTRIES, ...PROJECT_NAV_ENTRIES.map((n) => ({ ...n, to: `/p/${project.slug}/${n.to}` }))];
+  const nav = entries.filter((n) => q === '' || i18n._(n.label).toLowerCase().includes(q));
   if (nav.length > 0) {
     sections.push({
       title: i18n._(msg`Navigation`),
       items: nav.map((n) => ({ kind: 'nav' as const, nav: n })),
     });
   }
+  // Enter takes the first row, and this one starts a paid session (plan D-11): it
+  // leads only when the settled search found nothing and no place matched
+  // ("Playbooks" is 9 characters), and it waits for the search, so an Enter that
+  // beats the response cannot dispatch what was meant as a lookup.
+  if (project !== null && text.length > DISPATCH_AFTER_CHARS && settled) {
+    sections.push({ title: i18n._(msg`Dispatch`), items: [{ kind: 'dispatch' as const, text, project }] });
+  }
   return sections;
 }
 
-export function CommandPalette({ onClose }: { onClose: () => void }): JSX.Element {
+export function CommandPalette({
+  onClose,
+  slug = null,
+}: {
+  onClose: () => void;
+  /** The project the shell is scoped to; null under All projects. */
+  slug?: string | null;
+}): JSX.Element {
   const navigate = useNavigate();
   const { t, i18n } = useLingui();
   // Global project scope: search + file drill-in respect it like every page
   // does; the static Navigation section stays scope-independent.
-  const { scope, scopeName } = useScope();
+  const { scope, scopeName, projects } = useScope();
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<SearchResponse | null>(null);
   // File drill-in: non-null while listing the sessions that touched one path.
   const [filePath, setFilePath] = useState<string | null>(null);
   const [fileSessions, setFileSessions] = useState<FileSession[]>([]);
   const [active, setActive] = useState(0);
+  const [dispatchError, setDispatchError] = useState<string | null>(null);
+  const dispatching = useRef(false);
+  // The query whose search has answered: the dispatch row waits for it (D-11).
+  const [settledQuery, setSettledQuery] = useState<string | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const reqSeq = useRef(0);
+
+  const project = useMemo<PaletteProject | null>(() => {
+    const row = findProject(projects, slug ?? loadLastProject());
+    return row === null ? null : { row, slug: displaySlug(row, projects) };
+  }, [projects, slug]);
 
   // Debounced search (150 ms); stale responses dropped by sequence number.
   // Suspended while drilled into a file: the drill-in list is not query-driven,
@@ -132,11 +201,15 @@ export function CommandPalette({ onClose }: { onClose: () => void }): JSX.Elemen
         .then((r) => {
           if (reqSeq.current === seq) {
             setResults(r);
+            setSettledQuery(q);
             setActive(0);
           }
         })
         .catch(() => {
-          if (reqSeq.current === seq) setResults(null);
+          if (reqSeq.current === seq) {
+            setResults(null);
+            setSettledQuery(q);
+          }
         });
     }, 150);
     return () => clearTimeout(timer);
@@ -152,13 +225,27 @@ export function CommandPalette({ onClose }: { onClose: () => void }): JSX.Elemen
         },
       ];
     }
-    return sectionsFor(query, results, i18n);
-  }, [filePath, fileSessions, query, results, i18n, t]);
+    return sectionsFor(query, results, i18n, project, settledQuery === query.trim());
+  }, [filePath, fileSessions, query, results, i18n, t, project, settledQuery]);
   const flat = useMemo(() => sections.flatMap((s) => s.items), [sections]);
 
   function go(to: string): void {
     navigate(to);
     onClose();
+  }
+
+  /** A new card in Todo, which is what the dispatcher picks up; a title-only
+   * intake sends the title as its prompt. Stays open on failure, with the text. */
+  function dispatch(text: string, target: PaletteProject): void {
+    if (dispatching.current) return;
+    dispatching.current = true;
+    setDispatchError(null);
+    createBoardTask({ projectId: target.row.id, title: text, prompt: text, boardColumn: 'todo' })
+      .then(() => go(`/p/${target.slug}/board`))
+      .catch((e: unknown) => setDispatchError(e instanceof Error ? e.message : String(e)))
+      .finally(() => {
+        dispatching.current = false;
+      });
   }
 
   function drillIntoFile(path: string): void {
@@ -197,6 +284,9 @@ export function CommandPalette({ onClose }: { onClose: () => void }): JSX.Elemen
         break;
       case 'fileSession':
         go(`/sessions/${String(item.fs.sessionId)}`);
+        break;
+      case 'dispatch':
+        dispatch(item.text, item.project);
         break;
     }
   }
@@ -265,13 +355,19 @@ export function CommandPalette({ onClose }: { onClose: () => void }): JSX.Elemen
             placeholder={
               filePath !== null
                 ? t`sessions touching this file…`
-                : t`search sessions, messages, files…`
+                : t`jump to a session, plan, place… or type a task and press ⏎ to dispatch`
             }
             className="min-w-0 flex-1 bg-transparent font-mono text-[13px] text-ink outline-none"
           />
           {/* i18n-ignore — the key's name, as printed on the keyboard */}
           <span className="shrink-0 font-mono text-[10px] text-ink-faint">esc</span>
         </div>
+
+        {dispatchError !== null && (
+          <div role="alert" className="border-b border-line-soft px-3.5 py-2 font-mono text-[11px] text-red">
+            {dispatchError}
+          </div>
+        )}
 
         <div ref={listRef} className="max-h-[52vh] overflow-y-auto py-1.5">
           {sections.length === 0 && (
@@ -354,6 +450,17 @@ function ItemRow({ item }: { item: PaletteItem }): JSX.Element {
               many="# sessions ❯"
               other="# sessions ❯"
             />
+          </span>
+        </>
+      );
+    }
+    case 'dispatch': {
+      const text = item.text;
+      return (
+        <>
+          <span className="truncate text-[13px] text-ink">{t`⏎ new session: "${text}"`}</span>
+          <span className="ml-auto shrink-0 font-mono text-[10.5px] text-ink-faint">
+            {projectLabel(item.project.row.name, item.project.row.slug)}
           </span>
         </>
       );

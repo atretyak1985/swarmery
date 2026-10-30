@@ -8,7 +8,9 @@
 // plan branch reviews not yet acknowledged. There is
 // no inbox endpoint: the page fetches the lists (useInboxItems) and this
 // module normalises them into one InboxItem shape, one sort order and one set of
-// tabs.
+// groups. Approvals stay in the aggregate because Today counts them, but the Inbox
+// page lists only what does not block a session (`reviewable`, handoff §8): they
+// are decided in Needs you.
 //
 // Wording follows the code → UI dictionary (lib/glossary.ts UI_TERMS): a
 // context line says "off-plan", never the code name `surprise`.
@@ -21,7 +23,6 @@ import type { Lesson, RetireReason, RetirementProposal } from '../../api/lessons
 import { countFindings, type Review, type ReviewVerdict } from '../../api/reviews';
 import type { AgentChangeProposal, PermissionRequest, Recommendation } from '../../api/types';
 import { questionsOf, requestSummary } from '../../lib/approvals';
-import { UI_TERMS } from '../../lib/glossary';
 
 export type InboxKind =
   | 'approval'
@@ -185,15 +186,14 @@ export const KIND_META: Record<InboxKind, { label: string; dot: string; text: st
   },
   lesson: {
     get label() {
-      return t`new lesson`;
+      return t`lesson candidate`;
     },
     dot: 'bg-purple',
     text: 'text-purple',
   },
   advisor: {
-    // read per access: UI_TERMS.ui is a locale getter and this module loads before the catalogs
     get label() {
-      return UI_TERMS.recommendation.ui.replace('…', '');
+      return t`advisor noticed`;
     },
     dot: 'bg-blue',
     text: 'text-blue',
@@ -203,7 +203,7 @@ export const KIND_META: Record<InboxKind, { label: string; dot: string; text: st
       return t`agent change`;
     },
     dot: 'bg-ink-dim',
-    text: 'text-ink-dim',
+    text: 'text-ink-3',
   },
   classifier: {
     get label() {
@@ -282,11 +282,10 @@ function approvalItem(r: PermissionRequest): InboxItem {
 }
 
 function lessonItem(l: Lesson): InboxItem {
-  const lessonTitle = l.title;
   return {
     key: `lesson:${String(l.id)}`,
     kind: 'lesson',
-    title: t`New lesson: ${lessonTitle}`,
+    title: l.title,
     context: l.phaseName === '' ? t`from a phase run` : l.phaseName,
     ageIso: l.createdAt,
     urgent: false,
@@ -295,11 +294,10 @@ function lessonItem(l: Lesson): InboxItem {
 }
 
 function advisorItem(r: Recommendation): InboxItem {
-  const recommendationTitle = r.title;
   return {
     key: `advisor:${String(r.id)}`,
     kind: 'advisor',
-    title: t`Advisor: ${recommendationTitle}`,
+    title: r.title,
     context: `${r.rule} · ${r.target}`,
     ageIso: r.created_at,
     urgent: false,
@@ -416,14 +414,13 @@ export function groupClassifier(queue: readonly QueueItem[]): InboxItem[] {
     else list.push(q);
   }
   return [...bySession.entries()].map(([uuid, group]) => {
-    const first = group[0] as QueueItem;
+    const sessionTitle = group[0]?.sessionTitle ?? '';
     // The oldest question dates the group.
-    const ageIso = group.reduce((min, q) => (q.createdAt < min ? q.createdAt : min), first.createdAt);
-    const name = first.sessionTitle === '' ? uuid.slice(0, 8) : first.sessionTitle;
+    const ageIso = group.map((q) => q.createdAt).sort()[0] ?? '';
     return {
       key: `classifier:${uuid}`,
       kind: 'classifier',
-      title: t`Check the classifier · ${name}`,
+      title: sessionTitle === '' ? uuid.slice(0, 8) : sessionTitle,
       context: plural(group.length, {
         one: '# question · grouped',
         few: '# questions · grouped',
@@ -461,6 +458,33 @@ export function sortItems(items: readonly InboxItem[]): InboxItem[] {
     .sort((a, b) => (a.expiresIso ?? a.ageIso).localeCompare(b.expiresIso ?? b.ageIso));
   const rest = items.filter((i) => !i.urgent).sort((a, b) => a.ageIso.localeCompare(b.ageIso));
   return [...urgent, ...rest];
+}
+
+/** The kinds of the Inbox's list, in list order: an alert stops work, so it leads. */
+const GROUP_ORDER: readonly InboxKind[] = ['alert', 'lesson', 'advisor', 'classifier', 'proposal', 'retire', 'review'];
+
+/** What the Inbox lists: nothing here blocks a session. */
+export function reviewable(items: readonly InboxItem[]): InboxItem[] {
+  return items.filter((i) => i.kind !== 'approval');
+}
+
+export interface InboxGroup {
+  kind: InboxKind;
+  items: InboxItem[];
+}
+
+/** One group per kind, in list order; a kind with nothing waiting is left out. */
+export function groupByKind(items: readonly InboxItem[]): InboxGroup[] {
+  return GROUP_ORDER.map((kind) => ({ kind, items: items.filter((i) => i.kind === kind) })).filter(
+    (g) => g.items.length > 0,
+  );
+}
+
+/** The list's filter, on the row's title and its summary. */
+export function filterItems(items: readonly InboxItem[], query: string): InboxItem[] {
+  const q = query.trim().toLowerCase();
+  if (q === '') return [...items];
+  return items.filter((i) => i.title.toLowerCase().includes(q) || i.context.toLowerCase().includes(q));
 }
 
 /** Item count per tab, `all` included; `handled` is the agent-closed count the caller owns. */
@@ -700,8 +724,8 @@ export function expiresInLabel(iso: string, now: number = Date.now()): string {
 
 /** "9 waiting · oldest 1 d" — the header sub-line. */
 export function waitingLine(items: readonly InboxItem[], now: number = Date.now()): string {
-  if (items.length === 0) return t`nothing waiting`;
-  const oldest = items.reduce((min, i) => (i.ageIso < min ? i.ageIso : min), (items[0] as InboxItem).ageIso);
+  const oldest = items.map((i) => i.ageIso).sort()[0];
+  if (oldest === undefined) return t`nothing waiting`;
   const count = String(items.length);
   const age = ageLabel(oldest, now);
   return t`${count} waiting · oldest ${age}`;

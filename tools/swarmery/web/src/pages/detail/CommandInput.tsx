@@ -18,13 +18,10 @@
 // Cmd/Ctrl+Enter; a bare Enter inserts a newline (multi-line prompts).
 
 import { useLingui } from '@lingui/react/macro';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type RefObject } from 'react';
 import type { ProcState } from '../../api/types';
 import { cancelSessionMessage, killSession, sendSessionMessage } from '../../api';
-
-function hasLiveProcess(procState: ProcState | null | undefined): boolean {
-  return procState === 'running' || procState === 'orphaned';
-}
+import { hasLiveProcess } from './redirectChannel';
 
 export function CommandInput({
   sessionId,
@@ -32,7 +29,13 @@ export function CommandInput({
   resumeInFlight = false,
   onSent,
   onSendFailed,
+  placeholder,
+  inputRef,
 }: {
+  /** What a message does in this state; handoff §5. */
+  placeholder?: string;
+  /** Lets `redirect` and `resume with a reply` put the caret here. */
+  inputRef?: RefObject<HTMLTextAreaElement | null>;
   sessionId: number;
   procState: ProcState | null | undefined;
   resumeInFlight?: boolean;
@@ -104,7 +107,7 @@ export function CommandInput({
       : null;
 
   return (
-    <div className="shrink-0 border-t border-line bg-bg px-4 pt-2.5 pb-3 desk:px-10 wide:px-0">
+    <div className="sticky bottom-0 mt-1.5 max-w-[760px] bg-surface pt-2 pb-3">
       {hint !== null ? (
         <p className="mb-2 font-mono text-[10.5px] leading-relaxed text-ink-faint">{hint}</p>
       ) : (
@@ -114,21 +117,22 @@ export function CommandInput({
       )}
       <div className="flex items-end gap-2">
         <textarea
+          ref={inputRef}
           value={text}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={onKeyDown}
           disabled={busy || sending}
           rows={1}
-          placeholder={busy ? t`session in progress…` : t`Reply to this session…  (⌘/Ctrl+Enter to send)`}
+          placeholder={busy ? t`session in progress…` : (placeholder ?? t`Reply to this session…  (⌘/Ctrl+Enter to send)`)}
           aria-label={t`Message this session`}
-          className="max-h-40 min-h-11 flex-1 resize-y rounded-[11px] border border-line-strong bg-surface2 px-3.5 py-2.5 text-[13.5px] leading-[1.55] text-ink placeholder:text-ink-faint focus-visible:border-brand focus-visible:outline-none disabled:opacity-50"
+          className="max-h-40 min-h-[38px] flex-1 resize-y rounded-[8px] border border-line bg-bg px-3 py-[9px] text-[13px] leading-[normal] text-ink placeholder:text-ink-faint focus-visible:border-line-strong focus-visible:outline-none disabled:opacity-50"
         />
         {busy ? (
           <button
             type="button"
             onClick={stop}
             disabled={stopping}
-            className="min-h-11 shrink-0 rounded-[11px] border border-red/40 bg-red/12 px-4 py-2.5 text-[13px] font-medium text-red transition-colors hover:bg-red/20 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red disabled:cursor-not-allowed disabled:opacity-50"
+            className="min-h-[38px] shrink-0 rounded-[8px] border border-red px-3.5 font-mono text-[11.5px] font-bold text-red transition-colors hover:bg-red-bg focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red disabled:cursor-not-allowed disabled:opacity-50"
           >
             {stopping ? t`Stopping…` : t`Stop`}
           </button>
@@ -137,7 +141,7 @@ export function CommandInput({
             type="button"
             onClick={submit}
             disabled={sending || text.trim() === ''}
-            className="min-h-11 shrink-0 rounded-[11px] bg-brand px-4 py-2.5 text-[13px] font-medium text-bg transition-opacity hover:opacity-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand disabled:cursor-not-allowed disabled:opacity-40"
+            className="min-h-[38px] shrink-0 rounded-[8px] border border-brand bg-brand-bg px-3.5 font-mono text-[11.5px] font-bold text-brand transition-opacity focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand disabled:cursor-not-allowed disabled:opacity-40"
           >
             {sending ? t`Sending…` : t`Send`}
           </button>

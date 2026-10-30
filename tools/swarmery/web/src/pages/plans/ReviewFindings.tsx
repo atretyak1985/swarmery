@@ -12,7 +12,7 @@
 // not a passed review, and only the operator can lift it — repeat the review or
 // accept it as is. The daemon runs at most two rounds on its own (D42).
 
-import { t } from '@lingui/core/macro';
+import { plural, t } from '@lingui/core/macro';
 import { Trans, useLingui } from '@lingui/react/macro';
 import { useState } from 'react';
 import { answerPhaseDecision } from '../../api/guard';
@@ -89,7 +89,7 @@ export const MAX_AUTO_REVIEW_ROUNDS = 2;
 /** The rounds count line: "2 rounds" / "1 round" (plan round excluded). */
 export function roundsText(blocks: readonly ReviewBlock[]): string {
   const n = blocks.filter((b) => b.round !== 'plan').length;
-  return n === 1 ? t`1 review round` : t`${String(n)} review rounds`;
+  return plural(n, { one: '# review round', few: '# review rounds', many: '# review rounds', other: '# review rounds' });
 }
 
 function HoldBanner({

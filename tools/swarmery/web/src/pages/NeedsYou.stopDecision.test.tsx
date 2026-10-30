@@ -82,10 +82,11 @@ async function renderPage(): Promise<HTMLElement> {
       <NeedsYou />
     </MemoryRouter>,
   );
-  await screen.findByText(/blocked on you/);
+  await screen.findAllByTestId('needs-you-row');
   const row = screen.getAllByTestId('needs-you-row').find((r) => r.dataset.kind === 'phase_decision');
   if (row === undefined) throw new Error('no phase_decision row');
-  return row;
+  fireEvent.click(within(row).getByRole('button'));
+  return screen.getByTestId('needs-you-detail');
 }
 
 beforeEach(() => {
@@ -97,17 +98,19 @@ describe('NeedsYou agent stop decision', () => {
   it('shows the trigger, the reason, both options with consequences and the released files', async () => {
     serve([STOP]);
     const row = await renderPage();
-    expect(within(row).getByText('D-6')).toBeTruthy();
-    expect(within(row).getByTestId('stop-trigger').textContent).toBe('stop: protected-path');
+    expect(within(row).getByText('guard stop · D-6')).toBeTruthy();
+    expect(within(row).getByRole('heading', { name: 'The executor stopped: protected-path' })).toBeTruthy();
     expect(within(row).getByText(REASON)).toBeTruthy();
-    expect(within(row).getByRole('button', { name: 'Let me edit the test' })).toBeTruthy();
-    expect(within(row).getByRole('button', { name: 'Leave the test alone' })).toBeTruthy();
-    expect(within(row).getByText('→ the test changes with the code it covers')).toBeTruthy();
-    expect(within(row).getByText('→ the retry criterion stays open')).toBeTruthy();
-    expect(within(row).getByTestId('stop-paths').textContent).toBe(
-      'Allowing this releases: pkg/orders/line_items_test.go',
-    );
-    expect(within(row).queryByTestId('stop-flags')).toBeNull();
+    expect(within(row).getByRole('radiogroup')).toBeTruthy();
+    expect(within(row).getByRole('radio', { name: /Let me edit the test/ })).toBeTruthy();
+    expect(within(row).getByRole('radio', { name: /Leave the test alone/ })).toBeTruthy();
+    expect(
+      within(row).getByText(
+        'the test changes with the code it covers · Allowing this releases: pkg/orders/line_items_test.go',
+      ),
+    ).toBeTruthy();
+    expect(within(row).getByText('the retry criterion stays open')).toBeTruthy();
+    expect(within(row).queryByText(/contract broken/)).toBeNull();
   });
 
   it('answers with the clicked option and the note', async () => {
@@ -115,7 +118,8 @@ describe('NeedsYou agent stop decision', () => {
     const row = await renderPage();
     fireEvent.change(within(row).getByRole('textbox'), { target: { value: ' keep it small ' } });
     serve([]);
-    fireEvent.click(within(row).getByRole('button', { name: 'Leave the test alone' }));
+    fireEvent.click(within(row).getByRole('radio', { name: /Leave the test alone/ }));
+    fireEvent.click(within(row).getByRole('button', { name: /^answer: Leave the test alone/ }));
     await waitFor(() =>
       expect(guardApi.answerGuardDecision).toHaveBeenCalledWith(9, 41, 'D-6', 'keep-test', 'keep it small'),
     );
@@ -124,7 +128,7 @@ describe('NeedsYou agent stop decision', () => {
   it('sends free text as other, only once there is text', async () => {
     serve([STOP]);
     const row = await renderPage();
-    const own = within(row).getByRole('button', { name: 'Send my own answer' }) as HTMLButtonElement;
+    const own = within(row).getByRole('button', { name: /^own answer/ }) as HTMLButtonElement;
     expect(own.disabled).toBe(true);
     fireEvent.change(within(row).getByRole('textbox'), { target: { value: 'split the test file first' } });
     expect(own.disabled).toBe(false);
@@ -145,8 +149,6 @@ describe('NeedsYou agent stop decision', () => {
     };
     serve([flagged]);
     const row = await renderPage();
-    const warn = within(row).getByRole('note');
-    expect(warn.textContent).toContain('stop_options_count');
-    expect(warn.textContent).toContain('stop_paths_rejected');
+    expect(within(row).getByText('contract broken: stop_options_count, stop_paths_rejected')).toBeTruthy();
   });
 });

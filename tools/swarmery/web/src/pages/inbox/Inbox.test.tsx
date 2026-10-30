@@ -1,15 +1,15 @@
 // @vitest-environment jsdom
 //
-// The Inbox page (Canvas v3 phase 3). The claims:
+// The Inbox page (handoff §8). The claims:
 //
-//   1. Six kinds from six mocked fetchers (two approvals) render as seven rows,
-//      urgent first.
+//   1. It lists five kinds in their groups, and no approval: those block, and are
+//      decided in Needs you.
 //   2. j / k move the selection.
-//   3. e on an approval calls resolveApproval(id, 'approve'); x calls 'deny'.
-//   4. ?tab=lessons shows lessons only.
-//   5. Each kind's detail has exactly ONE primary button; an AskUserQuestion
-//      approval renders QuestionForm instead of approve.
+//   3. e runs the main action of the selected item, x the secondary one.
+//   4. ?tab=lessons opens on the lessons; ?tab=approvals goes to Needs you.
+//   5. Each kind's detail has exactly ONE primary button.
 //   6. A failed source is a "couldn't load" row, not a blank Inbox.
+//   7. A decided item leaves the list, and an empty list says "All reviewed."
 //
 // Runs with the rest of the web suite: `npm test` (vitest, also a swarmery-ci
 // step). On its own: `npx vitest run src/pages/inbox`.
@@ -26,12 +26,8 @@ import type { Review } from '../../api/reviews';
 import * as triage from '../../api/triage';
 import type { TriageVerdict } from '../../api/triage';
 import { Inbox } from './Inbox';
-import { TRIAGE_INBOX_KINDS } from './inboxModel';
 
 const NOW = Date.now();
-// The fixture's agent-eligible items: one classifier guess, one advisor finding,
-// one lesson and one retirement (the banner's shown count, and the run's cap).
-const AGENT_ELIGIBLE = 4;
 const iso = (offsetSec: number): string => new Date(NOW + offsetSec * 1000).toISOString();
 
 function approvalRow(id: number, toolName: string, input: unknown, expiresIn: number): Record<string, unknown> {
@@ -204,6 +200,7 @@ async function renderInbox(path = '/inbox'): Promise<void> {
     <MemoryRouter initialEntries={[path]}>
       <Routes>
         <Route path="/inbox" element={<Inbox />} />
+        <Route path="/needs-you" element={<div>needs you place</div>} />
       </Routes>
     </MemoryRouter>,
   );
@@ -214,11 +211,11 @@ async function renderInbox(path = '/inbox'): Promise<void> {
 }
 
 function rows(): HTMLElement[] {
-  return within(screen.getByRole('listbox', { name: 'waiting decisions' })).getAllByRole('option');
+  return screen.queryAllByTestId('inbox-row');
 }
 
 function selectedRow(): HTMLElement {
-  const sel = rows().find((r) => r.getAttribute('aria-selected') === 'true');
+  const sel = rows().find((r) => r.querySelector('[aria-current="true"]') !== null);
   if (sel === undefined) throw new Error('no selected row');
   return sel;
 }
@@ -235,74 +232,95 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('Inbox', () => {
-  it('renders the six kinds, urgent approvals first', async () => {
+  it('lists five kinds in their groups, and no approval', async () => {
     await renderInbox();
     const list = rows();
-    expect(list).toHaveLength(7);
-    expect(list[0]?.textContent).toContain('Bash');
-    expect(list[1]?.textContent).toContain('AskUserQuestion');
-    expect(list[0]?.textContent).toContain('expires soon');
-    expect(screen.getByText(/7 waiting/)).toBeTruthy();
-    for (const word of ['Bash', 'New lesson', 'Advisor', 'Change to', 'Check the classifier', 'Stop using']) {
-      expect(list.some((r) => r.textContent?.includes(word)), word).toBe(true);
+    expect(list).toHaveLength(5);
+    expect(list.map((r) => r.dataset.kind)).toEqual(['lesson', 'advisor', 'classifier', 'proposal', 'retire']);
+    expect(screen.getByText(/5 to review · nothing here blocks a session/)).toBeTruthy();
+    for (const word of ['lesson candidate', 'advisor noticed', 'check the classifier', 'agent change']) {
+      expect(screen.getByText(word), word).toBeTruthy();
     }
+    expect(screen.getByText('stop using a lesson?')).toBeTruthy();
+    expect(list.some((r) => r.textContent?.includes('Bash'))).toBe(false);
+    expect(document.body.textContent).not.toContain('AskUserQuestion');
   });
 
   it('moves the selection with j and k', async () => {
     await renderInbox();
-    expect(selectedRow().textContent).toContain('Bash');
+    expect(selectedRow().dataset.kind).toBe('lesson');
     fireEvent.keyDown(window, { key: 'j' });
-    expect(selectedRow().textContent).toContain('AskUserQuestion');
+    expect(selectedRow().dataset.kind).toBe('advisor');
     fireEvent.keyDown(window, { key: 'j' });
     fireEvent.keyDown(window, { key: 'k' });
-    expect(selectedRow().textContent).toContain('AskUserQuestion');
+    expect(selectedRow().dataset.kind).toBe('advisor');
   });
 
-  it('e approves and x denies the selected approval', async () => {
+  it('e runs the main action and x the secondary one', async () => {
     await renderInbox();
     await act(async () => {
       fireEvent.keyDown(window, { key: 'e' });
     });
-    expect(api.resolveApproval).toHaveBeenCalledWith(1, 'approve');
+    expect(lessons.acceptLesson).toHaveBeenCalledWith(5);
     cleanup();
     await renderInbox();
     await act(async () => {
       fireEvent.keyDown(window, { key: 'x' });
     });
-    expect(api.resolveApproval).toHaveBeenCalledWith(1, 'deny');
+    expect(lessons.dismissLesson).toHaveBeenCalledWith(5, 'not useful');
   });
 
-  it('?tab=lessons filters to lessons', async () => {
-    await renderInbox('/inbox?tab=lessons');
-    const list = rows();
-    expect(list).toHaveLength(1);
-    expect(list[0]?.textContent).toContain('New lesson');
-    expect(screen.getByRole('tab', { name: /lessons/ }).getAttribute('aria-selected')).toBe('true');
+  it('x skips a classifier question: there is no wrong answer to send', async () => {
+    await renderInbox('/inbox?tab=classifier');
+    expect(selectedRow().dataset.kind).toBe('classifier');
+    await act(async () => {
+      fireEvent.keyDown(window, { key: 'x' });
+    });
+    expect(selectedRow().dataset.kind).toBe('proposal');
+    expect(decisions.postGroundTruth).not.toHaveBeenCalled();
   });
 
-  it('renders one primary button per kind, QuestionForm for AskUserQuestion', async () => {
+  it('?tab=lessons opens on the lessons, and keeps the rest in view', async () => {
+    await renderInbox('/inbox?tab=retire');
+    expect(rows()).toHaveLength(5);
+    expect(selectedRow().dataset.kind).toBe('retire');
+  });
+
+  it('?tab=approvals goes to Needs you, where the approvals are', async () => {
+    await renderInbox('/inbox?tab=approvals');
+    expect(screen.getByText('needs you place')).toBeTruthy();
+  });
+
+  it('has one primary per kind, and no triage banner', async () => {
     await renderInbox();
-    const seen: string[] = [];
-    for (let i = 0; i < 7; i += 1) {
-      const label = selectedRow().textContent ?? '';
-      seen.push(label);
-      if (label.includes('AskUserQuestion')) {
-        expect(primaries()).toHaveLength(0);
-        expect(screen.getByRole('button', { name: /submit answers/ })).toBeTruthy();
-        expect(screen.queryByRole('button', { name: /^approve/ })).toBeNull();
-      } else {
-        expect(primaries(), label).toHaveLength(1);
-      }
+    for (const kind of ['lesson', 'advisor', 'classifier', 'proposal', 'retire']) {
+      expect(selectedRow().dataset.kind).toBe(kind);
+      expect(primaries(), kind).toHaveLength(1);
       fireEvent.keyDown(window, { key: 'j' });
     }
-    expect(new Set(seen)).toHaveProperty('size', 7);
+    expect(screen.queryByText(/run triage/)).toBeNull();
+  });
+
+  it('says All reviewed. when nothing is left, an open approval included', async () => {
+    const realLessons = vi.mocked(lessons.fetchLessons).getMockImplementation();
+    const realRetirements = vi.mocked(lessons.fetchRetirements).getMockImplementation();
+    vi.mocked(lessons.fetchLessons).mockImplementation(async () => []);
+    vi.mocked(lessons.fetchRetirements).mockImplementation(async () => []);
+    vi.mocked(api.fetchRecommendations).mockResolvedValue({ recommendations: [] } as never);
+    vi.mocked(api.fetchProposals).mockResolvedValue({ proposals: [] } as never);
+    vi.mocked(decisions.fetchLabelQueue).mockResolvedValue([]);
+    await renderInbox();
+    vi.mocked(lessons.fetchLessons).mockImplementation(realLessons as never);
+    vi.mocked(lessons.fetchRetirements).mockImplementation(realRetirements as never);
+    expect(rows()).toHaveLength(0);
+    expect(screen.getByText('All reviewed.')).toBeTruthy();
   });
 
   it('shows a failed source as a row, not a blank Inbox', async () => {
     vi.mocked(api.fetchProposals).mockRejectedValue(new Error('boom'));
     await renderInbox();
     expect(screen.getByRole('alert').textContent).toContain("couldn't load proposals");
-    expect(rows()).toHaveLength(6);
+    expect(rows()).toHaveLength(4);
   });
 
   it('puts a paused account first, and e probes and resumes it', async () => {
@@ -322,7 +340,7 @@ describe('Inbox', () => {
     ]);
     await renderInbox();
     const list = rows();
-    expect(list).toHaveLength(8);
+    expect(list).toHaveLength(6);
     expect(list[0]?.textContent).toContain('Account work is paused');
     expect(selectedRow().textContent).toContain('Account work is paused');
     expect(primaries()).toHaveLength(1);
@@ -334,11 +352,11 @@ describe('Inbox', () => {
     // x is a no-op: an alert cannot be dismissed.
     cleanup();
     await renderInbox('/inbox?tab=alerts');
-    expect(rows()).toHaveLength(1);
+    expect(selectedRow().dataset.kind).toBe('alert');
     await act(async () => {
       fireEvent.keyDown(window, { key: 'x' });
     });
-    expect(api.resolveApproval).not.toHaveBeenCalled();
+    expect(selectedRow().dataset.kind).toBe('alert');
   });
 
   it('lists an unacked plan review with its verdict and findings; e acks it and it leaves the list', async () => {
@@ -366,10 +384,10 @@ describe('Inbox', () => {
     };
     vi.mocked(reviews.fetchUnackedPlanReviews).mockResolvedValueOnce([review]).mockResolvedValue([]);
     await renderInbox('/inbox?tab=reviews');
-    expect(rows()).toHaveLength(1);
+    expect(rows()).toHaveLength(6);
     const card = selectedRow().textContent ?? '';
     expect(card).toContain('Plan review: Order line items');
-    expect(card).toContain('review failed');
+    expect(card).toContain('failed');
     expect(card).toContain('2 findings');
     const article = document.querySelector('article');
     expect(within(article as HTMLElement).getByLabelText('review findings').textContent).toContain(
@@ -384,8 +402,7 @@ describe('Inbox', () => {
     await act(async () => {
       await Promise.resolve();
     });
-    expect(screen.queryByRole('listbox', { name: 'waiting decisions' })).toBeNull();
-    expect(screen.getByText('Nothing is waiting on you.')).toBeTruthy();
+    expect(rows().some((r) => r.dataset.kind === 'review')).toBe(false);
   });
 
   it('shows an auto mode outage as an alert with nothing to press', async () => {
@@ -402,7 +419,6 @@ describe('Inbox', () => {
       },
     ]);
     await renderInbox('/inbox?tab=alerts');
-    expect(rows()).toHaveLength(1);
     expect(selectedRow().textContent).toContain('Permission checks are getting no verdict');
     // The daemon's sentence is the body; there is no button, and e does nothing.
     expect(document.querySelector('article')?.textContent).toContain(message);
@@ -446,93 +462,11 @@ describe('Inbox', () => {
       await renderInbox('/inbox?tab=lessons');
     }
 
-    it('drops the old header sentence', async () => {
-      await renderInbox();
-      expect(screen.queryByText(/Everything the system/)).toBeNull();
-      expect(screen.getByText(/Decisions that wait on you\./)).toBeTruthy();
-    });
-
-    it('offers a run for an old agent-eligible item and starts it unscoped on /inbox', async () => {
-      await renderInbox();
-      expect(screen.getByText(`${String(AGENT_ELIGIBLE)} can be handled by an agent · 3 need you`)).toBeTruthy();
-      await act(async () => {
-        fireEvent.click(screen.getByRole('button', { name: 'run triage' }));
-      });
-      expect(triage.startTriageRun).toHaveBeenCalledWith(null, { kinds: TRIAGE_INBOX_KINDS, cap: AGENT_ELIGIBLE });
-    });
-
-    it('starts the run with the project slug on /p/:slug/inbox', async () => {
-      render(
-        <MemoryRouter initialEntries={['/p/shop/inbox']}>
-          <Routes>
-            <Route path="/p/:slug/inbox" element={<Inbox />} />
-          </Routes>
-        </MemoryRouter>,
-      );
-      await act(async () => {
-        await Promise.resolve();
-        await Promise.resolve();
-      });
-      // The project's recommendations are not mocked, so the advisor finding is
-      // absent here: the banner shows 3, and 3 is the cap the click sends.
-      expect(screen.getByText('3 can be handled by an agent · 3 need you')).toBeTruthy();
-      await act(async () => {
-        fireEvent.click(screen.getByRole('button', { name: 'run triage' }));
-      });
-      expect(triage.startTriageRun).toHaveBeenCalledWith('shop', { kinds: TRIAGE_INBOX_KINDS, cap: 3 });
-    });
-
-    function triageRun(over: Record<string, unknown>): never {
-      return { id: 9, status: 'running', error: '', total: 4, done: 0, applied: 0, suggested: 0, failed: 0, ...over } as never;
-    }
-
-    it('a failed run shows its error; dismissing it removes the whole line and keeps the offer', async () => {
-      vi.mocked(triage.startTriageRun).mockResolvedValueOnce({ id: 9 });
-      vi.mocked(triage.fetchTriageRun).mockResolvedValueOnce(triageRun({ status: 'failed', error: 'budget exhausted' }));
-      await renderInbox();
-      await act(async () => {
-        fireEvent.click(screen.getByRole('button', { name: 'run triage' }));
-      });
-      expect(await screen.findByText('budget exhausted')).toBeTruthy();
-      expect(screen.queryByText(/agent closed/)).toBeNull();
-      await act(async () => {
-        fireEvent.click(screen.getByRole('button', { name: 'dismiss error' }));
-      });
-      expect(screen.queryByText('budget exhausted')).toBeNull();
-      expect(screen.queryByText('The triage run failed.')).toBeNull();
-      expect(screen.queryByRole('button', { name: 'retry' })).toBeNull();
-      expect(screen.getByRole('button', { name: 'run triage' })).toBeTruthy();
-    });
-
-    it('retry after a failed run shows the new run only, never the old failure beside it', async () => {
-      vi.mocked(triage.startTriageRun).mockResolvedValueOnce({ id: 9 });
-      vi.mocked(triage.fetchTriageRun).mockResolvedValueOnce(triageRun({ status: 'failed', error: 'budget exhausted' }));
-      await renderInbox();
-      await act(async () => {
-        fireEvent.click(screen.getByRole('button', { name: 'run triage' }));
-      });
-      expect(await screen.findByText('budget exhausted')).toBeTruthy();
-
-      vi.mocked(triage.startTriageRun).mockResolvedValueOnce({ id: 10 });
-      vi.mocked(triage.fetchActiveTriageRun).mockResolvedValue(triageRun({ id: 10 }));
-      await act(async () => {
-        fireEvent.click(screen.getByRole('button', { name: 'retry' }));
-      });
-      expect(await screen.findByText('triage running · 0 of 4')).toBeTruthy();
-      expect(screen.queryByText('budget exhausted')).toBeNull();
-      expect(screen.queryByRole('button', { name: 'retry' })).toBeNull();
-      expect(screen.queryByRole('button', { name: 'run triage' })).toBeNull();
-      // The retry sends the same body as the first click.
-      expect(vi.mocked(triage.startTriageRun).mock.calls).toEqual([
-        [null, { kinds: TRIAGE_INBOX_KINDS, cap: AGENT_ELIGIBLE }],
-        [null, { kinds: TRIAGE_INBOX_KINDS, cap: AGENT_ELIGIBLE }],
-      ]);
-    });
-
     it('shows the reasoning on a suggested lesson; e accepts the verdict, x still dismisses manually', async () => {
       serve({ suggested: [verdict({ id: 41 })] });
       await openLesson();
       expect(screen.getByText('agent suggests: accept')).toBeTruthy();
+      expect(selectedRow().textContent).toContain('agent: accept');
       expect(screen.getByText('Seen in three runs.')).toBeTruthy();
       expect(screen.getByRole('button', { name: /^accept · agent's suggestion/ })).toBeTruthy();
       expect(screen.getByText('if you press e')).toBeTruthy();
@@ -590,40 +524,6 @@ describe('Inbox', () => {
       expect(screen.getByText(/A task is created on the project's board with the text below/)).toBeTruthy();
     });
 
-    it('accept all confirms the open suggestions except fix tasks, one call each, and says so first', async () => {
-      serve({
-        suggested: [
-          verdict({ id: 71, value: 'accept' }),
-          verdict({ id: 72, ref: '99', value: 'not-useful' }),
-          verdict({ id: 73, kind: 'advisor', ref: '6', value: 'fix-card' }),
-          verdict({ id: 74, kind: 'retire', ref: '8', value: 'keep' }),
-        ],
-      });
-      vi.mocked(triage.acceptTriageVerdict).mockImplementation(async (id: number) => {
-        if (id === 72) throw new Error('boom');
-        return {} as never;
-      });
-      await renderInbox();
-      expect(screen.getByText(/4 suggestions from the agent/)).toBeTruthy();
-      expect(screen.getByText(/1 accept · 1 not useful · 1 keep it/)).toBeTruthy();
-      expect(screen.getByText(/1 fix task to read first/)).toBeTruthy();
-      await act(async () => {
-        fireEvent.click(screen.getByRole('button', { name: 'accept 3 suggestions' }));
-      });
-      expect(triage.acceptTriageVerdict).toHaveBeenCalledTimes(3);
-      const ids = vi.mocked(triage.acceptTriageVerdict).mock.calls.map((c) => c[0]);
-      expect(ids).toEqual([71, 72, 74]);
-      expect(ids).not.toContain(73);
-      expect(triage.acceptAllTriageVerdicts).not.toHaveBeenCalled();
-      expect(screen.getByText('accepted 2 · 1 failed')).toBeTruthy();
-    });
-
-    it('with only fix-task suggestions there is no accept-all control', async () => {
-      serve({ suggested: [verdict({ id: 73, kind: 'advisor', ref: '6', value: 'fix-card' })] });
-      await renderInbox();
-      expect(screen.getByText(/1 fix task to read first/)).toBeTruthy();
-      expect(screen.queryByRole('button', { name: /^accept \d+ suggestion/ })).toBeNull();
-    });
 
     it('answering a sampled classifier question reloads the triage state', async () => {
       serve({ sample: [verdict({ id: 51, kind: 'classifier', ref: '9', value: 'bugfix', state: 'sample' })] });
@@ -664,7 +564,7 @@ describe('Inbox', () => {
       expect(screen.queryByText(/agent suggests/)).toBeNull();
       expect(screen.getByText('if you accept')).toBeTruthy();
       expect(screen.queryByText('if you press e')).toBeNull();
-      expect(screen.getByText('e approve')).toBeTruthy();
+      expect(screen.getByText('e accept')).toBeTruthy();
       await act(async () => {
         fireEvent.keyDown(window, { key: 'e' });
       });
@@ -689,7 +589,7 @@ describe('Inbox', () => {
     it('lists applied verdicts under the handled tab and undo calls the endpoint', async () => {
       serve({ applied: [verdict({ id: 61, state: 'applied', title: 'Dup lesson', value: 'dismiss' })] });
       await renderInbox('/inbox?tab=handled');
-      expect(screen.getByRole('tab', { name: /handled by agent/ }).textContent).toContain('1');
+      expect(screen.getByText('handled by agent')).toBeTruthy();
       await act(async () => {
         fireEvent.click(screen.getByRole('button', { name: 'undo Dup lesson' }));
       });

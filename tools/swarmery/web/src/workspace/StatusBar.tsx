@@ -8,6 +8,7 @@ import { Trans, useLingui } from '@lingui/react/macro';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { DispatchStatus } from '../api/types';
 import { fetchDispatchStatus, pauseDispatch } from '../api';
+import { VcsAuthBanner } from '../components/VcsAuthBanner';
 import { useHealth, versionLabel, versionTitle } from '../lib/health';
 import { projectScopeKey } from './scopeKey';
 import type { BoardCounts } from './boardModel';
@@ -92,6 +93,7 @@ export function StatusBar({
         <Dot className={blocked > 0 ? 'bg-amber' : 'bg-ink-faint'} />
         <Trans>Blocked {blocked}</Trans>
       </span>
+      <VcsAuthBanner projectId={projectId} placement="status" />
 
       <span className="ml-auto flex items-center gap-3">
         {onToggleTerminal !== undefined && (

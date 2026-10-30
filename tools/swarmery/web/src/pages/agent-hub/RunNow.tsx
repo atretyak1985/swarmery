@@ -22,10 +22,13 @@ function composeHref(slug: string, agentName: string): string {
 export function RunNowButton({
   agentName,
   scopeSlug,
+  className,
 }: {
   agentName: string;
   /** Active project scope (workspace slug or fleet scope); null = fleet, unscoped. */
   scopeSlug: string | null;
+  /** The detail's action class, so this sits in its row like any other action. */
+  className: string;
 }): JSX.Element {
   const { t } = useLingui();
   const navigate = useNavigate();
@@ -73,13 +76,13 @@ export function RunNowButton({
       <button
         type="button"
         onClick={onClick}
-        className="rounded-lg border border-brand/40 bg-brand/10 px-3 py-1.5 text-[12px] font-semibold text-brand transition-colors hover:bg-brand/20"
+        className={className}
         data-tip={t`prefill a new board task with @${agentName}:`}
       >
-        <Trans>▸ Run now</Trans>
+        <Trans>run once</Trans>
       </button>
       {picking && (
-        <div className="absolute right-0 z-30 mt-1 max-h-[280px] w-[220px] overflow-y-auto rounded-lg border border-line-strong bg-surface py-1 shadow-lg">
+        <div className="absolute left-0 z-30 mt-1 max-h-[280px] w-[220px] overflow-y-auto rounded-lg border border-line-strong bg-surface py-1 shadow-lg">
           <div className="px-3 py-1.5 font-mono text-[10px] tracking-[0.1em] text-ink-faint uppercase">
             <Trans>pick a project</Trans>
           </div>

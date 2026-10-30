@@ -10,6 +10,7 @@
 // Renders nothing until at least one session in range carries `link`, so a
 // fleet without the mod sees the page exactly as before.
 
+import { plural } from '@lingui/core/macro';
 import { useLingui } from '@lingui/react/macro';
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
@@ -128,8 +129,18 @@ export function ModCostPanel({
   const shown = rows.slice(0, MAX_ROWS);
   const diverging = shown.filter((s) => costDiverges(s.link?.costUsd, s.costUsd)).length;
   const total = fmtCost(shown.reduce((sum, s) => sum + (rowCost(s, source).usd ?? 0), 0));
-  const count = String(shown.length);
-  const divergingCount = String(diverging);
+  const sessionsText = plural(shown.length, {
+    one: '# session with the session mod',
+    few: '# sessions with the session mod',
+    many: '# sessions with the session mod',
+    other: '# sessions with the session mod',
+  });
+  const divergingText = plural(diverging, {
+    one: '# differs by more than 10 %',
+    few: '# differ by more than 10 %',
+    many: '# differ by more than 10 %',
+    other: '# differ by more than 10 %',
+  });
 
   return (
     <section className="mt-6" data-testid="mod-cost-panel">
@@ -147,7 +158,7 @@ export function ModCostPanel({
           onChange={setPicked}
         />
         <span className="font-mono text-[10.5px] text-ink-faint">
-          {t`${count} sessions with the session mod · ${total} · ${divergingCount} differ by more than 10 %`}
+          {t`${sessionsText} · ${total} · ${divergingText}`}
         </span>
       </div>
       <p className="mb-2 text-[11.5px] text-ink-dim">

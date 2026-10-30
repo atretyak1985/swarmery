@@ -1,14 +1,15 @@
-// Chat tab: the session as a human-readable conversation (Claude-app style).
-// User turns render as right-aligned tinted bubbles, assistant turns as
-// markdown prose; tool activity from consecutive assistant turns merges into a
-// single subtle one-liner ("Ran 2 agents, ran 4 commands, used a tool") placed
-// before the prose that follows it. Clicking the line expands the group
-// inline, rendered with the Timeline tab's own rows (nested subagent blocks
-// included). Long assistant texts clamp to ~20 lines with a show-more expander.
+// Chat tab (handoff §5): the transcript in two columns, who · text. `you` is in the
+// accent, `claude` grey, and the turn's time sits on a tooltip. Assistant turns stay
+// markdown; tool activity from consecutive assistant turns merges into a single
+// subtle one-liner ("Ran 2 agents, ran 4 commands, used a tool") placed before the
+// prose that follows it. Clicking the line expands the group inline, rendered with
+// the Steps tab's own rows (nested subagent blocks included). Long assistant texts
+// clamp to ~20 lines with a show-more expander. The composer and the scroll follow
+// belong to SessionPane.
 
 import { plural } from '@lingui/core/macro';
 import { Trans, useLingui } from '@lingui/react/macro';
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import type { Event, SessionDetail, Turn } from '../../api/types';
 import { fmtAgo, fmtCost, fmtTime } from '../../lib/format';
@@ -37,6 +38,28 @@ export interface PendingSend {
    * are the explained ones: a live process, a removed run worktree, a branch
    * that no longer exists. */
   reason?: string | undefined;
+}
+
+/* ----- one row of the transcript ----- */
+
+function ChatRow({
+  who = '',
+  whoTone = 'text-ink-3',
+  tip,
+  children,
+}: {
+  /** Empty on a row that continues the turn above it: the tool one-liner. */
+  who?: string;
+  whoTone?: string;
+  tip?: string;
+  children: ReactNode;
+}): JSX.Element {
+  return (
+    <div data-tip={tip} className="grid grid-cols-[54px_minmax(0,1fr)] gap-3">
+      <span className={`pt-0.5 font-mono text-[10.5px] leading-[normal] ${whoTone}`}>{who}</span>
+      <div className="min-w-0 text-[13px] leading-[1.6] text-ink-2">{children}</div>
+    </div>
+  );
 }
 
 /* ----- tool activity one-liner ----- */
@@ -130,13 +153,13 @@ function ToolGroup({ counts, events }: { counts: ToolCounts; events: readonly Ev
   const [open, setOpen] = useState(false);
   const nodes = useMemo(() => buildSubtree(events), [events]);
   return (
-    <div className="my-1.5">
+    <ChatRow>
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
         data-tip={open ? t`Collapse activity` : t`Expand activity`}
-        className={`flex items-center gap-1.5 rounded-md px-1 py-0.5 font-mono text-[11px] transition-colors hover:text-brand ${open ? 'text-ink-2' : 'text-ink-faint'}`}
+        className={`flex items-center gap-1.5 rounded-md py-0.5 font-mono text-[11px] transition-colors hover:text-brand ${open ? 'text-ink-2' : 'text-ink-faint'}`}
       >
         <span aria-hidden="true">⚙</span>
         <span>{summary}</span>
@@ -152,7 +175,7 @@ function ToolGroup({ counts, events }: { counts: ToolCounts; events: readonly Ev
           <Nodes nodes={nodes} />
         </div>
       )}
-    </div>
+    </ChatRow>
   );
 }
 
@@ -173,7 +196,7 @@ function ClampedProse({ text }: { text: string }): JSX.Element {
         <Markdown text={text} />
         {long && !expanded && (
           <div
-            className="pointer-events-none absolute inset-x-0 bottom-0 h-12 bg-gradient-to-t from-bg to-transparent"
+            className="pointer-events-none absolute inset-x-0 bottom-0 h-12 bg-gradient-to-t from-surface to-transparent"
             aria-hidden="true"
           />
         )}
@@ -269,7 +292,7 @@ function ColdRestartMark({ turn }: { turn: Turn }): JSX.Element {
   return (
     <div
       data-tip={t`The prompt cache expired during the pause before this turn, so it re-wrote the whole context instead of reading it from cache.`}
-      className="my-3 rounded-[10px] border border-dashed border-blue/40 px-3 py-1.5 text-center font-mono text-[10.5px] text-blue"
+      className="rounded-[10px] border border-dashed border-blue/40 px-3 py-1.5 text-center font-mono text-[10.5px] text-blue"
     >
       <Trans>
         cold restart · {at} · re-wrote {k}k tokens of context · {cost}
@@ -278,16 +301,12 @@ function ColdRestartMark({ turn }: { turn: Turn }): JSX.Element {
   );
 }
 
-function UserBubble({ turn, text }: { turn: Turn; text: string | null }): JSX.Element {
+function UserTurn({ turn, text }: { turn: Turn; text: string | null }): JSX.Element {
+  const { t } = useLingui();
   return (
-    <div className="my-[7px] flex flex-col items-end">
-      <div className="max-w-[88%] rounded-[14px_14px_4px_14px] border border-line-strong bg-surface2 px-[15px] py-[11px] text-[13.5px] leading-[1.55] whitespace-pre-wrap text-ink">
-        {text ?? <Trans>(empty prompt)</Trans>}
-      </div>
-      <span className="mt-1 pr-1 font-mono text-[10px] text-ink-faint">
-        {fmtTime(turn.startedAt)}
-      </span>
-    </div>
+    <ChatRow who={t`you`} whoTone="text-brand" tip={fmtTime(turn.startedAt)}>
+      <div className="whitespace-pre-wrap">{text ?? <Trans>(empty prompt)</Trans>}</div>
+    </ChatRow>
   );
 }
 
@@ -301,7 +320,7 @@ function AwaitingApprovalPill({ since }: { since: string | null }): JSX.Element 
   return (
     <Link
       to="/approvals"
-      className="mt-4 inline-flex min-h-11 items-center gap-2.5 rounded-[9px] border border-amber/32 bg-amber/6 px-[13px] py-[9px] font-mono text-[11px] text-amber transition-colors hover:bg-amber/12 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
+      className="inline-flex min-h-11 items-center gap-2.5 self-start rounded-[9px] border border-amber/32 bg-amber/6 px-[13px] py-[9px] font-mono text-[11px] text-amber transition-colors hover:bg-amber/12 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
     >
       <span className="h-[7px] w-[7px] shrink-0 animate-blink-dot rounded-full bg-amber" aria-hidden="true" />
       <span>
@@ -315,10 +334,10 @@ function AwaitingApprovalPill({ since }: { since: string | null }): JSX.Element 
   );
 }
 
-/** Optimistic bubble for a message the user just sent. While `pending` it is a
- * dimmed user bubble with a "sending…" dot; on `failed` it gains a red tint and
- * a keyboard-focusable "failed — retry" button that re-sends the SAME entry
- * (the parent flips it back to pending — never a duplicate bubble). */
+/** Optimistic row for a message the user just sent. While `pending` it is a dimmed
+ * `you` row with a "sending…" dot; on `failed` its label turns red and it gains a
+ * keyboard-focusable "failed — retry" button that re-sends the SAME entry (the
+ * parent flips it back to pending — never a duplicate row). */
 function PendingTurn({
   entry,
   onRetry,
@@ -326,41 +345,32 @@ function PendingTurn({
   entry: PendingSend;
   onRetry?: ((key: string) => void) | undefined;
 }): JSX.Element {
+  const { t } = useLingui();
   const failed = entry.state === 'failed';
   return (
-    <div className="my-[7px] flex flex-col items-end">
-      <div
-        className={`max-w-[88%] rounded-[14px_14px_4px_14px] border px-[15px] py-[11px] text-[13.5px] leading-[1.55] whitespace-pre-wrap ${
-          failed
-            ? 'border-red/40 bg-red/6 text-ink'
-            : 'border-line-strong bg-surface2 text-ink opacity-60'
-        }`}
-      >
-        {entry.text}
-      </div>
+    <ChatRow who={t`you`} whoTone={failed ? 'text-red' : 'text-brand'}>
+      <div className={`whitespace-pre-wrap ${failed ? '' : 'opacity-60'}`}>{entry.text}</div>
       {failed ? (
-        <div className="flex flex-col items-end">
+        <div className="flex flex-col items-start">
           {entry.reason !== undefined && entry.reason !== '' ? (
-            <p className="mt-1 max-w-[88%] text-right font-mono text-[10px] leading-relaxed text-red">
-              {entry.reason}
-            </p>
+            <p className="m-0 mt-1 font-mono text-[10px] leading-relaxed text-red">{entry.reason}</p>
           ) : null}
           <button
             type="button"
             onClick={() => onRetry?.(entry.key)}
-            className="mt-1 flex items-center gap-1.5 rounded-md px-1 pr-1 font-mono text-[10px] text-red transition-colors hover:text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red"
+            className="mt-1 flex items-center gap-1.5 rounded-md font-mono text-[10px] text-red transition-colors hover:text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red"
           >
             <span aria-hidden="true">⚠</span>
             <Trans>failed — retry</Trans>
           </button>
         </div>
       ) : (
-        <span className="mt-1 flex items-center gap-1.5 pr-1 font-mono text-[10px] text-ink-faint">
+        <span className="mt-1 flex items-center gap-1.5 font-mono text-[10px] text-ink-faint">
           <span className="h-[6px] w-[6px] animate-blink-dot rounded-full bg-brand" aria-hidden="true" />
           <Trans>sending…</Trans>
         </span>
       )}
-    </div>
+    </ChatRow>
   );
 }
 
@@ -368,11 +378,15 @@ export function Chat({
   detail,
   pending = [],
   onRetry,
+  gated = false,
 }: {
   detail: SessionDetail;
   pending?: readonly PendingSend[];
   onRetry?: (key: string) => void;
+  /** The gate card above the tabs is up, so it answers what the pill would. */
+  gated?: boolean;
 }): JSX.Element {
+  const { t } = useLingui();
   const turns = useMemo(() => detail.turns.slice().sort((a, b) => a.seq - b.seq), [detail.turns]);
   const eventsByTurn = useMemo(() => {
     const map = new Map<number, Event[]>();
@@ -426,34 +440,36 @@ export function Chat({
       : null;
   const lastEvent = detail.events.length > 0 ? detail.events[detail.events.length - 1] : undefined;
   return (
-    <div className="mt-[26px]">
+    <div className="mt-[14px] flex max-w-[760px] flex-col gap-3">
       {items.map((item) =>
         item.kind === 'tools' ? (
           <ToolGroup key={item.key} counts={item.counts} events={item.events} />
         ) : item.kind === 'cold' ? (
           <ColdRestartMark key={item.key} turn={item.turn} />
         ) : item.kind === 'user' ? (
-          <UserBubble key={item.key} turn={item.turn} text={item.text} />
+          <UserTurn key={item.key} turn={item.turn} text={item.text} />
         ) : (
-          <div key={item.key} className="my-[7px] text-[14px] leading-[1.7] text-ink-2">
+          <ChatRow key={item.key} who={t`claude`}>
             <ClampedProse text={item.text} />
-          </div>
+          </ChatRow>
         ),
       )}
       {pending.map((entry) => (
         <PendingTurn key={entry.key} entry={entry} onRetry={onRetry} />
       ))}
-      <LiveActivity detail={detail} />
-      {detail.status === 'waiting_approval' && (
+      <div className="pl-[66px] empty:hidden">
+        <LiveActivity detail={detail} />
+      </div>
+      {detail.status === 'waiting_approval' && !gated && (
         <AwaitingApprovalPill since={lastEvent !== undefined ? fmtAgo(lastEvent.ts) : null} />
       )}
       {noFinalMessage !== null && (
-        <div className="my-4 rounded-[10px] border border-dashed border-line px-3 py-2 text-center font-mono text-[10.5px] text-ink-dim">
+        <div className="rounded-[10px] border border-dashed border-line px-3 py-2 text-center font-mono text-[10.5px] text-ink-dim">
           <Trans>no final message (stop_reason={noFinalMessage})</Trans>
         </div>
       )}
       {needsBackfill && (
-        <div className="my-4 rounded-[10px] border border-dashed border-line px-3 py-2 text-center font-mono text-[10.5px] text-ink-dim">
+        <div className="rounded-[10px] border border-dashed border-line px-3 py-2 text-center font-mono text-[10.5px] text-ink-dim">
           <Trans>
             some assistant prose is not ingested yet — run{' '}
             <code className="text-brand">swarmery backfill --rebuild-text</code>

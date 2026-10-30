@@ -422,7 +422,7 @@ export function ModsTab(): JSX.Element {
       )}
       {lastRescan !== null && rescanError === null && (
         <div className="mb-2 font-mono text-[11px] text-ink-dim" role="status">
-          {t`rescan: ${lastRescan.mods} mods · ${lastRescan.validated} validated · ${lastRescan.parseErrors} parse errors · ${lastRescan.removed} removed`}
+          {t`rescan: ${plural(lastRescan.mods, { one: '# mod', few: '# mods', many: '# mods', other: '# mods' })} · ${lastRescan.validated} validated · ${plural(lastRescan.parseErrors, { one: '# parse error', few: '# parse errors', many: '# parse errors', other: '# parse errors' })} · ${lastRescan.removed} removed`}
         </div>
       )}
       {error !== null && <ErrorBox message={error} onRetry={refetch} />}

@@ -1,162 +1,288 @@
-// Global settings (/settings — session mode), Canvas v3 phase 8: one place with
-// four tabs on `?tab=` (Appearance · Accounts · Notifications · Projects), so the
-// retired /projects list redirects onto ?tab=projects.
+// Global settings (/settings — session mode, handoff §3, §9): the frame every place
+// shares, one accordion group of rows. `?tab=` keeps its four old values, so the
+// retired /projects list still lands on Projects, and adds the rows that the old
+// Appearance tab held in one column.
 //
-//   Appearance    — ThemePickerPanel (mode segments + palette list; it renders
-//                    its own "appearance" eyebrow), the UI language picker,
-//                    then the host footer: the auto-approve note, daemon
-//                    health, worktrees, connectors.
+//   Appearance    — theme, compact rows, motion: the toggles really switch them.
+//   Palette       — ThemePickerPanel, the swatches with their live preview.
+//   Language      — the UI locale.
 //   Accounts      — the Claude accounts on this host (AccountsSection).
-//   Notifications — NotifySettings, wired to the shared NotifyPrefsContext (the
-//                    state the mounted useBrowserNotifications hook in AppShell
-//                    reads, so toggles here drive live background toasts).
+//   Notifications — the shared NotifyPrefsContext, the state the mounted
+//                    useBrowserNotifications hook reads, so a switch here drives
+//                    the live background toasts.
 //   Projects      — the project list (<Projects embedded />).
+//   This machine  — daemon health, the auto-approve note, worktrees, connectors.
+//   Keyboard      — the global keys.
 //
 // Project settings stay at /p/:slug/settings (pages/ProjectSettings.tsx).
 
-import type { MessageDescriptor } from '@lingui/core';
-import { msg } from '@lingui/core/macro';
-import { Trans, useLingui } from '@lingui/react/macro';
+import { useLingui } from '@lingui/react/macro';
+import { useState, type ReactNode } from 'react';
 import { AccountsSection } from '../components/AccountsSection';
 import { ConnectorsSection } from '../components/ConnectorsSection';
 import { ExplainPair } from '../components/Explain';
 import { LanguagePicker } from '../components/LanguagePicker';
-import { NotifySettings } from '../components/NotifySettings';
-import { type TabItem, Tabs, useTabParam } from '../components/Tabs';
-import { SectionTitle } from '../components/ui';
-import { useHealth, versionLabel, versionTitle } from '../lib/health';
+import { PageDetail, PagePlace, type PageToggle, usePlaceParams } from '../components/place/PageDetail';
+import { useHealth, versionLabel } from '../lib/health';
+import {
+  type NotifyPrefs,
+  notificationsSupported,
+  permissionState,
+  requestPermission,
+  savePrefs,
+} from '../lib/notifications';
 import { useNotifyPrefs } from '../lib/notifyPrefsContext';
+import { useTheme } from '../lib/theme';
+import type { Mode } from '../theme/palettes';
 import { ThemePickerPanel } from '../theme/ThemePicker';
 import { Projects } from './Projects';
 import { WorktreesPanel } from './settings/WorktreesPanel';
 
-type SettingsTab = 'appearance' | 'accounts' | 'notifications' | 'projects';
+const SETTINGS_TABS = [
+  'appearance',
+  'palette',
+  'language',
+  'accounts',
+  'notifications',
+  'projects',
+  'machine',
+  'keyboard',
+] as const;
 
-const SETTINGS_TABS: readonly SettingsTab[] = ['appearance', 'accounts', 'notifications', 'projects'];
+type SettingsTab = (typeof SETTINGS_TABS)[number];
 
-const TAB_ITEMS: readonly { id: SettingsTab; label: MessageDescriptor }[] = [
-  { id: 'appearance', label: msg`Appearance` },
-  { id: 'accounts', label: msg`Accounts` },
-  { id: 'notifications', label: msg`Notifications` },
-  { id: 'projects', label: msg`Projects` },
-];
-
-/** Appearance plus the host-level footer (auto-approve note, daemon, worktrees,
- * connectors) — everything the old single page showed besides accounts and
- * notifications. */
-function AppearanceTab(): JSX.Element {
-  const { health, unreachable } = useHealth();
-  const daemonOk = !unreachable;
+/** A section of an existing panel under the detail's blocks. */
+function Section({ title, children }: { title?: ReactNode; children: ReactNode }): JSX.Element {
   return (
-    <>
-      <div className="mt-5">
-        <ThemePickerPanel />
-      </div>
-
-      {/* Language — the UI locale (plan D5). Only the dashboard's own chrome is
-          translated: text from agents and the daemon passes through verbatim
-          (plan D7), and the note says so. */}
-      <SectionTitle>
-        <Trans>language</Trans>
-      </SectionTitle>
-      <div className="rounded-xl border border-line bg-surface p-3">
-        <LanguagePicker />
-        <p className="mt-2.5 text-[10.5px] leading-snug text-ink-faint">
-          <Trans>
-            translates the dashboard itself; text written by agents (plans, reports, lessons, advisor
-            recommendations) and messages from the daemon stay in English
-          </Trans>
-        </p>
-      </div>
-
-      {/* Auto-approve — permission presets are dispatch/approval settings scoped
-          to a single project (PermissionPresets needs a projectId), so they are
-          configured per project, not globally. */}
-      <SectionTitle>
-        <Trans>auto-approve</Trans>
-      </SectionTitle>
-      <div className="rounded-xl border border-dashed border-line px-3.5 py-4 font-mono text-[11.5px] text-ink-dim">
-        <Trans>auto-approve presets are configured per project — open a project's Settings to set them</Trans>
-      </div>
-
-      {/* Daemon — health + version from the shared poll. */}
-      <SectionTitle>
-        <Trans>daemon</Trans>
-      </SectionTitle>
-      <div className="flex items-center gap-2 rounded-xl border border-line bg-surface px-3.5 py-4 font-mono text-[11.5px] text-ink-dim">
-        <span
-          aria-hidden="true"
-          className={`inline-block h-[7px] w-[7px] rounded-full ${daemonOk ? 'bg-green' : 'bg-red'}`}
-        />
-        {daemonOk ? <Trans>daemon healthy</Trans> : <Trans>daemon unreachable</Trans>}
-        {health !== null && (
-          <span title={versionTitle(health)}>
-            {' '}
-            · {versionLabel(health)} · :7777
-          </span>
-        )}
-      </div>
-
-      {/* Worktrees — the janitor's inventory + what it decided. Host-level: it
-          sweeps every project on this machine without being asked, so this is
-          the account of what it did. */}
-      <SectionTitle>
-        <Trans>worktrees</Trans>
-      </SectionTitle>
-      <WorktreesPanel />
-
-      {/* Connectors — the MCP servers Claude Code has configured on THIS host
-          (`claude mcp list` reports user/claudeai/plugin scopes, which belong to
-          the machine, not to any one project). */}
-      <SectionTitle>
-        <Trans>connectors</Trans>
-      </SectionTitle>
-      <ConnectorsSection />
-    </>
+    <section className="mt-[18px] max-w-[720px]">
+      {title !== undefined && (
+        <div className="mb-2 font-mono text-[10px] leading-[normal] tracking-[0.12em] text-ink-faint uppercase">
+          {title}
+        </div>
+      )}
+      {children}
+    </section>
   );
 }
 
-function NotificationsTab(): JSX.Element {
+function AppearanceDetail(): JSX.Element {
+  const { t } = useLingui();
+  const { mode, setMode, compact, setCompact, motion, setMotion } = useTheme();
+  const toggles: PageToggle[] = [
+    {
+      key: 'theme',
+      label: t`Theme`,
+      hint: t`Also toggled with t`,
+      options: [
+        { value: 'dark', label: t`dark` },
+        { value: 'light', label: t`light` },
+        { value: 'system', label: t`system` },
+      ],
+      value: mode,
+      onPick: (next) => setMode(next as Mode),
+    },
+    { key: 'compact', label: t`Compact rows`, hint: t`Tighter rows in every list`, on: compact, onChange: setCompact },
+    { key: 'motion', label: t`Motion`, hint: t`Spinning and pulsing state glyphs`, on: motion, onChange: setMotion },
+  ];
+  return <PageDetail kind={t`settings`} meta={t`appearance`} title={t`Appearance`} toggles={toggles} />;
+}
+
+function NotificationsDetail(): JSX.Element {
+  const { t } = useLingui();
   const { prefs, setPrefs } = useNotifyPrefs();
+  const [denied, setDenied] = useState(permissionState() === 'denied');
+  const supported = notificationsSupported();
+
+  const flip = (key: keyof NotifyPrefs): void => {
+    void (async () => {
+      const enabling = !prefs[key];
+      // A browser asks for the permission on the first switch on; the click is
+      // the user gesture it requires.
+      if (enabling && !(await requestPermission())) {
+        setDenied(permissionState() === 'denied');
+        return;
+      }
+      const next = { ...prefs, [key]: enabling };
+      savePrefs(next);
+      setPrefs(next);
+    })();
+  };
+
+  const row = (key: keyof NotifyPrefs, label: string, hint: string): PageToggle => ({
+    key,
+    label,
+    hint,
+    on: prefs[key],
+    disabled: !supported,
+    onChange: () => flip(key),
+  });
+
   return (
-    <>
-      <SectionTitle>
-        <Trans>notifications</Trans>
-      </SectionTitle>
-      <NotifySettings prefs={prefs} onChange={setPrefs} />
-    </>
+    <PageDetail
+      kind={t`settings`}
+      meta={t`notifications`}
+      title={t`Notifications`}
+      lead={
+        !supported
+          ? t`this browser does not support the Notifications API`
+          : denied
+            ? t`notifications are blocked — allow them in the browser site settings, then re-toggle`
+            : null
+      }
+      toggles={[
+        row('approvalRequested', t`Needs you`, t`A request needs a decision`),
+        row('sessionFinished', t`Finished`, t`An active session ended`),
+        row('sessionError', t`Failed`, t`An error event appeared`),
+      ]}
+      paras={[
+        t`fires only while this tab is in the background; click a notification to jump to the approval or session`,
+      ]}
+    />
   );
+}
+
+function MachineDetail(): JSX.Element {
+  const { t } = useLingui();
+  const { health, unreachable } = useHealth();
+  return (
+    <PageDetail
+      kind={t`settings`}
+      meta={t`this machine`}
+      title={t`This machine`}
+      lead={t`What runs here for every project: the daemon, its worktree janitor and the MCP servers Claude Code has configured.`}
+      kv={[
+        {
+          k: t`daemon`,
+          v: unreachable ? t`daemon unreachable` : t`daemon healthy`,
+          tone: unreachable ? 'red' : 'green',
+        },
+        ...(health !== null ? [{ k: t`version`, v: `${versionLabel(health)} · :7777` }] : []),
+      ]}
+      // A preset is scoped to one project (PermissionPresets takes a projectId).
+      paras={[t`auto-approve presets are configured per project — open a project's Settings to set them`]}
+    >
+      {/* The janitor sweeps every project on this machine without being asked, so
+          this is the account of what it did. */}
+      <Section title={t`worktrees`}>
+        <WorktreesPanel />
+      </Section>
+      {/* `claude mcp list` reports user/claudeai/plugin scopes: they belong to the
+          machine, not to any one project. */}
+      <Section title={t`connectors`}>
+        <ConnectorsSection />
+      </Section>
+    </PageDetail>
+  );
+}
+
+function SettingsDetail({ tab }: { tab: SettingsTab }): JSX.Element {
+  const { t } = useLingui();
+  switch (tab) {
+    case 'appearance':
+      return <AppearanceDetail />;
+    case 'palette':
+      return (
+        <PageDetail
+          kind={t`settings`}
+          meta={t`palette`}
+          title={t`Palette`}
+          lead={t`Hover a palette to preview it; a click keeps it.`}
+        >
+          <Section>
+            <ThemePickerPanel />
+          </Section>
+        </PageDetail>
+      );
+    case 'language':
+      return (
+        <PageDetail
+          kind={t`settings`}
+          meta={t`language`}
+          title={t`Language`}
+          lead={t`translates the dashboard itself; text written by agents (plans, reports, lessons, advisor recommendations) and messages from the daemon stay in English`}
+        >
+          <Section>
+            <LanguagePicker />
+          </Section>
+        </PageDetail>
+      );
+    case 'accounts':
+      return (
+        <PageDetail
+          kind={t`settings`}
+          meta={t`accounts`}
+          title={t`Accounts`}
+          lead={t`Sessions pick the default account; when it hits its window the daemon pauses it and queues sessions until the reset.`}
+        >
+          <Section title={<ExplainPair id="claude-account">{t`claude accounts`}</ExplainPair>}>
+            <AccountsSection />
+          </Section>
+        </PageDetail>
+      );
+    case 'notifications':
+      return <NotificationsDetail />;
+    case 'projects':
+      return (
+        <PageDetail kind={t`settings`} meta={t`projects`} title={t`Projects`}>
+          <Projects embedded />
+        </PageDetail>
+      );
+    case 'machine':
+      return <MachineDetail />;
+    case 'keyboard':
+      return (
+        <PageDetail
+          kind={t`settings`}
+          meta={t`keyboard`}
+          title={t`Keyboard`}
+          kv={[
+            { k: 'j / k', v: t`move selection` },
+            { k: 'e', v: t`primary action` },
+            { k: 'x', v: t`secondary action` },
+            { k: '1 – 5', v: t`Today · Inbox · Needs you · Sessions · Plans` },
+            { k: 't', v: t`toggle theme` },
+            { k: '⌘K', v: t`search & actions` },
+            { k: 'Esc', v: t`close` },
+          ]}
+        />
+      );
+  }
 }
 
 export function Settings(): JSX.Element {
-  const { t, i18n } = useLingui();
-  const [tab, setTab] = useTabParam<SettingsTab>('tab', SETTINGS_TABS, 'appearance');
-  const tabs: TabItem<SettingsTab>[] = TAB_ITEMS.map((item) => ({ id: item.id, label: i18n._(item.label) }));
-  const label = tabs.find((item) => item.id === tab)?.label ?? t`Appearance`;
-
+  const { t } = useLingui();
+  const { tab, pick } = usePlaceParams<SettingsTab>(SETTINGS_TABS, 'appearance');
+  const row = (key: SettingsTab, title: string, summary: string): { key: string; glyph: string; title: string; summary: string } => ({
+    key,
+    glyph: '⚙',
+    title,
+    summary,
+  });
   return (
-    <div className="px-4 pt-5 pb-10 desk:px-8 desk:pt-7">
-      <h1 className="mb-3 font-display text-[20px] font-medium tracking-[-0.01em] text-ink">
-        <Trans>Settings</Trans>
-      </h1>
-      <Tabs tabs={tabs} value={tab} onChange={setTab} ariaLabel={t`Settings`} />
-      <div role="tabpanel" aria-label={label}>
-        {tab === 'appearance' && <AppearanceTab />}
-        {tab === 'accounts' && (
-          <>
-            {/* The Claude accounts swarmery knows about on THIS host
-                (multi-account, phase 7); AccountsSection self-fetches. */}
-            <SectionTitle>
-              <ExplainPair id="claude-account">
-                <Trans>accounts</Trans>
-              </ExplainPair>
-            </SectionTitle>
-            <AccountsSection />
-          </>
-        )}
-        {tab === 'notifications' && <NotificationsTab />}
-        {tab === 'projects' && <Projects embedded />}
-      </div>
-    </div>
+    <PagePlace
+      title={t`Settings`}
+      searchHint={t`filter settings`}
+      groups={[
+        {
+          key: 'settings',
+          label: t`Settings`,
+          items: [
+            row('appearance', t`Appearance`, t`theme · density · motion`),
+            row('palette', t`Palette`, t`six palettes with a live preview`),
+            row('language', t`Language`, t`English · Українська`),
+            row('accounts', t`Accounts`, t`Claude accounts on this host`),
+            row('notifications', t`Notifications`, t`needs-you · finished · failed`),
+            row('projects', t`Projects`, t`attach · archive · plugins`),
+            row('machine', t`This machine`, t`daemon · worktrees · connectors`),
+            row('keyboard', t`Keyboard`, t`j/k · e/x · 1–5 · t · ⌘K`),
+          ],
+        },
+      ]}
+      openGroup="settings"
+      selected={tab}
+      onOpenGroup={() => undefined}
+      onSelect={(key) => pick(key as SettingsTab)}
+      detail={<SettingsDetail key={tab} tab={tab} />}
+    />
   );
 }

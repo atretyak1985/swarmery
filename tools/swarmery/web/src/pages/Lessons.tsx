@@ -2,6 +2,7 @@ import type { MessageDescriptor } from '@lingui/core';
 // `tr` is the module-level macro (helpers outside components); components use useLingui's `t`.
 import { msg, t as tr } from '@lingui/core/macro';
 import { Trans, useLingui } from '@lingui/react/macro';
+import { PageDetail, type PageAction } from '../components/place/PageDetail';
 import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
@@ -426,11 +427,181 @@ function LessonCard({
   );
 }
 
+/** "in force · 12 d" or "candidate": how a live lesson stands, for its row and page. */
+export function lessonStanding(lesson: Lesson): string {
+  if (lesson.status !== 'active') return tr`candidate`;
+  const since = Date.parse(lesson.activatedAt ?? lesson.createdAt);
+  const days = String(Number.isNaN(since) ? 0 : Math.max(0, Math.floor((Date.now() - since) / 86_400_000)));
+  return tr`in force · ${days} d`;
+}
+
+/** One lesson as a detail page (handoff §9): what it reached and what that did to
+ *  its area, then everything the review card shows, so nothing depends on opening
+ *  the queue. `act` runs a lesson action and reloads the list. */
+export function LessonDetail({
+  lesson,
+  busy,
+  act,
+}: {
+  lesson: Lesson;
+  busy: boolean;
+  act: (run: () => Promise<Lesson>) => void;
+}): JSX.Element {
+  const { t } = useLingui();
+  const [editing, setEditing] = useState(false);
+  const eff = lesson.effectiveness ?? null;
+  const uses = eff?.uses ?? 0;
+  const before = eff?.medianBefore?.toFixed(2) ?? null;
+  const after = eff?.medianAfter?.toFixed(2) ?? null;
+  const measured = before !== null && after !== null;
+  const dropped = (eff?.medianDrop ?? 0) > 0;
+  const isCandidate = lesson.status === 'candidate';
+  const isActive = lesson.status === 'active';
+  const usesText = String(uses);
+  const minRuns = String(eff?.minRuns ?? 0);
+  const surprise = lesson.surpriseIndex?.toFixed(2) ?? null;
+  const planLine = `${lesson.planId} · ${lesson.phaseName}`;
+  const linkedTitle = lesson.linkedNormTitle;
+  const lessonId = String(lesson.id);
+  const branch = lesson.promotedBranch;
+
+  const lead = isCandidate
+    ? t`A candidate: it reaches no run until you accept it.`
+    : measured
+      ? t`Injected into ${usesText} runs. Median surprise in its area: ${before} → ${after}.`
+      : uses > 0
+        ? t`Reached ${usesText} runs so far: too few to judge. Proof needs ${minRuns}.`
+        : t`Not injected into any run yet.`;
+
+  const kv = [
+    { k: t`injected when`, v: lesson.areaGlobs.length > 0 ? lesson.areaGlobs.join(' · ') : t`every run` },
+    { k: t`origin`, v: planLine },
+  ];
+  if (lesson.source === 'review') kv.push({ k: t`source`, v: t`review` });
+  if (surprise !== null) kv.push({ k: t`surprise`, v: surprise });
+  if (lesson.recurrences > 1) kv.push({ k: t`seen`, v: `${String(lesson.recurrences)}×` });
+  if (linkedTitle !== '') kv.push({ k: t`linked to`, v: linkedTitle });
+
+  const actions: PageAction[] = [];
+  if (isCandidate) {
+    actions.push({ label: t`accept`, tone: 'brand', disabled: busy, onClick: () => act(() => acceptLesson(lesson.id)) });
+  }
+  if (isCandidate || isActive) {
+    actions.push({ label: t`edit wording`, disabled: busy, onClick: () => setEditing(true) });
+  }
+  if (isCandidate) {
+    for (const m of lesson.matches) {
+      const match = matchLabel(m);
+      actions.push({
+        key: `${m.kind}:${m.normTitle}:${String(m.lessonId ?? 0)}`,
+        label: t`merge into ${match}`,
+        tip: t`merge this candidate into the existing lesson`,
+        disabled: busy,
+        onClick: () =>
+          act(() =>
+            mergeLesson(lesson.id, m.kind === 'retro' ? { normTitle: m.normTitle } : { lessonId: m.lessonId ?? 0 }),
+          ),
+      });
+    }
+    actions.push({
+      label: t`dismiss`,
+      disabled: busy,
+      // i18n-ignore — the reason is stored server-side, not shown here
+      onClick: () => act(() => dismissLesson(lesson.id, 'dismissed by operator')),
+    });
+  }
+  if (isActive) {
+    actions.push({
+      label: t`retire`,
+      disabled: busy,
+      // i18n-ignore — the reason is stored server-side, not shown here
+      onClick: () => act(() => retireLesson(lesson.id, 'retired by operator')),
+    });
+    if (lesson.promotedBranch === '') {
+      actions.push({
+        label: t`promote to CLAUDE.md`,
+        tip: t`Write this lesson into the project's CLAUDE.md for its area, committed on a new branch for you to review`,
+        disabled: busy,
+        onClick: () => act(() => promoteLesson(lesson.id)),
+      });
+    }
+  }
+
+  return (
+    <PageDetail
+      kind={t`lesson`}
+      kindTone="purple"
+      meta={`${lesson.planId} · ${lessonStanding(lesson)}`}
+      title={lesson.title}
+      lead={lead}
+      {...(eff !== null
+        ? {
+            stats: [
+              { label: t`runs reached`, value: usesText, ...(measured ? {} : { tone: 'faint' as const }) },
+              ...(measured
+                ? [
+                    { label: t`surprise before`, value: before, tone: 'faint' as const },
+                    { label: t`after`, value: after, tone: dropped ? ('green' as const) : ('red' as const) },
+                  ]
+                : []),
+            ],
+          }
+        : {})}
+      kv={kv}
+      paras={lesson.cause !== '' ? [lesson.guidance, t`cause: ${lesson.cause}`] : [lesson.guidance]}
+      actions={editing ? [] : actions}
+    >
+      {editing && (
+        <EditForm
+          lesson={lesson}
+          busy={busy}
+          onCancel={() => setEditing(false)}
+          onSave={(title, guidance, areaGlobs) => {
+            setEditing(false);
+            act(() => editLesson(lesson.id, { title, guidance, areaGlobs }));
+          }}
+        />
+      )}
+      <div className="mt-[18px] max-w-[760px]">
+        {lesson.evidence.length > 0 && <EvidenceList lesson={lesson} />}
+        {isActive && eff !== null && (
+          <div className="mt-1 font-mono text-[10px] text-ink-dim">
+            <Trans>effectiveness:</Trans> {effectivenessLabel(eff)}
+          </div>
+        )}
+        {lesson.promotedBranch !== '' && (
+          <div className="mt-1 font-mono text-[10px] text-ink-dim">
+            <Trans>
+              L-{lessonId} promoted to CLAUDE.md on branch <span className="text-ink">{branch}</span>. Review it
+              there.
+            </Trans>
+          </div>
+        )}
+        {lesson.sourceParagraph !== '' && (
+          <details className="mt-1 text-[11px] text-ink-dim">
+            <summary className="cursor-pointer">
+              <Trans>where reality diverged</Trans>
+            </summary>
+            <p className="mt-1 whitespace-pre-wrap">{lesson.sourceParagraph}</p>
+          </details>
+        )}
+      </div>
+    </PageDetail>
+  );
+}
+
 /** Lessons — the review queue for lessons learned from surprising runs
  *  (learning-loop phase 14). Nothing becomes active without an accept here.
  *  `embedded` renders it as Learning's Lessons tab: no page heading or padding,
  *  and no calibration panel (that is its own "Forecast honesty" tab). */
-export function Lessons({ embedded = false }: { embedded?: boolean } = {}): JSX.Element {
+export function Lessons({
+  embedded = false,
+  onChanged,
+}: {
+  embedded?: boolean;
+  /** After a lesson action: the host's own list is stale too. */
+  onChanged?: () => void;
+} = {}): JSX.Element {
   const { i18n, t } = useLingui();
   const [filter, setFilter] = useState<LessonStatus | undefined>('candidate');
   const [items, setItems] = useState<Lesson[] | null>(null);
@@ -454,11 +625,14 @@ export function Lessons({ embedded = false }: { embedded?: boolean } = {}): JSX.
     (run: () => Promise<Lesson>) => {
       setBusy(true);
       run()
-        .then(() => load(filter))
+        .then(() => {
+          load(filter);
+          onChanged?.();
+        })
         .catch((e: unknown) => setErr(String(e)))
         .finally(() => setBusy(false));
     },
-    [filter, load],
+    [filter, load, onChanged],
   );
 
   return (

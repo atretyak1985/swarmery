@@ -57,9 +57,25 @@ msgstr " (project override)"
 msgid "— declares {declares}"
 msgstr "— declares {declares}"
 
+#: src/lib/sessionsView.ts
+msgid "· {intent}."
+msgstr "· {intent}."
+
+#: src/lib/sessionsView.ts
+msgid "· {intent}. The transcript stays."
+msgstr "· {intent}. The transcript stays."
+
 #: src/workspace/TaskModal.tsx
 msgid "· created {created}"
 msgstr "· created {created}"
+
+#: src/lib/sessionsView.ts
+msgid "· last action {ago} ago · {doing}."
+msgstr "· last action {ago} ago · {doing}."
+
+#: src/lib/sessionsView.ts
+msgid "· last action {ago} ago."
+msgstr "· last action {ago} ago."
 
 #: src/components/PluginDriftBadge.tsx
 msgid "· plugins {warn}"
@@ -69,6 +85,10 @@ msgstr "· plugins {warn}"
 msgid "· plugins ⚠ {error}"
 msgstr "· plugins ⚠ {error}"
 
+#: src/lib/sessionsView.ts
+msgid "· the transcript stays."
+msgstr "· the transcript stays."
+
 #: src/components/usage/UsageModal.tsx
 msgid "(no binding)"
 msgstr "(no binding)"
@@ -77,7 +97,7 @@ msgstr "(no binding)"
 msgid "(patch)"
 msgstr "(patch)"
 
-#: src/components/SessionCard.tsx
+#: src/components/SessionRow.tsx
 msgid "(untitled session)"
 msgstr "(untitled session)"
 
@@ -204,10 +224,6 @@ msgstr "{h} h ago"
 msgid "{hiddenCount} selected sessions are hidden by the filter and will not be sent"
 msgstr "{hiddenCount} selected sessions are hidden by the filter and will not be sent"
 
-#: src/components/SessionCard.tsx
-msgid "{k}k ctx"
-msgstr "{k}k ctx"
-
 #: src/components/BulkPromptBar.tsx
 msgid "{label} — {why}"
 msgstr "{label} — {why}"
@@ -304,6 +320,10 @@ msgstr "{sec} s ago"
 msgid "{sessions, plural, one {# session ❯} few {# sessions ❯} many {# sessions ❯} other {# sessions ❯}}"
 msgstr "{sessions, plural, one {# session ❯} few {# sessions ❯} many {# sessions ❯} other {# sessions ❯}}"
 
+#: src/components/HealthFooter.tsx
+msgid "{spend} today"
+msgstr "{spend} today"
+
 #: src/components/PluginConfigModal.tsx
 msgid "{suggestionCount} suggested by probe"
 msgstr "{suggestionCount} suggested by probe"
@@ -345,14 +365,6 @@ msgstr "@{value} (unknown)"
 msgid "← back to the overview"
 msgstr "← back to the overview"
 
-#: src/components/SessionCard.tsx
-msgid "→ changed to"
-msgstr "→ changed to"
-
-#: src/components/SessionCard.tsx
-msgid "→ fell back to"
-msgstr "→ fell back to"
-
 #: src/components/Drawer.tsx
 msgid "↑↓ next"
 msgstr "↑↓ next"
@@ -377,6 +389,10 @@ msgstr "⇧ Land"
 #: src/components/AccountsSection.tsx
 msgid "+ add account"
 msgstr "+ add account"
+
+#: src/components/place/ListPane.tsx
+msgid "+ new"
+msgstr "+ new"
 
 #: src/components/NewProjectButton.tsx
 msgid "+ new project"
@@ -414,13 +430,13 @@ msgstr "<0>branch ·</0> From Review, Re-run and a failed verify both send the c
 msgid "≈ approximate — this range overlaps pruned days (daily rollups), so older detail is missing"
 msgstr "≈ approximate — this range overlaps pruned days (daily rollups), so older detail is missing"
 
-#: src/components/Sidebar.tsx
-msgid "⌘K search & actions"
-msgstr "⌘K search & actions"
-
 #: src/lib/docFigures.tsx
 msgid "⌸ Terminal"
 msgstr "⌸ Terminal"
+
+#: src/components/CommandPalette.tsx
+msgid "⏎ new session: \"{text}\""
+msgstr "⏎ new session: \"{text}\""
 
 #: src/workspace/task/TaskActions.tsx
 #: src/workspace/TaskCard.tsx
@@ -475,6 +491,10 @@ msgstr "❙❙ Pause"
 msgid "🗑 Discard"
 msgstr "🗑 Discard"
 
+#: src/components/place/ListPane.tsx
+msgid "1–5 places"
+msgstr "1–5 places"
+
 #: src/lib/docFigures.tsx
 msgid "2 done · 237 archived"
 msgstr "2 done · 237 archived"
@@ -518,6 +538,10 @@ msgstr "a read-only verifier could NOT confirm the ticked criteria — see the v
 #: src/components/NotifySettings.tsx
 msgid "a request needs a decision"
 msgstr "a request needs a decision"
+
+#: src/pages/Settings.tsx
+msgid "A request needs a decision"
+msgstr "A request needs a decision"
 
 #: src/components/RunOutcomeModal.tsx
 msgid "A revise wizard interviews you against this plan and stages its changes as a diff — nothing is written until you approve it. The reason below is prefilled from this diagnosis; edit it before starting."
@@ -581,6 +605,7 @@ msgstr "account ready"
 msgid "accounts"
 msgstr "accounts"
 
+#: src/pages/Settings.tsx
 #: src/pages/Settings.tsx
 msgid "Accounts"
 msgstr "Accounts"
@@ -684,17 +709,37 @@ msgstr "All projects"
 msgid "All projects →"
 msgstr "All projects →"
 
+#: src/lib/sessionsView.ts
+msgid "Allow {toolName}: {preview}?"
+msgstr "Allow {toolName}: {preview}?"
+
+#: src/lib/sessionsView.ts
+msgid "Allow {toolName}?"
+msgstr "Allow {toolName}?"
+
 #: src/workspace/task/TaskActions.tsx
 msgid "already fixed"
 msgstr "already fixed"
+
+#: src/pages/Settings.tsx
+msgid "Also toggled with t"
+msgstr "Also toggled with t"
 
 #: src/components/NotifySettings.tsx
 msgid "an active session ended"
 msgstr "an active session ended"
 
+#: src/pages/Settings.tsx
+msgid "An active session ended"
+msgstr "An active session ended"
+
 #: src/components/NotifySettings.tsx
 msgid "an error event appeared"
 msgstr "an error event appeared"
+
+#: src/pages/Settings.tsx
+msgid "An error event appeared"
+msgstr "An error event appeared"
 
 #: src/lib/notifications.ts
 msgid "an error event in session #{sessionId}"
@@ -728,6 +773,7 @@ msgstr "answered through the swarmery hook process"
 msgid "API endpoints"
 msgstr "API endpoints"
 
+#: src/pages/Settings.tsx
 #: src/theme/ThemePicker.tsx
 #: src/theme/ThemePicker.tsx
 msgid "appearance"
@@ -753,10 +799,6 @@ msgstr "apply proposal failed"
 #: src/api.ts
 msgid "apply revision failed: {status}"
 msgstr "apply revision failed: {status}"
-
-#: src/lib/needsYou.ts
-msgid "Approval"
-msgstr "Approval"
 
 #: src/lib/notifications.ts
 msgid "Approval needed: {toolName}"
@@ -832,6 +874,10 @@ msgstr "Asking for a code…"
 msgid "attach"
 msgstr "attach"
 
+#: src/pages/Settings.tsx
+msgid "attach · archive · plugins"
+msgstr "attach · archive · plugins"
+
 #: src/components/AttachModal.tsx
 msgid "Attach <0>{projectName}</0>"
 msgstr "Attach <0>{projectName}</0>"
@@ -869,7 +915,6 @@ msgid "auto playbook"
 msgstr "auto playbook"
 
 #: src/components/PermissionPresets.tsx
-#: src/pages/Settings.tsx
 msgid "auto-approve"
 msgstr "auto-approve"
 
@@ -882,21 +927,18 @@ msgid "auto-approve presets are configured per project — open a project's Sett
 msgstr "auto-approve presets are configured per project — open a project's Settings to set them"
 
 #: src/lib/needsYou.ts
-msgid "Awaiting merge"
-msgstr "Awaiting merge"
+msgid "awaiting merge"
+msgstr "awaiting merge"
 
 #: src/lib/sessionsView.ts
 msgid "awaiting reply"
 msgstr "awaiting reply"
 
-#: src/components/SessionCard.tsx
-msgid "awaiting reply · {owed}"
-msgstr "awaiting reply · {owed}"
-
 #: src/lib/needsYou.ts
-msgid "Awaiting your reply"
-msgstr "Awaiting your reply"
+msgid "awaiting your reply"
+msgstr "awaiting your reply"
 
+#: src/components/Sidebar.tsx
 #: src/workspace/WorkspaceShell.tsx
 msgid "back to all projects"
 msgstr "back to all projects"
@@ -937,6 +979,10 @@ msgstr "Blocker: {summary}"
 #: src/components/RunOutcomeModal.tsx
 msgid "blockers"
 msgstr "blockers"
+
+#: src/components/CommandPalette.tsx
+msgid "Board"
+msgstr "Board"
 
 #: src/components/AccountsSection.tsx
 msgid "bound projects ({boundCount})"
@@ -1098,6 +1144,14 @@ msgstr "choose a project to plan in"
 msgid "choose a project…"
 msgstr "choose a project…"
 
+#: src/pages/Settings.tsx
+msgid "claude accounts"
+msgstr "claude accounts"
+
+#: src/pages/Settings.tsx
+msgid "Claude accounts on this host"
+msgstr "Claude accounts on this host"
+
 #: src/components/usage/UsageConnect.tsx
 #: src/components/usage/UsageConnect.tsx
 msgid "Claude login required for this account"
@@ -1139,6 +1193,7 @@ msgstr "CLI login required"
 #: src/components/PluginConfigModal.tsx
 #: src/components/usage/UsageModal.tsx
 #: src/components/usage/UsageModal.tsx
+#: src/pages/Settings.tsx
 #: src/workspace/NewTaskModal.tsx
 #: src/workspace/TaskModal.tsx
 msgid "close"
@@ -1196,6 +1251,10 @@ msgstr "color mode"
 msgid "column"
 msgstr "column"
 
+#: src/pages/Settings.tsx
+msgid "Compact rows"
+msgstr "Compact rows"
+
 #: src/components/PermissionPresets.tsx
 msgid "compiled into managed auto-approve rules · manual rules on the Approvals page are untouched"
 msgstr "compiled into managed auto-approve rules · manual rules on the Approvals page are untouched"
@@ -1236,8 +1295,8 @@ msgid "confirm detach"
 msgstr "confirm detach"
 
 #: src/lib/needsYou.ts
-msgid "Confirm locally"
-msgstr "Confirm locally"
+msgid "confirm locally"
+msgstr "confirm locally"
 
 #: src/components/SessionControls.tsx
 msgid "Confirm stop"
@@ -1418,7 +1477,12 @@ msgstr "cwd <0>{cwd}</0>"
 msgid "daemon"
 msgstr "daemon"
 
+#: src/pages/Settings.tsx
+msgid "daemon · worktrees · connectors"
+msgstr "daemon · worktrees · connectors"
+
 #: src/App.tsx
+#: src/components/HealthFooter.tsx
 #: src/components/HealthFooter.tsx
 #: src/pages/Settings.tsx
 #: src/workspace/WorkspaceShell.tsx
@@ -1427,10 +1491,15 @@ msgstr "daemon healthy"
 
 #: src/App.tsx
 #: src/components/HealthFooter.tsx
+#: src/components/HealthFooter.tsx
 #: src/pages/Settings.tsx
 #: src/workspace/WorkspaceShell.tsx
 msgid "daemon unreachable"
 msgstr "daemon unreachable"
+
+#: src/pages/Settings.tsx
+msgid "dark"
+msgstr "dark"
 
 #: src/theme/ThemePicker.tsx
 msgid "Dark"
@@ -1553,6 +1622,10 @@ msgstr "depends on: {dep}"
 #: src/components/SessionLinkChips.tsx
 msgid "derived from transcript"
 msgstr "derived from transcript"
+
+#: src/components/place/DecisionCard.tsx
+msgid "destructive"
+msgstr "destructive"
 
 #: src/components/ProjectActions.tsx
 msgid "detach"
@@ -1679,6 +1752,10 @@ msgstr "Dismiss"
 msgid "Dismiss the dashboard locked notice"
 msgstr "Dismiss the dashboard locked notice"
 
+#: src/components/CommandPalette.tsx
+msgid "Dispatch"
+msgstr "Dispatch"
+
 #: src/workspace/boardModel.ts
 msgid "dispatch error: {why}"
 msgstr "dispatch error: {why}"
@@ -1737,7 +1814,7 @@ msgstr "docs: {configDocs}"
 #: src/components/CreateAccountModal.tsx
 #: src/components/DetachModal.tsx
 #: src/components/NewProjectButton.tsx
-#: src/components/PlanRunCard.tsx
+#: src/components/place/StateGlyph.tsx
 #: src/components/SessionControls.tsx
 #: src/lib/sessionsView.ts
 msgid "done"
@@ -1757,6 +1834,10 @@ msgstr "duplicate"
 msgid "duplicate playbook failed: {status}"
 msgstr "duplicate playbook failed: {status}"
 
+#: src/components/place/ListPane.tsx
+msgid "e open"
+msgstr "e open"
+
 #: src/components/ProjectPlugins.tsx
 msgid "edit"
 msgstr "edit"
@@ -1772,6 +1853,10 @@ msgstr "edit project tags"
 #: src/theme/palettes.ts
 msgid "Ember"
 msgstr "Ember"
+
+#: src/pages/Settings.tsx
+msgid "English · Українська"
+msgstr "English · Українська"
 
 #: src/components/usage/UsageProviderCard.tsx
 msgid "error"
@@ -1817,13 +1902,16 @@ msgstr "extract failed: {status}"
 msgid "fail"
 msgstr "fail"
 
+#: src/components/place/StateGlyph.tsx
 #: src/components/ProjectPlugins.tsx
 #: src/components/RunOutcomeModal.tsx
 #: src/components/SessionControls.tsx
+#: src/lib/needsYou.ts
 msgid "failed"
 msgstr "failed"
 
-#: src/lib/needsYou.ts
+#: src/lib/sessionsView.ts
+#: src/pages/Settings.tsx
 msgid "Failed"
 msgstr "Failed"
 
@@ -1873,6 +1961,10 @@ msgstr "filled by probe"
 msgid "filled by probe · {moreCount} more suggested"
 msgstr "filled by probe · {moreCount} more suggested"
 
+#: src/components/place/PageDetail.tsx
+msgid "filter"
+msgstr "filter"
+
 #: src/workspace/AgentPicker.tsx
 msgid "filter agents"
 msgstr "filter agents"
@@ -1880,10 +1972,6 @@ msgstr "filter agents"
 #: src/workspace/AgentPicker.tsx
 msgid "filter agents…"
 msgstr "filter agents…"
-
-#: src/lib/pageSearch.tsx
-msgid "filter approvals…"
-msgstr "filter approvals…"
 
 #: src/components/ProjectDropdown.tsx
 msgid "filter by project"
@@ -1909,11 +1997,21 @@ msgstr "filter projects by name…"
 msgid "filter sessions by title…"
 msgstr "filter sessions by title…"
 
+#: src/pages/Settings.tsx
+msgid "filter settings"
+msgstr "filter settings"
+
 #: src/components/usage/UsageConnect.tsx
 msgid "Finish it here: open a terminal already scoped to this account and log the CLI in."
 msgstr "Finish it here: open a terminal already scoped to this account and log the CLI in."
 
+#: src/lib/sessionsView.ts
+#: src/pages/Settings.tsx
+msgid "Finished"
+msgstr "Finished"
+
 #: src/components/NotifySettings.tsx
+#: src/pages/Settings.tsx
 msgid "fires only while this tab is in the background; click a notification to jump to the approval or session"
 msgstr "fires only while this tab is in the background; click a notification to jump to the approval or session"
 
@@ -1936,6 +2034,14 @@ msgstr "Flow of a board card from capture to landing"
 #: src/components/AccountSelector.tsx
 msgid "follow whichever account is marked default on this machine"
 msgstr "follow whichever account is marked default on this machine"
+
+#: src/lib/sessionsView.ts
+msgid "for {quiet} · no transcript activity, it may have died silently."
+msgstr "for {quiet} · no transcript activity, it may have died silently."
+
+#: src/lib/sessionsView.ts
+msgid "for {waited} · the session does nothing until you decide."
+msgstr "for {waited} · the session does nothing until you decide."
 
 #: src/components/KillButton.tsx
 msgid "Force kill"
@@ -2001,22 +2107,20 @@ msgstr "Git push is never auto-approved unless you enable it explicitly."
 msgid "Git writes (add, commit, checkout, worktree)"
 msgstr "Git writes (add, commit, checkout, worktree)"
 
+#: src/components/place/StateGlyph.tsx
 #: src/lib/needsYou.ts
-msgid "Guard decision"
-msgstr "Guard decision"
+msgid "guard stop"
+msgstr "guard stop"
 
 #: src/pages/docsRail.ts
 msgid "Guides"
 msgstr "Guides"
 
-#: src/components/SessionCard.tsx
-msgid "Handoff"
-msgstr "Handoff"
-
 #: src/components/RunOutcomeModal.tsx
 msgid "headless run in progress"
 msgstr "headless run in progress"
 
+#: src/components/CommandPalette.tsx
 #: src/lib/nav.ts
 msgid "Health"
 msgstr "Health"
@@ -2053,6 +2157,10 @@ msgstr "History"
 #: src/workspace/TaskCard.tsx
 msgid "hold this card in the queue without losing its place"
 msgstr "hold this card in the queue without losing its place"
+
+#: src/pages/Settings.tsx
+msgid "Hover a palette to preview it; a click keeps it."
+msgstr "Hover a palette to preview it; a click keeps it."
 
 #: src/lib/glossary.ts
 msgid "how honest forecasts are"
@@ -2111,6 +2219,14 @@ msgstr "improve agent failed"
 msgid "Improve the system"
 msgstr "Improve the system"
 
+#: src/lib/sessionsView.ts
+msgid "in {elapsed} · {intent}."
+msgstr "in {elapsed} · {intent}."
+
+#: src/lib/sessionsView.ts
+msgid "in {elapsed}."
+msgstr "in {elapsed}."
+
 #: src/workspace/boardModel.ts
 msgid "In Progress"
 msgstr "In Progress"
@@ -2119,15 +2235,12 @@ msgstr "In Progress"
 msgid "In Review"
 msgstr "In Review"
 
+#: src/components/CommandPalette.tsx
 #: src/lib/docFigures.tsx
 #: src/lib/nav.ts
 #: src/workspace/boardModel.ts
 msgid "Inbox"
 msgstr "Inbox"
-
-#: src/components/SessionCard.tsx
-msgid "ingested from the {label} Claude Code account"
-msgstr "ingested from the {label} Claude Code account"
 
 #: src/components/LanguagePicker.tsx
 msgid "interface language"
@@ -2145,9 +2258,25 @@ msgstr "its CLI login is missing"
 msgid "Its commits will be lost."
 msgstr "Its commits will be lost."
 
+#: src/pages/Settings.tsx
+msgid "j/k · e/x · 1–5 · t · ⌘K"
+msgstr "j/k · e/x · 1–5 · t · ⌘K"
+
 #: src/components/SplitPane.tsx
 msgid "j/k move"
 msgstr "j/k move"
+
+#: src/components/place/ListPane.tsx
+msgid "j/k select"
+msgstr "j/k select"
+
+#: src/components/CommandPalette.tsx
+msgid "jump to a session, plan, place… or type a task and press ⏎ to dispatch"
+msgstr "jump to a session, plan, place… or type a task and press ⏎ to dispatch"
+
+#: src/components/Sidebar.tsx
+msgid "jump to anything, or type a task and dispatch it"
+msgstr "jump to anything, or type a task and dispatch it"
 
 #: src/components/NewProjectButton.tsx
 msgid "kebab-case only ([a-z0-9-])"
@@ -2160,6 +2289,15 @@ msgstr "keep the work"
 #: src/workspace/boardModel.ts
 msgid "kept in step with a GitHub issue or pull request"
 msgstr "kept in step with a GitHub issue or pull request"
+
+#: src/pages/Settings.tsx
+msgid "keyboard"
+msgstr "keyboard"
+
+#: src/pages/Settings.tsx
+#: src/pages/Settings.tsx
+msgid "Keyboard"
+msgstr "Keyboard"
 
 #: src/components/KillButton.tsx
 msgid "Kill"
@@ -2182,6 +2320,7 @@ msgstr "killed"
 msgid "killing…"
 msgstr "killing…"
 
+#: src/components/CommandPalette.tsx
 #: src/lib/nav.ts
 msgid "Knowledge"
 msgstr "Knowledge"
@@ -2225,6 +2364,11 @@ msgstr "Land, Re-run with feedback, Discard, Re-verify — with the diff and the
 msgid "language"
 msgstr "language"
 
+#: src/pages/Settings.tsx
+#: src/pages/Settings.tsx
+msgid "Language"
+msgstr "Language"
+
 #: src/components/usage/UsageModal.tsx
 msgid "Last updated: {updatedAt}"
 msgstr "Last updated: {updatedAt}"
@@ -2233,6 +2377,7 @@ msgstr "Last updated: {updatedAt}"
 msgid "later"
 msgstr "later"
 
+#: src/components/CommandPalette.tsx
 #: src/lib/nav.ts
 msgid "Learning"
 msgstr "Learning"
@@ -2252,6 +2397,10 @@ msgstr "letters, digits, '-' or '_' (it becomes a directory name)"
 #: src/api.ts
 msgid "lifecycle {action} failed ({status})"
 msgstr "lifecycle {action} failed ({status})"
+
+#: src/pages/Settings.tsx
+msgid "light"
+msgstr "light"
 
 #: src/theme/ThemePicker.tsx
 msgid "Light"
@@ -2305,6 +2454,10 @@ msgstr "loading usage"
 msgid "loading worktrees…"
 msgstr "loading worktrees…"
 
+#: src/main.tsx
+msgid "loading…"
+msgstr "loading…"
+
 #: src/components/PermissionPresets.tsx
 msgid "Locked down"
 msgstr "Locked down"
@@ -2321,9 +2474,10 @@ msgstr "main"
 msgid "managed"
 msgstr "managed"
 
+#: src/components/place/StateGlyph.tsx
 #: src/lib/needsYou.ts
-msgid "Manual check"
-msgstr "Manual check"
+msgid "manual check"
+msgstr "manual check"
 
 #: src/api.ts
 msgid "mark criterion failed: {status}"
@@ -2357,7 +2511,12 @@ msgstr "Migrate routine config to v2"
 msgid "missing: {missing}"
 msgstr "missing: {missing}"
 
+#: src/components/HealthFooter.tsx
+msgid "mock"
+msgstr "mock"
+
 #: src/App.tsx
+#: src/components/HealthFooter.tsx
 #: src/workspace/WorkspaceShell.tsx
 msgid "mock data"
 msgstr "mock data"
@@ -2381,6 +2540,14 @@ msgstr "model chosen at dispatch"
 #: src/workspace/task/TaskActions.tsx
 msgid "more actions"
 msgstr "more actions"
+
+#: src/pages/Settings.tsx
+msgid "Motion"
+msgstr "Motion"
+
+#: src/pages/Settings.tsx
+msgid "move selection"
+msgstr "move selection"
 
 #: src/workspace/task/TaskActions.tsx
 #: src/workspace/TaskCard.tsx
@@ -2407,9 +2574,19 @@ msgstr "needs {needs}"
 msgid "needs me"
 msgstr "needs me"
 
+#: src/components/place/StateGlyph.tsx
+msgid "needs you"
+msgstr "needs you"
+
+#: src/components/CommandPalette.tsx
 #: src/lib/nav.ts
+#: src/pages/Settings.tsx
 msgid "Needs you"
 msgstr "Needs you"
+
+#: src/pages/Settings.tsx
+msgid "needs-you · finished · failed"
+msgstr "needs-you · finished · failed"
 
 #: src/components/PermissionPresets.tsx
 msgid "Network (web fetch/search)"
@@ -2572,6 +2749,10 @@ msgstr "Note: {runNote}"
 msgid "Nothing in {laneTitle} matches “{filterLabel}”."
 msgstr "Nothing in {laneTitle} matches “{filterLabel}”."
 
+#: src/components/place/PageDetail.tsx
+msgid "Nothing matches."
+msgstr "Nothing matches."
+
 #: src/components/DetachModal.tsx
 msgid "nothing to remove"
 msgstr "nothing to remove"
@@ -2589,20 +2770,14 @@ msgid "notifications"
 msgstr "notifications"
 
 #: src/pages/Settings.tsx
+#: src/pages/Settings.tsx
 msgid "Notifications"
 msgstr "Notifications"
 
 #: src/components/NotifySettings.tsx
+#: src/pages/Settings.tsx
 msgid "notifications are blocked — allow them in the browser site settings, then re-toggle"
 msgstr "notifications are blocked — allow them in the browser site settings, then re-toggle"
-
-#: src/components/SessionCard.tsx
-msgid "now: {now}"
-msgstr "now: {now}"
-
-#: src/components/SessionCard.tsx
-msgid "now: {nowText}"
-msgstr "now: {nowText}"
 
 #: src/lib/docFigures.tsx
 msgid "objective · sequencing table · risks · definition of done"
@@ -2753,9 +2928,15 @@ msgstr "own answer for \"{questionText}\""
 msgid "packs (core is always on)"
 msgstr "packs (core is always on)"
 
+#: src/pages/Settings.tsx
 #: src/theme/ThemePicker.tsx
 msgid "palette"
 msgstr "palette"
+
+#: src/pages/Settings.tsx
+#: src/pages/Settings.tsx
+msgid "Palette"
+msgstr "Palette"
 
 #: src/workspace/NewTaskModal.tsx
 msgid "parked — dispatch it later from the board"
@@ -2801,9 +2982,18 @@ msgstr "pause this project"
 msgid "paused"
 msgstr "paused"
 
+#: src/components/place/StateGlyph.tsx
+msgid "pending"
+msgstr "pending"
+
 #: src/components/PermissionPresets.tsx
 msgid "per-category overrides apply only under the unrestricted preset"
 msgstr "per-category overrides apply only under the unrestricted preset"
+
+#: src/components/place/StateGlyph.tsx
+#: src/lib/needsYou.ts
+msgid "permission"
+msgstr "permission"
 
 #: src/components/PermissionPresets.tsx
 #: src/components/PermissionPresets.tsx
@@ -2847,6 +3037,10 @@ msgstr "Phase run diagnosis"
 msgid "phase run failed ({status})"
 msgstr "phase run failed ({status})"
 
+#: src/lib/sessionsView.ts
+msgid "Phase running"
+msgstr "Phase running"
+
 #: src/lib/docFigures.tsx
 msgid "Phases with no edge between them run in parallel; each phase document carries its own copy-paste agent prompt and acceptance criteria, so it is executable standalone."
 msgstr "Phases with no edge between them run in parallel; each phase document carries its own copy-paste agent prompt and acceptance criteria, so it is executable standalone."
@@ -2862,6 +3056,10 @@ msgstr "plain-language summary failed: {status}"
 #: src/workspace/TaskModal.tsx
 msgid "plan"
 msgstr "plan"
+
+#: src/components/HealthFooter.tsx
+msgid "plan {percent} %"
+msgstr "plan {percent} %"
 
 #: src/workspace/boardModel.ts
 msgid "plan {planId}"
@@ -2889,6 +3087,7 @@ msgid "plan in"
 msgstr "plan in"
 
 #: src/components/PlanRunCard.tsx
+#: src/components/SessionRow.tsx
 msgid "plan run"
 msgstr "plan run"
 
@@ -2916,6 +3115,7 @@ msgstr "plan unknown"
 msgid "planner's guess"
 msgstr "planner's guess"
 
+#: src/components/CommandPalette.tsx
 #: src/lib/nav.ts
 msgid "Plans"
 msgstr "Plans"
@@ -2934,6 +3134,10 @@ msgstr "playbook end"
 #: src/workspace/TaskCard.tsx
 msgid "playbook: {playbook}"
 msgstr "playbook: {playbook}"
+
+#: src/components/CommandPalette.tsx
+msgid "Playbooks"
+msgstr "Playbooks"
 
 #: src/components/ProjectActions.tsx
 msgid "plugin is not enabled for this project"
@@ -2958,6 +3162,10 @@ msgstr "primary"
 #: src/components/Sidebar.tsx
 msgid "primary (mobile)"
 msgstr "primary (mobile)"
+
+#: src/pages/Settings.tsx
+msgid "primary action"
+msgstr "primary action"
 
 #: src/lib/docFigures.tsx
 msgid "prio high"
@@ -3016,12 +3224,14 @@ msgstr "project paused"
 msgid "project…"
 msgstr "project…"
 
+#: src/pages/Settings.tsx
 #: src/workspace/ProjectSwitcher.tsx
 msgid "projects"
 msgstr "projects"
 
 #: src/components/CommandPalette.tsx
 #: src/components/CommandPalette.tsx
+#: src/pages/Settings.tsx
 #: src/pages/Settings.tsx
 msgid "Projects"
 msgstr "Projects"
@@ -3070,9 +3280,11 @@ msgstr "Pushes <0>{taskBranch}</0> to <1>origin</1> and opens a pull request wit
 msgid "put the card back in the Inbox"
 msgstr "put the card back in the Inbox"
 
+#: src/components/place/DecisionCard.tsx
+#: src/components/place/StateGlyph.tsx
 #: src/lib/needsYou.ts
-msgid "Question"
-msgstr "Question"
+msgid "question"
+msgstr "question"
 
 #: src/components/QuestionForm.tsx
 msgid "question {number}"
@@ -3099,9 +3311,13 @@ msgstr "queued, waiting for the mod to pick it up"
 msgid "queued: {queuedCount}"
 msgstr "queued: {queuedCount}"
 
-#: src/components/SessionCard.tsx
-msgid "quiet {quiet}"
-msgstr "quiet {quiet}"
+#: src/lib/sessionsView.ts
+msgid "Quiet"
+msgstr "Quiet"
+
+#: src/lib/sessionsView.ts
+msgid "quiet {quiet} · it may have died silently"
+msgstr "quiet {quiet} · it may have died silently"
 
 #: src/components/usage/UsageConnect.tsx
 msgid "Quota connected, but the CLI still needs a login: <0>{reason}</0>"
@@ -3289,6 +3505,10 @@ msgstr "rerun failed"
 msgid "reset"
 msgstr "reset"
 
+#: src/components/HealthFooter.tsx
+msgid "resets {at}"
+msgstr "resets {at}"
+
 #: src/components/usage/format.ts
 msgid "resets in {days}d"
 msgstr "resets in {days}d"
@@ -3470,7 +3690,6 @@ msgstr "run this phase again"
 msgid "run verification again against the worktree"
 msgstr "run verification again against the worktree"
 
-#: src/components/PlanRunCard.tsx
 #: src/components/RunOutcomeModal.tsx
 #: src/workspace/boardModel.ts
 msgid "running"
@@ -3525,6 +3744,14 @@ msgstr "Schema + migration"
 msgid "Search"
 msgstr "Search"
 
+#: src/pages/Settings.tsx
+msgid "search & actions"
+msgstr "search & actions"
+
+#: src/components/Sidebar.tsx
+msgid "Search & actions"
+msgstr "Search & actions"
+
 #: src/workspace/ProjectSwitcher.tsx
 msgid "search projects"
 msgstr "search projects"
@@ -3533,13 +3760,13 @@ msgstr "search projects"
 msgid "search projects…"
 msgstr "search projects…"
 
-#: src/components/CommandPalette.tsx
-msgid "search sessions, messages, files…"
-msgstr "search sessions, messages, files…"
-
 #: src/lib/sessionsView.ts
 msgid "second"
 msgstr "second"
+
+#: src/pages/Settings.tsx
+msgid "secondary action"
+msgstr "secondary action"
 
 #: src/components/BulkPromptBar.tsx
 msgid "select all"
@@ -3633,6 +3860,10 @@ msgstr "Sessions"
 msgid "sessions for {branch}"
 msgstr "sessions for {branch}"
 
+#: src/pages/Settings.tsx
+msgid "Sessions pick the default account; when it hits its window the daemon pauses it and queues sessions until the reset."
+msgstr "Sessions pick the default account; when it hits its window the daemon pauses it and queues sessions until the reset."
+
 #: src/components/CommandPalette.tsx
 msgid "Sessions touching file"
 msgstr "Sessions touching file"
@@ -3649,6 +3880,18 @@ msgstr "set account failed: {status}"
 msgid "set preset failed: {status}"
 msgstr "set preset failed: {status}"
 
+#: src/pages/Settings.tsx
+#: src/pages/Settings.tsx
+#: src/pages/Settings.tsx
+#: src/pages/Settings.tsx
+#: src/pages/Settings.tsx
+#: src/pages/Settings.tsx
+#: src/pages/Settings.tsx
+#: src/pages/Settings.tsx
+msgid "settings"
+msgstr "settings"
+
+#: src/components/CommandPalette.tsx
 #: src/lib/nav.ts
 #: src/pages/Settings.tsx
 #: src/pages/Settings.tsx
@@ -3731,6 +3974,10 @@ msgstr "Single-flight per worktree: a fix card shares its root card’s tree"
 msgid "Single-flight: the same card never starts twice"
 msgstr "Single-flight: the same card never starts twice"
 
+#: src/pages/Settings.tsx
+msgid "six palettes with a live preview"
+msgstr "six palettes with a live preview"
+
 #: src/lib/sessionsView.ts
 msgid "sixth"
 msgstr "sixth"
@@ -3763,13 +4010,21 @@ msgstr "source"
 msgid "spawned by verification to repair {externalId}"
 msgstr "spawned by verification to repair {externalId}"
 
+#: src/components/HealthFooter.tsx
+msgid "spend today · plan window"
+msgstr "spend today · plan window"
+
+#: src/pages/Settings.tsx
+msgid "Spinning and pulsing state glyphs"
+msgstr "Spinning and pulsing state glyphs"
+
 #: src/workspace/boardModel.ts
 msgid "stale"
 msgstr "stale"
 
 #: src/lib/needsYou.ts
-msgid "Stalled phase"
-msgstr "Stalled phase"
+msgid "stalled phase"
+msgstr "stalled phase"
 
 #: src/workspace/NewTaskModal.tsx
 msgid "start immediately — the dispatcher picks it up"
@@ -3828,6 +4083,14 @@ msgstr "Stop turn"
 msgid "stop using this lesson?"
 msgstr "stop using this lesson?"
 
+#: src/components/place/StateGlyph.tsx
+msgid "stopped"
+msgstr "stopped"
+
+#: src/lib/sessionsView.ts
+msgid "Stopped by you"
+msgstr "Stopped by you"
+
 #: src/components/StopButton.tsx
 msgid "stopping…"
 msgstr "stopping…"
@@ -3840,6 +4103,7 @@ msgstr "submit answers"
 msgid "subscription account"
 msgstr "subscription account"
 
+#: src/components/HealthFooter.tsx
 #: src/components/usage/UsageChip.tsx
 #: src/components/usage/UsageChip.tsx
 #: src/components/usage/UsageModal.tsx
@@ -3871,6 +4135,7 @@ msgid "Swarm"
 msgstr "Swarm"
 
 #: src/App.tsx
+#: src/components/Sidebar.tsx
 msgid "swarmery home"
 msgstr "swarmery home"
 
@@ -3894,6 +4159,10 @@ msgstr "switch to dark theme"
 msgid "switch to light theme"
 msgstr "switch to light theme"
 
+#: src/pages/Settings.tsx
+msgid "system"
+msgstr "system"
+
 #: src/components/CommandPalette.tsx
 #: src/lib/nav.ts
 #: src/theme/ThemePicker.tsx
@@ -3907,6 +4176,10 @@ msgstr "System"
 #: src/main.tsx
 msgid "system…"
 msgstr "system…"
+
+#: src/components/place/ListPane.tsx
+msgid "t theme"
+msgstr "t theme"
 
 #: src/components/usage/UsageConnect.tsx
 msgid "tab didn't open? authorize here"
@@ -4098,9 +4371,22 @@ msgstr "The worktree limit (default 4)"
 msgid "the worktree was reclaimed, so there is nothing left to grade — re-run the card instead"
 msgstr "the worktree was reclaimed, so there is nothing left to grade — re-run the card instead"
 
+#: src/components/Sidebar.tsx
 #: src/theme/ThemePicker.tsx
 msgid "theme"
 msgstr "theme"
+
+#: src/pages/Settings.tsx
+msgid "Theme"
+msgstr "Theme"
+
+#: src/pages/Settings.tsx
+msgid "theme · density · motion"
+msgstr "theme · density · motion"
+
+#: src/components/Sidebar.tsx
+msgid "theme · t"
+msgstr "theme · t"
 
 #: src/theme/ThemePicker.tsx
 #: src/theme/ThemePicker.tsx
@@ -4112,6 +4398,7 @@ msgid "third"
 msgstr "third"
 
 #: src/components/NotifySettings.tsx
+#: src/pages/Settings.tsx
 msgid "this browser does not support the Notifications API"
 msgstr "this browser does not support the Notifications API"
 
@@ -4134,6 +4421,15 @@ msgstr "this host"
 #: src/api.ts
 msgid "This is a mock plain-language explanation. In the real dashboard Claude writes it from the plan doc."
 msgstr "This is a mock plain-language explanation. In the real dashboard Claude writes it from the plan doc."
+
+#: src/pages/Settings.tsx
+msgid "this machine"
+msgstr "this machine"
+
+#: src/pages/Settings.tsx
+#: src/pages/Settings.tsx
+msgid "This machine"
+msgstr "This machine"
 
 #: src/components/PluginConfigModal.tsx
 msgid "this pack's config schema is missing or malformed"
@@ -4159,10 +4455,6 @@ msgstr "this project's .claude/agents/ definition replaces the inherited one"
 msgid "This runs the model on the evidence above and creates a diff proposal you approve before any PR."
 msgstr "This runs the model on the evidence above and creates a diff proposal you approve before any PR."
 
-#: src/components/SessionCard.tsx
-msgid "this session changed model mid-flight: started on {from}, its newest turn ran on {to}"
-msgstr "this session changed model mid-flight: started on {from}, its newest turn ran on {to}"
-
 #: src/workspace/task/TaskBrief.tsx
 msgid "this session had touched the file when the card was captured"
 msgstr "this session had touched the file when the card was captured"
@@ -4174,6 +4466,10 @@ msgstr "This terminal runs under <0>{account}</0>'s config dir. Run <1>claude</1
 #: src/main.tsx
 msgid "This view failed to render."
 msgstr "This view failed to render."
+
+#: src/pages/Settings.tsx
+msgid "Tighter rows in every list"
+msgstr "Tighter rows in every list"
 
 #: src/lib/docBlocks.tsx
 msgid "Tip"
@@ -4206,6 +4502,10 @@ msgstr "Today"
 msgid "today · {name}"
 msgstr "today · {name}"
 
+#: src/pages/Settings.tsx
+msgid "Today · Inbox · Needs you · Sessions · Plans"
+msgstr "Today · Inbox · Needs you · Sessions · Plans"
+
 #: src/api.ts
 msgid "toggle checkbox failed: {status}"
 msgstr "toggle checkbox failed: {status}"
@@ -4217,6 +4517,10 @@ msgstr "toggle failed: {status}"
 #: src/api.ts
 msgid "toggle rule failed: {status}"
 msgstr "toggle rule failed: {status}"
+
+#: src/pages/Settings.tsx
+msgid "toggle theme"
+msgstr "toggle theme"
 
 #: src/components/VcsSignInDialog.tsx
 msgid "Token"
@@ -4344,6 +4648,10 @@ msgstr "verify retries"
 msgid "verify: pass"
 msgstr "verify: pass"
 
+#: src/pages/Settings.tsx
+msgid "version"
+msgstr "version"
+
 #: src/components/ProjectPlugins.tsx
 msgid "via attach/detach"
 msgstr "via attach/detach"
@@ -4375,6 +4683,22 @@ msgstr "waiting for review, a failed verdict, a dispatch error, or an unanswered
 #: src/components/VcsSignInDialog.tsx
 msgid "Waiting for you to enter the code on {host}…"
 msgstr "Waiting for you to enter the code on {host}…"
+
+#: src/lib/sessionsView.ts
+msgid "Waiting for your answer"
+msgstr "Waiting for your answer"
+
+#: src/lib/sessionsView.ts
+msgid "waiting for your permission"
+msgstr "waiting for your permission"
+
+#: src/lib/sessionsView.ts
+msgid "Waiting for your permission"
+msgstr "Waiting for your permission"
+
+#: src/lib/sessionsView.ts
+msgid "waiting for your reply"
+msgstr "waiting for your reply"
 
 #: src/workspace/boardModel.ts
 msgid "waiting on quota: {why}"
@@ -4409,6 +4733,10 @@ msgstr "What is {term}?"
 #: src/workspace/task/TaskBrief.tsx
 msgid "what needs doing"
 msgstr "what needs doing"
+
+#: src/pages/Settings.tsx
+msgid "What runs here for every project: the daemon, its worktree janitor and the MCP servers Claude Code has configured."
+msgstr "What runs here for every project: the daemon, its worktree janitor and the MCP servers Claude Code has configured."
 
 #: src/workspace/NewTaskModal.tsx
 msgid "what should happen"
@@ -4454,7 +4782,12 @@ msgstr "will remove"
 msgid "will restore"
 msgstr "will restore"
 
+#: src/components/place/StateGlyph.tsx
+msgid "working"
+msgstr "working"
+
 #: src/lib/docFigures.tsx
+#: src/lib/sessionsView.ts
 #: src/workspace/boardModel.ts
 msgid "Working"
 msgstr "Working"
@@ -4472,8 +4805,8 @@ msgid "worktree"
 msgstr "worktree"
 
 #: src/lib/needsYou.ts
-msgid "Worktree cleanup"
-msgstr "Worktree cleanup"
+msgid "worktree cleanup"
+msgstr "worktree cleanup"
 
 #: src/workspace/task/TaskActions.tsx
 msgid "worktree reclaimed — nothing to re-grade"
@@ -4482,6 +4815,10 @@ msgstr "worktree reclaimed — nothing to re-grade"
 #: src/pages/Settings.tsx
 msgid "worktrees"
 msgstr "worktrees"
+
+#: src/components/place/DecisionCard.tsx
+msgid "write"
+msgstr "write"
 
 #: src/workspace/task/TaskActions.tsx
 msgid "write the evidence first — a close with no evidence cannot be audited"

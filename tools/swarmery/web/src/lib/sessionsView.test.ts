@@ -10,20 +10,27 @@ import { describe, expect, it } from 'vitest';
 import type { Session, SessionPlanGroup, SessionStatus } from '../api/types';
 import {
   buildDays,
-  countRuns,
-  countSessions,
   linkSelection,
   matchesQuery,
   planRowNotes,
   planRowTag,
   planRowTitle,
   runsOnly,
+  type DayBucket,
+  type DayItem,
 } from './sessionsView';
 
 /** Every plan session carries the SAME boilerplate prompt as its title — that
  * is the whole reason the fan-out rows are labelled by role instead. */
 const BOILERPLATE =
   'You are the controller for an ENTIRE approved implementation plan. Read the plan…';
+
+/** What the buckets hold, read directly: the run cards, and the session rows they
+ * and the flat items render. */
+const items = (days: readonly DayBucket[]): DayItem[] => days.flatMap((d) => d.items);
+const runItems = (days: readonly DayBucket[]): DayItem[] => items(days).filter((it) => it.kind === 'run');
+const sessionRows = (days: readonly DayBucket[]): number =>
+  items(days).reduce((n, it) => n + (it.kind === 'run' ? it.group.rows.length : 1), 0);
 
 let nextId = 1;
 
@@ -136,13 +143,13 @@ describe('buildDays — status filtering keeps a run card whole (any-row rule)',
 
   it('includes the run when ANY row matches, and never splits the fan-out', () => {
     const days = buildDays(all, 'killed');
-    expect(countRuns(days)).toBe(1);
+    expect(runItems(days)).toHaveLength(1);
     const run = days[0]!.items[0]!;
     if (run.kind !== 'run') throw new Error('expected a run item');
     // All three rows survive — the card is the unit, not the row.
     expect(run.group.rows).toHaveLength(3);
     // The non-matching loose session IS dropped.
-    expect(countSessions(days)).toBe(3);
+    expect(sessionRows(days)).toBe(3);
   });
 
   it('drops the run when no row matches', () => {
@@ -152,8 +159,8 @@ describe('buildDays — status filtering keeps a run card whole (any-row rule)',
 
   it('keeps everything when no status filter is set', () => {
     const days = buildDays(all, null);
-    expect(countRuns(days)).toBe(1);
-    expect(countSessions(days)).toBe(4);
+    expect(runItems(days)).toHaveLength(1);
+    expect(sessionRows(days)).toBe(4);
   });
 });
 
@@ -173,11 +180,11 @@ describe('buildDays — infinite scroll appends', () => {
     ];
 
     const firstPass = buildDays(page1, null);
-    expect(countRuns(firstPass)).toBe(1);
-    expect(countSessions(firstPass)).toBe(2);
+    expect(runItems(firstPass)).toHaveLength(1);
+    expect(sessionRows(firstPass)).toBe(2);
 
     const appended = buildDays([...page1, ...page2], null);
-    expect(countRuns(appended)).toBe(1); // merged by taskId, NOT duplicated
+    expect(runItems(appended)).toHaveLength(1); // merged by taskId, NOT duplicated
     const run = appended[0]!.items[0]!;
     if (run.kind !== 'run') throw new Error('expected a run item');
     expect(run.group.rows).toHaveLength(4);
@@ -194,7 +201,7 @@ describe('buildDays — infinite scroll appends', () => {
       ],
       null,
     );
-    expect(countRuns(days)).toBe(2);
+    expect(runItems(days)).toHaveLength(2);
   });
 });
 
@@ -210,7 +217,7 @@ describe('runsOnly (the `plan runs` audit view)', () => {
     expect(days).toHaveLength(2);
     const audit = runsOnly(days);
     expect(audit).toHaveLength(1);
-    expect(countRuns(audit)).toBe(1);
+    expect(runItems(audit)).toHaveLength(1);
   });
 });
 

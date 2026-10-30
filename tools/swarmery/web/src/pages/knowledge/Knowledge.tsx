@@ -1,26 +1,24 @@
-// Knowledge (Canvas v3 phase 8, artboard 2a): one project-only place for what a
-// project KNOWS — Memory · Architecture · Serena · Graphify — replacing four
-// sidebar rows. The active tab lives in `?tab=` so the retired
-// /p/:slug/{memory,architecture,serena,graphify} routes redirect onto it.
+// Knowledge (v4, handoff §3, §9): what a project KNOWS, in the frame every place
+// shares. The accordion groups are Memory · Architecture · Tooling, and Docs is a
+// sidebar place of its own because it documents swarmery, not the project.
 //
-// Bodies are the existing project-scoped pages, lazy, unchanged. The route is a
-// fill route (lib/fillRoute.ts): this shell takes the leftover height, the tab
-// bar stays put, and each body scrolls inside its own pane — Architecture/
-// Serena/Graphify are fill pages already, Memory is document-shaped and
-// gets an overflow pane here.
-//
-// The fleet /serena, /graphify, /architecture pages are NOT redirected here:
-// Knowledge needs a project. Docs is not a tab: it documents swarmery itself,
-// not the project, so it is its own sidebar place (lib/nav.ts).
+// `?tab=` keeps its four old values so the retired /p/:slug/{memory,architecture,
+// serena,graphify} routes redirect onto a group: serena and graphify are the two
+// rows of Tooling. Memory lists the project's memory files and opens the editor;
+// the other three stay the project-scoped pages they were, lazy, filling the detail
+// (lib/fillRoute.ts). The fleet /serena, /graphify, /architecture pages are NOT
+// redirected here: Knowledge needs a project.
 
-import type { MessageDescriptor } from '@lingui/core';
-import { msg } from '@lingui/core/macro';
-import { Trans, useLingui } from '@lingui/react/macro';
-import { Suspense, lazy } from 'react';
-import { type TabItem, Tabs, useTabParam } from '../../components/Tabs';
+import { useLingui } from '@lingui/react/macro';
+import { Suspense, lazy, useCallback, useEffect, useState } from 'react';
+import { useParams } from 'react-router-dom';
+import { fetchMemoryList } from '../../api';
+import type { MemoryFile } from '../../api/types';
+import { PageDetail, PagePlace, type PlaceGroup, usePlaceParams } from '../../components/place/PageDetail';
 import { Loading } from '../../components/ui';
+import { fmtAgo } from '../../lib/format';
+import { KIND_LABELS, Memory, MemoryEditor, fmtBytes } from '../Memory';
 
-const Memory = lazy(() => import('../Memory').then((m) => ({ default: m.Memory })));
 const ScopedArchitecture = lazy(() =>
   import('../../workspace/ScopedPages').then((m) => ({ default: m.ScopedArchitecture })),
 );
@@ -33,58 +31,129 @@ const ScopedGraphify = lazy(() =>
 
 export type KnowledgeTab = 'memory' | 'architecture' | 'serena' | 'graphify';
 
-export const KNOWLEDGE_TABS: readonly KnowledgeTab[] = [
-  'memory',
-  'architecture',
-  'serena',
-  'graphify',
-];
+export const KNOWLEDGE_TABS: readonly KnowledgeTab[] = ['memory', 'architecture', 'serena', 'graphify'];
 
-const TAB_ITEMS: readonly { id: KnowledgeTab; label: MessageDescriptor }[] = [
-  { id: 'memory', label: msg`Memory` },
-  { id: 'architecture', label: msg`Architecture` },
-  { id: 'serena', label: msg`Serena` },
-  { id: 'graphify', label: msg`Graphify` },
-];
+type KnowledgeGroup = 'memory' | 'architecture' | 'tooling';
 
-function KnowledgeBody({ tab }: { tab: KnowledgeTab }): JSX.Element {
-  switch (tab) {
-    case 'memory':
-      return (
-        <div className="h-full overflow-y-auto">
-          <Memory />
-        </div>
-      );
-    case 'architecture':
-      return <ScopedArchitecture />;
-    case 'serena':
-      return <ScopedSerena />;
-    case 'graphify':
-      return <ScopedGraphify />;
-  }
+function groupOf(tab: KnowledgeTab): KnowledgeGroup {
+  return tab === 'serena' || tab === 'graphify' ? 'tooling' : tab;
 }
 
 export function Knowledge(): JSX.Element {
   const { t, i18n } = useLingui();
-  const [tab, setTab] = useTabParam<KnowledgeTab>('tab', KNOWLEDGE_TABS, 'memory');
-  const tabs: TabItem<KnowledgeTab>[] = TAB_ITEMS.map((item) => ({
-    id: item.id,
-    label: i18n._(item.label),
-  }));
-  const label = tabs.find((item) => item.id === tab)?.label ?? t`Memory`;
+  const { slug = '' } = useParams<{ slug: string }>();
+  const { tab, item, pick } = usePlaceParams<KnowledgeTab>(KNOWLEDGE_TABS, 'memory');
+  const [files, setFiles] = useState<MemoryFile[] | null>(null);
+
+  const loadFiles = useCallback((): void => {
+    if (slug === '') return;
+    fetchMemoryList(slug)
+      .then((r) => setFiles(r.files))
+      .catch(() => setFiles(null));
+  }, [slug]);
+  useEffect(loadFiles, [loadFiles]);
+
+  const kindLabel = (kind: MemoryFile['kind']): string => i18n._(KIND_LABELS[kind]);
+
+  const groups: PlaceGroup[] = [
+    {
+      key: 'memory',
+      label: t`Memory`,
+      tone: 'blue',
+      count: files?.length ?? 0,
+      items: [
+        ...(files ?? []).map((file) => ({
+          key: `file:${file.path}`,
+          glyph: '▪',
+          glyphTone: 'blue' as const,
+          title: file.name,
+          summary: `${kindLabel(file.kind)} · ${fmtBytes(file.sizeBytes)}`,
+          age: fmtAgo(file.updatedAt),
+        })),
+        { key: 'panels', glyph: '◇', title: t`Index and stale facts`, summary: t`consolidate · lines that went stale` },
+      ],
+    },
+    {
+      key: 'architecture',
+      label: t`Architecture`,
+      items: [{ key: 'map', glyph: '❖', title: t`Architecture map`, summary: t`modules · flows · entry points` }],
+    },
+    {
+      key: 'tooling',
+      label: t`Tooling`,
+      items: [
+        { key: 'serena', glyph: '◆', title: t`Serena`, summary: t`symbol index` },
+        { key: 'graphify', glyph: '◆', title: t`Graphify`, summary: t`dependency graph` },
+      ],
+    },
+  ];
+
+  const group = groupOf(tab);
+  const open = groups.find((g) => g.key === group) ?? groups[0];
+  const selected =
+    group === 'tooling'
+      ? tab
+      : (open?.items.find((i) => i.key === item)?.key ?? open?.items[0]?.key ?? null);
+
+  const openFile = useCallback((path: string): void => pick('memory', `file:${path}`), [pick]);
+
+  const detail = (): JSX.Element => {
+    if (tab === 'architecture') return <ScopedArchitecture />;
+    if (tab === 'serena') return <ScopedSerena />;
+    if (tab === 'graphify') return <ScopedGraphify />;
+    const file = files?.find((f) => `file:${f.path}` === selected);
+    if (file !== undefined) {
+      return (
+        <PageDetail
+          kind={t`memory`}
+          kindTone="blue"
+          meta={`${kindLabel(file.kind)} · ${fmtBytes(file.sizeBytes)}`}
+          title={file.name}
+          lead={t`A file the project remembers and loads when a run needs it. Edit it if it has gone stale.`}
+          kv={[
+            { k: t`last changed`, v: fmtAgo(file.updatedAt) },
+            { k: t`scope`, v: slug },
+            { k: t`source`, v: kindLabel(file.kind) },
+            ...(file.writable ? [] : [{ k: t`access`, v: t`read-only`, tone: 'amber' as const }]),
+          ]}
+        >
+          <div className="mt-[18px]">
+            <MemoryEditor key={file.path} project={slug} path={file.path} onSaved={loadFiles} />
+          </div>
+        </PageDetail>
+      );
+    }
+    return (
+      <PageDetail
+        kind={t`memory`}
+        kindTone="blue"
+        title={t`Everything this project remembers.`}
+        lead={t`Its instructions, Claude Code auto-memory and Serena notes, editable with a versioned backup on every save.`}
+      >
+        <Memory panels onOpenFile={openFile} />
+      </PageDetail>
+    );
+  };
+
   return (
-    <div className="flex h-full min-h-0 flex-col">
-      <div className="shrink-0 px-4 pt-6 desk:px-10 desk:pt-[34px]">
-        <h1 className="mb-3 font-display text-[30px] leading-tight font-medium tracking-[-0.01em]">
-          <Trans>Knowledge</Trans>
-        </h1>
-        <Tabs tabs={tabs} value={tab} onChange={setTab} ariaLabel={t`Knowledge`} />
-      </div>
-      <div role="tabpanel" aria-label={label} className="min-h-0 flex-1">
-        <Suspense fallback={<Loading label={`${label.toLowerCase()}…`} />}>
-          <KnowledgeBody tab={tab} />
-        </Suspense>
-      </div>
-    </div>
+    <PagePlace
+      title={t`Knowledge`}
+      sub={t`what this project remembers`}
+      searchHint={t`search memory, modules, symbols`}
+      groups={groups}
+      openGroup={group}
+      selected={selected}
+      onOpenGroup={(key) => pick(key === 'tooling' ? 'serena' : (key as KnowledgeTab))}
+      onSelect={(key) => {
+        if (key === 'map') pick('architecture');
+        else if (key === 'serena' || key === 'graphify') pick(key);
+        else pick('memory', key === open?.items[0]?.key ? null : key);
+      }}
+      detail={
+        <div className="h-full min-h-0">
+          <Suspense fallback={<Loading label={t`loading…`} />}>{detail()}</Suspense>
+        </div>
+      }
+    />
   );
 }

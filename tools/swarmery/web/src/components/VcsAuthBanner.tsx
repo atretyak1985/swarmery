@@ -4,7 +4,9 @@
 // operator — not signed in, or the sign-in expired — with a way out. When the
 // daemon could not tell (status unknown: the provider CLI is missing or the
 // host did not answer) it says only that, in a softer tone: a signed-in
-// operator who is offline must not be told they are signed out.
+// operator who is offline must not be told they are signed out. That softer line
+// is no warning, so it lives in the status bar (`placement="status"`) and the
+// page's frame stays where the design puts it.
 //
 // Every word comes from the response: the provider's name from `terms`, the
 // sign-in command from `cliLogin` (chosen by the daemon per provider). Nothing
@@ -31,6 +33,10 @@ export interface VcsAuthBannerProps {
   projectId: number | null;
   /** Replaces the built-in sign-in dialog. Absent: "Sign in" opens VcsSignInDialog. */
   onSignIn?: () => void;
+  /** `banner` says what needs acting on, above the page. `status` says what the
+   *  daemon could not tell, in the status bar: that is no warning, so it must not
+   *  push the page's frame down. */
+  placement?: 'banner' | 'status';
 }
 
 /** Whether the banner has anything to say: a remote the daemon cannot act on,
@@ -45,7 +51,6 @@ const BTN_BASE =
 const BTN_WARN = `${BTN_BASE} border-amber/50 text-amber hover:bg-amber/15 focus-visible:outline-amber`;
 const BTN_SOFT = `${BTN_BASE} border-line text-ink-2 hover:bg-surface2 focus-visible:outline-ink-dim`;
 const SECTION_WARN = 'border-amber/40 bg-amber/10 text-amber';
-const SECTION_SOFT = 'border-line bg-surface text-ink-2';
 
 /** The banner's one-line statement for an auth status it shows. */
 function headlineFor(status: VcsInfo['auth']['status'], provider: string): string {
@@ -59,7 +64,7 @@ function headlineFor(status: VcsInfo['auth']['status'], provider: string): strin
   }
 }
 
-export function VcsAuthBanner({ projectId, onSignIn }: VcsAuthBannerProps): JSX.Element | null {
+export function VcsAuthBanner({ projectId, onSignIn, placement = 'banner' }: VcsAuthBannerProps): JSX.Element | null {
   const { vcs, reload } = useProjectVcs(projectId);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [checking, setChecking] = useState(false);
@@ -73,13 +78,14 @@ export function VcsAuthBanner({ projectId, onSignIn }: VcsAuthBannerProps): JSX.
   // An origin on a host the daemon could not classify: ask which service
   // hosts it (once — the answer is stored) instead of a sign-in it cannot name.
   if (vcs.askProvider === true && projectId !== null) {
-    return <VcsProviderAsk projectId={projectId} host={vcs.host} onSaved={reload} />;
+    return placement === 'banner' ? <VcsProviderAsk projectId={projectId} host={vcs.host} onSaved={reload} /> : null;
   }
   if (!needsSignIn(vcs)) return null;
 
   const { terms } = vcs;
   const { provider, change } = terms;
   const unknown = vcs.auth.status === 'unknown';
+  if (unknown !== (placement === 'status')) return null;
   const headline = headlineFor(vcs.auth.status, terms.provider);
   const btn = unknown ? BTN_SOFT : BTN_WARN;
   const sshNote =
@@ -92,32 +98,43 @@ export function VcsAuthBanner({ projectId, onSignIn }: VcsAuthBannerProps): JSX.
     reload();
   };
 
+  const buttons = (
+    <>
+      <button
+        type="button"
+        className={btn}
+        onClick={onSignIn ?? (() => setDialogOpen(true))}
+        {...(onSignIn === undefined ? { 'aria-haspopup': 'dialog' as const } : {})}
+      >
+        <Trans>Sign in</Trans>
+      </button>
+      <button type="button" className={btn} onClick={recheck} disabled={checking} aria-busy={checking}>
+        <Trans>Re-check</Trans>
+      </button>
+    </>
+  );
+
   return (
     <>
-      <section
-        aria-label={t`${provider} sign-in`}
-        data-testid="vcs-auth-banner"
-        data-status={vcs.auth.status}
-        className={`border-b px-4 py-2 font-mono text-[11px] desk:px-6 ${unknown ? SECTION_SOFT : SECTION_WARN}`}
-      >
-        <div role="status" className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
-          <span className="font-semibold">{headline}</span>
-          {sshNote !== null && <span className="text-ink-3">{sshNote}</span>}
-          <span className="ml-auto flex items-center gap-2">
-            <button
-              type="button"
-              className={btn}
-              onClick={onSignIn ?? (() => setDialogOpen(true))}
-              {...(onSignIn === undefined ? { 'aria-haspopup': 'dialog' as const } : {})}
-            >
-              <Trans>Sign in</Trans>
-            </button>
-            <button type="button" className={btn} onClick={recheck} disabled={checking} aria-busy={checking}>
-              <Trans>Re-check</Trans>
-            </button>
-          </span>
-        </div>
-      </section>
+      {placement === 'status' ? (
+        <span role="status" data-testid="vcs-auth-status" className="flex min-w-0 items-center gap-2">
+          <span className="truncate">{headline}</span>
+          {buttons}
+        </span>
+      ) : (
+        <section
+          aria-label={t`${provider} sign-in`}
+          data-testid="vcs-auth-banner"
+          data-status={vcs.auth.status}
+          className={`border-b px-4 py-2 font-mono text-[11px] desk:px-6 ${SECTION_WARN}`}
+        >
+          <div role="status" className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+            <span className="font-semibold">{headline}</span>
+            {sshNote !== null && <span className="text-ink-3">{sshNote}</span>}
+            <span className="ml-auto flex items-center gap-2">{buttons}</span>
+          </div>
+        </section>
+      )}
       {dialogOpen && projectId !== null && (
         <VcsSignInDialog
           projectId={projectId}

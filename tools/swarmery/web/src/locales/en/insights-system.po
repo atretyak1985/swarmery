@@ -17,21 +17,9 @@ msgstr ""
 msgid " — no cached model has a pricing entry, so no $ estimate"
 msgstr " — no cached model has a pricing entry, so no $ estimate"
 
-#: src/pages/health/Health.tsx
-msgid " · ${spent} spent"
-msgstr " · ${spent} spent"
-
 #: src/pages/Lessons.tsx
 msgid " · auto-retires {autoRetires}"
 msgstr " · auto-retires {autoRetires}"
-
-#: src/pages/inbox/Inbox.tsx
-msgid " · expires {expires}"
-msgstr " · expires {expires}"
-
-#: src/pages/inbox/Inbox.tsx
-msgid " · fleet-wide"
-msgstr " · fleet-wide"
 
 #: src/pages/Lessons.tsx
 msgid " · linked to \"{linkedTitle}\""
@@ -77,6 +65,26 @@ msgstr "· started {age} ago"
 msgid "(target {cmp}{targetValue})"
 msgstr "(target {cmp}{targetValue})"
 
+#. placeholder {0}: row.runs
+#: src/pages/health/HealthOverview.tsx
+msgid "{0, plural, one {{agent}: {failed} of # run failed, down from {was}.} few {{agent}: {failed} of # runs failed, down from {was}.} many {{agent}: {failed} of # runs failed, down from {was}.} other {{agent}: {failed} of # runs failed, down from {was}.}}"
+msgstr "{0, plural, one {{agent}: {failed} of # run failed, down from {was}.} few {{agent}: {failed} of # runs failed, down from {was}.} many {{agent}: {failed} of # runs failed, down from {was}.} other {{agent}: {failed} of # runs failed, down from {was}.}}"
+
+#. placeholder {0}: row.runs
+#: src/pages/health/HealthOverview.tsx
+msgid "{0, plural, one {{agent}: {failed} of # run failed.} few {{agent}: {failed} of # runs failed.} many {{agent}: {failed} of # runs failed.} other {{agent}: {failed} of # runs failed.}}"
+msgstr "{0, plural, one {{agent}: {failed} of # run failed.} few {{agent}: {failed} of # runs failed.} many {{agent}: {failed} of # runs failed.} other {{agent}: {failed} of # runs failed.}}"
+
+#. placeholder {0}: d.calls
+#: src/pages/health/healthPlace.ts
+msgid "{0, plural, one {{tool} denied {denied} of # call} few {{tool} denied {denied} of # calls} many {{tool} denied {denied} of # calls} other {{tool} denied {denied} of # calls}}"
+msgstr "{0, plural, one {{tool} denied {denied} of # call} few {{tool} denied {denied} of # calls} many {{tool} denied {denied} of # calls} other {{tool} denied {denied} of # calls}}"
+
+#. placeholder {0}: denied.calls
+#: src/pages/health/HealthOverview.tsx
+msgid "{0, plural, one {{tool} denied {deniedCount} of # call} few {{tool} denied {deniedCount} of # calls} many {{tool} denied {deniedCount} of # calls} other {{tool} denied {deniedCount} of # calls}}"
+msgstr "{0, plural, one {{tool} denied {deniedCount} of # call} few {{tool} denied {deniedCount} of # calls} many {{tool} denied {deniedCount} of # calls} other {{tool} denied {deniedCount} of # calls}}"
+
 #. placeholder {0}: a.calls
 #. placeholder {0}: mod.uses.length
 #: src/pages/Analytics.tsx
@@ -116,6 +124,11 @@ msgstr "{0, plural, one {# run · mean surprise {surprise}} few {# runs · mean 
 msgid "{0, plural, one {# run} few {# runs} many {# runs} other {# runs}}"
 msgstr "{0, plural, one {# run} few {# runs} many {# runs} other {# runs}}"
 
+#. placeholder {0}: shown.length
+#: src/pages/health/ModCostPanel.tsx
+msgid "{0, plural, one {# session with the session mod} few {# sessions with the session mod} many {# sessions with the session mod} other {# sessions with the session mod}}"
+msgstr "{0, plural, one {# session with the session mod} few {# sessions with the session mod} many {# sessions with the session mod} other {# sessions with the session mod}}"
+
 #. placeholder {0}: p.n
 #: src/pages/learning/TurnForecastPanel.tsx
 msgid "{0, plural, one {# turn} few {# turns} many {# turns} other {# turns}}"
@@ -126,22 +139,32 @@ msgstr "{0, plural, one {# turn} few {# turns} many {# turns} other {# turns}}"
 msgid "{0, plural, one {# validate error} few {# validate errors} many {# validate errors} other {# validate errors}}"
 msgstr "{0, plural, one {# validate error} few {# validate errors} many {# validate errors} other {# validate errors}}"
 
+#. placeholder {0}: denied.calls
+#: src/pages/health/HealthOverview.tsx
+msgid "{0, plural, one {denied {deniedCount}× · of # call} few {denied {deniedCount}× · of # calls} many {denied {deniedCount}× · of # calls} other {denied {deniedCount}× · of # calls}}"
+msgstr "{0, plural, one {denied {deniedCount}× · of # call} few {denied {deniedCount}× · of # calls} many {denied {deniedCount}× · of # calls} other {denied {deniedCount}× · of # calls}}"
+
 #. placeholder {0}: rep.minSamples
 #: src/pages/LessonsCalibration.tsx
 msgid "{0, plural, one {No group has # scored run yet.} few {No group has # scored runs yet.} many {No group has # scored runs yet.} other {No group has # scored runs yet.}}"
 msgstr "{0, plural, one {No group has # scored run yet.} few {No group has # scored runs yet.} many {No group has # scored runs yet.} other {No group has # scored runs yet.}}"
 
+#. placeholder {0}: g.sessions.length
+#: src/pages/health/healthPlace.ts
+msgid "{0, plural, one {same error {count}× in # session} few {same error {count}× in # sessions} many {same error {count}× in # sessions} other {same error {count}× in # sessions}}"
+msgstr "{0, plural, one {same error {count}× in # session} few {same error {count}× in # sessions} many {same error {count}× in # sessions} other {same error {count}× in # sessions}}"
+
 #: src/pages/inbox/inboxModel.ts
 msgid "{action} · agent's suggestion"
 msgstr "{action} · agent's suggestion"
 
-#: src/pages/health/Health.tsx
-msgid "{advisorOpen} open"
-msgstr "{advisorOpen} open"
-
 #: src/pages/inbox/HandledList.tsx
 msgid "{age} ago"
 msgstr "{age} ago"
+
+#: src/pages/SystemShell.tsx
+msgid "{agentCount} agents · {skillCount} skills · {hookCount} hooks · {routineCount} routines"
+msgstr "{agentCount} agents · {skillCount} skills · {hookCount} hooks · {routineCount} routines"
 
 #: src/pages/Retro.tsx
 msgid "{agentRuns} in this window, and {errorEvents} across them and the orchestrator."
@@ -163,6 +186,10 @@ msgstr "{arrow} from {prevPct}"
 msgid "{calls, plural, =1 {once} one {# times} few {# times} many {# times} other {# times}}"
 msgstr "{calls, plural, =1 {once} one {# times} few {# times} many {# times} other {# times}}"
 
+#: src/pages/learning/Learning.tsx
+msgid "{candidates, plural, one {# candidate · retirements · every status} few {# candidates · retirements · every status} many {# candidates · retirements · every status} other {# candidates · retirements · every status}}"
+msgstr "{candidates, plural, one {# candidate · retirements · every status} few {# candidates · retirements · every status} many {# candidates · retirements · every status} other {# candidates · retirements · every status}}"
+
 #: src/pages/health/healthModel.ts
 msgid "{changesText} verified · {gatheringCount} gathering proof"
 msgstr "{changesText} verified · {gatheringCount} gathering proof"
@@ -172,8 +199,8 @@ msgid "{checks, plural, one {# check got no verdict in the last hour} few {# che
 msgstr "{checks, plural, one {# check got no verdict in the last hour} few {# checks got no verdict in the last hour} many {# checks got no verdict in the last hour} other {# checks got no verdict in the last hour}}"
 
 #: src/pages/memory/StaleFactsPanel.tsx
-msgid "{claims, plural, one {# PR claims} few {# PR claims} many {# PR claims} other {# PR claims}} across {files, plural, one {# files} few {# files} many {# files} other {# files}}"
-msgstr "{claims, plural, one {# PR claims} few {# PR claims} many {# PR claims} other {# PR claims}} across {files, plural, one {# files} few {# files} many {# files} other {# files}}"
+msgid "{claims, plural, one {# PR claim} few {# PR claims} many {# PR claims} other {# PR claims}} across {files, plural, one {# file} few {# files} many {# files} other {# files}}"
+msgstr "{claims, plural, one {# PR claim} few {# PR claims} many {# PR claims} other {# PR claims}} across {files, plural, one {# file} few {# files} many {# files} other {# files}}"
 
 #: src/pages/Analytics.tsx
 msgid "{commits} commits · {filesModified} files"
@@ -192,13 +219,17 @@ msgstr "{completion}% completion · {perDay}/day"
 msgid "{costN, plural, one {# run(s)} few {# run(s)} many {# run(s)} other {# run(s)}} with a known cost"
 msgstr "{costN, plural, one {# run(s)} few {# run(s)} many {# run(s)} other {# run(s)}} with a known cost"
 
+#: src/pages/health/HealthOverview.tsx
+msgid "{count, plural, one {# friction you can remove today.} few {# frictions you can remove today.} many {# frictions you can remove today.} other {# frictions you can remove today.}}"
+msgstr "{count, plural, one {# friction you can remove today.} few {# frictions you can remove today.} many {# frictions you can remove today.} other {# frictions you can remove today.}}"
+
 #: src/pages/Retro.tsx
 msgid "{count, plural, one {# task} few {# tasks} many {# tasks} other {# tasks}}"
 msgstr "{count, plural, one {# task} few {# tasks} many {# tasks} other {# tasks}}"
 
-#: src/pages/health/ModCostPanel.tsx
-msgid "{count} sessions with the session mod · {total} · {divergingCount} differ by more than 10 %"
-msgstr "{count} sessions with the session mod · {total} · {divergingCount} differ by more than 10 %"
+#: src/pages/health/Health.tsx
+msgid "{count} d"
+msgstr "{count} d"
 
 #: src/pages/inbox/inboxModel.ts
 msgid "{count} waiting · oldest {age}"
@@ -212,9 +243,26 @@ msgstr "{d, plural, one {# day} few {# days} many {# days} other {# days}}"
 msgid "{day}: {runs, plural, one {# run} few {# runs} many {# runs} other {# runs}}"
 msgstr "{day}: {runs, plural, one {# run} few {# runs} many {# runs} other {# runs}}"
 
+#: src/pages/health/Health.tsx
+#: src/pages/health/healthPlace.ts
+msgid "{dayCount} d"
+msgstr "{dayCount} d"
+
+#: src/pages/health/HealthOverview.tsx
+msgid "{days, plural, one {# day} few {# days} many {# days} other {# days}}"
+msgstr "{days, plural, one {# day} few {# days} many {# days} other {# days}}"
+
+#: src/pages/health/healthModel.ts
+msgid "{days, plural, one {the # day before} few {the # days before} many {the # days before} other {the # days before}}"
+msgstr "{days, plural, one {the # day before} few {the # days before} many {the # days before} other {the # days before}}"
+
 #: src/pages/Retro.tsx
 msgid "{delegations} delegations: {ok} ok, {redispatched} re-dispatched"
 msgstr "{delegations} delegations: {ok} ok, {redispatched} re-dispatched"
+
+#: src/pages/health/ModCostPanel.tsx
+msgid "{diverging, plural, one {# differs by more than 10 %} few {# differ by more than 10 %} many {# differ by more than 10 %} other {# differ by more than 10 %}}"
+msgstr "{diverging, plural, one {# differs by more than 10 %} few {# differ by more than 10 %} many {# differ by more than 10 %} other {# differ by more than 10 %}}"
 
 #: src/pages/learning/classifierModel.ts
 msgid "{errors, plural, =1 {once} one {# times} few {# times} many {# times} other {# times}}"
@@ -229,10 +277,14 @@ msgid "{errs} err"
 msgstr "{errs} err"
 
 #: src/pages/health/FrictionTriageStrip.tsx
-#: src/pages/inbox/Inbox.tsx
+#: src/pages/health/healthPlace.ts
 #: src/pages/inbox/TriageBanner.tsx
 msgid "{failed} failed"
 msgstr "{failed} failed"
+
+#: src/pages/health/healthPlace.ts
+msgid "{failed} failed · {agent} moved it most"
+msgstr "{failed} failed · {agent} moved it most"
 
 #: src/pages/health/PhaseRunsTab.tsx
 msgid "{fallbackN, plural, one {# more run(s) ended in the window with no actuals row ({fallback}) — counted here only.} few {# more run(s) ended in the window with no actuals row ({fallback}) — counted here only.} many {# more run(s) ended in the window with no actuals row ({fallback}) — counted here only.} other {# more run(s) ended in the window with no actuals row ({fallback}) — counted here only.}}"
@@ -250,10 +302,6 @@ msgstr "{findings, plural, one {# Advisor finding} few {# Advisor findings} many
 msgid "{findingsText} · {rewritesText} to approve"
 msgstr "{findingsText} · {rewritesText} to approve"
 
-#: src/pages/inbox/ReviewItem.tsx
-msgid "{findingsText} · started {age} ago"
-msgstr "{findingsText} · started {age} ago"
-
 #: src/pages/inbox/TriageBanner.tsx
 msgid "{fixTasks, plural, one {# fix task} few {# fix tasks} many {# fix tasks} other {# fix tasks}}"
 msgstr "{fixTasks, plural, one {# fix task} few {# fix tasks} many {# fix tasks} other {# fix tasks}}"
@@ -269,6 +317,38 @@ msgstr "{groups, plural, one {# group(s)} few {# group(s)} many {# group(s)} oth
 #: src/pages/health/FrictionTriageStrip.tsx
 msgid "{groups} · agents are checked by rule"
 msgstr "{groups} · agents are checked by rule"
+
+#: src/pages/health/healthPlace.ts
+msgid "{head} · {failed} failed"
+msgstr "{head} · {failed} failed"
+
+#: src/pages/health/healthPlace.ts
+msgid "{head} · {failed} failed · was {was}"
+msgstr "{head} · {failed} failed · was {was}"
+
+#: src/pages/health/healthModel.ts
+msgid "{head} · {window} d · {failed} failed"
+msgstr "{head} · {window} d · {failed} failed"
+
+#: src/pages/health/healthModel.ts
+msgid "{head} · {window} d · {failed} failed, down from {prev}"
+msgstr "{head} · {window} d · {failed} failed, down from {prev}"
+
+#: src/pages/health/healthModel.ts
+msgid "{head} · {window} d · {failed} failed, up from {prev}"
+msgstr "{head} · {window} d · {failed} failed, up from {prev}"
+
+#: src/pages/health/HealthOverview.tsx
+msgid "{head} in {window}, {failed} failed — down from {was}."
+msgstr "{head} in {window}, {failed} failed — down from {was}."
+
+#: src/pages/health/HealthOverview.tsx
+msgid "{head} in {window}, {failed} failed — up from {was}."
+msgstr "{head} in {window}, {failed} failed — up from {was}."
+
+#: src/pages/health/HealthOverview.tsx
+msgid "{head} in {window}, {failed} failed."
+msgstr "{head} in {window}, {failed} failed."
 
 #: src/pages/health/healthModel.ts
 msgid "{head}; almost all of the change is {agent}."
@@ -287,12 +367,20 @@ msgid "{head}; the change is spread across several agents."
 msgstr "{head}; the change is spread across several agents."
 
 #: src/pages/AgentHub.tsx
-msgid "{healthLabel} · {failedPct}% failed-run share"
-msgstr "{healthLabel} · {failedPct}% failed-run share"
+msgid "{healthLabel} · {failed}% failed"
+msgstr "{healthLabel} · {failed}% failed"
 
 #: src/pages/LessonsCalibration.tsx
 msgid "{hiddenGroups} group(s) with {hiddenRuns} run(s) hidden: fewer than {minSamples} samples each."
 msgstr "{hiddenGroups} group(s) with {hiddenRuns} run(s) hidden: fewer than {minSamples} samples each."
+
+#: src/pages/health/HealthOverview.tsx
+msgid "{hot, plural, one {# agent still sits above the {line} % line.} few {# agents still sit above the {line} % line.} many {# agents still sit above the {line} % line.} other {# agents still sit above the {line} % line.}}"
+msgstr "{hot, plural, one {# agent still sits above the {line} % line.} few {# agents still sit above the {line} % line.} many {# agents still sit above the {line} % line.} other {# agents still sit above the {line} % line.}}"
+
+#: src/pages/learning/Learning.tsx
+msgid "{inForce, plural, one {# lesson in force} few {# lessons in force} many {# lessons in force} other {# lessons in force}}"
+msgstr "{inForce, plural, one {# lesson in force} few {# lessons in force} many {# lessons in force} other {# lessons in force}}"
 
 #: src/pages/system/ItemDetail.tsx
 msgid "{itemName} sections"
@@ -352,10 +440,6 @@ msgstr "{name} @ {head} — current"
 msgid "{name} @ {head} — the map records no commit for it"
 msgstr "{name} @ {head} — the map records no commit for it"
 
-#: src/pages/health/HealthOverview.tsx
-msgid "{nowPct} failed · {runs, plural, one {# runs} few {# runs} many {# runs} other {# runs}}"
-msgstr "{nowPct} failed · {runs, plural, one {# runs} few {# runs} many {# runs} other {# runs}}"
-
 #: src/pages/inbox/TriageBanner.tsx
 msgid "{offerAgent} can be handled by an agent · {offerYou} need you"
 msgstr "{offerAgent} can be handled by an agent · {offerYou} need you"
@@ -365,16 +449,20 @@ msgid "{ok} ok"
 msgstr "{ok} ok"
 
 #: src/pages/system/ItemDetail.tsx
-msgid "{okRuns} ok · {errorRuns} error · {sessions, plural, one {# sessions} few {# sessions} many {# sessions} other {# sessions}} · {projects, plural, one {# project} few {# projects} many {# projects} other {# projects}}"
-msgstr "{okRuns} ok · {errorRuns} error · {sessions, plural, one {# sessions} few {# sessions} many {# sessions} other {# sessions}} · {projects, plural, one {# project} few {# projects} many {# projects} other {# projects}}"
+msgid "{okRuns} ok · {errorRuns} error · {sessions, plural, one {# session} few {# sessions} many {# sessions} other {# sessions}} · {projects, plural, one {# project} few {# projects} many {# projects} other {# projects}}"
+msgstr "{okRuns} ok · {errorRuns} error · {sessions, plural, one {# session} few {# sessions} many {# sessions} other {# sessions}} · {projects, plural, one {# project} few {# projects} many {# projects} other {# projects}}"
+
+#: src/pages/inbox/Inbox.tsx
+msgid "{openCount} to review · nothing here blocks a session"
+msgstr "{openCount} to review · nothing here blocks a session"
 
 #: src/pages/system/ItemDetail.tsx
 msgid "{percent}% err"
 msgstr "{percent}% err"
 
-#: src/pages/health/HealthOverview.tsx
-msgid "{prevPct} → {nowPct} failed"
-msgstr "{prevPct} → {nowPct} failed"
+#: src/pages/learning/Learning.tsx
+msgid "{provingOut, plural, one {# change proving out} few {# changes proving out} many {# changes proving out} other {# changes proving out}}"
+msgstr "{provingOut, plural, one {# change proving out} few {# changes proving out} many {# changes proving out} other {# changes proving out}}"
 
 #: src/pages/Analytics.tsx
 msgid "{reads} cache reads · {uncached} uncached input"
@@ -400,37 +488,52 @@ msgstr "{rewrites, plural, one {# agent rewrite} few {# agent rewrites} many {# 
 msgid "{rowName} × {colName}: {cell} runs"
 msgstr "{rowName} × {colName}: {cell} runs"
 
+#: src/pages/health/healthPlace.ts
+msgid "{rule} · {target} · also in Inbox"
+msgstr "{rule} · {target} · also in Inbox"
+
 #: src/pages/health/healthModel.ts
 msgid "{runs, plural, one {# run · {failed} failed} few {# runs · {failed} failed} many {# runs · {failed} failed} other {# runs · {failed} failed}}"
 msgstr "{runs, plural, one {# run · {failed} failed} few {# runs · {failed} failed} many {# runs · {failed} failed} other {# runs · {failed} failed}}"
 
+#: src/pages/health/healthModel.ts
+#: src/pages/health/HealthOverview.tsx
+#: src/pages/health/healthPlace.ts
+msgid "{runs, plural, one {# run} few {# runs} many {# runs} other {# runs}}"
+msgstr "{runs, plural, one {# run} few {# runs} many {# runs} other {# runs}}"
+
 #: src/pages/RoutingReport.tsx
-msgid "{runs, plural, one {# runs} few {# runs} many {# runs} other {# runs}}, {failRate} fail, {meanCost} mean"
-msgstr "{runs, plural, one {# runs} few {# runs} many {# runs} other {# runs}}, {failRate} fail, {meanCost} mean"
+msgid "{runs, plural, one {# run} few {# runs} many {# runs} other {# runs}}, {failRate} fail, {meanCost} mean"
+msgstr "{runs, plural, one {# run} few {# runs} many {# runs} other {# runs}}, {failRate} fail, {meanCost} mean"
 
 #: src/pages/Analytics.tsx
 msgid "{runs} agent runs over {days} days — {topName} ran most."
 msgstr "{runs} agent runs over {days} days — {topName} ran most."
 
+#: src/pages/AgentHub.tsx
+#: src/pages/SystemShell.tsx
+msgid "{runs} runs / 30 d"
+msgstr "{runs} runs / 30 d"
+
 #: src/pages/health/healthModel.ts
 msgid "{sessionCount, plural, one {in # session} few {in # sessions} many {in # sessions} other {in # sessions}}"
 msgstr "{sessionCount, plural, one {in # session} few {in # sessions} many {in # sessions} other {in # sessions}}"
 
-#: src/pages/RoutingReport.tsx
-msgid "{settled} settled, {unsettled} still running in the last {days, plural, one {# days} few {# days} many {# days} other {# days}}."
-msgstr "{settled} settled, {unsettled} still running in the last {days, plural, one {# days} few {# days} many {# days} other {# days}}."
+#: src/pages/health/ModCostPanel.tsx
+msgid "{sessionsText} · {total} · {divergingText}"
+msgstr "{sessionsText} · {total} · {divergingText}"
 
 #: src/pages/RoutingReport.tsx
-msgid "{settledRuns, plural, one {# settled run(s)} few {# settled run(s)} many {# settled run(s)} other {# settled run(s)}}, {unsettled} still running · last {days, plural, one {# days} few {# days} many {# days} other {# days}}"
-msgstr "{settledRuns, plural, one {# settled run(s)} few {# settled run(s)} many {# settled run(s)} other {# settled run(s)}}, {unsettled} still running · last {days, plural, one {# days} few {# days} many {# days} other {# days}}"
+msgid "{settled} settled, {unsettled} still running in the last {days, plural, one {# day} few {# days} many {# days} other {# days}}."
+msgstr "{settled} settled, {unsettled} still running in the last {days, plural, one {# day} few {# days} many {# days} other {# days}}."
+
+#: src/pages/RoutingReport.tsx
+msgid "{settledRuns, plural, one {# settled run(s)} few {# settled run(s)} many {# settled run(s)} other {# settled run(s)}}, {unsettled} still running · last {days, plural, one {# day} few {# days} many {# days} other {# days}}"
+msgstr "{settledRuns, plural, one {# settled run(s)} few {# settled run(s)} many {# settled run(s)} other {# settled run(s)}}, {unsettled} still running · last {days, plural, one {# day} few {# days} many {# days} other {# days}}"
 
 #: src/pages/Memory.tsx
 msgid "{size} · {closed}/{total} lines closed"
 msgstr "{size} · {closed}/{total} lines closed"
-
-#: src/pages/inbox/Inbox.tsx
-msgid "{stale} changed meanwhile"
-msgstr "{stale} changed meanwhile"
 
 #: src/pages/health/FrictionTriageStrip.tsx
 #: src/pages/inbox/TriageBanner.tsx
@@ -444,6 +547,10 @@ msgstr "{suggestionTotal, plural, one {# suggestion} few {# suggestions} many {#
 #: src/pages/Analytics.tsx
 msgid "{tokens} tokens over {days} days — {topName} led at {share}%."
 msgstr "{tokens} tokens over {days} days — {topName} led at {share}%."
+
+#: src/pages/health/healthPlace.ts
+msgid "{tool} denied {count}×"
+msgstr "{tool} denied {count}×"
 
 #: src/pages/Analytics.tsx
 msgid "{toolCalls} calls"
@@ -482,9 +589,17 @@ msgstr "{unreadableCount} unreadable"
 msgid "{untriaged, plural, one {# untriaged group} few {# untriaged groups} many {# untriaged groups} other {# untriaged groups}}"
 msgstr "{untriaged, plural, one {# untriaged group} few {# untriaged groups} many {# untriaged groups} other {# untriaged groups}}"
 
+#: src/pages/learning/Learning.tsx
+msgid "{uses, plural, one {reached # run} few {reached # runs} many {reached # runs} other {reached # runs}}"
+msgstr "{uses, plural, one {reached # run} few {reached # runs} many {reached # runs} other {reached # runs}}"
+
 #: src/pages/health/healthModel.ts
 msgid "{verified, plural, one {# change} few {# changes} many {# changes} other {# changes}}"
 msgstr "{verified, plural, one {# change} few {# changes} many {# changes} other {# changes}}"
+
+#: src/pages/AgentHub.tsx
+msgid "{version} · changed {changed}"
+msgstr "{version} · changed {changed}"
 
 #: src/pages/Analytics.tsx
 msgid "{waitMin} min total · {resolved} resolved"
@@ -531,7 +646,6 @@ msgid "<0>Rule of thumb:</0> switch to {activeWord} only when “{agreement}” 
 msgstr "<0>Rule of thumb:</0> switch to {activeWord} only when “{agreement}” is above the bar for {checks}+ checked sessions."
 
 #: src/pages/system/HooksTab.tsx
-#: src/pages/SystemHub.tsx
 msgid "▲ no timeout"
 msgstr "▲ no timeout"
 
@@ -539,21 +653,37 @@ msgstr "▲ no timeout"
 msgid "▲ the command contains redacted values (•••) — saving writes the text exactly as shown"
 msgstr "▲ the command contains redacted values (•••) — saving writes the text exactly as shown"
 
-#: src/pages/agent-hub/RunNow.tsx
-msgid "▸ Run now"
-msgstr "▸ Run now"
-
 #: src/pages/health/HealthOverview.tsx
 msgid "✓ always allowed"
 msgstr "✓ always allowed"
+
+#: src/pages/inbox/InboxDetail.tsx
+msgid "✓ right"
+msgstr "✓ right"
+
+#: src/pages/inbox/InboxDetail.tsx
+msgid "✓ right, all {groupSize}"
+msgstr "✓ right, all {groupSize}"
 
 #: src/pages/Analytics.tsx
 msgid "$ Cost"
 msgstr "$ Cost"
 
+#: src/pages/health/healthPlace.ts
+msgid "${spent} in this window"
+msgstr "${spent} in this window"
+
+#: src/pages/Lessons.tsx
+msgid "A candidate: it reaches no run until you accept it."
+msgstr "A candidate: it reaches no run until you accept it."
+
 #: src/pages/inbox/InboxDetail.tsx
 msgid "A change to {agent}, drafted from its evidence"
 msgstr "A change to {agent}, drafted from its evidence"
+
+#: src/pages/knowledge/Knowledge.tsx
+msgid "A file the project remembers and loads when a run needs it. Edit it if it has gone stale."
+msgstr "A file the project remembers and loads when a run needs it. Edit it if it has gone stale."
 
 #: src/pages/learning/classifierModel.ts
 msgid "a finished session did not ship"
@@ -588,10 +718,11 @@ msgstr "A small local model reads each finished session and answers a few fixed 
 msgid "A task is created on the project's board with the text below, and an agent picks it up."
 msgstr "A task is created on the project's board with the text below, and an agent picks it up."
 
-#: src/pages/inbox/InboxDetail.tsx
+#: src/pages/inbox/Inbox.tsx
 #: src/pages/inbox/InboxDetail.tsx
 #: src/pages/inbox/inboxModel.ts
 #: src/pages/inbox/inboxModel.ts
+#: src/pages/Lessons.tsx
 #: src/pages/Lessons.tsx
 msgid "accept"
 msgstr "accept"
@@ -603,6 +734,10 @@ msgstr "Accept"
 #: src/pages/inbox/TriageBanner.tsx
 msgid "accept {acceptText}"
 msgstr "accept {acceptText}"
+
+#: src/pages/inbox/InboxDetail.tsx
+msgid "accept lesson"
+msgstr "accept lesson"
 
 #: src/pages/Retro.tsx
 msgid "accepted"
@@ -616,14 +751,6 @@ msgstr "accepted — {until}"
 msgid "accepted — waiting for adoption"
 msgstr "accepted — waiting for adoption"
 
-#: src/pages/inbox/Inbox.tsx
-msgid "accepted {accepted}"
-msgstr "accepted {accepted}"
-
-#: src/pages/inbox/Inbox.tsx
-msgid "accepting {current} of {total}…"
-msgstr "accepting {current} of {total}…"
-
 #: src/pages/inbox/InboxDetail.tsx
 msgid "Accepting creates a task on the project's board; an agent picks it up."
 msgstr "Accepting creates a task on the project's board; an agent picks it up."
@@ -631,6 +758,10 @@ msgstr "Accepting creates a task on the project's board; an agent picks it up."
 #: src/pages/inbox/TriageBanner.tsx
 msgid "accepting…"
 msgstr "accepting…"
+
+#: src/pages/knowledge/Knowledge.tsx
+msgid "access"
+msgstr "access"
 
 #: src/pages/inbox/InboxDetail.tsx
 #: src/pages/inbox/inboxModel.ts
@@ -651,10 +782,6 @@ msgid "active"
 msgstr "active"
 
 #: src/pages/AgentHub.tsx
-msgid "active {ago}"
-msgstr "active {ago}"
-
-#: src/pages/AgentHub.tsx
 msgid "Activity"
 msgstr "Activity"
 
@@ -666,13 +793,22 @@ msgstr "add an H1 <0># How to use</0> block at the end of that file — four sub
 msgid "advisor"
 msgstr "advisor"
 
-#: src/pages/health/Health.tsx
+#: src/pages/health/healthPlace.ts
 msgid "Advisor"
 msgstr "Advisor"
 
+#: src/pages/health/Health.tsx
+#: src/pages/health/Health.tsx
+msgid "advisor · open"
+msgstr "advisor · open"
+
 #: src/pages/inbox/inboxModel.ts
-msgid "Advisor: {recommendationTitle}"
-msgstr "Advisor: {recommendationTitle}"
+msgid "advisor noticed"
+msgstr "advisor noticed"
+
+#: src/pages/Lessons.tsx
+msgid "after"
+msgstr "after"
 
 #: src/pages/Analytics.tsx
 #: src/pages/Analytics.tsx
@@ -713,6 +849,10 @@ msgstr "Agent runs"
 msgid "Agent scorecards"
 msgstr "Agent scorecards"
 
+#: src/pages/AgentHub.tsx
+msgid "Agent sections"
+msgstr "Agent sections"
+
 #: src/pages/inbox/InboxDetail.tsx
 msgid "agent suggestion"
 msgstr "agent suggestion"
@@ -721,12 +861,15 @@ msgstr "agent suggestion"
 msgid "agent suggests: {suggestedValue}"
 msgstr "agent suggests: {suggestedValue}"
 
+#: src/pages/inbox/Inbox.tsx
+msgid "agent: {value}"
+msgstr "agent: {value}"
+
 #: src/pages/Analytics.tsx
 msgid "agents"
 msgstr "agents"
 
-#: src/pages/AgentHub.tsx
-#: src/pages/health/Health.tsx
+#: src/pages/health/healthPlace.ts
 #: src/pages/SystemShell.tsx
 msgid "Agents"
 msgstr "Agents"
@@ -739,7 +882,7 @@ msgstr "agree"
 msgid "alert"
 msgstr "alert"
 
-#: src/pages/health/Health.tsx
+#: src/pages/health/HealthOverview.tsx
 msgid "alerting → Inbox"
 msgstr "alerting → Inbox"
 
@@ -752,13 +895,17 @@ msgstr "alerts"
 msgid "all"
 msgstr "all"
 
-#: src/pages/health/HealthOverview.tsx
-msgid "all {agentCount} agents → Agents tab"
-msgstr "all {agentCount} agents → Agents tab"
-
 #: src/pages/Analytics.tsx
 msgid "all agents"
 msgstr "all agents"
+
+#: src/pages/health/healthPlace.ts
+msgid "All agents"
+msgstr "All agents"
+
+#: src/pages/health/HealthOverview.tsx
+msgid "all agents →"
+msgstr "all agents →"
 
 #: src/pages/system/InsightsTab.tsx
 msgid "all copies share one content hash — a clean promotion, no reconciliation needed"
@@ -768,6 +915,19 @@ msgstr "all copies share one content hash — a clean promotion, no reconciliati
 msgid "all four"
 msgstr "all four"
 
+#: src/pages/health/Health.tsx
+msgid "all projects"
+msgstr "all projects"
+
+#: src/pages/inbox/Inbox.tsx
+msgid "All reviewed."
+msgstr "All reviewed."
+
+#: src/pages/SystemShell.tsx
+#: src/pages/SystemShell.tsx
+msgid "All routines"
+msgstr "All routines"
+
 #: src/pages/system/shared.tsx
 msgid "all scopes"
 msgstr "all scopes"
@@ -775,6 +935,10 @@ msgstr "all scopes"
 #: src/pages/Architecture.tsx
 msgid "already current"
 msgstr "already current"
+
+#: src/pages/health/HealthOverview.tsx
+msgid "always allow {tool}"
+msgstr "always allow {tool}"
 
 #: src/pages/inbox/inboxModel.ts
 msgid "An agent drafts a change to its instructions. Nothing is applied: the draft comes back to this Inbox for your approval."
@@ -838,7 +1002,6 @@ msgstr "Approvals resolved"
 
 #: src/pages/inbox/Inbox.tsx
 #: src/pages/inbox/InboxDetail.tsx
-#: src/pages/inbox/InboxDetail.tsx
 msgid "approve"
 msgstr "approve"
 
@@ -871,6 +1034,7 @@ msgid "architecture map"
 msgstr "architecture map"
 
 #: src/pages/Architecture.tsx
+#: src/pages/knowledge/Knowledge.tsx
 msgid "Architecture map"
 msgstr "Architecture map"
 
@@ -906,8 +1070,8 @@ msgstr "Asked and logged; answers go to your Inbox for checking. <0>Nothing acts
 msgid "At the start of each turn the swarmery link mod forecasts the files it will touch, whether tests pass and how many steps it takes; the daemon scores that against what happened. A forecast held when its surprise stayed under 0.25. Advisory only — nothing here gates or alerts."
 msgstr "At the start of each turn the swarmery link mod forecasts the files it will touch, whether tests pass and how many steps it takes; the daemon scores that against what happened. A forecast held when its surprise stayed under 0.25. Advisory only — nothing here gates or alerts."
 
-#: src/pages/health/Health.tsx
-#: src/pages/health/Health.tsx
+#: src/pages/health/HealthOverview.tsx
+#: src/pages/health/HealthOverview.tsx
 msgid "Auto mode permission check"
 msgstr "Auto mode permission check"
 
@@ -926,6 +1090,10 @@ msgstr "Auto-memory"
 #: src/pages/Analytics.tsx
 msgid "Autonomy"
 msgstr "Autonomy"
+
+#: src/pages/health/HealthOverview.tsx
+msgid "average run"
+msgstr "average run"
 
 #: src/pages/Analytics.tsx
 #: src/pages/Analytics.tsx
@@ -953,9 +1121,14 @@ msgstr "awaiting ≥{pct}% improvement"
 msgid "because of you"
 msgstr "because of you"
 
+#: src/pages/learning/Learning.tsx
 #: src/pages/learning/Proof.tsx
 msgid "Because of you"
 msgstr "Because of you"
+
+#: src/pages/health/HealthOverview.tsx
+msgid "before"
+msgstr "before"
 
 #: src/pages/system/SkillsToExtendHint.tsx
 msgid "Before proposing a new agent, extend an existing skill."
@@ -1049,6 +1222,10 @@ msgstr "Cache served {pct}% of prompt tokens this range — saving ~{saved} net 
 msgid "Cache served {pct}% of prompt tokens this range."
 msgstr "Cache served {pct}% of prompt tokens this range."
 
+#: src/pages/learning/Learning.tsx
+msgid "Calibration"
+msgstr "Calibration"
+
 #: src/pages/learning/TurnForecastPanel.tsx
 msgid "Calibration by confidence bin"
 msgstr "Calibration by confidence bin"
@@ -1058,6 +1235,7 @@ msgid "calibration views"
 msgstr "calibration views"
 
 #: src/pages/Analytics.tsx
+#: src/pages/health/HealthOverview.tsx
 #: src/pages/Retro.tsx
 #: src/pages/system/ModsTab.tsx
 #: src/pages/system/ModsTab.tsx
@@ -1081,12 +1259,21 @@ msgid "cancel"
 msgstr "cancel"
 
 #: src/pages/Lessons.tsx
+msgid "candidate"
+msgstr "candidate"
+
+#: src/pages/Lessons.tsx
 msgid "candidates"
 msgstr "candidates"
 
 #: src/pages/Lessons.tsx
 msgid "cause:"
 msgstr "cause:"
+
+#. placeholder {0}: lesson.cause
+#: src/pages/Lessons.tsx
+msgid "cause: {0}"
+msgstr "cause: {0}"
 
 #: src/pages/Retro.tsx
 msgid "change detected — {until}"
@@ -1124,10 +1311,6 @@ msgstr "check in Inbox →"
 msgid "check the classifier"
 msgstr "check the classifier"
 
-#: src/pages/inbox/inboxModel.ts
-msgid "Check the classifier · {name}"
-msgstr "Check the classifier · {name}"
-
 #: src/pages/system/docsSection.ts
 msgid "checked against the item it documents"
 msgstr "checked against the item it documents"
@@ -1141,24 +1324,8 @@ msgid "Claude Code auto mode"
 msgstr "Claude Code auto mode"
 
 #: src/pages/inbox/InboxDetail.tsx
-msgid "Claude is asking you {count, plural, one {# question} few {# questions} many {# questions} other {# questions}}"
-msgstr "Claude is asking you {count, plural, one {# question} few {# questions} many {# questions} other {# questions}}"
-
-#: src/pages/inbox/InboxDetail.tsx
-msgid "Claude is told no and looks for another way, or stops."
-msgstr "Claude is told no and looks for another way, or stops."
-
-#: src/pages/inbox/InboxDetail.tsx
 msgid "Claude refused this account: its sign-in expired, or its access was switched off."
 msgstr "Claude refused this account: its sign-in expired, or its access was switched off."
-
-#: src/pages/inbox/InboxDetail.tsx
-msgid "Claude wants to use {toolName}"
-msgstr "Claude wants to use {toolName}"
-
-#: src/pages/agent-hub/HubShell.tsx
-msgid "clear filter"
-msgstr "clear filter"
 
 #: src/pages/system/ModsTab.tsx
 msgid "close"
@@ -1173,24 +1340,25 @@ msgid "Closed"
 msgstr "Closed"
 
 #: src/pages/inbox/HandledList.tsx
+#: src/pages/inbox/Inbox.tsx
 msgid "closed by the agent"
 msgstr "closed by the agent"
-
-#: src/pages/SystemHub.tsx
-msgid "command"
-msgstr "command"
 
 #: src/pages/Analytics.tsx
 msgid "Command center"
 msgstr "Command center"
 
+#: src/pages/SystemHub.tsx
+msgid "Command sections"
+msgstr "Command sections"
+
 #: src/pages/system-hub/Profiles.tsx
 msgid "command…"
 msgstr "command…"
 
-#: src/pages/SystemHub.tsx
-msgid "commands"
-msgstr "commands"
+#: src/pages/SystemShell.tsx
+msgid "Commands"
+msgstr "Commands"
 
 #: src/pages/system/ItemDetail.tsx
 msgid "Compare"
@@ -1216,9 +1384,9 @@ msgstr "confidence {range}"
 msgid "confident and wrong"
 msgstr "confident and wrong"
 
-#: src/pages/SystemHub.tsx
-msgid "Config"
-msgstr "Config"
+#: src/pages/knowledge/Knowledge.tsx
+msgid "consolidate · lines that went stale"
+msgstr "consolidate · lines that went stale"
 
 #: src/pages/Memory.tsx
 msgid "Consolidate index"
@@ -1228,7 +1396,6 @@ msgstr "Consolidate index"
 msgid "Consolidate the auto-memory index"
 msgstr "Consolidate the auto-memory index"
 
-#: src/pages/SystemHub.tsx
 #: src/pages/SystemHub.tsx
 msgid "Content"
 msgstr "Content"
@@ -1278,11 +1445,15 @@ msgstr "copying…"
 msgid "cost"
 msgstr "cost"
 
+#: src/pages/AgentHub.tsx
+msgid "cost · 30 d"
+msgstr "cost · 30 d"
+
 #: src/pages/Analytics.tsx
 msgid "Cost / task"
 msgstr "Cost / task"
 
-#: src/pages/health/Health.tsx
+#: src/pages/health/healthPlace.ts
 msgid "Cost & tokens"
 msgstr "Cost & tokens"
 
@@ -1301,6 +1472,10 @@ msgstr "cost…"
 #: src/pages/inbox/Inbox.tsx
 msgid "couldn't load {source}"
 msgstr "couldn't load {source}"
+
+#: src/pages/SystemShell.tsx
+msgid "create · schedule · run history"
+msgstr "create · schedule · run history"
 
 #: src/pages/system/CreateAgentForm.tsx
 msgid "create agent"
@@ -1339,13 +1514,17 @@ msgstr "Daily avg"
 msgid "Dead components"
 msgstr "Dead components"
 
+#: src/pages/health/HealthOverview.tsx
+msgid "decide in Inbox →"
+msgstr "decide in Inbox →"
+
 #: src/pages/learning/Proof.tsx
 msgid "decide something in the Inbox →"
 msgstr "decide something in the Inbox →"
 
-#: src/pages/inbox/Inbox.tsx
-msgid "Decisions that wait on you. An agent can label the classifier's guesses and close what is only informational; approvals, agent changes and alerts always wait for you."
-msgstr "Decisions that wait on you. An agent can label the classifier's guesses and close what is only informational; approvals, agent changes and alerts always wait for you."
+#: src/pages/health/HealthOverview.tsx
+msgid "decisions"
+msgstr "decisions"
 
 #: src/pages/learning/TurnForecastPanel.tsx
 msgid "declared confidence"
@@ -1378,24 +1557,22 @@ msgid "deleted"
 msgstr "deleted"
 
 #: src/pages/Analytics.tsx
+#: src/pages/health/HealthOverview.tsx
 #: src/pages/Retro.tsx
 msgid "denied"
 msgstr "denied"
-
-#: src/pages/health/HealthOverview.tsx
-msgid "denied {deniedCount}× · of {callCount} calls"
-msgstr "denied {deniedCount}× · of {callCount} calls"
 
 #: src/pages/Retro.tsx
 msgid "Denied tools"
 msgstr "Denied tools"
 
-#: src/pages/inbox/Inbox.tsx
-#: src/pages/inbox/InboxDetail.tsx
-#: src/pages/inbox/InboxDetail.tsx
-#: src/pages/inbox/InboxDetail.tsx
-msgid "deny"
-msgstr "deny"
+#: src/pages/health/healthPlace.ts
+msgid "denied tools · repeating errors · approvals"
+msgstr "denied tools · repeating errors · approvals"
+
+#: src/pages/knowledge/Knowledge.tsx
+msgid "dependency graph"
+msgstr "dependency graph"
 
 #: src/pages/system/CreateAgentForm.tsx
 msgid "description"
@@ -1433,6 +1610,10 @@ msgstr "disable hook {event} {matcher}"
 msgid "disable this hook"
 msgstr "disable this hook"
 
+#: src/pages/SystemHub.tsx
+msgid "Disable to let runs skip this hook"
+msgstr "Disable to let runs skip this hook"
+
 #: src/pages/system/HooksTab.tsx
 msgid "disabled"
 msgstr "disabled"
@@ -1444,11 +1625,14 @@ msgstr "discard my changes"
 #: src/pages/health/FrictionTriageStrip.tsx
 #: src/pages/health/FrictionTriageStrip.tsx
 #: src/pages/inbox/HandledList.tsx
+#: src/pages/inbox/Inbox.tsx
+#: src/pages/inbox/InboxDetail.tsx
 #: src/pages/inbox/InboxDetail.tsx
 #: src/pages/inbox/inboxModel.ts
 #: src/pages/inbox/inboxModel.ts
 #: src/pages/inbox/TriageBanner.tsx
 #: src/pages/inbox/TriageBanner.tsx
+#: src/pages/Lessons.tsx
 #: src/pages/Lessons.tsx
 #: src/pages/Retro.tsx
 msgid "dismiss"
@@ -1472,7 +1656,12 @@ msgstr "diverged"
 msgid "doc…"
 msgstr "doc…"
 
+#: src/pages/Docs.tsx
+msgid "docs"
+msgstr "docs"
+
 #: src/pages/AgentHub.tsx
+#: src/pages/Docs.tsx
 #: src/pages/system/ItemDetail.tsx
 #: src/pages/SystemHub.tsx
 #: src/pages/SystemHub.tsx
@@ -1482,11 +1671,6 @@ msgstr "Docs"
 #: src/pages/Docs.tsx
 msgid "docs…"
 msgstr "docs…"
-
-#: src/pages/Docs.tsx
-#: src/pages/Docs.tsx
-msgid "Documentation"
-msgstr "Documentation"
 
 #: src/pages/SystemShell.tsx
 msgid "documented ·"
@@ -1537,17 +1721,34 @@ msgstr "Edit"
 msgid "Edit — raw markdown"
 msgstr "Edit — raw markdown"
 
-#: src/pages/system-hub/Profiles.tsx
-msgid "edit / enable / disable this hook from the System page → Hooks tab (the existing write surface)"
-msgstr "edit / enable / disable this hook from the System page → Hooks tab (the existing write surface)"
+#: src/pages/AgentHub.tsx
+msgid "edit prompt"
+msgstr "edit prompt"
 
-#: src/pages/inbox/InboxDetail.tsx
+#: src/pages/SystemHub.tsx
+msgid "edit skill"
+msgstr "edit skill"
+
+#: src/pages/Lessons.tsx
 msgid "edit wording"
 msgstr "edit wording"
 
+#: src/pages/inbox/InboxDetail.tsx
+msgid "edit wording →"
+msgstr "edit wording →"
+
+#: src/pages/AgentHub.tsx
+msgid "Edits land in an isolated git worktree · set in Definition"
+msgstr "Edits land in an isolated git worktree · set in Definition"
+
+#: src/pages/Lessons.tsx
 #: src/pages/Lessons.tsx
 msgid "effectiveness:"
 msgstr "effectiveness:"
+
+#: src/pages/AgentHub.tsx
+msgid "effort"
+msgstr "effort"
 
 #: src/pages/system/HooksTab.tsx
 msgid "enable"
@@ -1568,6 +1769,10 @@ msgstr "enable hook {event} {matcher}"
 #: src/pages/system/HooksTab.tsx
 msgid "enable this hook"
 msgstr "enable this hook"
+
+#: src/pages/SystemHub.tsx
+msgid "Enabled"
+msgstr "Enabled"
 
 #: src/pages/system/InsightsTab.tsx
 msgid "enabled in a project's settings, but not actually loadable there"
@@ -1594,6 +1799,7 @@ msgid "error rate"
 msgstr "error rate"
 
 #: src/pages/Analytics.tsx
+#: src/pages/health/HealthOverview.tsx
 #: src/pages/system-hub/Profiles.tsx
 #: src/pages/system/ModsTab.tsx
 msgid "errors"
@@ -1619,10 +1825,11 @@ msgstr "Est. saved"
 msgid "Estimate only — {formula} (Fusion's constant). Not a measured figure."
 msgstr "Estimate only — {formula} (Fusion's constant). Not a measured figure."
 
-#: src/pages/health/Health.tsx
+#: src/pages/health/healthPlace.ts
 msgid "Estimates"
 msgstr "Estimates"
 
+#: src/pages/health/healthPlace.ts
 #: src/pages/Retro.tsx
 msgid "Estimation accuracy"
 msgstr "Estimation accuracy"
@@ -1630,10 +1837,6 @@ msgstr "Estimation accuracy"
 #: src/pages/Retro.tsx
 msgid "evals {evalPassed}/{evalTotal}"
 msgstr "evals {evalPassed}/{evalTotal}"
-
-#: src/pages/system-hub/Profiles.tsx
-msgid "event"
-msgstr "event"
 
 #: src/pages/system/ModsTab.tsx
 #: src/pages/system/ModsTab.tsx
@@ -1643,6 +1846,10 @@ msgstr "events"
 #: src/pages/system/InsightsTab.tsx
 msgid "every agent and skill was used in the last 30 days"
 msgstr "every agent and skill was used in the last 30 days"
+
+#: src/pages/health/Health.tsx
+msgid "Every agent, scored over this window."
+msgstr "Every agent, scored over this window."
 
 #: src/pages/system/InsightsTab.tsx
 msgid "every component carries a complete usage guide"
@@ -1657,6 +1864,14 @@ msgstr "every enabled plugin resolves for its project"
 msgid "Every future run touching {areas} gets this sentence in its brief. We then watch whether those runs land closer to plan."
 msgstr "Every future run touching {areas} gets this sentence in its brief. We then watch whether those runs land closer to plan."
 
+#: src/pages/learning/Learning.tsx
+msgid "Every lesson, and what waits for a decision."
+msgstr "Every lesson, and what waits for a decision."
+
+#: src/pages/SystemShell.tsx
+msgid "every mod on this machine"
+msgstr "every mod on this machine"
+
 #: src/pages/inbox/ReviewItem.tsx
 msgid "Every phase of this plan finished. A read-only reviewer read all of their run branches together, looking at the seams between phases — what one phase hands over and another expects. Nothing was blocked or re-run."
 msgstr "Every phase of this plan finished. A read-only reviewer read all of their run branches together, looking at the seams between phases — what one phase hands over and another expects. Nothing was blocked or re-run."
@@ -1664,6 +1879,10 @@ msgstr "Every phase of this plan finished. A read-only reviewer read all of thei
 #: src/pages/system/InsightsTab.tsx
 msgid "every project"
 msgstr "every project"
+
+#: src/pages/Lessons.tsx
+msgid "every run"
+msgstr "every run"
 
 #: src/pages/Analytics.tsx
 msgid "every series is hidden — click a legend chip to show one"
@@ -1677,6 +1896,11 @@ msgstr "Everything else in swarmery works without it. Until a model is set up, n
 msgid "Everything this project remembers — its instructions, Claude Code auto-memory, and Serena notes — editable with a versioned backup on every save."
 msgstr "Everything this project remembers — its instructions, Claude Code auto-memory, and Serena notes — editable with a versioned backup on every save."
 
+#: src/pages/knowledge/Knowledge.tsx
+msgid "Everything this project remembers."
+msgstr "Everything this project remembers."
+
+#: src/pages/inbox/InboxDetail.tsx
 #: src/pages/Retro.tsx
 msgid "evidence"
 msgstr "evidence"
@@ -1685,13 +1909,13 @@ msgstr "evidence"
 msgid "evidence:"
 msgstr "evidence:"
 
+#: src/pages/inbox/Inbox.tsx
+msgid "expires {expires}"
+msgstr "expires {expires}"
+
 #: src/pages/inbox/InboxDetail.tsx
 msgid "expires in {expiresIn}"
 msgstr "expires in {expiresIn}"
-
-#: src/pages/inbox/Inbox.tsx
-msgid "expires soon"
-msgstr "expires soon"
 
 #: src/pages/Architecture.tsx
 msgid "explore {exploreShare}%"
@@ -1706,6 +1930,8 @@ msgid "fail"
 msgstr "fail"
 
 #: src/pages/Architecture.tsx
+#: src/pages/health/HealthOverview.tsx
+#: src/pages/health/HealthOverview.tsx
 #: src/pages/system/ModsTab.tsx
 msgid "failed"
 msgstr "failed"
@@ -1713,6 +1939,14 @@ msgstr "failed"
 #: src/pages/learning/classifierModel.ts
 msgid "failed session"
 msgstr "failed session"
+
+#: src/pages/health/HealthOverview.tsx
+msgid "failed share by agent"
+msgstr "failed share by agent"
+
+#: src/pages/SystemHub.tsx
+msgid "file"
+msgstr "file"
 
 #: src/pages/Memory.tsx
 msgid "File changed on disk"
@@ -1722,26 +1956,16 @@ msgstr "File changed on disk"
 msgid "file…"
 msgstr "file…"
 
-#: src/pages/SystemHub.tsx
-msgid "filter {noun}…"
-msgstr "filter {noun}…"
-
-#: src/pages/AgentHub.tsx
-msgid "filter agents…"
-msgstr "filter agents…"
-
-#: src/pages/Docs.tsx
-msgid "Filter docs"
-msgstr "Filter docs"
-
-#: src/pages/Docs.tsx
-msgid "filter docs…"
-msgstr "filter docs…"
+#: src/pages/inbox/Inbox.tsx
+#: src/pages/SystemShell.tsx
+msgid "filter"
+msgstr "filter"
 
 #: src/pages/Retro.tsx
 msgid "filter lesson groups…"
 msgstr "filter lesson groups…"
 
+#: src/pages/learning/Learning.tsx
 #: src/pages/Retro.tsx
 msgid "filter lessons"
 msgstr "filter lessons"
@@ -1758,13 +1982,13 @@ msgstr "filter lessons…"
 msgid "filter usage by agent"
 msgstr "filter usage by agent"
 
-#: src/pages/agent-hub/HubShell.tsx
-msgid "filter…"
-msgstr "filter…"
-
 #: src/pages/inbox/ReviewItem.tsx
 msgid "findings"
 msgstr "findings"
+
+#: src/pages/health/healthPlace.ts
+msgid "Findings and rewrites"
+msgstr "Findings and rewrites"
 
 #: src/pages/learning/classifierModel.ts
 #: src/pages/learning/classifierModel.ts
@@ -1778,6 +2002,10 @@ msgstr "First-pass success rate"
 #: src/pages/Retro.tsx
 msgid "fix proposed"
 msgstr "fix proposed"
+
+#: src/pages/inbox/Inbox.tsx
+msgid "fleet-wide"
+msgstr "fleet-wide"
 
 #: src/pages/system/ModsTab.tsx
 msgid "folder"
@@ -1795,19 +2023,32 @@ msgstr "forecast calibration"
 msgid "forecast files it never touched"
 msgstr "forecast files it never touched"
 
+#: src/pages/health/Health.tsx
+#: src/pages/health/healthPlace.ts
+#: src/pages/learning/Learning.tsx
 #: src/pages/learning/Learning.tsx
 msgid "Forecast honesty"
 msgstr "Forecast honesty"
 
-#: src/pages/health/Health.tsx
+#: src/pages/health/HealthOverview.tsx
+msgid "friction"
+msgstr "friction"
+
+#: src/pages/health/healthPlace.ts
 msgid "Friction"
 msgstr "Friction"
 
+#: src/pages/health/healthPlace.ts
 #: src/pages/Retro.tsx
 msgid "Friction board"
 msgstr "Friction board"
 
 #: src/pages/health/HealthOverview.tsx
+#: src/pages/health/HealthOverview.tsx
+msgid "friction board →"
+msgstr "friction board →"
+
+#: src/pages/health/healthPlace.ts
 msgid "Friction you can remove today"
 msgstr "Friction you can remove today"
 
@@ -1826,6 +2067,11 @@ msgstr "from recommendation #{recId}"
 #: src/pages/system/ItemDetail.tsx
 msgid "Frontmatter"
 msgstr "Frontmatter"
+
+#: src/pages/learning/Learning.tsx
+#: src/pages/learning/Learning.tsx
+msgid "gathering"
+msgstr "gathering"
 
 #: src/pages/system/ModsTab.tsx
 msgid "gating hooks"
@@ -1906,6 +2152,7 @@ msgstr "Guessed {times}."
 msgid "guidance (one sentence)"
 msgstr "guidance (one sentence)"
 
+#: src/pages/inbox/Inbox.tsx
 #: src/pages/inbox/inboxModel.ts
 msgid "handled by agent"
 msgstr "handled by agent"
@@ -1914,10 +2161,46 @@ msgstr "handled by agent"
 msgid "harness {harness}"
 msgstr "harness {harness}"
 
-#: src/pages/health/Health.tsx
+#: src/pages/AgentHub.tsx
+msgid "health"
+msgstr "health"
+
 #: src/pages/health/Health.tsx
 msgid "Health"
 msgstr "Health"
+
+#: src/pages/health/Health.tsx
+#: src/pages/health/HealthOverview.tsx
+msgid "health · agent"
+msgstr "health · agent"
+
+#: src/pages/health/Health.tsx
+msgid "health · cost"
+msgstr "health · cost"
+
+#: src/pages/health/Health.tsx
+#: src/pages/health/Health.tsx
+msgid "health · estimates"
+msgstr "health · estimates"
+
+#: src/pages/health/HealthOverview.tsx
+msgid "health · fleet"
+msgstr "health · fleet"
+
+#: src/pages/health/Health.tsx
+#: src/pages/health/HealthOverview.tsx
+#: src/pages/health/HealthOverview.tsx
+#: src/pages/health/HealthOverview.tsx
+msgid "health · friction"
+msgstr "health · friction"
+
+#: src/pages/health/Health.tsx
+msgid "health · phase runs"
+msgstr "health · phase runs"
+
+#: src/pages/AgentHub.tsx
+msgid "health →"
+msgstr "health →"
 
 #: src/pages/health/HealthOverview.tsx
 msgid "health…"
@@ -1956,8 +2239,6 @@ msgid "hit rate per confidence bin"
 msgstr "hit rate per confidence bin"
 
 #: src/pages/system/ModsTab.tsx
-#: src/pages/SystemHub.tsx
-#: src/pages/SystemHub.tsx
 msgid "hook"
 msgstr "hook"
 
@@ -1977,11 +2258,6 @@ msgstr "hook writes need the row content_hash — not served by the daemon yet"
 msgid "hook…"
 msgstr "hook…"
 
-#: src/pages/SystemHub.tsx
-msgid "hooks"
-msgstr "hooks"
-
-#: src/pages/SystemHub.tsx
 #: src/pages/SystemShell.tsx
 msgid "Hooks"
 msgstr "Hooks"
@@ -1989,6 +2265,11 @@ msgstr "Hooks"
 #: src/pages/system/HooksTab.tsx
 msgid "hooks…"
 msgstr "hooks…"
+
+#: src/pages/health/healthPlace.ts
+#: src/pages/learning/Learning.tsx
+msgid "how close forecasts land"
+msgstr "how close forecasts land"
 
 #: src/pages/learning/classifierModel.ts
 msgid "How did it end?"
@@ -1998,33 +2279,37 @@ msgstr "How did it end?"
 msgid "How did the phase run end?"
 msgstr "How did the phase run end?"
 
+#: src/pages/health/Health.tsx
+msgid "How estimates landed, and what the runs taught."
+msgstr "How estimates landed, and what the runs taught."
+
 #: src/pages/LessonsCalibration.tsx
 msgid "How often forecasts held, by group. Area hit is matched areas over every area either side named; bands and outcome are exact-match rates; the curve compares declared confidence with how often the forecast held. Post-hoc forecasts are excluded."
 msgstr "How often forecasts held, by group. Area hit is matched areas over every area either side named; bands and outcome are exact-match rates; the curve compares declared confidence with how often the forecast held. Post-hoc forecasts are excluded."
+
+#: src/pages/health/healthPlace.ts
+msgid "how plan-phase runs ended"
+msgstr "how plan-phase runs ended"
 
 #: src/pages/health/PhaseRunsTab.tsx
 msgid "How plan-phase runs ended, what the noops were waiting on, what the router and the verifier did, and how many finished phases came back. Rows marked (est.) are read from the runs' own words, not a recorded fact."
 msgstr "How plan-phase runs ended, what the noops were waiting on, what the router and the verifier did, and how many finished phases came back. Rows marked (est.) are read from the runs' own words, not a recorded fact."
 
 #: src/pages/health/Health.tsx
-msgid "how the agent fleet is doing and what to change"
-msgstr "how the agent fleet is doing and what to change"
+msgid "How plan-phase runs ended."
+msgstr "How plan-phase runs ended."
+
+#: src/pages/Docs.tsx
+msgid "how swarmery works"
+msgstr "how swarmery works"
 
 #: src/pages/learning/Classifier.tsx
 msgid "How the modes work"
 msgstr "How the modes work"
 
-#: src/pages/health/Health.tsx
-msgid "how this project's agents are doing and what to change"
-msgstr "how this project's agents are doing and what to change"
-
 #: src/pages/Analytics.tsx
 msgid "Human-hours saved is an estimate: {formula}"
 msgstr "Human-hours saved is an estimate: {formula}"
-
-#: src/pages/inbox/InboxDetail.tsx
-msgid "I'll fix it — track this"
-msgstr "I'll fix it — track this"
 
 #: src/pages/system/InsightsTab.tsx
 msgid "identical"
@@ -2034,11 +2319,14 @@ msgstr "identical"
 msgid "identical to the current content — nothing changes on disk"
 msgstr "identical to the current content — nothing changes on disk"
 
-#: src/pages/AgentHub.tsx
-msgid "idle"
-msgstr "idle"
+#: src/pages/inbox/InboxDetail.tsx
+msgid "if right"
+msgstr "if right"
 
 #: src/pages/inbox/InboxDetail.tsx
+msgid "if wrong"
+msgstr "if wrong"
+
 #: src/pages/inbox/InboxDetail.tsx
 msgid "if you accept"
 msgstr "if you accept"
@@ -2048,21 +2336,17 @@ msgid "if you ack"
 msgstr "if you ack"
 
 #: src/pages/inbox/InboxDetail.tsx
-#: src/pages/inbox/InboxDetail.tsx
 msgid "if you approve"
 msgstr "if you approve"
 
 #: src/pages/inbox/InboxDetail.tsx
-msgid "if you confirm"
-msgstr "if you confirm"
+#: src/pages/inbox/InboxDetail.tsx
+msgid "if you dismiss"
+msgstr "if you dismiss"
 
 #: src/pages/inbox/InboxDetail.tsx
-msgid "if you deny"
-msgstr "if you deny"
-
-#: src/pages/inbox/InboxDetail.tsx
-msgid "if you keep it"
-msgstr "if you keep it"
+msgid "if you keep"
+msgstr "if you keep"
 
 #: src/pages/inbox/InboxDetail.tsx
 msgid "if you press e"
@@ -2076,9 +2360,21 @@ msgstr "if you probe & resume"
 msgid "if you reject"
 msgstr "if you reject"
 
+#: src/pages/inbox/InboxDetail.tsx
+msgid "if you retire"
+msgstr "if you retire"
+
+#: src/pages/inbox/InboxDetail.tsx
+msgid "if you track"
+msgstr "if you track"
+
 #: src/pages/Retro.tsx
 msgid "Improve"
 msgstr "Improve"
+
+#: src/pages/Lessons.tsx
+msgid "in force · {days} d"
+msgstr "in force · {days} d"
 
 #: src/pages/Analytics.tsx
 msgid "In progress"
@@ -2092,13 +2388,13 @@ msgstr "In review"
 msgid "Inbox"
 msgstr "Inbox"
 
-#: src/pages/inbox/Inbox.tsx
-msgid "inbox kinds"
-msgstr "inbox kinds"
-
 #: src/pages/Architecture.tsx
 msgid "incremental rebuild"
 msgstr "incremental rebuild"
+
+#: src/pages/knowledge/Knowledge.tsx
+msgid "Index and stale facts"
+msgstr "Index and stale facts"
 
 #: src/pages/Lessons.tsx
 msgid "ineffective"
@@ -2112,12 +2408,17 @@ msgstr "infra {infra}"
 msgid "inherit from session"
 msgstr "inherit from session"
 
-#: src/pages/SystemHub.tsx
-msgid "insights"
-msgstr "insights"
+#: src/pages/Lessons.tsx
+msgid "Injected into {usesText} runs. Median surprise in its area: {before} → {after}."
+msgstr "Injected into {usesText} runs. Median surprise in its area: {before} → {after}."
+
+#: src/pages/Lessons.tsx
+msgid "injected when"
+msgstr "injected when"
 
 #: src/pages/AgentHub.tsx
-#: src/pages/SystemHub.tsx
+#: src/pages/SystemShell.tsx
+#: src/pages/SystemShell.tsx
 #: src/pages/SystemShell.tsx
 msgid "Insights"
 msgstr "Insights"
@@ -2175,6 +2476,10 @@ msgstr "invocations 30d"
 msgid "it is almost always sure of itself, yet {lowered}. Start checking here."
 msgstr "it is almost always sure of itself, yet {lowered}. Start checking here."
 
+#: src/pages/knowledge/Knowledge.tsx
+msgid "Its instructions, Claude Code auto-memory and Serena notes, editable with a versioned backup on every save."
+msgstr "Its instructions, Claude Code auto-memory and Serena notes, editable with a versioned backup on every save."
+
 #: src/pages/learning/classifierModel.ts
 msgid "its trigger fires"
 msgstr "its trigger fires"
@@ -2187,6 +2492,10 @@ msgstr "judge {model}"
 msgid "judged · {score}"
 msgstr "judged · {score}"
 
+#: src/pages/health/HealthOverview.tsx
+msgid "judged success"
+msgstr "judged success"
+
 #: src/pages/Retro.tsx
 msgid "judgment"
 msgstr "judgment"
@@ -2195,11 +2504,11 @@ msgstr "judgment"
 msgid "kebab-case only: lowercase letters, digits, single dashes (my-agent)"
 msgstr "kebab-case only: lowercase letters, digits, single dashes (my-agent)"
 
+#: src/pages/inbox/InboxDetail.tsx
 #: src/pages/Lessons.tsx
 msgid "keep"
 msgstr "keep"
 
-#: src/pages/inbox/InboxDetail.tsx
 #: src/pages/inbox/inboxModel.ts
 #: src/pages/inbox/inboxModel.ts
 msgid "keep it"
@@ -2210,10 +2519,10 @@ msgid "keeps a store"
 msgstr "keeps a store"
 
 #: src/pages/knowledge/Knowledge.tsx
-#: src/pages/knowledge/Knowledge.tsx
 msgid "Knowledge"
 msgstr "Knowledge"
 
+#: src/pages/Lessons.tsx
 #: src/pages/Lessons.tsx
 msgid "L-{lessonId} promoted to CLAUDE.md on branch <0>{branch}</0>. Review it there."
 msgstr "L-{lessonId} promoted to CLAUDE.md on branch <0>{branch}</0>. Review it there."
@@ -2222,9 +2531,13 @@ msgstr "L-{lessonId} promoted to CLAUDE.md on branch <0>{branch}</0>. Review it 
 msgid "last {lastSeen}"
 msgstr "last {lastSeen}"
 
-#: src/pages/SystemHub.tsx
-msgid "last {lastUsed}"
-msgstr "last {lastUsed}"
+#: src/pages/knowledge/Knowledge.tsx
+msgid "last changed"
+msgstr "last changed"
+
+#: src/pages/health/HealthOverview.tsx
+msgid "last seen"
+msgstr "last seen"
 
 #: src/pages/health/HealthOverview.tsx
 msgid "Last seen {ago} · in {sessions, plural, one {# session} few {# sessions} many {# sessions} other {# sessions}}."
@@ -2233,6 +2546,10 @@ msgstr "Last seen {ago} · in {sessions, plural, one {# session} few {# sessions
 #: src/pages/health/HealthOverview.tsx
 msgid "Last seen {ago}."
 msgstr "Last seen {ago}."
+
+#: src/pages/SystemHub.tsx
+msgid "last used"
+msgstr "last used"
 
 #: src/pages/system-hub/Profiles.tsx
 msgid "last used {lastUsed}"
@@ -2251,13 +2568,28 @@ msgid "Latest report · {date}"
 msgstr "Latest report · {date}"
 
 #: src/pages/learning/Learning.tsx
-#: src/pages/learning/Learning.tsx
 msgid "Learning"
 msgstr "Learning"
+
+#: src/pages/learning/Learning.tsx
+msgid "learning · classifier"
+msgstr "learning · classifier"
+
+#: src/pages/learning/Learning.tsx
+msgid "learning · forecast honesty"
+msgstr "learning · forecast honesty"
+
+#: src/pages/Lessons.tsx
+msgid "lesson"
+msgstr "lesson"
 
 #: src/pages/Lessons.tsx
 msgid "lesson #{lessonId}"
 msgstr "lesson #{lessonId}"
+
+#: src/pages/inbox/inboxModel.ts
+msgid "lesson candidate"
+msgstr "lesson candidate"
 
 #: src/pages/Retro.tsx
 msgid "lesson groups failed to load for this range — untick “Group by lesson” for the flat feed"
@@ -2269,6 +2601,7 @@ msgstr "lesson groups…"
 
 #: src/pages/agent-hub/Tabs.tsx
 #: src/pages/inbox/inboxModel.ts
+#: src/pages/learning/Learning.tsx
 msgid "lessons"
 msgstr "lessons"
 
@@ -2276,10 +2609,6 @@ msgstr "lessons"
 #: src/pages/Lessons.tsx
 msgid "Lessons"
 msgstr "Lessons"
-
-#: src/pages/learning/Learning.tsx
-msgid "lessons · the classifier · forecast honesty"
-msgstr "lessons · the classifier · forecast honesty"
 
 #: src/pages/Retro.tsx
 msgid "lessons failed to load for this range"
@@ -2292,6 +2621,10 @@ msgstr "Lessons learned"
 #: src/pages/Retro.tsx
 msgid "lessons…"
 msgstr "lessons…"
+
+#: src/pages/Lessons.tsx
+msgid "linked to"
+msgstr "linked to"
 
 #: src/pages/system/shared.tsx
 msgid "lint {severity}"
@@ -2321,8 +2654,11 @@ msgstr "LLM-judge trajectory score"
 msgid "loaded into every session's first request — CLAUDE.md size, unused MCP servers"
 msgstr "loaded into every session's first request — CLAUDE.md size, unused MCP servers"
 
+#: src/pages/health/Health.tsx
 #: src/pages/health/PhaseRunsTab.tsx
 #: src/pages/inbox/Inbox.tsx
+#: src/pages/inbox/Inbox.tsx
+#: src/pages/knowledge/Knowledge.tsx
 #: src/pages/learning/Classifier.tsx
 #: src/pages/Lessons.tsx
 msgid "loading…"
@@ -2361,9 +2697,9 @@ msgstr "lsp-pack is not enabled for this project — enable it in Settings"
 msgid "machine-wide"
 msgstr "machine-wide"
 
-#: src/pages/system-hub/Profiles.tsx
-msgid "managed · {managed}"
-msgstr "managed · {managed}"
+#: src/pages/SystemHub.tsx
+msgid "managed"
+msgstr "managed"
 
 #: src/pages/system/HooksTab.tsx
 msgid "managed · swarmery"
@@ -2381,10 +2717,6 @@ msgstr "map built {builtAgo}"
 msgid "mark not useful"
 msgstr "mark not useful"
 
-#: src/pages/system-hub/Profiles.tsx
-msgid "matcher"
-msgstr "matcher"
-
 #: src/pages/RoutingReport.tsx
 msgid "mean cost"
 msgstr "mean cost"
@@ -2398,6 +2730,10 @@ msgid "Median session"
 msgstr "Median session"
 
 #: src/pages/knowledge/Knowledge.tsx
+#: src/pages/knowledge/Knowledge.tsx
+msgid "memory"
+msgstr "memory"
+
 #: src/pages/knowledge/Knowledge.tsx
 #: src/pages/Memory.tsx
 msgid "Memory"
@@ -2420,9 +2756,11 @@ msgid "memory…"
 msgstr "memory…"
 
 #: src/pages/Lessons.tsx
+#: src/pages/Lessons.tsx
 msgid "merge into {match}"
 msgstr "merge into {match}"
 
+#: src/pages/Lessons.tsx
 #: src/pages/Lessons.tsx
 msgid "merge this candidate into the existing lesson"
 msgstr "merge this candidate into the existing lesson"
@@ -2456,6 +2794,7 @@ msgstr "mod validate report"
 msgid "mode for {question}"
 msgstr "mode for {question}"
 
+#: src/pages/AgentHub.tsx
 #: src/pages/Analytics.tsx
 #: src/pages/learning/TurnForecastPanel.tsx
 #: src/pages/RoutingReport.tsx
@@ -2478,6 +2817,11 @@ msgstr "moderate risk"
 msgid "Mods"
 msgstr "Mods"
 
+#: src/pages/SystemShell.tsx
+#: src/pages/SystemShell.tsx
+msgid "Mods audit"
+msgstr "Mods audit"
+
 #: src/pages/system/ModsTab.tsx
 msgid "mods…"
 msgstr "mods…"
@@ -2490,6 +2834,10 @@ msgstr "module"
 msgid "module sha"
 msgstr "module sha"
 
+#: src/pages/knowledge/Knowledge.tsx
+msgid "modules · flows · entry points"
+msgstr "modules · flows · entry points"
+
 #: src/pages/learning/TurnForecastPanel.tsx
 msgid "Most surprising turns"
 msgstr "Most surprising turns"
@@ -2499,8 +2847,8 @@ msgid "most used"
 msgstr "most used"
 
 #: src/pages/Memory.tsx
-msgid "move {moveCount, plural, one {# files} few {# files} many {# files} other {# files}}"
-msgstr "move {moveCount, plural, one {# files} few {# files} many {# files} other {# files}}"
+msgid "move {moveCount, plural, one {# file} few {# files} many {# files} other {# files}}"
+msgstr "move {moveCount, plural, one {# file} few {# files} many {# files} other {# files}}"
 
 #: src/pages/Memory.tsx
 msgid "move finished entries out of the always-loaded index"
@@ -2548,13 +2896,9 @@ msgstr "never used"
 msgid "New agent"
 msgstr "New agent"
 
-#: src/pages/inbox/inboxModel.ts
-msgid "new lesson"
-msgstr "new lesson"
-
-#: src/pages/inbox/inboxModel.ts
-msgid "New lesson: {lessonTitle}"
-msgstr "New lesson: {lessonTitle}"
+#: src/pages/inbox/Inbox.tsx
+msgid "New items land here after runs are measured: lesson candidates, Advisor findings, classifier checks, agent changes."
+msgstr "New items land here after runs are measured: lesson candidates, Advisor findings, classifier checks, agent changes."
 
 #: src/pages/Docs.tsx
 msgid "next →"
@@ -2576,33 +2920,17 @@ msgstr "no {metric} data for {pivotWord} in this range"
 msgid "no {noun} in this range"
 msgstr "no {noun} in this range"
 
-#: src/pages/SystemHub.tsx
-msgid "no {noun} on this machine"
-msgstr "no {noun} on this machine"
-
-#: src/pages/SystemHub.tsx
-msgid "No {noun} resolve for this project — enable a pack in Settings, or add one under .claude/."
-msgstr "No {noun} resolve for this project — enable a pack in Settings, or add one under .claude/."
-
-#: src/pages/SystemHub.tsx
-msgid "no {originScope}-scope {noun} here"
-msgstr "no {originScope}-scope {noun} here"
+#: src/pages/SystemShell.tsx
+msgid "no {originScope}-scope entries here"
+msgstr "no {originScope}-scope entries here"
 
 #: src/pages/RoutingReport.tsx
 msgid "no {pick} runs in tier {tier} above the gate yet"
 msgstr "no {pick} runs in tier {tier} above the gate yet"
 
-#: src/pages/AgentHub.tsx
-msgid "no {scopeChip}-scope agents here"
-msgstr "no {scopeChip}-scope agents here"
-
-#: src/pages/AgentHub.tsx
-msgid "no agents on this machine"
-msgstr "no agents on this machine"
-
-#: src/pages/AgentHub.tsx
-msgid "No agents resolve for this project — enable a pack in Settings, or add one under .claude/agents/."
-msgstr "No agents resolve for this project — enable a pack in Settings, or add one under .claude/agents/."
+#: src/pages/health/HealthOverview.tsx
+msgid "No approval rule covers this tool yet. Allow it once and these runs stop asking."
+msgstr "No approval rule covers this tool yet. Allow it once and these runs stop asking."
 
 #: src/pages/Architecture.tsx
 msgid "no architecture map for this project — enable architecture-pack in Settings to generate it"
@@ -2637,12 +2965,12 @@ msgid "no denied tool calls in this range"
 msgstr "no denied tool calls in this range"
 
 #: src/pages/Docs.tsx
-msgid "no docs match"
-msgstr "no docs match"
-
-#: src/pages/Docs.tsx
 msgid "no docs published by the daemon"
 msgstr "no docs published by the daemon"
+
+#: src/pages/learning/Learning.tsx
+msgid "no effect"
+msgstr "no effect"
 
 #: src/pages/Retro.tsx
 msgid "no errors in this range"
@@ -2704,10 +3032,6 @@ msgstr "No local model configured — this is optional"
 #: src/pages/Architecture.tsx
 msgid "no map yet — press build map to generate it"
 msgstr "no map yet — press build map to generate it"
-
-#: src/pages/agent-hub/HubShell.tsx
-msgid "no matches"
-msgstr "no matches"
 
 #: src/pages/Memory.tsx
 msgid "No memory files yet — this project has no CLAUDE.md, auto-memory, or Serena notes."
@@ -2774,13 +3098,17 @@ msgstr "no retrospective lessons in this range"
 msgid "no risk badges"
 msgstr "no risk badges"
 
+#: src/pages/health/healthPlace.ts
+msgid "no rule covers it · + always allow"
+msgstr "no rule covers it · + always allow"
+
 #: src/pages/agent-hub/Tabs.tsx
 msgid "no runs in the last 30 days"
 msgstr "no runs in the last 30 days"
 
 #: src/pages/system/ItemDetail.tsx
-msgid "no runs recorded in the last {days, plural, one {# days} few {# days} many {# days} other {# days}}"
-msgstr "no runs recorded in the last {days, plural, one {# days} few {# days} many {# days} other {# days}}"
+msgid "no runs recorded in the last {days, plural, one {# day} few {# days} many {# days} other {# days}}"
+msgstr "no runs recorded in the last {days, plural, one {# day} few {# days} many {# days} other {# days}}"
 
 #: src/pages/learning/TurnForecastPanel.tsx
 msgid "No scored turns in this window."
@@ -2817,6 +3145,10 @@ msgstr "no tasks this agent executed"
 #: src/pages/Retro.tsx
 msgid "no tasks with retro artifacts in this range"
 msgstr "no tasks with retro artifacts in this range"
+
+#: src/pages/SystemHub.tsx
+msgid "no timeout"
+msgstr "no timeout"
 
 #: src/pages/learning/TurnForecastPanel.tsx
 msgid "No turns with a confidence yet — calibration needs forecasts whose confidence parsed. The scored turns below still count."
@@ -2856,8 +3188,8 @@ msgstr "noise · until {day}"
 
 #: src/pages/Memory.tsx
 #: src/pages/Memory.tsx
-#: src/pages/system-hub/Profiles.tsx
 #: src/pages/system/HooksTab.tsx
+#: src/pages/SystemHub.tsx
 msgid "none"
 msgstr "none"
 
@@ -2889,6 +3221,10 @@ msgstr "not hashed — re-validated on the next scan"
 msgid "not helping"
 msgstr "not helping"
 
+#: src/pages/Lessons.tsx
+msgid "Not injected into any run yet."
+msgstr "Not injected into any run yet."
+
 #: src/pages/Retro.tsx
 msgid "not noise"
 msgstr "not noise"
@@ -2897,7 +3233,6 @@ msgstr "not noise"
 msgid "not noise: {example}"
 msgstr "not noise: {example}"
 
-#: src/pages/inbox/InboxDetail.tsx
 #: src/pages/inbox/inboxModel.ts
 msgid "not useful"
 msgstr "not useful"
@@ -2910,13 +3245,13 @@ msgstr "not validated"
 msgid "nothing closed yet"
 msgstr "nothing closed yet"
 
-#: src/pages/agent-hub/HubShell.tsx
-msgid "nothing here yet"
-msgstr "nothing here yet"
+#: src/pages/SystemShell.tsx
+msgid "nothing on this machine"
+msgstr "nothing on this machine"
 
-#: src/pages/inbox/Inbox.tsx
-msgid "Nothing is waiting on you."
-msgstr "Nothing is waiting on you."
+#: src/pages/SystemShell.tsx
+msgid "Nothing resolves for this project — enable a pack in Settings, or add one under .claude/."
+msgstr "Nothing resolves for this project — enable a pack in Settings, or add one under .claude/."
 
 #: src/pages/Memory.tsx
 msgid "nothing to consolidate — the index is all live"
@@ -2971,6 +3306,10 @@ msgstr "open a fix task"
 msgid "open in Inbox →"
 msgstr "open in Inbox →"
 
+#: src/pages/health/HealthOverview.tsx
+msgid "open in System"
+msgstr "open in System"
+
 #: src/pages/agent-hub/Tabs.tsx
 msgid "open insights"
 msgstr "open insights"
@@ -2995,13 +3334,19 @@ msgstr "open the plan →"
 msgid "Orchestrator {mainCost} · {mainTokens} tokens out · agents {agentCostLabel}"
 msgstr "Orchestrator {mainCost} · {mainTokens} tokens out · agents {agentCostLabel}"
 
+#: src/pages/Lessons.tsx
 #: src/pages/system-hub/Profiles.tsx
+#: src/pages/SystemHub.tsx
 msgid "origin"
 msgstr "origin"
 
 #: src/pages/inbox/inboxModel.ts
 msgid "out of date"
 msgstr "out of date"
+
+#: src/pages/health/healthPlace.ts
+msgid "Outcomes"
+msgstr "Outcomes"
 
 #: src/pages/system/TemplatesTab.tsx
 msgid "overlays…"
@@ -3012,7 +3357,7 @@ msgid "overlays/_schema/project.schema.json is missing — overlay validation un
 msgstr "overlays/_schema/project.schema.json is missing — overlay validation unavailable"
 
 #: src/pages/AgentHub.tsx
-#: src/pages/health/Health.tsx
+#: src/pages/health/healthPlace.ts
 #: src/pages/SystemHub.tsx
 #: src/pages/SystemHub.tsx
 msgid "Overview"
@@ -3021,6 +3366,10 @@ msgstr "Overview"
 #: src/pages/RoutingReport.tsx
 msgid "p90 cost"
 msgstr "p90 cost"
+
+#: src/pages/health/HealthOverview.tsx
+msgid "p95 run"
+msgstr "p95 run"
 
 #: src/pages/system/TemplatesTab.tsx
 msgid "packs"
@@ -3042,6 +3391,11 @@ msgstr "passed"
 msgid "Passes / Total"
 msgstr "Passes / Total"
 
+#: src/pages/SystemHub.tsx
+#: src/pages/SystemHub.tsx
+msgid "path"
+msgstr "path"
+
 #: src/pages/system/ModsTab.tsx
 msgid "pattern"
 msgstr "pattern"
@@ -3058,6 +3412,10 @@ msgstr "perfectly calibrated"
 msgid "Permission checks are getting no verdict"
 msgstr "Permission checks are getting no verdict"
 
+#: src/pages/AgentHub.tsx
+msgid "permission tiers"
+msgstr "permission tiers"
+
 #: src/pages/agent-hub/Tabs.tsx
 msgid "phase {phase}"
 msgstr "phase {phase}"
@@ -3066,7 +3424,7 @@ msgstr "phase {phase}"
 msgid "phase runs"
 msgstr "phase runs"
 
-#: src/pages/health/Health.tsx
+#: src/pages/health/healthPlace.ts
 #: src/pages/health/PhaseRunsTab.tsx
 msgid "Phase runs"
 msgstr "Phase runs"
@@ -3083,6 +3441,10 @@ msgstr "pick"
 msgid "pick a project"
 msgstr "pick a project"
 
+#: src/pages/inbox/InboxDetail.tsx
+msgid "Pick the correct answer above: it is recorded instead of the guess."
+msgstr "Pick the correct answer above: it is recorded instead of the guess."
+
 #: src/pages/system/ItemDetail.tsx
 msgid "pick two versions to diff"
 msgstr "pick two versions to diff"
@@ -3092,7 +3454,6 @@ msgid "Pitfalls"
 msgstr "Pitfalls"
 
 #: src/pages/inbox/inboxModel.ts
-#: src/pages/inbox/ReviewItem.tsx
 msgid "plan #{id}"
 msgstr "plan #{id}"
 
@@ -3101,7 +3462,6 @@ msgid "plan review"
 msgstr "plan review"
 
 #: src/pages/inbox/inboxModel.ts
-#: src/pages/inbox/ReviewItem.tsx
 msgid "Plan review: {plan}"
 msgstr "Plan review: {plan}"
 
@@ -3130,6 +3490,8 @@ msgstr "Plugin drift"
 msgid "plugin items are read-only — edit them in the plugin's marketplace repo and adopt via /plugin update"
 msgstr "plugin items are read-only — edit them in the plugin's marketplace repo and adopt via /plugin update"
 
+#: src/pages/SystemShell.tsx
+#: src/pages/SystemShell.tsx
 #: src/pages/SystemShell.tsx
 msgid "Plugins"
 msgstr "Plugins"
@@ -3191,14 +3553,6 @@ msgstr "pricing table"
 msgid "probe & resume"
 msgstr "probe & resume"
 
-#: src/pages/inbox/InboxDetail.tsx
-msgid "Production deploy — confirm in the session's terminal. Nothing runs until you do."
-msgstr "Production deploy — confirm in the session's terminal. Nothing runs until you do."
-
-#: src/pages/inbox/InboxDetail.tsx
-msgid "Production deploy via {toolName} — confirm locally"
-msgstr "Production deploy via {toolName} — confirm locally"
-
 #: src/pages/Analytics.tsx
 msgid "Productivity"
 msgstr "Productivity"
@@ -3233,32 +3587,61 @@ msgid "projects"
 msgstr "projects"
 
 #: src/pages/Lessons.tsx
+#: src/pages/Lessons.tsx
 msgid "promote to CLAUDE.md"
 msgstr "promote to CLAUDE.md"
+
+#: src/pages/SystemShell.tsx
+msgid "promotion · drift · dead components"
+msgstr "promotion · drift · dead components"
 
 #: src/pages/system/InsightsTab.tsx
 msgid "Promotion candidates"
 msgstr "Promotion candidates"
+
+#: src/pages/AgentHub.tsx
+msgid "prompt"
+msgstr "prompt"
+
+#: src/pages/AgentHub.tsx
+msgid "prompt {version}"
+msgstr "prompt {version}"
 
 #: src/pages/Analytics.tsx
 msgid "Prompt-cache read ratio over the range. Higher = cheaper reads served from cache."
 msgstr "Prompt-cache read ratio over the range. Higher = cheaper reads served from cache."
 
 #: src/pages/learning/Learning.tsx
-msgid "Proof"
-msgstr "Proof"
+msgid "proof · {word}"
+msgstr "proof · {word}"
+
+#: src/pages/learning/Learning.tsx
+msgid "Proof · did the change help?"
+msgstr "Proof · did the change help?"
 
 #: src/pages/inbox/inboxModel.ts
 msgid "proposals"
 msgstr "proposals"
 
+#: src/pages/health/HealthOverview.tsx
+msgid "propose a change"
+msgstr "propose a change"
+
 #: src/pages/Lessons.tsx
 msgid "proposed because reviewers raised the same finding type in this area in several phases"
 msgstr "proposed because reviewers raised the same finding type in this area in several phases"
 
+#: src/pages/inbox/InboxDetail.tsx
+msgid "Proposed lesson: {guidance}"
+msgstr "Proposed lesson: {guidance}"
+
 #: src/pages/Lessons.tsx
 msgid "Proposed retirements"
 msgstr "Proposed retirements"
+
+#: src/pages/learning/Learning.tsx
+msgid "proven"
+msgstr "proven"
 
 #: src/pages/Architecture.tsx
 msgid "provision failed"
@@ -3267,6 +3650,14 @@ msgstr "provision failed"
 #: src/pages/Architecture.tsx
 msgid "queued"
 msgstr "queued"
+
+#: src/pages/health/HealthOverview.tsx
+msgid "raised"
+msgstr "raised"
+
+#: src/pages/health/Health.tsx
+msgid "Range"
+msgstr "Range"
 
 #: src/pages/Analytics.tsx
 msgid "Range total cost ÷ tasks done. Cost comes from priced turns; unpriced work is excluded."
@@ -3284,6 +3675,10 @@ msgstr "raw markdown content"
 msgid "re-dispatch {redispatchPct}%"
 msgstr "re-dispatch {redispatchPct}%"
 
+#: src/pages/health/HealthOverview.tsx
+msgid "re-dispatched"
+msgstr "re-dispatched"
+
 #: src/pages/Retro.tsx
 msgid "Re-run apply"
 msgstr "Re-run apply"
@@ -3292,6 +3687,11 @@ msgstr "Re-run apply"
 msgid "re-run the apply/PR pipeline (e.g. after a gh outage)"
 msgstr "re-run the apply/PR pipeline (e.g. after a gh outage)"
 
+#: src/pages/Lessons.tsx
+msgid "Reached {usesText} runs so far: too few to judge. Proof needs {minRuns}."
+msgstr "Reached {usesText} runs so far: too few to judge. Proof needs {minRuns}."
+
+#: src/pages/knowledge/Knowledge.tsx
 #: src/pages/Memory.tsx
 #: src/pages/Memory.tsx
 msgid "read-only"
@@ -3386,8 +3786,8 @@ msgstr "rescan failed: {rescanError}"
 #. placeholder {2}: lastRescan.parseErrors
 #. placeholder {3}: lastRescan.removed
 #: src/pages/system/ModsTab.tsx
-msgid "rescan: {0} mods · {1} validated · {2} parse errors · {3} removed"
-msgstr "rescan: {0} mods · {1} validated · {2} parse errors · {3} removed"
+msgid "rescan: {0, plural, one {# mod} few {# mods} many {# mods} other {# mods}} · {1} validated · {2, plural, one {# parse error} few {# parse errors} many {# parse errors} other {# parse errors}} · {3} removed"
+msgstr "rescan: {0, plural, one {# mod} few {# mods} many {# mods} other {# mods}} · {1} validated · {2, plural, one {# parse error} few {# parse errors} many {# parse errors} other {# parse errors}} · {3} removed"
 
 #: src/pages/system/ModsTab.tsx
 msgid "rescanning…"
@@ -3409,10 +3809,16 @@ msgstr "restore the soft-deleted agent instead"
 msgid "resumes on its own in {resetsIn}, when the limit resets"
 msgstr "resumes on its own in {resetsIn}, when the limit resets"
 
+#: src/pages/inbox/InboxDetail.tsx
+#: src/pages/Lessons.tsx
 #: src/pages/Lessons.tsx
 #: src/pages/Lessons.tsx
 msgid "retire"
 msgstr "retire"
+
+#: src/pages/learning/Learning.tsx
+msgid "retirements · every status"
+msgstr "retirements · every status"
 
 #: src/pages/inbox/InboxDetail.tsx
 msgid "retires on its own in {retiresIn} if nobody answers"
@@ -3440,6 +3846,7 @@ msgid "Retry"
 msgstr "Retry"
 
 #: src/pages/Lessons.tsx
+#: src/pages/Lessons.tsx
 msgid "review"
 msgstr "review"
 
@@ -3450,6 +3857,10 @@ msgstr "review {verdictWord}"
 #: src/pages/inbox/ReviewItem.tsx
 msgid "review findings"
 msgstr "review findings"
+
+#: src/pages/learning/Learning.tsx
+msgid "Review queue"
+msgstr "Review queue"
 
 #: src/pages/system/docsSection.ts
 #: src/pages/SystemShell.tsx
@@ -3489,7 +3900,7 @@ msgstr "rollback on disk…"
 msgid "rollback to {rbWhen} — what will change on disk:"
 msgstr "rollback to {rbWhen} — what will change on disk:"
 
-#: src/pages/agent-hub/HubShell.tsx
+#: src/pages/SystemShell.tsx
 msgid "roster…"
 msgstr "roster…"
 
@@ -3509,15 +3920,12 @@ msgstr "routing surface"
 msgid "row"
 msgstr "row"
 
+#: src/pages/health/HealthOverview.tsx
 #: src/pages/Retro.tsx
 #: src/pages/Retro.tsx
 #: src/pages/Retro.tsx
 msgid "rule"
 msgstr "rule"
-
-#: src/pages/inbox/Inbox.tsx
-msgid "rules & history →"
-msgstr "rules & history →"
 
 #: src/pages/Memory.tsx
 msgid "run a dry run first"
@@ -3531,12 +3939,19 @@ msgstr "Run a dry run to see which closed entries can move to <0>closed/</0>. No
 msgid "Run an OpenAI-compatible model server: LM Studio (<0>localhost:1234</0>), Ollama (<1>localhost:11434/v1</1>), llama.cpp or vLLM. A 7–14B instruct model is enough."
 msgstr "Run an OpenAI-compatible model server: LM Studio (<0>localhost:1234</0>), Ollama (<1>localhost:11434/v1</1>), llama.cpp or vLLM. A 7–14B instruct model is enough."
 
+#: src/pages/agent-hub/RunNow.tsx
+#: src/pages/AgentHub.tsx
+msgid "run once"
+msgstr "run once"
+
 #: src/pages/health/FrictionTriageStrip.tsx
 #: src/pages/inbox/TriageBanner.tsx
 msgid "run triage"
 msgstr "run triage"
 
 #: src/pages/Analytics.tsx
+#: src/pages/health/HealthOverview.tsx
+#: src/pages/health/HealthOverview.tsx
 #: src/pages/Retro.tsx
 #: src/pages/RoutingReport.tsx
 #: src/pages/system/ItemDetail.tsx
@@ -3548,9 +3963,9 @@ msgstr "runs"
 msgid "Runs"
 msgstr "Runs"
 
-#: src/pages/AgentHub.tsx
-msgid "runs 30d {runs30d}"
-msgstr "runs 30d {runs30d}"
+#: src/pages/Lessons.tsx
+msgid "runs reached"
+msgstr "runs reached"
 
 #: src/pages/learning/TurnForecastPanel.tsx
 msgid "said"
@@ -3561,8 +3976,12 @@ msgid "said {said}, held {held}"
 msgstr "said {said}, held {held}"
 
 #: src/pages/health/HealthOverview.tsx
-msgid "Same error {count, plural, one {# times} few {# times} many {# times} other {# times}} in this window"
-msgstr "Same error {count, plural, one {# times} few {# times} many {# times} other {# times}} in this window"
+msgid "Same error {count, plural, one {# time} few {# times} many {# times} other {# times}} in this window"
+msgstr "Same error {count, plural, one {# time} few {# times} many {# times} other {# times}} in this window"
+
+#: src/pages/health/healthPlace.ts
+msgid "same error {count}×"
+msgstr "same error {count}×"
 
 #: src/pages/system/InsightsTab.tsx
 msgid "same-named local component in ≥2 projects — graduation rule (EXTENDING.md)"
@@ -3597,11 +4016,17 @@ msgstr "saved ✓"
 msgid "saving…"
 msgstr "saving…"
 
-#: src/pages/system-hub/Profiles.tsx
+#: src/pages/knowledge/Knowledge.tsx
 #: src/pages/system-hub/Profiles.tsx
 #: src/pages/system/CreateAgentForm.tsx
+#: src/pages/SystemHub.tsx
+#: src/pages/SystemHub.tsx
 msgid "scope"
 msgstr "scope"
+
+#: src/pages/health/healthPlace.ts
+msgid "scorecards · judged sessions"
+msgstr "scorecards · judged sessions"
 
 #: src/pages/learning/classifierModel.ts
 msgid "scored phase run"
@@ -3611,6 +4036,14 @@ msgstr "scored phase run"
 msgid "SDLC funnel"
 msgstr "SDLC funnel"
 
+#: src/pages/Docs.tsx
+msgid "search docs"
+msgstr "search docs"
+
+#: src/pages/knowledge/Knowledge.tsx
+msgid "search memory, modules, symbols"
+msgstr "search memory, modules, symbols"
+
 #: src/pages/health/HealthOverview.tsx
 msgid "see friction"
 msgstr "see friction"
@@ -3619,25 +4052,17 @@ msgstr "see friction"
 msgid "see what it closed"
 msgstr "see what it closed"
 
+#: src/pages/Lessons.tsx
+msgid "seen"
+msgstr "seen"
+
 #: src/pages/inbox/InboxDetail.tsx
 msgid "seen {recurrences}×"
 msgstr "seen {recurrences}×"
 
-#: src/pages/SystemHub.tsx
-msgid "select a {singularNoun} to see its profile"
-msgstr "select a {singularNoun} to see its profile"
-
 #: src/pages/Memory.tsx
 msgid "Select a file to view or edit."
 msgstr "Select a file to view or edit."
-
-#: src/pages/agent-hub/HubShell.tsx
-msgid "select a row"
-msgstr "select a row"
-
-#: src/pages/AgentHub.tsx
-msgid "select an agent to see its profile"
-msgstr "select an agent to see its profile"
 
 #: src/pages/system/ItemDetail.tsx
 msgid "select version {versionId} for compare"
@@ -3688,14 +4113,12 @@ msgstr "session {session} · turn {seq}"
 msgid "session {sessionId}"
 msgstr "session {sessionId}"
 
-#: src/pages/inbox/InboxDetail.tsx
-msgid "Session {sessionId} asked {askedAgo} ago and is waiting on you. Nothing runs until you answer."
-msgstr "Session {sessionId} asked {askedAgo} ago and is waiting on you. Nothing runs until you answer."
-
 #: src/pages/system/InsightsTab.tsx
 msgid "Session-start cost"
 msgstr "Session-start cost"
 
+#: src/pages/health/HealthOverview.tsx
+#: src/pages/health/HealthOverview.tsx
 #: src/pages/Retro.tsx
 #: src/pages/system-hub/Profiles.tsx
 msgid "sessions"
@@ -3748,7 +4171,6 @@ msgstr "similar skills"
 #: src/pages/Analytics.tsx
 #: src/pages/Analytics.tsx
 #: src/pages/Retro.tsx
-#: src/pages/SystemHub.tsx
 msgid "skill"
 msgstr "skill"
 
@@ -3760,12 +4182,15 @@ msgstr "Skill audit"
 msgid "skill invocations"
 msgstr "skill invocations"
 
+#: src/pages/SystemHub.tsx
+msgid "Skill sections"
+msgstr "Skill sections"
+
 #: src/pages/system-hub/Profiles.tsx
 msgid "skill…"
 msgstr "skill…"
 
 #: src/pages/Analytics.tsx
-#: src/pages/SystemHub.tsx
 msgid "skills"
 msgstr "skills"
 
@@ -3792,6 +4217,7 @@ msgid "skills…"
 msgstr "skills…"
 
 #: src/pages/inbox/Inbox.tsx
+#: src/pages/inbox/InboxDetail.tsx
 msgid "skip"
 msgstr "skip"
 
@@ -3803,8 +4229,11 @@ msgstr "sort by"
 msgid "sort list"
 msgstr "sort list"
 
+#: src/pages/knowledge/Knowledge.tsx
+#: src/pages/Lessons.tsx
 #: src/pages/system/ModsTab.tsx
 #: src/pages/system/ModsTab.tsx
+#: src/pages/SystemHub.tsx
 msgid "source"
 msgstr "source"
 
@@ -3815,6 +4244,15 @@ msgstr "source recommendation"
 #: src/pages/system/ModsTab.tsx
 msgid "spawns processes"
 msgstr "spawns processes"
+
+#: src/pages/health/healthPlace.ts
+msgid "Spend · {window}"
+msgstr "Spend · {window}"
+
+#: src/pages/health/HealthOverview.tsx
+#: src/pages/health/HealthOverview.tsx
+msgid "spent"
+msgstr "spent"
 
 #: src/pages/Lessons.tsx
 #: src/pages/system/docsSection.ts
@@ -3888,7 +4326,6 @@ msgstr "Stop using “{lessonTitle}”?"
 msgid "stop using a lesson?"
 msgstr "stop using a lesson?"
 
-#: src/pages/inbox/InboxDetail.tsx
 #: src/pages/inbox/inboxModel.ts
 #: src/pages/inbox/inboxModel.ts
 msgid "stop using it"
@@ -3907,12 +4344,17 @@ msgid "surface"
 msgstr "surface"
 
 #: src/pages/learning/TurnForecastPanel.tsx
+#: src/pages/Lessons.tsx
 msgid "surprise"
 msgstr "surprise"
 
 #: src/pages/Lessons.tsx
 msgid "surprise {before} → {after}"
 msgstr "surprise {before} → {after}"
+
+#: src/pages/Lessons.tsx
+msgid "surprise before"
+msgstr "surprise before"
 
 #: src/pages/learning/classifierModel.ts
 msgid "Suspicious:"
@@ -3926,26 +4368,61 @@ msgstr "swap rows and columns"
 msgid "swarmery installer hook — manage it via `swarmery hooks`"
 msgstr "swarmery installer hook — manage it via `swarmery hooks`"
 
+#: src/pages/knowledge/Knowledge.tsx
+msgid "symbol index"
+msgstr "symbol index"
+
+#: src/pages/SystemHub.tsx
+msgid "system"
+msgstr "system"
+
 #: src/pages/SystemShell.tsx
 msgid "System"
 msgstr "System"
 
-#: src/pages/SystemHub.tsx
-#: src/pages/SystemHub.tsx
-msgid "System Hub"
-msgstr "System Hub"
+#: src/pages/AgentHub.tsx
+msgid "system · agent"
+msgstr "system · agent"
 
 #: src/pages/SystemHub.tsx
-msgid "System Hub sections"
-msgstr "System Hub sections"
+msgid "system · command"
+msgstr "system · command"
+
+#: src/pages/SystemHub.tsx
+msgid "system · hook"
+msgstr "system · hook"
+
+#: src/pages/SystemShell.tsx
+msgid "system · insights"
+msgstr "system · insights"
+
+#: src/pages/SystemShell.tsx
+msgid "system · mods"
+msgstr "system · mods"
+
+#: src/pages/SystemShell.tsx
+msgid "system · plugins"
+msgstr "system · plugins"
+
+#: src/pages/SystemShell.tsx
+msgid "system · routines"
+msgstr "system · routines"
+
+#: src/pages/SystemHub.tsx
+msgid "system · skill"
+msgstr "system · skill"
+
+#: src/pages/SystemHub.tsx
+msgid "system · template"
+msgstr "system · template"
 
 #: src/pages/system-hub/Profiles.tsx
 msgid "system is in readonly mode — copy is disabled"
 msgstr "system is in readonly mode — copy is disabled"
 
-#: src/pages/SystemShell.tsx
-msgid "System sections"
-msgstr "System sections"
+#: src/pages/health/HealthOverview.tsx
+msgid "target"
+msgstr "target"
 
 #: src/pages/Retro.tsx
 msgid "task"
@@ -3959,29 +4436,25 @@ msgstr "Tasks"
 msgid "tasks 30d <0>{tasks30d}</0>"
 msgstr "tasks 30d <0>{tasks30d}</0>"
 
+#: src/pages/health/healthPlace.ts
+msgid "tasks against their estimate · retro lessons"
+msgstr "tasks against their estimate · retro lessons"
+
 #: src/pages/Analytics.tsx
 msgid "Tasks done"
 msgstr "Tasks done"
-
-#: src/pages/SystemHub.tsx
-msgid "template"
-msgstr "template"
 
 #: src/pages/system-hub/Profiles.tsx
 msgid "template…"
 msgstr "template…"
 
-#: src/pages/SystemHub.tsx
-msgid "templates"
-msgstr "templates"
+#: src/pages/SystemShell.tsx
+msgid "Templates"
+msgstr "Templates"
 
 #: src/pages/learning/TurnForecastPanel.tsx
 msgid "tests outcome missed"
 msgstr "tests outcome missed"
-
-#: src/pages/health/healthModel.ts
-msgid "the {dayCount} days before"
-msgstr "the {dayCount} days before"
 
 #: src/pages/inbox/InboxDetail.tsx
 msgid "The account is checked for real — its sign-in, then one short model call. If it answers, runs start again at once; if not, it stays paused and you see why."
@@ -3992,9 +4465,6 @@ msgid "The agent has not closed anything in the last 7 days."
 msgstr "The agent has not closed anything in the last 7 days."
 
 #: src/pages/inbox/InboxDetail.tsx
-msgid "The call runs now and the session continues. Nothing else changes."
-msgstr "The call runs now and the session continues. Nothing else changes."
-
 #: src/pages/inbox/inboxModel.ts
 msgid "The candidate is closed as not useful. Nothing is added to any brief."
 msgstr "The candidate is closed as not useful. Nothing is added to any brief."
@@ -4072,6 +4542,14 @@ msgid "the item changed after this guide was written — docs.source_sha no long
 msgstr "the item changed after this guide was written — docs.source_sha no longer matches the body"
 
 #: src/pages/inbox/InboxDetail.tsx
+msgid "The label is confirmed as the ground truth for this session."
+msgstr "The label is confirmed as the ground truth for this session."
+
+#: src/pages/inbox/Inbox.tsx
+msgid "the last 7 days, each with an undo"
+msgstr "the last 7 days, each with an undo"
+
+#: src/pages/inbox/InboxDetail.tsx
 #: src/pages/inbox/inboxModel.ts
 msgid "The lesson stops appearing in briefs. Its history stays."
 msgstr "The lesson stops appearing in briefs. Its history stays."
@@ -4088,7 +4566,7 @@ msgstr "The local model's guess about “{sessionTitle}”. Your answer is the o
 msgid "The mod reports what Claude Code counted for its current process, so a resumed session restarts from 0; the pricing table recomputes every turn. Charts above use the pricing table."
 msgstr "The mod reports what Claude Code counted for its current process, so a resumed session restarts from 0; the pricing table recomputes every turn. Charts above use the pricing table."
 
-#: src/pages/health/HealthOverview.tsx
+#: src/pages/health/healthPlace.ts
 msgid "The one sentence"
 msgstr "The one sentence"
 
@@ -4104,6 +4582,7 @@ msgstr "The proposal closes and this reason is held off for 30 days. The lesson 
 msgid "The proposal is marked approved; applying it opens a pull request you review."
 msgstr "The proposal is marked approved; applying it opens a pull request you review."
 
+#: src/pages/inbox/InboxDetail.tsx
 #: src/pages/inbox/inboxModel.ts
 msgid "The recommendation is closed. It reopens on its own if the rule keeps firing."
 msgstr "The recommendation is closed. It reopens on its own if the rule keeps firing."
@@ -4111,6 +4590,10 @@ msgstr "The recommendation is closed. It reopens on its own if the rule keeps fi
 #: src/pages/system/InsightsTab.tsx
 msgid "the report is gone from the workspace"
 msgstr "the report is gone from the workspace"
+
+#: src/pages/health/healthPlace.ts
+msgid "the review digest · recommendations · agent rewrites"
+msgstr "the review digest · recommendations · agent rewrites"
 
 #: src/pages/inbox/InboxDetail.tsx
 msgid "The review leaves the Inbox. It stays on record; nothing else changes."
@@ -4121,15 +4604,10 @@ msgid "The reviewer left no findings text."
 msgstr "The reviewer left no findings text."
 
 #: src/pages/inbox/InboxDetail.tsx
-msgid "The session waits for your answers; they go back to Claude as the tool's result."
-msgstr "The session waits for your answers; they go back to Claude as the tool's result."
-
-#: src/pages/inbox/InboxDetail.tsx
 msgid "the task"
 msgstr "the task"
 
 #: src/pages/health/Health.tsx
-#: src/pages/inbox/Inbox.tsx
 msgid "The triage run failed."
 msgstr "The triage run failed."
 
@@ -4141,6 +4619,10 @@ msgstr "the window before"
 #: src/pages/inbox/inboxModel.ts
 msgid "these areas"
 msgstr "these areas"
+
+#: src/pages/health/HealthOverview.tsx
+msgid "things you can remove today"
+msgstr "things you can remove today"
 
 #: src/pages/inbox/InboxDetail.tsx
 msgid "This account hit a Claude usage limit."
@@ -4170,11 +4652,6 @@ msgstr "this project already has its own copy of this template"
 msgid "This range"
 msgstr "This range"
 
-#: src/pages/health/Health.tsx
-#: src/pages/health/Health.tsx
-msgid "this window"
-msgstr "this window"
-
 #: src/pages/RoutingReport.tsx
 msgid "tier"
 msgstr "tier"
@@ -4183,7 +4660,8 @@ msgstr "tier"
 msgid "tier {tier}, picked {pick}, ran {model}: {cell}"
 msgstr "tier {tier}, picked {pick}, ran {model}: {cell}"
 
-#: src/pages/system-hub/Profiles.tsx
+#: src/pages/SystemHub.tsx
+#: src/pages/SystemHub.tsx
 msgid "timeout"
 msgstr "timeout"
 
@@ -4194,6 +4672,10 @@ msgstr "timeout (s)"
 #: src/pages/system/HooksTab.tsx
 msgid "timeout {timeoutSecs}s"
 msgstr "timeout {timeoutSecs}s"
+
+#: src/pages/health/HealthOverview.tsx
+msgid "times"
+msgstr "times"
 
 #: src/pages/Lessons.tsx
 msgid "title"
@@ -4228,9 +4710,13 @@ msgstr "Tool calls per human intervention (approvals a human resolved + mid-run 
 msgid "Tool use"
 msgstr "Tool use"
 
-#: src/pages/SystemHub.tsx
-msgid "Toolkit"
-msgstr "Toolkit"
+#: src/pages/knowledge/Knowledge.tsx
+msgid "Tooling"
+msgstr "Tooling"
+
+#: src/pages/AgentHub.tsx
+msgid "tools"
+msgstr "tools"
 
 #: src/pages/Analytics.tsx
 #: src/pages/Analytics.tsx
@@ -4240,6 +4726,14 @@ msgstr "Tools"
 #: src/pages/system/CreateAgentForm.tsx
 msgid "tools <0>(optional)</0>"
 msgstr "tools <0>(optional)</0>"
+
+#: src/pages/health/Health.tsx
+msgid "Tools you deny and errors that repeat."
+msgstr "Tools you deny and errors that repeat."
+
+#: src/pages/health/HealthOverview.tsx
+msgid "Tools you deny every time, and errors that repeat across sessions."
+msgstr "Tools you deny every time, and errors that repeat across sessions."
 
 #: src/pages/Analytics.tsx
 msgid "tools…"
@@ -4265,6 +4759,7 @@ msgstr "Total wait"
 msgid "touched files it did not forecast"
 msgstr "touched files it did not forecast"
 
+#: src/pages/inbox/InboxDetail.tsx
 #: src/pages/inbox/inboxModel.ts
 #: src/pages/inbox/inboxModel.ts
 msgid "track this"
@@ -4384,8 +4879,8 @@ msgid "usage-guide coverage: every agent, skill and command the marketplace ship
 msgstr "usage-guide coverage: every agent, skill and command the marketplace ships must carry a '# How to use' block"
 
 #: src/pages/SystemHub.tsx
-msgid "used 30d {used30d}"
-msgstr "used 30d {used30d}"
+msgid "used in {used} sessions / 30 d"
+msgstr "used in {used} sessions / 30 d"
 
 #: src/pages/system/ModsTab.tsx
 msgid "Validate report"
@@ -4469,10 +4964,6 @@ msgstr "vs prev {days}d"
 msgid "vs prev {prevRunsCount}"
 msgstr "vs prev {prevRunsCount}"
 
-#: src/pages/inbox/Inbox.tsx
-msgid "waiting decisions"
-msgstr "waiting decisions"
-
 #: src/pages/health/Health.tsx
 msgid "waiting on you"
 msgstr "waiting on you"
@@ -4480,6 +4971,10 @@ msgstr "waiting on you"
 #: src/pages/system/ModsTab.tsx
 msgid "warnings"
 msgstr "warnings"
+
+#: src/pages/health/HealthOverview.tsx
+msgid "was"
+msgstr "was"
 
 #: src/pages/inbox/InboxDetail.tsx
 msgid "Was this {answers}?"
@@ -4493,16 +4988,25 @@ msgstr "We snapshot today's number as the baseline and tell you in a week whethe
 msgid "We snapshot today's number as the baseline, notice when the target changes, and a week later tell you whether it moved."
 msgstr "We snapshot today's number as the baseline, notice when the target changes, and a week later tell you whether it moved."
 
-#: src/pages/inbox/InboxDetail.tsx
-#: src/pages/inbox/InboxDetail.tsx
-#: src/pages/inbox/InboxDetail.tsx
-#: src/pages/inbox/InboxDetail.tsx
-msgid "What happened:"
-msgstr "What happened:"
+#: src/pages/learning/Learning.tsx
+msgid "what a proof row is and when it is verified"
+msgstr "what a proof row is and when it is verified"
 
 #: src/pages/learning/classifierModel.ts
 msgid "What kind of task was it?"
 msgstr "What kind of task was it?"
+
+#: src/pages/health/Health.tsx
+msgid "What the Advisor found and what waits on you."
+msgstr "What the Advisor found and what waits on you."
+
+#: src/pages/learning/Learning.tsx
+msgid "What the local model labels, and how it does."
+msgstr "What the local model labels, and how it does."
+
+#: src/pages/learning/Learning.tsx
+msgid "what the model labels · how often you agree"
+msgstr "what the model labels · how often you agree"
 
 #: src/pages/RoutingReport.tsx
 msgid "What the router would have picked for each run, recorded in shadow beside what actually ran. Fail counts a failed, blocked or partial run or a failed verification; agree is how often the pick and the model that ran were the same; cost is known-cost runs only."
@@ -4512,6 +5016,10 @@ msgstr "What the router would have picked for each run, recorded in shadow besid
 msgid "what this agent owns, in one line"
 msgstr "what this agent owns, in one line"
 
+#: src/pages/knowledge/Knowledge.tsx
+msgid "what this project remembers"
+msgstr "what this project remembers"
+
 #: src/pages/RoutingReport.tsx
 msgid "when {pick} ran: {ranCell}"
 msgstr "when {pick} ran: {ranCell}"
@@ -4520,17 +5028,22 @@ msgstr "when {pick} ran: {ranCell}"
 msgid "When a phase run lands far from its forecast and its report explains why, a cheap model proposes up to two lessons, each citing evidence from that run. A candidate reaches future runs only after you accept it here. Merge it into an existing lesson when it repeats one. Active lessons are re-measured against their area's surprise; one that stops earning its place is proposed for retirement below, and retired on its own after 14 days without an answer."
 msgstr "When a phase run lands far from its forecast and its report explains why, a cheap model proposes up to two lessons, each citing evidence from that run. A candidate reaches future runs only after you accept it here. Merge it into an existing lesson when it repeats one. Active lessons are re-measured against their area's surprise; one that stops earning its place is proposed for retirement below, and retired on its own after 14 days without an answer."
 
-#: src/pages/inbox/Inbox.tsx
-msgid "when you have a minute"
-msgstr "when you have a minute"
-
+#: src/pages/Lessons.tsx
 #: src/pages/Lessons.tsx
 msgid "where reality diverged"
 msgstr "where reality diverged"
 
+#: src/pages/health/Health.tsx
+msgid "Where the money and tokens went."
+msgstr "Where the money and tokens went."
+
 #: src/pages/RoutingReport.tsx
 msgid "Where the pick differed"
 msgstr "Where the pick differed"
+
+#: src/pages/SystemShell.tsx
+msgid "which packs a project enables"
+msgstr "which packs a project enables"
 
 #: src/pages/learning/classifierModel.ts
 msgid "Why did it fail?"
@@ -4552,10 +5065,15 @@ msgstr "working…"
 msgid "workspace…"
 msgstr "workspace…"
 
+#: src/pages/AgentHub.tsx
+msgid "Worktree isolation"
+msgstr "Worktree isolation"
+
 #: src/pages/system/shared.tsx
 msgid "worst active lint finding: {severity}"
 msgstr "worst active lint finding: {severity}"
 
+#: src/pages/Lessons.tsx
 #: src/pages/Lessons.tsx
 msgid "Write this lesson into the project's CLAUDE.md for its area, committed on a new branch for you to review"
 msgstr "Write this lesson into the project's CLAUDE.md for its area, committed on a new branch for you to review"
@@ -4568,14 +5086,9 @@ msgstr "writes files"
 msgid "written by the docs generator and not reviewed yet"
 msgstr "written by the docs generator and not reviewed yet"
 
-#: src/pages/inbox/InboxDetail.tsx
 #: src/pages/system/ModsTab.tsx
 msgid "yes"
 msgstr "yes"
-
-#: src/pages/inbox/InboxDetail.tsx
-msgid "yes, all {groupSize}"
-msgstr "yes, all {groupSize}"
 
 #: src/pages/learning/classifierModel.ts
 msgid "You haven't checked any yet"

@@ -118,8 +118,15 @@ function windowDays(a: RetroAgentsResp): number | null {
 }
 
 function trendClause(now: number, prev: number | null, days: number | null): string {
-  const dayCount = String(days ?? 0);
-  const window = days !== null ? t`the ${dayCount} days before` : t`the window before`;
+  const window =
+    days !== null
+      ? plural(days, {
+          one: 'the # day before',
+          few: 'the # days before',
+          many: 'the # days before',
+          other: 'the # days before',
+        })
+      : t`the window before`;
   const nowPct = fmtPct(now);
   if (prev === null) return t`The fleet failed ${nowPct} of its runs in this window`;
   if (Math.abs(now - prev) < 2) return t`The fleet is failing about as often as ${window}`;
@@ -187,6 +194,21 @@ export function windowCellText(c: WindowCell): { value: string; delta: string | 
   const arrow = better ? '↓' : '↑';
   const prevPct = fmtPct(c.prevFailedPct);
   return { value, delta: t`${arrow} from ${prevPct}`, better };
+}
+
+/** The list's mono line: "142 runs · 30 d · 11 % failed, down from 19 %". */
+export function placeSub(c: WindowCell, days: number): string {
+  const runs = c.runs;
+  const head = plural(runs, { one: '# run', few: '# runs', many: '# runs', other: '# runs' });
+  const window = String(days);
+  const failed = fmtPct(c.failedPct);
+  if (c.prevFailedPct === null || Math.round(c.prevFailedPct) === Math.round(c.failedPct)) {
+    return t`${head} · ${window} d · ${failed} failed`;
+  }
+  const prev = fmtPct(c.prevFailedPct);
+  return c.failedPct < c.prevFailedPct
+    ? t`${head} · ${window} d · ${failed} failed, down from ${prev}`
+    : t`${head} · ${window} d · ${failed} failed, up from ${prev}`;
 }
 
 /* ----- friction ----- */

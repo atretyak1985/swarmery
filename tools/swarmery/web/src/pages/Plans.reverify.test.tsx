@@ -123,6 +123,12 @@ let releaseVerify: (() => void) | null = null;
 const verifyCalls = (): { url: string; init: RequestInit | undefined }[] =>
   calls.filter((c) => /\/phases\/\d+\/verify$/.test(c.url));
 
+/** The phase's actions live in its expansion. */
+async function openRow(): Promise<void> {
+  const row = await screen.findByRole('button', { name: /^Phase 1 — / });
+  if (row.getAttribute('aria-expanded') !== 'true') fireEvent.click(row);
+}
+
 function stubFetch(): void {
   calls = [];
   vi.stubGlobal(
@@ -185,6 +191,7 @@ const LIST = `/p/swarmery/plans/${PLAN}`;
 describe('Verify again — phase row', () => {
   it('is offered when the server says canReverify, and POSTs …/verify', async () => {
     render(<PlansAt path={LIST} />);
+    await openRow();
     const btn = await screen.findByRole('button', { name: 'Verify again' });
     expect(btn.getAttribute('data-tip')).toContain('read-only verifier');
     fireEvent.click(btn);
@@ -215,6 +222,7 @@ describe('Verify again — phase row', () => {
     ];
     render(<PlansAt path={LIST} />);
     // The row's done branch (✓ summary) is what renders — not Run/Retry.
+    await openRow();
     await screen.findAllByRole('button', { name: '✓ summary' });
     expect(screen.queryByRole('button', { name: /Run phase|Retry run/ })).toBeNull();
     expect(screen.getByRole('button', { name: 'Verify again' })).toBeTruthy();
@@ -223,6 +231,7 @@ describe('Verify again — phase row', () => {
   it('reads verifying… and is disabled while the server reports verifyRunning', async () => {
     epics = [epic([phase({ verifyRunning: true })])];
     render(<PlansAt path={LIST} />);
+    await openRow();
     const btn = (await screen.findByRole('button', { name: 'verifying…' })) as HTMLButtonElement;
     expect(btn.disabled).toBe(true);
     fireEvent.click(btn);
@@ -232,6 +241,7 @@ describe('Verify again — phase row', () => {
   it('is disabled while its own request is in flight', async () => {
     verifyReply = null;
     render(<PlansAt path={LIST} />);
+    await openRow();
     fireEvent.click(await screen.findByRole('button', { name: 'Verify again' }));
     const busy = (await screen.findByRole('button', { name: 'verifying…' })) as HTMLButtonElement;
     expect(busy.disabled).toBe(true);
@@ -245,6 +255,7 @@ describe('Verify again — phase row', () => {
       body: { error: 'a whole-plan run is executing this plan', code: 'plan-running' },
     };
     render(<PlansAt path={LIST} />);
+    await openRow();
     fireEvent.click(await screen.findByRole('button', { name: 'Verify again' }));
     await screen.findByText('a whole-plan run is executing this plan');
   });
@@ -256,6 +267,7 @@ describe('Verify again — run diagnosis modal', () => {
   it('the unverified blocker fires the page hook and the modal closes', async () => {
     epics = [epic([phase({ runOutcome: 'partial' })])];
     render(<PlansAt path={LIST} />);
+    await openRow();
     fireEvent.click(await screen.findByRole('button', { name: 'ran · 3/3' }));
     const dialog = await screen.findByRole('dialog', { name: 'Phase run diagnosis' });
     await within(dialog).findByText('the grade never landed');

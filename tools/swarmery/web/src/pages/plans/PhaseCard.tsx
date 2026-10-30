@@ -5,7 +5,7 @@
 // the phase-run lifecycle stays where it lives today.
 
 import type { MessageDescriptor } from '@lingui/core';
-import { msg } from '@lingui/core/macro';
+import { msg, plural } from '@lingui/core/macro';
 import { Trans, useLingui } from '@lingui/react/macro';
 import type { ReactNode } from 'react';
 import type {
@@ -299,10 +299,14 @@ export function PhaseCard({
     meta.push(t`ran ${span}`);
   }
   const done = String(phase.checkboxesDone);
-  const total = String(phase.checkboxesTotal);
   const before = String(phase.runCheckboxesBefore);
   meta.push(
-    `${t`${done} of ${total} criteria`}${phase.runCheckboxesBefore === null ? '' : ` ${t`(${before} before)`}`}`,
+    `${plural(phase.checkboxesTotal, {
+      one: `${done} of # criterion`,
+      few: `${done} of # criteria`,
+      many: `${done} of # criteria`,
+      other: `${done} of # criteria`,
+    })}${phase.runCheckboxesBefore === null ? '' : ` ${t`(${before} before)`}`}`,
   );
   if (phase.docUpdatedAt !== null) {
     const edited = fmtAgo(phase.docUpdatedAt);

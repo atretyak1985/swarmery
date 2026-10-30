@@ -9,7 +9,7 @@
 // above the panel in the plan's action row, like the plan-level panel's does.
 
 import type { MessageDescriptor } from '@lingui/core';
-import { msg, t } from '@lingui/core/macro';
+import { msg, plural, t } from '@lingui/core/macro';
 import { Trans, useLingui } from '@lingui/react/macro';
 import { useEffect, useId, useLayoutEffect, useRef, type ReactNode } from 'react';
 import type { Epic, EpicPhase } from '../../api/types';
@@ -38,10 +38,14 @@ export function phasePanelSubtitle(epic: Epic, phase: EpicPhase): string {
   const count = String(epic.phases.length);
   const seq = String(phase.seq);
   const done = String(phase.checkboxesDone);
-  const total = String(phase.checkboxesTotal);
   const parts = [
     at >= 0 ? t`Phase ${position} of ${count}` : t`Phase ${seq}`,
-    t`${done}/${total} criteria`,
+    plural(phase.checkboxesTotal, {
+      one: `${done}/# criterion`,
+      few: `${done}/# criteria`,
+      many: `${done}/# criteria`,
+      other: `${done}/# criteria`,
+    }),
   ];
   const model = phase.runModel ?? phase.docModel;
   if (model !== null) parts.push(modelShortName(model));

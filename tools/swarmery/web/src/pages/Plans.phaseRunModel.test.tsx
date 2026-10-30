@@ -301,6 +301,7 @@ describe('which model a finished run used (SC-6)', () => {
     render(
       <PlansAtRoute />,
     );
+    fireEvent.click(await screen.findByRole('button', { name: /^Phase 1 — / }));
     const chip = await screen.findByText('fable');
     // The full pinned ID stays reachable — the label shortens, it does not erase.
     expect(chip.getAttribute('data-tip')).toContain('claude-fable-5-1');
@@ -344,7 +345,7 @@ describe('which model a finished run used (SC-6)', () => {
     render(
       <PlansAtRoute />,
     );
-    await screen.findByText(/Running/);
+    await screen.findByText(/^running/);
     expect(screen.queryByText('opus')).toBeNull();
   });
 

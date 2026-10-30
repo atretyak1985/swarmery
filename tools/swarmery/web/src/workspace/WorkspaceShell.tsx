@@ -1,10 +1,11 @@
-// Workspace shell (fusion phase 4): the top-level chrome for project mode — a
-// slim header (wordmark linking back to the fleet, a theme toggle, daemon
-// health) above the ProjectWorkspaceLayout. It is a SIBLING of the fleet <App/>
-// (its own header + the same Sidebar scoped to the project + status bar), not
-// nested inside it, so project mode is a distinct full-screen surface rather
-// than a page within the fleet frame. Shared providers (ScopeProvider) live one
-// level up in RootProviders so both surfaces read the same project store.
+// Workspace shell (fusion phase 4): the top-level chrome for project mode, around
+// the ProjectWorkspaceLayout. On desktop that chrome is the sidebar alone
+// (Swarmery v4); below `desk`, where the sidebar is hidden, a slim header keeps
+// the wordmark linking back to the fleet, the switches and daemon health. It is a
+// SIBLING of the fleet <App/> (the same Sidebar scoped to the project + status
+// bar), not nested inside it, so project mode is a distinct full-screen surface
+// rather than a page within the fleet frame. Shared providers (ScopeProvider) live
+// one level up in RootProviders so both surfaces read the same project store.
 //
 // The way back to the fleet is the sidebar's project switcher ("All projects")
 // or the wordmark — the Sessions/Projects mode toggle was retired (Canvas v3).
@@ -33,14 +34,11 @@ export function WorkspaceShell(): JSX.Element {
     // sub-pixel row height (the mobile tab strip lands on a .5 boundary) rounds
     // up and the whole app gains a 1px document scroll.
     <div className="flex h-dvh flex-col overflow-hidden">
-      <header className="header-hairline relative z-20 flex h-14 shrink-0 items-center gap-4 bg-bg px-4 desk:px-6">
-        {/* Same fixed-width wordmark block as the fleet header (desk:w-[172px])
-            so the header chrome sits at the identical x-position in both
-            shells — no shift when switching scope. */}
+      <header className="header-hairline relative z-20 flex h-14 shrink-0 items-center gap-4 bg-bg px-4 desk:hidden">
         <Link
           to="/"
           aria-label={t`back to all projects`}
-          className="flex min-w-0 items-center font-sans text-[16px] leading-none font-extrabold tracking-[0.09em] text-ink uppercase transition-opacity hover:opacity-80 desk:w-[172px] desk:shrink-0"
+          className="flex min-w-0 items-center font-sans text-[16px] leading-none font-extrabold tracking-[0.09em] text-ink uppercase transition-opacity hover:opacity-80"
         >
           <Wordmark />
         </Link>

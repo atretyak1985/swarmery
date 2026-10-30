@@ -1,11 +1,11 @@
-// Desktop (≥1280px) right rail of the session detail (Redesign): usage blocks
-// first — MODELS (purple, share of tokens), AGENTS (blue, runs × duration),
-// SKILLS (amber, uses) — each in its own card with a per-row bar showing how
-// much it was used relative to the group's top entry. Then the CALL TREE (who
-// called what: skills → tools → subagents, recursive) and FILES CHANGED
-// aggregated per path (one row per file, +/− summed across all its edits,
-// sorted by churn). Everything is derived client-side from the already-loaded
-// detail — no extra API calls. Mobile keeps the SummaryChips strip instead.
+// What used to be the session detail's right rail, now a fold under the Steps
+// ledger (plan D-4): the handoff brief, context hogs, then usage blocks — MODELS,
+// AGENTS, SKILLS — each in its own card with a per-row bar showing how much it was
+// used relative to the group's top entry. Then the CALL TREE (who called what:
+// skills → tools → subagents, recursive) and FILES CHANGED aggregated per path
+// (one row per file, +/− summed across all its edits, sorted by churn). Category
+// gets no colour (handoff §4), so the bars are neutral. Everything is derived
+// client-side from the already-loaded detail — no extra API calls.
 
 import { Trans, useLingui } from '@lingui/react/macro';
 import { useMemo } from 'react';
@@ -210,17 +210,17 @@ export function DetailRail({
   }
 
   return (
-    <div className="flex min-w-0 flex-col gap-2.5">
+    <div className="grid min-w-0 grid-cols-[repeat(auto-fit,minmax(280px,1fr))] items-start gap-2.5">
       {handoff != null && <HandoffCard sessionId={sessionId} handoffPath={handoff.path} />}
       <ContextHogsCard sessionId={sessionId} />
       {models.length > 0 && (
-        <UsageBlock label={t`models`} labelTone="text-purple/70" barTone="bg-purple/60" rows={models} />
+        <UsageBlock label={t`models`} labelTone="text-ink-dim" barTone="bg-ink-dim/60" rows={models} />
       )}
       {agents.length > 0 && (
-        <UsageBlock label={t`agents`} labelTone="text-blue/70" barTone="bg-blue/60" rows={agents} />
+        <UsageBlock label={t`agents`} labelTone="text-ink-dim" barTone="bg-ink-dim/60" rows={agents} />
       )}
       {skills.length > 0 && (
-        <UsageBlock label={t`skills`} labelTone="text-amber/70" barTone="bg-amber/60" rows={skills} />
+        <UsageBlock label={t`skills`} labelTone="text-ink-dim" barTone="bg-ink-dim/60" rows={skills} />
       )}
 
       {tree.length > 0 && <CallTreeCard nodes={tree} />}

@@ -213,9 +213,9 @@ async function back(r: Router): Promise<void> {
 }
 
 function listItem(title: string): HTMLElement {
-  const item = screen
-    .getAllByRole('link')
-    .find((l) => l.hasAttribute('aria-current') && l.textContent?.includes(title));
+  const item = [...document.querySelectorAll<HTMLElement>('[data-plan-group] a')].find((l) =>
+    l.textContent?.includes(title),
+  );
   if (item === undefined) throw new Error(`no plan list item "${title}"`);
   return item;
 }
@@ -253,6 +253,11 @@ function LinkTabsHarness({ onChange }: { onChange: (id: Id) => void }): JSX.Elem
   const value = (new URLSearchParams(search).get('t') ?? 'one') as Id;
   const tabs = IDS.map((id) => ({ id, label: id, href: `/tabs?t=${id}` }));
   return <Tabs tabs={tabs} value={value} onChange={onChange} ariaLabel="link tabs" />;
+}
+
+function PlainTabsHarness(): JSX.Element {
+  const [v, setV] = useState<Id>('one');
+  return <Tabs tabs={IDS.map((id) => ({ id, label: id }))} value={v} onChange={setV} ariaLabel="plain" />;
 }
 
 describe('Tabs — an href tab is a link', () => {
@@ -314,11 +319,7 @@ describe('Tabs — an href tab is a link', () => {
   });
 
   it('button tabs still switch through onChange on the arrow keys (no router needed)', () => {
-    function Local(): JSX.Element {
-      const [v, setV] = useState<Id>('one');
-      return <Tabs tabs={IDS.map((id) => ({ id, label: id }))} value={v} onChange={setV} ariaLabel="plain" />;
-    }
-    render(<Local />);
+    render(<PlainTabsHarness />);
     fireEvent.keyDown(screen.getByRole('tablist', { name: 'plain' }), { key: 'End' });
     expect(screen.getByRole('tab', { name: 'three' }).getAttribute('aria-selected')).toBe('true');
     expect(document.activeElement).toBe(screen.getByRole('tab', { name: 'three' }));
@@ -353,7 +354,7 @@ describe('useTabParam — replace by default, push on request (SC-10)', () => {
 // ---------------------------------------------------------------------------
 
 describe('SC-9 — every selection is a real anchor with its canonical href', () => {
-  it('plan list items, filter tabs, phase names and the PlansPlace top tabs', async () => {
+  it('plan list items and phase names', async () => {
     mount(`${BASE}/${B.externalId}?scope=swarmery`);
     await waitFor(() => {
       expect(listItem('Beta').getAttribute('aria-current')).toBe('true');
@@ -361,26 +362,18 @@ describe('SC-9 — every selection is a real anchor with its canonical href', ()
     expect(listItem('Alpha').getAttribute('href')).toBe(`${BASE}/${A.externalId}?scope=swarmery`);
     expect(listItem('Beta').tagName).toBe('A');
 
-    expect(tabIn('plan status filter', /^active/).getAttribute('href')).toBe(`${BASE}?scope=swarmery`);
-    expect(tabIn('plan status filter', /^done/).getAttribute('href')).toBe(`${BASE}?scope=swarmery&status=done`);
-    expect(tabIn('plan status filter', /^archived/).getAttribute('href')).toBe(
-      `${BASE}?scope=swarmery&status=archived`,
-    );
 
     const name = screen.getByRole('link', { name: 'Beta 2' });
     expect(name.getAttribute('href')).toBe(`${BASE}/${B.externalId}/phase/2?scope=swarmery`);
     // The row keeps its button role; the anchor is only the name inside it.
-    expect(screen.getByRole('button', { name: 'open Phase 2 — Beta 2 details' }).contains(name)).toBe(true);
+    expect(screen.getByRole('button', { name: 'Phase 2 — Beta 2' }).contains(name)).toBe(true);
 
-    expect(tabIn('Plans', /^Plans$/).getAttribute('href')).toBe(`${BASE}/${B.externalId}?scope=swarmery`);
-    // Board and Playbooks are parked (lib/parked.ts): out of the strip.
-    const strip = within(screen.getByRole('tablist', { name: 'Plans' }));
-    expect(strip.queryByRole('tab', { name: /^Board$/ })).toBeNull();
-    expect(strip.queryByRole('tab', { name: /^Playbooks$/ })).toBeNull();
-    expect(tabIn('Plans', /^New plan$/).getAttribute('href')).toBe(`${BASE}?scope=swarmery&tab=new`);
+    // Plans draws no tabs: `+ new` opens New plan, ⌘K reaches Board and Playbooks.
+    expect(screen.queryByRole('tablist', { name: 'Plans' })).toBeNull();
+    expect(screen.getByRole('button', { name: '+ new' })).toBeTruthy();
   });
 
-  it('a plan row stays a link while its copy-id chip stays a separate control', async () => {
+  it('the plan id is copied from the header, and copying navigates nowhere', async () => {
     const realClipboard = Object.getOwnPropertyDescriptor(navigator, 'clipboard');
     const writeText = vi.fn().mockResolvedValue(undefined);
     Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
@@ -390,18 +383,14 @@ describe('SC-9 — every selection is a real anchor with its canonical href', ()
         expect(listItem('Beta').getAttribute('aria-current')).toBe('true');
       });
       const link = listItem('Alpha');
-      const chip = screen.getByRole('button', { name: `copy id: ${A.externalId}` });
-      // No <button> inside the <a>: the chip is a sibling, so the link's name is
-      // the plan title alone.
-      expect(link.contains(chip)).toBe(false);
+      const chip = screen.getByRole('button', { name: `copy id: ${B.externalId}` });
+      // A row is one link with nothing interactive inside it.
       expect(link.querySelector('button')).toBeNull();
-      expect(link.textContent).toBe('Alpha');
 
       await act(async () => {
         fireEvent.click(chip);
       });
-      expect(writeText).toHaveBeenCalledWith(A.externalId);
-      // Copying never selects the row.
+      expect(writeText).toHaveBeenCalledWith(B.externalId);
       expect(at(r)).toBe(`${BASE}/${B.externalId}?scope=swarmery`);
 
       fireEvent.click(link);
@@ -453,7 +442,7 @@ describe('SC-10 — the PlansPlace top tabs switch with push', () => {
     await waitFor(() => {
       expect(listItem('Beta').getAttribute('aria-current')).toBe('true');
     });
-    fireEvent.click(tabIn('Plans', /^New plan$/));
+    fireEvent.click(screen.getByRole('button', { name: '+ new' }));
     await settled(r, `${BASE}?tab=new`);
     expect(r.state.historyAction).toBe('PUSH');
     await screen.findByText('new plan body');
@@ -475,6 +464,9 @@ describe('SC-10 — the PlansPlace top tabs switch with push', () => {
     const strip = within(screen.getByRole('tablist', { name: 'Plans' }));
     expect(strip.getByRole('tab', { name: /^Board$/ }).getAttribute('aria-selected')).toBe('true');
     expect(strip.queryByRole('tab', { name: /^Playbooks$/ })).toBeNull();
+    // The strip is the way back from a body that has no list of its own.
+    expect(tabIn('Plans', /^Plans$/).getAttribute('href')).toBe(BASE);
+    expect(tabIn('Plans', /^New plan$/).getAttribute('href')).toBe(`${BASE}?tab=new`);
   });
 });
 

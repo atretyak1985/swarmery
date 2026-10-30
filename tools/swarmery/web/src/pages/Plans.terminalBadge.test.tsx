@@ -177,13 +177,13 @@ function stubFetch(): void {
 }
 
 function phaseRow(seq: number, name: string): HTMLElement {
-  return screen.getByRole('button', { name: `open Phase ${String(seq)} — ${name} details` });
+  return screen.getByRole('button', { name: `Phase ${String(seq)} — ${name}` });
 }
 
 async function mountPlans(): Promise<void> {
   render(<PlansAtRoute />);
   await waitFor(() => {
-    expect(screen.getByRole('button', { name: /open Phase 1/ })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /^Phase 1/ })).toBeTruthy();
   });
 }
 
@@ -332,7 +332,7 @@ describe('terminal badge on the Plans page', () => {
     // Leave plan A while its terminal-sessions call is still out.
     fireEvent.click(screen.getByRole('link', { name: /plan beta/ }));
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: /open Phase 1 — Beta work/ })).toBeTruthy();
+      expect(screen.getByRole('button', { name: /^Phase 1 — Beta work/ })).toBeTruthy();
     });
     await waitFor(() => {
       expect(terminalCalls).toContain(TASK_B);
