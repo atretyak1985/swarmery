@@ -105,11 +105,6 @@ export function comparePlanRows(a: Session, b: Session): number {
   return b.startedAt.localeCompare(a.startedAt);
 }
 
-/** A run is "running" while any row is live or blocked on an approval. */
-export function runIsRunning(rows: readonly Session[]): boolean {
-  return rows.some((r) => r.status === 'active' || r.status === 'waiting_approval');
-}
-
 /** Per-status tallies for a run header, in the page's chip vocabulary. */
 export function statusSummary(rows: readonly Session[]): string {
   const counts: Record<SessionStatus, number> = {
@@ -315,23 +310,6 @@ export function linkSelection(days: readonly DayBucket[], selected: readonly num
   const visible = selected.filter((id) => ids.has(id));
   const onScreen = selected.filter((id) => shownIds.has(id)).length;
   return { selectable, visible, hidden: selected.length - onScreen, notPolling: onScreen - visible.length };
-}
-
-/** How many session ROWS the given buckets render (run rows included). */
-export function countSessions(days: readonly DayBucket[]): number {
-  let n = 0;
-  for (const d of days) {
-    for (const it of d.items) n += it.kind === 'run' ? it.group.rows.length : 1;
-  }
-  return n;
-}
-
-export function countRuns(days: readonly DayBucket[]): number {
-  let n = 0;
-  for (const d of days) {
-    for (const it of d.items) if (it.kind === 'run') n += 1;
-  }
-  return n;
 }
 
 /* ----- the groups of the list (handoff §5) -------------------------------- */
