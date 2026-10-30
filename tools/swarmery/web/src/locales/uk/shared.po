@@ -1914,6 +1914,10 @@ msgstr "заповнено зондом"
 msgid "filled by probe · {moreCount} more suggested"
 msgstr "заповнено зондом · ще {moreCount} запропоновано"
 
+#: src/components/place/PageDetail.tsx
+msgid "filter"
+msgstr "фільтр"
+
 #: src/workspace/AgentPicker.tsx
 msgid "filter agents"
 msgstr "фільтр агентів"
@@ -2652,6 +2656,10 @@ msgstr "Примітка: {runNote}"
 #: src/workspace/boardModel.ts
 msgid "Nothing in {laneTitle} matches “{filterLabel}”."
 msgstr "У доріжці {laneTitle} нічого не відповідає «{filterLabel}»."
+
+#: src/components/place/PageDetail.tsx
+msgid "Nothing matches."
+msgstr "Нічого не знайдено."
 
 #: src/components/DetachModal.tsx
 msgid "nothing to remove"

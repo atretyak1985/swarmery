@@ -17,10 +17,6 @@ msgstr ""
 msgid " — no cached model has a pricing entry, so no $ estimate"
 msgstr " — у жодної кешованої моделі немає запису про ціну, тож оцінки в $ немає"
 
-#: src/pages/health/Health.tsx
-msgid " · ${spent} spent"
-msgstr " · витрачено ${spent}"
-
 #: src/pages/Lessons.tsx
 msgid " · auto-retires {autoRetires}"
 msgstr " · автосписання {autoRetires}"
@@ -123,17 +119,36 @@ msgstr "{0, plural, one {# помилка validate} few {# помилки valida
 msgid "{0, plural, one {No group has # scored run yet.} few {No group has # scored runs yet.} many {No group has # scored runs yet.} other {No group has # scored runs yet.}}"
 msgstr "{0, plural, one {Жодна група ще не має # оціненого запуску.} few {Жодна група ще не має # оцінених запусків.} many {Жодна група ще не має # оцінених запусків.} other {Жодна група ще не має # оціненого запуску.}}"
 
+#. placeholder {0}: String(candidates)
+#: src/pages/learning/Learning.tsx
+msgid "{0} candidates · retirements · every status"
+msgstr "{0} кандидатів · списання · усі статуси"
+
+#. placeholder {0}: String(ordered.length - candidates)
+#. placeholder {1}: String(candidates)
+#: src/pages/learning/Learning.tsx
+msgid "{0} lessons in force · {1} candidates"
+msgstr "{0} уроків у силі · {1} кандидатів"
+
 #: src/pages/inbox/inboxModel.ts
 msgid "{action} · agent's suggestion"
 msgstr "{action} · пропозиція агента"
 
-#: src/pages/health/Health.tsx
-msgid "{advisorOpen} open"
-msgstr "{advisorOpen} відкритих"
-
 #: src/pages/inbox/HandledList.tsx
 msgid "{age} ago"
 msgstr "{age} тому"
+
+#: src/pages/health/HealthOverview.tsx
+msgid "{agent} carries the most failures: {figure}."
+msgstr "Найбільше збоїв у {agent}: {figure}."
+
+#: src/pages/health/HealthOverview.tsx
+msgid "{agent}: {failed} of {runs} runs failed, down from {was}."
+msgstr "{agent}: збій у {failed} з {runs} запусків, було {was}."
+
+#: src/pages/health/HealthOverview.tsx
+msgid "{agent}: {failed} of {runs} runs failed."
+msgstr "{agent}: збій у {failed} з {runs} запусків."
 
 #: src/pages/Retro.tsx
 msgid "{agentRuns} in this window, and {errorEvents} across them and the orchestrator."
@@ -184,6 +199,10 @@ msgstr "{completion}% виконання · {perDay}/день"
 msgid "{costN, plural, one {# run(s)} few {# run(s)} many {# run(s)} other {# run(s)}} with a known cost"
 msgstr "{costN, plural, one {# запуск} few {# запуски} many {# запусків} other {# запуску}} із відомою вартістю"
 
+#: src/pages/health/HealthOverview.tsx
+msgid "{count, plural, one {# friction you can remove today.} few {# frictions you can remove today.} many {# frictions you can remove today.} other {# frictions you can remove today.}}"
+msgstr "{count, plural, one {# тертя можна прибрати сьогодні.} few {# тертя можна прибрати сьогодні.} many {# тертів можна прибрати сьогодні.} other {# тертя можна прибрати сьогодні.}}"
+
 #: src/pages/Retro.tsx
 msgid "{count, plural, one {# task} few {# tasks} many {# tasks} other {# tasks}}"
 msgstr "{count, plural, one {# задача} few {# задачі} many {# задач} other {# задачі}}"
@@ -221,9 +240,14 @@ msgid "{errs} err"
 msgstr "{errs} пом."
 
 #: src/pages/health/FrictionTriageStrip.tsx
+#: src/pages/health/healthPlace.ts
 #: src/pages/inbox/TriageBanner.tsx
 msgid "{failed} failed"
 msgstr "{failed} невдалих"
+
+#: src/pages/health/healthPlace.ts
+msgid "{failed} failed · {agent} moved it most"
+msgstr "збій {failed} · найбільше вплинув {agent}"
 
 #: src/pages/health/PhaseRunsTab.tsx
 msgid "{fallbackN, plural, one {# more run(s) ended in the window with no actuals row ({fallback}) — counted here only.} few {# more run(s) ended in the window with no actuals row ({fallback}) — counted here only.} many {# more run(s) ended in the window with no actuals row ({fallback}) — counted here only.} other {# more run(s) ended in the window with no actuals row ({fallback}) — counted here only.}}"
@@ -257,6 +281,26 @@ msgstr "{groups, plural, one {# група} few {# групи} many {# груп}
 msgid "{groups} · agents are checked by rule"
 msgstr "{groups} · агентів перевіряють за правилом"
 
+#: src/pages/health/healthPlace.ts
+msgid "{head} · {failed} failed"
+msgstr "{head} · збій {failed}"
+
+#: src/pages/health/healthPlace.ts
+msgid "{head} · {failed} failed · was {was}"
+msgstr "{head} · збій {failed} · було {was}"
+
+#: src/pages/health/healthModel.ts
+msgid "{head} · {window} d · {failed} failed"
+msgstr "{head} · {window} д · збій {failed}"
+
+#: src/pages/health/healthModel.ts
+msgid "{head} · {window} d · {failed} failed, down from {prev}"
+msgstr "{head} · {window} д · збій {failed}, було {prev}"
+
+#: src/pages/health/healthModel.ts
+msgid "{head} · {window} d · {failed} failed, up from {prev}"
+msgstr "{head} · {window} д · збій {failed}, було {prev}"
+
 #: src/pages/health/healthModel.ts
 msgid "{head}; almost all of the change is {agent}."
 msgstr "{head}; майже вся зміна — це {agent}."
@@ -280,6 +324,10 @@ msgstr "{healthLabel} · {failedPct}% невдалих запусків"
 #: src/pages/LessonsCalibration.tsx
 msgid "{hiddenGroups} group(s) with {hiddenRuns} run(s) hidden: fewer than {minSamples} samples each."
 msgstr "Приховано груп: {hiddenGroups}, запусків: {hiddenRuns} — менш ніж {minSamples} зразків у кожній."
+
+#: src/pages/health/HealthOverview.tsx
+msgid "{hot, plural, one {# agent still sits above the {line} % line.} few {# agents still sit above the {line} % line.} many {# agents still sit above the {line} % line.} other {# agents still sit above the {line} % line.}}"
+msgstr "{hot, plural, one {# агент досі вище межі {line} %.} few {# агенти досі вище межі {line} %.} many {# агентів досі вище межі {line} %.} other {# агента досі вище межі {line} %.}}"
 
 #: src/pages/system/ItemDetail.tsx
 msgid "{itemName} sections"
@@ -391,9 +439,18 @@ msgstr "{rewrites, plural, one {# переписаний агент} few {# пе
 msgid "{rowName} × {colName}: {cell} runs"
 msgstr "{rowName} × {colName}: {cell} запусків"
 
+#: src/pages/health/healthPlace.ts
+msgid "{rule} · {target} · also in Inbox"
+msgstr "{rule} · {target} · також у Вхідних"
+
 #: src/pages/health/healthModel.ts
 msgid "{runs, plural, one {# run · {failed} failed} few {# runs · {failed} failed} many {# runs · {failed} failed} other {# runs · {failed} failed}}"
 msgstr "{runs, plural, one {# запуск · {failed} невдалих} few {# запуски · {failed} невдалих} many {# запусків · {failed} невдалих} other {# запуску · {failed} невдалих}}"
+
+#: src/pages/health/healthModel.ts
+#: src/pages/health/healthPlace.ts
+msgid "{runs, plural, one {# run} few {# runs} many {# runs} other {# runs}}"
+msgstr "{runs, plural, one {# запуск} few {# запуски} many {# запусків} other {# запуску}}"
 
 #: src/pages/RoutingReport.tsx
 msgid "{runs, plural, one {# runs} few {# runs} many {# runs} other {# runs}}, {failRate} fail, {meanCost} mean"
@@ -432,6 +489,18 @@ msgstr "{suggestionTotal, plural, one {# пропозиція} few {# пропо
 msgid "{tokens} tokens over {days} days — {topName} led at {share}%."
 msgstr "{tokens} токенів за {days} днів — лідер {topName} із {share}%."
 
+#: src/pages/health/healthPlace.ts
+msgid "{tool} denied {count}×"
+msgstr "{tool} відхилено {count}×"
+
+#: src/pages/health/healthPlace.ts
+msgid "{tool} denied {denied} of {calls} times"
+msgstr "{tool} відхилено {denied} із {calls} разів"
+
+#: src/pages/health/HealthOverview.tsx
+msgid "{tool} denied {deniedCount} of {callCount} times"
+msgstr "{tool} відхилено {deniedCount} із {callCount} разів"
+
 #: src/pages/Analytics.tsx
 msgid "{toolCalls} calls"
 msgstr "{toolCalls} викликів"
@@ -468,6 +537,10 @@ msgstr "{unreadableCount} не читається"
 #: src/pages/health/FrictionTriageStrip.tsx
 msgid "{untriaged, plural, one {# untriaged group} few {# untriaged groups} many {# untriaged groups} other {# untriaged groups}}"
 msgstr "{untriaged, plural, one {# невідсортована група} few {# невідсортовані групи} many {# невідсортованих груп} other {# невідсортованої групи}}"
+
+#: src/pages/learning/Learning.tsx
+msgid "{uses, plural, one {reached # run} few {reached # runs} many {reached # runs} other {reached # runs}}"
+msgstr "{uses, plural, one {охопив # запуск} few {охопив # запуски} many {охопив # запусків} other {охопив # запуску}}"
 
 #: src/pages/health/healthModel.ts
 msgid "{verified, plural, one {# change} few {# changes} many {# changes} other {# changes}}"
@@ -546,9 +619,25 @@ msgstr "✓ правильно, усі {groupSize}"
 msgid "$ Cost"
 msgstr "$ Вартість"
 
+#: src/pages/health/healthPlace.ts
+msgid "${spent} in this window"
+msgstr "${spent} за цей період"
+
+#: src/pages/health/Health.tsx
+msgid "${spent} spent in this window."
+msgstr "Витрачено ${spent} за цей період."
+
+#: src/pages/Lessons.tsx
+msgid "A candidate: it reaches no run until you accept it."
+msgstr "Кандидат: він не потрапить у жоден запуск, доки ви його не приймете."
+
 #: src/pages/inbox/InboxDetail.tsx
 msgid "A change to {agent}, drafted from its evidence"
 msgstr "Зміна для {agent}, підготована з його доказів"
+
+#: src/pages/knowledge/Knowledge.tsx
+msgid "A file the project remembers and loads when a run needs it. Edit it if it has gone stale."
+msgstr "Файл, який проєкт пам’ятає й завантажує, коли він потрібен запуску. Відредагуйте його, якщо він застарів."
 
 #: src/pages/learning/classifierModel.ts
 msgid "a finished session did not ship"
@@ -588,6 +677,7 @@ msgstr "На дошці проєкту створюється задача з т
 #: src/pages/inbox/inboxModel.ts
 #: src/pages/inbox/inboxModel.ts
 #: src/pages/Lessons.tsx
+#: src/pages/Lessons.tsx
 msgid "accept"
 msgstr "прийняти"
 
@@ -623,6 +713,10 @@ msgstr "Прийняття створює задачу на дошці проє�
 msgid "accepting…"
 msgstr "приймаємо…"
 
+#: src/pages/knowledge/Knowledge.tsx
+msgid "access"
+msgstr "доступ"
+
 #: src/pages/inbox/InboxDetail.tsx
 #: src/pages/inbox/inboxModel.ts
 msgid "Account {account} is paused"
@@ -657,13 +751,22 @@ msgstr "додайте блок H1 <0># How to use</0> у кінці того ф
 msgid "advisor"
 msgstr "радник"
 
-#: src/pages/health/Health.tsx
+#: src/pages/health/healthPlace.ts
 msgid "Advisor"
 msgstr "Радник"
+
+#: src/pages/health/Health.tsx
+#: src/pages/health/Health.tsx
+msgid "advisor · open"
+msgstr "радник · відкрито"
 
 #: src/pages/inbox/inboxModel.ts
 msgid "advisor noticed"
 msgstr "радник помітив"
+
+#: src/pages/Lessons.tsx
+msgid "after"
+msgstr "після"
 
 #: src/pages/Analytics.tsx
 #: src/pages/Analytics.tsx
@@ -721,7 +824,7 @@ msgid "agents"
 msgstr "агенти"
 
 #: src/pages/AgentHub.tsx
-#: src/pages/health/Health.tsx
+#: src/pages/health/healthPlace.ts
 #: src/pages/SystemShell.tsx
 msgid "Agents"
 msgstr "Агенти"
@@ -734,7 +837,7 @@ msgstr "збіг"
 msgid "alert"
 msgstr "сповіщення"
 
-#: src/pages/health/Health.tsx
+#: src/pages/health/HealthOverview.tsx
 msgid "alerting → Inbox"
 msgstr "сповіщає → Вхідні"
 
@@ -747,13 +850,17 @@ msgstr "сповіщення"
 msgid "all"
 msgstr "усі"
 
-#: src/pages/health/HealthOverview.tsx
-msgid "all {agentCount} agents → Agents tab"
-msgstr "усі {agentCount} агентів → вкладка «Агенти»"
-
 #: src/pages/Analytics.tsx
 msgid "all agents"
 msgstr "усі агенти"
+
+#: src/pages/health/healthPlace.ts
+msgid "All agents"
+msgstr "Усі агенти"
+
+#: src/pages/health/HealthOverview.tsx
+msgid "all agents →"
+msgstr "усі агенти →"
 
 #: src/pages/system/InsightsTab.tsx
 msgid "all copies share one content hash — a clean promotion, no reconciliation needed"
@@ -762,6 +869,10 @@ msgstr "усі копії мають один хеш вмісту — чисте
 #: src/pages/LessonsCalibration.tsx
 msgid "all four"
 msgstr "усі чотири"
+
+#: src/pages/health/Health.tsx
+msgid "all projects"
+msgstr "усі проєкти"
 
 #: src/pages/inbox/Inbox.tsx
 msgid "All reviewed."
@@ -774,6 +885,10 @@ msgstr "усі області"
 #: src/pages/Architecture.tsx
 msgid "already current"
 msgstr "уже актуальна"
+
+#: src/pages/health/HealthOverview.tsx
+msgid "always allow {tool}"
+msgstr "завжди дозволяти {tool}"
 
 #: src/pages/inbox/inboxModel.ts
 msgid "An agent drafts a change to its instructions. Nothing is applied: the draft comes back to this Inbox for your approval."
@@ -869,6 +984,7 @@ msgid "architecture map"
 msgstr "карта архітектури"
 
 #: src/pages/Architecture.tsx
+#: src/pages/knowledge/Knowledge.tsx
 msgid "Architecture map"
 msgstr "Карта архітектури"
 
@@ -904,8 +1020,8 @@ msgstr "Питання ставляться й записуються; відп�
 msgid "At the start of each turn the swarmery link mod forecasts the files it will touch, whether tests pass and how many steps it takes; the daemon scores that against what happened. A forecast held when its surprise stayed under 0.25. Advisory only — nothing here gates or alerts."
 msgstr "На початку кожного ходу мод swarmery link прогнозує, які файли він зачепить, чи пройдуть тести і скільки кроків знадобиться; демон звіряє прогноз із тим, що сталося насправді. Прогноз справдився, якщо його здивування лишилося нижче 0.25. Лише для довідки — тут нічого не блокує і не надсилає сповіщень."
 
-#: src/pages/health/Health.tsx
-#: src/pages/health/Health.tsx
+#: src/pages/health/HealthOverview.tsx
+#: src/pages/health/HealthOverview.tsx
 msgid "Auto mode permission check"
 msgstr "Перевірка дозволів авторежиму"
 
@@ -924,6 +1040,10 @@ msgstr "Автопам’ять"
 #: src/pages/Analytics.tsx
 msgid "Autonomy"
 msgstr "Автономність"
+
+#: src/pages/health/HealthOverview.tsx
+msgid "average run"
+msgstr "середній запуск"
 
 #: src/pages/Analytics.tsx
 #: src/pages/Analytics.tsx
@@ -951,9 +1071,14 @@ msgstr "чекаємо на покращення ≥{pct}%"
 msgid "because of you"
 msgstr "завдяки вам"
 
+#: src/pages/learning/Learning.tsx
 #: src/pages/learning/Proof.tsx
 msgid "Because of you"
 msgstr "Завдяки вам"
+
+#: src/pages/health/HealthOverview.tsx
+msgid "before"
+msgstr "до"
 
 #: src/pages/system/SkillsToExtendHint.tsx
 msgid "Before proposing a new agent, extend an existing skill."
@@ -1047,6 +1172,10 @@ msgstr "Кеш віддав {pct}% токенів промпту за цей д�
 msgid "Cache served {pct}% of prompt tokens this range."
 msgstr "Кеш віддав {pct}% токенів промпту за цей діапазон."
 
+#: src/pages/learning/Learning.tsx
+msgid "Calibration"
+msgstr "Калібрування"
+
 #: src/pages/learning/TurnForecastPanel.tsx
 msgid "Calibration by confidence bin"
 msgstr "Калібрування за інтервалами упевненості"
@@ -1056,6 +1185,7 @@ msgid "calibration views"
 msgstr "вигляди калібрування"
 
 #: src/pages/Analytics.tsx
+#: src/pages/health/HealthOverview.tsx
 #: src/pages/Retro.tsx
 #: src/pages/system/ModsTab.tsx
 #: src/pages/system/ModsTab.tsx
@@ -1078,6 +1208,10 @@ msgstr "може схвалювати виклики інструментів"
 msgid "cancel"
 msgstr "скасувати"
 
+#: src/pages/learning/Learning.tsx
+msgid "candidate"
+msgstr "кандидат"
+
 #: src/pages/Lessons.tsx
 msgid "candidates"
 msgstr "пропоновані"
@@ -1085,6 +1219,11 @@ msgstr "пропоновані"
 #: src/pages/Lessons.tsx
 msgid "cause:"
 msgstr "причина:"
+
+#. placeholder {0}: lesson.cause
+#: src/pages/Lessons.tsx
+msgid "cause: {0}"
+msgstr "причина: {0}"
 
 #: src/pages/Retro.tsx
 msgid "change detected — {until}"
@@ -1203,6 +1342,10 @@ msgstr "впевнений, але хибний"
 msgid "Config"
 msgstr "Конфіг"
 
+#: src/pages/knowledge/Knowledge.tsx
+msgid "consolidate · lines that went stale"
+msgstr "ущільнення · застарілі рядки"
+
 #: src/pages/Memory.tsx
 msgid "Consolidate index"
 msgstr "Консолідувати індекс"
@@ -1266,6 +1409,7 @@ msgid "Cost / task"
 msgstr "Вартість / задача"
 
 #: src/pages/health/Health.tsx
+#: src/pages/health/healthPlace.ts
 msgid "Cost & tokens"
 msgstr "Вартість і токени"
 
@@ -1322,9 +1466,17 @@ msgstr "Сер. за день"
 msgid "Dead components"
 msgstr "Мертві компоненти"
 
+#: src/pages/health/HealthOverview.tsx
+msgid "decide in Inbox →"
+msgstr "вирішити у Вхідних →"
+
 #: src/pages/learning/Proof.tsx
 msgid "decide something in the Inbox →"
 msgstr "вирішіть щось у Вхідних →"
+
+#: src/pages/health/HealthOverview.tsx
+msgid "decisions"
+msgstr "рішення"
 
 #: src/pages/learning/TurnForecastPanel.tsx
 msgid "declared confidence"
@@ -1357,6 +1509,7 @@ msgid "deleted"
 msgstr "видалено"
 
 #: src/pages/Analytics.tsx
+#: src/pages/health/HealthOverview.tsx
 #: src/pages/Retro.tsx
 msgid "denied"
 msgstr "відхилено"
@@ -1368,6 +1521,14 @@ msgstr "відхилено {deniedCount}× · з {callCount} викликів"
 #: src/pages/Retro.tsx
 msgid "Denied tools"
 msgstr "Заборонені інструменти"
+
+#: src/pages/health/healthPlace.ts
+msgid "denied tools · repeating errors · approvals"
+msgstr "відхилені інструменти · повторювані помилки · дозволи"
+
+#: src/pages/knowledge/Knowledge.tsx
+msgid "dependency graph"
+msgstr "граф залежностей"
 
 #: src/pages/system/CreateAgentForm.tsx
 msgid "description"
@@ -1423,6 +1584,7 @@ msgstr "відкинути мої зміни"
 #: src/pages/inbox/inboxModel.ts
 #: src/pages/inbox/TriageBanner.tsx
 #: src/pages/inbox/TriageBanner.tsx
+#: src/pages/Lessons.tsx
 #: src/pages/Lessons.tsx
 #: src/pages/Retro.tsx
 msgid "dismiss"
@@ -1497,6 +1659,7 @@ msgid "Each row will be something you accepted, what the system did with it, and
 msgstr "Кожен рядок буде тим, що ви прийняли, що система з цим зробила і чи справді зрушив показник, який це мало зрушити, — для перевірки потрібен тиждень трафіку і зміна на 20 %."
 
 #: src/pages/Lessons.tsx
+#: src/pages/Lessons.tsx
 #: src/pages/Memory.tsx
 #: src/pages/system/HooksTab.tsx
 msgid "edit"
@@ -1518,6 +1681,10 @@ msgstr "редагуйте / вмикайте / вимикайте цей хук
 #: src/pages/inbox/InboxDetail.tsx
 msgid "edit wording →"
 msgstr "змінити формулювання →"
+
+#: src/pages/Lessons.tsx
+msgid "effectiveness"
+msgstr "ефективність"
 
 #: src/pages/Lessons.tsx
 msgid "effectiveness:"
@@ -1568,6 +1735,7 @@ msgid "error rate"
 msgstr "частка помилок"
 
 #: src/pages/Analytics.tsx
+#: src/pages/health/HealthOverview.tsx
 #: src/pages/system-hub/Profiles.tsx
 #: src/pages/system/ModsTab.tsx
 msgid "errors"
@@ -1593,10 +1761,11 @@ msgstr "Заощаджено (оц.)"
 msgid "Estimate only — {formula} (Fusion's constant). Not a measured figure."
 msgstr "Лише оцінка — {formula} (константа Fusion). Не виміряне значення."
 
-#: src/pages/health/Health.tsx
+#: src/pages/health/healthPlace.ts
 msgid "Estimates"
 msgstr "Оцінки"
 
+#: src/pages/health/healthPlace.ts
 #: src/pages/Retro.tsx
 msgid "Estimation accuracy"
 msgstr "Точність оцінок"
@@ -1618,6 +1787,10 @@ msgstr "події"
 msgid "every agent and skill was used in the last 30 days"
 msgstr "кожен агент і скіл використовувався за останні 30 днів"
 
+#: src/pages/health/Health.tsx
+msgid "Every agent, scored over this window."
+msgstr "Кожен агент з оцінкою за цей період."
+
 #: src/pages/system/InsightsTab.tsx
 msgid "every component carries a complete usage guide"
 msgstr "кожен компонент має повний посібник із використання"
@@ -1631,6 +1804,10 @@ msgstr "кожен увімкнений плагін розв’язується
 msgid "Every future run touching {areas} gets this sentence in its brief. We then watch whether those runs land closer to plan."
 msgstr "Кожен наступний запуск, що торкається {areas}, отримає це речення у своєму брифі. Далі ми дивимося, чи ближче до плану лягають такі запуски."
 
+#: src/pages/learning/Learning.tsx
+msgid "Every lesson, and what waits for a decision."
+msgstr "Усі уроки і те, що чекає на рішення."
+
 #: src/pages/inbox/ReviewItem.tsx
 msgid "Every phase of this plan finished. A read-only reviewer read all of their run branches together, looking at the seams between phases — what one phase hands over and another expects. Nothing was blocked or re-run."
 msgstr "Усі фази цього плану завершені. Рев’юер без права на запис прочитав усі їхні гілки запусків разом, дивлячись на шви між фазами — що одна фаза передає, а інша очікує. Нічого не заблоковано і не перезапущено."
@@ -1638,6 +1815,10 @@ msgstr "Усі фази цього плану завершені. Рев’юе�
 #: src/pages/system/InsightsTab.tsx
 msgid "every project"
 msgstr "кожен проєкт"
+
+#: src/pages/Lessons.tsx
+msgid "every run"
+msgstr "кожен запуск"
 
 #: src/pages/Analytics.tsx
 msgid "every series is hidden — click a legend chip to show one"
@@ -1650,6 +1831,10 @@ msgstr "Усе інше у swarmery працює без нього. Доки м�
 #: src/pages/Memory.tsx
 msgid "Everything this project remembers — its instructions, Claude Code auto-memory, and Serena notes — editable with a versioned backup on every save."
 msgstr "Усе, що пам’ятає цей проєкт — його інструкції, автопам’ять Claude Code і нотатки Serena — можна редагувати з версійованою резервною копією при кожному збереженні."
+
+#: src/pages/knowledge/Knowledge.tsx
+msgid "Everything this project remembers."
+msgstr "Усе, що цей проєкт пам’ятає."
 
 #: src/pages/inbox/InboxDetail.tsx
 #: src/pages/Retro.tsx
@@ -1681,6 +1866,8 @@ msgid "fail"
 msgstr "провал"
 
 #: src/pages/Architecture.tsx
+#: src/pages/health/HealthOverview.tsx
+#: src/pages/health/HealthOverview.tsx
 #: src/pages/system/ModsTab.tsx
 msgid "failed"
 msgstr "збій"
@@ -1688,6 +1875,10 @@ msgstr "збій"
 #: src/pages/learning/classifierModel.ts
 msgid "failed session"
 msgstr "невдала сесія"
+
+#: src/pages/health/HealthOverview.tsx
+msgid "failed share by agent"
+msgstr "частка збоїв за агентами"
 
 #: src/pages/Memory.tsx
 msgid "File changed on disk"
@@ -1721,6 +1912,7 @@ msgstr "фільтр документів…"
 msgid "filter lesson groups…"
 msgstr "фільтр груп уроків…"
 
+#: src/pages/learning/Learning.tsx
 #: src/pages/Retro.tsx
 msgid "filter lessons"
 msgstr "фільтр уроків"
@@ -1744,6 +1936,10 @@ msgstr "фільтр…"
 #: src/pages/inbox/ReviewItem.tsx
 msgid "findings"
 msgstr "знахідки"
+
+#: src/pages/health/healthPlace.ts
+msgid "Findings and rewrites"
+msgstr "Знахідки й переписування"
 
 #: src/pages/learning/classifierModel.ts
 #: src/pages/learning/classifierModel.ts
@@ -1778,19 +1974,32 @@ msgstr "калібрування прогнозів"
 msgid "forecast files it never touched"
 msgstr "не зачепив файли з прогнозу"
 
+#: src/pages/health/Health.tsx
+#: src/pages/health/healthPlace.ts
+#: src/pages/learning/Learning.tsx
 #: src/pages/learning/Learning.tsx
 msgid "Forecast honesty"
 msgstr "Чесність прогнозів"
 
-#: src/pages/health/Health.tsx
+#: src/pages/health/HealthOverview.tsx
+msgid "friction"
+msgstr "тертя"
+
+#: src/pages/health/healthPlace.ts
 msgid "Friction"
 msgstr "Тертя"
 
+#: src/pages/health/healthPlace.ts
 #: src/pages/Retro.tsx
 msgid "Friction board"
 msgstr "Дошка тертя"
 
 #: src/pages/health/HealthOverview.tsx
+#: src/pages/health/HealthOverview.tsx
+msgid "friction board →"
+msgstr "дошка тертя →"
+
+#: src/pages/health/healthPlace.ts
 msgid "Friction you can remove today"
 msgstr "Тертя, яке можна прибрати сьогодні"
 
@@ -1809,6 +2018,11 @@ msgstr "з рекомендації #{recId}"
 #: src/pages/system/ItemDetail.tsx
 msgid "Frontmatter"
 msgstr "Frontmatter"
+
+#: src/pages/learning/Learning.tsx
+#: src/pages/learning/Learning.tsx
+msgid "gathering"
+msgstr "збираємо дані"
 
 #: src/pages/system/ModsTab.tsx
 msgid "gating hooks"
@@ -1899,9 +2113,37 @@ msgid "harness {harness}"
 msgstr "оболонка {harness}"
 
 #: src/pages/health/Health.tsx
-#: src/pages/health/Health.tsx
 msgid "Health"
 msgstr "Здоров’я"
+
+#: src/pages/health/Health.tsx
+#: src/pages/health/HealthOverview.tsx
+msgid "health · agent"
+msgstr "здоров’я · агент"
+
+#: src/pages/health/Health.tsx
+msgid "health · cost"
+msgstr "здоров’я · витрати"
+
+#: src/pages/health/Health.tsx
+#: src/pages/health/Health.tsx
+msgid "health · estimates"
+msgstr "здоров’я · оцінки"
+
+#: src/pages/health/HealthOverview.tsx
+msgid "health · fleet"
+msgstr "здоров’я · флот"
+
+#: src/pages/health/Health.tsx
+#: src/pages/health/HealthOverview.tsx
+#: src/pages/health/HealthOverview.tsx
+#: src/pages/health/HealthOverview.tsx
+msgid "health · friction"
+msgstr "здоров’я · тертя"
+
+#: src/pages/health/Health.tsx
+msgid "health · phase runs"
+msgstr "здоров’я · запуски фаз"
 
 #: src/pages/health/HealthOverview.tsx
 msgid "health…"
@@ -1974,6 +2216,11 @@ msgstr "Хуки"
 msgid "hooks…"
 msgstr "хуки…"
 
+#: src/pages/health/healthPlace.ts
+#: src/pages/learning/Learning.tsx
+msgid "how close forecasts land"
+msgstr "наскільки точні прогнози"
+
 #: src/pages/learning/classifierModel.ts
 msgid "How did it end?"
 msgstr "Чим усе закінчилося?"
@@ -1982,25 +2229,29 @@ msgstr "Чим усе закінчилося?"
 msgid "How did the phase run end?"
 msgstr "Чим закінчився запуск фази?"
 
+#: src/pages/health/Health.tsx
+msgid "How estimates landed, and what the runs taught."
+msgstr "Як справдились оцінки й чого навчили запуски."
+
 #: src/pages/LessonsCalibration.tsx
 msgid "How often forecasts held, by group. Area hit is matched areas over every area either side named; bands and outcome are exact-match rates; the curve compares declared confidence with how often the forecast held. Post-hoc forecasts are excluded."
 msgstr "Як часто прогнози справджувалися, за групами. Збіг зон — частка збіглих зон серед усіх, що назвала будь-яка сторона; діапазони й результат — частки точних збігів; крива порівнює заявлену впевненість із тим, як часто прогноз справджувався. Прогнози post-hoc виключено."
+
+#: src/pages/health/healthPlace.ts
+msgid "how plan-phase runs ended"
+msgstr "чим закінчились запуски фаз"
 
 #: src/pages/health/PhaseRunsTab.tsx
 msgid "How plan-phase runs ended, what the noops were waiting on, what the router and the verifier did, and how many finished phases came back. Rows marked (est.) are read from the runs' own words, not a recorded fact."
 msgstr "Як завершувалися запуски фаз, на що чекали порожні запуски, що робили маршрутизатор і перевіряльник, і скільки завершених фаз повернулося. Рядки з позначкою (оцінка) прочитані зі слів самих запусків, а не із записаного факту."
 
 #: src/pages/health/Health.tsx
-msgid "how the agent fleet is doing and what to change"
-msgstr "як справи у флоту агентів і що змінити"
+msgid "How plan-phase runs ended."
+msgstr "Чим закінчились запуски фаз."
 
 #: src/pages/learning/Classifier.tsx
 msgid "How the modes work"
 msgstr "Як працюють режими"
-
-#: src/pages/health/Health.tsx
-msgid "how this project's agents are doing and what to change"
-msgstr "як справи в агентів цього проєкту і що змінити"
 
 #: src/pages/Analytics.tsx
 msgid "Human-hours saved is an estimate: {formula}"
@@ -2071,6 +2322,10 @@ msgstr "якщо відстежуватимете"
 msgid "Improve"
 msgstr "Покращити"
 
+#: src/pages/learning/Learning.tsx
+msgid "in force"
+msgstr "у силі"
+
 #: src/pages/Analytics.tsx
 msgid "In progress"
 msgstr "У роботі"
@@ -2087,6 +2342,10 @@ msgstr "Вхідні"
 msgid "incremental rebuild"
 msgstr "інкрементна перебудова"
 
+#: src/pages/knowledge/Knowledge.tsx
+msgid "Index and stale facts"
+msgstr "Індекс і застарілі факти"
+
 #: src/pages/Lessons.tsx
 msgid "ineffective"
 msgstr "неефективний"
@@ -2098,6 +2357,14 @@ msgstr "інфра {infra}"
 #: src/pages/system/CreateAgentForm.tsx
 msgid "inherit from session"
 msgstr "успадкувати від сесії"
+
+#: src/pages/Lessons.tsx
+msgid "Injected into {usesText} runs. Median surprise in its area: {before} → {after}."
+msgstr "Додано в {usesText} запусків. Медіана здивування в його зоні: {before} → {after}."
+
+#: src/pages/Lessons.tsx
+msgid "injected when"
+msgstr "коли додається"
 
 #: src/pages/SystemHub.tsx
 msgid "insights"
@@ -2162,6 +2429,10 @@ msgstr "викликів за 30 д"
 msgid "it is almost always sure of itself, yet {lowered}. Start checking here."
 msgstr "він майже завжди впевнений у собі, і все ж {lowered}. Почніть перевірку звідси."
 
+#: src/pages/knowledge/Knowledge.tsx
+msgid "Its instructions, Claude Code auto-memory and Serena notes, editable with a versioned backup on every save."
+msgstr "Його інструкції, автопам’ять Claude Code і нотатки Serena; кожне збереження створює резервну версію."
+
 #: src/pages/learning/classifierModel.ts
 msgid "its trigger fires"
 msgstr "спрацьовує його тригер"
@@ -2173,6 +2444,10 @@ msgstr "суддя {model}"
 #: src/pages/Retro.tsx
 msgid "judged · {score}"
 msgstr "оцінено · {score}"
+
+#: src/pages/health/HealthOverview.tsx
+msgid "judged success"
+msgstr "успіх за оцінкою"
 
 #: src/pages/Retro.tsx
 msgid "judgment"
@@ -2197,10 +2472,10 @@ msgid "keeps a store"
 msgstr "зберігає дані"
 
 #: src/pages/knowledge/Knowledge.tsx
-#: src/pages/knowledge/Knowledge.tsx
 msgid "Knowledge"
 msgstr "Знання"
 
+#: src/pages/Lessons.tsx
 #: src/pages/Lessons.tsx
 msgid "L-{lessonId} promoted to CLAUDE.md on branch <0>{branch}</0>. Review it there."
 msgstr "L-{lessonId} перенесено в CLAUDE.md у гілці <0>{branch}</0>. Перегляньте його там."
@@ -2212,6 +2487,14 @@ msgstr "останній {lastSeen}"
 #: src/pages/SystemHub.tsx
 msgid "last {lastUsed}"
 msgstr "останній {lastUsed}"
+
+#: src/pages/knowledge/Knowledge.tsx
+msgid "last changed"
+msgstr "востаннє змінено"
+
+#: src/pages/health/HealthOverview.tsx
+msgid "last seen"
+msgstr "востаннє бачили"
 
 #: src/pages/health/HealthOverview.tsx
 msgid "Last seen {ago} · in {sessions, plural, one {# session} few {# sessions} many {# sessions} other {# sessions}}."
@@ -2238,9 +2521,20 @@ msgid "Latest report · {date}"
 msgstr "Останній звіт · {date}"
 
 #: src/pages/learning/Learning.tsx
-#: src/pages/learning/Learning.tsx
 msgid "Learning"
 msgstr "Навчання"
+
+#: src/pages/learning/Learning.tsx
+msgid "learning · classifier"
+msgstr "навчання · класифікатор"
+
+#: src/pages/learning/Learning.tsx
+msgid "learning · forecast honesty"
+msgstr "навчання · чесність прогнозів"
+
+#: src/pages/Lessons.tsx
+msgid "lesson"
+msgstr "урок"
 
 #: src/pages/Lessons.tsx
 msgid "lesson #{lessonId}"
@@ -2260,6 +2554,7 @@ msgstr "групи уроків…"
 
 #: src/pages/agent-hub/Tabs.tsx
 #: src/pages/inbox/inboxModel.ts
+#: src/pages/learning/Learning.tsx
 msgid "lessons"
 msgstr "уроки"
 
@@ -2267,10 +2562,6 @@ msgstr "уроки"
 #: src/pages/Lessons.tsx
 msgid "Lessons"
 msgstr "Уроки"
-
-#: src/pages/learning/Learning.tsx
-msgid "lessons · the classifier · forecast honesty"
-msgstr "уроки · класифікатор · чесність прогнозів"
 
 #: src/pages/Retro.tsx
 msgid "lessons failed to load for this range"
@@ -2283,6 +2574,10 @@ msgstr "Винесені уроки"
 #: src/pages/Retro.tsx
 msgid "lessons…"
 msgstr "уроки…"
+
+#: src/pages/Lessons.tsx
+msgid "linked to"
+msgstr "пов’язано з"
 
 #: src/pages/system/shared.tsx
 msgid "lint {severity}"
@@ -2312,9 +2607,11 @@ msgstr "оцінка траєкторії LLM-суддею"
 msgid "loaded into every session's first request — CLAUDE.md size, unused MCP servers"
 msgstr "завантажується в перший запит кожної сесії — розмір CLAUDE.md, невикористані сервери MCP"
 
+#: src/pages/health/Health.tsx
 #: src/pages/health/PhaseRunsTab.tsx
 #: src/pages/inbox/Inbox.tsx
 #: src/pages/inbox/Inbox.tsx
+#: src/pages/knowledge/Knowledge.tsx
 #: src/pages/learning/Classifier.tsx
 #: src/pages/Lessons.tsx
 msgid "loading…"
@@ -2391,6 +2688,10 @@ msgstr "Медіанна сесія"
 
 #: src/pages/knowledge/Knowledge.tsx
 #: src/pages/knowledge/Knowledge.tsx
+msgid "memory"
+msgstr "пам’ять"
+
+#: src/pages/knowledge/Knowledge.tsx
 #: src/pages/Memory.tsx
 msgid "Memory"
 msgstr "Memory"
@@ -2412,9 +2713,11 @@ msgid "memory…"
 msgstr "пам’ять…"
 
 #: src/pages/Lessons.tsx
+#: src/pages/Lessons.tsx
 msgid "merge into {match}"
 msgstr "злити в {match}"
 
+#: src/pages/Lessons.tsx
 #: src/pages/Lessons.tsx
 msgid "merge this candidate into the existing lesson"
 msgstr "злити цього кандидата з наявним уроком"
@@ -2481,6 +2784,10 @@ msgstr "модуль"
 #: src/pages/system/ModsTab.tsx
 msgid "module sha"
 msgstr "sha модуля"
+
+#: src/pages/knowledge/Knowledge.tsx
+msgid "modules · flows · entry points"
+msgstr "модулі · потоки · точки входу"
 
 #: src/pages/learning/TurnForecastPanel.tsx
 msgid "Most surprising turns"
@@ -2592,6 +2899,10 @@ msgstr "на цій машині немає агентів"
 msgid "No agents resolve for this project — enable a pack in Settings, or add one under .claude/agents/."
 msgstr "Для цього проєкту не знайдено агентів — увімкніть пакет у Налаштуваннях або додайте свого в .claude/agents/."
 
+#: src/pages/health/HealthOverview.tsx
+msgid "No approval rule covers this tool yet. Allow it once and these runs stop asking."
+msgstr "Жодне правило ще не охоплює цей інструмент. Дозвольте його один раз, і ці запуски більше не питатимуть."
+
 #: src/pages/Architecture.tsx
 msgid "no architecture map for this project — enable architecture-pack in Settings to generate it"
 msgstr "у цього проєкту немає карти архітектури — увімкніть architecture-pack у Налаштуваннях, щоб її згенерувати"
@@ -2631,6 +2942,10 @@ msgstr "жоден документ не підходить"
 #: src/pages/Docs.tsx
 msgid "no docs published by the daemon"
 msgstr "демон не опублікував документації"
+
+#: src/pages/learning/Learning.tsx
+msgid "no effect"
+msgstr "без ефекту"
 
 #: src/pages/Retro.tsx
 msgid "no errors in this range"
@@ -2762,6 +3077,10 @@ msgstr "у цьому періоді немає уроків із ретро"
 msgid "no risk badges"
 msgstr "без бейджів ризику"
 
+#: src/pages/health/healthPlace.ts
+msgid "no rule covers it · + always allow"
+msgstr "немає правила · + завжди дозволяти"
+
 #: src/pages/agent-hub/Tabs.tsx
 msgid "no runs in the last 30 days"
 msgstr "за останні 30 днів запусків не було"
@@ -2877,6 +3196,10 @@ msgstr "хеш не обчислено — повторна перевірка �
 msgid "not helping"
 msgstr "не допомагає"
 
+#: src/pages/Lessons.tsx
+msgid "Not injected into any run yet."
+msgstr "Ще не додано в жоден запуск."
+
 #: src/pages/Retro.tsx
 msgid "not noise"
 msgstr "не шум"
@@ -2954,6 +3277,10 @@ msgstr "відкрити задачу на виправлення"
 msgid "open in Inbox →"
 msgstr "відкрити у Вхідних →"
 
+#: src/pages/health/HealthOverview.tsx
+msgid "open in System"
+msgstr "відкрити в Системі"
+
 #: src/pages/agent-hub/Tabs.tsx
 msgid "open insights"
 msgstr "відкриті інсайти"
@@ -2978,6 +3305,7 @@ msgstr "відкрити план →"
 msgid "Orchestrator {mainCost} · {mainTokens} tokens out · agents {agentCostLabel}"
 msgstr "Оркестратор {mainCost} · {mainTokens} вихідних токенів · агенти {agentCostLabel}"
 
+#: src/pages/Lessons.tsx
 #: src/pages/system-hub/Profiles.tsx
 msgid "origin"
 msgstr "джерело"
@@ -2985,6 +3313,10 @@ msgstr "джерело"
 #: src/pages/inbox/inboxModel.ts
 msgid "out of date"
 msgstr "застарів"
+
+#: src/pages/health/healthPlace.ts
+msgid "Outcomes"
+msgstr "Результати"
 
 #: src/pages/system/TemplatesTab.tsx
 msgid "overlays…"
@@ -2995,7 +3327,7 @@ msgid "overlays/_schema/project.schema.json is missing — overlay validation un
 msgstr "немає overlays/_schema/project.schema.json — валідація оверлеїв недоступна"
 
 #: src/pages/AgentHub.tsx
-#: src/pages/health/Health.tsx
+#: src/pages/health/healthPlace.ts
 #: src/pages/SystemHub.tsx
 #: src/pages/SystemHub.tsx
 msgid "Overview"
@@ -3004,6 +3336,10 @@ msgstr "Огляд"
 #: src/pages/RoutingReport.tsx
 msgid "p90 cost"
 msgstr "вартість p90"
+
+#: src/pages/health/HealthOverview.tsx
+msgid "p95 run"
+msgstr "запуск p95"
 
 #: src/pages/system/TemplatesTab.tsx
 msgid "packs"
@@ -3049,7 +3385,7 @@ msgstr "фаза {phase}"
 msgid "phase runs"
 msgstr "запуски фаз"
 
-#: src/pages/health/Health.tsx
+#: src/pages/health/healthPlace.ts
 #: src/pages/health/PhaseRunsTab.tsx
 msgid "Phase runs"
 msgstr "Запуски фаз"
@@ -3210,6 +3546,7 @@ msgid "projects"
 msgstr "проєкти"
 
 #: src/pages/Lessons.tsx
+#: src/pages/Lessons.tsx
 msgid "promote to CLAUDE.md"
 msgstr "перенести в CLAUDE.md"
 
@@ -3222,12 +3559,20 @@ msgid "Prompt-cache read ratio over the range. Higher = cheaper reads served fro
 msgstr "Частка читань із кешу промптів за період. Вище = більше дешевих читань із кешу."
 
 #: src/pages/learning/Learning.tsx
-msgid "Proof"
-msgstr "Доказ"
+msgid "proof · {word}"
+msgstr "доказ · {word}"
+
+#: src/pages/learning/Learning.tsx
+msgid "Proof · did the change help?"
+msgstr "Докази · чи допомогла зміна?"
 
 #: src/pages/inbox/inboxModel.ts
 msgid "proposals"
 msgstr "пропозиції"
+
+#: src/pages/health/HealthOverview.tsx
+msgid "propose a change"
+msgstr "запропонувати зміну"
 
 #: src/pages/Lessons.tsx
 msgid "proposed because reviewers raised the same finding type in this area in several phases"
@@ -3241,6 +3586,10 @@ msgstr "Пропонований урок: {guidance}"
 msgid "Proposed retirements"
 msgstr "Пропозиції списати"
 
+#: src/pages/learning/Learning.tsx
+msgid "proven"
+msgstr "доведено"
+
 #: src/pages/Architecture.tsx
 msgid "provision failed"
 msgstr "підготовка не вдалася"
@@ -3248,6 +3597,14 @@ msgstr "підготовка не вдалася"
 #: src/pages/Architecture.tsx
 msgid "queued"
 msgstr "у черзі"
+
+#: src/pages/health/HealthOverview.tsx
+msgid "raised"
+msgstr "виявлено"
+
+#: src/pages/health/Health.tsx
+msgid "Range"
+msgstr "Період"
 
 #: src/pages/Analytics.tsx
 msgid "Range total cost ÷ tasks done. Cost comes from priced turns; unpriced work is excluded."
@@ -3265,6 +3622,10 @@ msgstr "сирий markdown"
 msgid "re-dispatch {redispatchPct}%"
 msgstr "повторні делегування {redispatchPct}%"
 
+#: src/pages/health/HealthOverview.tsx
+msgid "re-dispatched"
+msgstr "запущено повторно"
+
 #: src/pages/Retro.tsx
 msgid "Re-run apply"
 msgstr "Застосувати знову"
@@ -3273,6 +3634,11 @@ msgstr "Застосувати знову"
 msgid "re-run the apply/PR pipeline (e.g. after a gh outage)"
 msgstr "перезапустити конвеєр застосування/PR (наприклад, після збою gh)"
 
+#: src/pages/Lessons.tsx
+msgid "Reached {usesText} runs so far: too few to judge. Proof needs {minRuns}."
+msgstr "Поки охопив {usesText} запусків: замало для висновків. Для доказу потрібно {minRuns}."
+
+#: src/pages/knowledge/Knowledge.tsx
 #: src/pages/Memory.tsx
 #: src/pages/Memory.tsx
 msgid "read-only"
@@ -3393,8 +3759,13 @@ msgstr "відновиться само через {resetsIn}, коли лімі
 #: src/pages/inbox/InboxDetail.tsx
 #: src/pages/Lessons.tsx
 #: src/pages/Lessons.tsx
+#: src/pages/Lessons.tsx
 msgid "retire"
 msgstr "списати"
+
+#: src/pages/learning/Learning.tsx
+msgid "retirements · every status"
+msgstr "списання · усі статуси"
 
 #: src/pages/inbox/InboxDetail.tsx
 msgid "retires on its own in {retiresIn} if nobody answers"
@@ -3422,6 +3793,7 @@ msgid "Retry"
 msgstr "Повторити"
 
 #: src/pages/Lessons.tsx
+#: src/pages/Lessons.tsx
 msgid "review"
 msgstr "рев’ю"
 
@@ -3432,6 +3804,10 @@ msgstr "рев’ю: {verdictWord}"
 #: src/pages/inbox/ReviewItem.tsx
 msgid "review findings"
 msgstr "знахідки рев’ю"
+
+#: src/pages/learning/Learning.tsx
+msgid "Review queue"
+msgstr "Черга перегляду"
 
 #: src/pages/system/docsSection.ts
 #: src/pages/SystemShell.tsx
@@ -3491,6 +3867,7 @@ msgstr "тип запуску для маршрутизації"
 msgid "row"
 msgstr "рядок"
 
+#: src/pages/health/HealthOverview.tsx
 #: src/pages/Retro.tsx
 #: src/pages/Retro.tsx
 #: src/pages/Retro.tsx
@@ -3515,6 +3892,8 @@ msgid "run triage"
 msgstr "запустити сортування"
 
 #: src/pages/Analytics.tsx
+#: src/pages/health/HealthOverview.tsx
+#: src/pages/health/HealthOverview.tsx
 #: src/pages/Retro.tsx
 #: src/pages/RoutingReport.tsx
 #: src/pages/system/ItemDetail.tsx
@@ -3530,6 +3909,10 @@ msgstr "Запуски"
 msgid "runs 30d {runs30d}"
 msgstr "запусків за 30 дн. {runs30d}"
 
+#: src/pages/Lessons.tsx
+msgid "runs reached"
+msgstr "охоплено запусків"
+
 #: src/pages/learning/TurnForecastPanel.tsx
 msgid "said"
 msgstr "заявлено"
@@ -3541,6 +3924,14 @@ msgstr "заявлено {said}, справдилося {held}"
 #: src/pages/health/HealthOverview.tsx
 msgid "Same error {count, plural, one {# times} few {# times} many {# times} other {# times}} in this window"
 msgstr "Та сама помилка {count, plural, one {# раз} few {# рази} many {# разів} other {# разу}} у цьому вікні"
+
+#: src/pages/health/healthPlace.ts
+msgid "same error {count}×"
+msgstr "та сама помилка {count}×"
+
+#: src/pages/health/healthPlace.ts
+msgid "same error {count}× in {sessions} sessions"
+msgstr "та сама помилка {count}× у {sessions} сесіях"
 
 #: src/pages/system/InsightsTab.tsx
 msgid "same-named local component in ≥2 projects — graduation rule (EXTENDING.md)"
@@ -3581,6 +3972,10 @@ msgstr "збереження…"
 msgid "scope"
 msgstr "область"
 
+#: src/pages/health/healthPlace.ts
+msgid "scorecards · judged sessions"
+msgstr "картки оцінок · оцінені сесії"
+
 #: src/pages/learning/classifierModel.ts
 msgid "scored phase run"
 msgstr "оцінений запуск фази"
@@ -3589,6 +3984,10 @@ msgstr "оцінений запуск фази"
 msgid "SDLC funnel"
 msgstr "Воронка SDLC"
 
+#: src/pages/knowledge/Knowledge.tsx
+msgid "search memory, modules, symbols"
+msgstr "пошук у пам’яті, модулях, символах"
+
 #: src/pages/health/HealthOverview.tsx
 msgid "see friction"
 msgstr "до тертя"
@@ -3596,6 +3995,10 @@ msgstr "до тертя"
 #: src/pages/inbox/TriageBanner.tsx
 msgid "see what it closed"
 msgstr "що він закрив"
+
+#: src/pages/Lessons.tsx
+msgid "seen"
+msgstr "бачили"
 
 #: src/pages/inbox/InboxDetail.tsx
 msgid "seen {recurrences}×"
@@ -3670,6 +4073,8 @@ msgstr "сесія {sessionId}"
 msgid "Session-start cost"
 msgstr "Вартість старту сесії"
 
+#: src/pages/health/HealthOverview.tsx
+#: src/pages/health/HealthOverview.tsx
 #: src/pages/Retro.tsx
 #: src/pages/system-hub/Profiles.tsx
 msgid "sessions"
@@ -3778,6 +4183,8 @@ msgstr "сортувати за"
 msgid "sort list"
 msgstr "сортувати список"
 
+#: src/pages/knowledge/Knowledge.tsx
+#: src/pages/Lessons.tsx
 #: src/pages/system/ModsTab.tsx
 #: src/pages/system/ModsTab.tsx
 msgid "source"
@@ -3790,6 +4197,15 @@ msgstr "вихідна рекомендація"
 #: src/pages/system/ModsTab.tsx
 msgid "spawns processes"
 msgstr "запускає процеси"
+
+#: src/pages/health/healthPlace.ts
+msgid "Spend · {window}"
+msgstr "Витрати · {window}"
+
+#: src/pages/health/HealthOverview.tsx
+#: src/pages/health/HealthOverview.tsx
+msgid "spent"
+msgstr "витрачено"
 
 #: src/pages/Lessons.tsx
 #: src/pages/system/docsSection.ts
@@ -3881,12 +4297,17 @@ msgid "surface"
 msgstr "тип запуску"
 
 #: src/pages/learning/TurnForecastPanel.tsx
+#: src/pages/Lessons.tsx
 msgid "surprise"
 msgstr "здивування"
 
 #: src/pages/Lessons.tsx
 msgid "surprise {before} → {after}"
 msgstr "несподіванка {before} → {after}"
+
+#: src/pages/Lessons.tsx
+msgid "surprise before"
+msgstr "здивування до"
 
 #: src/pages/learning/classifierModel.ts
 msgid "Suspicious:"
@@ -3899,6 +4320,10 @@ msgstr "поміняти рядки й колонки"
 #: src/pages/system/HooksTab.tsx
 msgid "swarmery installer hook — manage it via `swarmery hooks`"
 msgstr "хук інсталятора swarmery — керуйте ним через `swarmery hooks`"
+
+#: src/pages/knowledge/Knowledge.tsx
+msgid "symbol index"
+msgstr "індекс символів"
 
 #: src/pages/SystemShell.tsx
 msgid "System"
@@ -3921,6 +4346,10 @@ msgstr "система в режимі лише читання — копіюв�
 msgid "System sections"
 msgstr "Розділи Система"
 
+#: src/pages/health/HealthOverview.tsx
+msgid "target"
+msgstr "ціль"
+
 #: src/pages/Retro.tsx
 msgid "task"
 msgstr "задача"
@@ -3932,6 +4361,10 @@ msgstr "Задачі"
 #: src/pages/system/ItemDetail.tsx
 msgid "tasks 30d <0>{tasks30d}</0>"
 msgstr "задач за 30 дн. <0>{tasks30d}</0>"
+
+#: src/pages/health/healthPlace.ts
+msgid "tasks against their estimate · retro lessons"
+msgstr "задачі проти їхніх оцінок · уроки ретро"
 
 #: src/pages/Analytics.tsx
 msgid "Tasks done"
@@ -4067,7 +4500,7 @@ msgstr "Здогад локальної моделі про «{sessionTitle}». 
 msgid "The mod reports what Claude Code counted for its current process, so a resumed session restarts from 0; the pricing table recomputes every turn. Charts above use the pricing table."
 msgstr "Мод повідомляє те, що Claude Code нарахував для поточного процесу, тож відновлена сесія починає з 0; таблиця цін перераховує кожен хід. Графіки вище побудовано за таблицею цін."
 
-#: src/pages/health/HealthOverview.tsx
+#: src/pages/health/healthPlace.ts
 msgid "The one sentence"
 msgstr "Одним реченням"
 
@@ -4091,6 +4524,10 @@ msgstr "Рекомендацію закрито. Вона відкриється
 #: src/pages/system/InsightsTab.tsx
 msgid "the report is gone from the workspace"
 msgstr "звіту вже немає у workspace"
+
+#: src/pages/health/healthPlace.ts
+msgid "the review digest · recommendations · agent rewrites"
+msgstr "дайджест огляду · рекомендації · переписування агентів"
 
 #: src/pages/inbox/InboxDetail.tsx
 msgid "The review leaves the Inbox. It stays on record; nothing else changes."
@@ -4116,6 +4553,10 @@ msgstr "попереднє вікно"
 #: src/pages/inbox/inboxModel.ts
 msgid "these areas"
 msgstr "цих зон"
+
+#: src/pages/health/HealthOverview.tsx
+msgid "things you can remove today"
+msgstr "що можна прибрати сьогодні"
 
 #: src/pages/inbox/InboxDetail.tsx
 msgid "This account hit a Claude usage limit."
@@ -4145,11 +4586,6 @@ msgstr "у цього проєкту вже є власна копія цьог�
 msgid "This range"
 msgstr "Цей період"
 
-#: src/pages/health/Health.tsx
-#: src/pages/health/Health.tsx
-msgid "this window"
-msgstr "це вікно"
-
 #: src/pages/RoutingReport.tsx
 msgid "tier"
 msgstr "рівень"
@@ -4169,6 +4605,10 @@ msgstr "таймаут (с)"
 #: src/pages/system/HooksTab.tsx
 msgid "timeout {timeoutSecs}s"
 msgstr "таймаут {timeoutSecs} с"
+
+#: src/pages/health/HealthOverview.tsx
+msgid "times"
+msgstr "разів"
 
 #: src/pages/Lessons.tsx
 msgid "title"
@@ -4203,6 +4643,10 @@ msgstr "Викликів інструментів на одне втручанн
 msgid "Tool use"
 msgstr "Інструменти"
 
+#: src/pages/knowledge/Knowledge.tsx
+msgid "Tooling"
+msgstr "Інструменти"
+
 #: src/pages/SystemHub.tsx
 msgid "Toolkit"
 msgstr "Інструментарій"
@@ -4215,6 +4659,14 @@ msgstr "Інструменти"
 #: src/pages/system/CreateAgentForm.tsx
 msgid "tools <0>(optional)</0>"
 msgstr "інструменти <0>(необов’язково)</0>"
+
+#: src/pages/health/Health.tsx
+msgid "Tools you deny and errors that repeat."
+msgstr "Інструменти, які ви відхиляєте, і помилки, що повторюються."
+
+#: src/pages/health/HealthOverview.tsx
+msgid "Tools you deny every time, and errors that repeat across sessions."
+msgstr "Інструменти, які ви щоразу відхиляєте, і помилки, що повторюються між сесіями."
 
 #: src/pages/Analytics.tsx
 msgid "tools…"
@@ -4453,6 +4905,10 @@ msgstr "чекає на вас"
 msgid "warnings"
 msgstr "попередження"
 
+#: src/pages/health/HealthOverview.tsx
+msgid "was"
+msgstr "було"
+
 #: src/pages/inbox/InboxDetail.tsx
 msgid "Was this {answers}?"
 msgstr "Це було {answers}?"
@@ -4465,9 +4921,25 @@ msgstr "Ми фіксуємо сьогоднішнє число як базов�
 msgid "We snapshot today's number as the baseline, notice when the target changes, and a week later tell you whether it moved."
 msgstr "Ми фіксуємо сьогоднішнє число як базове, помічаємо, коли ціль змінюється, і через тиждень скажемо, чи воно зрушило."
 
+#: src/pages/learning/Learning.tsx
+msgid "what a proof row is and when it is verified"
+msgstr "що таке рядок доказу і коли його перевіряють"
+
 #: src/pages/learning/classifierModel.ts
 msgid "What kind of task was it?"
 msgstr "Що це була за задача?"
+
+#: src/pages/health/Health.tsx
+msgid "What the Advisor found and what waits on you."
+msgstr "Що знайшов Радник і що чекає на вас."
+
+#: src/pages/learning/Learning.tsx
+msgid "What the local model labels, and how it does."
+msgstr "Що позначає локальна модель і як їй це вдається."
+
+#: src/pages/learning/Learning.tsx
+msgid "what the model labels · how often you agree"
+msgstr "що позначає модель · як часто ви згодні"
 
 #: src/pages/RoutingReport.tsx
 msgid "What the router would have picked for each run, recorded in shadow beside what actually ran. Fail counts a failed, blocked or partial run or a failed verification; agree is how often the pick and the model that ran were the same; cost is known-cost runs only."
@@ -4477,6 +4949,10 @@ msgstr "Що маршрутизатор обрав би для кожного з
 msgid "what this agent owns, in one line"
 msgstr "за що відповідає цей агент, одним рядком"
 
+#: src/pages/knowledge/Knowledge.tsx
+msgid "what this project remembers"
+msgstr "що пам’ятає цей проєкт"
+
 #: src/pages/RoutingReport.tsx
 msgid "when {pick} ran: {ranCell}"
 msgstr "коли виконувала {pick}: {ranCell}"
@@ -4485,6 +4961,7 @@ msgstr "коли виконувала {pick}: {ranCell}"
 msgid "When a phase run lands far from its forecast and its report explains why, a cheap model proposes up to two lessons, each citing evidence from that run. A candidate reaches future runs only after you accept it here. Merge it into an existing lesson when it repeats one. Active lessons are re-measured against their area's surprise; one that stops earning its place is proposed for retirement below, and retired on its own after 14 days without an answer."
 msgstr "Коли запуск фази далеко розходиться з прогнозом, а його звіт пояснює чому, дешева модель пропонує до двох уроків, кожен із доказами з того запуску. Кандидат доходить до майбутніх запусків лише після того, як ви приймете його тут. Якщо він повторює наявний урок — злийте їх. Активні уроки переміряють за несподіванкою їхньої зони; той, що перестає себе виправдовувати, пропонується списати нижче і списується сам через 14 днів без відповіді."
 
+#: src/pages/Lessons.tsx
 #: src/pages/Lessons.tsx
 msgid "where reality diverged"
 msgstr "де реальність розійшлася з планом"
@@ -4517,6 +4994,7 @@ msgstr "робочий простір…"
 msgid "worst active lint finding: {severity}"
 msgstr "найгірша активна знахідка лінту: {severity}"
 
+#: src/pages/Lessons.tsx
 #: src/pages/Lessons.tsx
 msgid "Write this lesson into the project's CLAUDE.md for its area, committed on a new branch for you to review"
 msgstr "Записати цей урок у CLAUDE.md проєкту для його зони — комітом у новій гілці, яку ви переглянете"

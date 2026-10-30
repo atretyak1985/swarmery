@@ -2,10 +2,11 @@
 //
 // Health (Canvas v3 phase 5). The claims:
 //
-//   1. `?tab=advisor` selects the Advisor tab and renders the retro advisor
-//      section; the strip carries one range control and seven tabs.
+//   1. `?tab=advisor` opens the Advisor group and renders the retro advisor
+//      section; the place carries one range control and seven accordion groups,
+//      the first open by default and only ever one.
 //   2. Changing the range rewrites `?days=` and refetches with the new from/to.
-//   3. The strip's decision cells link to Inbox and to Learning's proof tab,
+//   3. The overview's decision rows link to Inbox and to Learning's Proof group,
 //      in the fleet and in a project.
 //   4. The embedded Retro (Agents) and Analytics (Cost) render no range row of
 //      their own: exactly one range control on the page.
@@ -106,6 +107,11 @@ function rec(id: number, status: string): Record<string, unknown> {
   };
 }
 
+/** A group header of the accordion: its label, then its count. */
+function groupHeader(name: string): HTMLElement {
+  return screen.getByRole('button', { name: new RegExp(`^${name}\\s*\\d+$`) });
+}
+
 function LocationProbe(): JSX.Element {
   const loc = useLocation();
   return <div data-testid="loc">{`${loc.pathname}${loc.search}`}</div>;
@@ -173,8 +179,7 @@ describe('Health', () => {
       notes: [],
     });
     renderAt('/health?tab=phaseruns&days=30');
-    const tablist = screen.getByRole('tablist', { name: 'Health' });
-    expect(within(tablist).getByRole('tab', { name: /Phase runs/ }).getAttribute('aria-selected')).toBe('true');
+    expect(groupHeader('Phase runs').getAttribute('aria-expanded')).toBe('true');
     await waitFor(() =>
       expect(phaseReportApi.fetchPhaseRunsReport).toHaveBeenCalledWith(addDays(today, -29), today),
     );
@@ -183,15 +188,16 @@ describe('Health', () => {
     expect(await screen.findByRole('rowheader', { name: 'reopened phases' })).toBeTruthy();
   });
 
-  it('selects the Advisor tab from ?tab=advisor and renders seven tabs under one range', async () => {
+  it('opens the Advisor group from ?tab=advisor: seven groups, one open, one range', async () => {
     renderAt('/health?tab=advisor');
-    const tablist = screen.getByRole('tablist', { name: 'Health' });
-    expect(within(tablist).getAllByRole('tab')).toHaveLength(7);
-    expect(within(tablist).getByRole('tab', { name: /Advisor/ }).getAttribute('aria-selected')).toBe('true');
-    expect(within(tablist).getByRole('tab', { name: /Overview/ }).getAttribute('aria-selected')).toBe('false');
+    const list = within(screen.getByRole('region', { name: 'Health' }));
+    expect(list.getAllByRole('button', { expanded: true })).toHaveLength(1);
+    expect(list.getAllByRole('button', { expanded: false })).toHaveLength(6);
+    expect(groupHeader('Advisor').getAttribute('aria-expanded')).toBe('true');
+    expect(groupHeader('Overview').getAttribute('aria-expanded')).toBe('false');
     // The retro advisor section (lazy) renders its recommendations rail.
     expect(await screen.findByText('Recommendations')).toBeTruthy();
-    await waitFor(() => expect(within(tablist).getByRole('tab', { name: /Advisor/ }).textContent).toContain('2 open'));
+    await waitFor(() => expect(groupHeader('Advisor').textContent).toContain('2'));
     expect(screen.getAllByRole('radiogroup')).toHaveLength(1);
   });
 
@@ -217,9 +223,8 @@ describe('Health', () => {
     const because = screen.getByRole('link', { name: /because of you/i });
     expect(because.getAttribute('href')).toBe('/learning?tab=proof');
     expect(because.textContent).toContain('2 changes verified · 1 gathering proof');
-    // The window cell: 60 runs, 10 % failed, down from 50 %, $40 spent.
-    await waitFor(() => expect(screen.getByText(/60 runs · 10 % failed/)).toBeTruthy());
-    expect(screen.getByText('↓ from 50 %')).toBeTruthy();
+    // The list's mono line: 60 runs, 10 % failed, down from 50 %.
+    await waitFor(() => expect(screen.getByText('60 runs · 14 d · 10 % failed, down from 50 %')).toBeTruthy());
   });
 
   it('links the Inbox cell into the project under /p/:slug', async () => {
@@ -228,16 +233,31 @@ describe('Health', () => {
     expect(waiting.getAttribute('href')).toBe('/p/shop/inbox');
   });
 
-  it('renders the overview: one sentence, agent rows and friction', async () => {
+  it('renders the overview: one sentence, its numbers and the failed share by agent', async () => {
     renderAt('/health');
     expect(
       await screen.findByText(
         'The fleet is failing half as often as the 14 days before; almost all of the change is implementation-agent.',
       ),
     ).toBeTruthy();
-    expect(screen.getByText('50 % → 10 % failed')).toBeTruthy();
-    expect(screen.getByRole('button', { name: '+ always allow' })).toBeTruthy();
-    expect(screen.getByText('Same error 4 times in this window')).toBeTruthy();
+    expect(screen.getByText('implementation-agent carries the most failures: 50 % → 10 % failed.')).toBeTruthy();
+    expect(screen.getByText('failed share by agent')).toBeTruthy();
+  });
+
+  it('opens the friction you can remove from the second row, with always allow', async () => {
+    renderAt('/health');
+    fireEvent.click(await screen.findByRole('button', { name: /Friction you can remove today/ }));
+    expect(await screen.findByRole('button', { name: 'always allow Bash' })).toBeTruthy();
+    expect(screen.getByText(/Same error 4 times in this window/)).toBeTruthy();
+    expect(screen.getByTestId('loc').textContent).toBe('/health?item=removable');
+  });
+
+  it('opens one agent of the Agents group as a page', async () => {
+    renderAt('/health?tab=agents&item=agent:implementation-agent');
+    expect(
+      await screen.findByRole('heading', { name: 'implementation-agent: 10 % of 60 runs failed, down from 50 %.' }),
+    ).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'propose a change' })).toBeTruthy();
   });
 
   it('shows the auto mode permission check on the overview, alerting into the Inbox', async () => {
@@ -422,7 +442,7 @@ describe('friction triage', () => {
     // The panel (Retro's own state) lost the chip …
     await waitFor(() => expect(screen.queryByText(/noise · until/)).toBeNull());
     // … and the tab count (Health's own state) gained the group: 1 denial + 3 untriaged.
-    await waitFor(() => expect(screen.getByRole('tab', { name: /Friction/ }).textContent).toMatch(/4/));
+    await waitFor(() => expect(groupHeader('Friction').textContent).toMatch(/4/));
   });
 
   it('disables every "not noise" button while one unmute is in flight', async () => {
@@ -471,7 +491,7 @@ describe('friction triage', () => {
     expect(order[0]).toContain('snoozed failure');
     expect(order[0]).not.toMatch(/tracked|fix proposed|noise/);
     // 1 uncovered denial + the group whose state is unknown.
-    await waitFor(() => expect(screen.getByRole('tab', { name: /Friction/ }).textContent).toMatch(/2/));
+    await waitFor(() => expect(groupHeader('Friction').textContent).toMatch(/2/));
   });
 
   it('shows an alert and does not refetch when the unmute fails', async () => {
@@ -485,17 +505,16 @@ describe('friction triage', () => {
   });
 
   it('does not offer a muted top group on the overview', async () => {
-    renderAt('/health');
-    expect(await screen.findByText('Same error 4 times in this window')).toBeTruthy();
-    expect(screen.queryByText('Same error 9 times in this window')).toBeNull();
+    renderAt('/health?item=removable');
+    expect(await screen.findByText(/Same error 4 times in this window/)).toBeTruthy();
+    expect(screen.queryByText(/Same error 9 times in this window/)).toBeNull();
   });
 
   it('counts only untriaged groups and uncovered denials on the Friction tab', async () => {
     renderAt('/health');
-    const tab = await screen.findByRole('tab', { name: /Friction/ });
     // 1 uncovered denial + 2 untriaged groups; muted, tracked and fix_proposed are out.
-    expect(tab.textContent).toMatch(/3/);
-    expect(tab.textContent).not.toMatch(/[4-9]/);
+    await waitFor(() => expect(groupHeader('Friction').textContent).toMatch(/3/));
+    expect(groupHeader('Friction').textContent).not.toMatch(/[4-9]/);
   });
 });
 
@@ -527,7 +546,7 @@ describe('friction triage trigger', () => {
   /** The strip has counted the fixture's one untriaged group and Health holds its one agent row. */
   async function ready(): Promise<void> {
     expect(await screen.findByText('1 untriaged group · agents are checked by rule')).toBeTruthy();
-    await waitFor(() => expect(screen.getByRole('tab', { name: /Agents/ }).textContent).toMatch(/1/));
+    await waitFor(() => expect(groupHeader('Agents').textContent).toMatch(/1/));
   }
 
   it('starts a friction + agent run capped at untriaged groups + agent rows, fleet-wide', async () => {
@@ -565,7 +584,7 @@ describe('friction triage trigger', () => {
     renderAt('/health?tab=friction');
     await ready();
     // 1 uncovered denial + 1 untriaged group.
-    expect(screen.getByRole('tab', { name: /Friction/ }).textContent).toMatch(/2/);
+    expect(groupHeader('Friction').textContent).toMatch(/2/);
     const before = vi.mocked(api.fetchRetroFriction).mock.calls.length;
     // The run muted the group: the server reports it so.
     vi.mocked(api.fetchRetroFriction).mockResolvedValue({
@@ -576,8 +595,8 @@ describe('friction triage trigger', () => {
     expect((await screen.findByText(/agent closed 1/)).textContent).toBe('agent closed 1 · left 0 suggestions');
     // Health's copy and the embedded Retro panel's copy are both refetched.
     await waitFor(() => expect(vi.mocked(api.fetchRetroFriction).mock.calls.length).toBe(before + 2));
-    await waitFor(() => expect(screen.getByRole('tab', { name: /Friction/ }).textContent).not.toMatch(/2/));
-    expect(screen.getByRole('tab', { name: /Friction/ }).textContent).toMatch(/1/);
+    await waitFor(() => expect(groupHeader('Friction').textContent).not.toMatch(/2/));
+    expect(groupHeader('Friction').textContent).toMatch(/1/);
     expect(await screen.findByText(/noise · until/)).toBeTruthy();
     expect(screen.getByText('no untriaged groups · agents are checked by rule')).toBeTruthy();
   });
@@ -607,8 +626,8 @@ describe('friction triage trigger', () => {
     expect(await screen.findByText(/Agent scorecards/)).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'run triage' })).toBeNull();
     cleanup();
-    renderAt('/health');
-    expect(await screen.findByText('Same error 4 times in this window')).toBeTruthy();
+    renderAt('/health?item=removable');
+    expect(await screen.findByText(/Same error 4 times in this window/)).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'run triage' })).toBeNull();
     expect(triageApi.fetchActiveTriageRun).not.toHaveBeenCalled();
   });

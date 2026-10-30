@@ -1914,6 +1914,10 @@ msgstr "filled by probe"
 msgid "filled by probe · {moreCount} more suggested"
 msgstr "filled by probe · {moreCount} more suggested"
 
+#: src/components/place/PageDetail.tsx
+msgid "filter"
+msgstr "filter"
+
 #: src/workspace/AgentPicker.tsx
 msgid "filter agents"
 msgstr "filter agents"
@@ -2652,6 +2656,10 @@ msgstr "Note: {runNote}"
 #: src/workspace/boardModel.ts
 msgid "Nothing in {laneTitle} matches “{filterLabel}”."
 msgstr "Nothing in {laneTitle} matches “{filterLabel}”."
+
+#: src/components/place/PageDetail.tsx
+msgid "Nothing matches."
+msgstr "Nothing matches."
 
 #: src/components/DetachModal.tsx
 msgid "nothing to remove"
