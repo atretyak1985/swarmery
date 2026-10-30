@@ -13,7 +13,8 @@ import { phaseNeedsYou, phaseStatus, type PhaseStatus } from './planModel';
 
 export type PhaseStage = 'landed' | 'review' | 'exec' | 'decision' | 'manual' | 'none';
 
-function heldByDecision(p: EpicPhase): boolean {
+/** A decision holds the phase: a guard stop, a review, or a planning decision. */
+export function heldByDecision(p: EpicPhase): boolean {
   return p.decisionHold != null || p.guardDecision != null || p.reviewDecision != null;
 }
 
@@ -28,6 +29,23 @@ export function phaseStage(p: EpicPhase, status: PhaseStatus): PhaseStage {
     return 'exec';
   }
   return 'none';
+}
+
+export function stageLabel(stage: PhaseStage): string {
+  switch (stage) {
+    case 'landed':
+      return t`landed`;
+    case 'review':
+      return t`review`;
+    case 'exec':
+      return t`exec`;
+    case 'decision':
+      return t`decision`;
+    case 'manual':
+      return t`manual`;
+    case 'none':
+      return '—';
+  }
 }
 
 export function phaseGlyph(p: EpicPhase, status: PhaseStatus): GlyphState {
@@ -103,6 +121,37 @@ export function phaseNote(
     });
   }
   return t`not started`;
+}
+
+/** The phase page's sentence: a coloured lead, and the ledger's note as its rest. */
+export function phaseStateLine(
+  p: EpicPhase,
+  status: PhaseStatus,
+  depsUnmet: readonly number[],
+  note: string,
+): { state: GlyphState; lead: string; rest: string } {
+  const state = phaseGlyph(p, status);
+  if (state === 'needs') {
+    if (heldByDecision(p)) {
+      return {
+        state,
+        lead: p.guardDecision != null ? t`Stopped by the guard` : t`Waiting for your decision`,
+        rest: t`${note}. The run is paused until you answer.`,
+      };
+    }
+    return { state, lead: t`Waiting for your check`, rest: t`every automatic criterion is green; ${note}.` };
+  }
+  if (state === 'working') {
+    return { state, lead: phaseStage(p, status) === 'review' ? t`In review` : t`Executing`, rest: `${note}.` };
+  }
+  if (state === 'done') return { state, lead: t`Landed`, rest: `${note}.` };
+  if (state === 'failed') return { state, lead: t`Failed`, rest: `${note}.` };
+  if (state === 'stopped') return { state, lead: t`Stopped`, rest: `${note}.` };
+  return {
+    state,
+    lead: t`Not started`,
+    rest: depsUnmet.length > 0 ? `${note}.` : status === 'pending' ? t`ready to run.` : `${note}.`,
+  };
 }
 
 /** The phase a person came to look at: the one running, else the next one that can

@@ -189,6 +189,12 @@ export function extractSection(md: string, heading: string): string | null {
   return text === '' ? null : text;
 }
 
+/** What a phase doc says the phase is for; null when it says nothing. */
+export function phaseGoal(doc: string): string | null {
+  // i18n-ignore — headings matched in the doc, never shown
+  return extractSection(doc, 'Goal') ?? extractSection(doc, 'Objective');
+}
+
 /** Sections a plan README states its aim in, plain words first. */
 // i18n-ignore — headings matched in the doc, never shown
 const GOAL_SECTIONS = ['In plain words', 'Objective', 'Goal'];

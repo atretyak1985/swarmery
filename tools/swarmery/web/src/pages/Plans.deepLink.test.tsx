@@ -393,13 +393,12 @@ describe('SC-2 — a phase URL opens the phase panel on that tab', () => {
     expect(at(r)).toBe(`${BASE}/${B.externalId}/phase/2/review`);
   });
 
-  it('Review on a phase that never ran canonicalises to Runs (replace)', async () => {
-    const r = mount('/elsewhere', `${BASE}/${B.externalId}/phase/2/review`);
-    await settled(r, `${BASE}/${B.externalId}/phase/2/runs`);
-    expect(r.state.historyAction).toBe('REPLACE');
+  it('Review on a phase that never ran stays on Review and says there is no branch', async () => {
+    const r = mount(`${BASE}/${B.externalId}/phase/2/review`);
     const d = await screen.findByRole('region', { name: 'Beta 2' });
-    expect(within(d).getByRole('tab', { name: 'Runs' }).getAttribute('aria-selected')).toBe('true');
-    expect(within(d).queryByRole('tab', { name: 'Review' })).toBeNull();
+    expect(at(r)).toBe(`${BASE}/${B.externalId}/phase/2/review`);
+    expect(within(d).getByRole('tab', { name: 'Review' }).getAttribute('aria-selected')).toBe('true');
+    expect(within(d).getByText('No branch yet.')).toBeTruthy();
   });
 });
 
@@ -503,7 +502,7 @@ describe('SC-4 — every click is one history entry; Back retraces them', () => 
     fireEvent.keyDown(document, { key: 'ArrowDown' }); // the panel listens on document
     await settled(r, `${BASE}/${B.externalId}/phase/3/criteria`);
     expect(d).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: 'all phases' }));
+    fireEvent.click(screen.getByRole('button', { name: /^← / }));
     await settled(r, `${BASE}/${B.externalId}`);
     await back(r);
     await settled(r, `${BASE}/${B.externalId}/phase/3/criteria`);
@@ -619,12 +618,17 @@ describe('SC-6 — ?status= still lands in a group', () => {
     expect(at(r)).toBe(`${BASE}/${B.externalId}`);
   });
 
-  it('the list shows every group at once, not one status', async () => {
+  it('a tab holds one status, and picking it lands on its first plan', async () => {
     mount(`${BASE}/${A.externalId}`);
     await waitFor(() => {
       expect(selectedPlan()).toContain('Alpha');
     });
     expect(listItem('Beta').closest<HTMLElement>('[data-plan-group]')?.dataset.planGroup).toBe('active');
+    expect(screen.queryByRole('link', { name: /Shipped/ })).toBeNull();
+    fireEvent.click(screen.getByRole('tab', { name: /^done/ }));
+    await waitFor(() => {
+      expect(selectedPlan()).toContain('Shipped');
+    });
     expect(listItem('Shipped').closest<HTMLElement>('[data-plan-group]')?.dataset.planGroup).toBe('done');
   });
 });
@@ -677,7 +681,7 @@ describe('PlansPlace — a plan path is the Plans tab', () => {
     await waitFor(() => {
       expect(selectedPlan()).toContain('Beta');
     });
-    expect(screen.queryByRole('tablist', { name: 'Plans' })).toBeNull();
+    expect(screen.queryByRole('tab', { name: /New plan/ })).toBeNull();
   });
 });
 

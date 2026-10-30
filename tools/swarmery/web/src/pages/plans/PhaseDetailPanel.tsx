@@ -1,29 +1,52 @@
-// One phase's details, opened inline in place of the phase list.
+// One phase's page, in place of the plan: its head (state, numbers, blocker), its
+// actions, and the six tabs' bodies. PhasePanel is the shell around them.
 
+import { plural } from '@lingui/core/macro';
 import { Trans, useLingui } from '@lingui/react/macro';
 import { type ReactNode, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { togglePlanCheckbox } from '../../api';
-import type { DecisionHoldRef, Epic, EpicPhase, PlanRevision, ProviderTerms } from '../../api/types';
+import type { DecisionHoldRef, Epic, EpicPhase, PlanRevision, ProviderTerms, Session } from '../../api/types';
+import { NumbersStrip, type NumberItem } from '../../components/place/NumbersStrip';
+import type { GlyphState } from '../../components/place/StateGlyph';
+import { actionClass } from '../../components/place/PageDetail';
 import { Loading } from '../../components/ui';
-import { fmtAgo } from '../../lib/format';
+import { fmtAgo, fmtElapsed } from '../../lib/format';
 import { Markdown } from '../../lib/markdown';
+import { safeHref } from '../../lib/safeHref';
 import { useSessionHref } from '../../lib/sessionHref';
 import { useProjectWorkspace } from '../../workspace/ProjectContext';
 import { CriterionLint } from './CriterionLint';
 import { ForecastStory } from './ForecastStory';
-import { ForecastSection, RailSection, SurpriseChip } from './ForecastVsActual';
+import { forecastsOf, ForecastSection, RailSection, SurpriseChip } from './ForecastVsActual';
 import { LandCriterionAction } from './LandCriterionAction';
 import { hasReviewTab, showsReviewTab } from './landingModel';
+import { RunRow, runSpan, STAGE_TONE } from './PhaseLedger';
+import {
+  phaseCost,
+  phaseNote,
+  phaseRuns,
+  phaseStage,
+  phaseStateLine,
+  heldByDecision,
+  stageLabel,
+} from './phaseLedgerModel';
 import { PhaseCard } from './PhaseCard';
 import { isUnresolvedOutcome, PhaseActivity, phaseChip, ReverifyButton, runButtonCls, RunCompletedChip, RunOutcomeChip } from './phaseChips';
 import { PhasePanel } from './PhasePanel';
 import { PhaseReopens } from './PhaseReopens';
 import { PhaseReview } from './PhaseReview';
-import { DocModelChip, type PhaseRunModel, RunModelChip } from './PhaseRunPickers';
+import {
+  DocModelChip,
+  type PhaseRunEffort,
+  PhaseRunEffortPicker,
+  type PhaseRunModel,
+  PhaseRunModelPicker,
+  RunModelChip,
+} from './PhaseRunPickers';
 import { PlainSummary } from './PlainSummary';
 import { type Check, DocEditor, extractChecks } from './planDetailShell';
-import { computeResolvedSeqs, extractSection, phaseStatus } from './planModel';
+import { computeResolvedSeqs, extractSection, fmtSpent, phaseGoal, phaseNeedsYou, phaseStatus } from './planModel';
 import type { PhaseDetailTab } from './plansTarget';
 import { ReviewFindings } from './ReviewFindings';
 import { RunsReviewBlock } from './RunsReviewBlock';
@@ -32,12 +55,31 @@ import { reverifyAction, type Reverify } from './useReverify';
 import { VerifyVerdictChip } from './VerifyVerdictChip';
 import { WorkaroundHits } from './WorkaroundHits';
 
-/** Acceptance-criteria list with tick state (✓ done / ○ open). With `onToggle`
- * the rows become buttons that flip the criterion in the doc (the affordance
- * the retired doc modal owned); without it the list is read-only. `lint`
- * renders under a toggleable row (the Criteria tab's class-marker hint), and
- * `action` under it (the Criteria tab's [LAND] action) — beside the toggle,
- * never instead of it. */
+type CriterionKind = 'auto' | 'manual' | 'land';
+
+const KIND_CHIP: Record<CriterionKind, string> = {
+  auto: 'rounded-full border-line-strong text-ink-faint',
+  manual: 'rounded-[3px] border-brand text-brand',
+  land: 'rounded-full border-blue text-blue',
+};
+
+const KIND_MARK = {
+  manual: '[MANUAL]', // i18n-ignore — the doc's own marker
+  land: '[LAND]', // i18n-ignore — the doc's own marker
+} as const;
+
+const KIND_TAG = /\[(MANUAL|LAND)\]/i;
+
+/** The doc's `[MANUAL]`/`[LAND]` marker, and the criterion without it. */
+function criterionParts(text: string): { kind: CriterionKind; text: string } {
+  const tag = KIND_TAG.exec(text)?.[1]?.toUpperCase();
+  const kind: CriterionKind = tag === 'MANUAL' ? 'manual' : tag === 'LAND' ? 'land' : 'auto';
+  return { kind, text: text.replace(KIND_TAG, '').replace(/\s+/g, ' ').trim() };
+}
+
+/** Acceptance criteria, ticked in the doc (the box flips that exact line). `lint`
+ * renders under a row (the class-marker hint) and `action` under it (the [LAND]
+ * action) — beside the box, never instead of it. */
 function ChecksList({
   checks,
   onToggle,
@@ -46,54 +88,66 @@ function ChecksList({
   action,
 }: {
   checks: Check[];
-  onToggle?: (c: Check) => void;
-  busyLine?: number | null;
-  lint?: (c: Check) => ReactNode;
-  action?: (c: Check) => ReactNode;
+  onToggle: (c: Check) => void;
+  busyLine: number | null;
+  lint: (c: Check) => ReactNode;
+  action: (c: Check) => ReactNode;
 }): JSX.Element {
   const { t } = useLingui();
   return (
-    <ul className="space-y-1.5">
+    <ul className="m-0 max-w-[720px] list-none p-0">
       {checks.map((c) => {
-        const mark = (
-          <span
-            aria-hidden="true"
-            className={`mt-px shrink-0 font-mono text-[12px] ${
-              c.done ? 'text-green' : 'text-ink-faint'
-            }`}
-          >
-            {c.done ? '✓' : '○'}
-          </span>
-        );
-        if (onToggle === undefined) {
-          return (
-            <li key={c.line} className="flex items-start gap-2">
-              {mark}
-              <span className={c.done ? 'text-ink-dim' : 'text-ink'}>{c.text}</span>
-            </li>
-          );
-        }
+        const { kind, text } = criterionParts(c.text);
         return (
-          <li key={c.line}>
+          <li
+            key={c.line}
+            className="grid grid-cols-[18px_minmax(0,1fr)_auto] items-start gap-3 border-b border-line py-[9px]"
+          >
             <button
               type="button"
               disabled={busyLine === c.line}
               aria-pressed={c.done}
+              aria-label={text}
               onClick={() => onToggle(c)}
               data-tip={c.done ? t`un-tick this criterion in the doc` : t`tick this criterion in the doc`}
-              className="flex w-full items-start gap-2 rounded px-1 py-0.5 text-left transition-colors hover:bg-surface2/50 disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-brand"
+              className={`mt-px size-4 cursor-pointer rounded-[4px] border p-0 text-center font-mono text-[11px] leading-4 disabled:opacity-50 ${
+                c.done
+                  ? 'border-green bg-green-bg text-green'
+                  : `bg-transparent text-transparent ${kind === 'manual' ? 'border-brand' : 'border-line-strong'}`
+              }`}
             >
-              {mark}
-              <span className={c.done ? 'text-ink-dim line-through' : 'text-ink'}>{c.text}</span>
+              <span aria-hidden="true">✓</span>
             </button>
-            {lint?.(c)}
-            {action?.(c)}
+            <div className="min-w-0">
+              <div className={`text-[13px] leading-normal ${c.done ? 'text-ink-dim' : 'text-ink'}`}>{text}</div>
+              {lint(c)}
+              {action(c)}
+            </div>
+            <span
+              className={`border px-[7px] py-px font-mono text-[10px] leading-[normal] font-bold whitespace-nowrap ${KIND_CHIP[kind]}`}
+            >
+              {kind === 'auto' ? t`auto` : KIND_MARK[kind]}
+            </span>
           </li>
         );
       })}
     </ul>
   );
 }
+
+/** The state sentence's dot and lead, in the state's colour (handoff §4). */
+const STATE_DOT: Partial<Record<GlyphState, string>> = {
+  needs: 'animate-blink-dot bg-amber',
+  working: 'animate-pulse bg-green',
+  done: 'bg-ink-dim',
+  failed: 'bg-red',
+};
+const STATE_TEXT: Partial<Record<GlyphState, string>> = {
+  needs: 'text-amber',
+  working: 'text-green',
+  done: 'text-ink-dim',
+  failed: 'text-red',
+};
 
 /** Run chip for the phase rail header. Switches on the run's OUTCOME, not its
  * process state, so the panel tells the same four-way story the list does — a
@@ -123,10 +177,12 @@ function RunStateChip({
   return null;
 }
 
-/** One phase's body inside PhasePanel (inline, in place of the phase list), tabbed: Story (PhaseCard + the
- * forecast story), Criteria (interactive checks + the doc), Runs (run state,
+/** One phase's page, tabbed: Story (what the phase is for and the PhaseCard's
+ * holds and meta), Plain words (the doc's own section, else a generated one),
+ * Criteria (interactive checks + the doc), Runs (its sessions, run state,
  * diagnosis, provenance), Review (the run branch's diff, verdict and landing —
- * plans/PhaseReview.tsx), Report (what was shipped) and Edit (raw markdown). */
+ * plans/PhaseReview.tsx), Report (forecast against what happened, and what was
+ * shipped), and Edit (raw markdown), reached by the `edit` action. */
 export function PhaseDetailPanel({
   epic,
   phase,
@@ -134,9 +190,15 @@ export function PhaseDetailPanel({
   onTab,
   tabHref,
   onStep,
+  onBack,
+  sessions,
+  now,
   runBusy,
   planRunning,
   phaseRunModel,
+  onPhaseRunModel,
+  phaseRunEffort,
+  onPhaseRunEffort,
   onRetry,
   onCancelRun,
   reverify,
@@ -155,11 +217,19 @@ export function PhaseDetailPanel({
   tabHref?: ((tab: PhaseDetailTab) => string) | undefined;
   /** Open the neighbouring phase by seq (↑/↓), keeping the tab. */
   onStep: (seq: number) => void;
+  /** Back to the plan. */
+  onBack: () => void;
+  /** The plan's sessions; null until they load. */
+  sessions: readonly Session[] | null;
+  now: number;
   runBusy: number | null;
   /** A whole-plan run owns the phase docs — per-phase runs stand down. */
   planRunning: boolean;
   /** The picker's value, for DocModelChip — see PhaseActions' note. */
   phaseRunModel: PhaseRunModel;
+  onPhaseRunModel: (m: PhaseRunModel) => void;
+  phaseRunEffort: PhaseRunEffort;
+  onPhaseRunEffort: (e: PhaseRunEffort) => void;
   onRetry: () => void;
   onCancelRun: () => void;
   reverify: Reverify;
@@ -188,9 +258,7 @@ export function PhaseDetailPanel({
   // A done phase retires its Edit tab (the doc is the record of shipped work); a
   // stale `edit` selection degrades to Report instead of a dead panel.
   const editable = status !== 'done';
-  // Likewise a phase that never ran has no Review tab; `review` degrades to Runs.
-  const activeTab: PhaseDetailTab =
-    tab === 'edit' && !editable ? 'report' : tab === 'review' && !showsReviewTab(phase) ? 'runs' : tab;
+  const activeTab: PhaseDetailTab = tab === 'edit' && !editable ? 'report' : tab;
   const at = epic.phases.findIndex((p) => p.seq === phase.seq);
   const prev = epic.phases[at - 1];
   const next = epic.phases[at + 1];
@@ -251,6 +319,132 @@ export function PhaseDetailPanel({
   const revisedAgo =
     appliedRevision !== undefined ? fmtAgo(appliedRevision.decidedAt ?? appliedRevision.createdAt) : '';
 
+  const runs = phaseRuns(sessions, phase.id);
+  const cost = phaseCost(runs);
+  const forecast = forecastsOf(phase).at(-1);
+  const forecastBand = forecast === undefined ? '' : [forecast.sizeBand, forecast.durationBand].filter((b) => b !== '').join(' · ');
+  const done = phase.checkboxesDone;
+  const total = phase.checkboxesTotal;
+  // No forecast in dollars exists (plan D-5): the plan's band stands in that slot.
+  const stats: NumberItem[] = [
+    { label: t`spent`, value: cost === null ? '—' : fmtSpent(cost), tone: 'brand' },
+    ...(forecastBand === '' ? [] : [{ label: t`forecast`, value: forecastBand, tone: 'faint' as const }]),
+    { label: t`runs`, value: String(runs.length) },
+    { label: t`criteria`, value: `${String(done)}/${String(total)}`, tone: total > 0 && done === total ? 'green' : 'default' },
+    { label: t`duration`, value: runs.length === 0 ? '—' : runs.map((r) => runSpan(r, now)).join(' + ') },
+  ];
+
+  const stage = phaseStage(phase, status);
+  const note = phaseNote(phase, status, depsUnmet, phase.runStartedAt === null ? '' : fmtElapsed(phase.runStartedAt, now), terms?.changeShort ?? null);
+  const state = phaseStateLine(phase, status, depsUnmet, note);
+  const needsYou = phaseNeedsYou(phase);
+  const held = heldByDecision(phase);
+  const needsHref = `/p/${encodeURIComponent(projectSlug)}/needs-you`;
+  const manualOpen = phase.manualOpen;
+  const blocker = !needsYou
+    ? null
+    : phase.guardDecision != null
+      ? t`the guard stop waits on your answer`
+      : held
+        ? t`the phase waits on your answer`
+        : plural(manualOpen, {
+          one: '# manual check only you can close',
+          few: '# manual checks only you can close',
+          many: '# manual checks only you can close',
+          other: '# manual checks only you can close',
+        });
+  const prUrl = phase.landing?.prUrl ?? null;
+  const change = terms?.changeShort ?? '';
+  const heldCount = (phase.decisionHold?.decisions.length ?? 0) + (phase.guardDecision != null ? 1 : 0);
+  const findings = phase.reviewBlocks?.reduce((n, block) => n + block.findings.length, 0) ?? 0;
+  const tabCounts: Partial<Record<PhaseDetailTab, string>> = {
+    ...(heldCount > 0 ? { story: String(heldCount) } : {}),
+    ...(total > 0 ? { criteria: `${String(done)}/${String(total)}` } : {}),
+    ...(runs.length > 0 ? { runs: String(runs.length) } : {}),
+    ...(findings > 0 ? { review: String(findings) } : {}),
+  };
+  const head = (
+    <>
+      <div className="mt-2 flex items-start gap-2 text-[13.5px] leading-normal text-ink-2">
+        <span aria-hidden="true" className={`mt-[5px] size-[9px] shrink-0 rounded-full ${STATE_DOT[state.state] ?? 'bg-ink-faint'}`} />
+        <span>
+          <b className={`font-semibold ${STATE_TEXT[state.state] ?? 'text-ink-faint'}`}>{state.lead}</b> · {state.rest}
+        </span>
+      </div>
+      <div className="mt-4">
+        <NumbersStrip items={stats} />
+      </div>
+      {blocker !== null && (
+        <Link
+          to={needsHref}
+          className="mt-3.5 inline-flex items-center gap-2 rounded-lg border border-brand bg-brand-bg px-3 py-[7px] text-[12.5px] leading-[normal] text-ink"
+        >
+          <span aria-hidden="true" className="font-mono text-brand">
+            ●
+          </span>
+          {blocker}
+          <span className="font-mono text-[10.5px] text-brand">
+            <Trans>Needs you →</Trans>
+          </span>
+        </Link>
+      )}
+    </>
+  );
+  const actions = (
+    <>
+      {needsYou ? (
+        held ? (
+          <Link to={needsHref} className={actionClass('brand')}>
+            <Trans>answer in Needs you</Trans>
+          </Link>
+        ) : (
+          <button type="button" onClick={() => onTab('criteria')} className={actionClass('brand')}>
+            <Trans>tick criteria</Trans>
+          </button>
+        )
+      ) : running ? (
+        <>
+          {phase.runSessionUuid !== null && (
+            <Link to={sessionHref(phase.runSessionUuid)} className={actionClass(undefined)}>
+              <Trans>open run</Trans>
+            </Link>
+          )}
+          <button type="button" disabled={runBusy !== null} onClick={onCancelRun} className={actionClass('red')}>
+            <Trans>stop phase</Trans>
+          </button>
+        </>
+      ) : status !== 'done' && primary !== null ? (
+        <button
+          type="button"
+          disabled={primary.disabled}
+          data-tip={'tip' in primary ? primary.tip : undefined}
+          onClick={primary.onClick}
+          className={actionClass('brand')}
+        >
+          {runBusy === phase.id ? '…' : isUnresolvedOutcome(phase.runOutcome) ? t`Retry run` : t`▶ run this phase now`}
+        </button>
+      ) : null}
+      {isUnresolvedOutcome(phase.runOutcome) && !running && (
+        <button type="button" onClick={onOpenOutcome} className={actionClass(undefined)}>
+          <Trans>why it did not move</Trans>
+        </button>
+      )}
+      <ReverifyButton action={again} size="panel" />
+      {status === 'done' && prUrl !== null && safeHref(prUrl) !== null && (
+        <a href={safeHref(prUrl) ?? undefined} target="_blank" rel="noreferrer" className={actionClass(undefined)}>
+          <Trans>open {change} ↗</Trans>
+        </a>
+      )}
+      {editable && (
+        <button type="button" onClick={() => onTab('edit')} aria-pressed={activeTab === 'edit'} className={actionClass(undefined)}>
+          <Trans>edit</Trans>
+        </button>
+      )}
+    </>
+  );
+  const goal = doc === null ? null : phaseGoal(doc);
+  const plainSection = doc === null ? null : extractSection(doc, 'In plain words'); // i18n-ignore — the doc's own heading
+
   return (
     <PhasePanel
       epic={epic}
@@ -259,8 +453,12 @@ export function PhaseDetailPanel({
       onTab={onTab}
       onPrev={prev !== undefined ? () => onStep(prev.seq) : undefined}
       onNext={next !== undefined ? () => onStep(next.seq) : undefined}
-      editable={editable}
+      onBack={onBack}
+      stage={{ label: stageLabel(stage), tone: STAGE_TONE[stage] }}
       hrefFor={tabHref}
+      head={head}
+      tabCounts={tabCounts}
+      actions={actions}
     >
       {activeTab === 'edit' ? (
         <DocEditor
@@ -270,18 +468,31 @@ export function PhaseDetailPanel({
           onSaved={onDocChanged}
         />
       ) : activeTab === 'report' ? (
-        <PhaseSummary taskId={epic.taskId} phase={phase} doc={doc} />
+        <div className="max-w-[760px] space-y-5">
+          <ForecastStory phase={phase} />
+          {phase.surprise == null && <ForecastSection phase={phase} />}
+          <PhaseSummary taskId={epic.taskId} phase={phase} doc={doc} />
+        </div>
       ) : activeTab === 'plain' ? (
-        <PlainSummary taskId={epic.taskId} kind="phase" path={phase.docRelPath} version={phase.docUpdatedAt} />
+        doc === null ? (
+          <Loading label={t`doc…`} />
+        ) : plainSection !== null ? (
+          <div className="max-w-[66ch] text-[15px] leading-[1.65] text-pretty text-ink">
+            <Markdown text={plainSection} />
+          </div>
+        ) : (
+          <PlainSummary taskId={epic.taskId} kind="phase" path={phase.docRelPath} version={phase.docUpdatedAt} />
+        )
       ) : activeTab === 'story' ? (
         <div className="space-y-5">
+          {goal !== null && (
+            <div className="max-w-[70ch] text-[13.5px] leading-[1.65] text-pretty text-ink-2">
+              <Markdown text={goal} />
+            </div>
+          )}
           <PhaseCard
+            embedded
             phase={phase}
-            {...(primary !== null ? { primary } : {})}
-            secondaries={[
-              ...(again !== null ? [again] : []),
-              ...(isUnresolvedOutcome(phase.runOutcome) ? [{ label: t`why it did not move`, onClick: onOpenOutcome }] : []),
-            ]}
             {...(phase.completionReport !== null ? { report: <Markdown text={phase.completionReport} /> } : {})}
             terms={terms}
             decisionHref={(d) => decisionTurnHref(projectSlug, d)}
@@ -293,28 +504,59 @@ export function PhaseDetailPanel({
             hits={phase.workaroundHits ?? []}
             total={phase.workaroundTotal ?? 0}
           />
-          <ForecastStory phase={phase} />
-          {phase.surprise == null && <ForecastSection phase={phase} />}
         </div>
       ) : activeTab === 'review' ? (
-        <div className="space-y-4">
+        <div className="max-w-[760px] space-y-4">
           {/* Keyed by phase: ↑/↓ step navigation keeps the tab, and a land still in
               flight for the previous phase must not render onto this one. A phase
               the daemon never ran has nothing to land — only its findings. */}
           {hasReviewTab(phase) && (
             <PhaseReview key={phase.id} epic={epic} phase={phase} terms={terms} onLanded={onDocChanged} />
           )}
-          <ReviewFindings
-            blocks={phase.reviewBlocks ?? []}
-            legacy={phase.legacyReview === true}
-            hold={phase.reviewHold ?? ''}
-            decision={phase.reviewDecision ?? null}
-            onAnswered={onDocChanged}
-          />
+          {showsReviewTab(phase) ? (
+            <ReviewFindings
+              blocks={phase.reviewBlocks ?? []}
+              legacy={phase.legacyReview === true}
+              hold={phase.reviewHold ?? ''}
+              decision={phase.reviewDecision ?? null}
+              onAnswered={onDocChanged}
+            />
+          ) : (
+            <div className="py-4 text-[12.5px] text-ink-dim">
+              <Trans>No branch yet.</Trans>
+            </div>
+          )}
         </div>
       ) : activeTab === 'runs' ? (
         <>
-          <div className="flex flex-wrap items-center gap-1.5">
+          {runs.length > 0 ? (
+            <ol aria-label={t`runs of this phase`} className="m-0 list-none p-0">
+              {runs.map((run) => (
+                <RunRow key={run.id} run={run} now={now} ruled />
+              ))}
+            </ol>
+          ) : (
+            sessions !== null && (
+              <div className="py-5 text-[12.5px] text-ink-dim">
+                <Trans>No runs yet — this phase starts when the previous one lands.</Trans>
+              </div>
+            )
+          )}
+          {status !== 'done' && !running && (
+            <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1.5">
+              <PhaseRunModelPicker
+                value={phaseRunModel}
+                onChange={onPhaseRunModel}
+                disabled={runBusy !== null || planRunning}
+              />
+              <PhaseRunEffortPicker
+                value={phaseRunEffort}
+                onChange={onPhaseRunEffort}
+                disabled={runBusy !== null || planRunning}
+              />
+            </div>
+          )}
+          <div className="mt-3 flex flex-wrap items-center gap-1.5">
             <span className={`rounded border px-1.5 py-px font-mono text-[9px] ${chip.cls}`}>{i18n._(chip.label)}</span>
             {/* Only the idle half: while live, RunStateChip already pulses. */}
             {status === 'in_progress' && !running && (
@@ -336,24 +578,20 @@ export function PhaseDetailPanel({
                 ← #{seq}
               </span>
             ))}
-            <ReverifyButton action={again} size="panel" className="ml-auto" />
-            {primary !== null && (
+            {/* The header's actions name what the page is waiting for, so a phase that
+                waits on the operator keeps its run here. */}
+            {needsYou && primary !== null && (
               <button
                 type="button"
                 disabled={primary.disabled}
                 data-tip={'tip' in primary ? primary.tip : undefined}
                 onClick={primary.onClick}
-                className={`${again === null ? 'ml-auto' : ''} rounded-md border px-2 py-1 font-mono text-[10px] transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${running ? 'border-red/40 text-red hover:bg-red/10' : runButtonCls(phase.runOutcome)}`}
+                className={`ml-auto rounded-md border px-2 py-1 font-mono text-[10px] transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${running ? 'border-red/40 text-red hover:bg-red/10' : runButtonCls(phase.runOutcome)}`}
               >
                 {primary.label}
               </button>
             )}
           </div>
-          {running && phase.runSessionUuid !== null && (
-            <Link to={sessionHref(phase.runSessionUuid)} className="mt-2 inline-block font-mono text-[10px] text-ink-dim hover:text-brand hover:underline">
-              <Trans>session →</Trans>
-            </Link>
-          )}
           {appliedRevision !== undefined && (
             <div className="mt-2 font-mono text-[10px] text-ink-faint">
               <Trans>
@@ -395,7 +633,7 @@ export function PhaseDetailPanel({
               {toggleErr}
             </div>
           )}
-          <RailSection label={t`acceptance criteria`}>
+          <div>
             {checks === null ? (
               <Loading label={t`criteria…`} />
             ) : checks.length === 0 ? (
@@ -435,8 +673,23 @@ export function PhaseDetailPanel({
                 )}
               />
             )}
-          </RailSection>
-          <RailSection label={t`doc`}>{doc === null ? <Loading label={t`doc…`} /> : <Markdown text={doc} />}</RailSection>
+            <div className="mt-2.5 font-mono text-[10.5px] leading-[normal] text-ink-faint">
+              <Trans>auto criteria are checked by the verifier · [MANUAL] only you can tick · [LAND] closes on landing</Trans>
+            </div>
+          </div>
+          {doc !== null && (
+            <details className="group mt-4">
+              <summary className="cursor-pointer list-none font-mono text-[11px] text-ink-dim transition-colors hover:text-brand [&::-webkit-details-marker]:hidden">
+                <span aria-hidden="true" className="mr-1.5 inline-block transition-transform group-open:rotate-90">
+                  ▸
+                </span>
+                <Trans>doc</Trans>
+              </summary>
+              <div className="mt-2">
+                <Markdown text={doc} />
+              </div>
+            </details>
+          )}
         </>
       )}
     </PhasePanel>

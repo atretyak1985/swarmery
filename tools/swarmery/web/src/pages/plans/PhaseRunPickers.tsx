@@ -1,7 +1,7 @@
 // Which model and effort the next per-phase run starts with, and the chips that say
 // what a run used and what its doc asks for.
 
-import { msg, plural } from '@lingui/core/macro';
+import { msg, plural, t } from '@lingui/core/macro';
 import { Trans, useLingui } from '@lingui/react/macro';
 import type { EpicPhase } from '../../api/types';
 
@@ -57,6 +57,11 @@ const DEFAULT_PHASE_RUN_MODEL: PhaseRunModel = 'default';
  * the two choices are about different runs and different money. */
 export const PHASE_RUN_MODEL_KEY = 'swarmery.phaserun.model';
 
+/** The line under the ledger: what a run started now will use. */
+export function phaseRunModelLine(value: PhaseRunModel): string {
+  return value === 'default' ? t`per phase doc, else ${PHASE_RUN_DEFAULT_MODEL_LABEL}` : value;
+}
+
 // ── Per-phase effort selection ──────────────────────────────────────────────
 // The second half of "what does this run cost": which brain, and how hard it
 // thinks. Its options ARE the CLI's closed set (claudeflags.ValidEfforts), so —
@@ -83,6 +88,11 @@ const DEFAULT_PHASE_RUN_EFFORT: PhaseRunEffort = 'default';
 /** Its own key, beside the model's — the two are different decisions about the
  * same money and must not share storage. */
 export const PHASE_RUN_EFFORT_KEY = 'swarmery.phaserun.effort';
+
+/** The effort half of that line. */
+export function phaseRunEffortLine(value: PhaseRunEffort): string {
+  return value === 'default' ? t`per phase doc, else high` : value;
+}
 
 function isPhaseRunEffort(v: string | null): v is PhaseRunEffort {
   return PHASE_RUN_EFFORTS.some((e) => e.value === v);

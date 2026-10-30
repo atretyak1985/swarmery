@@ -81,6 +81,9 @@ export interface PhaseCardProps {
   /** Where the phase's open agent stop is answered (the Needs you page). null
    *  (or absent) renders the stop without a link. */
   stopHref?: string | null;
+  /** On the phase page, whose head already carries the name and the state: no
+   *  frame, and the chips alone where the card has its header. */
+  embedded?: boolean;
 }
 
 /** Whether `p` is a path on this origin: it starts with one `/` that a browser
@@ -173,6 +176,69 @@ export function StopDecisionNote({
           <Trans>answer it →</Trans>
         </a>
       )}
+    </div>
+  );
+}
+
+/** The phase page's list of what holds the phase: id, the question, and a way to
+ *  it. The same decisions the card's notes carry, as rows of a place. */
+function DecisionRows({
+  phase,
+  stop,
+  stopHref,
+  hrefFor,
+}: {
+  phase: EpicPhase;
+  stop: NeedsYouDecision | null;
+  stopHref: string | null;
+  hrefFor?: ((ref: DecisionHoldRef) => string | null) | undefined;
+}): JSX.Element | null {
+  const rows = [
+    ...(stop === null
+      ? []
+      : [
+          {
+            id: stop.decisionId,
+            tone: 'text-red',
+            text:
+              stop.trigger !== undefined && stop.trigger !== ''
+                ? `${stop.trigger}: ${stop.reason !== undefined && stop.reason !== '' ? stop.reason : stop.question}`
+                : (stop.reason ?? stop.question),
+            href: stopHref,
+            testId: 'stop-decision',
+          },
+        ]),
+    ...(phase.decisionHold?.decisions ?? []).map((d) => ({
+      id: d.decisionId,
+      tone: 'text-amber',
+      text: d.question,
+      href: holdHref(d, hrefFor),
+      testId: 'decision-hold',
+    })),
+  ];
+  if (rows.length === 0) return null;
+  return (
+    <div className="mt-[18px] max-w-[720px]">
+      <div className="font-mono text-[10px] leading-[normal] tracking-[0.12em] text-ink-faint uppercase">
+        <Trans>decisions</Trans>
+      </div>
+      {rows.map((row) => (
+        <div
+          key={row.id}
+          data-testid={row.testId}
+          className="grid grid-cols-[44px_minmax(0,1fr)_auto] items-baseline gap-3 border-b border-line py-2"
+        >
+          <span className={`font-mono text-[11px] font-bold ${row.tone}`}>{row.id}</span>
+          <span className="text-[12.5px] leading-[1.45] text-ink-2">{row.text}</span>
+          {row.href !== null ? (
+            <a href={row.href} className="font-mono text-[10.5px] text-ink-faint transition-colors hover:text-brand">
+              <Trans>answer it →</Trans>
+            </a>
+          ) : (
+            <span />
+          )}
+        </div>
+      ))}
     </div>
   );
 }
@@ -282,6 +348,7 @@ export function PhaseCard({
   terms = null,
   decisionHref,
   stopHref = null,
+  embedded = false,
 }: PhaseCardProps): JSX.Element {
   const { i18n, t } = useLingui();
   const story = forecastStory(phase);
@@ -313,40 +380,59 @@ export function PhaseCard({
     meta.push(t`edited ${edited}`);
   }
 
+  const chips = (
+    <>
+      <StalledBadge stall={phase.stalled} />
+      {terms != null && phase.landing != null && <LandingChip landing={phase.landing} terms={terms} />}
+      {band !== null && <OffPlanChip band={band} compact />}
+    </>
+  );
+
   return (
-    <article data-testid="phase-card" className="rounded-xl border border-line bg-surface px-5 py-[18px]">
-      <div className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.1em] text-ink-faint">
-        <span>
-          <Trans>Phase {seq}</Trans> · {phase.checkboxesDone}/{phase.checkboxesTotal}
-        </span>
-        {model !== null && (
-          <>
-            <span aria-hidden="true">·</span>
-            <span>{modelShortName(model)}</span>
-          </>
-        )}
-        <span className="ml-auto flex items-center gap-1.5">
-          <StalledBadge stall={phase.stalled} />
-          {terms != null && phase.landing != null && <LandingChip landing={phase.landing} terms={terms} />}
-          {band !== null && <OffPlanChip band={band} compact />}
-        </span>
-      </div>
-      <div className="mt-1.5 text-[15px] font-medium leading-[1.35] text-ink">{phase.name}</div>
+    <article
+      data-testid="phase-card"
+      className={embedded ? undefined : 'rounded-xl border border-line bg-surface px-5 py-[18px]'}
+    >
+      {embedded ? (
+        <div className="flex flex-wrap items-center gap-1.5 empty:hidden">{chips}</div>
+      ) : (
+        <>
+          <div className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.1em] text-ink-faint">
+            <span>
+              <Trans>Phase {seq}</Trans> · {phase.checkboxesDone}/{phase.checkboxesTotal}
+            </span>
+            {model !== null && (
+              <>
+                <span aria-hidden="true">·</span>
+                <span>{modelShortName(model)}</span>
+              </>
+            )}
+            <span className="ml-auto flex items-center gap-1.5">{chips}</span>
+          </div>
+          <div className="mt-1.5 text-[15px] font-medium leading-[1.35] text-ink">{phase.name}</div>
 
-      <div className="mt-3 flex items-start gap-2.5 rounded-[10px] border border-line bg-bg px-3 py-2.5">
-        <span className={`mt-[5px] h-2 w-2 shrink-0 rounded-full ${dot}`} />
-        <div className="min-w-0">
-          <div className="text-[13px] font-medium text-ink">{title}</div>
-          {detail !== null && detail !== '' && (
-            <div className="mt-[3px] text-[12px] leading-[1.5] text-ink-3">{detail}</div>
-          )}
-        </div>
-      </div>
-
-      {phase.decisionHold != null && phase.decisionHold.decisions.length > 0 && (
-        <DecisionHoldNote hold={phase.decisionHold} hrefFor={decisionHref} />
+          <div className="mt-3 flex items-start gap-2.5 rounded-[10px] border border-line bg-bg px-3 py-2.5">
+            <span className={`mt-[5px] h-2 w-2 shrink-0 rounded-full ${dot}`} />
+            <div className="min-w-0">
+              <div className="text-[13px] font-medium text-ink">{title}</div>
+              {detail !== null && detail !== '' && (
+                <div className="mt-[3px] text-[12px] leading-[1.5] text-ink-3">{detail}</div>
+              )}
+            </div>
+          </div>
+        </>
       )}
-      {stop !== null && <StopDecisionNote decision={stop} href={stopHref} />}
+
+      {embedded ? (
+        <DecisionRows phase={phase} stop={stop} stopHref={stopHref} hrefFor={decisionHref} />
+      ) : (
+        <>
+          {phase.decisionHold != null && phase.decisionHold.decisions.length > 0 && (
+            <DecisionHoldNote hold={phase.decisionHold} hrefFor={decisionHref} />
+          )}
+          {stop !== null && <StopDecisionNote decision={stop} href={stopHref} />}
+        </>
+      )}
 
       <GuardBadge guard={phaseGuard(phase)} className="mt-2" />
 

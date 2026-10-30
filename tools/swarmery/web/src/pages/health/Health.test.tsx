@@ -109,7 +109,7 @@ function rec(id: number, status: string): Record<string, unknown> {
 
 /** A group header of the accordion: its label, then its count. */
 function groupHeader(name: string): HTMLElement {
-  return screen.getByRole('button', { name: new RegExp(`^${name}\\s*\\d+$`) });
+  return screen.getByRole('tab', { name: new RegExp(`^${name.toLowerCase()}\\s*\\d*$`) });
 }
 
 function LocationProbe(): JSX.Element {
@@ -179,7 +179,7 @@ describe('Health', () => {
       notes: [],
     });
     renderAt('/health?tab=phaseruns&days=30');
-    expect(groupHeader('Phase runs').getAttribute('aria-expanded')).toBe('true');
+    expect(groupHeader('Phase runs').getAttribute('aria-selected')).toBe('true');
     await waitFor(() =>
       expect(phaseReportApi.fetchPhaseRunsReport).toHaveBeenCalledWith(addDays(today, -29), today),
     );
@@ -191,10 +191,10 @@ describe('Health', () => {
   it('opens the Advisor group from ?tab=advisor: seven groups, one open, one range', async () => {
     renderAt('/health?tab=advisor');
     const list = within(screen.getByRole('region', { name: 'Health' }));
-    expect(list.getAllByRole('button', { expanded: true })).toHaveLength(1);
-    expect(list.getAllByRole('button', { expanded: false })).toHaveLength(6);
-    expect(groupHeader('Advisor').getAttribute('aria-expanded')).toBe('true');
-    expect(groupHeader('Overview').getAttribute('aria-expanded')).toBe('false');
+    expect(list.getAllByRole('tab')).toHaveLength(7);
+    expect(list.getAllByRole('tab', { selected: true })).toHaveLength(1);
+    expect(groupHeader('Advisor').getAttribute('aria-selected')).toBe('true');
+    expect(groupHeader('Overview').getAttribute('aria-selected')).toBe('false');
     // The retro advisor section (lazy) renders its recommendations rail.
     expect(await screen.findByText('Recommendations')).toBeTruthy();
     await waitFor(() => expect(groupHeader('Advisor').textContent).toContain('2'));

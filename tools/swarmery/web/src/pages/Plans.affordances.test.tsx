@@ -368,8 +368,8 @@ describe('SC-9 — every selection is a real anchor with its canonical href', ()
     // The row keeps its button role; the anchor is only the name inside it.
     expect(screen.getByRole('button', { name: 'Phase 2 — Beta 2' }).contains(name)).toBe(true);
 
-    // Plans draws no tabs: `+ new` opens New plan, ⌘K reaches Board and Playbooks.
-    expect(screen.queryByRole('tablist', { name: 'Plans' })).toBeNull();
+    // The strip is the list's: `+ new` opens New plan, ⌘K reaches Board and Playbooks.
+    expect(screen.queryByRole('tab', { name: /New plan/ })).toBeNull();
     expect(screen.getByRole('button', { name: '+ new' })).toBeTruthy();
   });
 
@@ -409,8 +409,15 @@ describe('SC-9 — every selection is a real anchor with its canonical href', ()
     expect(href(/^Story/)).toBe(`${BASE}/${B.externalId}/phase/2?scope=swarmery`);
     expect(href(/^Criteria/)).toBe(`${BASE}/${B.externalId}/phase/2/criteria?scope=swarmery`);
     expect(href(/^Runs/)).toBe(`${BASE}/${B.externalId}/phase/2/runs?scope=swarmery`);
+    expect(href(/^Plain words/)).toBe(`${BASE}/${B.externalId}/phase/2/plain?scope=swarmery`);
+    expect(href(/^Review/)).toBe(`${BASE}/${B.externalId}/phase/2/review?scope=swarmery`);
     expect(href(/^Report/)).toBe(`${BASE}/${B.externalId}/phase/2/report?scope=swarmery`);
-    expect(href(/^Edit/)).toBe(`${BASE}/${B.externalId}/phase/2/edit?scope=swarmery`);
+    // Edit is an action on the tabs line; its URL stays.
+    expect(within(d).queryByRole('tab', { name: /^Edit/ })).toBeNull();
+    fireEvent.click(within(d).getByRole('button', { name: 'edit' }));
+    await waitFor(() => {
+      expect(screen.getByRole('textbox')).toBeTruthy();
+    });
   });
 
   it('plan-details tabs link to their details URLs', async () => {

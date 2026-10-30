@@ -171,7 +171,7 @@ export function Learning(): JSX.Element {
     },
     {
       key: 'proof',
-      label: t`Proof · did the change help?`,
+      label: t`Proof`,
       tone: 'green',
       count: proof.length,
       items: [
@@ -181,7 +181,7 @@ export function Learning(): JSX.Element {
     },
     {
       key: 'classifier',
-      label: t`The classifier`,
+      label: t`Classifier`,
       tone: 'green',
       items: [
         { key: 'calibration', glyph: '◐', title: t`Calibration`, summary: t`what the model labels · how often you agree` },
@@ -241,6 +241,7 @@ export function Learning(): JSX.Element {
 
   return (
     <PagePlace
+      tabbed
       title={t`Learning`}
       sub={`${lessonsInForce} · ${changesProving}`}
       searchHint={t`filter lessons`}

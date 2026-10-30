@@ -124,6 +124,7 @@ export function healthGroups({ agents, friction, recs, proposals, days }: Health
     {
       key: 'overview' satisfies HealthTab,
       label: t`Overview`,
+      noTabCount: true,
       items: [
         {
           key: 'fleet',

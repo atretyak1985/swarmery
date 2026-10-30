@@ -133,7 +133,7 @@ export const INBOX_TABS: readonly { id: InboxTabId; label: string; kind?: InboxK
   {
     id: 'proposals',
     get label() {
-      return t`proposals`;
+      return t`agent changes`;
     },
     kind: 'proposal',
   },
@@ -147,7 +147,7 @@ export const INBOX_TABS: readonly { id: InboxTabId; label: string; kind?: InboxK
   {
     id: 'retire',
     get label() {
-      return t`stop using a lesson?`;
+      return t`retire a lesson?`;
     },
     kind: 'retire',
   },
@@ -472,6 +472,9 @@ export interface InboxGroup {
   kind: InboxKind;
   items: InboxItem[];
 }
+
+/** The `all` tab shows this many rows of a group, then a way into its own tab. */
+export const INBOX_GROUP_CAP = 3;
 
 /** One group per kind, in list order; a kind with nothing waiting is left out. */
 export function groupByKind(items: readonly InboxItem[]): InboxGroup[] {

@@ -437,6 +437,10 @@ msgstr "Agents ran clean."
 msgid "Agents waited <0>{waited}</0> on you today."
 msgstr "Agents waited <0>{waited}</0> on you today."
 
+#: src/pages/Sessions.tsx
+msgid "all"
+msgstr "all"
+
 #: src/pages/Overview.tsx
 msgid "all approvals →"
 msgstr "all approvals →"
@@ -875,6 +879,7 @@ msgstr "doc copy mismatch"
 
 #: src/pages/Overview.tsx
 #: src/pages/ProjectOverview.tsx
+#: src/pages/Sessions.tsx
 msgid "done"
 msgstr "done"
 
@@ -1287,6 +1292,10 @@ msgstr "Needs attention"
 msgid "Needs triage"
 msgstr "Needs triage"
 
+#: src/pages/Sessions.tsx
+msgid "needs you"
+msgstr "needs you"
+
 #: src/pages/NeedsYou.tsx
 #: src/pages/Sessions.tsx
 msgid "Needs you"
@@ -1473,6 +1482,10 @@ msgstr "note (optional)"
 msgid "Nothing blocked on you."
 msgstr "Nothing blocked on you."
 
+#: src/pages/Sessions.tsx
+msgid "Nothing finished today yet."
+msgstr "Nothing finished today yet."
+
 #: src/pages/ProjectOverview.tsx
 msgid "nothing flagged"
 msgstr "nothing flagged"
@@ -1488,6 +1501,22 @@ msgstr "Nothing here. Dispatch a task with + new, or widen the project scope."
 #: src/pages/Overview.tsx
 msgid "nothing idle"
 msgstr "nothing idle"
+
+#: src/pages/NeedsYou.tsx
+msgid "Nothing is blocked on you. Permissions, questions, guard stops and manual checks land here live."
+msgstr "Nothing is blocked on you. Permissions, questions, guard stops and manual checks land here live."
+
+#: src/pages/Sessions.tsx
+msgid "Nothing is running."
+msgstr "Nothing is running."
+
+#: src/pages/NeedsYou.tsx
+msgid "Nothing matches."
+msgstr "Nothing matches."
+
+#: src/pages/Sessions.tsx
+msgid "Nothing needs you."
+msgstr "Nothing needs you."
 
 #: src/pages/Overview.tsx
 msgid "nothing notable yet today"
@@ -2075,6 +2104,7 @@ msgstr "sessions"
 #: src/pages/ProjectSettings.tsx
 #: src/pages/ProjectSettings.tsx
 #: src/pages/Sessions.tsx
+#: src/pages/Sessions.tsx
 msgid "Sessions"
 msgstr "Sessions"
 
@@ -2549,6 +2579,7 @@ msgstr "without proof: {withoutProof}"
 
 #: src/pages/Overview.tsx
 #: src/pages/Overview.tsx
+#: src/pages/Sessions.tsx
 #: src/pages/today/LiveNow.tsx
 msgid "working"
 msgstr "working"

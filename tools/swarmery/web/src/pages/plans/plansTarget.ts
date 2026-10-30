@@ -5,7 +5,6 @@
 import { i18n, type MessageDescriptor } from '@lingui/core';
 import { msg, t } from '@lingui/core/macro';
 import type { Epic, EpicPhase } from '../../api/types';
-import { showsReviewTab } from './landingModel';
 import { PHASE_TABS, type PhaseTab } from './PhasePanel';
 import { computeResolvedSeqs, phaseStatus, planComplete } from './planModel';
 import type { ParsedPlansRoute, PlanDetailTab, PlansDetail, PlansStatus, PlansTarget } from './plansUrl';
@@ -25,6 +24,13 @@ export const FILTER_LABEL: Record<EpicFilter, MessageDescriptor> = EPIC_STATUS_L
 /** Which group an epic belongs to (paused plans live with the active ones). */
 export function epicFilterOf(status: Epic['status']): EpicFilter {
   return status === 'active' || status === 'paused' ? 'active' : status;
+}
+
+/** Which tab of the list a plan sits in. A plan whose every phase landed is done
+ * whatever its status still says, as the design's list has it. */
+export function planFilterOf(epic: Epic): EpicFilter {
+  const filter = epicFilterOf(epic.status);
+  return filter === 'active' && planComplete(epic, computeResolvedSeqs(epic.phases)) ? 'done' : filter;
 }
 
 /** The stale-link notice for a revision id the plan does not have (SC-8). */
@@ -141,7 +147,7 @@ export function canonicalPlansTarget(
   epics: Epic[],
 ): { target: PlansTarget; missing: PlansMissing } {
   const listOf = (f: EpicFilter, missing: PlansMissing): { target: PlansTarget; missing: PlansMissing } => {
-    const first = epics.find((e) => epicFilterOf(e.status) === f);
+    const first = epics.find((e) => planFilterOf(e) === f);
     return { target: first !== undefined ? { plan: first.externalId } : { plan: null, status: f }, missing };
   };
 
@@ -169,14 +175,8 @@ export function canonicalPlansTarget(
     if (p === undefined) {
       return { target: { plan: epic.externalId }, missing: { kind: 'phase', seq: d.seq, planTitle: epic.title } };
     }
-    // Edit on a done phase → Report; Review on a phase that never ran → Runs
-    // (the tabs each panel falls back to).
-    const tab: PhaseDetailTab =
-      d.tab === 'edit' && phaseStatus(p, resolvedSeqs) === 'done'
-        ? 'report'
-        : d.tab === 'review' && !showsReviewTab(p)
-          ? 'runs'
-          : d.tab;
+    // Edit on a done phase → Report (the tab the page falls back to).
+    const tab: PhaseDetailTab = d.tab === 'edit' && phaseStatus(p, resolvedSeqs) === 'done' ? 'report' : d.tab;
     return { target: { plan: epic.externalId, detail: { kind: 'phase', seq: d.seq, tab } }, missing: null };
   }
   const complete = planComplete(epic, resolvedSeqs);

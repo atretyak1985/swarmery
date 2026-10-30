@@ -935,8 +935,8 @@ export function SessionPane({
           <TabButton active={tab === 'diff'} onClick={() => setTab('diff')} count={diffCount}>
             {t`Diff`}
           </TabButton>
-          <span className="flex-1" />
-          <div className="flex flex-wrap items-center gap-0.5 pb-0.5">
+          <span className="min-w-2 flex-1" />
+          <div className="inline-flex gap-1.5 py-1">
             {/* No `pause` (plan D-13): stopSession ends the process and records it
                 as finished, so the word would lie. */}
             {state === 'working' && redirect !== null && (

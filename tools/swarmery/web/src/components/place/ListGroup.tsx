@@ -1,9 +1,10 @@
-// A group inside a list (handoff §1): a mono uppercase label, its count, a
-// hairline and a caret. Sessions, Needs you, Inbox, Plans and Today keep every
-// group open; Health, Learning, Knowledge, System, Docs and Settings run them as
-// an accordion — one open, the first by default, and the counts always visible.
+// A group inside a list (handoff §1): a caret, a mono uppercase label and its
+// count. Sessions, Needs you, Inbox and Today keep every group open, and their head
+// keeps the caret's width so labels line up. Docs and Settings run them as an
+// accordion — one open, the first by default, and the counts always visible.
 // `useAccordion` is that mode: one key open, and clicking the open group leaves
-// it open, as the design does, because a place always shows one group.
+// it open, as the design does, because a place always shows one group. A tab of a
+// list hides the head: the tab already names the group.
 
 import { useCallback, useState, type ReactNode } from 'react';
 
@@ -24,6 +25,7 @@ export function ListGroup({
   tone = 'default',
   open = true,
   onToggle,
+  hideHead = false,
   children,
 }: {
   label: string;
@@ -32,23 +34,24 @@ export function ListGroup({
   open?: boolean;
   /** Omitted for an always-open group: the header is then plain, not a control. */
   onToggle?: () => void;
+  /** Under a list tab: the rows alone. */
+  hideHead?: boolean;
   children?: ReactNode;
 }): JSX.Element {
   const header = (
     <>
+      <span aria-hidden="true" className="w-2.5 shrink-0 font-mono text-[10px] text-ink-faint">
+        {onToggle === undefined ? '' : open ? '▾' : '▸'}
+      </span>
       <span className={`font-mono text-[10px] tracking-[0.12em] uppercase ${LABEL_TONE[tone]}`}>{label}</span>
       <span className="font-mono text-[10px] text-ink-faint">{count}</span>
-      <span aria-hidden="true" className="h-px flex-1 bg-line" />
-      <span aria-hidden="true" className="font-mono text-[10px] text-ink-faint">
-        {open ? '▾' : '▸'}
-      </span>
     </>
   );
-  const headerClass =
-    'flex w-full items-center gap-2 border-t border-line pt-[10px] pr-[14px] pb-1.5 pl-[14px] leading-[normal]';
+  const pad = onToggle === undefined ? 'pt-[10px] pb-1' : open ? 'pt-3 pb-1' : 'py-[7px]';
+  const headerClass = `flex w-full items-center gap-2 pr-[14px] pl-2.5 text-left leading-[normal] ${pad}`;
   return (
     <div>
-      {onToggle === undefined ? (
+      {hideHead ? null : onToggle === undefined ? (
         <div className={headerClass}>{header}</div>
       ) : (
         <button

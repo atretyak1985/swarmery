@@ -1,8 +1,9 @@
 // The phase ledger (handoff §6): one line per phase, in the design's grid, so a
-// plan's state reads top to bottom. A line opens in place to its runs, its criteria
-// and every action the phase offers; the phase's name is the way to its full details,
-// which replace the ledger. The running phase, else the next runnable one, is open
-// until the operator picks another: that is the one a person came to look at.
+// plan's state reads top to bottom. A click on a line opens it in place to its runs,
+// its criteria and every action the phase offers; the phase's name opens the phase's
+// own page. The running phase, else the next runnable one, is open until the operator
+// picks another: that is the one a person came to look at. PhaseRunLine, above the
+// ledger, says what a run started now will use.
 
 import { Trans, useLingui } from '@lingui/react/macro';
 import { useState } from 'react';
@@ -27,11 +28,14 @@ import {
   phaseRuns,
   phaseStage,
   sessionGlyph,
+  stageLabel,
   type PhaseStage,
 } from './phaseLedgerModel';
 import {
   DocModelChip,
   PhaseRunEffortPicker,
+  phaseRunEffortLine,
+  phaseRunModelLine,
   PhaseRunModelPicker,
   RunModelChip,
   type PhaseRunEffort,
@@ -46,7 +50,7 @@ import { reverifyAction, type Reverify } from './useReverify';
 const GRID =
   'grid grid-cols-[18px_24px_minmax(0,1fr)_40px] gap-[10px] desk:grid-cols-[18px_24px_minmax(0,1.7fr)_minmax(56px,0.4fr)_minmax(88px,0.7fr)_40px]';
 
-const STAGE_TONE: Record<PhaseStage, string> = {
+export const STAGE_TONE: Record<PhaseStage, string> = {
   decision: 'text-brand',
   manual: 'text-brand',
   review: 'text-green',
@@ -62,16 +66,11 @@ const BAND_FILL: Record<OffPlanBand, string> = {
 };
 
 function StageLabel({ stage }: { stage: PhaseStage }): JSX.Element {
-  const { t } = useLingui();
-  const label: Record<PhaseStage, string> = {
-    landed: t`landed`,
-    review: t`review`,
-    exec: t`exec`,
-    decision: t`decision`,
-    manual: t`manual`,
-    none: '—',
-  };
-  return <span className={`hidden font-mono text-[11px] leading-[normal] desk:block ${STAGE_TONE[stage]}`}>{label[stage]}</span>;
+  return (
+    <span className={`hidden font-mono text-[11px] leading-[normal] desk:block ${STAGE_TONE[stage]}`}>
+      {stageLabel(stage)}
+    </span>
+  );
 }
 
 /** The cost and a bar of its share against the plan's costliest phase. No tick: a
@@ -91,20 +90,30 @@ function CostCell({ cost, maxCost, band }: { cost: number | null; maxCost: numbe
   );
 }
 
-function RunRow({ run, now }: { run: Session; now: number }): JSX.Element {
+/** How long a run took, or has been going. */
+export function runSpan(run: Session, now: number): string {
+  const end = run.endedAt === null ? now : new Date(run.endedAt).getTime();
+  return compactSpan(end - new Date(run.startedAt).getTime());
+}
+
+/** One run. `ruled` is the phase page's line: larger, with a hairline under it. */
+export function RunRow({ run, now, ruled = false }: { run: Session; now: number; ruled?: boolean }): JSX.Element {
   const sessionHref = useSessionHref();
   const label = run.title ?? run.why ?? run.sessionUuid.slice(0, 8);
-  const end = run.endedAt === null ? now : new Date(run.endedAt).getTime();
-  const span = compactSpan(end - new Date(run.startedAt).getTime());
+  const span = runSpan(run, now);
   return (
     <li>
       <Link
         to={sessionHref(run.sessionUuid)}
-        className="grid grid-cols-[18px_minmax(0,1fr)_auto] items-start gap-3 py-1.5 leading-[normal] transition-colors hover:text-brand"
+        className={`grid grid-cols-[18px_minmax(0,1fr)_auto] items-start gap-3 leading-[normal] transition-colors hover:text-brand ${
+          ruled ? 'border-b border-line py-[9px]' : 'py-1.5'
+        }`}
       >
         <StateGlyph state={sessionGlyph(run.status)} size={12} />
         <span className="min-w-0">
-          <span className="block truncate text-[12.5px] text-ink-2">{label}</span>
+          <span className={`block truncate ${ruled ? 'text-[13px] font-medium text-ink' : 'text-[12.5px] text-ink-2'}`}>
+            {label}
+          </span>
           {run.model !== null && (
             <span className="mt-0.5 block font-mono text-[10.5px] text-ink-faint">{modelShortName(run.model)}</span>
           )}
@@ -368,6 +377,7 @@ export function PhaseLedger({
                     <Link
                       to={phaseHref(p.seq, 'story')}
                       onClick={(e) => e.stopPropagation()}
+                      title={t`open phase`}
                       className={`min-w-0 text-[13px] leading-[1.35] font-medium text-pretty transition-colors hover:text-brand ${
                         pending ? 'text-ink-dim' : 'text-ink'
                       }`}
@@ -453,6 +463,24 @@ export function PhaseLedger({
           );
         })}
       </ol>
+    </div>
+  );
+}
+
+/** What a run started now will use: the pickers' values, then how runs are isolated. */
+export function PhaseRunLine({ model, effort }: { model: PhaseRunModel; effort: PhaseRunEffort }): JSX.Element {
+  const { t } = useLingui();
+  return (
+    <div className="mt-3 flex flex-wrap gap-x-[22px] gap-y-1.5 font-mono text-[10.5px] leading-[normal] text-ink-faint">
+      <span>
+        {t`run model`} · <span className="text-ink-dim">{phaseRunModelLine(model)}</span>
+      </span>
+      <span>
+        {t`effort`} · <span className="text-ink-dim">{phaseRunEffortLine(effort)}</span>
+      </span>
+      <span>
+        {t`isolation`} · <span className="text-ink-dim">{t`worktree per phase`}</span>
+      </span>
     </div>
   );
 }

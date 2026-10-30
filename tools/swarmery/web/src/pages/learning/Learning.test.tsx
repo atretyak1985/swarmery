@@ -4,7 +4,7 @@
 //
 //   1. /learning renders three accordion groups, Lessons first and open with its
 //      lessons as rows, one page heading and no calibration panel.
-//   2. `?tab=classifier` opens The classifier: sentence titles, the words
+//   2. `?tab=classifier` opens Classifier: sentence titles, the words
 //      off · watching · acting, and no code-name mode on screen. `?tab=honesty`
 //      opens the same group on its Forecast honesty row.
 //   3. Choosing "watching" calls putDecisionMode with 'shadow'.
@@ -99,7 +99,7 @@ function lesson(id: number): lessons.Lesson {
 
 /** A group header of the accordion: its label, then its count. */
 function group(name: string): HTMLElement {
-  return screen.getByRole('button', { name: new RegExp(`^${name}\\s*\\d+$`) });
+  return screen.getByRole('tab', { name: new RegExp(`^${name.toLowerCase()}\\s*\\d*$`) });
 }
 
 function renderAt(url: string): void {
@@ -137,10 +137,10 @@ describe('Learning', () => {
   it('renders three groups with Lessons open first and its lessons as rows', async () => {
     renderAt('/learning');
     const list = within(screen.getByRole('region', { name: 'Learning' }));
-    expect(list.getAllByRole('button', { expanded: true })).toHaveLength(1);
-    expect(list.getAllByRole('button', { expanded: false })).toHaveLength(2);
+    expect(list.getAllByRole('tab')).toHaveLength(3);
+    expect(list.getAllByRole('tab', { selected: true })).toHaveLength(1);
     await waitFor(() => expect(group('Lessons').textContent).toMatch(/3/));
-    expect(group('Lessons').getAttribute('aria-expanded')).toBe('true');
+    expect(group('Lessons').getAttribute('aria-selected')).toBe('true');
     expect(lessons.fetchLessons).toHaveBeenCalledWith();
     expect(await screen.findByRole('button', { name: /lesson 1/ })).toBeTruthy();
     // One page heading (Learning) and no calibration panel.
@@ -157,7 +157,7 @@ describe('Learning', () => {
 
   it('selects the classifier from ?tab= and speaks in sentences and mode words', async () => {
     renderAt('/learning?tab=classifier');
-    expect(group('The classifier').getAttribute('aria-expanded')).toBe('true');
+    expect(group('Classifier').getAttribute('aria-selected')).toBe('true');
     expect(await screen.findByText('What kind of task was it?')).toBeTruthy();
     expect(screen.getByText('d2.task_type')).toBeTruthy();
     expect(screen.getByText('Why did it fail?')).toBeTruthy();
@@ -183,9 +183,9 @@ describe('Learning', () => {
     );
   });
 
-  it('renders the calibration panel under Forecast honesty, inside The classifier', async () => {
+  it('renders the calibration panel under Forecast honesty, inside Classifier', async () => {
     renderAt('/learning?tab=honesty');
-    expect(group('The classifier').getAttribute('aria-expanded')).toBe('true');
+    expect(group('Classifier').getAttribute('aria-selected')).toBe('true');
     expect(await screen.findByText('How honest forecasts are')).toBeTruthy();
     expect(screen.getByText('calibration')).toBeTruthy();
   });

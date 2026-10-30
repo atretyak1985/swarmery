@@ -6,7 +6,7 @@
 //      decided in Needs you.
 //   2. j / k move the selection.
 //   3. e runs the main action of the selected item, x the secondary one.
-//   4. ?tab=lessons opens on the lessons; ?tab=approvals goes to Needs you.
+//   4. ?tab=lessons opens that tab; ?tab=approvals goes to Needs you.
 //   5. Each kind's detail has exactly ONE primary button.
 //   6. A failed source is a "couldn't load" row, not a blank Inbox.
 //   7. A decided item leaves the list, and an empty list says "All reviewed."
@@ -271,7 +271,9 @@ describe('Inbox', () => {
   });
 
   it('x skips a classifier question: there is no wrong answer to send', async () => {
-    await renderInbox('/inbox?tab=classifier');
+    await renderInbox('/inbox');
+    const row = rows().find((r) => r.dataset.kind === 'classifier') as HTMLElement;
+    fireEvent.click(row.firstElementChild as HTMLElement);
     expect(selectedRow().dataset.kind).toBe('classifier');
     await act(async () => {
       fireEvent.keyDown(window, { key: 'x' });
@@ -280,10 +282,40 @@ describe('Inbox', () => {
     expect(decisions.postGroundTruth).not.toHaveBeenCalled();
   });
 
-  it('?tab=lessons opens on the lessons, and keeps the rest in view', async () => {
+  it('?tab=retire opens that tab: its rows alone, under no group head', async () => {
     await renderInbox('/inbox?tab=retire');
-    expect(rows()).toHaveLength(5);
+    expect(rows()).toHaveLength(1);
     expect(selectedRow().dataset.kind).toBe('retire');
+    expect(screen.getByRole('tab', { name: /retire a lesson/ }).getAttribute('aria-selected')).toBe('true');
+  });
+
+  it('all shows three rows of a group, then a way into its tab', async () => {
+    const real = vi.mocked(lessons.fetchLessons).getMockImplementation();
+    const [first] = (await real?.()) ?? [];
+    vi.mocked(lessons.fetchLessons).mockImplementation(
+      async () => [1, 2, 3, 4, 5].map((id) => ({ ...first, id, title: `lesson ${String(id)}` })) as never,
+    );
+    await renderInbox('/inbox');
+    expect(rows().filter((r) => r.dataset.kind === 'lesson')).toHaveLength(3);
+    fireEvent.click(screen.getByRole('button', { name: '+ 2 more →' }));
+    expect(rows()).toHaveLength(5);
+    expect(rows().every((r) => r.dataset.kind === 'lesson')).toBe(true);
+    expect(screen.getByRole('tab', { name: /^lessons/ }).getAttribute('aria-selected')).toBe('true');
+    vi.mocked(lessons.fetchLessons).mockImplementation(real as never);
+  });
+
+  it('shows all, the kinds with something waiting, and handled by agent', async () => {
+    await renderInbox('/inbox');
+    const labels = screen.getAllByRole('tab').map((tab) => tab.textContent ?? '');
+    expect(labels[0]).toMatch(/^all/);
+    expect(labels[labels.length - 1]).toMatch(/^handled by agent/);
+    expect(labels.some((label) => label.startsWith('approvals'))).toBe(false);
+  });
+
+  it('a tab with nothing in it says so', async () => {
+    await renderInbox('/inbox?tab=reviews');
+    expect(rows()).toHaveLength(0);
+    expect(screen.getByText('Nothing here.')).toBeTruthy();
   });
 
   it('?tab=approvals goes to Needs you, where the approvals are', async () => {
@@ -313,13 +345,13 @@ describe('Inbox', () => {
     vi.mocked(lessons.fetchLessons).mockImplementation(realLessons as never);
     vi.mocked(lessons.fetchRetirements).mockImplementation(realRetirements as never);
     expect(rows()).toHaveLength(0);
-    expect(screen.getByText('All reviewed.')).toBeTruthy();
+    expect(screen.getAllByText('All reviewed.').length).toBeGreaterThan(0);
   });
 
   it('shows a failed source as a row, not a blank Inbox', async () => {
     vi.mocked(api.fetchProposals).mockRejectedValue(new Error('boom'));
     await renderInbox();
-    expect(screen.getByRole('alert').textContent).toContain("couldn't load proposals");
+    expect(screen.getByRole('alert').textContent).toContain("couldn't load agent changes");
     expect(rows()).toHaveLength(4);
   });
 
@@ -384,7 +416,7 @@ describe('Inbox', () => {
     };
     vi.mocked(reviews.fetchUnackedPlanReviews).mockResolvedValueOnce([review]).mockResolvedValue([]);
     await renderInbox('/inbox?tab=reviews');
-    expect(rows()).toHaveLength(6);
+    expect(rows()).toHaveLength(1);
     const card = selectedRow().textContent ?? '';
     expect(card).toContain('Plan review: Order line items');
     expect(card).toContain('failed');
@@ -549,7 +581,7 @@ describe('Inbox', () => {
       const items = vi.mocked(api.fetchApprovals).mock.calls.length;
       const lists = vi.mocked(triage.fetchTriageVerdicts).mock.calls.length;
       await act(async () => {
-        fireEvent.click(screen.getByRole('button', { name: 'undo Dup lesson' }));
+        fireEvent.click(screen.getByRole('button', { name: /^undo/ }));
       });
       await act(async () => {
         await Promise.resolve();
@@ -589,9 +621,11 @@ describe('Inbox', () => {
     it('lists applied verdicts under the handled tab and undo calls the endpoint', async () => {
       serve({ applied: [verdict({ id: 61, state: 'applied', title: 'Dup lesson', value: 'dismiss' })] });
       await renderInbox('/inbox?tab=handled');
-      expect(screen.getByText('handled by agent')).toBeTruthy();
+      expect(screen.getByRole('tab', { name: /handled by agent/ }).getAttribute('aria-selected')).toBe('true');
+      expect(screen.getAllByTestId('inbox-handled-row')).toHaveLength(1);
+      expect(screen.getByText('e undo')).toBeTruthy();
       await act(async () => {
-        fireEvent.click(screen.getByRole('button', { name: 'undo Dup lesson' }));
+        fireEvent.keyDown(window, { key: 'e' });
       });
       expect(triage.undoTriageVerdict).toHaveBeenCalledWith(61);
     });

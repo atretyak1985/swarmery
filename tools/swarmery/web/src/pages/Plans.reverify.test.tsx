@@ -224,7 +224,7 @@ describe('Verify again — phase row', () => {
     // The row's done branch (✓ summary) is what renders — not Run/Retry.
     await openRow();
     await screen.findAllByRole('button', { name: '✓ summary' });
-    expect(screen.queryByRole('button', { name: /Run phase|Retry run/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: /run this phase now|Run phase|Retry run/ })).toBeNull();
     expect(screen.getByRole('button', { name: 'Verify again' })).toBeTruthy();
   });
 
@@ -299,7 +299,7 @@ describe('Verify again — detail panel', () => {
   it('Runs tab offers nothing when canReverify is false', async () => {
     epics = [epic([phase({ canReverify: false })])];
     render(<PlansAt path={`${LIST}/phase/1/runs`} />);
-    await screen.findByRole('button', { name: /Run phase|Retry run/ });
+    await screen.findByRole('button', { name: /run this phase now|Run phase|Retry run/ });
     expect(screen.queryByRole('button', { name: 'Verify again' })).toBeNull();
   });
 });

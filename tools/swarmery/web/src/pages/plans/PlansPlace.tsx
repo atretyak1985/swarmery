@@ -4,8 +4,8 @@
 // shared link lands on a specific tab; the default (Plans) keeps the URL clean. Each
 // body is lazy, as the routes were.
 //
-// Plans itself is a list and a plan (handoff §6) and draws no tabs: `+ new` in its
-// list opens New plan, and Board and Playbooks are reached through ⌘K (plan D-3).
+// Plans itself is a list and a plan (handoff §6) and draws none of these tabs: `+ new`
+// in its list opens New plan, and Board and Playbooks are reached through ⌘K (plan D-3).
 // The strip exists only on those other bodies, as their way back to Plans; a parked
 // tab stays out of it unless it is the one you are on.
 //
