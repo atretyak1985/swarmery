@@ -951,17 +951,13 @@ export function SessionPane({
             <Menu label="⋯" ariaLabel={t`more for this session`}>
               {state !== 'done' && <MenuLine label={t`outcome`}>{outcomePicker}</MenuLine>}
               {state !== 'done' && <MenuLine label={t`board`}>{extractButton}</MenuLine>}
-              {!live && killable !== 'none' && (
-                <MenuLine label={t`process`}>
+              {/* Stop vs Kill is explained once, here, next to the process. */}
+              <MenuLine label={t`process`}>
+                <ExplainPair id="kill-vs-stop">
                   <ProcBadge session={detail} />
-                  <KillButton session={detail} />
-                </MenuLine>
-              )}
-              {live && (
-                <MenuLine label={t`process`}>
-                  <ProcBadge session={detail} />
-                </MenuLine>
-              )}
+                </ExplainPair>
+                {!live && <KillButton session={detail} />}
+              </MenuLine>
               <MenuLine label={t`live usage`}>
                 <SessionLinkChips session={detail} />
               </MenuLine>

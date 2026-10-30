@@ -52,7 +52,7 @@ export function ListPane({
       <div className="px-[14px] pt-[14px] pb-2">
         <div className="flex items-baseline gap-2">
           <h1 className="m-0 text-[15px] leading-[normal] font-semibold tracking-[-0.01em] text-ink">{title}</h1>
-          {sub !== undefined && <span className="font-mono text-[10.5px] text-ink-faint">{sub}</span>}
+          {sub !== undefined && <span className="font-mono text-[10.5px] leading-[normal] text-ink-faint">{sub}</span>}
         </div>
         <div className="mt-[10px] flex items-center gap-1.5">
           <input

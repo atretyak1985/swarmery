@@ -11,7 +11,7 @@ import { msg } from '@lingui/core/macro';
 import { Trans, useLingui } from '@lingui/react/macro';
 import { useMemo, useState } from 'react';
 import type { Event, SessionDetail } from '../../api/types';
-import { fmtDurationMs, fmtSpan, fmtTime } from '../../lib/format';
+import { fmtSpan, fmtTime } from '../../lib/format';
 import {
   argSummary,
   errorText,
@@ -20,6 +20,7 @@ import {
   subagentDescription,
   subagentName,
 } from '../../lib/payload';
+import { compactSpan, stepDuration } from '../../lib/sessionsView';
 import { buildTimeline, countEvents, type TimelineNode } from '../../lib/timeline';
 import type { DecisionTier } from '../../components/place/DecisionCard';
 import { StateGlyph, type GlyphState } from '../../components/place/StateGlyph';
@@ -36,6 +37,7 @@ const TYPE_LABELS: Partial<Record<Event['type'], MessageDescriptor>> = {
   session_end: msg`Session end`,
 };
 
+// i18n-ignore: Tailwind classes
 const STEP = 'grid grid-cols-[18px_minmax(0,1fr)_auto] items-start gap-3 border-b border-line py-2';
 const STEP_DURATION = 'font-mono text-[10.5px] leading-[18px] whitespace-nowrap text-ink-faint';
 const STEP_DETAIL = 'mt-[3px] font-mono text-[11.5px] leading-[1.5] break-words text-ink-3';
@@ -69,10 +71,17 @@ function isWaitingEvent(event: Event): boolean {
   return event.type === 'permission_request' && event.status === null;
 }
 
+/** The agent's own words for the step, when the tool call carried them; the tool
+ * then steps back to the grey tag beside it (handoff §5). */
+function stepWords(event: Event): string | null {
+  return pickString(event.payload, ['description']);
+}
+
 function EventRow({ event, active }: { event: Event; active: boolean }): JSX.Element {
   const { i18n } = useLingui();
   const [open, setOpen] = useState(false);
   const failed = isErrorEvent(event);
+  const words = stepWords(event);
   const arg = argSummary(event);
   const failure = failed ? errorText(event) : null;
   const state: GlyphState = failed ? 'failed' : active ? 'working' : 'done';
@@ -88,10 +97,11 @@ function EventRow({ event, active }: { event: Event; active: boolean }): JSX.Ele
           className="flex min-w-0 items-baseline gap-2 text-left"
         >
           <span className={`text-[13px] leading-[normal] font-medium ${failed ? 'text-red' : 'text-ink'}`}>
-            {labelFor(event, i18n)}
+            {words ?? labelFor(event, i18n)}
           </span>
+          {words !== null && <span className="font-mono text-[10.5px] text-ink-faint">{labelFor(event, i18n)}</span>}
         </button>
-        {arg !== null && <div className={STEP_DETAIL}>{arg}</div>}
+        {arg !== null && arg !== words && <div className={STEP_DETAIL}>{arg}</div>}
         {failure !== null && <div className={`${STEP_DETAIL} text-red`}>{failure}</div>}
         {open && (
           <pre className="mt-1.5 overflow-x-auto rounded-md border border-line bg-bg px-2.5 py-2 font-mono text-[10.5px] leading-relaxed text-ink-2">
@@ -99,7 +109,7 @@ function EventRow({ event, active }: { event: Event; active: boolean }): JSX.Ele
           </pre>
         )}
       </div>
-      <span className={STEP_DURATION}>{fmtDurationMs(event.durationMs)}</span>
+      <span className={STEP_DURATION}>{stepDuration(event.durationMs)}</span>
     </div>
   );
 }
@@ -118,7 +128,7 @@ function SubagentBlock({
   const running = node.stop === null;
   const duration =
     node.stop !== null
-      ? fmtDurationMs(node.stop.durationMs ?? null) || fmtSpan(node.start.ts, node.stop.ts)
+      ? stepDuration(node.stop.durationMs ?? null) || fmtSpan(node.start.ts, node.stop.ts)
       : t`running…`;
 
   return (
@@ -170,16 +180,20 @@ function Prompt({ event }: { event: Event }): JSX.Element {
 /** A step waiting on the gate card above: what it asks, and the level. */
 function AwaitingStep({ event, tier }: { event: Event; tier: DecisionTier | undefined }): JSX.Element {
   const { t, i18n } = useLingui();
+  const words = stepWords(event);
   const command = argSummary(event);
   const tool = event.toolName ?? t`Permission`;
-  const waited = fmtSpan(event.ts, null);
+  const waited = compactSpan(Date.now() - new Date(event.ts).getTime());
   const badge = tier === undefined ? undefined : TIER_BADGE[tier];
   return (
     <div className={STEP}>
       <StateGlyph state="needs" size={12} className="mt-px" />
       <div className="min-w-0">
-        <div className="text-[13px] leading-[normal] font-medium text-ink">{t`${tool} · awaiting approval`}</div>
-        {command !== null && <div className={STEP_DETAIL}>{command}</div>}
+        <div className="flex min-w-0 items-baseline gap-2">
+          <span className="text-[13px] leading-[normal] font-medium text-ink">{words ?? t`${tool} · awaiting approval`}</span>
+          {words !== null && <span className="font-mono text-[10.5px] text-ink-faint">{tool}</span>}
+        </div>
+        {command !== null && command !== words && <div className={STEP_DETAIL}>{command}</div>}
         {badge !== undefined && (
           <span className={`mt-1 inline-block px-1.5 font-mono text-[10px] ${badge.className}`}>
             {i18n._(badge.label)}

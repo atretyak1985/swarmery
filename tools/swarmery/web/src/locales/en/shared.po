@@ -57,9 +57,25 @@ msgstr " (project override)"
 msgid "— declares {declares}"
 msgstr "— declares {declares}"
 
+#: src/lib/sessionsView.ts
+msgid "· {intent}."
+msgstr "· {intent}."
+
+#: src/lib/sessionsView.ts
+msgid "· {intent}. The transcript stays."
+msgstr "· {intent}. The transcript stays."
+
 #: src/workspace/TaskModal.tsx
 msgid "· created {created}"
 msgstr "· created {created}"
+
+#: src/lib/sessionsView.ts
+msgid "· last action {ago} ago · {doing}."
+msgstr "· last action {ago} ago · {doing}."
+
+#: src/lib/sessionsView.ts
+msgid "· last action {ago} ago."
+msgstr "· last action {ago} ago."
 
 #: src/components/PluginDriftBadge.tsx
 msgid "· plugins {warn}"
@@ -69,6 +85,10 @@ msgstr "· plugins {warn}"
 msgid "· plugins ⚠ {error}"
 msgstr "· plugins ⚠ {error}"
 
+#: src/lib/sessionsView.ts
+msgid "· the transcript stays."
+msgstr "· the transcript stays."
+
 #: src/components/usage/UsageModal.tsx
 msgid "(no binding)"
 msgstr "(no binding)"
@@ -77,7 +97,7 @@ msgstr "(no binding)"
 msgid "(patch)"
 msgstr "(patch)"
 
-#: src/components/SessionCard.tsx
+#: src/components/SessionRow.tsx
 msgid "(untitled session)"
 msgstr "(untitled session)"
 
@@ -203,10 +223,6 @@ msgstr "{h} h ago"
 #: src/components/BulkPromptBar.tsx
 msgid "{hiddenCount} selected sessions are hidden by the filter and will not be sent"
 msgstr "{hiddenCount} selected sessions are hidden by the filter and will not be sent"
-
-#: src/components/SessionCard.tsx
-msgid "{k}k ctx"
-msgstr "{k}k ctx"
 
 #: src/components/BulkPromptBar.tsx
 msgid "{label} — {why}"
@@ -348,14 +364,6 @@ msgstr "@{value} (unknown)"
 #: src/main.tsx
 msgid "← back to the overview"
 msgstr "← back to the overview"
-
-#: src/components/SessionCard.tsx
-msgid "→ changed to"
-msgstr "→ changed to"
-
-#: src/components/SessionCard.tsx
-msgid "→ fell back to"
-msgstr "→ fell back to"
 
 #: src/components/Drawer.tsx
 msgid "↑↓ next"
@@ -696,6 +704,14 @@ msgstr "All projects"
 msgid "All projects →"
 msgstr "All projects →"
 
+#: src/lib/sessionsView.ts
+msgid "Allow {toolName}: {preview}?"
+msgstr "Allow {toolName}: {preview}?"
+
+#: src/lib/sessionsView.ts
+msgid "Allow {toolName}?"
+msgstr "Allow {toolName}?"
+
 #: src/workspace/task/TaskActions.tsx
 msgid "already fixed"
 msgstr "already fixed"
@@ -900,10 +916,6 @@ msgstr "Awaiting merge"
 #: src/lib/sessionsView.ts
 msgid "awaiting reply"
 msgstr "awaiting reply"
-
-#: src/components/SessionCard.tsx
-msgid "awaiting reply · {owed}"
-msgstr "awaiting reply · {owed}"
 
 #: src/lib/needsYou.ts
 msgid "Awaiting your reply"
@@ -1765,7 +1777,6 @@ msgstr "docs: {configDocs}"
 #: src/components/DetachModal.tsx
 #: src/components/NewProjectButton.tsx
 #: src/components/place/StateGlyph.tsx
-#: src/components/PlanRunCard.tsx
 #: src/components/SessionControls.tsx
 #: src/lib/sessionsView.ts
 msgid "done"
@@ -1857,6 +1868,7 @@ msgid "failed"
 msgstr "failed"
 
 #: src/lib/needsYou.ts
+#: src/lib/sessionsView.ts
 msgid "Failed"
 msgstr "Failed"
 
@@ -1946,6 +1958,10 @@ msgstr "filter sessions by title…"
 msgid "Finish it here: open a terminal already scoped to this account and log the CLI in."
 msgstr "Finish it here: open a terminal already scoped to this account and log the CLI in."
 
+#: src/lib/sessionsView.ts
+msgid "Finished"
+msgstr "Finished"
+
 #: src/components/NotifySettings.tsx
 msgid "fires only while this tab is in the background; click a notification to jump to the approval or session"
 msgstr "fires only while this tab is in the background; click a notification to jump to the approval or session"
@@ -1969,6 +1985,14 @@ msgstr "Flow of a board card from capture to landing"
 #: src/components/AccountSelector.tsx
 msgid "follow whichever account is marked default on this machine"
 msgstr "follow whichever account is marked default on this machine"
+
+#: src/lib/sessionsView.ts
+msgid "for {quiet} · no transcript activity, it may have died silently."
+msgstr "for {quiet} · no transcript activity, it may have died silently."
+
+#: src/lib/sessionsView.ts
+msgid "for {waited} · the session does nothing until you decide."
+msgstr "for {waited} · the session does nothing until you decide."
 
 #: src/components/KillButton.tsx
 msgid "Force kill"
@@ -2045,10 +2069,6 @@ msgstr "guard stop"
 #: src/pages/docsRail.ts
 msgid "Guides"
 msgstr "Guides"
-
-#: src/components/SessionCard.tsx
-msgid "Handoff"
-msgstr "Handoff"
 
 #: src/components/RunOutcomeModal.tsx
 msgid "headless run in progress"
@@ -2149,6 +2169,14 @@ msgstr "improve agent failed"
 msgid "Improve the system"
 msgstr "Improve the system"
 
+#: src/lib/sessionsView.ts
+msgid "in {elapsed} · {intent}."
+msgstr "in {elapsed} · {intent}."
+
+#: src/lib/sessionsView.ts
+msgid "in {elapsed}."
+msgstr "in {elapsed}."
+
 #: src/workspace/boardModel.ts
 msgid "In Progress"
 msgstr "In Progress"
@@ -2163,10 +2191,6 @@ msgstr "In Review"
 #: src/workspace/boardModel.ts
 msgid "Inbox"
 msgstr "Inbox"
-
-#: src/components/SessionCard.tsx
-msgid "ingested from the {label} Claude Code account"
-msgstr "ingested from the {label} Claude Code account"
 
 #: src/components/LanguagePicker.tsx
 msgid "interface language"
@@ -2663,14 +2687,6 @@ msgstr "Notifications"
 msgid "notifications are blocked — allow them in the browser site settings, then re-toggle"
 msgstr "notifications are blocked — allow them in the browser site settings, then re-toggle"
 
-#: src/components/SessionCard.tsx
-msgid "now: {now}"
-msgstr "now: {now}"
-
-#: src/components/SessionCard.tsx
-msgid "now: {nowText}"
-msgstr "now: {nowText}"
-
 #: src/lib/docFigures.tsx
 msgid "objective · sequencing table · risks · definition of done"
 msgstr "objective · sequencing table · risks · definition of done"
@@ -2922,6 +2938,10 @@ msgstr "Phase run diagnosis"
 msgid "phase run failed ({status})"
 msgstr "phase run failed ({status})"
 
+#: src/lib/sessionsView.ts
+msgid "Phase running"
+msgstr "Phase running"
+
 #: src/lib/docFigures.tsx
 msgid "Phases with no edge between them run in parallel; each phase document carries its own copy-paste agent prompt and acceptance criteria, so it is executable standalone."
 msgstr "Phases with no edge between them run in parallel; each phase document carries its own copy-paste agent prompt and acceptance criteria, so it is executable standalone."
@@ -2968,6 +2988,7 @@ msgid "plan in"
 msgstr "plan in"
 
 #: src/components/PlanRunCard.tsx
+#: src/components/SessionRow.tsx
 msgid "plan run"
 msgstr "plan run"
 
@@ -3188,9 +3209,13 @@ msgstr "queued, waiting for the mod to pick it up"
 msgid "queued: {queuedCount}"
 msgstr "queued: {queuedCount}"
 
-#: src/components/SessionCard.tsx
-msgid "quiet {quiet}"
-msgstr "quiet {quiet}"
+#: src/lib/sessionsView.ts
+msgid "Quiet"
+msgstr "Quiet"
+
+#: src/lib/sessionsView.ts
+msgid "quiet {quiet} · it may have died silently"
+msgstr "quiet {quiet} · it may have died silently"
 
 #: src/components/usage/UsageConnect.tsx
 msgid "Quota connected, but the CLI still needs a login: <0>{reason}</0>"
@@ -3563,7 +3588,6 @@ msgstr "run this phase again"
 msgid "run verification again against the worktree"
 msgstr "run verification again against the worktree"
 
-#: src/components/PlanRunCard.tsx
 #: src/components/RunOutcomeModal.tsx
 #: src/workspace/boardModel.ts
 msgid "running"
@@ -3930,6 +3954,10 @@ msgstr "stop using this lesson?"
 msgid "stopped"
 msgstr "stopped"
 
+#: src/lib/sessionsView.ts
+msgid "Stopped by you"
+msgstr "Stopped by you"
+
 #: src/components/StopButton.tsx
 msgid "stopping…"
 msgstr "stopping…"
@@ -4272,10 +4300,6 @@ msgstr "this project's .claude/agents/ definition replaces the inherited one"
 msgid "This runs the model on the evidence above and creates a diff proposal you approve before any PR."
 msgstr "This runs the model on the evidence above and creates a diff proposal you approve before any PR."
 
-#: src/components/SessionCard.tsx
-msgid "this session changed model mid-flight: started on {from}, its newest turn ran on {to}"
-msgstr "this session changed model mid-flight: started on {from}, its newest turn ran on {to}"
-
 #: src/workspace/task/TaskBrief.tsx
 msgid "this session had touched the file when the card was captured"
 msgstr "this session had touched the file when the card was captured"
@@ -4489,6 +4513,22 @@ msgstr "waiting for review, a failed verdict, a dispatch error, or an unanswered
 msgid "Waiting for you to enter the code on {host}…"
 msgstr "Waiting for you to enter the code on {host}…"
 
+#: src/lib/sessionsView.ts
+msgid "Waiting for your answer"
+msgstr "Waiting for your answer"
+
+#: src/lib/sessionsView.ts
+msgid "waiting for your permission"
+msgstr "waiting for your permission"
+
+#: src/lib/sessionsView.ts
+msgid "Waiting for your permission"
+msgstr "Waiting for your permission"
+
+#: src/lib/sessionsView.ts
+msgid "waiting for your reply"
+msgstr "waiting for your reply"
+
 #: src/workspace/boardModel.ts
 msgid "waiting on quota: {why}"
 msgstr "waiting on quota: {why}"
@@ -4572,6 +4612,7 @@ msgid "working"
 msgstr "working"
 
 #: src/lib/docFigures.tsx
+#: src/lib/sessionsView.ts
 #: src/workspace/boardModel.ts
 msgid "Working"
 msgstr "Working"

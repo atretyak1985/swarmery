@@ -17,6 +17,10 @@ msgstr ""
 msgid "— <0>untick onboarded only</0> to see them"
 msgstr "— <0>untick onboarded only</0> to see them"
 
+#: src/pages/detail/Timeline.tsx
+msgid "? question"
+msgstr "? question"
+
 #: src/pages/sessions/SwarmPanel.tsx
 msgid "… (truncated)"
 msgstr "… (truncated)"
@@ -30,8 +34,8 @@ msgstr "· suggested"
 msgid "(empty prompt)"
 msgstr "(empty prompt)"
 
+#: src/pages/detail/SessionPane.tsx
 #: src/pages/Overview.tsx
-#: src/pages/SessionDetail.tsx
 msgid "(untitled session)"
 msgstr "(untitled session)"
 
@@ -44,6 +48,11 @@ msgstr "{0, plural, one {# malformed line skipped} few {# malformed lines skippe
 #: src/pages/Projects.tsx
 msgid "{0, plural, one {# project · {onboardedCount} onboarded} few {# projects · {onboardedCount} onboarded} many {# projects · {onboardedCount} onboarded} other {# projects · {onboardedCount} onboarded}}"
 msgstr "{0, plural, one {# project · {onboardedCount} onboarded} few {# projects · {onboardedCount} onboarded} many {# projects · {onboardedCount} onboarded} other {# projects · {onboardedCount} onboarded}}"
+
+#. placeholder {0}: loaded.length
+#: src/pages/Sessions.tsx
+msgid "{0, plural, one {# session} few {# sessions} many {# sessions} other {# sessions}}"
+msgstr "{0, plural, one {# session} few {# sessions} many {# sessions} other {# sessions}}"
 
 #. placeholder {0}: data.uninspected
 #: src/pages/detail/ContextHogsCard.tsx
@@ -94,6 +103,10 @@ msgstr "{count, plural, one {# model} few {# models} many {# models} other {# mo
 msgid "{count, plural, one {one agent is idle until you answer} few {# agents are idle until you answer} many {# agents are idle until you answer} other {# agents are idle until you answer}}"
 msgstr "{count, plural, one {one agent is idle until you answer} few {# agents are idle until you answer} many {# agents are idle until you answer} other {# agents are idle until you answer}}"
 
+#: src/pages/Sessions.tsx
+msgid "{countLine} · {needCount} need you"
+msgstr "{countLine} · {needCount} need you"
+
 #: src/pages/detail/CallTree.tsx
 msgid "{errorCount} err"
 msgstr "{errorCount} err"
@@ -122,7 +135,7 @@ msgstr "{gatheringProof, plural, one {{count} change still gathering proof.} few
 msgid "{hiddenByOnboarded, plural, one {# project hidden as not onboarded} few {# projects hidden as not onboarded} many {# projects hidden as not onboarded} other {# projects hidden as not onboarded}}"
 msgstr "{hiddenByOnboarded, plural, one {# project hidden as not onboarded} few {# projects hidden as not onboarded} many {# projects hidden as not onboarded} other {# projects hidden as not onboarded}}"
 
-#: src/pages/SessionDetail.tsx
+#: src/pages/detail/SessionPane.tsx
 msgid "{inserted, plural, one {# task suggested on the board.} few {# tasks suggested on the board.} many {# tasks suggested on the board.} other {# tasks suggested on the board.}}"
 msgstr "{inserted, plural, one {# task suggested on the board.} few {# tasks suggested on the board.} many {# tasks suggested on the board.} other {# tasks suggested on the board.}}"
 
@@ -202,14 +215,6 @@ msgstr "{sessionCount} sessions · {costLabel}"
 msgid "{sessions, plural, one {measured: median of # session over {days} days · cache write {writeLabel}} few {measured: median of # sessions over {days} days · cache write {writeLabel}} many {measured: median of # sessions over {days} days · cache write {writeLabel}} other {measured: median of # sessions over {days} days · cache write {writeLabel}}}"
 msgstr "{sessions, plural, one {measured: median of # session over {days} days · cache write {writeLabel}} few {measured: median of # sessions over {days} days · cache write {writeLabel}} many {measured: median of # sessions over {days} days · cache write {writeLabel}} other {measured: median of # sessions over {days} days · cache write {writeLabel}}}"
 
-#: src/pages/Sessions.tsx
-msgid "{shownRuns, plural, one {# plan runs} few {# plan runs} many {# plan runs} other {# plan runs}}"
-msgstr "{shownRuns, plural, one {# plan runs} few {# plan runs} many {# plan runs} other {# plan runs}}"
-
-#: src/pages/Sessions.tsx
-msgid "{shownSessions, plural, one {# sessions} few {# sessions} many {# sessions} other {# sessions}}"
-msgstr "{shownSessions, plural, one {# sessions} few {# sessions} many {# sessions} other {# sessions}}"
-
 #: src/pages/detail/Chat.tsx
 msgid "{skills, plural, one {used {count} skill} few {used {count} skills} many {used {count} skills} other {used {count} skills}}"
 msgstr "{skills, plural, one {used {count} skill} few {used {count} skills} many {used {count} skills} other {used {count} skills}}"
@@ -225,6 +230,14 @@ msgstr "{stops, plural, one {# stop} few {# stops} many {# stops} other {# stops
 #: src/pages/Overview.tsx
 msgid "{stopTotal, plural, one {across # stop} few {across # stops} many {across # stops} other {across # stops}}"
 msgstr "{stopTotal, plural, one {across # stop} few {across # stops} many {across # stops} other {across # stops}}"
+
+#: src/pages/detail/SessionGate.tsx
+msgid "{tool} · asks every time · no always-allow"
+msgstr "{tool} · asks every time · no always-allow"
+
+#: src/pages/detail/SessionGate.tsx
+msgid "{tool} · asks once per scope"
+msgstr "{tool} · asks once per scope"
 
 #: src/pages/detail/Timeline.tsx
 msgid "{tool} · awaiting approval"
@@ -250,8 +263,7 @@ msgstr "{verifiedChanges, plural, one {{count} change proved it helped.} few {{c
 msgid "← projects"
 msgstr "← projects"
 
-#: src/pages/SessionDetail.tsx
-#: src/pages/SessionDetail.tsx
+#: src/pages/detail/SessionPane.tsx
 msgid "← sessions"
 msgstr "← sessions"
 
@@ -275,6 +287,14 @@ msgstr "~{totalEst} total, estimated at ~4 bytes/token from tool-result sizes"
 msgid "~tokens"
 msgstr "~tokens"
 
+#: src/pages/detail/Timeline.tsx
+msgid "▲ destructive"
+msgstr "▲ destructive"
+
+#: src/pages/detail/Timeline.tsx
+msgid "◆ write"
+msgstr "◆ write"
+
 #: src/pages/Overview.tsx
 msgid "✓ auto-approved"
 msgstr "✓ auto-approved"
@@ -283,6 +303,10 @@ msgstr "✓ auto-approved"
 msgid "✓ delivered"
 msgstr "✓ delivered"
 
+#: src/pages/detail/SessionGate.tsx
+msgid "a denial stops the session · the transcript stays"
+msgstr "a denial stops the session · the transcript stays"
+
 #: src/pages/Approvals.tsx
 msgid "a pause is a feature, not a failure"
 msgstr "a pause is a feature, not a failure"
@@ -290,10 +314,6 @@ msgstr "a pause is a feature, not a failure"
 #: src/pages/detail/CommandInput.tsx
 msgid "a reply is being generated — Stop to cancel it."
 msgstr "a reply is being generated — Stop to cancel it."
-
-#: src/pages/SessionDetail.tsx
-msgid "account"
-msgstr "account"
 
 #: src/pages/Approvals.tsx
 msgid "add rule"
@@ -322,10 +342,6 @@ msgstr "Agents ran clean."
 msgid "Agents waited <0>{waited}</0> on you today."
 msgstr "Agents waited <0>{waited}</0> on you today."
 
-#: src/pages/Sessions.tsx
-msgid "all"
-msgstr "all"
-
 #: src/pages/Overview.tsx
 msgid "all approvals →"
 msgstr "all approvals →"
@@ -353,9 +369,17 @@ msgstr "all sessions →"
 msgid "Allow (add to scope)"
 msgstr "Allow (add to scope)"
 
+#: src/pages/detail/SessionGate.tsx
+msgid "allow once"
+msgstr "allow once"
+
 #: src/pages/NeedsYou.tsx
 msgid "Allowing this releases: {pathList}"
 msgstr "Allowing this releases: {pathList}"
+
+#: src/pages/detail/SessionGate.tsx
+msgid "always allow in {project}"
+msgstr "always allow in {project}"
 
 #: src/pages/Approvals.tsx
 msgid "always allow…"
@@ -412,7 +436,6 @@ msgid "approvals…"
 msgstr "approvals…"
 
 #: src/pages/Approvals.tsx
-#: src/pages/detail/Timeline.tsx
 #: src/pages/Overview.tsx
 #: src/pages/today/WaitingOnYou.tsx
 msgid "approve"
@@ -436,6 +459,10 @@ msgstr "archived"
 #: src/pages/sessions/CacheColdBadge.tsx
 msgid "Ask the daemon to write a handoff brief for this session"
 msgstr "Ask the daemon to write a handoff brief for this session"
+
+#: src/pages/detail/SessionGate.tsx
+msgid "asked at step {steps}"
+msgstr "asked at step {steps}"
 
 #: src/pages/Approvals.tsx
 msgid "Auto-approve rules"
@@ -465,10 +492,6 @@ msgstr "awaiting approval — respond in the terminal or Approvals"
 msgid "awaiting approval · {since} — respond in the terminal or Approvals"
 msgstr "awaiting approval · {since} — respond in the terminal or Approvals"
 
-#: src/pages/SessionDetail.tsx
-msgid "awaiting reply · {quietFor}"
-msgstr "awaiting reply · {quietFor}"
-
 #: src/pages/Approvals.tsx
 msgid "Bash patterns match the command PREFIX — `Bash(git *)` also matches `git status && rm -rf /`. Keep rules narrow; auto-approvals stay in History (via rule)."
 msgstr "Bash patterns match the command PREFIX — `Bash(git *)` also matches `git status && rm -rf /`. Keep rules narrow; auto-approvals stay in History (via rule)."
@@ -480,6 +503,10 @@ msgstr "blocked {age}"
 #: src/pages/Overview.tsx
 msgid "Blocked on you · {count}"
 msgstr "Blocked on you · {count}"
+
+#: src/pages/detail/SessionPane.tsx
+msgid "board"
+msgstr "board"
 
 #: src/pages/NeedsYou.tsx
 msgid "Branch"
@@ -515,7 +542,7 @@ msgstr "Capability"
 msgid "Change"
 msgstr "Change"
 
-#: src/pages/SessionDetail.tsx
+#: src/pages/detail/SessionPane.tsx
 msgid "Chat"
 msgstr "Chat"
 
@@ -535,7 +562,7 @@ msgstr "CLAUDE.md"
 msgid "CLAUDE.md files, MCP tools and skill descriptions are sized from disk at ~4 bytes per token; “other parts” are the measured first request minus them (system prompt, built-in tools, agent list)."
 msgstr "CLAUDE.md files, MCP tools and skill descriptions are sized from disk at ~4 bytes per token; “other parts” are the measured first request minus them (system prompt, built-in tools, agent list)."
 
-#: src/pages/SessionDetail.tsx
+#: src/pages/detail/SessionPane.tsx
 msgid "click to rename"
 msgstr "click to rename"
 
@@ -552,7 +579,7 @@ msgstr "Cogitating"
 msgid "cold restart · {at} · re-wrote {k}k tokens of context · {cost}"
 msgstr "cold restart · {at} · re-wrote {k}k tokens of context · {cost}"
 
-#: src/pages/SessionDetail.tsx
+#: src/pages/detail/SessionPane.tsx
 msgid "cold restarts"
 msgstr "cold restarts"
 
@@ -600,6 +627,11 @@ msgstr "conflict"
 #: src/pages/NeedsYou.tsx
 msgid "content in main"
 msgstr "content in main"
+
+#: src/pages/detail/SessionPane.tsx
+#: src/pages/detail/SessionPane.tsx
+msgid "context"
+msgstr "context"
 
 #: src/pages/detail/ContextHogsCard.tsx
 msgid "context hogs"
@@ -649,8 +681,8 @@ msgstr "copy resume command"
 msgid "Copy the command that starts a fresh session from this handoff"
 msgstr "Copy the command that starts a fresh session from this handoff"
 
+#: src/pages/detail/SessionPane.tsx
 #: src/pages/ProjectDetail.tsx
-#: src/pages/SessionDetail.tsx
 msgid "cost"
 msgstr "cost"
 
@@ -687,7 +719,8 @@ msgid "denied"
 msgstr "denied"
 
 #: src/pages/Approvals.tsx
-#: src/pages/detail/Timeline.tsx
+#: src/pages/detail/SessionGate.tsx
+#: src/pages/detail/SessionGate.tsx
 msgid "deny"
 msgstr "deny"
 
@@ -695,15 +728,11 @@ msgstr "deny"
 msgid "deny reason"
 msgstr "deny reason"
 
-#: src/pages/SessionDetail.tsx
-msgid "Diffs"
-msgstr "Diffs"
+#: src/pages/detail/SessionPane.tsx
+msgid "Diff"
+msgstr "Diff"
 
-#: src/pages/SessionDetail.tsx
-msgid "Diffs · {diffCount}"
-msgstr "Diffs · {diffCount}"
-
-#: src/pages/SessionDetail.tsx
+#: src/pages/detail/SessionPane.tsx
 msgid "dismiss"
 msgstr "dismiss"
 
@@ -724,14 +753,25 @@ msgstr "dispatched task"
 msgid "done"
 msgstr "done"
 
+#: src/pages/Sessions.tsx
+msgid "Done today"
+msgstr "Done today"
+
 #: src/pages/Projects.tsx
 msgid "down vs previous week"
 msgstr "down vs previous week"
 
 #: src/pages/detail/CallTree.tsx
-#: src/pages/SessionDetail.tsx
 msgid "duration"
 msgstr "duration"
+
+#: src/pages/Sessions.tsx
+msgid "Earlier"
+msgstr "Earlier"
+
+#: src/pages/detail/SessionPane.tsx
+msgid "elapsed"
+msgstr "elapsed"
 
 #: src/pages/Approvals.tsx
 msgid "elsewhere"
@@ -754,7 +794,7 @@ msgid "error rate 7d"
 msgstr "error rate 7d"
 
 #: src/pages/detail/CallTree.tsx
-#: src/pages/SessionDetail.tsx
+#: src/pages/detail/SessionPane.tsx
 msgid "errors"
 msgstr "errors"
 
@@ -798,15 +838,19 @@ msgstr "expired — the mod did not pick it up in time"
 msgid "expires {expires}"
 msgstr "expires {expires}"
 
+#: src/pages/detail/SessionGate.tsx
+msgid "expires in {clock}"
+msgstr "expires in {clock}"
+
 #: src/pages/Approvals.tsx
 msgid "expiring…"
 msgstr "expiring…"
 
-#: src/pages/SessionDetail.tsx
+#: src/pages/detail/SessionPane.tsx
 msgid "extract tasks"
 msgstr "extract tasks"
 
-#: src/pages/SessionDetail.tsx
+#: src/pages/detail/SessionPane.tsx
 msgid "extracting…"
 msgstr "extracting…"
 
@@ -848,6 +892,10 @@ msgstr "File claims"
 #: src/pages/detail/DetailRail.tsx
 msgid "files changed"
 msgstr "files changed"
+
+#: src/pages/Sessions.tsx
+msgid "filter · n:name s:state o:result"
+msgstr "filter · n:name s:state o:result"
 
 #: src/pages/ProjectDetail.tsx
 msgid "first request"
@@ -952,9 +1000,13 @@ msgstr "invocations"
 msgid "Ionizing"
 msgstr "Ionizing"
 
-#: src/pages/SessionDetail.tsx
+#: src/pages/detail/SessionPane.tsx
 msgid "Jump to latest"
 msgstr "Jump to latest"
+
+#: src/pages/detail/SessionPane.tsx
+msgid "labels"
+msgstr "labels"
 
 #: src/pages/ProjectDetail.tsx
 #: src/pages/Projects.tsx
@@ -966,25 +1018,17 @@ msgstr "last activity"
 msgid "last attempt: {0}"
 msgstr "last attempt: {0}"
 
-#: src/pages/SessionDetail.tsx
-msgid "last event"
-msgstr "last event"
-
 #: src/pages/detail/LiveActivity.tsx
 msgid "last output {lastAgo}"
 msgstr "last output {lastAgo}"
 
-#: src/pages/SessionDetail.tsx
+#: src/pages/detail/SessionPane.tsx
 msgid "Latest"
 msgstr "Latest"
 
 #: src/pages/today/loopModel.ts
 msgid "Learn"
 msgstr "Learn"
-
-#: src/pages/Sessions.tsx
-msgid "list arrangement"
-msgstr "list arrangement"
 
 #: src/pages/today/loopModel.ts
 msgid "live"
@@ -997,6 +1041,10 @@ msgstr "live · working quietly"
 #: src/pages/today/LiveNow.tsx
 msgid "Live now"
 msgstr "Live now"
+
+#: src/pages/detail/SessionPane.tsx
+msgid "live usage"
+msgstr "live usage"
 
 #: src/pages/Sessions.tsx
 msgid "loading more…"
@@ -1055,10 +1103,6 @@ msgstr "Messages"
 msgid "messages…"
 msgstr "messages…"
 
-#: src/pages/SessionDetail.tsx
-msgid "model"
-msgstr "model"
-
 #: src/pages/today/LiveNow.tsx
 msgid "model unknown"
 msgstr "model unknown"
@@ -1066,6 +1110,10 @@ msgstr "model unknown"
 #: src/pages/detail/DetailRail.tsx
 msgid "models"
 msgstr "models"
+
+#: src/pages/detail/SessionPane.tsx
+msgid "more for this session"
+msgstr "more for this session"
 
 #: src/pages/ProjectOverview.tsx
 msgid "Needs attention"
@@ -1076,6 +1124,7 @@ msgid "Needs triage"
 msgstr "Needs triage"
 
 #: src/pages/NeedsYou.tsx
+#: src/pages/Sessions.tsx
 msgid "Needs you"
 msgstr "Needs you"
 
@@ -1086,14 +1135,6 @@ msgstr "needs you…"
 #: src/pages/detail/CallTree.tsx
 msgid "nested agents"
 msgstr "nested agents"
-
-#: src/pages/Sessions.tsx
-msgid "newest first"
-msgstr "newest first"
-
-#: src/pages/Sessions.tsx
-msgid "no {statusLabel} sessions — clear the status filter to see the rest"
-msgstr "no {statusLabel} sessions — clear the status filter to see the rest"
 
 #: src/pages/detail/Chat.tsx
 msgid "no conversation in this session yet"
@@ -1119,13 +1160,13 @@ msgstr "no errors for this day"
 msgid "no events in this session yet"
 msgstr "no events in this session yet"
 
-#: src/pages/detail/Diffs.tsx
-msgid "no file changes in this session"
-msgstr "no file changes in this session"
-
 #: src/pages/sessions/SwarmPanel.tsx
 msgid "No files are claimed right now."
 msgstr "No files are claimed right now."
+
+#: src/pages/detail/Diffs.tsx
+msgid "No files changed yet."
+msgstr "No files changed yet."
 
 #: src/pages/detail/Chat.tsx
 msgid "no final message (stop_reason={noFinalMessage})"
@@ -1139,7 +1180,7 @@ msgstr "no health data yet"
 msgid "No messages between this project's sessions yet."
 msgstr "No messages between this project's sessions yet."
 
-#: src/pages/SessionDetail.tsx
+#: src/pages/detail/SessionPane.tsx
 msgid "No new tasks — this session had nothing left to suggest."
 msgstr "No new tasks — this session had nothing left to suggest."
 
@@ -1203,10 +1244,6 @@ msgstr "no sessions match the filter"
 msgid "no sessions yet"
 msgstr "no sessions yet"
 
-#: src/pages/Sessions.tsx
-msgid "no sessions yet — run <0>swarmery ingest <file.jsonl></0>"
-msgstr "no sessions yet — run <0>swarmery ingest <file.jsonl></0>"
-
 #: src/pages/sessions/SwarmPanel.tsx
 msgid "No swarmery link mod reports on this session, so it cannot be steered from the dashboard."
 msgstr "No swarmery link mod reports on this session, so it cannot be steered from the dashboard."
@@ -1214,10 +1251,6 @@ msgstr "No swarmery link mod reports on this session, so it cannot be steered fr
 #: src/pages/Overview.tsx
 msgid "no tool activity recorded"
 msgstr "no tool activity recorded"
-
-#: src/pages/SessionDetail.tsx
-msgid "no transcript activity past the stuck window — the session may have died silently"
-msgstr "no transcript activity past the stuck window — the session may have died silently"
 
 #: src/pages/NeedsYou.tsx
 msgid "no trigger"
@@ -1267,6 +1300,10 @@ msgstr "note (optional) — recorded with the answer in the phase doc"
 #: src/pages/ProjectOverview.tsx
 msgid "nothing flagged"
 msgstr "nothing flagged"
+
+#: src/pages/Sessions.tsx
+msgid "Nothing here. Dispatch a task with + new, or widen the project scope."
+msgstr "Nothing here. Dispatch a task with + new, or widen the project scope."
 
 #: src/pages/Overview.tsx
 msgid "nothing idle"
@@ -1340,6 +1377,10 @@ msgstr "open criteria →"
 msgid "open in System"
 msgstr "open in System"
 
+#: src/pages/detail/SessionPane.tsx
+msgid "open in terminal ↗"
+msgstr "open in terminal ↗"
+
 #: src/pages/NeedsYou.tsx
 #: src/pages/NeedsYou.tsx
 msgid "open phase →"
@@ -1375,9 +1416,26 @@ msgstr "other parts"
 msgid "out of scope"
 msgstr "out of scope"
 
+#: src/pages/detail/SessionPane.tsx
+msgid "outcome"
+msgstr "outcome"
+
+#. placeholder {0}: OUTCOME_GLYPH[outcome].glyph
+#: src/pages/detail/SessionPane.tsx
+msgid "outcome {0} ▾"
+msgstr "outcome {0} ▾"
+
+#: src/pages/detail/SessionPane.tsx
+msgid "outcome ▾"
+msgstr "outcome ▾"
+
 #: src/pages/NeedsYou.tsx
 msgid "Path"
 msgstr "Path"
+
+#: src/pages/detail/SessionPane.tsx
+msgid "pause"
+msgstr "pause"
 
 #: src/pages/Approvals.tsx
 #: src/pages/sessions/SwarmPanel.tsx
@@ -1406,6 +1464,10 @@ msgstr "phase review"
 msgid "phase run"
 msgstr "phase run"
 
+#: src/pages/Sessions.tsx
+msgid "Pick a session on the left."
+msgstr "Pick a session on the left."
+
 #: src/pages/Projects.tsx
 msgid "pin {name}"
 msgstr "pin {name}"
@@ -1428,12 +1490,13 @@ msgid "plan revision"
 msgstr "plan revision"
 
 #: src/pages/detail/PendingRunNotice.tsx
+#: src/pages/detail/SessionPane.tsx
 msgid "plan run"
 msgstr "plan run"
 
 #: src/pages/Sessions.tsx
-msgid "plan runs"
-msgstr "plan runs"
+msgid "Plan runs"
+msgstr "Plan runs"
 
 #: src/pages/detail/PendingRunNotice.tsx
 msgid "planning session"
@@ -1458,6 +1521,10 @@ msgstr "pre-fill an auto-approve rule from this request (the rule catches future
 #: src/pages/Projects.tsx
 msgid "prev 7d"
 msgstr "prev 7d"
+
+#: src/pages/detail/SessionPane.tsx
+msgid "process"
+msgstr "process"
 
 #: src/pages/Approvals.tsx
 #: src/pages/NeedsYou.tsx
@@ -1489,13 +1556,13 @@ msgstr "Proof"
 msgid "Proof →"
 msgstr "Proof →"
 
+#: src/pages/detail/SessionPane.tsx
+msgid "queue a message · delivered after this step"
+msgstr "queue a message · delivered after this step"
+
 #: src/pages/sessions/SwarmPanel.tsx
 msgid "queued, waiting for the mod to pick it up"
 msgstr "queued, waiting for the mod to pick it up"
-
-#: src/pages/SessionDetail.tsx
-msgid "quiet · {quietFor}"
-msgstr "quiet · {quietFor}"
 
 #: src/pages/Approvals.tsx
 msgid "raw"
@@ -1529,9 +1596,13 @@ msgstr "recent sessions"
 msgid "Recipient"
 msgstr "Recipient"
 
-#: src/pages/SessionDetail.tsx
+#: src/pages/detail/SessionPane.tsx
 msgid "recovered"
 msgstr "recovered"
+
+#: src/pages/detail/SessionPane.tsx
+msgid "redirect"
+msgstr "redirect"
 
 #: src/pages/NeedsYou.tsx
 msgid "Reject"
@@ -1541,6 +1612,10 @@ msgstr "Reject"
 msgid "release with no decision — the native selector renders in the terminal (E12d/E12e)"
 msgstr "release with no decision — the native selector renders in the terminal (E12d/E12e)"
 
+#: src/pages/detail/SessionPane.tsx
+msgid "remote control"
+msgstr "remote control"
+
 #: src/pages/NeedsYou.tsx
 msgid "Remove selected"
 msgstr "Remove selected"
@@ -1549,18 +1624,30 @@ msgstr "Remove selected"
 msgid "Removing…"
 msgstr "Removing…"
 
-#: src/pages/SessionDetail.tsx
-#: src/pages/SessionDetail.tsx
+#: src/pages/detail/SessionPane.tsx
+#: src/pages/detail/SessionPane.tsx
 msgid "rename session"
 msgstr "rename session"
+
+#: src/pages/detail/SessionGate.tsx
+msgid "reply"
+msgstr "reply"
+
+#: src/pages/detail/SessionPane.tsx
+msgid "reply · this resumes the session"
+msgstr "reply · this resumes the session"
+
+#: src/pages/detail/SessionPane.tsx
+msgid "reply to resume from the saved conversation"
+msgstr "reply to resume from the saved conversation"
 
 #: src/pages/detail/CommandInput.tsx
 msgid "Reply to this session…  (⌘/Ctrl+Enter to send)"
 msgstr "Reply to this session…  (⌘/Ctrl+Enter to send)"
 
-#: src/pages/detail/Timeline.tsx
-msgid "respond in the terminal, or approve/deny from the Approvals screen."
-msgstr "respond in the terminal, or approve/deny from the Approvals screen."
+#: src/pages/detail/SessionPane.tsx
+msgid "resume with a reply"
+msgstr "resume with a reply"
 
 #: src/pages/today/WaitingOnYou.tsx
 msgid "review"
@@ -1598,14 +1685,13 @@ msgstr "run"
 msgid "Run"
 msgstr "Run"
 
-#: src/pages/SessionDetail.tsx
+#: src/pages/detail/SessionPane.tsx
 msgid "run a model pass over this session and suggest board tasks from what it left behind"
 msgstr "run a model pass over this session and suggest board tasks from what it left behind"
 
 #: src/pages/detail/CallTree.tsx
 #: src/pages/detail/CallTree.tsx
 #: src/pages/detail/CallTree.tsx
-#: src/pages/SessionDetail.tsx
 msgid "running"
 msgstr "running"
 
@@ -1621,7 +1707,7 @@ msgstr "running…"
 msgid "runs scored"
 msgstr "runs scored"
 
-#. placeholder {0}: item.session.title ?? item.session.sessionUuid
+#. placeholder {0}: s.title ?? s.sessionUuid
 #: src/pages/Sessions.tsx
 msgid "select {0} for continue phase"
 msgstr "select {0} for continue phase"
@@ -1661,6 +1747,10 @@ msgstr "Sending…"
 msgid "sent"
 msgstr "sent"
 
+#: src/pages/detail/SessionPane.tsx
+msgid "session"
+msgstr "session"
+
 #: src/pages/Overview.tsx
 msgid "session #{sessionId}"
 msgstr "session #{sessionId}"
@@ -1681,15 +1771,19 @@ msgstr "session in progress…"
 msgid "session is running in a terminal — Stop it to take over and continue the conversation here."
 msgstr "session is running in a terminal — Stop it to take over and continue the conversation here."
 
-#: src/pages/SessionDetail.tsx
+#: src/pages/detail/SessionPane.tsx
+msgid "session outcome"
+msgstr "session outcome"
+
+#: src/pages/detail/SessionPane.tsx
 msgid "session title"
 msgstr "session title"
 
-#: src/pages/SessionDetail.tsx
+#: src/pages/detail/SessionPane.tsx
 msgid "session title…"
 msgstr "session title…"
 
-#: src/pages/SessionDetail.tsx
+#: src/pages/detail/SessionPane.tsx
 msgid "session…"
 msgstr "session…"
 
@@ -1776,6 +1870,10 @@ msgstr "skills"
 msgid "some assistant prose is not ingested yet — run <0>swarmery backfill --rebuild-text</0>"
 msgstr "some assistant prose is not ingested yet — run <0>swarmery backfill --rebuild-text</0>"
 
+#: src/pages/detail/Diffs.tsx
+msgid "sorted by risk · deletions first"
+msgstr "sorted by risk · deletions first"
+
 #: src/pages/ProjectDetail.tsx
 #: src/pages/ProjectOverview.tsx
 msgid "source: {source}"
@@ -1806,13 +1904,21 @@ msgid "stats"
 msgstr "stats"
 
 #: src/pages/detail/CallTree.tsx
-#: src/pages/SessionDetail.tsx
 msgid "status"
 msgstr "status"
+
+#: src/pages/detail/SessionPane.tsx
+msgid "Steps"
+msgstr "Steps"
 
 #: src/pages/Overview.tsx
 msgid "still blocked"
 msgstr "still blocked"
+
+#: src/pages/detail/SessionPane.tsx
+#: src/pages/detail/SessionPane.tsx
+msgid "stop"
+msgstr "stop"
 
 #: src/pages/detail/CommandInput.tsx
 msgid "Stop"
@@ -1854,8 +1960,11 @@ msgstr "subscription"
 msgid "suggested replies"
 msgstr "suggested replies"
 
+#: src/pages/detail/SessionPane.tsx
+msgid "swarm"
+msgstr "swarm"
+
 #: src/pages/ProjectOverview.tsx
-#: src/pages/SessionDetail.tsx
 #: src/pages/sessions/SwarmPanel.tsx
 msgid "Swarm"
 msgstr "Swarm"
@@ -1927,9 +2036,9 @@ msgstr "The prompt cache expired during the pause before this turn, so it re-wro
 msgid "The sending session's permission mode let the engine's classifier refuse the send. Relay from a session in another mode (e.g. acceptEdits or bypassPermissions)."
 msgstr "The sending session's permission mode let the engine's classifier refuse the send. Relay from a session in another mode (e.g. acceptEdits or bypassPermissions)."
 
-#: src/pages/SessionDetail.tsx
-msgid "the session ended its turn and waits for your typed reply"
-msgstr "the session ended its turn and waits for your typed reply"
+#: src/pages/detail/SessionGate.tsx
+msgid "The session asks to run {tool}"
+msgstr "The session asks to run {tool}"
 
 #: src/pages/sessions/SwarmPanel.tsx
 msgid "The session's link mod is not polling for commands. Enable the swarmery-link \"control\" option and keep the session open."
@@ -1953,17 +2062,13 @@ msgstr "the swarmery plugin is not enabled for this project"
 msgid "Thinking"
 msgstr "Thinking"
 
+#: src/pages/detail/SessionGate.tsx
+msgid "This is a production deploy: confirm it in the session's own terminal"
+msgstr "This is a production deploy: confirm it in the session's own terminal"
+
 #: src/pages/ProjectOverview.tsx
 msgid "This week"
 msgstr "This week"
-
-#: src/pages/Sessions.tsx
-msgid "timeline"
-msgstr "timeline"
-
-#: src/pages/SessionDetail.tsx
-msgid "Timeline"
-msgstr "Timeline"
 
 #: src/pages/sessions/SwarmPanel.tsx
 msgid "to"
@@ -1978,9 +2083,9 @@ msgid "Today in detail"
 msgstr "Today in detail"
 
 #: src/pages/detail/CallTree.tsx
+#: src/pages/detail/SessionPane.tsx
 #: src/pages/ProjectDetail.tsx
 #: src/pages/Projects.tsx
-#: src/pages/SessionDetail.tsx
 msgid "tokens"
 msgstr "tokens"
 
@@ -2014,10 +2119,6 @@ msgstr "total time"
 msgid "trace unavailable"
 msgstr "trace unavailable"
 
-#: src/pages/SessionDetail.tsx
-msgid "transcript activity within the stuck window — the session is working"
-msgstr "transcript activity within the stuck window — the session is working"
-
 #: src/pages/ProjectOverview.tsx
 msgid "triage"
 msgstr "triage"
@@ -2026,17 +2127,9 @@ msgstr "triage"
 msgid "triage unavailable"
 msgstr "triage unavailable"
 
-#: src/pages/detail/Timeline.tsx
-msgid "turn {seq} · {startedAt}"
-msgstr "turn {seq} · {startedAt}"
-
 #: src/pages/detail/ContextHogsCard.tsx
 msgid "turn {seq}: {written}"
 msgstr "turn {seq}: {written}"
-
-#: src/pages/detail/Timeline.tsx
-msgid "unassigned events"
-msgstr "unassigned events"
 
 #: src/pages/ProjectOverview.tsx
 #: src/pages/ProjectSettings.tsx
@@ -2063,6 +2156,10 @@ msgstr "untitled session"
 msgid "up vs previous week"
 msgstr "up vs previous week"
 
+#: src/pages/detail/SessionPane.tsx
+msgid "usage · agents · skills · files"
+msgstr "usage · agents · skills · files"
+
 #: src/pages/detail/PendingRunNotice.tsx
 msgid "verification run"
 msgstr "verification run"
@@ -2088,6 +2185,11 @@ msgstr "waited today"
 msgid "waiting"
 msgstr "waiting"
 
+#: src/pages/detail/SessionGate.tsx
+#: src/pages/detail/Timeline.tsx
+msgid "waiting {waited}"
+msgstr "waiting {waited}"
+
 #: src/pages/today/LiveNow.tsx
 msgid "waiting on you"
 msgstr "waiting on you"
@@ -2109,6 +2211,10 @@ msgstr "Where work sits"
 msgid "Where your time went"
 msgstr "Where your time went"
 
+#: src/pages/detail/SessionGate.tsx
+msgid "why you deny, for the session"
+msgstr "why you deny, for the session"
+
 #: src/pages/NeedsYou.tsx
 msgid "without proof: {withoutProof}"
 msgstr "without proof: {withoutProof}"
@@ -2120,12 +2226,9 @@ msgid "working"
 msgstr "working"
 
 #: src/pages/detail/LiveActivity.tsx
+#: src/pages/Sessions.tsx
 msgid "Working"
 msgstr "Working"
-
-#: src/pages/SessionDetail.tsx
-msgid "working · {lastActive}"
-msgstr "working · {lastActive}"
 
 #: src/pages/ProjectOverview.tsx
 #: src/pages/ProjectSettings.tsx
@@ -2140,6 +2243,10 @@ msgstr "Worktrees of finished phases and cards whose content is already in main.
 msgid "Worktrees ready to remove in {repoRoot}"
 msgstr "Worktrees ready to remove in {repoRoot}"
 
+#: src/pages/detail/SessionGate.tsx
+msgid "write my own"
+msgstr "write my own"
+
 #: src/pages/sessions/CacheColdBadge.tsx
 msgid "writing handoff…"
 msgstr "writing handoff…"
@@ -2147,6 +2254,10 @@ msgstr "writing handoff…"
 #: src/pages/NeedsYou.tsx
 msgid "your own answer — or a note sent with the option you pick"
 msgstr "your own answer — or a note sent with the option you pick"
+
+#: src/pages/detail/SessionGate.tsx
+msgid "your pick is pasted as the reply"
+msgstr "your pick is pasted as the reply"
 
 #: src/pages/detail/CallTree.tsx
 msgid "Σ tokens"

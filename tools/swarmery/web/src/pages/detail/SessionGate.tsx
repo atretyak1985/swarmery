@@ -11,8 +11,9 @@
 //                      daemon extracted them, and the composer otherwise
 //
 // The tier has no field of its own: a prod-deploy request is `destructive`, the
-// rest `write`. `always allow in <project>` needs the rules form, so the card links
-// to Needs you for it rather than growing a second one.
+// rest `write`. `always allow in <project>` needs the rules form, so the card opens
+// it rather than growing a second one. Deny asks for its optional reason on the
+// first press and sends on the second: the reason goes to Claude verbatim.
 
 import { useLingui } from '@lingui/react/macro';
 import { useCallback, useEffect, useMemo, useState, type MutableRefObject } from 'react';
@@ -20,7 +21,9 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { fetchApprovals, resolveApproval, sendSessionMessage, type ApprovalAction } from '../../api';
 import type { NeedsYouItem, PermissionRequest, SessionDetail } from '../../api/types';
 import { DecisionCard, type DecisionTier } from '../../components/place/DecisionCard';
-import { buildAnswers, EMPTY_DRAFT, fmtClock, questionsOf, type AnswerMap } from '../../lib/approvals';
+import { buildAnswers, EMPTY_DRAFT, questionsOf, type AnswerMap } from '../../lib/approvals';
+import { projectLabel } from '../../lib/format';
+import { compactSpan } from '../../lib/sessionsView';
 import { useNowMs } from '../../lib/sessionState';
 import { PendingCard } from '../Approvals';
 import type { PaneActions } from './SessionPane';
@@ -55,6 +58,7 @@ export function SessionGate({
   const [request, setRequest] = useState<PermissionRequest | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [denying, setDenying] = useState(false);
   const [reason, setReason] = useState('');
   const [pick, setPick] = useState<number>(0);
 
@@ -132,7 +136,8 @@ export function SessionGate({
   const secondary = (): void => {
     if (busy) return;
     if (asks) onOpenComposer();
-    else if (!localOnly) resolve('deny', reason.trim() === '' ? undefined : reason.trim());
+    else if (!denying) setDenying(true);
+    else resolve('deny', reason.trim() === '' ? undefined : reason.trim());
   };
 
   // `e` and `x` act on what the buttons show; read through a ref by the list.
@@ -156,9 +161,12 @@ export function SessionGate({
   }
 
   const tool = item.toolName;
+  const project = projectLabel(session.projectName, session.projectSlug);
   const steps = String(session.events.length);
   const meta = asks ? t`asked at step ${steps}` : t`${tool} · asks once per scope`;
-  const clock = request === null ? null : fmtClock((new Date(request.expiresAt).getTime() - nowMs) / 1000);
+  const left = request === null ? null : Math.max(0, Math.round((new Date(request.expiresAt).getTime() - nowMs) / 1000));
+  const clock = left === null ? null : `${String(Math.floor(left / 60))}:${String(left % 60).padStart(2, '0')}`;
+  const waited = compactSpan(nowMs - new Date(item.blockingSince).getTime());
   const headline = asks
     ? item.question !== ''
       ? item.question
@@ -173,27 +181,30 @@ export function SessionGate({
         gate
         tier={tier}
         meta={tier === 'destructive' ? t`${tool} · asks every time · no always-allow` : meta}
-        {...(clock === null ? {} : { expires: t`expires in ${clock}` })}
+        expires={clock === null ? t`waiting ${waited}` : t`expires in ${clock}`}
         title={headline}
         {...(!asks && item.preview !== '' ? { code: item.preview } : {})}
         options={options.map((label, i) => ({ id: String(i), label }))}
         picked={options.length > 0 ? String(pick) : null}
         onPick={(picked) => setPick(Number(picked))}
-        {...(asks || localOnly
-          ? {}
-          : { note: { value: reason, onChange: setReason, placeholder: t`why, if you deny` } })}
+        {...(denying ? { note: { value: reason, onChange: setReason, placeholder: t`why you deny, for the session` } } : {})}
         primary={{
           label: asks ? t`reply` : localOnly ? t`deny` : t`allow once`,
           onClick: primary,
           disabled: busy || (asks && single === null && request !== null),
         }}
+        {...(!asks && !localOnly
+          ? {
+              extra: {
+                label: t`always allow in ${project}`,
+                onClick: () => navigate(slug === undefined ? '/inbox?tab=approvals' : `/p/${slug}/inbox?tab=approvals`),
+              },
+            }
+          : {})}
         {...(localOnly
           ? {}
           : { secondary: { label: asks ? t`write my own` : t`deny`, onClick: secondary, disabled: busy } })}
-        link={{
-          label: t`open in Needs you →`,
-          onClick: () => navigate(slug === undefined ? '/needs-you' : `/p/${slug}/needs-you`),
-        }}
+        foot={asks ? t`your pick is pasted as the reply` : t`a denial stops the session · the transcript stays`}
       />
       {error !== null && (
         <div role="alert" className="mt-2 font-mono text-[11px] text-red">

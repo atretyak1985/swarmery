@@ -22,7 +22,7 @@ import type { Session, SessionLink } from '../api/types';
 import { fmtTime } from '../lib/format';
 import { LiveNow } from '../pages/today/LiveNow';
 import { cleanup, render, screen, within } from '../test/render';
-import { SessionCard } from './SessionCard';
+import { SessionLinkChips } from './SessionLinkChips';
 
 afterEach(cleanup);
 
@@ -77,7 +77,7 @@ function makeSession(over: Partial<Session> = {}): Session {
 function renderCard(session: Session): HTMLElement {
   const { container } = render(
     <MemoryRouter>
-      <SessionCard session={session} />
+      <SessionLinkChips session={session} />
     </MemoryRouter>,
   );
   return container;

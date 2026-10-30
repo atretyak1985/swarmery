@@ -57,9 +57,25 @@ msgstr " (перевизначено проєктом)"
 msgid "— declares {declares}"
 msgstr "— оголошує {declares}"
 
+#: src/lib/sessionsView.ts
+msgid "· {intent}."
+msgstr "· {intent}."
+
+#: src/lib/sessionsView.ts
+msgid "· {intent}. The transcript stays."
+msgstr "· {intent}. Транскрипт лишається."
+
 #: src/workspace/TaskModal.tsx
 msgid "· created {created}"
 msgstr "· створено {created}"
+
+#: src/lib/sessionsView.ts
+msgid "· last action {ago} ago · {doing}."
+msgstr "· остання дія {ago} тому · {doing}."
+
+#: src/lib/sessionsView.ts
+msgid "· last action {ago} ago."
+msgstr "· остання дія {ago} тому."
 
 #: src/components/PluginDriftBadge.tsx
 msgid "· plugins {warn}"
@@ -69,6 +85,10 @@ msgstr "· плагіни {warn}"
 msgid "· plugins ⚠ {error}"
 msgstr "· плагіни ⚠ {error}"
 
+#: src/lib/sessionsView.ts
+msgid "· the transcript stays."
+msgstr "· транскрипт лишається."
+
 #: src/components/usage/UsageModal.tsx
 msgid "(no binding)"
 msgstr "(без прив’язки)"
@@ -77,7 +97,7 @@ msgstr "(без прив’язки)"
 msgid "(patch)"
 msgstr "(патч)"
 
-#: src/components/SessionCard.tsx
+#: src/components/SessionRow.tsx
 msgid "(untitled session)"
 msgstr "(сесія без назви)"
 
@@ -203,10 +223,6 @@ msgstr "{h} год тому"
 #: src/components/BulkPromptBar.tsx
 msgid "{hiddenCount} selected sessions are hidden by the filter and will not be sent"
 msgstr "вибрані сесії, приховані фільтром ({hiddenCount}), не буде надіслано"
-
-#: src/components/SessionCard.tsx
-msgid "{k}k ctx"
-msgstr "{k}k ctx"
 
 #: src/components/BulkPromptBar.tsx
 msgid "{label} — {why}"
@@ -348,14 +364,6 @@ msgstr "@{value} (невідомий)"
 #: src/main.tsx
 msgid "← back to the overview"
 msgstr "← до огляду"
-
-#: src/components/SessionCard.tsx
-msgid "→ changed to"
-msgstr "→ змінено на"
-
-#: src/components/SessionCard.tsx
-msgid "→ fell back to"
-msgstr "→ відкат на"
 
 #: src/components/Drawer.tsx
 msgid "↑↓ next"
@@ -696,6 +704,14 @@ msgstr "Усі проєкти"
 msgid "All projects →"
 msgstr "Усі проєкти →"
 
+#: src/lib/sessionsView.ts
+msgid "Allow {toolName}: {preview}?"
+msgstr "Дозволити {toolName}: {preview}?"
+
+#: src/lib/sessionsView.ts
+msgid "Allow {toolName}?"
+msgstr "Дозволити {toolName}?"
+
 #: src/workspace/task/TaskActions.tsx
 msgid "already fixed"
 msgstr "вже виправлено"
@@ -900,10 +916,6 @@ msgstr "Очікує злиття"
 #: src/lib/sessionsView.ts
 msgid "awaiting reply"
 msgstr "чекає відповіді"
-
-#: src/components/SessionCard.tsx
-msgid "awaiting reply · {owed}"
-msgstr "чекає відповіді · {owed}"
 
 #: src/lib/needsYou.ts
 msgid "Awaiting your reply"
@@ -1765,7 +1777,6 @@ msgstr "документація: {configDocs}"
 #: src/components/DetachModal.tsx
 #: src/components/NewProjectButton.tsx
 #: src/components/place/StateGlyph.tsx
-#: src/components/PlanRunCard.tsx
 #: src/components/SessionControls.tsx
 #: src/lib/sessionsView.ts
 msgid "done"
@@ -1857,6 +1868,7 @@ msgid "failed"
 msgstr "збій"
 
 #: src/lib/needsYou.ts
+#: src/lib/sessionsView.ts
 msgid "Failed"
 msgstr "Невдача"
 
@@ -1946,6 +1958,10 @@ msgstr "фільтр сесій за назвою…"
 msgid "Finish it here: open a terminal already scoped to this account and log the CLI in."
 msgstr "Завершіть тут: відкрийте термінал, уже прив’язаний до цього акаунта, і ввійдіть у CLI."
 
+#: src/lib/sessionsView.ts
+msgid "Finished"
+msgstr "Завершено"
+
 #: src/components/NotifySettings.tsx
 msgid "fires only while this tab is in the background; click a notification to jump to the approval or session"
 msgstr "спрацьовує лише коли ця вкладка у фоні; клік по сповіщенню веде до погодження чи сесії"
@@ -1969,6 +1985,14 @@ msgstr "Шлях картки дошки від фіксації до влитт
 #: src/components/AccountSelector.tsx
 msgid "follow whichever account is marked default on this machine"
 msgstr "використовувати акаунт, позначений типовим на цій машині"
+
+#: src/lib/sessionsView.ts
+msgid "for {quiet} · no transcript activity, it may have died silently."
+msgstr "{quiet} · у транскрипті тихо, сесія могла непомітно померти."
+
+#: src/lib/sessionsView.ts
+msgid "for {waited} · the session does nothing until you decide."
+msgstr "{waited} · сесія нічого не робить, доки ви не вирішите."
 
 #: src/components/KillButton.tsx
 msgid "Force kill"
@@ -2045,10 +2069,6 @@ msgstr "зупинка guard"
 #: src/pages/docsRail.ts
 msgid "Guides"
 msgstr "Посібники"
-
-#: src/components/SessionCard.tsx
-msgid "Handoff"
-msgstr "Передача"
 
 #: src/components/RunOutcomeModal.tsx
 msgid "headless run in progress"
@@ -2149,6 +2169,14 @@ msgstr "покращити агента не вдалося"
 msgid "Improve the system"
 msgstr "Покращити систему"
 
+#: src/lib/sessionsView.ts
+msgid "in {elapsed} · {intent}."
+msgstr "за {elapsed} · {intent}."
+
+#: src/lib/sessionsView.ts
+msgid "in {elapsed}."
+msgstr "за {elapsed}."
+
 #: src/workspace/boardModel.ts
 msgid "In Progress"
 msgstr "У роботі"
@@ -2163,10 +2191,6 @@ msgstr "На рев’ю"
 #: src/workspace/boardModel.ts
 msgid "Inbox"
 msgstr "Вхідні"
-
-#: src/components/SessionCard.tsx
-msgid "ingested from the {label} Claude Code account"
-msgstr "проіндексовано з акаунта Claude Code «{label}»"
 
 #: src/components/LanguagePicker.tsx
 msgid "interface language"
@@ -2663,14 +2687,6 @@ msgstr "Сповіщення"
 msgid "notifications are blocked — allow them in the browser site settings, then re-toggle"
 msgstr "сповіщення заблоковано — дозвольте їх у налаштуваннях сайту в браузері й перемкніть ще раз"
 
-#: src/components/SessionCard.tsx
-msgid "now: {now}"
-msgstr "зараз: {now}"
-
-#: src/components/SessionCard.tsx
-msgid "now: {nowText}"
-msgstr "зараз: {nowText}"
-
 #: src/lib/docFigures.tsx
 msgid "objective · sequencing table · risks · definition of done"
 msgstr "мета · таблиця послідовності · ризики · визначення готовності"
@@ -2922,6 +2938,10 @@ msgstr "Діагноз запуску фази"
 msgid "phase run failed ({status})"
 msgstr "запуск фази не вдався ({status})"
 
+#: src/lib/sessionsView.ts
+msgid "Phase running"
+msgstr "Фаза виконується"
+
 #: src/lib/docFigures.tsx
 msgid "Phases with no edge between them run in parallel; each phase document carries its own copy-paste agent prompt and acceptance criteria, so it is executable standalone."
 msgstr "Фази без ребра між ними виконуються паралельно; кожен документ фази містить власний готовий промпт для агента й критерії приймання, тож його можна виконати окремо."
@@ -2968,6 +2988,7 @@ msgid "plan in"
 msgstr "план у проєкті"
 
 #: src/components/PlanRunCard.tsx
+#: src/components/SessionRow.tsx
 msgid "plan run"
 msgstr "запуск плану"
 
@@ -3188,9 +3209,13 @@ msgstr "у черзі, чекає, доки мод її забере"
 msgid "queued: {queuedCount}"
 msgstr "у черзі: {queuedCount}"
 
-#: src/components/SessionCard.tsx
-msgid "quiet {quiet}"
-msgstr "мовчить {quiet}"
+#: src/lib/sessionsView.ts
+msgid "Quiet"
+msgstr "Тиша"
+
+#: src/lib/sessionsView.ts
+msgid "quiet {quiet} · it may have died silently"
+msgstr "тиша {quiet} · сесія могла непомітно померти"
 
 #: src/components/usage/UsageConnect.tsx
 msgid "Quota connected, but the CLI still needs a login: <0>{reason}</0>"
@@ -3563,7 +3588,6 @@ msgstr "запустити цю фазу знову"
 msgid "run verification again against the worktree"
 msgstr "запустити перевірку worktree ще раз"
 
-#: src/components/PlanRunCard.tsx
 #: src/components/RunOutcomeModal.tsx
 #: src/workspace/boardModel.ts
 msgid "running"
@@ -3930,6 +3954,10 @@ msgstr "списати цей урок?"
 msgid "stopped"
 msgstr "зупинено"
 
+#: src/lib/sessionsView.ts
+msgid "Stopped by you"
+msgstr "Зупинено вами"
+
 #: src/components/StopButton.tsx
 msgid "stopping…"
 msgstr "зупинка…"
@@ -4272,10 +4300,6 @@ msgstr "визначення з .claude/agents/ цього проєкту зам
 msgid "This runs the model on the evidence above and creates a diff proposal you approve before any PR."
 msgstr "Це запускає модель на доказах вище і створює пропозицію-дифф, яку ви погоджуєте перед будь-яким PR."
 
-#: src/components/SessionCard.tsx
-msgid "this session changed model mid-flight: started on {from}, its newest turn ran on {to}"
-msgstr "ця сесія змінила модель по ходу: почалась на {from}, останній хід працював на {to}"
-
 #: src/workspace/task/TaskBrief.tsx
 msgid "this session had touched the file when the card was captured"
 msgstr "ця сесія торкалася файлу на момент захоплення картки"
@@ -4489,6 +4513,22 @@ msgstr "чекає на рев’ю, вердикт FAIL, помилка дис�
 msgid "Waiting for you to enter the code on {host}…"
 msgstr "Чекаємо, доки ви введете код на {host}…"
 
+#: src/lib/sessionsView.ts
+msgid "Waiting for your answer"
+msgstr "Чекає на вашу відповідь"
+
+#: src/lib/sessionsView.ts
+msgid "waiting for your permission"
+msgstr "чекає на ваш дозвіл"
+
+#: src/lib/sessionsView.ts
+msgid "Waiting for your permission"
+msgstr "Чекає на ваш дозвіл"
+
+#: src/lib/sessionsView.ts
+msgid "waiting for your reply"
+msgstr "чекає на вашу відповідь"
+
 #: src/workspace/boardModel.ts
 msgid "waiting on quota: {why}"
 msgstr "очікує квоти: {why}"
@@ -4572,6 +4612,7 @@ msgid "working"
 msgstr "працює"
 
 #: src/lib/docFigures.tsx
+#: src/lib/sessionsView.ts
 #: src/workspace/boardModel.ts
 msgid "Working"
 msgstr "У роботі"

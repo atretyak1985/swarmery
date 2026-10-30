@@ -400,6 +400,16 @@ export function compactSpan(ms: number): string {
   return `${String(Math.floor(h / 24))}d`;
 }
 
+/** A step's duration: 6s, 41s, 2m 10s, 3m. Empty when it is not known. */
+export function stepDuration(ms: number | null): string {
+  if (ms === null) return '';
+  const sec = Math.round(ms / 1000);
+  if (sec < 60) return `${String(sec)}s`;
+  const rest = sec % 60;
+  const min = String(Math.floor(sec / 60));
+  return rest === 0 ? `${min}m` : `${min}m ${String(rest).padStart(2, '0')}s`;
+}
+
 const spanSince = (iso: string, nowMs: number): number => nowMs - new Date(iso).getTime();
 
 /** The row's age: how long it has blocked, run or sat finished. */
