@@ -160,12 +160,12 @@
     the design's #8d8779, which is only about 3.3:1 on the page (plan D-7). */
 
   /* ---- brand · amber accent ---- */
-  --color-brand: #b0730f;
+  --color-brand: #93590c; /* plan D-10: the design's #b0730f is 3.63:1 as text on the page */
 
   /* ---- status / semantic ---- */
   --color-green: #2e7d4f;
   --color-amber: #b0730f;
-  --color-red: #c74a42;
+  --color-red: #bc3f36; /* plan D-10: darkened to the 4.5:1 floor, the raised surface included */
   --color-blue: #1f5fa8;
   --color-purple: #7b4fa3;
   --color-brand-bg: color-mix(in srgb, var(--color-brand) 10%, transparent);

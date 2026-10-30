@@ -1343,7 +1343,7 @@ export function Overview(): JSX.Element {
         )}
       </div>
 
-      <aside className="min-w-0 border-line px-4 pb-10 wide:sticky wide:top-14 wide:min-h-[calc(100vh-56px)] wide:border-l wide:px-7 wide:pt-[34px] wide:pb-10">
+      <aside className="min-w-0 border-line px-4 pb-10 wide:sticky wide:top-0 wide:min-h-screen wide:border-l wide:px-7 wide:pt-[34px] wide:pb-10">
         {pending.length > 0 && <BlockedRail pending={pending} nowMs={nowMs} />}
         {stats !== null && (
           <TriageRail

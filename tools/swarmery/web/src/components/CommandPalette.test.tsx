@@ -11,7 +11,7 @@
 import { MemoryRouter, useLocation } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, render, screen } from '../test/render';
-import { createBoardTask } from '../api';
+import { createBoardTask, fetchSearch } from '../api';
 import { useScope } from '../lib/scope';
 import { CommandPalette } from './CommandPalette';
 
@@ -44,6 +44,14 @@ function type(input: HTMLElement, value: string): void {
   fireEvent.change(input, { target: { value } });
 }
 
+/** Types, then lets the 150 ms debounced search answer: the dispatch row waits for it. */
+async function typeSettled(input: HTMLElement, value: string): Promise<void> {
+  type(input, value);
+  await act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 170));
+  });
+}
+
 beforeEach(() => {
   window.localStorage.clear();
   vi.clearAllMocks();
@@ -62,7 +70,7 @@ afterEach(cleanup);
 describe('CommandPalette dispatch', () => {
   it('creates a Todo card from text longer than 8 characters', async () => {
     const input = renderPalette('-work-shop');
-    type(input, 'fix the flaky login test');
+    await typeSettled(input, 'fix the flaky login test');
     fireEvent.keyDown(input, { key: 'Enter' });
     await act(async () => {
       await Promise.resolve();
@@ -76,9 +84,9 @@ describe('CommandPalette dispatch', () => {
     expect(onClose).toHaveBeenCalledOnce();
   });
 
-  it('does not treat exactly 8 characters as a task', () => {
+  it('does not treat exactly 8 characters as a task', async () => {
     const input = renderPalette('-work-shop');
-    type(input, '12345678');
+    await typeSettled(input, '12345678');
     fireEvent.keyDown(input, { key: 'Enter' });
     expect(createBoardTask).not.toHaveBeenCalled();
   });
@@ -89,17 +97,42 @@ describe('CommandPalette dispatch', () => {
     expect(screen.queryByText(/new session/)).toBeNull();
   });
 
-  it('names the project the card will land in', () => {
+  // Plan D-11: Enter on a search must never start a paid session.
+  it('does not dispatch an Enter that beats the search response', () => {
     const input = renderPalette('-work-shop');
     type(input, 'fix the flaky login test');
+    fireEvent.keyDown(input, { key: 'Enter' });
+    expect(createBoardTask).not.toHaveBeenCalled();
+  });
+
+  it('keeps dispatch after real search results, so Enter opens the result', async () => {
+    vi.mocked(fetchSearch).mockResolvedValueOnce({
+      sessions: [],
+      turns: [],
+      files: [],
+      projects: [{ id: 7, slug: '-work-shop', name: 'Shop', path: '/work/shop' }],
+    } as never);
+    const input = renderPalette('-work-shop');
+    await typeSettled(input, 'fix the flaky login test');
+    expect(screen.getByText('⏎ new session: "fix the flaky login test"')).toBeTruthy();
+    fireEvent.keyDown(input, { key: 'Enter' });
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(createBoardTask).not.toHaveBeenCalled();
+  });
+
+  it('names the project the card will land in', async () => {
+    const input = renderPalette('-work-shop');
+    await typeSettled(input, 'fix the flaky login test');
     expect(screen.getByText('⏎ new session: "fix the flaky login test"')).toBeTruthy();
     expect(screen.getByText('Shop')).toBeTruthy();
   });
 
-  it('falls back to the last project under All projects', () => {
+  it('falls back to the last project under All projects', async () => {
     window.localStorage.setItem('swarmery.lastProject', '-work-shop');
     const input = renderPalette(null);
-    type(input, 'fix the flaky login test');
+    await typeSettled(input, 'fix the flaky login test');
     expect(screen.getByText('Shop')).toBeTruthy();
   });
 
@@ -114,7 +147,7 @@ describe('CommandPalette dispatch', () => {
   it('stays open with the error when the create fails', async () => {
     vi.mocked(createBoardTask).mockRejectedValueOnce(new Error('board is down'));
     const input = renderPalette('-work-shop');
-    type(input, 'fix the flaky login test');
+    await typeSettled(input, 'fix the flaky login test');
     fireEvent.keyDown(input, { key: 'Enter' });
     await act(async () => {
       await Promise.resolve();
@@ -137,9 +170,9 @@ describe('CommandPalette navigation', () => {
 
   // Enter on a dispatch row starts a session. "Playbooks" is past the 8-character
   // mark, so a place's name must not be read as a task.
-  it('navigates on Enter when long text names a place, and keeps dispatch one arrow away', () => {
+  it('navigates on Enter when long text names a place, and keeps dispatch one arrow away', async () => {
     const input = renderPalette('-work-shop');
-    type(input, 'Playbooks');
+    await typeSettled(input, 'Playbooks');
     expect(screen.getByText('⏎ new session: "Playbooks"')).toBeTruthy();
     fireEvent.keyDown(input, { key: 'Enter' });
     expect(createBoardTask).not.toHaveBeenCalled();

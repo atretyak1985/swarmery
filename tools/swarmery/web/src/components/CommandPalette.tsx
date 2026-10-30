@@ -100,6 +100,7 @@ function sectionsFor(
   results: SearchResponse | null,
   i18n: I18n,
   project: PaletteProject | null,
+  settled: boolean,
 ): Section[] {
   const text = query.trim();
   const q = text.toLowerCase();
@@ -142,13 +143,12 @@ function sectionsFor(
       items: nav.map((n) => ({ kind: 'nav' as const, nav: n })),
     });
   }
-  if (project !== null && text.length > DISPATCH_AFTER_CHARS) {
-    const row = { title: i18n._(msg`Dispatch`), items: [{ kind: 'dispatch' as const, text, project }] };
-    // Enter takes the first row, and this one starts a paid session: text that
-    // names a place is navigation ("Playbooks" is 9 characters), so there the
-    // dispatch row waits at the end, one arrow away.
-    if (nav.length > 0) sections.push(row);
-    else sections.unshift(row);
+  // Enter takes the first row, and this one starts a paid session (plan D-11): it
+  // leads only when the settled search found nothing and no place matched
+  // ("Playbooks" is 9 characters), and it waits for the search, so an Enter that
+  // beats the response cannot dispatch what was meant as a lookup.
+  if (project !== null && text.length > DISPATCH_AFTER_CHARS && settled) {
+    sections.push({ title: i18n._(msg`Dispatch`), items: [{ kind: 'dispatch' as const, text, project }] });
   }
   return sections;
 }
@@ -174,6 +174,8 @@ export function CommandPalette({
   const [active, setActive] = useState(0);
   const [dispatchError, setDispatchError] = useState<string | null>(null);
   const dispatching = useRef(false);
+  // The query whose search has answered: the dispatch row waits for it (D-11).
+  const [settledQuery, setSettledQuery] = useState<string | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const reqSeq = useRef(0);
 
@@ -199,11 +201,15 @@ export function CommandPalette({
         .then((r) => {
           if (reqSeq.current === seq) {
             setResults(r);
+            setSettledQuery(q);
             setActive(0);
           }
         })
         .catch(() => {
-          if (reqSeq.current === seq) setResults(null);
+          if (reqSeq.current === seq) {
+            setResults(null);
+            setSettledQuery(q);
+          }
         });
     }, 150);
     return () => clearTimeout(timer);
@@ -219,8 +225,8 @@ export function CommandPalette({
         },
       ];
     }
-    return sectionsFor(query, results, i18n, project);
-  }, [filePath, fileSessions, query, results, i18n, t, project]);
+    return sectionsFor(query, results, i18n, project, settledQuery === query.trim());
+  }, [filePath, fileSessions, query, results, i18n, t, project, settledQuery]);
   const flat = useMemo(() => sections.flatMap((s) => s.items), [sections]);
 
   function go(to: string): void {

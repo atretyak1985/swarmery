@@ -9,7 +9,7 @@
 // render-blocking script from <head>, so it still runs before first paint.
 (function () {
   var BG = {
-    'swarm:dark': '#0e0f12', 'swarm:light': '#f6f2ea',
+    'swarm:dark': '#0e0f12', 'swarm:light': '#f7f5f0',
     'ocean:dark': '#0b0f14', 'ocean:light': '#eef3f7',
     'forest:dark': '#0c1210', 'forest:light': '#eef4ee',
     'sunset:dark': '#140d0e', 'sunset:light': '#f7efea',

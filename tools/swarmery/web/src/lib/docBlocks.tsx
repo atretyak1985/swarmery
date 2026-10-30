@@ -136,7 +136,7 @@ export function MermaidBlock({ code }: { code: string }): JSX.Element {
           startOnLoad: false,
           theme: mermaidTheme(currentMode()),
           securityLevel: 'strict',
-          fontFamily: 'Inter, ui-sans-serif, system-ui, sans-serif',
+          fontFamily: '"IBM Plex Sans", ui-sans-serif, system-ui, sans-serif',
           // PINNED FOR THE v12 UPGRADE. v12 is a deliberately breaking release:
           // "existing flowcharts, state and class diagrams will re-lay out and
           // recolour" unless the old defaults are named explicitly. Every
