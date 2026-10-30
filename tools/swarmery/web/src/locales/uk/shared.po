@@ -1262,7 +1262,7 @@ msgstr "підтвердити відключення"
 
 #: src/lib/needsYou.ts
 msgid "confirm locally"
-msgstr "підтвердьте локально"
+msgstr "підтвердити локально"
 
 #: src/components/SessionControls.tsx
 msgid "Confirm stop"

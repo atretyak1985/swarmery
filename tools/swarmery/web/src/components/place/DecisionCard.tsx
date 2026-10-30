@@ -83,6 +83,8 @@ export interface DecisionCardProps {
   /** The picked option id. */
   picked?: string | null;
   onPick?: (id: string) => void;
+  /** Long options: the main button repeats the pick's head, up to this many characters. */
+  pickLimit?: number;
   note?: { value: string; onChange: (next: string) => void; placeholder: string };
   primary: DecisionAction;
   secondary?: DecisionAction;
@@ -97,6 +99,13 @@ export interface DecisionCardProps {
 }
 
 const KIND_TONE = { amber: 'text-amber', red: 'text-red', default: 'text-ink-dim' } as const;
+
+/** The pick as the button says it: the part before ` ·`, cut at `limit`. */
+function pickHead(label: string, limit: number | undefined): string {
+  if (limit === undefined) return label;
+  const head = (label.split(' ·')[0] ?? label).slice(0, limit);
+  return label.length > limit ? `${head}…` : head;
+}
 
 const quietButton = (gate: boolean): string =>
   `rounded-[7px] border border-line-strong bg-transparent font-mono text-[11.5px] leading-[normal] text-ink-2 disabled:opacity-50 ${
@@ -116,6 +125,7 @@ export function DecisionCard({
   options,
   picked = null,
   onPick,
+  pickLimit,
   note,
   primary,
   secondary,
@@ -128,7 +138,9 @@ export function DecisionCard({
   const tierDef = tier === undefined ? undefined : TIERS[tier];
   const chosen = options?.find((o) => o.id === picked);
   // `reply: <pick>` — the button says exactly what will go out.
-  const primaryLabel = chosen === undefined ? primary.label : `${primary.label}: ${chosen.label}`;
+  const primaryLabel = chosen === undefined ? primary.label : `${primary.label}: ${pickHead(chosen.label, pickLimit)}`;
+  // The tier's colour is the gate's: a whole pane speaks in the one accent.
+  const primaryTone = gate ? (tierDef?.primary ?? PRIMARY_DEFAULT) : PRIMARY_DEFAULT;
 
   return (
     <div
@@ -140,7 +152,7 @@ export function DecisionCard({
     >
       <div className={`flex min-w-0 items-center font-mono text-[10.5px] leading-[normal] ${gate ? 'gap-[10px]' : 'gap-2'}`}>
         {tierDef !== undefined ? (
-          <span className={`shrink-0 px-[7px] py-px font-bold whitespace-nowrap ${tierDef.badge}`}>
+          <span className={`shrink-0 px-[7px] py-px font-bold whitespace-nowrap ${tierDef.badge} ${gate ? '' : '-my-0.5'}`}>
             {`${tierDef.glyph} ${i18n._(tierDef.label)}`}
           </span>
         ) : (
@@ -165,7 +177,7 @@ export function DecisionCard({
       {code !== undefined && (
         <code
           className={`block rounded-[6px] border border-line bg-bg px-[10px] py-2 font-mono text-[12px] whitespace-pre-wrap text-ink-2 ${
-            gate ? 'mt-2' : 'mt-[10px] max-w-[620px]'
+            gate ? 'mt-2' : 'mt-[10px] max-w-[642px] leading-[normal]'
           }`}
         >
           {code}
@@ -243,7 +255,7 @@ export function DecisionCard({
           disabled={primary.disabled}
           className={`max-w-[460px] truncate rounded-[7px] border font-mono text-[11.5px] leading-[normal] font-bold disabled:opacity-50 ${
             gate ? 'px-3 py-1.5' : 'px-[13px] py-[7px]'
-          } ${tierDef?.primary ?? PRIMARY_DEFAULT}`}
+          } ${primaryTone}`}
         >
           {primaryLabel} <span className="font-normal opacity-55">e</span>
         </button>

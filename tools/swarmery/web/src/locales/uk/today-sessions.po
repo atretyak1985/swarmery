@@ -762,6 +762,7 @@ msgstr "відхилено"
 #: src/pages/NeedsYou.tsx
 #: src/pages/NeedsYou.tsx
 #: src/pages/NeedsYou.tsx
+#: src/pages/NeedsYou.tsx
 msgid "deny"
 msgstr "відхилити"
 
@@ -967,7 +968,7 @@ msgstr "згенерувати інсайти"
 
 #: src/pages/NeedsYou.tsx
 msgid "guard block unreadable"
-msgstr "блок guard не читається"
+msgstr "блок guard не прочитати"
 
 #: src/pages/sessions/SwarmPanel.tsx
 msgid "handed to the session's mod"
@@ -1495,11 +1496,11 @@ msgstr "результат ▾"
 
 #: src/pages/NeedsYou.tsx
 msgid "own answer — overrides the selection"
-msgstr "своя відповідь — замінює вибране"
+msgstr "власна відповідь — замінює вибране"
 
 #: src/pages/NeedsYou.tsx
 msgid "own answer…"
-msgstr "своя відповідь…"
+msgstr "власна відповідь…"
 
 #: src/pages/NeedsYou.tsx
 msgid "Path"
@@ -2048,7 +2049,7 @@ msgstr "підписка"
 
 #: src/pages/NeedsYou.tsx
 msgid "suggested"
-msgstr "запропоновано"
+msgstr "пропозиція"
 
 #: src/pages/detail/SessionPane.tsx
 msgid "swarm"
@@ -2140,8 +2141,8 @@ msgid "The session stopped to ask rather than guess. It does nothing until it he
 msgstr "Сесія зупинилась, щоб запитати, а не вгадувати. Вона нічого не робить, доки не почує вас."
 
 #: src/pages/NeedsYou.tsx
-msgid "The session stopped to ask rather than guess. Your answer goes back to it as the tool's result."
-msgstr "Сесія зупинилась, щоб запитати, а не вгадувати. Ваша відповідь повернеться до неї як результат інструмента."
+msgid "The session stopped to ask rather than guess. Your pick is sent as the reply; the session resumes with it."
+msgstr "Сесія зупинилась, щоб запитати, а не вгадувати. Ваш вибір піде як відповідь, і сесія продовжить із ним."
 
 #: src/pages/NeedsYou.tsx
 msgid "The session waits on you. Nothing runs until you decide."

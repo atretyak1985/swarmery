@@ -762,6 +762,7 @@ msgstr "denied"
 #: src/pages/NeedsYou.tsx
 #: src/pages/NeedsYou.tsx
 #: src/pages/NeedsYou.tsx
+#: src/pages/NeedsYou.tsx
 msgid "deny"
 msgstr "deny"
 
@@ -2140,8 +2141,8 @@ msgid "The session stopped to ask rather than guess. It does nothing until it he
 msgstr "The session stopped to ask rather than guess. It does nothing until it hears from you."
 
 #: src/pages/NeedsYou.tsx
-msgid "The session stopped to ask rather than guess. Your answer goes back to it as the tool's result."
-msgstr "The session stopped to ask rather than guess. Your answer goes back to it as the tool's result."
+msgid "The session stopped to ask rather than guess. Your pick is sent as the reply; the session resumes with it."
+msgstr "The session stopped to ask rather than guess. Your pick is sent as the reply; the session resumes with it."
 
 #: src/pages/NeedsYou.tsx
 msgid "The session waits on you. Nothing runs until you decide."

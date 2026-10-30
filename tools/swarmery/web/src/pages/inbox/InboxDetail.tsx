@@ -109,7 +109,7 @@ const SECONDARY = `${BTN} border-line-strong bg-transparent text-ink-2`;
 const LINK = 'ml-auto font-mono text-[10.5px] leading-[normal] text-ink-faint transition-colors hover:text-brand';
 
 function KeyHint({ k }: { k: string }): JSX.Element | null {
-  return k === '' ? null : <span className="ml-1 font-normal opacity-55">{k}</span>;
+  return k === '' ? null : <span className="font-normal opacity-55"> {k}</span>;
 }
 
 function Consequences({ yes, no }: { yes: [string, string]; no?: [string, string] }): JSX.Element {
@@ -134,7 +134,7 @@ function Body({ children }: { children: ReactNode }): JSX.Element {
 /** The `evidence` block of handoff §8: a mono block under a small label. */
 function Evidence({ children }: { children: ReactNode }): JSX.Element {
   return (
-    <div className="mt-3 max-w-[620px] rounded-[8px] border border-line px-3 py-[10px]">
+    <div className="mt-3 max-w-[646px] rounded-[8px] border border-line px-3 py-[10px]">
       <div className="font-mono text-[10px] tracking-[0.1em] text-ink-faint uppercase">
         <Trans>evidence</Trans>
       </div>
@@ -145,7 +145,7 @@ function Evidence({ children }: { children: ReactNode }): JSX.Element {
 
 function Code({ children }: { children: ReactNode }): JSX.Element {
   return (
-    <div className="mt-[10px] max-w-[620px] overflow-x-auto rounded-[6px] border border-line bg-bg px-[10px] py-2 font-mono text-[12px] whitespace-pre-wrap text-ink-2">
+    <div className="mt-[10px] max-w-[642px] overflow-x-auto rounded-[6px] border border-line bg-bg px-[10px] py-2 font-mono text-[12px] leading-[normal] whitespace-pre-wrap text-ink-2">
       {children}
     </div>
   );

@@ -10,7 +10,7 @@ import { MemoryRouter } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ackReview, countFindings, fetchPhaseReviews, fetchUnackedPlanReviews, type Review } from '../../api/reviews';
 import { toItems } from './inboxModel';
-import { ReviewDetail, ReviewRow } from './ReviewItem';
+import { ReviewDetail } from './ReviewItem';
 
 const NOW = Date.parse('2026-10-10T12:00:00Z');
 
@@ -77,13 +77,6 @@ describe('review inbox item', () => {
     expect(toItems({ reviews: [review({ planTitle: '', findings: 'VERDICT: PASS', verdict: 'pass' })] })[0]?.title).toBe(
       'Plan review: plan #9',
     );
-  });
-
-  it('renders the card: verdict badge, findings count, plan title, started time', () => {
-    render(<ReviewRow review={review()} selected={false} now={NOW} />);
-    expect(screen.getByText('Plan review: Order line items')).toBeTruthy();
-    expect(screen.getByText('review failed')).toBeTruthy();
-    expect(screen.getByText(/2 findings · started 2 h ago/)).toBeTruthy();
   });
 
   it('renders the detail: findings monospace and scrollable, a link to the plan', () => {

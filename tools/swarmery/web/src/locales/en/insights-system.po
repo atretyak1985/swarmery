@@ -241,10 +241,6 @@ msgstr "{findings, plural, one {# Advisor finding} few {# Advisor findings} many
 msgid "{findingsText} · {rewritesText} to approve"
 msgstr "{findingsText} · {rewritesText} to approve"
 
-#: src/pages/inbox/ReviewItem.tsx
-msgid "{findingsText} · started {age} ago"
-msgstr "{findingsText} · started {age} ago"
-
 #: src/pages/inbox/TriageBanner.tsx
 msgid "{fixTasks, plural, one {# fix task} few {# fix tasks} many {# fix tasks} other {# fix tasks}}"
 msgstr "{fixTasks, plural, one {# fix task} few {# fix tasks} many {# fix tasks} other {# fix tasks}}"
@@ -3083,7 +3079,6 @@ msgid "Pitfalls"
 msgstr "Pitfalls"
 
 #: src/pages/inbox/inboxModel.ts
-#: src/pages/inbox/ReviewItem.tsx
 msgid "plan #{id}"
 msgstr "plan #{id}"
 
@@ -3092,7 +3087,6 @@ msgid "plan review"
 msgstr "plan review"
 
 #: src/pages/inbox/inboxModel.ts
-#: src/pages/inbox/ReviewItem.tsx
 msgid "Plan review: {plan}"
 msgstr "Plan review: {plan}"
 

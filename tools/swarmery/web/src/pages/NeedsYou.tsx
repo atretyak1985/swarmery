@@ -141,6 +141,10 @@ function useCardKeys(ctx: CardContext, primary?: () => void, secondary?: () => v
   const { keys, busy } = ctx;
   useEffect(() => {
     keys.current = { primary: busy ? undefined : primary, secondary: busy ? undefined : secondary };
+    // Once the card is gone its keys must not answer a request that left the queue.
+    return () => {
+      keys.current = { primary: undefined, secondary: undefined };
+    };
   });
 }
 
@@ -372,7 +376,7 @@ function QuestionDecision({
       title={single?.question ?? t`Claude is asking you ${plural(count, { one: '# question', few: '# questions', many: '# questions', other: '# questions' })}`}
       body={
         single !== null ? (
-          <Trans>The session stopped to ask rather than guess. Your answer goes back to it as the tool's result.</Trans>
+          <Trans>The session stopped to ask rather than guess. Your pick is sent as the reply; the session resumes with it.</Trans>
         ) : (
           <div className="flex flex-col gap-2.5">
             {questions.map((q, i) => (
@@ -585,6 +589,7 @@ function PhaseDecision({ ctx }: { ctx: CardContext }): JSX.Element | null {
       })}
       picked={picked?.id ?? null}
       onPick={(id) => setPick(decision.options.findIndex((o) => o.id === id))}
+      pickLimit={34}
       note={{
         value: note,
         onChange: setNote,
@@ -974,10 +979,25 @@ export function NeedsYou(): JSX.Element {
   };
 
   const hint = selected?.kind;
-  const primaryHint =
-    hint === 'approval' ? t`approve` : hint === 'awaiting_reply' || hint === 'question' ? t`reply` : hint === 'phase_decision' ? t`answer` : undefined;
-  const secondaryHint =
-    hint === 'approval' || hint === 'question' ? t`deny` : hint === 'awaiting_reply' ? t`dismiss` : undefined;
+  const selectedRequest = selected?.requestId == null ? null : (requests.get(selected.requestId) ?? null);
+  // A prod-deploy request can only be denied here, so `e` is the deny.
+  const denyOnly = hint === 'approval' && selectedRequest?.riskClass === 'prod-deploy';
+  const primaryHint = denyOnly
+    ? t`deny`
+    : hint === 'approval'
+      ? t`approve`
+      : hint === 'awaiting_reply' || hint === 'question'
+        ? t`reply`
+        : hint === 'phase_decision'
+          ? t`answer`
+          : undefined;
+  const secondaryHint = denyOnly
+    ? undefined
+    : hint === 'approval' || hint === 'question'
+      ? t`deny`
+      : hint === 'awaiting_reply'
+        ? t`dismiss`
+        : undefined;
   const blockedCount = String(visible.length);
 
   const context = (item: NeedsYouItem): CardContext => {
@@ -1070,7 +1090,7 @@ export function NeedsYou(): JSX.Element {
             <Decision
               key={currentKey}
               ctx={context(selected)}
-              request={selected.requestId === null ? null : (requests.get(selected.requestId) ?? null)}
+              request={selectedRequest}
             />
           ) : (
             !loading &&

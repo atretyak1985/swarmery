@@ -11,7 +11,7 @@
 import { Trans, useLingui } from '@lingui/react/macro';
 import { useEffect, useMemo, useState } from 'react';
 import { Navigate, useParams, useSearchParams } from 'react-router-dom';
-import { ListGroup } from '../../components/place/ListGroup';
+import { ListGroup, type GroupTone } from '../../components/place/ListGroup';
 import { ListPane } from '../../components/place/ListPane';
 import { ListRow } from '../../components/place/ListRow';
 import { PlaceLayout } from '../../components/place/PlaceLayout';
@@ -32,11 +32,24 @@ import {
   suggestionActionLabel,
   valueWording,
   type InboxItem,
+  type InboxKind,
 } from './inboxModel';
 import { FLEET_WIDE_KINDS, useInboxItems } from './useInboxItems';
 
 /** The row that opens the agent's closed items in the detail. */
 const HANDLED = 'handled';
+
+/** A group's label takes its kind's colour, as the row's dot does. */
+const GROUP_TONE: Record<InboxKind, GroupTone> = {
+  approval: 'amber',
+  lesson: 'purple',
+  advisor: 'blue',
+  proposal: 'default',
+  classifier: 'green',
+  retire: 'red',
+  alert: 'red',
+  review: 'default',
+};
 
 /** Wall clock for the expiry countdowns. */
 function useNow(periodMs: number): number {
@@ -190,7 +203,7 @@ function InboxPlace({ scope, tab }: { scope: string | null; tab: string | null }
         >
           {loading && <Loading label={t`loading…`} />}
           {groups.map((g) => (
-            <ListGroup key={g.kind} label={KIND_META[g.kind].label} count={g.items.length}>
+            <ListGroup key={g.kind} label={KIND_META[g.kind].label} count={g.items.length} tone={GROUP_TONE[g.kind]}>
               {g.items.map((item) => (
                 <div key={item.key} data-testid="inbox-row" data-kind={item.kind}>
                   <ListRow

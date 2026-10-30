@@ -7,13 +7,15 @@
 
 import { useCallback, useState, type ReactNode } from 'react';
 
-export type GroupTone = 'default' | 'amber' | 'green' | 'red';
+export type GroupTone = 'default' | 'amber' | 'green' | 'red' | 'blue' | 'purple';
 
 const LABEL_TONE: Record<GroupTone, string> = {
   default: 'text-ink-faint',
   amber: 'text-amber',
   green: 'text-green',
   red: 'text-red',
+  blue: 'text-blue',
+  purple: 'text-purple',
 };
 
 export function ListGroup({
