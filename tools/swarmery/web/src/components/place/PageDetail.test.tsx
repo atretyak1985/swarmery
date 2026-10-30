@@ -38,7 +38,7 @@ function Harness(): JSX.Element {
         openGroup={tab}
         selected={selected}
         onOpenGroup={(key) => pick(key as 'one' | 'two')}
-        onSelect={(key) => pick(tab, key)}
+        onSelect={(key, group) => pick(group as 'one' | 'two', key)}
         detail={<div data-testid="selected">{selected}</div>}
       />
       <div data-testid="search">{search}</div>
@@ -157,6 +157,14 @@ describe('PagePlace', () => {
     expect(screen.getByTestId('selected').textContent).toBe('b');
     fireEvent.keyDown(window, { key: 'k' });
     expect(screen.getByTestId('selected').textContent).toBe('a');
+  });
+
+  it('picks a filtered row in its own group, not the one that was open', () => {
+    renderPlace('/');
+    fireEvent.change(screen.getByRole('searchbox'), { target: { value: 'gamma' } });
+    fireEvent.click(screen.getByRole('button', { name: /Gamma/ }));
+    expect(screen.getByTestId('search').textContent).toBe('?tab=two&item=c');
+    expect(screen.getByTestId('selected').textContent).toBe('c');
   });
 
   it('filters rows and hides groups with no match', () => {

@@ -240,7 +240,7 @@ describe('Health', () => {
         'The fleet is failing half as often as the 14 days before; almost all of the change is implementation-agent.',
       ),
     ).toBeTruthy();
-    expect(screen.getByText('implementation-agent carries the most failures: 50 % → 10 % failed.')).toBeTruthy();
+    expect(screen.getByRole('heading', { level: 2, name: '60 runs in 14 days, 10 % failed — down from 50 %.' })).toBeTruthy();
     expect(screen.getByText('failed share by agent')).toBeTruthy();
   });
 

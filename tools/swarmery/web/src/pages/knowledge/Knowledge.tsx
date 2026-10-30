@@ -112,6 +112,7 @@ export function Knowledge(): JSX.Element {
           lead={t`A file the project remembers and loads when a run needs it. Edit it if it has gone stale.`}
           kv={[
             { k: t`last changed`, v: fmtAgo(file.updatedAt) },
+            { k: t`scope`, v: slug },
             { k: t`source`, v: kindLabel(file.kind) },
             ...(file.writable ? [] : [{ k: t`access`, v: t`read-only`, tone: 'amber' as const }]),
           ]}

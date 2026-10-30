@@ -229,6 +229,7 @@ function RowBody({ row }: { row: PageRow }): JSX.Element {
   );
 }
 
+// i18n-ignore — a class list, not copy
 const ROW_CLASS = 'grid w-full grid-cols-[18px_minmax(0,1fr)_auto_auto] items-center gap-3 border-b border-line py-2';
 
 function RowsBlock({ title, rows }: { title: string; rows: readonly PageRow[] }): JSX.Element {
@@ -505,7 +506,7 @@ export function PagePlace({
   onOpenGroup,
   onSelect,
   detail,
-  secondaryHint,
+  secondaryHint = '—',
   onSecondary,
   narrow,
 }: {
@@ -517,7 +518,8 @@ export function PagePlace({
   /** The selected row of the open group. */
   selected: string | null;
   onOpenGroup: (group: string) => void;
-  onSelect: (key: string) => void;
+  /** With the row's own group: under a filter it need not be the open one. */
+  onSelect: (key: string, group: string) => void;
   detail: ReactNode;
   secondaryHint?: string;
   onSecondary?: () => void;
@@ -541,7 +543,7 @@ export function PagePlace({
     if (items.length === 0) return;
     const at = items.findIndex((item) => item.key === selected);
     const next = items[Math.min(Math.max(at + step, 0), items.length - 1)];
-    if (next !== undefined) onSelect(next.key);
+    if (next !== undefined && open !== undefined) onSelect(next.key, open.key);
   };
   const emptyText = t`Nothing matches.`;
   return (
@@ -559,7 +561,7 @@ export function PagePlace({
             onPrev: () => moveBy(-1),
             ...(onSecondary !== undefined ? { onSecondary } : {}),
           }}
-          {...(secondaryHint !== undefined ? { secondaryHint } : {})}
+          secondaryHint={secondaryHint}
           {...(visible.length === 0
             ? { empty: <div className="px-[14px] py-3 font-mono text-[11px] text-ink-faint">{emptyText}</div> }
             : {})}
@@ -594,7 +596,7 @@ export function PagePlace({
                     pr={item.right}
                     prTone={TEXT_TONE[item.rightTone ?? 'faint']}
                     selected={item.key === selected}
-                    onSelect={() => onSelect(item.key)}
+                    onSelect={() => onSelect(item.key, group.key)}
                   />
                 ))}
               </ListGroup>

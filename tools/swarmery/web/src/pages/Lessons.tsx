@@ -427,6 +427,14 @@ function LessonCard({
   );
 }
 
+/** "in force · 12 d" or "candidate": how a live lesson stands, for its row and page. */
+export function lessonStanding(lesson: Lesson): string {
+  if (lesson.status !== 'active') return tr`candidate`;
+  const since = Date.parse(lesson.activatedAt ?? lesson.createdAt);
+  const days = String(Number.isNaN(since) ? 0 : Math.max(0, Math.floor((Date.now() - since) / 86_400_000)));
+  return tr`in force · ${days} d`;
+}
+
 /** One lesson as a detail page (handoff §9): what it reached and what that did to
  *  its area, then everything the review card shows, so nothing depends on opening
  *  the queue. `act` runs a lesson action and reloads the list. */
@@ -473,14 +481,13 @@ export function LessonDetail({
   if (surprise !== null) kv.push({ k: t`surprise`, v: surprise });
   if (lesson.recurrences > 1) kv.push({ k: t`seen`, v: `${String(lesson.recurrences)}×` });
   if (linkedTitle !== '') kv.push({ k: t`linked to`, v: linkedTitle });
-  if (isActive && eff !== null) kv.push({ k: t`effectiveness`, v: effectivenessLabel(eff) });
 
   const actions: PageAction[] = [];
   if (isCandidate) {
     actions.push({ label: t`accept`, tone: 'brand', disabled: busy, onClick: () => act(() => acceptLesson(lesson.id)) });
   }
   if (isCandidate || isActive) {
-    actions.push({ label: t`edit`, disabled: busy, onClick: () => setEditing(true) });
+    actions.push({ label: t`edit wording`, disabled: busy, onClick: () => setEditing(true) });
   }
   if (isCandidate) {
     for (const m of lesson.matches) {
@@ -524,7 +531,7 @@ export function LessonDetail({
     <PageDetail
       kind={t`lesson`}
       kindTone="purple"
-      meta={`${lesson.status} · ${planLine}`}
+      meta={`${lesson.planId} · ${lessonStanding(lesson)}`}
       title={lesson.title}
       lead={lead}
       {...(eff !== null
@@ -556,7 +563,12 @@ export function LessonDetail({
         />
       )}
       <div className="mt-[18px] max-w-[760px]">
-        <EvidenceList lesson={lesson} />
+        {lesson.evidence.length > 0 && <EvidenceList lesson={lesson} />}
+        {isActive && eff !== null && (
+          <div className="mt-1 font-mono text-[10px] text-ink-dim">
+            <Trans>effectiveness:</Trans> {effectivenessLabel(eff)}
+          </div>
+        )}
         {lesson.promotedBranch !== '' && (
           <div className="mt-1 font-mono text-[10px] text-ink-dim">
             <Trans>
@@ -582,7 +594,14 @@ export function LessonDetail({
  *  (learning-loop phase 14). Nothing becomes active without an accept here.
  *  `embedded` renders it as Learning's Lessons tab: no page heading or padding,
  *  and no calibration panel (that is its own "Forecast honesty" tab). */
-export function Lessons({ embedded = false }: { embedded?: boolean } = {}): JSX.Element {
+export function Lessons({
+  embedded = false,
+  onChanged,
+}: {
+  embedded?: boolean;
+  /** After a lesson action: the host's own list is stale too. */
+  onChanged?: () => void;
+} = {}): JSX.Element {
   const { i18n, t } = useLingui();
   const [filter, setFilter] = useState<LessonStatus | undefined>('candidate');
   const [items, setItems] = useState<Lesson[] | null>(null);
@@ -606,11 +625,14 @@ export function Lessons({ embedded = false }: { embedded?: boolean } = {}): JSX.
     (run: () => Promise<Lesson>) => {
       setBusy(true);
       run()
-        .then(() => load(filter))
+        .then(() => {
+          load(filter);
+          onChanged?.();
+        })
         .catch((e: unknown) => setErr(String(e)))
         .finally(() => setBusy(false));
     },
-    [filter, load],
+    [filter, load, onChanged],
   );
 
   return (

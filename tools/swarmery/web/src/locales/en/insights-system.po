@@ -119,17 +119,6 @@ msgstr "{0, plural, one {# validate error} few {# validate errors} many {# valid
 msgid "{0, plural, one {No group has # scored run yet.} few {No group has # scored runs yet.} many {No group has # scored runs yet.} other {No group has # scored runs yet.}}"
 msgstr "{0, plural, one {No group has # scored run yet.} few {No group has # scored runs yet.} many {No group has # scored runs yet.} other {No group has # scored runs yet.}}"
 
-#. placeholder {0}: String(candidates)
-#: src/pages/learning/Learning.tsx
-msgid "{0} candidates · retirements · every status"
-msgstr "{0} candidates · retirements · every status"
-
-#. placeholder {0}: String(ordered.length - candidates)
-#. placeholder {1}: String(candidates)
-#: src/pages/learning/Learning.tsx
-msgid "{0} lessons in force · {1} candidates"
-msgstr "{0} lessons in force · {1} candidates"
-
 #: src/pages/inbox/inboxModel.ts
 msgid "{action} · agent's suggestion"
 msgstr "{action} · agent's suggestion"
@@ -137,10 +126,6 @@ msgstr "{action} · agent's suggestion"
 #: src/pages/inbox/HandledList.tsx
 msgid "{age} ago"
 msgstr "{age} ago"
-
-#: src/pages/health/HealthOverview.tsx
-msgid "{agent} carries the most failures: {figure}."
-msgstr "{agent} carries the most failures: {figure}."
 
 #: src/pages/health/HealthOverview.tsx
 msgid "{agent}: {failed} of {runs} runs failed, down from {was}."
@@ -169,6 +154,10 @@ msgstr "{arrow} from {prevPct}"
 #: src/pages/learning/classifierModel.ts
 msgid "{calls, plural, =1 {once} one {# times} few {# times} many {# times} other {# times}}"
 msgstr "{calls, plural, =1 {once} one {# times} few {# times} many {# times} other {# times}}"
+
+#: src/pages/learning/Learning.tsx
+msgid "{candidates} candidates · retirements · every status"
+msgstr "{candidates} candidates · retirements · every status"
 
 #: src/pages/health/healthModel.ts
 msgid "{changesText} verified · {gatheringCount} gathering proof"
@@ -301,6 +290,18 @@ msgstr "{head} · {window} d · {failed} failed, down from {prev}"
 msgid "{head} · {window} d · {failed} failed, up from {prev}"
 msgstr "{head} · {window} d · {failed} failed, up from {prev}"
 
+#: src/pages/health/HealthOverview.tsx
+msgid "{head} in {window} days, {failed} failed — down from {was}."
+msgstr "{head} in {window} days, {failed} failed — down from {was}."
+
+#: src/pages/health/HealthOverview.tsx
+msgid "{head} in {window} days, {failed} failed — up from {was}."
+msgstr "{head} in {window} days, {failed} failed — up from {was}."
+
+#: src/pages/health/HealthOverview.tsx
+msgid "{head} in {window} days, {failed} failed."
+msgstr "{head} in {window} days, {failed} failed."
+
 #: src/pages/health/healthModel.ts
 msgid "{head}; almost all of the change is {agent}."
 msgstr "{head}; almost all of the change is {agent}."
@@ -328,6 +329,10 @@ msgstr "{hiddenGroups} group(s) with {hiddenRuns} run(s) hidden: fewer than {min
 #: src/pages/health/HealthOverview.tsx
 msgid "{hot, plural, one {# agent still sits above the {line} % line.} few {# agents still sit above the {line} % line.} many {# agents still sit above the {line} % line.} other {# agents still sit above the {line} % line.}}"
 msgstr "{hot, plural, one {# agent still sits above the {line} % line.} few {# agents still sit above the {line} % line.} many {# agents still sit above the {line} % line.} other {# agents still sit above the {line} % line.}}"
+
+#: src/pages/learning/Learning.tsx
+msgid "{inForce} lessons in force · {provingOut} changes proving out"
+msgstr "{inForce} lessons in force · {provingOut} changes proving out"
 
 #: src/pages/system/ItemDetail.tsx
 msgid "{itemName} sections"
@@ -387,10 +392,6 @@ msgstr "{name} @ {head} — current"
 msgid "{name} @ {head} — the map records no commit for it"
 msgstr "{name} @ {head} — the map records no commit for it"
 
-#: src/pages/health/HealthOverview.tsx
-msgid "{nowPct} failed · {runs, plural, one {# runs} few {# runs} many {# runs} other {# runs}}"
-msgstr "{nowPct} failed · {runs, plural, one {# runs} few {# runs} many {# runs} other {# runs}}"
-
 #: src/pages/inbox/TriageBanner.tsx
 msgid "{offerAgent} can be handled by an agent · {offerYou} need you"
 msgstr "{offerAgent} can be handled by an agent · {offerYou} need you"
@@ -410,10 +411,6 @@ msgstr "{openCount} to review · nothing here blocks a session"
 #: src/pages/system/ItemDetail.tsx
 msgid "{percent}% err"
 msgstr "{percent}% err"
-
-#: src/pages/health/HealthOverview.tsx
-msgid "{prevPct} → {nowPct} failed"
-msgstr "{prevPct} → {nowPct} failed"
 
 #: src/pages/Analytics.tsx
 msgid "{reads} cache reads · {uncached} uncached input"
@@ -448,6 +445,7 @@ msgid "{runs, plural, one {# run · {failed} failed} few {# runs · {failed} fai
 msgstr "{runs, plural, one {# run · {failed} failed} few {# runs · {failed} failed} many {# runs · {failed} failed} other {# runs · {failed} failed}}"
 
 #: src/pages/health/healthModel.ts
+#: src/pages/health/HealthOverview.tsx
 #: src/pages/health/healthPlace.ts
 msgid "{runs, plural, one {# run} few {# runs} many {# runs} other {# runs}}"
 msgstr "{runs, plural, one {# run} few {# runs} many {# runs} other {# runs}}"
@@ -622,10 +620,6 @@ msgstr "$ Cost"
 #: src/pages/health/healthPlace.ts
 msgid "${spent} in this window"
 msgstr "${spent} in this window"
-
-#: src/pages/health/Health.tsx
-msgid "${spent} spent in this window."
-msgstr "${spent} spent in this window."
 
 #: src/pages/Lessons.tsx
 msgid "A candidate: it reaches no run until you accept it."
@@ -1208,7 +1202,7 @@ msgstr "can approve tool calls"
 msgid "cancel"
 msgstr "cancel"
 
-#: src/pages/learning/Learning.tsx
+#: src/pages/Lessons.tsx
 msgid "candidate"
 msgstr "candidate"
 
@@ -1408,7 +1402,6 @@ msgstr "cost"
 msgid "Cost / task"
 msgstr "Cost / task"
 
-#: src/pages/health/Health.tsx
 #: src/pages/health/healthPlace.ts
 msgid "Cost & tokens"
 msgstr "Cost & tokens"
@@ -1659,7 +1652,6 @@ msgid "Each row will be something you accepted, what the system did with it, and
 msgstr "Each row will be something you accepted, what the system did with it, and whether the number it was meant to move actually moved — verification needs a week of traffic and a 20 % change."
 
 #: src/pages/Lessons.tsx
-#: src/pages/Lessons.tsx
 #: src/pages/Memory.tsx
 #: src/pages/system/HooksTab.tsx
 msgid "edit"
@@ -1678,14 +1670,15 @@ msgstr "Edit — raw markdown"
 msgid "edit / enable / disable this hook from the System page → Hooks tab (the existing write surface)"
 msgstr "edit / enable / disable this hook from the System page → Hooks tab (the existing write surface)"
 
+#: src/pages/Lessons.tsx
+msgid "edit wording"
+msgstr "edit wording"
+
 #: src/pages/inbox/InboxDetail.tsx
 msgid "edit wording →"
 msgstr "edit wording →"
 
 #: src/pages/Lessons.tsx
-msgid "effectiveness"
-msgstr "effectiveness"
-
 #: src/pages/Lessons.tsx
 msgid "effectiveness:"
 msgstr "effectiveness:"
@@ -2322,9 +2315,9 @@ msgstr "if you track"
 msgid "Improve"
 msgstr "Improve"
 
-#: src/pages/learning/Learning.tsx
-msgid "in force"
-msgstr "in force"
+#: src/pages/Lessons.tsx
+msgid "in force · {days} d"
+msgstr "in force · {days} d"
 
 #: src/pages/Analytics.tsx
 msgid "In progress"
@@ -3966,6 +3959,7 @@ msgstr "saved ✓"
 msgid "saving…"
 msgstr "saving…"
 
+#: src/pages/knowledge/Knowledge.tsx
 #: src/pages/system-hub/Profiles.tsx
 #: src/pages/system-hub/Profiles.tsx
 #: src/pages/system/CreateAgentForm.tsx
@@ -4965,6 +4959,10 @@ msgstr "When a phase run lands far from its forecast and its report explains why
 #: src/pages/Lessons.tsx
 msgid "where reality diverged"
 msgstr "where reality diverged"
+
+#: src/pages/health/Health.tsx
+msgid "Where the money and tokens went."
+msgstr "Where the money and tokens went."
 
 #: src/pages/RoutingReport.tsx
 msgid "Where the pick differed"

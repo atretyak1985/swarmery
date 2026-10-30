@@ -15,7 +15,7 @@ import type { Recommendation } from '../../api/types';
 import { PageDetail, PagePlace, type PageTone, type PlaceGroup, type PlaceItem, usePlaceParams } from '../../components/place/PageDetail';
 import { fmtAgo } from '../../lib/format';
 import { PLACES } from '../../lib/nav';
-import { LessonDetail, Lessons } from '../Lessons';
+import { LessonDetail, Lessons, lessonStanding } from '../Lessons';
 import { CalibrationPanel } from '../LessonsCalibration';
 import { RecDetail } from '../health/HealthOverview';
 import { Classifier } from './Classifier';
@@ -28,6 +28,7 @@ export type LearningTab = (typeof LEARNING_TABS)[number];
 const PROOF_RECS = ['verified', 'accepted', 'adopted'] as const;
 
 /** The evidence note a verify pass leaves when nothing moved. */
+// i18n-ignore — matched against the daemon's note, never rendered
 const NO_EFFECT_NOTE = 'no measurable improvement';
 
 type ProofVerdict = 'proven' | 'gathering' | 'none';
@@ -52,7 +53,7 @@ function lessonItem(lesson: Lesson): PlaceItem {
   const before = eff?.medianBefore?.toFixed(2) ?? null;
   const after = eff?.medianAfter?.toFixed(2) ?? null;
   const active = lesson.status === 'active';
-  const status = active ? tr`in force` : tr`candidate`;
+  const status = lessonStanding(lesson);
   const reached = plural(uses, {
     one: 'reached # run',
     few: 'reached # runs',
@@ -138,8 +139,10 @@ export function Learning(): JSX.Element {
   const inbox = inboxHref(projectSlug);
   const live = (lessons ?? []).filter((l) => l.status === 'active' || l.status === 'candidate');
   const ordered = [...live.filter((l) => l.status === 'active'), ...live.filter((l) => l.status === 'candidate')];
-  const candidates = live.length - live.filter((l) => l.status === 'active').length;
+  const inForce = live.filter((l) => l.status === 'active').length;
+  const candidates = live.length - inForce;
   const proof = (recs ?? []).filter((r) => (PROOF_RECS as readonly string[]).includes(r.status));
+  const provingOut = proof.filter((r) => r.status !== 'verified').length;
 
   const groups: PlaceGroup[] = [
     {
@@ -153,7 +156,7 @@ export function Learning(): JSX.Element {
           key: 'queue',
           glyph: '▤',
           title: t`Review queue`,
-          summary: candidates > 0 ? t`${String(candidates)} candidates · retirements · every status` : t`retirements · every status`,
+          summary: candidates > 0 ? t`${candidates} candidates · retirements · every status` : t`retirements · every status`,
         },
       ],
     },
@@ -200,7 +203,7 @@ export function Learning(): JSX.Element {
       return (
         <PageDetail kind={t`lessons`} kindTone="purple" title={t`Every lesson, and what waits for a decision.`}>
           <div className="mt-2">
-            <Lessons embedded />
+            <Lessons embedded onChanged={loadLessons} />
           </div>
         </PageDetail>
       );
@@ -230,18 +233,19 @@ export function Learning(): JSX.Element {
   return (
     <PagePlace
       title={t`Learning`}
-      sub={t`${String(ordered.length - candidates)} lessons in force · ${String(candidates)} candidates`}
+      sub={t`${inForce} lessons in force · ${provingOut} changes proving out`}
       searchHint={t`filter lessons`}
       groups={groups}
       openGroup={group}
       selected={selected}
       onOpenGroup={(key) => pick(key as LearningTab)}
-      onSelect={(key) => {
-        if (group === 'classifier') {
+      onSelect={(key, rowGroup) => {
+        if (rowGroup === 'classifier') {
           pick(key === 'honesty' ? 'honesty' : 'classifier');
           return;
         }
-        pick(tab, key === open?.items[0]?.key ? null : key);
+        const first = groups.find((g) => g.key === rowGroup)?.items[0]?.key;
+        pick(rowGroup as LearningTab, key === first ? null : key);
       }}
       detail={detail()}
     />

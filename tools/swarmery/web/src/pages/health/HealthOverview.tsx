@@ -35,7 +35,6 @@ import {
   autoModeRow,
   fmtPct,
   oneSentence,
-  topAgents,
   uncoveredDenied,
   untriagedErrors,
   windowCell,
@@ -74,17 +73,6 @@ function AutoModeRow({ mode, inboxHref }: { mode: HealthAutoMode; inboxHref: str
   );
 }
 
-function agentFigure(row: RetroAgentRow): string {
-  const { now, prev } = agentMove(row);
-  const nowPct = fmtPct(now);
-  if (prev !== null && Math.abs(prev - now) >= 2) {
-    const prevPct = fmtPct(prev);
-    return t`${prevPct} → ${nowPct} failed`;
-  }
-  const runs = row.runs;
-  return t`${nowPct} failed · ${plural(runs, { one: '# runs', few: '# runs', many: '# runs', other: '# runs' })}`;
-}
-
 function sameErrorLine(count: number): string {
   return t`Same error ${plural(count, { one: '# times', few: '# times', many: '# times', other: '# times' })} in this window`;
 }
@@ -94,22 +82,34 @@ function lastSeenLine(ago: string, sessions: number): string {
   return t`Last seen ${ago} · in ${plural(sessions, { one: '# session', few: '# sessions', many: '# sessions', other: '# sessions' })}.`;
 }
 
-function fleetLead(agents: RetroAgentsResp): string | null {
-  const worst = topAgents(agents, 1)[0];
-  if (worst === undefined) return null;
-  const agent = worst.agent;
-  const figure = agentFigure(worst);
+/** The design's title: "142 runs in 30 days, 11 % failed — down from 19 %." */
+function fleetTitle(agents: RetroAgentsResp, days: number): string {
+  const cell = windowCell(agents);
+  const runs = cell.runs;
+  const head = plural(runs, { one: '# run', few: '# runs', many: '# runs', other: '# runs' });
+  const window = String(days);
+  const failed = fmtPct(cell.failedPct);
+  const prev = cell.prevFailedPct;
+  if (prev === null || Math.round(prev) === Math.round(cell.failedPct)) return t`${head} in ${window} days, ${failed} failed.`;
+  const was = fmtPct(prev);
+  return cell.failedPct < prev
+    ? t`${head} in ${window} days, ${failed} failed — down from ${was}.`
+    : t`${head} in ${window} days, ${failed} failed — up from ${was}.`;
+}
+
+/** The one sentence: which way the rate moved and whose runs moved it. */
+function fleetLead(agents: RetroAgentsResp): string {
   const hot = agents.agents.filter((row) => row.error_rate * 100 >= HOT_FAILED_PCT).length;
   const line = String(HOT_FAILED_PCT);
-  const moved = t`${agent} carries the most failures: ${figure}.`;
+  const sentence = oneSentence(agents);
   return hot > 0
-    ? `${moved} ${plural(hot, {
+    ? `${sentence} ${plural(hot, {
         one: `# agent still sits above the ${line} % line.`,
         few: `# agents still sit above the ${line} % line.`,
         many: `# agents still sit above the ${line} % line.`,
         other: `# agents still sit above the ${line} % line.`,
       })}`
-    : moved;
+    : sentence;
 }
 
 function fleetStats(agents: RetroAgentsResp): NumberItem[] {
@@ -141,7 +141,7 @@ export function FleetDetail({
   error,
   onRetry,
   scopeLabel,
-  windowLabel,
+  days,
   decisions,
   autoMode,
   alertsHref,
@@ -150,7 +150,7 @@ export function FleetDetail({
   error: string | null;
   onRetry: () => void;
   scopeLabel: string;
-  windowLabel: string;
+  days: number;
   decisions: readonly PageRow[];
   /** Absent while the daemon is unreachable or older than the field: no row. */
   autoMode: HealthAutoMode | undefined;
@@ -169,8 +169,8 @@ export function FleetDetail({
     <PageDetail
       kind={t`health · fleet`}
       kindTone="brand"
-      meta={`${scopeLabel} · ${windowLabel}`}
-      title={oneSentence(agents)}
+      meta={`${scopeLabel} · ${String(days)} d`}
+      title={fleetTitle(agents, days)}
       lead={fleetLead(agents)}
       stats={fleetStats(agents)}
       barsTitle={t`failed share by agent`}

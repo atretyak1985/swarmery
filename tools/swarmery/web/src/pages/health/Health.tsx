@@ -236,14 +236,19 @@ export function Health(): JSX.Element {
     switch (tab) {
       case 'overview':
         return selected === 'removable' ? (
-          <RemovableDetail friction={friction} onOpen={toFrictionRow} onBoard={toBoard} />
+          <RemovableDetail
+            key={friction !== null ? uncoveredDenied(friction)[0]?.tool : undefined}
+            friction={friction}
+            onOpen={toFrictionRow}
+            onBoard={toBoard}
+          />
         ) : (
           <FleetDetail
             agents={agents}
             error={error}
             onRetry={load}
             scopeLabel={projectSlug ?? t`all projects`}
-            windowLabel={windowLabel}
+            days={days}
             decisions={decisions}
             autoMode={autoMode}
             alertsHref={`${placeHref('inbox', projectSlug)}?tab=alerts`}
@@ -304,21 +309,14 @@ export function Health(): JSX.Element {
           </PageDetail>
         );
       }
-      case 'cost': {
-        const spent = agents !== null ? String(Math.round(windowCell(agents).costUsd)) : null;
+      case 'cost':
         return (
-          <PageDetail
-            kind={t`health · cost`}
-            kindTone="brand"
-            meta={windowLabel}
-            title={spent !== null ? t`$${spent} spent in this window.` : t`Cost & tokens`}
-          >
+          <PageDetail kind={t`health · cost`} kindTone="brand" meta={windowLabel} title={t`Where the money and tokens went.`}>
             <Suspense fallback={<Loading label={t`cost…`} />}>
               <Analytics range={{ from: range.from, to: range.to }} />
             </Suspense>
           </PageDetail>
         );
-      }
       case 'agents': {
         const row = agents?.agents.find((a) => `agent:${a.agent}` === selected);
         if (row !== undefined) {
@@ -343,9 +341,9 @@ export function Health(): JSX.Element {
       openGroup={tab}
       selected={selected}
       onOpenGroup={(key) => pick(key as HealthTab)}
-      onSelect={(key) => {
-        const first = openGroup?.items[0]?.key;
-        pick(tab, key === first ? null : key);
+      onSelect={(key, group) => {
+        const first = groups.find((g) => g.key === group)?.items[0]?.key;
+        pick(group as HealthTab, key === first ? null : key);
       }}
       detail={
         <div className="relative">
