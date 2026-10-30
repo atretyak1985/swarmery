@@ -1973,10 +1973,6 @@ msgstr "фільтр агентів"
 msgid "filter agents…"
 msgstr "фільтр агентів…"
 
-#: src/lib/pageSearch.tsx
-msgid "filter approvals…"
-msgstr "фільтр погоджень…"
-
 #: src/components/ProjectDropdown.tsx
 msgid "filter by project"
 msgstr "фільтр за проєктом"

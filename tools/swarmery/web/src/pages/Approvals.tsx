@@ -13,6 +13,10 @@
 // submit → {action:"answer"}. «answer in terminal →» is the {action:"terminal"}
 // no-decision handoff — NOT a plain approve, which would resolve the questions
 // unanswered (E12d). Unparseable questions fall back to the generic card.
+//
+// In the frame every place shares (v4): the accordion list holds Pending ·
+// Auto-approve rules · History, `?tab=`/`?item=` say which, and the detail shows that
+// section, or the one row picked in it.
 
 import type { MessageDescriptor } from '@lingui/core';
 import { msg } from '@lingui/core/macro';
@@ -44,11 +48,10 @@ import {
   type ParsedQuestion,
 } from '../lib/approvals';
 import { fmtAgo } from '../lib/format';
-import { usePageSearch } from '../lib/pageSearch';
 import { useScope } from '../lib/scope';
 import { useSessionProjectIndex } from '../lib/sessionProjects';
 import { applyPermissionMessage, useLiveUpdates } from '../lib/ws';
-import { PageSearchInput } from '../components/PageSearchInput';
+import { PageDetail, PagePlace, type PlaceGroup, type PlaceItem, usePlaceParams } from '../components/place/PageDetail';
 import { ScopeChip } from '../components/ScopeChip';
 import { Empty, ErrorBox, Loading } from '../components/ui';
 import { ProjectName } from '../components/ProjectName';
@@ -57,6 +60,15 @@ import { ChannelBadge } from '../components/ChannelBadge';
 import { QuestionBlock } from '../components/QuestionForm';
 
 const HISTORY_LIMIT = 50;
+
+const MANAGE_TABS = ['pending', 'rules', 'history'] as const;
+type ManageTab = (typeof MANAGE_TABS)[number];
+
+/** The row a click picked, or all of them; a row since gone falls back to all. */
+function pickedOr<T>(rows: readonly T[], item: string | null, id: (row: T) => number): readonly T[] {
+  const picked = rows.filter((row) => String(id(row)) === item);
+  return picked.length > 0 ? picked : rows;
+}
 
 /* ----- terminal-status chips (approved sage / denied danger / rest dim) ----- */
 
@@ -524,14 +536,14 @@ function HistoryRow({
 /* ----- screen ----- */
 
 export function Approvals(): JSX.Element {
-  const { t } = useLingui();
+  const { t, i18n } = useLingui();
+  const { tab, item, pick } = usePlaceParams<ManageTab>(MANAGE_TABS, 'pending');
   const [requests, setRequests] = useState<PermissionRequest[] | null>(null);
   const { bySessionId } = useSessionProjectIndex(requests !== null && requests.length > 0);
   const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<number | null>(null);
   const [nowMs, setNowMs] = useState(() => Date.now());
   const { scope, scopeProject } = useScope();
-  const query = usePageSearch();
 
   // Global scope, applied client-side over the lazy sessions join. A request
   // whose session is not resolvable stays VISIBLE (safety: a pending approval
@@ -625,23 +637,13 @@ export function Approvals(): JSX.Element {
   }, []);
   useLiveUpdates(onMessage, load);
 
-  // Contextual header search: match tool name or the joined session's title.
-  const matchesQuery = (r: PermissionRequest): boolean => {
-    if (query === '') return true;
-    const s = bySessionId.get(r.sessionId);
-    return [r.toolName, s?.title, s?.projectName, s?.projectSlug].some(
-      (v) => v != null && v.toLowerCase().includes(query),
-    );
-  };
   const pending = (requests ?? [])
     .filter((r) => r.status === 'pending')
     .filter(inScope)
-    .filter(matchesQuery)
     .sort((a, b) => a.requestedAt.localeCompare(b.requestedAt)); // oldest (most urgent) first
   const history = (requests ?? [])
     .filter((r) => r.status !== 'pending')
     .filter(inScope)
-    .filter(matchesQuery)
     .sort((a, b) =>
       (b.resolvedAt ?? b.requestedAt).localeCompare(a.resolvedAt ?? a.requestedAt),
     )
@@ -666,6 +668,7 @@ export function Approvals(): JSX.Element {
     });
     setRuleError(null);
     setRuleFormOpen(true);
+    pick('rules');
   };
 
   // "resolved today" for the subline — local calendar day, derived from the
@@ -712,119 +715,169 @@ export function Approvals(): JSX.Element {
       .finally(() => setBusyId(null));
   };
 
+  const requestRow = (r: PermissionRequest): Pick<PlaceItem, 'key' | 'title' | 'summary' | 'tag'> => {
+    const s = sessionOf(r.sessionId);
+    const project = s?.projectName ?? s?.projectSlug;
+    return {
+      key: String(r.id),
+      title: r.toolName,
+      summary: requestSummary(r),
+      ...(project !== undefined && project !== null ? { tag: project } : {}),
+    };
+  };
+  const groups: PlaceGroup[] = [
+    {
+      key: 'pending',
+      label: t`Pending`,
+      tone: pending.length > 0 ? 'amber' : 'default',
+      items: pending.map((r) => ({ ...requestRow(r), glyph: '⚑', glyphTone: 'amber', age: fmtAgo(r.requestedAt) })),
+    },
+    {
+      key: 'rules',
+      label: t`Auto-approve rules`,
+      items: (rules ?? []).map((rule) => ({
+        key: String(rule.id),
+        glyph: '✓',
+        glyphTone: rule.enabled ? 'green' : 'faint',
+        title: rule.toolPattern,
+        ...(rule.note !== null && rule.note !== undefined ? { summary: rule.note } : {}),
+      })),
+    },
+    {
+      key: 'history',
+      label: t`History`,
+      items: history.map((r) => ({
+        ...requestRow(r),
+        glyph: '·',
+        age: fmtAgo(r.resolvedAt ?? r.requestedAt),
+        right: i18n._(APPROVAL_LABEL[r.status]),
+      })),
+    },
+  ];
+
+  const pendingSection = (): JSX.Element => (
+    <PageDetail
+      kind={t`approvals · pending`}
+      title={t`Waiting on you`}
+      lead={t`a pause is a feature, not a failure`}
+    >
+      <div className="mt-[18px]">
+        {pending.length === 0 && (
+          <Empty>
+            <Trans>
+              no pending approvals — agents are running unattended.{' '}
+              <span className="font-mono text-ink">permission_requested</span> pushes new ones here
+              live
+            </Trans>
+          </Empty>
+        )}
+        {pickedOr(pending, item, (r) => r.id).map((r) => (
+          <PendingCard
+            key={r.id}
+            request={r}
+            session={sessionOf(r.sessionId)}
+            nowMs={nowMs}
+            busy={busyId === r.id}
+            onResolve={(action, reason, answers) => resolve(r, action, reason, answers)}
+            onAlwaysAllow={() => alwaysAllow(r)}
+          />
+        ))}
+      </div>
+    </PageDetail>
+  );
+
+  const rulesSection = (): JSX.Element => (
+    <PageDetail kind={t`approvals · rules`} title={t`Auto-approve rules`}>
+      <div className="mt-[18px]">
+        <button
+          type="button"
+          onClick={() => {
+            setRuleFormOpen((v) => !v);
+            setRuleError(null);
+          }}
+          className="rounded-lg border border-line px-2.5 py-0.5 font-mono text-[10.5px] text-ink-3 transition-colors hover:bg-surface2"
+        >
+          {ruleFormOpen ? t`close` : t`+ add rule`}
+        </button>
+        {ruleFormOpen && (
+          <AddRuleForm
+            projects={projects}
+            draft={ruleDraft}
+            busy={ruleBusy}
+            error={ruleError}
+            onChange={setRuleDraft}
+            onSubmit={submitRule}
+            onCancel={() => setRuleFormOpen(false)}
+          />
+        )}
+        {rules !== null && rules.length > 0 && (
+          <div className="mt-2 divide-y divide-line-soft overflow-hidden rounded-xl border border-line">
+            {pickedOr(rules, item, (rule) => rule.id).map((rule) => (
+              <RuleRow
+                key={rule.id}
+                rule={rule}
+                busy={ruleBusy}
+                onToggle={() => toggleRule(rule)}
+                onDelete={() => removeRule(rule)}
+              />
+            ))}
+          </div>
+        )}
+        {rules !== null && rules.length === 0 && !ruleFormOpen && (
+          <Empty>
+            <Trans>
+              no rules — matching requests auto-approve with{' '}
+              <span className="font-mono text-ink">via rule</span> and stay in History for audit
+            </Trans>
+          </Empty>
+        )}
+      </div>
+    </PageDetail>
+  );
+
+  const historySection = (): JSX.Element => (
+    <PageDetail kind={t`approvals · history`} title={t`History`}>
+      <div className="mt-[18px]">
+        {history.length === 0 ? (
+          <Empty>
+            <Trans>no decisions yet — resolved requests land here with their audit trail</Trans>
+          </Empty>
+        ) : (
+          <div className="divide-y divide-line-soft overflow-hidden rounded-xl border border-line">
+            {pickedOr(history, item, (r) => r.id).map((r) => (
+              <HistoryRow key={r.id} request={r} session={sessionOf(r.sessionId)} />
+            ))}
+          </div>
+        )}
+      </div>
+    </PageDetail>
+  );
+
+  const section = (): JSX.Element =>
+    tab === 'rules' ? rulesSection() : tab === 'history' ? historySection() : pendingSection();
+
   return (
-    <div className="px-4 pb-10 desk:px-10 desk:pb-[60px]">
-      {/* Header stays pinned; only the pending/history context below scrolls. */}
-      <div className="sticky top-0 z-10 -mx-4 border-b border-line bg-bg px-4 pt-6 pb-3.5 desk:-mx-10 desk:px-10 desk:pt-[34px]">
-        <h1 className="text-[22px] leading-tight font-semibold tracking-[-0.015em] text-ink">
-          <Trans>Waiting on you</Trans>
-        </h1>
-        <div className="mt-1.5 font-mono text-[11px] text-ink-dim">
-          {requests !== null
-            ? t`${pendingCount} pending · ${resolvedTodayCount} resolved today · a pause is a feature, not a failure`
-            : t`a pause is a feature, not a failure`}
-        </div>
-        {/* search · project scope — same order as the Sessions filter row. */}
-        <div className="mt-3 flex flex-wrap items-center gap-2">
-          <PageSearchInput />
+    <PagePlace
+      title={t`Approvals`}
+      sub={t`${pendingCount} pending · ${resolvedTodayCount} resolved today`}
+      searchHint={t`filter`}
+      groups={groups}
+      openGroup={tab}
+      selected={item}
+      onOpenGroup={(key) => pick(key as ManageTab)}
+      onSelect={(key, group) => pick(group as ManageTab, key)}
+      detail={
+        <>
+          {error !== null && <ErrorBox message={error} onRetry={load} />}
+          {requests === null && error === null && <Loading label={t`approvals…`} />}
+          {requests !== null && section()}
+        </>
+      }
+      after={
+        <div className="mt-2 border-t border-line px-[14px] py-3">
           <ScopeChip />
         </div>
-      </div>
-
-      {error !== null && <ErrorBox message={error} onRetry={load} />}
-      {requests === null && error === null && <Loading label={t`approvals…`} />}
-
-      {requests !== null && (
-        <>
-          {pending.length === 0 && (
-            <Empty>
-              <Trans>
-                no pending approvals — agents are running unattended.{' '}
-                <span className="font-mono text-ink">permission_requested</span> pushes new ones here
-                live
-              </Trans>
-            </Empty>
-          )}
-          {pending.map((r) => (
-            <PendingCard
-              key={r.id}
-              request={r}
-              session={sessionOf(r.sessionId)}
-              nowMs={nowMs}
-              busy={busyId === r.id}
-              onResolve={(action, reason, answers) => resolve(r, action, reason, answers)}
-              onAlwaysAllow={() => alwaysAllow(r)}
-            />
-          ))}
-
-          <div className="mt-[30px] flex items-center gap-3">
-            <span className="font-mono text-[10.5px] tracking-[0.14em] text-ink-faint uppercase">
-              <Trans>Auto-approve rules</Trans>
-            </span>
-            <span className="h-px flex-1 bg-line" aria-hidden="true" />
-            <button
-              type="button"
-              onClick={() => {
-                setRuleFormOpen((v) => !v);
-                setRuleError(null);
-              }}
-              className="rounded-lg border border-line px-2.5 py-0.5 font-mono text-[10.5px] text-ink-3 transition-colors hover:bg-surface2"
-            >
-              {ruleFormOpen ? t`close` : t`+ add rule`}
-            </button>
-          </div>
-          {ruleFormOpen && (
-            <AddRuleForm
-              projects={projects}
-              draft={ruleDraft}
-              busy={ruleBusy}
-              error={ruleError}
-              onChange={setRuleDraft}
-              onSubmit={submitRule}
-              onCancel={() => setRuleFormOpen(false)}
-            />
-          )}
-          {rules !== null && rules.length > 0 && (
-            <div className="mt-2 divide-y divide-line-soft overflow-hidden rounded-xl border border-line">
-              {rules.map((rule) => (
-                <RuleRow
-                  key={rule.id}
-                  rule={rule}
-                  busy={ruleBusy}
-                  onToggle={() => toggleRule(rule)}
-                  onDelete={() => removeRule(rule)}
-                />
-              ))}
-            </div>
-          )}
-          {rules !== null && rules.length === 0 && !ruleFormOpen && (
-            <Empty>
-              <Trans>
-                no rules — matching requests auto-approve with{' '}
-                <span className="font-mono text-ink">via rule</span> and stay in History for audit
-              </Trans>
-            </Empty>
-          )}
-
-          <div className="mt-[30px] flex items-center gap-3">
-            <span className="font-mono text-[10.5px] tracking-[0.14em] text-ink-faint uppercase">
-              <Trans>History</Trans>
-            </span>
-            <span className="h-px flex-1 bg-line" aria-hidden="true" />
-          </div>
-          {history.length === 0 ? (
-            <Empty>
-              <Trans>no decisions yet — resolved requests land here with their audit trail</Trans>
-            </Empty>
-          ) : (
-            <div className="mt-2 divide-y divide-line-soft overflow-hidden rounded-xl border border-line">
-              {history.map((r) => (
-                <HistoryRow key={r.id} request={r} session={sessionOf(r.sessionId)} />
-              ))}
-            </div>
-          )}
-        </>
-      )}
-    </div>
+      }
+    />
   );
 }

@@ -59,9 +59,6 @@ export function pageSearchPlaceholder(pathname: string): string | null {
     return t`filter by title or plan…`;
   }
   if (pathname === '/projects') return t`filter projects by name…`;
-  // The Approvals page (rules + history) lives at approvals/manage since the
-  // Inbox took over /approvals; project mode renders it under /p/<slug>/.
-  if (/^(\/p\/[^/]+)?\/approvals\/manage$/.test(pathname)) return t`filter approvals…`;
   // /system(/*) is the tabbed System shell — its embedded hubs carry their own
   // in-pane search box, so the header search is hidden there (like /agents).
   return null;

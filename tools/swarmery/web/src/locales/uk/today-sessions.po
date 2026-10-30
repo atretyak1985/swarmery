@@ -241,8 +241,8 @@ msgid "{name} went quiet"
 msgstr "{name}: без активності"
 
 #: src/pages/Approvals.tsx
-msgid "{pendingCount} pending · {resolvedTodayCount} resolved today · a pause is a feature, not a failure"
-msgstr "{pendingCount} в очікуванні · {resolvedTodayCount} вирішено сьогодні · пауза — це задум, а не збій"
+msgid "{pendingCount} pending · {resolvedTodayCount} resolved today"
+msgstr "{pendingCount} в очікуванні · {resolvedTodayCount} вирішено сьогодні"
 
 #: src/pages/today/loopModel.ts
 msgid "{plans, plural, one {plan} few {plans} many {plans} other {plans}}"
@@ -525,6 +525,22 @@ msgid "Appears after you accept a change and it has run long enough to prove its
 msgstr "З’явиться, коли ви приймете зміну і вона попрацює достатньо, щоб себе довести."
 
 #: src/pages/Approvals.tsx
+msgid "Approvals"
+msgstr "Дозволи"
+
+#: src/pages/Approvals.tsx
+msgid "approvals · history"
+msgstr "дозволи · історія"
+
+#: src/pages/Approvals.tsx
+msgid "approvals · pending"
+msgstr "дозволи · в очікуванні"
+
+#: src/pages/Approvals.tsx
+msgid "approvals · rules"
+msgstr "дозволи · правила"
+
+#: src/pages/Approvals.tsx
 msgid "approvals…"
 msgstr "погодження…"
 
@@ -562,6 +578,7 @@ msgstr "запитано на кроці {steps}"
 msgid "auto-approve preset · account"
 msgstr "пресет автосхвалення · акаунт"
 
+#: src/pages/Approvals.tsx
 #: src/pages/Approvals.tsx
 msgid "Auto-approve rules"
 msgstr "Правила автопогодження"
@@ -1005,6 +1022,7 @@ msgstr "Зайняті файли"
 msgid "files changed"
 msgstr "змінені файли"
 
+#: src/pages/Approvals.tsx
 #: src/pages/NeedsYou.tsx
 msgid "filter"
 msgstr "фільтр"
@@ -1083,6 +1101,7 @@ msgstr "у роботі в"
 msgid "hide"
 msgstr "сховати"
 
+#: src/pages/Approvals.tsx
 #: src/pages/Approvals.tsx
 msgid "History"
 msgstr "Історія"
@@ -1625,6 +1644,10 @@ msgstr "шлях · архів · від'єднання"
 #: src/pages/sessions/SwarmPanel.tsx
 msgid "pending"
 msgstr "очікує"
+
+#: src/pages/Approvals.tsx
+msgid "Pending"
+msgstr "В очікуванні"
 
 #: src/pages/detail/LiveActivity.tsx
 msgid "Percolating"

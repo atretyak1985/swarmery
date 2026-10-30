@@ -241,8 +241,8 @@ msgid "{name} went quiet"
 msgstr "{name} went quiet"
 
 #: src/pages/Approvals.tsx
-msgid "{pendingCount} pending · {resolvedTodayCount} resolved today · a pause is a feature, not a failure"
-msgstr "{pendingCount} pending · {resolvedTodayCount} resolved today · a pause is a feature, not a failure"
+msgid "{pendingCount} pending · {resolvedTodayCount} resolved today"
+msgstr "{pendingCount} pending · {resolvedTodayCount} resolved today"
 
 #: src/pages/today/loopModel.ts
 msgid "{plans, plural, one {plan} few {plans} many {plans} other {plans}}"
@@ -525,6 +525,22 @@ msgid "Appears after you accept a change and it has run long enough to prove its
 msgstr "Appears after you accept a change and it has run long enough to prove itself."
 
 #: src/pages/Approvals.tsx
+msgid "Approvals"
+msgstr "Approvals"
+
+#: src/pages/Approvals.tsx
+msgid "approvals · history"
+msgstr "approvals · history"
+
+#: src/pages/Approvals.tsx
+msgid "approvals · pending"
+msgstr "approvals · pending"
+
+#: src/pages/Approvals.tsx
+msgid "approvals · rules"
+msgstr "approvals · rules"
+
+#: src/pages/Approvals.tsx
 msgid "approvals…"
 msgstr "approvals…"
 
@@ -562,6 +578,7 @@ msgstr "asked at step {steps}"
 msgid "auto-approve preset · account"
 msgstr "auto-approve preset · account"
 
+#: src/pages/Approvals.tsx
 #: src/pages/Approvals.tsx
 msgid "Auto-approve rules"
 msgstr "Auto-approve rules"
@@ -1005,6 +1022,7 @@ msgstr "File claims"
 msgid "files changed"
 msgstr "files changed"
 
+#: src/pages/Approvals.tsx
 #: src/pages/NeedsYou.tsx
 msgid "filter"
 msgstr "filter"
@@ -1083,6 +1101,7 @@ msgstr "held by"
 msgid "hide"
 msgstr "hide"
 
+#: src/pages/Approvals.tsx
 #: src/pages/Approvals.tsx
 msgid "History"
 msgstr "History"
@@ -1625,6 +1644,10 @@ msgstr "path · archive · detach"
 #: src/pages/sessions/SwarmPanel.tsx
 msgid "pending"
 msgstr "pending"
+
+#: src/pages/Approvals.tsx
+msgid "Pending"
+msgstr "Pending"
 
 #: src/pages/detail/LiveActivity.tsx
 msgid "Percolating"
