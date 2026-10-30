@@ -25,17 +25,6 @@ import { ScopeProvider, useScope } from './lib/scope';
 import { ThemeProvider } from './lib/theme';
 import { UsageDataProvider } from './lib/usageData';
 import { Loading } from './components/ui';
-import { Approvals } from './pages/Approvals';
-import { Inbox } from './pages/inbox/Inbox';
-import { NeedsYou } from './pages/NeedsYou';
-import { Overview } from './pages/Overview';
-import { Sessions } from './pages/Sessions';
-import { SessionDetailPage } from './pages/SessionDetail';
-import { Settings } from './pages/Settings';
-import { Docs } from './pages/Docs';
-import { Architecture } from './pages/Architecture';
-import { Serena } from './pages/Serena';
-import { Graphify } from './pages/Graphify';
 import { FleetPlaceRedirect } from './workspace/FleetPlaceRedirect';
 import { ProjectDetailRedirect } from './workspace/ProjectDetailRedirect';
 import { PLANS_ROUTE_PATHS } from './pages/plans/plansUrl';
@@ -57,6 +46,25 @@ import './index.css';
 const unlocked = consumeUnlockFragment();
 void unlocked.then(() => verifyStoredSession());
 watchUnlockFragment();
+
+// Fleet pages are lazy: only the shell (App) and Today are in the entry chunk,
+// so first load stays inside the budget. Each route element is wrapped in a
+// Suspense boundary INSIDE the route (see pg), so the sidebar never unmounts.
+const Approvals = lazy(() => import('./pages/Approvals').then((m) => ({ default: m.Approvals })));
+const Inbox = lazy(() => import('./pages/inbox/Inbox').then((m) => ({ default: m.Inbox })));
+const NeedsYou = lazy(() => import('./pages/NeedsYou').then((m) => ({ default: m.NeedsYou })));
+const Overview = lazy(() => import('./pages/Overview').then((m) => ({ default: m.Overview })));
+const Sessions = lazy(() => import('./pages/Sessions').then((m) => ({ default: m.Sessions })));
+const SessionDetailPage = lazy(() =>
+  import('./pages/SessionDetail').then((m) => ({ default: m.SessionDetailPage })),
+);
+const Settings = lazy(() => import('./pages/Settings').then((m) => ({ default: m.Settings })));
+const Docs = lazy(() => import('./pages/Docs').then((m) => ({ default: m.Docs })));
+const Architecture = lazy(() =>
+  import('./pages/Architecture').then((m) => ({ default: m.Architecture })),
+);
+const Serena = lazy(() => import('./pages/Serena').then((m) => ({ default: m.Serena })));
+const Graphify = lazy(() => import('./pages/Graphify').then((m) => ({ default: m.Graphify })));
 
 // Health (Canvas v3 phase 5) absorbs /analytics and /retro as tabs. Lazy, and
 // it lazy-loads those two pages itself (Analytics pulls in Recharts), so their
@@ -134,6 +142,11 @@ function RootProviders(): JSX.Element {
 function RouteLoading({ what }: { what: MessageDescriptor }): JSX.Element {
   const { i18n } = useLingui();
   return <Loading label={i18n._(what)} />;
+}
+
+/** Suspense boundary for a lazy fleet route element. */
+function pg(node: JSX.Element): JSX.Element {
+  return <Suspense fallback={<RouteLoading what={msg`loading…`} />}>{node}</Suspense>;
 }
 
 /** Suspense boundary for a lazy workspace route element. */
@@ -218,17 +231,17 @@ const router = createBrowserRouter([
         element: <App />,
         children: [
           // Today (Canvas v3 phase 4): the loop map over the old command deck.
-          { index: true, element: <Today detail={<Overview />} /> },
+          { index: true, element: <Today detail={pg(<Overview />)} /> },
           // Inbox holds what does not block; approvals moved to Needs you (handoff
           // §3), which offers always-allow. The old page keeps rules + history at
           // approvals/manage.
-          { path: 'inbox', element: <Inbox />, handle: { fill: true } },
+          { path: 'inbox', element: pg(<Inbox />), handle: { fill: true } },
           { path: 'approvals', element: <Navigate to="/needs-you?tab=approvals" replace /> },
-          { path: 'approvals/manage', element: <Approvals /> },
+          { path: 'approvals/manage', element: pg(<Approvals />) },
           // Needs you: every session blocker, oldest first (GET /api/needs-you).
-          { path: 'needs-you', element: <NeedsYou /> },
-          { path: 'sessions', element: <Sessions /> },
-          { path: 'sessions/:id', element: <SessionDetailPage /> },
+          { path: 'needs-you', element: pg(<NeedsYou />) },
+          { path: 'sessions', element: pg(<Sessions />) },
+          { path: 'sessions/:id', element: pg(<SessionDetailPage />) },
           // Settings (Canvas v3 phase 8) absorbs the project list as a tab; the
           // "no last project → /projects" fallback lands there through this.
           { path: 'projects', element: <Navigate to="/settings?tab=projects" replace /> },
@@ -329,15 +342,15 @@ const router = createBrowserRouter([
           // scrolling and the page fills the leftover height, scrolling inside
           // its own pane instead of under a second scrollbar (lib/fillRoute.ts).
           // Document-shaped routes (Planning included) stay unmarked.
-          { path: 'serena', element: <Serena />, handle: { fill: true } },
-          { path: 'graphify', element: <Graphify />, handle: { fill: true } },
-          { path: 'architecture', element: <Architecture />, handle: { fill: true } },
+          { path: 'serena', element: pg(<Serena />), handle: { fill: true } },
+          { path: 'graphify', element: pg(<Graphify />), handle: { fill: true } },
+          { path: 'architecture', element: pg(<Architecture />), handle: { fill: true } },
           // Global settings (session mode): appearance + notifications +
           // auto-approve note + daemon/health. Project settings stays scoped at
           // /p/:slug/settings — do NOT add this to the project subtree.
-          { path: 'settings', element: <Settings /> },
-          { path: 'docs', element: <Docs />, handle: { fill: true } },
-          { path: 'docs/:slug', element: <Docs />, handle: { fill: true } },
+          { path: 'settings', element: pg(<Settings />) },
+          { path: 'docs', element: pg(<Docs />), handle: { fill: true } },
+          { path: 'docs/:slug', element: pg(<Docs />), handle: { fill: true } },
         ],
       },
       {
@@ -357,9 +370,9 @@ const router = createBrowserRouter([
           { path: 'planning', element: <ProjectTabRedirect place="plans" tab="new" /> },
           { path: 'board', element: <ProjectTabRedirect place="plans" tab="board" /> },
           { path: 'playbooks', element: <ProjectTabRedirect place="plans" tab="playbooks" /> },
-          { path: 'sessions', element: <Sessions /> },
-          { path: 'sessions/:id', element: <SessionDetailPage /> },
-          { path: 'needs-you', element: <NeedsYou /> },
+          { path: 'sessions', element: pg(<Sessions />) },
+          { path: 'sessions/:id', element: pg(<SessionDetailPage />) },
+          { path: 'needs-you', element: pg(<NeedsYou />) },
           { path: 'inbox', element: ws(<Inbox />), handle: { fill: true } },
           { path: 'approvals', element: <ProjectApprovalsRedirect /> },
           { path: 'approvals/manage', element: ws(<Approvals />) },
