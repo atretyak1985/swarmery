@@ -5,6 +5,10 @@
 //
 // Permission tiers differ by SHAPE and not only by colour: destructive is a red
 // rectangle, write a blue dashed pill, question an amber pill.
+//
+// `gate` is the same decision inside a session's detail (handoff §5): a card with
+// the tier's border and a 14px headline, because there it sits among other blocks
+// rather than owning the pane.
 
 import type { MessageDescriptor } from '@lingui/core';
 import { msg } from '@lingui/core/macro';
@@ -18,6 +22,8 @@ interface TierDef {
   label: MessageDescriptor;
   badge: string;
   primary: string;
+  /** The gate card's border: the tier again, in shape and colour. */
+  border: string;
 }
 
 const TIERS: Record<DecisionTier, TierDef> = {
@@ -26,18 +32,21 @@ const TIERS: Record<DecisionTier, TierDef> = {
     label: msg`destructive`,
     badge: 'rounded-[3px] border border-red text-red',
     primary: 'border-red bg-red-bg text-red',
+    border: 'border-red',
   },
   write: {
     glyph: '◆',
     label: msg`write`,
     badge: 'rounded-full border border-dashed border-blue text-blue',
     primary: 'border-green bg-green-bg text-green',
+    border: 'border-blue',
   },
   question: {
     glyph: '?',
     label: msg`question`,
     badge: 'rounded-full border border-amber text-amber',
     primary: 'border-brand bg-brand-bg text-brand',
+    border: 'border-brand',
   },
 };
 
@@ -81,12 +90,18 @@ export interface DecisionCardProps {
   extra?: DecisionAction;
   /** Right edge of the actions: `phase review →`. */
   link?: { label: string; onClick: () => void };
+  /** Right edge of the actions when it is a note, not a way out. */
+  foot?: string;
+  /** The compact card in a session's detail. */
+  gate?: boolean;
 }
 
 const KIND_TONE = { amber: 'text-amber', red: 'text-red', default: 'text-ink-dim' } as const;
 
-const QUIET_BUTTON =
-  'rounded-[7px] border border-line-strong bg-transparent px-[13px] py-[7px] font-mono text-[11.5px] leading-[normal] text-ink-2 disabled:opacity-50';
+const quietButton = (gate: boolean): string =>
+  `rounded-[7px] border border-line-strong bg-transparent font-mono text-[11.5px] leading-[normal] text-ink-2 disabled:opacity-50 ${
+    gate ? 'px-3 py-1.5' : 'px-[13px] py-[7px]'
+  }`;
 
 export function DecisionCard({
   kind,
@@ -106,6 +121,8 @@ export function DecisionCard({
   secondary,
   extra,
   link,
+  foot,
+  gate = false,
 }: DecisionCardProps): JSX.Element {
   const { i18n } = useLingui();
   const tierDef = tier === undefined ? undefined : TIERS[tier];
@@ -114,8 +131,14 @@ export function DecisionCard({
   const primaryLabel = chosen === undefined ? primary.label : `${primary.label}: ${chosen.label}`;
 
   return (
-    <div className="flex min-h-full flex-col">
-      <div className="flex min-w-0 items-center gap-2 font-mono text-[10.5px] leading-[normal]">
+    <div
+      className={
+        gate
+          ? `mt-[18px] rounded-[10px] border bg-bg px-4 py-[14px] ${tierDef?.border ?? 'border-line-strong'}`
+          : 'flex min-h-full flex-col'
+      }
+    >
+      <div className={`flex min-w-0 items-center font-mono text-[10.5px] leading-[normal] ${gate ? 'gap-[10px]' : 'gap-2'}`}>
         {tierDef !== undefined ? (
           <span className={`shrink-0 px-[7px] py-px font-bold whitespace-nowrap ${tierDef.badge}`}>
             {`${tierDef.glyph} ${i18n._(tierDef.label)}`}
@@ -125,28 +148,50 @@ export function DecisionCard({
             <span className={`shrink-0 font-bold whitespace-nowrap ${KIND_TONE[kindTone]}`}>{kind}</span>
           )
         )}
-        {meta !== undefined && <span className="min-w-0 truncate text-ink-faint">{`· ${meta}`}</span>}
+        {meta !== undefined && (
+          <span className={`min-w-0 truncate ${gate ? 'text-ink-3' : 'text-ink-faint'}`}>{gate ? meta : `· ${meta}`}</span>
+        )}
         {expires !== undefined && <span className="ml-auto shrink-0 text-brand">{expires}</span>}
       </div>
 
-      <h2 className="mt-[10px] text-[20px] leading-[1.3] font-semibold tracking-[-0.015em] text-balance text-ink">
-        {title}
-      </h2>
+      {gate ? (
+        <h3 className="mt-[10px] text-[14px] leading-[1.4] font-medium text-balance text-ink">{title}</h3>
+      ) : (
+        <h2 className="mt-[10px] text-[20px] leading-[1.3] font-semibold tracking-[-0.015em] text-balance text-ink">
+          {title}
+        </h2>
+      )}
 
       {code !== undefined && (
-        <code className="mt-[10px] block max-w-[620px] rounded-[6px] border border-line bg-bg px-[10px] py-2 font-mono text-[12px] whitespace-pre-wrap text-ink-2">
+        <code
+          className={`block rounded-[6px] border border-line bg-bg px-[10px] py-2 font-mono text-[12px] whitespace-pre-wrap text-ink-2 ${
+            gate ? 'mt-2' : 'mt-[10px] max-w-[620px]'
+          }`}
+        >
           {code}
         </code>
       )}
 
-      {body !== undefined && <div className="mt-[10px] max-w-[70ch] text-[13.5px] leading-[1.6] text-ink-2">{body}</div>}
+      {body !== undefined && (
+        <div
+          className={`mt-[10px] max-w-[70ch] ${
+            gate ? 'text-[13px] leading-[1.55] text-ink-3' : 'text-[13.5px] leading-[1.6] text-ink-2'
+          }`}
+        >
+          {body}
+        </div>
+      )}
 
       {facts !== undefined && (
         <div className="mt-2 font-mono text-[10.5px] leading-[1.6] text-ink-faint">{facts}</div>
       )}
 
       {options !== undefined && options.length > 0 && (
-        <div role="radiogroup" aria-label={title} className="mt-[14px] flex max-w-[640px] flex-col gap-1">
+        <div
+          role="radiogroup"
+          aria-label={title}
+          className={`flex flex-col gap-1 ${gate ? 'mt-3 max-w-[620px]' : 'mt-[14px] max-w-[640px]'}`}
+        >
           {options.map((o) => {
             const on = o.id === picked;
             return (
@@ -191,24 +236,24 @@ export function DecisionCard({
         />
       )}
 
-      <div className="mt-auto flex flex-wrap items-center gap-2 pt-[22px]">
+      <div className={`flex flex-wrap items-center gap-2 ${gate ? 'mt-[14px]' : 'mt-auto pt-[22px]'}`}>
         <button
           type="button"
           onClick={primary.onClick}
           disabled={primary.disabled}
-          className={`max-w-[460px] truncate rounded-[7px] border px-[13px] py-[7px] font-mono text-[11.5px] leading-[normal] font-bold disabled:opacity-50 ${
-            tierDef?.primary ?? PRIMARY_DEFAULT
-          }`}
+          className={`max-w-[460px] truncate rounded-[7px] border font-mono text-[11.5px] leading-[normal] font-bold disabled:opacity-50 ${
+            gate ? 'px-3 py-1.5' : 'px-[13px] py-[7px]'
+          } ${tierDef?.primary ?? PRIMARY_DEFAULT}`}
         >
           {primaryLabel} <span className="font-normal opacity-55">e</span>
         </button>
         {extra !== undefined && (
-          <button type="button" onClick={extra.onClick} disabled={extra.disabled} className={QUIET_BUTTON}>
+          <button type="button" onClick={extra.onClick} disabled={extra.disabled} className={quietButton(gate)}>
             {extra.label}
           </button>
         )}
         {secondary !== undefined && (
-          <button type="button" onClick={secondary.onClick} disabled={secondary.disabled} className={QUIET_BUTTON}>
+          <button type="button" onClick={secondary.onClick} disabled={secondary.disabled} className={quietButton(gate)}>
             {secondary.label} <span className="opacity-55">x</span>
           </button>
         )}
@@ -220,6 +265,9 @@ export function DecisionCard({
           >
             {link.label}
           </button>
+        )}
+        {foot !== undefined && (
+          <span className="ml-auto font-mono text-[10.5px] leading-[normal] text-ink-faint">{foot}</span>
         )}
       </div>
     </div>

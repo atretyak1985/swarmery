@@ -8,7 +8,16 @@ import type { Session } from '../api/types';
  * and the row is recorded as 'completed', not 'killed'. Unlike Kill it needs
  * no PID — a zombie row can always be closed out.
  */
-export function StopButton({ session }: { session: Session }): JSX.Element {
+export function StopButton({
+  session,
+  label,
+  className,
+}: {
+  session: Session;
+  /** The resting label and look, for a host with its own buttons. */
+  label?: string;
+  className?: string;
+}): JSX.Element {
   const { t } = useLingui();
   const [confirming, setConfirming] = useState(false);
   const [stopping, setStopping] = useState(false);
@@ -57,9 +66,12 @@ export function StopButton({ session }: { session: Session }): JSX.Element {
     <button
       type="button"
       onClick={(e) => { halt(e); setConfirming(true); }}
-      className="rounded border border-ink-dim/30 px-2 py-0.5 font-mono text-[10.5px] font-medium text-ink-dim transition-colors hover:border-amber/40 hover:text-amber"
+      className={
+        className ??
+        'rounded border border-ink-dim/30 px-2 py-0.5 font-mono text-[10.5px] font-medium text-ink-dim transition-colors hover:border-amber/40 hover:text-amber'
+      }
     >
-      <Trans>Stop</Trans>
+      {label ?? <Trans>Stop</Trans>}
     </button>
   );
 }

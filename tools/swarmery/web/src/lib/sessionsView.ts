@@ -4,7 +4,11 @@
 // rules the UI used to bury inside JSX.
 //
 // The contract the page relies on:
-//   • the ONLY top-level structure is the day timeline (dayLabel/buildDays);
+//   • the list is three groups (handoff §5): Needs you, Working, Done today, and
+//     an Earlier group under them so history stays reachable (buildGroups);
+//   • each row is ONE sentence of state (rowSummary), and the detail repeats
+//     the state nowhere below its own sentence (stateSentence);
+//   • the Plan runs group keeps the fan-out audit view (buildDays, runsOnly);
 //   • a plan run is ONE item, positioned by its NEWEST row, merged by taskId —
 //     so an infinite-scroll page boundary that splits a fan-out re-buckets into
 //     the same single run instead of duplicating it;
@@ -16,8 +20,9 @@
 
 import { i18n, type MessageDescriptor } from '@lingui/core';
 import { msg, t } from '@lingui/core/macro';
-import type { Session, SessionStatus } from '../api/types';
+import type { NeedsYouItem, NeedsYouKind, Session, SessionStatus } from '../api/types';
 import { fmtDate } from './format';
+import { sessionState } from './sessionState';
 
 export const STATUSES: SessionStatus[] = [
   'active',
@@ -327,4 +332,196 @@ export function countRuns(days: readonly DayBucket[]): number {
     for (const it of d.items) if (it.kind === 'run') n += 1;
   }
   return n;
+}
+
+/* ----- the groups of the list (handoff §5) -------------------------------- */
+
+/** A row's state: a StateGlyph name. `pending` is a stuck session, quiet past
+ * the stuck window: nothing is known to be working, and nothing has ended. */
+export type RowState = 'needs' | 'working' | 'done' | 'failed' | 'stopped' | 'pending';
+
+export type SessionGroup = 'needs' | 'working' | 'done' | 'earlier';
+
+/** The blockers a session's detail can answer, which is what makes it `needs`. */
+const GATE_KINDS: ReadonlySet<NeedsYouKind> = new Set(['approval', 'question', 'prod_deploy_local', 'awaiting_reply']);
+
+/** The oldest gate of each session (the queue arrives oldest first). The list
+ * cannot rely on `status` alone: a pending approval leaves it `active`. */
+export function gatesBySession(items: readonly NeedsYouItem[]): Map<number, NeedsYouItem> {
+  const gates = new Map<number, NeedsYouItem>();
+  for (const item of items) {
+    if (item.sessionId > 0 && GATE_KINDS.has(item.kind) && !gates.has(item.sessionId)) gates.set(item.sessionId, item);
+  }
+  return gates;
+}
+
+export function rowState(s: Session, nowMs: number, gate?: NeedsYouItem): RowState {
+  if (gate !== undefined || s.status === 'waiting_approval' || s.status === 'awaiting_reply') return 'needs';
+  const live = sessionState(s, nowMs);
+  if (live === 'running') return 'working';
+  if (live === 'stuck') return 'pending';
+  if (s.outcome === 'abandoned') return 'stopped';
+  // A killed row exited with an error (planRowNotes reads it the same way).
+  if (s.outcome === 'fail' || s.status === 'killed') return 'failed';
+  return 'done';
+}
+
+function sameDay(aMs: number, bMs: number): boolean {
+  return new Date(aMs).toDateString() === new Date(bMs).toDateString();
+}
+
+export function groupOf(s: Session, state: RowState, nowMs: number): SessionGroup {
+  if (state === 'needs') return 'needs';
+  if (state === 'working' || state === 'pending') return 'working';
+  return sameDay(new Date(s.endedAt ?? s.startedAt).getTime(), nowMs) ? 'done' : 'earlier';
+}
+
+export type SessionGroups = Record<SessionGroup, Session[]>;
+
+/** Partitions a newest-first list; the order inside each group is kept. */
+export function buildGroups(
+  sorted: readonly Session[],
+  nowMs: number,
+  gates: ReadonlyMap<number, NeedsYouItem>,
+): SessionGroups {
+  const groups: SessionGroups = { needs: [], working: [], done: [], earlier: [] };
+  for (const s of sorted) groups[groupOf(s, rowState(s, nowMs, gates.get(s.id)), nowMs)].push(s);
+  return groups;
+}
+
+/** Compact span: 40s, 12m, 3h 43m, 2d. */
+export function compactSpan(ms: number): string {
+  const sec = Math.max(0, Math.round(ms / 1000));
+  if (sec < 60) return `${String(sec)}s`;
+  const min = Math.floor(sec / 60);
+  if (min < 60) return `${String(min)}m`;
+  const h = Math.floor(min / 60);
+  if (h < 24) return min % 60 === 0 ? `${String(h)}h` : `${String(h)}h ${String(min % 60)}m`;
+  return `${String(Math.floor(h / 24))}d`;
+}
+
+const spanSince = (iso: string, nowMs: number): number => nowMs - new Date(iso).getTime();
+
+/** The row's age: how long it has blocked, run or sat finished. */
+export function rowAge(s: Session, state: RowState, nowMs: number, gate?: NeedsYouItem): string {
+  if (state === 'needs') return compactSpan(spanSince(gate?.blockingSince ?? s.endedAt ?? s.startedAt, nowMs));
+  if (state === 'working' || state === 'pending') return compactSpan(spanSince(s.startedAt, nowMs));
+  return compactSpan(spanSince(s.endedAt ?? s.startedAt, nowMs));
+}
+
+/** A plan row's title: the run, then the phase. Never the boilerplate prompt. */
+export function planRowLabel(s: Session): string {
+  const g = s.planGroup;
+  const name = planRowTitle(s);
+  return g == null ? name : `${g.title} · ${name}`;
+}
+
+function gateSummary(gate: NeedsYouItem): string {
+  const { toolName, preview } = gate;
+  if (gate.kind === 'approval' || gate.kind === 'prod_deploy_local') {
+    return preview === '' ? t`Allow ${toolName}?` : t`Allow ${toolName}: ${preview}?`;
+  }
+  return preview !== '' ? preview : gate.question;
+}
+
+/** The row's one sentence. `now` is the live action line; a plan row never falls
+ * back to `why`, which is its boilerplate dispatch prompt. */
+export function rowSummary(s: Session, state: RowState, nowMs: number, now: string | null, gate?: NeedsYouItem): string {
+  const plan = s.planGroup != null;
+  const intent = plan ? null : (s.why ?? null);
+  const place = [s.model, s.gitBranch].filter((v) => v !== null).join(' · ');
+  switch (state) {
+    case 'needs':
+      if (gate !== undefined) return gateSummary(gate);
+      return s.status === 'awaiting_reply' ? t`waiting for your reply` : t`waiting for your permission`;
+    case 'working':
+      return now ?? intent ?? place;
+    case 'pending': {
+      const quiet = compactSpan(spanSince(s.endedAt ?? s.startedAt, nowMs));
+      return t`quiet ${quiet} · it may have died silently`;
+    }
+    default:
+      return intent ?? place;
+  }
+}
+
+export interface StateSentence {
+  lead: string;
+  rest: string;
+}
+
+/** Handoff §5: the state in one sentence, repeated nowhere below it. */
+export function stateSentence(
+  s: Session,
+  state: RowState,
+  nowMs: number,
+  lastEventAt: string | null,
+  now: string | null,
+  gate?: NeedsYouItem,
+): StateSentence {
+  const plan = s.planGroup != null;
+  const intent = plan ? null : (s.why ?? null);
+  const elapsed = compactSpan(spanSince(s.startedAt, new Date(s.endedAt ?? nowMs).getTime()));
+  switch (state) {
+    case 'needs': {
+      const waited = rowAge(s, state, nowMs, gate);
+      const permission = gate?.kind === 'approval' || gate?.kind === 'prod_deploy_local' || s.status === 'waiting_approval';
+      return {
+        lead: permission ? t`Waiting for your permission` : t`Waiting for your answer`,
+        rest: t`for ${waited} · the session does nothing until you decide.`,
+      };
+    }
+    case 'working': {
+      const ago = compactSpan(spanSince(lastEventAt ?? s.endedAt ?? s.startedAt, nowMs));
+      const doing = now ?? intent;
+      return {
+        lead: plan ? t`Phase running` : t`Working`,
+        rest: doing === null ? t`· last action ${ago} ago.` : t`· last action ${ago} ago · ${doing}.`,
+      };
+    }
+    case 'pending': {
+      const quiet = compactSpan(spanSince(s.endedAt ?? s.startedAt, nowMs));
+      return { lead: t`Quiet`, rest: t`for ${quiet} · no transcript activity, it may have died silently.` };
+    }
+    case 'done':
+      return { lead: t`Finished`, rest: intent === null ? t`in ${elapsed}.` : t`in ${elapsed} · ${intent}.` };
+    case 'failed':
+      return { lead: t`Failed`, rest: intent === null ? t`· the transcript stays.` : t`· ${intent}. The transcript stays.` };
+    case 'stopped':
+      return { lead: t`Stopped by you`, rest: intent === null ? '.' : t`· ${intent}.` };
+  }
+}
+
+/* ----- the filter field (handoff: `filter · n:name s:state o:result`) ------ */
+
+export interface ListFilter {
+  text: string;
+  name: string;
+  state: string;
+  outcome: string;
+}
+
+/** Splits `n:`, `s:` and `o:` tokens out of the field; the rest is plain text. */
+export function parseListQuery(raw: string): ListFilter {
+  const filter: ListFilter = { text: '', name: '', state: '', outcome: '' };
+  const words: string[] = [];
+  for (const word of raw.trim().toLowerCase().split(/\s+/)) {
+    const token = /^([nso]):(.+)$/.exec(word);
+    if (token === null) words.push(word);
+    else if (token[1] === 'n') filter.name = token[2] ?? '';
+    else if (token[1] === 's') filter.state = token[2] ?? '';
+    else filter.outcome = token[2] ?? '';
+  }
+  filter.text = words.join(' ');
+  return filter;
+}
+
+export function matchesFilter(s: Session, f: ListFilter, state: RowState): boolean {
+  if (!matchesQuery(s, f.text)) return false;
+  if (f.name !== '' && !`${s.title ?? ''} ${s.planGroup?.title ?? ''}`.toLowerCase().includes(f.name)) return false;
+  if (f.state !== '') {
+    const words = [state, s.status, STATUS_LABELS[s.status]];
+    if (!words.some((w) => w.toLowerCase().includes(f.state))) return false;
+  }
+  return f.outcome === '' || (s.outcome ?? '').includes(f.outcome);
 }

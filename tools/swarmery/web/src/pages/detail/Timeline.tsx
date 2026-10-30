@@ -1,14 +1,17 @@
-// Timeline tab: turns chronologically; tool calls as compact expandable rows;
-// subagent spans as nested collapsible blocks (blue track — the signature
-// element); errors red with failure text visible WITHOUT expanding.
+// Steps tab (handoff §5): the live ledger of the session, one row per step: a
+// glyph, the step, its detail, and how long it took. Failed steps stay in the
+// ledger with their failure text visible without opening them. A row opens its
+// raw payload; a subagent is a row that opens onto its own steps, nested.
+//
+// The gate itself is the card above the tabs, so a waiting step only says what it
+// waits on and carries the level badge. Chat reuses `Nodes` for its tool groups.
 
 import type { I18n, MessageDescriptor } from '@lingui/core';
 import { msg } from '@lingui/core/macro';
 import { Trans, useLingui } from '@lingui/react/macro';
 import { useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
-import type { Event, SessionDetail, Turn } from '../../api/types';
-import { fmtAgo, fmtDurationMs, fmtSpan, fmtTime } from '../../lib/format';
+import type { Event, SessionDetail } from '../../api/types';
+import { fmtDurationMs, fmtSpan, fmtTime } from '../../lib/format';
 import {
   argSummary,
   errorText,
@@ -18,7 +21,8 @@ import {
   subagentName,
 } from '../../lib/payload';
 import { buildTimeline, countEvents, type TimelineNode } from '../../lib/timeline';
-import { TOOL_GLYPHS } from '../../lib/glyphs';
+import type { DecisionTier } from '../../components/place/DecisionCard';
+import { StateGlyph, type GlyphState } from '../../components/place/StateGlyph';
 import { Empty } from '../../components/ui';
 
 const TYPE_LABELS: Partial<Record<Event['type'], MessageDescriptor>> = {
@@ -32,15 +36,16 @@ const TYPE_LABELS: Partial<Record<Event['type'], MessageDescriptor>> = {
   session_end: msg`Session end`,
 };
 
-function glyphFor(event: Event): string {
-  if (event.toolName !== null && TOOL_GLYPHS[event.toolName] !== undefined) {
-    return TOOL_GLYPHS[event.toolName] ?? '·';
-  }
-  if (event.type === 'skill_use') return '◈';
-  if (event.type === 'commit') return '⎇';
-  if (event.type === 'error') return '✕';
-  return '·';
-}
+const STEP = 'grid grid-cols-[18px_minmax(0,1fr)_auto] items-start gap-3 border-b border-line py-2';
+const STEP_DURATION = 'font-mono text-[10.5px] leading-[18px] whitespace-nowrap text-ink-faint';
+const STEP_DETAIL = 'mt-[3px] font-mono text-[11.5px] leading-[1.5] break-words text-ink-3';
+
+/** Shape and colour of the level badge on a gated step (handoff §7). */
+const TIER_BADGE: Record<DecisionTier, { label: MessageDescriptor; className: string }> = {
+  destructive: { label: msg`▲ destructive`, className: 'rounded-[3px] border border-red text-red' },
+  write: { label: msg`◆ write`, className: 'rounded-full border border-dashed border-blue text-blue' },
+  question: { label: msg`? question`, className: 'rounded-full border border-amber text-amber' },
+};
 
 function labelFor(event: Event, i18n: I18n): string {
   const typeLabel = TYPE_LABELS[event.type];
@@ -64,63 +69,37 @@ function isWaitingEvent(event: Event): boolean {
   return event.type === 'permission_request' && event.status === null;
 }
 
-function EventRow({ event, inSubagent }: { event: Event; inSubagent: boolean }): JSX.Element {
+function EventRow({ event, active }: { event: Event; active: boolean }): JSX.Element {
   const { i18n } = useLingui();
   const [open, setOpen] = useState(false);
   const failed = isErrorEvent(event);
-  // Waiting permission_request rows are rendered by AwaitingApprovalNode
-  // instead — this component never receives one (see Nodes below).
   const arg = argSummary(event);
   const failure = failed ? errorText(event) : null;
-
-  const rail = failed ? 'border-red/50' : inSubagent ? 'border-blue/35' : 'border-line';
-  const dot = failed
-    ? 'border-red bg-red/20'
-    : event.status === 'ok'
-      ? 'border-green bg-surface2'
-      : 'border-ink-dim bg-surface2';
-  const toolTone = failed ? 'text-red' : 'text-ink';
+  const state: GlyphState = failed ? 'failed' : active ? 'working' : 'done';
 
   return (
-    <div className={`relative ml-[5px] border-l-2 py-1.5 pl-3 ${rail}`}>
-      <span
-        className={`absolute top-[15px] -left-[5px] h-2 w-2 rounded-full border-2 ${dot}`}
-        aria-hidden="true"
-      />
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        aria-expanded={open}
-        className="flex w-full items-start gap-2.5 text-left"
-      >
-        <span className="min-w-[42px] pt-0.5 font-mono text-[10.5px] text-ink-dim">
-          {fmtTime(event.ts)}
-        </span>
-        <span className="min-w-0 flex-1">
-          <span className={`block font-mono text-[12px] font-medium ${toolTone}`}>
-            <span className="mr-1 text-ink-dim" aria-hidden="true">
-              {glyphFor(event)}
-            </span>
+    <div className={STEP} data-tip={fmtTime(event.ts)}>
+      <StateGlyph state={state} size={12} className="mt-px" />
+      <div className="min-w-0">
+        <button
+          type="button"
+          onClick={() => setOpen((v) => !v)}
+          aria-expanded={open}
+          className="flex min-w-0 items-baseline gap-2 text-left"
+        >
+          <span className={`text-[13px] leading-[normal] font-medium ${failed ? 'text-red' : 'text-ink'}`}>
             {labelFor(event, i18n)}
           </span>
-          {arg !== null && (
-            <span className="block truncate font-mono text-[10.5px] text-ink-faint">{arg}</span>
-          )}
-        </span>
-        <span className="shrink-0 pt-0.5 font-mono text-[10px] text-ink-faint">
-          {fmtDurationMs(event.durationMs)}
-        </span>
-      </button>
-      {failure !== null && (
-        <div className="mt-[7px] rounded-[7px] border border-red/30 bg-red/6 px-2.5 py-1.5 font-mono text-[11px] text-red">
-          {failure}
-        </div>
-      )}
-      {open && (
-        <pre className="mt-1.5 overflow-x-auto rounded-md border border-line bg-bg px-2.5 py-2 font-mono text-[10.5px] leading-relaxed text-ink-2">
-          {payloadJson(event)}
-        </pre>
-      )}
+        </button>
+        {arg !== null && <div className={STEP_DETAIL}>{arg}</div>}
+        {failure !== null && <div className={`${STEP_DETAIL} text-red`}>{failure}</div>}
+        {open && (
+          <pre className="mt-1.5 overflow-x-auto rounded-md border border-line bg-bg px-2.5 py-2 font-mono text-[10.5px] leading-relaxed text-ink-2">
+            {payloadJson(event)}
+          </pre>
+        )}
+      </div>
+      <span className={STEP_DURATION}>{fmtDurationMs(event.durationMs)}</span>
     </div>
   );
 }
@@ -131,42 +110,42 @@ function SubagentBlock({
   node: Extract<TimelineNode, { kind: 'subagent' }>;
 }): JSX.Element {
   const { t } = useLingui();
-  const [open, setOpen] = useState(true);
-  // WHO did WHAT: description is the primary label; agent type is a dimmed
-  // suffix (or the fallback label when the payload has no description).
+  const [open, setOpen] = useState(false);
+  // WHO did WHAT: the description leads; the agent type stands in for a tool.
   const type = subagentName(node.start);
   const description = subagentDescription(node.start);
   const events = countEvents(node.children);
+  const running = node.stop === null;
   const duration =
     node.stop !== null
       ? fmtDurationMs(node.stop.durationMs ?? null) || fmtSpan(node.start.ts, node.stop.ts)
       : t`running…`;
 
   return (
-    <div className="my-1.5 ml-[5px] rounded-r-lg border-l-2 border-blue bg-blue/5 py-2 pr-2.5 pl-3">
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        aria-expanded={open}
-        className="flex w-full items-center gap-2 text-left font-mono text-[11.5px]"
-      >
-        <span
-          className={`text-ink-dim transition-transform ${open ? 'rotate-90' : ''}`}
-          aria-hidden="true"
+    <div>
+      <div className={STEP}>
+        <StateGlyph state={running ? 'working' : 'done'} size={12} className="mt-px" />
+        <button
+          type="button"
+          onClick={() => setOpen((v) => !v)}
+          aria-expanded={open}
+          className="flex min-w-0 items-baseline gap-2 text-left"
         >
-          ▶
-        </span>
-        <span className="min-w-0 truncate font-bold text-blue">⬡ {description ?? type}</span>
-        <span className="shrink-0 whitespace-nowrap text-ink-dim">
-          {description !== null ? type : t`subagent`} · <Trans>{events} events</Trans>
-        </span>
-        <span className={`ml-auto shrink-0 ${node.stop === null ? 'text-green' : 'text-ink-dim'}`}>
-          {duration}
-        </span>
-      </button>
+          <span className="min-w-0 truncate text-[13px] leading-[normal] font-medium text-ink">
+            {description ?? type}
+          </span>
+          <span className="shrink-0 font-mono text-[10.5px] whitespace-nowrap text-ink-faint">
+            {description !== null ? type : t`subagent`} · <Trans>{events} events</Trans>
+          </span>
+          <span aria-hidden="true" className="shrink-0 font-mono text-[10px] text-ink-faint">
+            {open ? '▾' : '▸'}
+          </span>
+        </button>
+        <span className={STEP_DURATION}>{duration}</span>
+      </div>
       {open && (
-        <div className="mt-1.5">
-          <Nodes nodes={node.children} inSubagent />
+        <div className="border-l border-line-strong pl-3">
+          <Nodes nodes={node.children} />
         </div>
       )}
     </div>
@@ -178,56 +157,36 @@ function Prompt({ event }: { event: Event }): JSX.Element {
   const text =
     pickString(event.payload, ['text', 'prompt', 'content', 'message']) ?? t`(empty prompt)`;
   return (
-    <div className="mb-2 rounded-[10px] border border-line bg-surface2 px-3 py-2.5 text-[13px] leading-normal text-ink">
-      {text}
+    <div className={STEP}>
+      <span aria-hidden="true" className="w-[18px] text-center font-mono text-[12px] leading-[18px] text-ink-faint">
+        ›
+      </span>
+      <div className="line-clamp-2 min-w-0 text-[13px] leading-[1.45] text-ink-2">{text}</div>
+      <span className={STEP_DURATION}>{fmtTime(event.ts)}</span>
     </div>
   );
 }
 
-/** Trailing "awaiting approval" node — Canvas's dedicated amber-ring card.
- * Approve/deny identity (permission_requests.id) is not on this event, so
- * the actions route to the Approvals screen rather than resolving inline. */
-function AwaitingApprovalNode({ event }: { event: Event }): JSX.Element {
-  const { t } = useLingui();
+/** A step waiting on the gate card above: what it asks, and the level. */
+function AwaitingStep({ event, tier }: { event: Event; tier: DecisionTier | undefined }): JSX.Element {
+  const { t, i18n } = useLingui();
   const command = argSummary(event);
   const tool = event.toolName ?? t`Permission`;
+  const waited = fmtSpan(event.ts, null);
+  const badge = tier === undefined ? undefined : TIER_BADGE[tier];
   return (
-    <div className="relative py-0 pb-1 pl-6">
-      <span
-        className="absolute top-[3px] left-0 box-border h-3 w-3 animate-blink-dot rounded-full border-2 border-amber bg-amber/20"
-        aria-hidden="true"
-      />
-      <div className="rounded-[10px] border border-amber/32 bg-amber/6 px-3.5 py-[11px]">
-        <div className="flex items-center gap-2">
-          <span className="font-mono text-[12px] font-bold text-amber">
-            {t`${tool} · awaiting approval`}
+    <div className={STEP}>
+      <StateGlyph state="needs" size={12} className="mt-px" />
+      <div className="min-w-0">
+        <div className="text-[13px] leading-[normal] font-medium text-ink">{t`${tool} · awaiting approval`}</div>
+        {command !== null && <div className={STEP_DETAIL}>{command}</div>}
+        {badge !== undefined && (
+          <span className={`mt-1 inline-block px-1.5 font-mono text-[10px] ${badge.className}`}>
+            {i18n._(badge.label)}
           </span>
-          <span className="ml-auto shrink-0 font-mono text-[10px] text-amber">
-            {fmtAgo(event.ts)}
-          </span>
-        </div>
-        {command !== null && (
-          <div className="mt-1.5 font-mono text-[11.5px] text-ink-2">{command}</div>
         )}
-        <div className="mt-1.5 text-[12.5px] leading-[1.5] text-ink-3">
-          <span className="text-ink-faint">→ </span>
-          <Trans>respond in the terminal, or approve/deny from the Approvals screen.</Trans>
-        </div>
-        <div className="mt-2.5 flex gap-[7px]">
-          <Link
-            to="/approvals"
-            className="inline-flex min-h-9 items-center rounded-lg border border-green/40 bg-green/10 px-4 font-mono text-[11px] font-semibold text-green transition-colors hover:bg-green/20 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
-          >
-            <Trans>approve</Trans>
-          </Link>
-          <Link
-            to="/approvals"
-            className="inline-flex min-h-9 items-center rounded-lg border border-red/40 bg-transparent px-4 font-mono text-[11px] text-red transition-colors hover:bg-red/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
-          >
-            <Trans>deny</Trans>
-          </Link>
-        </div>
       </div>
+      <span className={STEP_DURATION}>{t`waiting ${waited}`}</span>
     </div>
   );
 }
@@ -235,10 +194,13 @@ function AwaitingApprovalNode({ event }: { event: Event }): JSX.Element {
 // Exported for the Chat tab's expandable tool groups — same rows, same nesting.
 export function Nodes({
   nodes,
-  inSubagent = false,
+  activeEventId = null,
+  gateTier,
 }: {
   nodes: TimelineNode[];
-  inSubagent?: boolean;
+  /** The step in progress on a live session, whose glyph is the working one. */
+  activeEventId?: number | null;
+  gateTier?: DecisionTier | undefined;
 }): JSX.Element {
   return (
     <>
@@ -248,29 +210,27 @@ export function Nodes({
         ) : node.event.type === 'user_prompt' ? (
           <Prompt key={node.event.id} event={node.event} />
         ) : isWaitingEvent(node.event) ? (
-          <AwaitingApprovalNode key={node.event.id} event={node.event} />
+          <AwaitingStep key={node.event.id} event={node.event} tier={gateTier} />
         ) : (
-          <EventRow key={node.event.id} event={node.event} inSubagent={inSubagent} />
+          <EventRow key={node.event.id} event={node.event} active={node.event.id === activeEventId} />
         ),
       )}
     </>
   );
 }
 
-function TurnHeader({ turn }: { turn: Turn | null }): JSX.Element {
-  const { t } = useLingui();
-  const seq = turn?.seq;
-  const startedAt = turn !== null ? fmtTime(turn.startedAt) : '';
-  return (
-    <div className="mt-4 mb-1.5 flex items-center gap-2 font-mono text-[10.5px] tracking-[0.1em] text-ink-dim uppercase">
-      {turn !== null ? t`turn ${seq} · ${startedAt}` : t`unassigned events`}
-      <span className="h-px flex-1 bg-line" aria-hidden="true" />
-    </div>
-  );
-}
-
-export function Timeline({ detail }: { detail: SessionDetail }): JSX.Element {
+export function Timeline({
+  detail,
+  live = false,
+  gateTier,
+}: {
+  detail: SessionDetail;
+  /** A working session: its newest step is the one in progress. */
+  live?: boolean;
+  gateTier?: DecisionTier | undefined;
+}): JSX.Element {
   const groups = useMemo(() => buildTimeline(detail), [detail]);
+  const lastEvent = detail.events[detail.events.length - 1];
 
   if (groups.length === 0) {
     return (
@@ -280,11 +240,10 @@ export function Timeline({ detail }: { detail: SessionDetail }): JSX.Element {
     );
   }
   return (
-    <div className="mt-[26px]">
+    <div className="mt-[14px] flex flex-col">
       {groups.map((group) => (
         <section key={group.turn !== null ? `turn-${group.turn.id}` : 'orphans'}>
-          <TurnHeader turn={group.turn} />
-          <Nodes nodes={group.nodes} />
+          <Nodes nodes={group.nodes} activeEventId={live ? (lastEvent?.id ?? null) : null} gateTier={gateTier} />
         </section>
       ))}
     </div>
