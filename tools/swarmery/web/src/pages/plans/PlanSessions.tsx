@@ -19,50 +19,57 @@ const SESSION_DOT: Record<SessionStatus, string> = {
   killed: 'bg-red/70',
 };
 
-/** Every session the plan produced, to the RIGHT of the phase timeline: the
- * plan-run controller, each phase run, and the subagents under them — resolved
- * server-side from the stamped run branch / worktree cwd (?planTask=, see
- * internal/api/session_plan_group.go), the same rule the Sessions page groups by.
- *
- * The phase rows themselves link a session only WHILE a run is live, so on a
- * finished plan — the common case, e.g. an archived 72/72 plan — the transcripts
- * of everything that shipped were unreachable from the plan page. This column is
- * that missing link, and it is the only place a subagent transcript surfaces at
- * all: subagents never stamp a phase row. */
-export function PlanSessions({
-  epic,
-  activePhaseId,
-}: {
-  epic: Epic;
-  /** The phase whose details are open, so its sessions read as selected. */
-  activePhaseId: number | null;
-}): JSX.Element {
-  const { t } = useLingui();
-  const sessionHref = useSessionHref();
+/** Every session of the plan — the plan-run controller, each phase run, and the
+ * subagents under them — resolved server-side from the stamped run branch / worktree
+ * cwd (?planTask=, see internal/api/session_plan_group.go), the same rule the Sessions
+ * page groups by. The ledger reads its runs and costs from this, so the one fetch
+ * feeds both. Run edges mint and end sessions; `epic` is already refetched on the
+ * plan_updated WS frame, so a fingerprint of its run state is the cheapest live
+ * trigger there is — no second subscription. */
+export function usePlanSessions(epic: Epic): { sessions: Session[] | null; error: string | null } {
   const [sessions, setSessions] = useState<Session[] | null>(null);
-  const [err, setErr] = useState<string | null>(null);
-
-  // Run edges (start, cancel, finish) mint and end sessions. `epic` is already
-  // refetched on the plan_updated WS frame, so a fingerprint of its run state is
-  // the cheapest live trigger there is — no second subscription.
+  const [error, setError] = useState<string | null>(null);
   const runFingerprint =
     epic.phases.map((p) => `${p.id}:${p.runState}:${p.runSessionUuid ?? ''}`).join('|') +
     `#${epic.planRun?.runState ?? ''}:${epic.planRun?.runSessionUuid ?? ''}`;
-
   useEffect(() => {
     let alive = true;
-    setErr(null);
+    setError(null);
     fetchSessions({ planTask: epic.taskId }, { limit: 200 })
       .then((page) => {
         if (alive) setSessions(page.sessions);
       })
       .catch((e: unknown) => {
-        if (alive) setErr(e instanceof Error ? e.message : String(e));
+        if (alive) setError(e instanceof Error ? e.message : String(e));
       });
     return () => {
       alive = false;
     };
   }, [epic.taskId, runFingerprint]);
+  return { sessions, error };
+}
+
+/** The plan's sessions, under the ledger or under an open phase. The phase rows show
+ * their own runs; this list is the rest of the story: the plan-run controller, the
+ * subagents, and the operator's own sessions linked to the plan. It is the only place
+ * those surface, and the only way to a finished plan's transcripts that a phase row
+ * does not name. Folded on the ledger, open under a phase, until the operator picks. */
+export function PlanSessions({
+  epic,
+  activePhaseId,
+  sessions,
+  err,
+}: {
+  epic: Epic;
+  /** The phase whose details are open, so its sessions read as selected. */
+  activePhaseId: number | null;
+  sessions: Session[] | null;
+  err: string | null;
+}): JSX.Element {
+  const { t } = useLingui();
+  const sessionHref = useSessionHref();
+  const [folded, setFolded] = useState<boolean | null>(null);
+  const open = !(folded ?? activePhaseId === null);
 
   // The operator's hand-picked slice lives WITH the plan it belongs to:
   // [taskId, scope]. Keying on taskId (the same idiom as `runMsg`, above) means
@@ -94,11 +101,18 @@ export function PlanSessions({
   const totalCount = String(view.totalCount);
 
   return (
-    <aside className="hidden w-[264px] shrink-0 flex-col lg:flex" aria-label={t`plan sessions`}>
-      <div className="mb-2 flex items-baseline justify-between gap-2">
-        <span className="font-mono text-[10.5px] uppercase tracking-wide text-ink-dim">
+    <section className="mt-[22px]" aria-label={t`plan sessions`}>
+      <div className="flex items-center gap-2 leading-[normal]">
+        <button
+          type="button"
+          aria-expanded={open}
+          onClick={() => setFolded(open)}
+          className="flex cursor-pointer items-center gap-2 font-mono text-[10px] tracking-[0.1em] text-ink-faint uppercase transition-colors hover:text-ink"
+        >
           <Trans>sessions</Trans>
-        </span>
+          <span aria-hidden="true">{open ? '▾' : '▸'}</span>
+        </button>
+        <span aria-hidden="true" className="h-px flex-1 bg-line" />
         {sessions !== null &&
           // A plan with no sessions at all has nothing to switch between, so it
           // keeps the bare count rather than a toggle that cannot do anything.
@@ -156,22 +170,30 @@ export function PlanSessions({
             </button>
           ))}
       </div>
-      {err !== null ? (
-        <ErrorBox message={err} />
+      {!open ? null : err !== null ? (
+        <div className="mt-2">
+          <ErrorBox message={err} />
+        </div>
       ) : sessions === null ? (
-        <Loading />
+        <div className="mt-2">
+          <Loading />
+        </div>
       ) : view.totalCount === 0 ? (
-        <Empty>
-          <Trans>no sessions ran this plan</Trans>
-        </Empty>
+        <div className="mt-2">
+          <Empty>
+            <Trans>no sessions ran this plan</Trans>
+          </Empty>
+        </div>
       ) : view.sessions.length === 0 && view.linked.length === 0 ? (
         // Only reachable through a deliberate pick: the automatic rule hands back
         // 'all' when the phase slice would be empty.
-        <Empty>
-          <Trans>no sessions for this phase</Trans>
-        </Empty>
+        <div className="mt-2">
+          <Empty>
+            <Trans>no sessions for this phase</Trans>
+          </Empty>
+        </div>
       ) : (
-        <ol className="space-y-1">
+        <ol className="mt-2 grid gap-1 desk:grid-cols-2">
           {view.sessions.map((s) => {
             const g = s.planGroup ?? null;
             const label = g?.role === 'phase' ? `#${String(g.phaseSeq ?? '?')}` : t`plan`;
@@ -246,6 +268,6 @@ export function PlanSessions({
           ))}
         </ol>
       )}
-    </aside>
+    </section>
   );
 }

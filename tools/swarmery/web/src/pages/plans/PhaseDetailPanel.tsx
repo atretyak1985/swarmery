@@ -16,8 +16,7 @@ import { ForecastSection, RailSection, SurpriseChip } from './ForecastVsActual';
 import { LandCriterionAction } from './LandCriterionAction';
 import { hasReviewTab, showsReviewTab } from './landingModel';
 import { PhaseCard } from './PhaseCard';
-import { isUnresolvedOutcome, PhaseActivity, phaseChip, runButtonCls, RunCompletedChip, RunOutcomeChip } from './phaseChips';
-import { ReverifyButton } from './PhaseList';
+import { isUnresolvedOutcome, PhaseActivity, phaseChip, ReverifyButton, runButtonCls, RunCompletedChip, RunOutcomeChip } from './phaseChips';
 import { PhasePanel } from './PhasePanel';
 import { PhaseReopens } from './PhaseReopens';
 import { PhaseReview } from './PhaseReview';
@@ -159,7 +158,7 @@ export function PhaseDetailPanel({
   runBusy: number | null;
   /** A whole-plan run owns the phase docs — per-phase runs stand down. */
   planRunning: boolean;
-  /** The picker's value, for DocModelChip — see PhaseList's note. */
+  /** The picker's value, for DocModelChip — see PhaseActions' note. */
   phaseRunModel: PhaseRunModel;
   onRetry: () => void;
   onCancelRun: () => void;

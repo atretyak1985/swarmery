@@ -6,6 +6,7 @@ import { msg, t } from '@lingui/core/macro';
 import { Trans, useLingui } from '@lingui/react/macro';
 import { useEffect, useState } from 'react';
 import type { EpicPhase, PhaseRunOutcome, RunEvent } from '../../api/types';
+import type { PhaseCardAction } from './PhaseCard';
 import type { PhaseStatus } from './planModel';
 
 /** Re-renders on an interval so elapsed labels (doc activity, running phases)
@@ -147,7 +148,7 @@ export function runButtonCls(outcome: PhaseRunOutcome): string {
   return 'border-brand/40 text-brand hover:bg-brand/10';
 }
 
-function outcomeChipLabel(p: EpicPhase, outcome: UnresolvedOutcome): string {
+export function outcomeChipLabel(p: EpicPhase, outcome: UnresolvedOutcome): string {
   if (outcome === 'failed') return t`failed`;
   if (outcome === 'partial') {
     const done = String(p.checkboxesDone);
@@ -275,5 +276,36 @@ export function ContinuationChip({ events }: { events: RunEvent[] | null }): JSX
     >
       ↻ {continuations.length}
     </span>
+  );
+}
+
+/** The **Verify again** button of the phase row and the panel's Runs tab. The
+ *  action itself (label, busy, tip) comes from `reverifyAction`, the one builder
+ *  every site shares; null renders nothing. */
+export function ReverifyButton({
+  action,
+  size,
+  className = '',
+}: {
+  action: PhaseCardAction | null;
+  size: 'row' | 'panel';
+  className?: string;
+}): JSX.Element | null {
+  if (action === null) return null;
+  return (
+    <button
+      type="button"
+      disabled={action.disabled}
+      data-tip={action.tip}
+      onClick={(e) => {
+        e.stopPropagation();
+        action.onClick();
+      }}
+      className={`rounded-md border border-line-strong font-mono text-ink-3 transition-colors hover:text-ink disabled:cursor-not-allowed disabled:opacity-50 ${
+        size === 'row' ? 'px-1.5 py-px text-[9.5px]' : 'px-2 py-1 text-[10px]'
+      } ${className}`}
+    >
+      {action.label}
+    </button>
   );
 }

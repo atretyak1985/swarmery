@@ -464,7 +464,7 @@ describe('SC-4 — every click is one history entry; Back retraces them', () => 
     fireEvent.click(listItem('Beta'));
     await settled(r, `${BASE}/${B.externalId}`);
 
-    fireEvent.click(screen.getByRole('button', { name: 'open Phase 3 — Beta 3 details' }));
+    fireEvent.click(screen.getByRole('link', { name: 'Beta 3' }));
     await settled(r, `${BASE}/${B.externalId}/phase/3`);
     const d = await screen.findByRole('region', { name: 'Beta 3' });
 
@@ -529,7 +529,7 @@ describe('SC-4 — every click is one history entry; Back retraces them', () => 
     await settled(r, `${BASE}/${A.externalId}`);
     fireEvent.click(listItem('Beta'));
     await settled(r, `${BASE}/${B.externalId}`);
-    fireEvent.click(screen.getByRole('button', { name: 'open Phase 1 — Beta 1 details' }));
+    fireEvent.click(screen.getByRole('link', { name: 'Beta 1' }));
     const d = await screen.findByRole('region', { name: 'Beta 1' });
     fireEvent.click(within(d).getByRole('tab', { name: 'Report' }));
     await settled(r, `${BASE}/${B.externalId}/phase/1/report`);

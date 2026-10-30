@@ -66,6 +66,10 @@ msgstr "раундів рев’ю: {0}"
 msgid "{archivedCount} archived"
 msgstr "{archivedCount} в архіві"
 
+#: src/pages/plans/phaseLedgerModel.ts
+msgid "{back, plural, one {came back once} few {came back # times} many {came back # times} other {came back # times}}"
+msgstr "{back, plural, one {поверталась # раз} few {поверталась # рази} many {поверталась # разів} other {поверталась # раза}}"
+
 #: src/pages/plans/GuardBadge.tsx
 msgid "{blocked, plural, one {# blocked attempt} few {# blocked attempts} many {# blocked attempts} other {# blocked attempts}}"
 msgstr "{blocked, plural, one {# заблокована спроба} few {# заблоковані спроби} many {# заблокованих спроб} other {# заблокованої спроби}}"
@@ -107,6 +111,7 @@ msgid "{done} of {total} checkboxes done"
 msgstr "{done} з {total} чекбоксів відмічено"
 
 #: src/pages/plans/PhaseCard.tsx
+#: src/pages/plans/phaseLedgerModel.ts
 msgid "{done} of {total} criteria"
 msgstr "{done} з {total} критеріїв"
 
@@ -150,6 +155,10 @@ msgstr "{label}: {subject} — сесій: {count} ({listing})"
 msgid "{label}: {subject} is open in session {shortId} ({liveNote})"
 msgstr "{label}: {subject} — сесія {shortId} ({liveNote})"
 
+#: src/pages/plans/phaseLedgerModel.ts
+msgid "{land} [LAND] pending"
+msgstr "{land} [LAND] очікує"
+
 #: src/pages/plans/planModel.ts
 msgid "{landed} of {total} phases landed"
 msgstr "злито фаз: {landed} із {total}"
@@ -157,6 +166,10 @@ msgstr "злито фаз: {landed} із {total}"
 #: src/pages/plans/forecastStoryModel.ts
 msgid "{m, plural, one {# minute} few {# minutes} many {# minutes} other {# minutes}}"
 msgstr "{m, plural, one {# хвилину} few {# хвилини} many {# хвилин} other {# хвилини}}"
+
+#: src/pages/plans/phaseLedgerModel.ts
+msgid "{manual, plural, one {# criterion [MANUAL] — only you can close it} few {# criteria [MANUAL] — only you can close them} many {# criteria [MANUAL] — only you can close them} other {# criteria [MANUAL] — only you can close them}}"
+msgstr "{manual, plural, one {# критерій [MANUAL] — закрити можете лише ви} few {# критерії [MANUAL] — закрити можете лише ви} many {# критеріїв [MANUAL] — закрити можете лише ви} other {# критерію [MANUAL] — закрити можете лише ви}}"
 
 #: src/pages/plans/forecastStoryModel.ts
 msgid "{n, plural, one {area} few {areas} many {areas} other {areas}}"
@@ -258,7 +271,7 @@ msgstr "▶ Запустити"
 msgid "▶ run plan"
 msgstr "▶ запустити план"
 
-#: src/pages/plans/PhaseList.tsx
+#: src/pages/plans/PhaseLedger.tsx
 #: src/pages/plans/PlanHeader.tsx
 msgid "✓ summary"
 msgstr "✓ підсумок"
@@ -329,7 +342,7 @@ msgstr "мала"
 
 #: src/pages/Plans.tsx
 #: src/pages/plans/PhaseDetailPanel.tsx
-#: src/pages/plans/PhaseList.tsx
+#: src/pages/plans/PhaseLedger.tsx
 msgid "a whole-plan run is executing this plan"
 msgstr "цей план виконує запуск усього плану"
 
@@ -338,7 +351,7 @@ msgstr "цей план виконує запуск усього плану"
 msgid "acceptance criteria"
 msgstr "критерії приймання"
 
-#: src/pages/plans/PhaseList.tsx
+#: src/pages/plans/PhaseLedger.tsx
 msgid "activated"
 msgstr "активовано"
 
@@ -566,7 +579,7 @@ msgstr "скасувати"
 #: src/pages/planning/ReviseModal.tsx
 #: src/pages/planning/RevisionReview.tsx
 #: src/pages/plans/PhaseDetailPanel.tsx
-#: src/pages/plans/PhaseList.tsx
+#: src/pages/plans/PhaseLedger.tsx
 #: src/pages/plans/PlanRunControls.tsx
 #: src/pages/Routines.tsx
 msgid "Cancel"
@@ -673,6 +686,10 @@ msgstr "Продовжити план"
 msgid "copies the markdown into the project so its prompts become editable"
 msgstr "копіює markdown у проєкт, щоб його промпти можна було редагувати"
 
+#: src/pages/plans/PhaseLedger.tsx
+msgid "cost"
+msgstr "вартість"
+
 #: src/pages/plans/RunsReviewBlock.tsx
 msgid "couldn't load the findings: {error}"
 msgstr "не вдалося завантажити знахідки: {error}"
@@ -701,6 +718,7 @@ msgstr "Створити"
 msgid "created {created}"
 msgstr "створено {created}"
 
+#: src/pages/plans/PhaseLedger.tsx
 #: src/pages/plans/PlanHeader.tsx
 msgid "criteria"
 msgstr "критерії"
@@ -745,6 +763,10 @@ msgstr "вирішено {decided}"
 msgid "decided {decided} by {by}"
 msgstr "вирішено {decided} ({by})"
 
+#: src/pages/plans/PhaseLedger.tsx
+msgid "decision"
+msgstr "рішення"
+
 #. placeholder {0}: linkedTurn.seq
 #: src/pages/PlanningMode.tsx
 msgid "decision D-{0}"
@@ -772,14 +794,18 @@ msgid "Delete this routine"
 msgstr "Видалити цю рутину"
 
 #: src/pages/plans/PhaseDetailPanel.tsx
-#: src/pages/plans/PhaseList.tsx
+#: src/pages/plans/PhaseLedger.tsx
 msgid "dependency pending"
 msgstr "залежність очікує"
 
 #: src/pages/plans/PhaseDetailPanel.tsx
-#: src/pages/plans/PhaseList.tsx
+#: src/pages/plans/PhaseLedger.tsx
 msgid "dependency resolved"
 msgstr "залежність виконано"
+
+#: src/pages/plans/PhaseLedger.tsx
+msgid "depends on"
+msgstr "залежить від"
 
 #: src/pages/planning/RefineModal.tsx
 msgid "Describe what should change. The plan will update, and the next questions will follow your direction."
@@ -904,7 +930,7 @@ msgstr "напр. Додати на сторінку звітів кнопку �
 msgid "Edit"
 msgstr "Редагувати"
 
-#: src/pages/plans/PhaseList.tsx
+#: src/pages/plans/PhaseLedger.tsx
 msgid "edit doc"
 msgstr "редагувати документ"
 
@@ -978,6 +1004,10 @@ msgstr "щохвилини"
 #: src/pages/plans/ReviewFindings.tsx
 msgid "evidence"
 msgstr "докази"
+
+#: src/pages/plans/PhaseLedger.tsx
+msgid "exec"
+msgstr "виконання"
 
 #: src/pages/plans/PlanRunControls.tsx
 msgid "execution mode"
@@ -1126,6 +1156,14 @@ msgstr "блок guard не прочитати"
 msgid "guard check"
 msgstr "перевірка guard"
 
+#: src/pages/plans/phaseLedgerModel.ts
+msgid "guard stopped the run · {id}"
+msgstr "guard зупинив запуск · {id}"
+
+#: src/pages/plans/phaseLedgerModel.ts
+msgid "guard stopped the run · {id} · {trigger}"
+msgstr "guard зупинив запуск · {id} · {trigger}"
+
 #: src/pages/plans/PlanHeader.tsx
 msgid "hand the whole plan to one agent, headlessly, in an isolated worktree"
 msgstr "віддати весь план одному фоновому агенту в ізольованому worktree"
@@ -1135,7 +1173,7 @@ msgid "happened"
 msgstr "сталося"
 
 #: src/pages/plans/PhaseDetailPanel.tsx
-#: src/pages/plans/PhaseList.tsx
+#: src/pages/plans/PhaseLedger.tsx
 msgid "headless run in progress"
 msgstr "триває фоновий запуск"
 
@@ -1242,6 +1280,15 @@ msgstr "лишити картку плану"
 msgid "label: any"
 msgstr "мітка: будь-яка"
 
+#: src/pages/plans/PhaseLedger.tsx
+#: src/pages/plans/phaseLedgerModel.ts
+msgid "landed"
+msgstr "злито"
+
+#: src/pages/plans/phaseLedgerModel.ts
+msgid "landed · {change}"
+msgstr "злито · {change}"
+
 #: src/pages/Routines.tsx
 msgid "last {lastRun}"
 msgstr "останній {lastRun}"
@@ -1308,6 +1355,10 @@ msgstr "low — механічна робота"
 #: src/pages/plans/ForecastVsActual.tsx
 msgid "major miss"
 msgstr "великий промах"
+
+#: src/pages/plans/PhaseLedger.tsx
+msgid "manual"
+msgstr "вручну"
 
 #: src/pages/Routines.tsx
 msgid "manual / webhook only"
@@ -1462,6 +1513,10 @@ msgstr "у цьому документі немає чекбоксів"
 msgid "no code touched"
 msgstr "код не зачеплено"
 
+#: src/pages/plans/phaseLedgerModel.ts
+msgid "no completion report"
+msgstr "немає звіту про виконання"
+
 #: src/pages/planning/RevisionReview.tsx
 msgid "no content change"
 msgstr "вміст без змін"
@@ -1533,6 +1588,10 @@ msgstr "ревізій немає — «Ревізія плану» в рядк�
 #: src/pages/Routines.tsx
 msgid "No routines yet. Create one to schedule recurring work."
 msgstr "Рутин ще немає. Створіть одну, щоб запланувати повторювану роботу."
+
+#: src/pages/plans/PhaseLedger.tsx
+msgid "no runs yet"
+msgstr "запусків ще не було"
 
 #: src/pages/Routines.tsx
 msgid "No runs yet."
@@ -1608,6 +1667,7 @@ msgstr "Ще не запускалась."
 msgid "not scored — the run’s actuals are not recorded yet, or nothing about it was measurable"
 msgstr "без оцінки — фактичні показники запуску ще не записані або нічого не вдалося виміряти"
 
+#: src/pages/plans/phaseLedgerModel.ts
 #: src/pages/plans/planModel.ts
 msgid "not started"
 msgstr "не розпочато"
@@ -1693,10 +1753,6 @@ msgstr "Відкрити в Рев’ю →"
 #: src/pages/plans/TerminalBadge.tsx
 msgid "open in terminal"
 msgstr "відкрито в терміналі"
-
-#: src/pages/plans/PhaseList.tsx
-msgid "open Phase {seq} — {name} details"
-msgstr "відкрити деталі фази {seq} — {name}"
 
 #: src/pages/plans/PlanHeader.tsx
 msgid "open plan details"
@@ -1792,6 +1848,10 @@ msgstr "Назавжди видалити <0>{routineName}</0> та історі
 msgid "permission pending"
 msgstr "чекає дозволу"
 
+#: src/pages/plans/PhaseLedger.tsx
+msgid "phase"
+msgstr "фаза"
+
 #: src/pages/plans/PlanDetailPanel.tsx
 msgid "phase {phase} covers {cid}, which the spec never declares"
 msgstr "фаза {phase} покриває {cid}, якого немає в специфікації"
@@ -1805,11 +1865,14 @@ msgid "phase {seq}"
 msgstr "фаза {seq}"
 
 #: src/pages/plans/PhaseCard.tsx
-#: src/pages/plans/PhaseList.tsx
 #: src/pages/plans/PhasePanel.tsx
 #: src/pages/plans/PlanDetailPanel.tsx
 msgid "Phase {seq}"
 msgstr "Фаза {seq}"
+
+#: src/pages/plans/PhaseLedger.tsx
+msgid "Phase {seq} — {name}"
+msgstr "Фаза {seq} — {name}"
 
 #: src/pages/plans/plansTarget.ts
 msgid "Phase {seq} not found in {planTitle}"
@@ -1886,7 +1949,7 @@ msgstr "джерело документа плану"
 
 #: src/pages/Plans.tsx
 #: src/pages/plans/PhaseDetailPanel.tsx
-#: src/pages/plans/PhaseList.tsx
+#: src/pages/plans/PhaseLedger.tsx
 #: src/pages/plans/PlanHeader.tsx
 msgid "plan is not active"
 msgstr "план не активний"
@@ -2194,6 +2257,7 @@ msgid "reply"
 msgstr "відповідь"
 
 #: src/pages/plans/DecisionTable.tsx
+#: src/pages/plans/PhaseLedger.tsx
 msgid "report"
 msgstr "звіт"
 
@@ -2210,7 +2274,7 @@ msgid "resolved in the plan round"
 msgstr "виправлено в раунді плану"
 
 #: src/pages/plans/PhaseDetailPanel.tsx
-#: src/pages/plans/PhaseList.tsx
+#: src/pages/plans/PhaseLedger.tsx
 msgid "Retry run"
 msgstr "Повторити запуск"
 
@@ -2235,6 +2299,7 @@ msgid "revert"
 msgstr "відкотити"
 
 #: src/pages/plans/DecisionTable.tsx
+#: src/pages/plans/PhaseLedger.tsx
 #: src/pages/plans/PhaseReopens.tsx
 #: src/pages/plans/RunsReviewBlock.tsx
 msgid "review"
@@ -2243,6 +2308,10 @@ msgstr "рев’ю"
 #: src/pages/plans/PhasePanel.tsx
 msgid "Review"
 msgstr "Рев’ю"
+
+#: src/pages/plans/PhaseLedger.tsx
+msgid "review & land"
+msgstr "рев’ю і злиття"
 
 #: src/pages/PlanningMode.tsx
 msgid "Review changes →"
@@ -2383,7 +2452,7 @@ msgid "Run now"
 msgstr "Запустити зараз"
 
 #: src/pages/plans/PhaseDetailPanel.tsx
-#: src/pages/plans/PhaseList.tsx
+#: src/pages/plans/PhaseLedger.tsx
 msgid "Run phase"
 msgstr "Запустити фазу"
 
@@ -2396,7 +2465,7 @@ msgid "run this phase again even though nothing has changed since it blocked"
 msgstr "запустити цю фазу знову, хоч після блокування нічого не змінилося"
 
 #: src/pages/plans/PhaseDetailPanel.tsx
-#: src/pages/plans/PhaseList.tsx
+#: src/pages/plans/PhaseLedger.tsx
 msgid "run this phase headlessly in an isolated worktree"
 msgstr "запустити цю фазу фоново в ізольованому worktree"
 
@@ -2405,14 +2474,19 @@ msgid "run_one (one catch-up)"
 msgstr "run_one (одне надолуження)"
 
 #: src/pages/plans/phaseChips.tsx
+#: src/pages/plans/phaseLedgerModel.ts
 msgid "running"
 msgstr "виконується"
 
 #: src/pages/Board.tsx
 #: src/pages/plans/PhaseDetailPanel.tsx
-#: src/pages/plans/PhaseList.tsx
+#: src/pages/plans/PhaseLedger.tsx
 msgid "Running"
 msgstr "Виконується"
+
+#: src/pages/plans/phaseLedgerModel.ts
+msgid "running · {elapsed}"
+msgstr "виконується · {elapsed}"
 
 #: src/pages/planning/RunningPlanPanel.tsx
 msgid "running plan"
@@ -2422,9 +2496,18 @@ msgstr "поточний план"
 msgid "Running plan"
 msgstr "План виконується"
 
+#: src/pages/plans/PhaseLedger.tsx
+#: src/pages/plans/PhaseLedger.tsx
+msgid "runs"
+msgstr "запуски"
+
 #: src/pages/plans/PhasePanel.tsx
 msgid "Runs"
 msgstr "Запуски"
+
+#: src/pages/plans/PhaseLedger.tsx
+msgid "runs of phase {seq}"
+msgstr "запуски фази {seq}"
 
 #: src/pages/Routines.tsx
 msgid "runs…"
@@ -2487,7 +2570,7 @@ msgstr "надсилаємо…"
 msgid "Sends the phase back to its agent: your feedback is appended to the next run's prompt."
 msgstr "Повертає фазу її агенту: ваш відгук додається до промпта наступного запуску."
 
-#: src/pages/plans/PhaseList.tsx
+#: src/pages/plans/PhaseLedger.tsx
 #: src/pages/plans/PlanRunControls.tsx
 msgid "session"
 msgstr "сесія"
@@ -2582,6 +2665,10 @@ msgstr "специфікація…"
 msgid "spent"
 msgstr "витрачено"
 
+#: src/pages/plans/PhaseLedger.tsx
+msgid "stage"
+msgstr "стадія"
+
 #: src/pages/Playbooks.tsx
 msgid "stage chain"
 msgstr "ланцюжок етапів"
@@ -2644,6 +2731,10 @@ msgstr "почато {startedAgo}"
 msgid "starting…"
 msgstr "запуск…"
 
+#: src/pages/plans/phaseLedgerModel.ts
+msgid "starts when {deps} lands"
+msgstr "почнеться, коли злито {deps}"
+
 #: src/pages/plans/DecisionTable.tsx
 #: src/pages/plans/ReviewFindings.tsx
 msgid "status"
@@ -2668,6 +2759,10 @@ msgstr "зупинка: {trigger}"
 #: src/pages/plans/PlanHeader.tsx
 msgid "stops new runs from starting; the run in flight keeps going"
 msgstr "забороняє нові запуски; поточний запуск триває"
+
+#: src/pages/plans/PhaseLedger.tsx
+msgid "story"
+msgstr "розповідь"
 
 #: src/pages/plans/PhasePanel.tsx
 msgid "Story"
@@ -2863,6 +2958,10 @@ msgstr "Планувальник був упевнений на {percent} %"
 msgid "the README holds the phase table: reorder, rename by hand"
 msgstr "таблиця фаз у README: міняйте порядок і назви вручну"
 
+#: src/pages/plans/phaseLedgerModel.ts
+msgid "the review waits on you · {id}"
+msgstr "рев’ю чекає на вас · {id}"
+
 #: src/pages/plans/ReviewFindings.tsx
 msgid "the reviewer wrote no readable kind: review block — its own words are in the doc"
 msgstr "рецензент не написав читабельного блоку kind: review — його власні слова є в документі"
@@ -2914,6 +3013,10 @@ msgstr "дифф запуску не виміряно"
 #: src/pages/plans/LandCriterionAction.tsx
 msgid "the run's diff, verdict and landing controls"
 msgstr "дифф запуску, вердикт і керування посадкою"
+
+#: src/pages/plans/phaseLedgerModel.ts
+msgid "the verification never landed"
+msgstr "верифікація не завершилась"
 
 #: src/pages/plans/VerifyVerdictChip.tsx
 msgid "the verifier could not conclude (env or timeout) — this is not a failing grade"
@@ -3060,14 +3163,22 @@ msgstr "не пройдено"
 msgid "verify inconclusive"
 msgstr "без висновку"
 
+#: src/pages/plans/phaseLedgerModel.ts
+msgid "verifying"
+msgstr "перевіряється"
+
 #: src/pages/plans/useReverify.ts
 msgid "verifying…"
 msgstr "перевіряється…"
 
 #: src/pages/plans/PhaseDetailPanel.tsx
-#: src/pages/plans/PhaseList.tsx
+#: src/pages/plans/PhaseLedger.tsx
 msgid "waiting on phase {waitingOn}"
 msgstr "чекає на фазу {waitingOn}"
+
+#: src/pages/plans/phaseLedgerModel.ts
+msgid "waits on decision {held}"
+msgstr "чекає на рішення {held}"
 
 #: src/pages/plans/PhaseCard.tsx
 #: src/pages/plans/PhaseCard.tsx
@@ -3107,7 +3218,7 @@ msgstr "що виправити наступним проходом"
 msgid "what was done"
 msgstr "що зроблено"
 
-#: src/pages/plans/PhaseList.tsx
+#: src/pages/plans/PhaseLedger.tsx
 msgid "what was done — the executor's Completion Report and execution record"
 msgstr "що зроблено — Completion Report виконавця і запис виконання"
 

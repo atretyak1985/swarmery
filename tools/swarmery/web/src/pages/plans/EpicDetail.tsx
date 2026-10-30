@@ -11,12 +11,12 @@ import { DepsUnmergedActions } from './DepsUnmergedActions';
 import { NEUTRAL_TERMS } from './landingModel';
 import { useNow } from './phaseChips';
 import { PhaseDetailPanel } from './PhaseDetailPanel';
-import { PhaseList } from './PhaseList';
+import { PhaseLedger } from './PhaseLedger';
 import { type PhaseRunEffort, PhaseRunEffortPicker, type PhaseRunModel, PhaseRunModelPicker } from './PhaseRunPickers';
 import { PlanDetailPanel } from './PlanDetailPanel';
 import { PlanHeader } from './PlanHeader';
 import { computeResolvedSeqs, planComplete } from './planModel';
-import { PlanSessions } from './PlanSessions';
+import { PlanSessions, usePlanSessions } from './PlanSessions';
 import type { DetailSel, PhaseDetailTab } from './plansTarget';
 import type { PlanDetailTab } from './plansUrl';
 import { useTerminalSessions } from './TerminalBadge';
@@ -112,6 +112,7 @@ export function EpicDetail({
     () => terminalSessions.filter((s) => s.phaseId === null),
     [terminalSessions],
   );
+  const { sessions, error: sessionsErr } = usePlanSessions(epic);
   const phaseRunActive = epic.phases.some((p) => p.runState === 'running');
   // A plan run owns every phase doc for its duration — offering per-phase runs
   // next to it would invite two worktrees editing the same files.
@@ -269,19 +270,11 @@ export function EpicDetail({
         </div>
       )}
 
-      {/* Phases on the left, the sessions they produced on the right — the
-          sessions column stays put while the phase area swaps between the
-          timeline and a phase/plan detail, so a transcript is one click away
-          from whatever is being read. Below ~22rem for the phases (a 1024px
-          window, plan list and app sidebar open) the sessions column wraps
-          under them instead of squeezing the phase cards until their run
-          chips spill out — the longer Ukrainian labels made that visible. */}
-      <div className="mt-[22px] flex min-w-0 flex-wrap items-start gap-4">
-        <div className="min-w-0 flex-1 basis-[22rem]">
-          {/* Above the phase area, not in the plan header: the header's control is
-              the WHOLE-PLAN run, which reads SWARMERY_PLANRUN_MODEL and is out of
-              scope here (risk R3). Sitting here it governs exactly what it names —
-              every per-phase Run/Retry below it, list or detail panel. */}
+      {/* A detail — a phase or the plan itself — opens INLINE, in place of the
+          ledger, so it gets the whole column; "← all phases" (or Escape) above the
+          panel backs out to the ledger. The sessions stay under either. */}
+      <div className="mt-[22px] min-w-0">
+        {detail?.kind === 'phase' && (
           <div className="mb-2 flex flex-wrap items-center justify-end gap-x-3 gap-y-1.5">
             <PhaseRunModelPicker
               value={phaseRunModel}
@@ -294,9 +287,7 @@ export function EpicDetail({
               disabled={runBusy !== null || planRunning}
             />
           </div>
-          {/* A detail — a phase or the plan itself — opens INLINE, in place of the
-              phase list, so it gets the whole column; "← all phases" (or Escape)
-              above the panel backs out to the list. */}
+        )}
           {detail?.kind === 'phase' ? (
             <PhaseDetailPanel
               epic={epic}
@@ -335,16 +326,21 @@ export function EpicDetail({
               }}
             />
           ) : (
-            <PhaseList
+            <PhaseLedger
               epic={epic}
               resolvedSeqs={resolvedSeqs}
+              sessions={sessions}
               now={now}
               runBusy={runBusy}
               planRunning={planRunning}
               terminalSessions={terminalSessions}
+              terms={terms}
               phaseRunModel={phaseRunModel}
+              onPhaseRunModel={onPhaseRunModel}
+              phaseRunEffort={phaseRunEffort}
+              onPhaseRunEffort={onPhaseRunEffort}
               onOpenPhase={onOpenPhase}
-              phaseHref={(seq) => phaseHref(seq, 'story')}
+              phaseHref={phaseHref}
               onRun={onRun}
               onCancelRun={onCancelRun}
               reverify={reverify}
@@ -352,10 +348,11 @@ export function EpicDetail({
               onOpenOutcome={onOpenOutcome}
             />
           )}
-        </div>
         <PlanSessions
           epic={epic}
           activePhaseId={detail !== null && detail.kind === 'phase' ? detail.phase.id : null}
+          sessions={sessions}
+          err={sessionsErr}
         />
       </div>
 

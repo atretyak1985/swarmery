@@ -11,7 +11,7 @@
 // where it used to get lost against the panel's own identity block.
 //
 // The parts live under pages/plans/: PlanList, EpicDetail (a plan on screen),
-// PhaseList, PhaseDetailPanel, PlanDetailPanel, PlanSessions. This file owns what
+// PhaseLedger, PhaseDetailPanel, PlanDetailPanel, PlanSessions. This file owns what
 // has to outlive a plan switch: the URL as the selection, the loaded epics and the
 // run handlers.
 //
