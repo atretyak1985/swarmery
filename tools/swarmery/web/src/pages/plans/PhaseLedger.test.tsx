@@ -157,7 +157,9 @@ describe('PhaseLedger', () => {
     fireEvent.click(row('Phase 2 — Limiter core'));
     const links = within(screen.getByRole('list', { name: 'runs of phase 2' })).getAllByRole('link');
     expect(links).toHaveLength(2);
-    expect(links[0]?.textContent).toContain('spec + ADR');
+    // The role and how it stands: a run's title is the prompt it was started with.
+    expect(links[0]?.textContent).toContain('executor · finished');
+    expect(links[0]?.textContent).not.toContain('spec + ADR');
     expect(links[0]?.textContent).toContain('41m');
   });
 
@@ -167,30 +169,36 @@ describe('PhaseLedger', () => {
     expect(onRun).toHaveBeenCalledWith(11);
   });
 
-  it('keeps Cancel, the session and the live chip on a running phase', () => {
-    const { onCancelRun } = mount([live]);
-    expect(screen.getByRole('link', { name: 'session' })).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
-    expect(onCancelRun).toHaveBeenCalledWith(13);
+  it('opens a running phase on what it is doing, its run and its page', () => {
+    mount([live]);
+    expect(screen.getByText('The executor is working.')).toBeTruthy();
+    expect(screen.getByRole('link', { name: 'open run' })).toBeTruthy();
+    expect(screen.getByRole('link', { name: 'open phase →' }).getAttribute('href')).toBe('/plan/phase/3/story');
+    expect(screen.queryByRole('button', { name: 'Cancel' })).toBeNull();
   });
 
-  it('keeps the summary on a done phase and offers no doc edit', () => {
-    const { onOpenPhase } = mount([done]);
-    fireEvent.click(row('Phase 2 — Limiter core'));
-    fireEvent.click(screen.getByRole('button', { name: '✓ summary' }));
-    expect(onOpenPhase).toHaveBeenCalledWith(2, 'report');
-    expect(screen.queryByRole('link', { name: 'edit doc' })).toBeNull();
+  it('sends a guard stop to Needs you, and says it stopped off plan', () => {
+    mount([{ ...idle, guardDecision: { id: 1 } } as unknown as EpicPhase]);
+    fireEvent.click(row('Phase 1 — Design bucket'));
+    expect(screen.getByText('The guard stopped the run. Nothing moves until you answer.')).toBeTruthy();
+    expect(screen.getByRole('link', { name: 'answer in Needs you' }).getAttribute('href')).toBe('/needs-you');
+    expect(screen.getByText('stopped off plan').className).toContain('text-red');
     expect(screen.queryByRole('button', { name: 'Run phase' })).toBeNull();
   });
 
-  it('links every detail tab from an open line, and criteria to where they are ticked', () => {
-    mount([idle]);
-    const href = (name: string | RegExp): string | null => screen.getByRole('link', { name }).getAttribute('href');
-    expect(href('story')).toBe('/plan/phase/1/story');
-    expect(href('runs')).toBe('/plan/phase/1/runs');
-    expect(href('report')).toBe('/plan/phase/1/report');
-    expect(href('edit doc')).toBe('/plan/phase/1/edit');
-    expect(href(/^criteria · 0\/3/)).toBe('/plan/phase/1/criteria');
+  it('offers a done phase only its page, and nothing to run', () => {
+    mount([done]);
+    fireEvent.click(row('Phase 2 — Limiter core'));
+    expect(screen.getByText('Landed.')).toBeTruthy();
+    expect(screen.getByRole('link', { name: 'open phase →' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Run phase' })).toBeNull();
+  });
+
+  it('sends a phase at its manual checks to its criteria', () => {
+    mount([{ ...idle, checkboxesDone: 2, manualOpen: 1 } as EpicPhase]);
+    fireEvent.click(row('Phase 1 — Design bucket'));
+    expect(screen.getByRole('link', { name: 'tick criteria' }).getAttribute('href')).toBe('/plan/phase/1/criteria');
+    expect(screen.getByText('ready to hand off')).toBeTruthy();
   });
 
   it('puts the model and effort pickers beside the Run they govern', () => {
@@ -199,10 +207,9 @@ describe('PhaseLedger', () => {
     expect(screen.getAllByRole('combobox')).toHaveLength(2);
   });
 
-  it('leaves the pickers out while the phase waits on the operator, and keeps Run', () => {
+  it('leaves the pickers out while the phase waits on the operator', () => {
     mount([{ ...idle, checkboxesDone: 2, manualOpen: 1 } as EpicPhase]);
     fireEvent.click(row('Phase 1 — Design bucket'));
-    expect(screen.getByRole('button', { name: 'Run phase' })).toBeTruthy();
     expect(screen.queryAllByRole('combobox')).toHaveLength(0);
   });
 

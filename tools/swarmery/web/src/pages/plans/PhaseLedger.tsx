@@ -5,28 +5,30 @@
 // picks another: that is the one a person came to look at. What a run started now
 // will use is on the plan's metadata line, above the ledger.
 
+import type { MessageDescriptor } from '@lingui/core';
+import { msg } from '@lingui/core/macro';
 import { Trans, useLingui } from '@lingui/react/macro';
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useParams } from 'react-router-dom';
 import type { Epic, EpicPhase, ProviderTerms, Session, TerminalSession } from '../../api/types';
-import { StateGlyph } from '../../components/place/StateGlyph';
+import { type GlyphState, StateGlyph } from '../../components/place/StateGlyph';
 import type { OffPlanBand } from '../../lib/offPlan';
 import { fmtElapsed } from '../../lib/format';
 import { useSessionHref } from '../../lib/sessionHref';
 import { modelShortName } from '../../lib/sessionModelChip';
 import { compactSpan } from '../../lib/sessionsView';
-import { SurpriseChip } from './ForecastVsActual';
-import { showsReviewTab } from './landingModel';
-import { ContinuationChip, isUnresolvedOutcome, PhaseActivity, ReverifyButton, RunCompletedChip, runButtonCls, RunOutcomeChip } from './phaseChips';
+import { isUnresolvedOutcome, ReverifyButton, RunCompletedChip, RunOutcomeChip } from './phaseChips';
 import {
-  criteriaLine,
   defaultOpenSeq,
   phaseCost,
   phaseCostBand,
   phaseGlyph,
+  phaseLead,
   phaseNote,
   phaseRuns,
   phaseStage,
+  phaseVerdict,
+  type PhaseVerdict,
   sessionGlyph,
   stageLabel,
   type PhaseStage,
@@ -125,6 +127,55 @@ export function RunRow({ run, now, ruled = false }: { run: Session; now: number;
   );
 }
 
+const RUN_WORD: Partial<Record<GlyphState, MessageDescriptor>> = {
+  needs: msg`needs you`,
+  working: msg`running`,
+  done: msg`finished`,
+  failed: msg`failed`,
+  stopped: msg`stopped`,
+  pending: msg`queued`,
+};
+
+/** A run on an open line. Its title is the prompt it was started with, so the line
+ * says what the run is: the role it played, then how it stands. */
+function LedgerRun({ run, now }: { run: Session; now: number }): JSX.Element {
+  const { t, i18n } = useLingui();
+  const sessionHref = useSessionHref();
+  const state = sessionGlyph(run.status);
+  const facts = [
+    run.model === null ? null : modelShortName(run.model),
+    run.costUsd == null ? null : fmtSpent(run.costUsd),
+    runSpan(run, now),
+  ].filter((fact) => fact !== null);
+  return (
+    <li>
+      <Link
+        to={sessionHref(run.sessionUuid)}
+        className="grid grid-cols-[18px_minmax(0,1fr)] items-start gap-3 py-1.5 leading-[normal] transition-colors hover:text-brand"
+      >
+        <StateGlyph state={state} size={12} />
+        <span className="min-w-0">
+          <span className="block truncate text-[12.5px] text-ink-2">
+            {run.planGroup?.role === 'controller' ? t`controller` : t`executor`}{' '}
+            <span className="text-ink-3">· {i18n._(RUN_WORD[state] ?? msg`queued`)}</span>
+          </span>
+          <span className="mt-0.5 block truncate font-mono text-[10.5px] text-ink-faint">{facts.join(' · ')}</span>
+        </span>
+      </Link>
+    </li>
+  );
+}
+
+const LINE_BUTTON = 'rounded-[7px] border px-3 py-1.5 font-mono text-[11.5px] leading-[normal] whitespace-nowrap transition-colors';
+const LINE_PLAIN = `${LINE_BUTTON} border-line-strong text-ink-2 hover:border-brand hover:text-brand`;
+const LINE_ACCENT = `${LINE_BUTTON} border-brand bg-brand-bg font-bold text-brand disabled:cursor-not-allowed disabled:opacity-50`;
+const VERDICT_TONE: Record<PhaseVerdict['tone'], string> = {
+  red: 'text-red',
+  green: 'text-green',
+  brand: 'text-brand',
+  faint: 'text-ink-faint',
+};
+
 interface PhaseActionProps {
   epic: Epic;
   phase: EpicPhase;
@@ -137,16 +188,17 @@ interface PhaseActionProps {
   onPhaseRunModel: (m: PhaseRunModel) => void;
   phaseRunEffort: PhaseRunEffort;
   onPhaseRunEffort: (e: PhaseRunEffort) => void;
-  onOpenPhase: (seq: number, tab: PhaseDetailTab) => void;
   onRun: (phaseId: number) => void;
-  onCancelRun: (phaseId: number) => void;
   reverify: Reverify;
   onReverify: (phaseId: number) => void;
   onOpenOutcome: (phaseId: number) => void;
+  phaseHref: (seq: number, tab: PhaseDetailTab) => string;
 }
 
-/** Everything the phase offers beyond its runs. The server re-checks every gate; the
- * disable here is a courtesy and its tip says why. */
+/** The one next move, then the way into the phase. A run that has ended adds what is
+ * known of it: its model, its outcome, the way to grade it again. While a phase runs or
+ * waits on a decision there is nothing to add, and stopping it lives on its page. The
+ * server re-checks every gate; the disable here is a courtesy and its tip says why. */
 function PhaseActions({
   epic,
   phase: p,
@@ -155,16 +207,16 @@ function PhaseActions({
   runBusy,
   planRunning,
   phaseRunModel,
-  onOpenPhase,
   onRun,
-  onCancelRun,
   reverify,
   onReverify,
   onOpenOutcome,
+  phaseHref,
 }: PhaseActionProps): JSX.Element {
   const { t, i18n } = useLingui();
+  const { slug } = useParams<{ slug?: string }>();
   const sessionHref = useSessionHref();
-  const running = p.runState === 'running';
+  const stage = phaseStage(p, status);
   const waitingOn = depsUnmet.join(', ');
   const runDisabled = runBusy !== null || planRunning || epic.status !== 'active' || depsUnmet.length > 0;
   const runTitle = planRunning
@@ -174,115 +226,52 @@ function PhaseActions({
       : depsUnmet.length > 0
         ? t`waiting on phase ${waitingOn}`
         : t`run this phase headlessly in an isolated worktree`;
-  // Offered on the server's word alone: a `fail` phase reads done and is still
-  // re-gradable, so every branch below renders it.
-  const again = reverifyAction(p, reverify, onReverify, i18n);
-  const outcome = (
-    <>
-      <RunModelChip phase={p} />
-      <DocModelChip phase={p} picked={phaseRunModel} />
-      {p.runOutcome === 'completed' && <RunCompletedChip phase={p} />}
-      {isUnresolvedOutcome(p.runOutcome) && (
-        <RunOutcomeChip phase={p} outcome={p.runOutcome} onOpen={() => onOpenOutcome(p.id)} />
-      )}
-      <ReverifyButton action={again} size="row" />
-    </>
-  );
+  const needsHref = `${slug === undefined ? '' : `/p/${encodeURIComponent(slug)}`}/needs-you`;
   return (
-    // The chips are taller than the criteria line and must not push the rows below.
-    <div className="-my-1 ml-auto flex flex-wrap items-center gap-1.5">
-      {/* Legacy chip: phases activated into a board task before the plan↔board
-          decoupling still show their board column for historical context. */}
-      {p.activatedAt !== null && (
-        <span
-          className="rounded border border-brand/40 bg-brand/10 px-1.5 py-px font-mono text-[9.5px] text-brand"
-          data-tip={p.boardTaskExternalId ?? undefined}
-        >
-          <Trans>activated</Trans>
-          {p.boardColumn !== null ? ` · ${p.boardColumn}` : ''}
-        </span>
-      )}
-      <ContinuationChip events={p.runEvents} />
-      <SurpriseChip phase={p} onOpen={() => onOpenPhase(p.seq, 'story')} />
-      {status === 'in_progress' && <PhaseActivity docUpdatedAt={p.docUpdatedAt} running={running} />}
-      {running ? (
-        <>
-          {/* The line's note says how long it has run. */}
-          {p.runSessionUuid !== null && (
-            <Link
-              to={sessionHref(p.runSessionUuid)}
-              data-tip={t`headless run in progress`}
-              className="font-mono text-[9.5px] text-ink-dim underline-offset-2 transition-colors hover:text-brand hover:underline"
-            >
-              <Trans>session</Trans>
-            </Link>
-          )}
-          <button
-            type="button"
-            disabled={runBusy !== null}
-            onClick={() => onCancelRun(p.id)}
-            className="rounded-md border border-red/40 px-1.5 py-px font-mono text-[9.5px] text-red transition-colors hover:bg-red/10 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            <Trans>Cancel</Trans>
-          </button>
-        </>
-      ) : status === 'done' ? (
-        <>
-          {outcome}
-          <button
-            type="button"
-            onClick={() => onOpenPhase(p.seq, 'report')}
-            data-tip={t`what was done — the executor's Completion Report and execution record`}
-            className="font-mono text-[9.5px] text-green underline-offset-2 transition-colors hover:underline"
-          >
-            <Trans>✓ summary</Trans>
-          </button>
-        </>
+    <>
+      {stage === 'decision' ? (
+        <Link to={needsHref} className={LINE_ACCENT}>
+          <Trans>answer in Needs you</Trans>
+        </Link>
+      ) : stage === 'manual' ? (
+        <Link to={phaseHref(p.seq, 'criteria')} className={LINE_ACCENT}>
+          <Trans>tick criteria</Trans>
+        </Link>
+      ) : p.runState === 'running' ? (
+        p.runSessionUuid !== null && (
+          <Link to={sessionHref(p.runSessionUuid)} className={LINE_PLAIN}>
+            <Trans>open run</Trans>
+          </Link>
+        )
       ) : (
-        <>
-          {outcome}
+        status !== 'done' &&
+        stage !== 'review' && (
           <button
             type="button"
             disabled={runDisabled}
             data-tip={runTitle}
             onClick={() => onRun(p.id)}
-            className={`rounded-md border px-1.5 py-px font-mono text-[9.5px] transition-colors disabled:cursor-not-allowed disabled:border-line disabled:text-ink-faint ${runButtonCls(p.runOutcome)}`}
+            className={LINE_ACCENT}
           >
             {runBusy === p.id ? '…' : isUnresolvedOutcome(p.runOutcome) ? t`Retry run` : t`Run phase`}
           </button>
+        )
+      )}
+      <Link to={phaseHref(p.seq, 'story')} className={LINE_PLAIN}>
+        <Trans>open phase →</Trans>
+      </Link>
+      {stage !== 'decision' && p.runState !== 'running' && (
+        <>
+          <RunModelChip phase={p} />
+          <DocModelChip phase={p} picked={phaseRunModel} />
+          {p.runOutcome === 'completed' && <RunCompletedChip phase={p} />}
+          {isUnresolvedOutcome(p.runOutcome) && (
+            <RunOutcomeChip phase={p} outcome={p.runOutcome} onOpen={() => onOpenOutcome(p.id)} />
+          )}
+          <ReverifyButton action={reverifyAction(p, reverify, onReverify, i18n)} size="row" />
         </>
       )}
-    </div>
-  );
-}
-
-/** The links into the phase's details. A done phase is history: its doc describes
- * work already shipped, so it offers no Edit. */
-function PhaseLinks({
-  phase,
-  status,
-  phaseHref,
-}: {
-  phase: EpicPhase;
-  status: PhaseStatus;
-  phaseHref: (seq: number, tab: PhaseDetailTab) => string;
-}): JSX.Element {
-  const { t } = useLingui();
-  const links: { tab: PhaseDetailTab; label: string }[] = [
-    { tab: 'story', label: t`story` },
-    { tab: 'runs', label: t`runs` },
-    ...(showsReviewTab(phase) ? [{ tab: 'review' as const, label: t`review & land` }] : []),
-    { tab: 'report', label: t`report` },
-    ...(status === 'done' ? [] : [{ tab: 'edit' as const, label: t`edit doc` }]),
-  ];
-  return (
-    <div className="flex flex-wrap gap-x-3 gap-y-1 font-mono text-[10.5px] leading-[normal] text-ink-faint">
-      {links.map(({ tab, label }) => (
-        <Link key={tab} to={phaseHref(phase.seq, tab)} className="transition-colors hover:text-brand">
-          {label}
-        </Link>
-      ))}
-    </div>
+    </>
   );
 }
 
@@ -358,6 +347,7 @@ export function PhaseLedger({
           const open = openSeq === p.seq;
           const pending = status === 'pending' || status === 'blocked';
           const elapsed = p.runStartedAt === null ? '' : fmtElapsed(p.runStartedAt, now);
+          const verdict = phaseVerdict(p, status, runs.length > 0);
           const seq = String(p.seq);
           const name = p.name;
           const toggle = (): void => setPicked({ taskId: epic.taskId, seq: open ? null : p.seq });
@@ -412,50 +402,36 @@ export function PhaseLedger({
                 </span>
               </div>
               {open && (
-                <div className="border-b border-line pt-1 pb-[10px] pl-7 desk:pl-[58px]">
-                  {sessions === null ? null : runs.length === 0 ? (
-                    <div className="py-1.5 font-mono text-[10.5px] leading-[normal] text-ink-faint">
-                      <Trans>no runs yet</Trans>
-                    </div>
-                  ) : (
-                    <ol aria-label={t`runs of phase ${seq}`}>
+                <div className="border-b border-line pt-1.5 pb-3 pl-7 desk:pl-[58px]">
+                  <p className="m-0 max-w-[72ch] text-[13px] leading-[1.55] text-ink-2">
+                    {phaseLead(p, status, depsUnmet, phaseNote(p, status, depsUnmet, elapsed, terms?.changeShort ?? null))}
+                  </p>
+                  {sessions !== null && runs.length > 0 && (
+                    <ol aria-label={t`runs of phase ${seq}`} className="mt-1.5">
                       {runs.map((run) => (
-                        <RunRow key={run.id} run={run} now={now} />
+                        <LedgerRun key={run.id} run={run} now={now} />
                       ))}
                     </ol>
                   )}
-                  {p.dependsOn.length > 0 && (
-                    <div className="mt-1.5 flex flex-wrap gap-1.5 font-mono text-[10.5px] leading-[normal] text-ink-faint">
-                      <Trans>depends on</Trans>
-                      {p.dependsOn.map((dep) => (
-                        <span
-                          key={dep}
-                          className={resolvedSeqs.has(dep) ? 'text-green' : undefined}
-                          data-tip={resolvedSeqs.has(dep) ? t`dependency resolved` : t`dependency pending`}
-                        >
-                          #{dep}
-                        </span>
-                      ))}
-                    </div>
-                  )}
-                  {/* One line, as the design's criteria line is: a running phase's
-                      expansion keeps the design's height. */}
-                  <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1">
-                    {/* The criteria tab is where they are ticked. */}
-                    <Link
-                      to={phaseHref(p.seq, 'criteria')}
-                      className="font-mono text-[10.5px] leading-[normal] text-ink-faint transition-colors hover:text-brand"
-                    >
-                      <Trans>criteria</Trans> · {criteriaLine(p)}
-                    </Link>
-                    <PhaseLinks phase={p} status={status} phaseHref={phaseHref} />
-                    <PhaseActions {...actions} epic={epic} phase={p} status={status} depsUnmet={depsUnmet} />
+                  <div className="mt-2.5 flex flex-wrap items-center gap-2">
+                    <PhaseActions
+                      {...actions}
+                      epic={epic}
+                      phase={p}
+                      status={status}
+                      depsUnmet={depsUnmet}
+                      phaseHref={phaseHref}
+                    />
+                    {verdict !== null && (
+                      <span className={`ml-auto font-mono text-[10.5px] leading-[normal] whitespace-nowrap ${VERDICT_TONE[verdict.tone]}`}>
+                        {verdict.text}
+                      </span>
+                    )}
                   </div>
-                  {/* They govern exactly the Run and Retry on the line above, so they
-                      show where starting a run is the next move: not while the phase
-                      waits on the operator. An open phase has them too. */}
-                  {status !== 'done' && p.runState !== 'running' && !phaseNeedsYou(p) && (
-                    <div className="mt-1.5 flex flex-wrap items-center justify-end gap-x-3 gap-y-1">
+                  {/* They govern the Run above, so they show where starting a run is
+                      the next move. */}
+                  {status !== 'done' && p.runState !== 'running' && !phaseNeedsYou(p) && phaseStage(p, status) !== 'review' && (
+                    <div className="mt-2 flex flex-wrap items-center justify-end gap-x-3 gap-y-1">
                       <PhaseRunModelPicker
                         value={actions.phaseRunModel}
                         onChange={actions.onPhaseRunModel}

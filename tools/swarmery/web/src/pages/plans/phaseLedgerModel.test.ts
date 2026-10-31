@@ -68,6 +68,12 @@ describe('phaseStage', () => {
 });
 
 describe('phaseGlyph', () => {
+  it('keeps a phase moving through landing at working: its stage reads review', () => {
+    for (const state of ['pushed', 'pr_open']) {
+      expect(glyph(phase({ landing: { state } } as unknown as Partial<EpicPhase>))).toBe('working');
+    }
+  });
+
   it('ranks what blocks over what runs', () => {
     expect(glyph(phase({ runState: 'running', guardDecision: guard }))).toBe('needs');
     expect(glyph(phase({ runState: 'running' }))).toBe('working');

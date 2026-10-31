@@ -340,10 +340,8 @@ export function EpicDetail({
               onPhaseRunModel={onPhaseRunModel}
               phaseRunEffort={phaseRunEffort}
               onPhaseRunEffort={onPhaseRunEffort}
-              onOpenPhase={onOpenPhase}
               phaseHref={phaseHref}
               onRun={onRun}
-              onCancelRun={onCancelRun}
               reverify={reverify}
               onReverify={onReverify}
               onOpenOutcome={onOpenOutcome}
