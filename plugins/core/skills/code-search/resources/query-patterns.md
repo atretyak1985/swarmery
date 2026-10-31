@@ -63,6 +63,42 @@ Glob("<infrastructure-repo>/**/values*.yaml")
 Glob("<infrastructure-repo>/files/backendMigration/*.sql")
 ```
 
+### Scoping `path` to the pattern's literal ancestor (Mode 4a)
+
+Glob's directory walk is driven by `path`, not by the literal prefix already baked into
+`pattern` — a narrow pattern at a broad `path` still walks the whole tree underneath `path`
+before the pattern ever filters anything:
+
+```
+# Slow: path is the repo root, so Glob walks the entire tree even though the
+# pattern only matches a handful of files deep inside it.
+Glob("<infrastructure-repo>/files/backendMigration/01[23]*.sql", path: "<infrastructure-repo>")
+
+# Fast: path is pushed down to the pattern's narrowest literal ancestor
+# directory; Glob only walks that directory.
+Glob("01[23]*.sql", path: "<infrastructure-repo>/files/backendMigration")
+```
+
+### Searching inside a dependency tree on purpose (Mode 4b)
+
+When the target deliberately sits inside `node_modules/.pnpm`, `vendor`, or a build cache,
+no exclusion helps — excluding the tree would exclude the thing being searched for. Don't
+retry the built-in Glob/Grep call; fall back to `Bash` with an explicit, adjustable timeout
+instead (the built-in tools' internal ripgrep timeout is fixed at ~20s and not configurable
+from this repo):
+
+```
+Bash(
+  command: "find <device>/node_modules/.pnpm -path '*some-package*/node_modules/some-package/build/*env*'",
+  timeout: 120000
+)
+# or, for a text match rather than a filename pattern:
+Bash(
+  command: "rg --files <device>/node_modules/.pnpm | grep 'some-package/build'",
+  timeout: 120000
+)
+```
+
 ## Worked example: finding all uses of the telemetry emitter
 
 **Input:** `query: "telemetryEmitter"`, `search_type: "exact"`, `scope: "apps/<mainApp>/src/"`
