@@ -182,6 +182,40 @@ rule means nothing has been tested yet; it is not evidence that the rule is safe
 A false `deny` breaks a headless plan run outright, with no prompt to fall back on. That is why this
 rule waits for a filled row, while `ask` did not.
 
+## `search-scope-guard.sh`
+
+Log: `search-scope-guard.jsonl` · Reader: `scripts/guard-hits.sh --log <path>` · Review deadline:
+**2026-12-01** (`ENFORCE_FROM` in the hook is that deadline, not a trigger).
+
+The record shape is `bash-shape-guard.jsonl`'s plus `tool`/`pattern`/`path`/`glob` fields instead of
+`cmd`, so the reader works unchanged — it only needs the full path, the same way
+`prod-deploy-guard.sh` and `agent-routing-guard.sh` are read (no `--log-basename` flag was added;
+reusing the existing `--log <path>` override kept the reader's default behaviour byte-identical and
+avoided a near-duplicate flag for the same job):
+
+```bash
+scripts/guard-hits.sh --log "$AGENT_WORKSPACE_ROOT/$AGENT_PROJECT/workspace/metrics/search-scope-guard.jsonl"
+```
+
+This hook fires on every `Grep`/`Glob` tool call, independent of whether the `code-search` skill
+(`disable-model-invocation: true`, read only by `researcher`/`implementation-agent`) was ever
+loaded — it is what gives that skill's Mode 4a/4b/4c guidance reach beyond the two agents that
+explicitly read it.
+
+| Rule | Hits | Sessions | False positives reviewed | Decision | Reviewed on |
+|---|---|---|---|---|---|
+| `glob-broad-path` | new rule, burn-in starts 2026-11-01 | — | — | stay in warn | — |
+| `glob-dependency-tree` | new rule, burn-in starts 2026-11-01 | — | — | stay in warn | — |
+| `grep-unscoped-root` | new rule, burn-in starts 2026-11-01 | — | — | stay in warn | — |
+
+**What the false-positive review has to answer here.** `glob-dependency-tree` is the rule most
+likely to be wrong in the other direction: it never suggests narrowing `path`, only the `Bash`
+fallback, specifically because excluding `node_modules`/`vendor`/`.pnpm`/`dist`/`build`/`.git` would
+exclude the thing being searched for when that tree is the deliberate target. If a sampled hit shows
+the tree was walked *incidentally* rather than as the target, that is a true Mode 4c case this rule
+is misclassifying as 4b — the fix is tightening `is_dep_tree_path`'s callers, not just relabeling the
+row.
+
 ## `agent-routing-guard.sh`
 
 Log: `agent-routing-guard.jsonl` · Reader: `scripts/guard-hits.sh --log <path>` · Review deadline:
