@@ -440,7 +440,7 @@ export function Chat({
       : null;
   const lastEvent = detail.events.length > 0 ? detail.events[detail.events.length - 1] : undefined;
   return (
-    <div className="mt-[14px] flex max-w-[760px] flex-col gap-3">
+    <div className="mt-[14px] flex flex-col gap-3">
       {items.map((item) =>
         item.kind === 'tools' ? (
           <ToolGroup key={item.key} counts={item.counts} events={item.events} />

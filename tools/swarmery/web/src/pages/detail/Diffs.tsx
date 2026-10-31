@@ -147,7 +147,7 @@ export function Diffs({ changes, openPath }: { changes: FileChange[]; openPath?:
     );
   }
   return (
-    <div className="mt-[14px] max-w-[820px]">
+    <div className="mt-[14px]">
       <div className="font-mono text-[10.5px] leading-[normal] text-ink-faint">{t`sorted by risk · deletions first`}</div>
       <div className="mt-2 flex flex-col">
         {groups.map((group) => (

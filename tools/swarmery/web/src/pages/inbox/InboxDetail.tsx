@@ -121,7 +121,7 @@ function Consequences({ yes, no }: { yes: [string, string]; no?: [string, string
     </div>
   );
   return (
-    <div className="mt-[14px] grid max-w-[680px] grid-cols-[repeat(auto-fit,minmax(220px,1fr))] gap-[10px]">
+    <div className="mt-[14px] grid grid-cols-[repeat(auto-fit,minmax(220px,1fr))] gap-[10px]">
       {box(yes[0], yes[1], 'text-green')}
       {no !== undefined && box(no[0], no[1], 'text-red')}
     </div>
@@ -135,7 +135,7 @@ function Body({ children }: { children: ReactNode }): JSX.Element {
 /** The `evidence` block of handoff §8: a mono block under a small label. */
 function Evidence({ children }: { children: ReactNode }): JSX.Element {
   return (
-    <div className="mt-3 max-w-[646px] rounded-[8px] border border-line px-3 py-[10px]">
+    <div className="mt-3 rounded-[8px] border border-line px-3 py-[10px]">
       <div className="font-mono text-[10px] tracking-[0.1em] text-ink-faint uppercase">
         <Trans>evidence</Trans>
       </div>
@@ -146,7 +146,7 @@ function Evidence({ children }: { children: ReactNode }): JSX.Element {
 
 function Code({ children }: { children: ReactNode }): JSX.Element {
   return (
-    <div className="mt-[10px] max-w-[642px] overflow-x-auto rounded-[6px] border border-line bg-bg px-[10px] py-2 font-mono text-[12px] leading-[normal] whitespace-pre-wrap text-ink-2">
+    <div className="mt-[10px] overflow-x-auto rounded-[6px] border border-line bg-bg px-[10px] py-2 font-mono text-[12px] leading-[normal] whitespace-pre-wrap text-ink-2">
       {children}
     </div>
   );
@@ -156,7 +156,7 @@ function Code({ children }: { children: ReactNode }): JSX.Element {
 function Diff({ text }: { text: string }): JSX.Element {
   const lines = text.split('\n').map((line, n) => ({ id: String(n), line }));
   return (
-    <div className="mt-3 max-h-[260px] max-w-[680px] overflow-auto rounded-[8px] border border-line bg-bg py-2 font-mono text-[11px] leading-[1.6]">
+    <div className="mt-3 max-h-[260px] overflow-auto rounded-[8px] border border-line bg-bg py-2 font-mono text-[11px] leading-[1.6]">
       {lines.map(({ id, line }) => (
         <div
           key={id}
@@ -531,7 +531,7 @@ export function InboxDetail({
   return (
     <article
       aria-label={item.title}
-      className="box-border flex min-h-full max-w-[900px] flex-col px-4 pb-10 desk:px-7"
+      className="box-border flex min-h-full flex-col px-4 pb-10 desk:px-7"
     >
       <DetailHeader bleed>
         <div className="flex min-w-0 items-center gap-2 font-mono text-[10.5px] leading-[normal]">
@@ -557,7 +557,7 @@ export function InboxDetail({
       {hasSuggestion && suggestion !== undefined && (
         <section
           aria-label={t`agent suggestion`}
-          className="mt-[14px] max-w-[680px] rounded-[8px] border border-brand/30 bg-brand-bg px-3 py-[10px]"
+          className="mt-[14px] rounded-[8px] border border-brand/30 bg-brand-bg px-3 py-[10px]"
         >
           <div className="text-[12.5px] font-medium text-ink-2">
             <Trans>agent suggests: {suggestedValue}</Trans>

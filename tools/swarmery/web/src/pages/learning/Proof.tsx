@@ -9,7 +9,7 @@ import { DetailHeader } from '../../components/place/DetailHeader';
 
 export function Proof({ inboxHref }: { inboxHref: string }): JSX.Element {
   return (
-    <section aria-labelledby="proof-heading" className="max-w-[980px] px-4 pb-10 desk:px-7">
+    <section aria-labelledby="proof-heading" className="px-4 pb-10 desk:px-7">
       <DetailHeader bleed>
         <h2
           id="proof-heading"

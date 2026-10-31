@@ -217,7 +217,7 @@ export function HookProfile({ id }: { id: number }): JSX.Element {
   if (hub === null) return <Loading label={t`hook…`} />;
 
   return (
-    <div className="mt-[18px] max-w-[720px] space-y-4">
+    <div className="mt-[18px] space-y-4">
       {hub.lint.length > 0 && (
         <div>
           <div className="mb-1.5 font-mono text-[10px] tracking-[0.1em] text-ink-faint uppercase">

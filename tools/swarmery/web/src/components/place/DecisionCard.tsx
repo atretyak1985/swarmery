@@ -173,7 +173,7 @@ export function DecisionCard({
       {code !== undefined && (
         <code
           className={`block rounded-[6px] border border-line px-[10px] py-2 font-mono text-[12px] whitespace-pre-wrap [overflow-wrap:anywhere] text-ink-2 ${
-            gate ? 'mt-2 bg-bg' : 'mt-[10px] max-w-[642px] bg-surface leading-[normal]'
+            gate ? 'mt-2 bg-bg' : 'mt-[10px] bg-surface leading-[normal]'
           }`}
         >
           {code}
@@ -214,7 +214,7 @@ export function DecisionCard({
         <div
           role="radiogroup"
           aria-label={title}
-          className={`flex flex-col gap-1 ${gate ? 'mt-3 max-w-[620px]' : 'mt-[14px] max-w-[640px]'}`}
+          className={`flex flex-col gap-1 ${gate ? 'mt-3' : 'mt-[14px]'}`}
         >
           {options.map((o) => {
             const on = o.id === picked;
@@ -256,7 +256,7 @@ export function DecisionCard({
           onChange={(e) => note.onChange(e.target.value)}
           placeholder={note.placeholder}
           aria-label={note.placeholder}
-          className="mt-[10px] w-full max-w-[640px] rounded-[7px] border border-line bg-bg px-[10px] py-[7px] text-[12.5px] leading-[normal] text-ink outline-none"
+          className="mt-[10px] w-full rounded-[7px] border border-line bg-bg px-[10px] py-[7px] text-[12.5px] leading-[normal] text-ink outline-none"
         />
       )}
 

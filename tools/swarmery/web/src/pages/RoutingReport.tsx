@@ -221,7 +221,7 @@ export function RoutingReport(): JSX.Element {
   }, [surface]);
 
   return (
-    <section className="mt-2 max-w-3xl" aria-labelledby="routing-heading">
+    <section className="mt-2" aria-labelledby="routing-heading">
       <h2 id="routing-heading" className="text-sm text-ink">
         <Trans>Complexity routing</Trans>
       </h2>

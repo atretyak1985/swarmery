@@ -881,7 +881,7 @@ export function SessionPane({
       onScroll={tab === 'chat' ? onPanelScroll : undefined}
       className="h-full min-h-0 overflow-y-auto [-webkit-overflow-scrolling:touch]"
     >
-      <div data-testid="session-detail" className="max-w-[1240px] pb-10">
+      <div data-testid="session-detail" className="pb-10">
         <DetailHeader flush>
           <BackLink to={listHref} />
 

@@ -1106,7 +1106,7 @@ export function NeedsYou(): JSX.Element {
         <div
           data-testid="needs-you-detail"
           data-kind={selected?.kind}
-          className="flex min-h-full max-w-[900px] flex-col px-4 pb-10 desk:px-7 [&>*:last-child]:flex-1"
+          className="flex min-h-full flex-col px-4 pb-10 desk:px-7 [&>*:last-child]:flex-1"
         >
           {error !== null && (
             <div className="pt-[22px]">

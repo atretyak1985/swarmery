@@ -475,7 +475,7 @@ export function Plans(): JSX.Element {
         }
         detail={
           // No padding above: the plan's and the phase's bands start at the column's top.
-          <div className="max-w-[1040px] px-4 pb-10 desk:px-7">
+          <div className="px-4 pb-10 desk:px-7">
             {actionError !== null && (
               <div
                 role="alert"

@@ -83,7 +83,7 @@ function RetirementQueue(): JSX.Element | null {
 
   if (err === null && (items === null || items.length === 0)) return null;
   return (
-    <section className="mt-4 max-w-3xl" aria-labelledby="retirement-heading">
+    <section className="mt-4" aria-labelledby="retirement-heading">
       <h2 id="retirement-heading" className="text-sm text-ink">
         <Trans>Proposed retirements</Trans>
       </h2>
@@ -562,7 +562,7 @@ export function LessonDetail({
           }}
         />
       )}
-      <div className="mt-[18px] max-w-[760px]">
+      <div className="mt-[18px]">
         {lesson.evidence.length > 0 && <EvidenceList lesson={lesson} />}
         {isActive && eff !== null && (
           <div className="mt-1 font-mono text-[10px] text-ink-dim">
@@ -688,7 +688,7 @@ export function Lessons({
         </div>
       )}
       {items !== null && items.length > 0 && (
-        <ul className="mt-4 grid max-w-3xl gap-3">
+        <ul className="mt-4 grid gap-3">
           {items.map((l) => (
             <LessonCard key={l.id} lesson={l} busy={busy} act={act} />
           ))}

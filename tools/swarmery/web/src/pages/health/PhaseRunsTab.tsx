@@ -34,7 +34,7 @@ export function PhaseRunsTable({ rep }: { rep: PhaseRunsReport }): JSX.Element {
   const fallbackN = rep.fallbackRows.n;
   return (
     <>
-      <table className="mt-3 w-full max-w-2xl border-collapse font-mono text-[11px]">
+      <table className="mt-3 w-full border-collapse font-mono text-[11px]">
         <caption className="sr-only">
           <Trans>
             Phase runs from {from} to {to}

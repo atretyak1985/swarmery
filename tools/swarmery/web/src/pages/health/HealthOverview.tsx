@@ -58,7 +58,7 @@ function AutoModeRow({ mode, inboxHref }: { mode: HealthAutoMode; inboxHref: str
     <div
       role="status"
       aria-label={t`Auto mode permission check`}
-      className="mt-[18px] flex max-w-[760px] flex-wrap items-baseline gap-x-3 gap-y-1 border-b border-line py-2"
+      className="mt-[18px] flex flex-wrap items-baseline gap-x-3 gap-y-1 border-b border-line py-2"
     >
       <span className="font-mono text-[10px] tracking-[0.12em] text-ink-faint uppercase">
         <Trans>Auto mode permission check</Trans>

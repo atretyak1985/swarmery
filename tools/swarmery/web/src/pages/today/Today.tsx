@@ -198,7 +198,7 @@ export function Today({ detail }: { detail: ReactNode }): JSX.Element {
       }
       detail={
         <div data-testid="today">
-          <div className="max-w-[1040px] px-4 pb-6 desk:px-7">
+          <div className="px-4 pb-6 desk:px-7">
             <DetailHeader bleed>
               <EyebrowClock scope={scopeLabel} />
               <h2 className="m-0 mt-2 text-[22px] leading-[normal] font-semibold tracking-[-0.015em] text-ink">

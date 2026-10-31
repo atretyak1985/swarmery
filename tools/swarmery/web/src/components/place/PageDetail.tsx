@@ -148,7 +148,7 @@ export function actionClass(tone: PageTone | undefined): string {
 
 function BarsBlock({ title, bars }: { title: string; bars: readonly PageBar[] }): JSX.Element {
   return (
-    <div className="mt-[18px] max-w-[640px]">
+    <div className="mt-[18px]">
       <div className={BLOCK_TITLE}>{title}</div>
       <div className="mt-2 flex flex-col gap-[7px]">
         {bars.map((bar) => (
@@ -184,7 +184,7 @@ function TrendBlock({
 }): JSX.Element {
   const top = Math.max(...values, 1);
   return (
-    <div className="mt-[18px] max-w-[640px]">
+    <div className="mt-[18px]">
       <div className={`flex justify-between ${BLOCK_TITLE}`}>
         <span>{title}</span>
         {note !== undefined && <span className="tracking-normal normal-case">{note}</span>}
@@ -207,7 +207,7 @@ function TrendBlock({
 
 function KvBlock({ rows }: { rows: readonly PageKv[] }): JSX.Element {
   return (
-    <div className="mt-[18px] grid max-w-[720px] grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-x-6 gap-y-2">
+    <div className="mt-[18px] grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-x-6 gap-y-2">
       {rows.map((row) => (
         <div key={row.k} className="flex flex-col gap-0.5 border-b border-line py-1.5">
           <span className="font-mono text-[9.5px] leading-[normal] tracking-[0.1em] text-ink-faint uppercase">
@@ -239,7 +239,7 @@ const ROW_CLASS = 'grid w-full grid-cols-[18px_minmax(0,1fr)_auto_auto] items-ce
 
 function RowsBlock({ title, rows }: { title: string; rows: readonly PageRow[] }): JSX.Element {
   return (
-    <div className="mt-[18px] max-w-[760px]">
+    <div className="mt-[18px]">
       <div className={BLOCK_TITLE}>{title}</div>
       <div className="mt-1.5">
         {rows.map((row) =>
@@ -302,7 +302,7 @@ export function Segmented({
 
 function TogglesBlock({ rows }: { rows: readonly PageToggle[] }): JSX.Element {
   return (
-    <div className="mt-[18px] flex max-w-[640px] flex-col">
+    <div className="mt-[18px] flex flex-col">
       {rows.map((row) => (
         <div
           key={row.key}
@@ -405,7 +405,7 @@ export function PageDetail({
   children,
 }: PageDetailProps): JSX.Element {
   return (
-    <div className="max-w-[980px] px-4 pb-10 leading-[normal] desk:px-7">
+    <div className="px-4 pb-10 leading-[normal] desk:px-7">
       <DetailHeader bleed>
         <div className="flex min-w-0 items-center gap-2 font-mono text-[10.5px]">
           <span className={`shrink-0 whitespace-nowrap ${TEXT_TONE[kindTone]}`}>{kind}</span>
@@ -434,7 +434,7 @@ export function PageDetail({
         </div>
       )}
       {code !== undefined && code !== null && code !== '' && (
-        <pre className="mt-4 max-w-[720px] overflow-x-auto rounded-lg border border-line bg-bg px-3.5 py-3 font-mono text-[11.5px] leading-[1.6] whitespace-pre-wrap text-ink-2">
+        <pre className="mt-4 overflow-x-auto rounded-lg border border-line bg-bg px-3.5 py-3 font-mono text-[11.5px] leading-[1.6] whitespace-pre-wrap text-ink-2">
           {code}
         </pre>
       )}

@@ -121,7 +121,7 @@ function ForecastCalibration(): JSX.Element {
   const hiddenRuns = String(rep?.hiddenRuns ?? 0);
   const minSamples = String(rep?.minSamples ?? 0);
   return (
-    <section className="mt-2 max-w-3xl" aria-labelledby="calibration-heading">
+    <section className="mt-2" aria-labelledby="calibration-heading">
       <h2 id="calibration-heading" className="flex items-baseline gap-2 text-sm font-normal text-ink">
         {heading()}
         <span className="font-mono text-[10px] text-ink-faint">{UI_TERMS.calibration.code}</span>

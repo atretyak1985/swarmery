@@ -96,7 +96,7 @@ function ChecksList({
 }): JSX.Element {
   const { t } = useLingui();
   return (
-    <ul className="m-0 max-w-[720px] list-none p-0">
+    <ul className="m-0 list-none p-0">
       {checks.map((c) => {
         const { kind, text } = criterionParts(c.text);
         return (
@@ -456,7 +456,7 @@ export function PhaseDetailPanel({
           onSaved={onDocChanged}
         />
       ) : activeTab === 'report' ? (
-        <div className="max-w-[760px] space-y-5">
+        <div className="space-y-5">
           <ForecastStory phase={phase} />
           {phase.surprise == null && <ForecastSection phase={phase} />}
           <PhaseSummary taskId={epic.taskId} phase={phase} doc={doc} />
@@ -494,7 +494,7 @@ export function PhaseDetailPanel({
           />
         </div>
       ) : activeTab === 'review' ? (
-        <div className="max-w-[760px] space-y-4">
+        <div className="space-y-4">
           {/* Keyed by phase: ↑/↓ step navigation keeps the tab, and a land still in
               flight for the previous phase must not render onto this one. A phase
               the daemon never ran has nothing to land — only its findings. */}
