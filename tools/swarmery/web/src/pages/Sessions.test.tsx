@@ -438,6 +438,32 @@ describe('the detail', () => {
     });
   });
 
+  describe('from wide up', () => {
+    beforeEach(() => {
+      window.matchMedia = ((): MediaQueryList =>
+        ({ matches: true, addEventListener: () => undefined, removeEventListener: () => undefined }) as unknown as MediaQueryList) as typeof window.matchMedia;
+    });
+    afterEach(() => {
+      Reflect.deleteProperty(window, 'matchMedia');
+    });
+
+    it('stands the rail beside the whole session, header included', async () => {
+      open('/sessions/3');
+      const detail = await screen.findByTestId('session-detail');
+      const rail = screen.getByRole('complementary', { name: 'session context' });
+      expect(detail.contains(rail)).toBe(false);
+      expect(rail.previousElementSibling).toBe(detail);
+      expect(rail.className).toContain('overflow-y-auto');
+      expect(rail.className).toContain('w-[260px]');
+    });
+  });
+
+  it('keeps the rail in the flow below wide, under the header', async () => {
+    open('/sessions/3');
+    const detail = await screen.findByTestId('session-detail');
+    expect(detail.contains(screen.getByRole('complementary', { name: 'session context' }))).toBe(true);
+  });
+
   it('keeps the composer in the conversation column, beside the rail', async () => {
     open('/sessions/3');
     const composer = await screen.findByRole('textbox', { name: /reply|message/i });
