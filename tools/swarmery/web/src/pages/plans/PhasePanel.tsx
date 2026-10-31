@@ -74,8 +74,6 @@ export interface PhasePanelProps {
   hrefFor?: ((tab: PhaseTab) => string) | undefined;
   /** The BlockerBanner, above the band's content. */
   banner?: ReactNode;
-  /** State sentence and numbers, between the name and the tabs. */
-  head?: ReactNode;
   /** The small number beside a tab's label. */
   tabCounts?: Partial<Record<PhaseTab, string>> | undefined;
   /** On the tabs' line, at its right edge. */
@@ -97,7 +95,6 @@ export function PhasePanel({
   stage,
   hrefFor,
   banner,
-  head,
   tabCounts = {},
   actions,
   children,
@@ -218,7 +215,6 @@ export function PhasePanel({
         <h3 id={titleId} className="mt-2 text-[18px] leading-[1.3] font-semibold tracking-[-0.01em] text-balance text-ink">
           {phase.name}
         </h3>
-        {head}
         <div className="mt-[18px] flex flex-wrap items-center gap-0.5">
           <div
             role="tablist"

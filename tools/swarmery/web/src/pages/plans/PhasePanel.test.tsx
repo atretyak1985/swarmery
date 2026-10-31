@@ -147,14 +147,13 @@ describe('PhasePanel', () => {
     expect(p.onTab).toHaveBeenCalledWith('criteria');
   });
 
-  it('keeps the breadcrumb, name, head and tabs in one band, with the body under it', () => {
-    renderPanel({ head: <p>state line</p> });
+  it('keeps the breadcrumb, name and tabs in one band, with the body under it', () => {
+    renderPanel();
     const band = screen.getByRole('heading', { level: 3 }).parentElement?.parentElement as HTMLElement;
     expect(band.className).toContain('border-b');
     // One step lighter than the plan's band, and pinned right under it.
     expect(band.className).toContain('bg-surface');
     expect(band.style.top).toBe('var(--detail-parent-band-h, 0px)');
-    expect(band.contains(screen.getByText('state line'))).toBe(true);
     expect(band.contains(screen.getByRole('tablist'))).toBe(true);
     expect(screen.getByRole('tablist').parentElement?.className).not.toContain('border-b');
     expect(band.contains(screen.getByRole('tabpanel'))).toBe(false);

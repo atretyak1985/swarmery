@@ -254,10 +254,6 @@ msgstr "{needs, plural, one {# needs you} few {# need you} many {# need you} oth
 msgid "{needs, plural, one {# phase waits on a decision from you} few {# phases wait on a decision from you} many {# phases wait on a decision from you} other {# phases wait on a decision from you}}"
 msgstr "{needs, plural, one {# phase waits on a decision from you} few {# phases wait on a decision from you} many {# phases wait on a decision from you} other {# phases wait on a decision from you}}"
 
-#: src/pages/plans/phaseLedgerModel.ts
-msgid "{note}. The run is paused until you answer."
-msgstr "{note}. The run is paused until you answer."
-
 #: src/pages/plans/PlanList.tsx
 msgid "{phases, plural, one {# phase needs you} few {# phases need you} many {# phases need you} other {# phases need you}}"
 msgstr "{phases, plural, one {# phase needs you} few {# phases need you} many {# phases need you} other {# phases need you}}"
@@ -821,7 +817,6 @@ msgstr "Create"
 msgid "created {created}"
 msgstr "created {created}"
 
-#: src/pages/plans/PhaseDetailPanel.tsx
 #: src/pages/plans/PhaseLedger.tsx
 msgid "criteria"
 msgstr "criteria"
@@ -1031,7 +1026,6 @@ msgstr "Duplicating…"
 
 #: src/pages/plans/ForecastVsActual.tsx
 #: src/pages/plans/ForecastVsActual.tsx
-#: src/pages/plans/PhaseDetailPanel.tsx
 msgid "duration"
 msgstr "duration"
 
@@ -1122,10 +1116,6 @@ msgstr "ending blocked"
 msgid "epics…"
 msgstr "epics…"
 
-#: src/pages/plans/phaseLedgerModel.ts
-msgid "every automatic criterion is green; {note}."
-msgstr "every automatic criterion is green; {note}."
-
 #: src/pages/Routines.tsx
 msgid "every minute"
 msgstr "every minute"
@@ -1139,10 +1129,6 @@ msgstr "evidence"
 #: src/pages/plans/phaseLedgerModel.ts
 msgid "exec"
 msgstr "exec"
-
-#: src/pages/plans/phaseLedgerModel.ts
-msgid "Executing"
-msgstr "Executing"
 
 #: src/pages/plans/PlanRunControls.tsx
 msgid "execution mode"
@@ -1175,10 +1161,6 @@ msgstr "fable 5.1 — most capable, ~2.5× cost"
 #: src/pages/plans/planModel.ts
 msgid "failed"
 msgstr "failed"
-
-#: src/pages/plans/phaseLedgerModel.ts
-msgid "Failed"
-msgstr "Failed"
 
 #: src/pages/plans/usePlanDoc.ts
 msgid "failed to load {path}: {reason}"
@@ -1261,7 +1243,6 @@ msgid "For example: phase 3's library choice failed the a11y gate — replace it
 msgstr "For example: phase 3's library choice failed the a11y gate — replace it and add an audit phase."
 
 #: src/pages/plans/ForecastVsActual.tsx
-#: src/pages/plans/PhaseDetailPanel.tsx
 msgid "forecast"
 msgstr "forecast"
 
@@ -1385,10 +1366,6 @@ msgstr "In plain words"
 msgid "in progress"
 msgstr "in progress"
 
-#: src/pages/plans/phaseLedgerModel.ts
-msgid "In review"
-msgstr "In review"
-
 #: src/pages/plans/ReviewFindings.tsx
 msgid "incomplete"
 msgstr "incomplete"
@@ -1438,10 +1415,6 @@ msgstr "label: any"
 #: src/pages/plans/planModel.ts
 msgid "landed"
 msgstr "landed"
-
-#: src/pages/plans/phaseLedgerModel.ts
-msgid "Landed"
-msgstr "Landed"
 
 #: src/pages/plans/phaseLedgerModel.ts
 msgid "landed · {change}"
@@ -1856,10 +1829,6 @@ msgstr "not scored — the run’s actuals are not recorded yet, or nothing abou
 #: src/pages/plans/planModel.ts
 msgid "not started"
 msgstr "not started"
-
-#: src/pages/plans/phaseLedgerModel.ts
-msgid "Not started"
-msgstr "Not started"
 
 #: src/pages/plans/DecisionTable.tsx
 #: src/pages/plans/DecisionTable.tsx
@@ -2400,10 +2369,6 @@ msgstr "readme…"
 msgid "ready to land"
 msgstr "ready to land"
 
-#: src/pages/plans/phaseLedgerModel.ts
-msgid "ready to run."
-msgstr "ready to run."
-
 #: src/pages/plans/DecisionTable.tsx
 msgid "reason: {rowReason}"
 msgstr "reason: {rowReason}"
@@ -2744,7 +2709,6 @@ msgstr "running plan"
 msgid "Running plan"
 msgstr "Running plan"
 
-#: src/pages/plans/PhaseDetailPanel.tsx
 #: src/pages/plans/PhaseLedger.tsx
 #: src/pages/plans/PhaseLedger.tsx
 msgid "runs"
@@ -2910,10 +2874,6 @@ msgstr "spec coverage — criteria covered by at least one phase"
 msgid "spec…"
 msgstr "spec…"
 
-#: src/pages/plans/PhaseDetailPanel.tsx
-msgid "spent"
-msgstr "spent"
-
 #: src/pages/plans/PhaseLedger.tsx
 msgid "stage"
 msgstr "stage"
@@ -3008,14 +2968,6 @@ msgstr "stop phase"
 #: src/pages/plans/PhaseCard.tsx
 msgid "stop: {trigger}"
 msgstr "stop: {trigger}"
-
-#: src/pages/plans/phaseLedgerModel.ts
-msgid "Stopped"
-msgstr "Stopped"
-
-#: src/pages/plans/phaseLedgerModel.ts
-msgid "Stopped by the guard"
-msgstr "Stopped by the guard"
 
 #: src/pages/plans/PlanHeader.tsx
 msgid "stops new runs from starting; the run in flight keeps going"
@@ -3447,14 +3399,6 @@ msgstr "verifying"
 #: src/pages/plans/useReverify.ts
 msgid "verifying…"
 msgstr "verifying…"
-
-#: src/pages/plans/phaseLedgerModel.ts
-msgid "Waiting for your check"
-msgstr "Waiting for your check"
-
-#: src/pages/plans/phaseLedgerModel.ts
-msgid "Waiting for your decision"
-msgstr "Waiting for your decision"
 
 #: src/pages/plans/PhaseDetailPanel.tsx
 #: src/pages/plans/PhaseLedger.tsx

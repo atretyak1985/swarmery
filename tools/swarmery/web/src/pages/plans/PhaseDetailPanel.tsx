@@ -1,4 +1,4 @@
-// One phase's page, in place of the plan: its blocker, its head (state, numbers), its
+// One phase's page, in place of the plan: its blocker, its name, its
 // actions, and the six tabs' bodies. PhasePanel is the shell around them.
 
 import { plural } from '@lingui/core/macro';
@@ -8,27 +8,22 @@ import { Link } from 'react-router-dom';
 import { togglePlanCheckbox } from '../../api';
 import type { DecisionHoldRef, Epic, EpicPhase, PlanRevision, ProviderTerms, Session } from '../../api/types';
 import { BlockerBanner } from '../../components/place/DetailHeader';
-import { NumbersStrip, type NumberItem } from '../../components/place/NumbersStrip';
-import type { GlyphState } from '../../components/place/StateGlyph';
 import { actionClass } from '../../components/place/PageDetail';
 import { Loading } from '../../components/ui';
-import { fmtAgo, fmtElapsed } from '../../lib/format';
+import { fmtAgo } from '../../lib/format';
 import { Markdown } from '../../lib/markdown';
 import { safeHref } from '../../lib/safeHref';
 import { useSessionHref } from '../../lib/sessionHref';
 import { useProjectWorkspace } from '../../workspace/ProjectContext';
 import { CriterionLint } from './CriterionLint';
 import { ForecastStory } from './ForecastStory';
-import { forecastsOf, ForecastSection, RailSection, SurpriseChip } from './ForecastVsActual';
+import { ForecastSection, RailSection, SurpriseChip } from './ForecastVsActual';
 import { LandCriterionAction } from './LandCriterionAction';
 import { hasReviewTab, showsReviewTab } from './landingModel';
-import { RunRow, runSpan, STAGE_TONE } from './PhaseLedger';
+import { RunRow, STAGE_TONE } from './PhaseLedger';
 import {
-  phaseCost,
-  phaseNote,
   phaseRuns,
   phaseStage,
-  phaseStateLine,
   heldByDecision,
   stageLabel,
 } from './phaseLedgerModel';
@@ -47,7 +42,7 @@ import {
 } from './PhaseRunPickers';
 import { PlainSummary } from './PlainSummary';
 import { type Check, DocEditor, extractChecks } from './planDetailShell';
-import { computeResolvedSeqs, extractSection, fmtSpent, phaseGoal, phaseNeedsYou, phaseStatus } from './planModel';
+import { computeResolvedSeqs, extractSection, phaseGoal, phaseNeedsYou, phaseStatus } from './planModel';
 import type { PhaseDetailTab } from './plansTarget';
 import { ReviewFindings } from './ReviewFindings';
 import { RunsReviewBlock } from './RunsReviewBlock';
@@ -135,20 +130,6 @@ function ChecksList({
     </ul>
   );
 }
-
-/** The state sentence's dot and lead, in the state's colour (handoff §4). */
-const STATE_DOT: Partial<Record<GlyphState, string>> = {
-  needs: 'animate-blink-dot bg-amber',
-  working: 'animate-pulse bg-green',
-  done: 'bg-ink-dim',
-  failed: 'bg-red',
-};
-const STATE_TEXT: Partial<Record<GlyphState, string>> = {
-  needs: 'text-amber',
-  working: 'text-green',
-  done: 'text-ink-dim',
-  failed: 'text-red',
-};
 
 /** Run chip for the phase rail header. Switches on the run's OUTCOME, not its
  * process state, so the panel tells the same four-way story the list does — a
@@ -321,23 +302,10 @@ export function PhaseDetailPanel({
     appliedRevision !== undefined ? fmtAgo(appliedRevision.decidedAt ?? appliedRevision.createdAt) : '';
 
   const runs = phaseRuns(sessions, phase.id);
-  const cost = phaseCost(runs);
-  const forecast = forecastsOf(phase).at(-1);
-  const forecastBand = forecast === undefined ? '' : [forecast.sizeBand, forecast.durationBand].filter((b) => b !== '').join(' · ');
   const done = phase.checkboxesDone;
   const total = phase.checkboxesTotal;
-  // No forecast in dollars exists (plan D-5): the plan's band stands in that slot.
-  const stats: NumberItem[] = [
-    { label: t`spent`, value: cost === null ? '—' : fmtSpent(cost), tone: 'brand' },
-    ...(forecastBand === '' ? [] : [{ label: t`forecast`, value: forecastBand, tone: 'faint' as const }]),
-    { label: t`runs`, value: String(runs.length) },
-    { label: t`criteria`, value: `${String(done)}/${String(total)}`, tone: total > 0 && done === total ? 'green' : 'default' },
-    { label: t`duration`, value: runs.length === 0 ? '—' : runs.map((r) => runSpan(r, now)).join(' + ') },
-  ];
 
   const stage = phaseStage(phase, status);
-  const note = phaseNote(phase, status, depsUnmet, phase.runStartedAt === null ? '' : fmtElapsed(phase.runStartedAt, now), terms?.changeShort ?? null);
-  const state = phaseStateLine(phase, status, depsUnmet, note);
   const needsYou = phaseNeedsYou(phase);
   const held = heldByDecision(phase);
   const needsHref = `/p/${encodeURIComponent(projectSlug)}/needs-you`;
@@ -364,19 +332,6 @@ export function PhaseDetailPanel({
     ...(runs.length > 0 ? { runs: String(runs.length) } : {}),
     ...(findings > 0 ? { review: String(findings) } : {}),
   };
-  const head = (
-    <>
-      <div className="mt-2 flex items-start gap-2 text-[13.5px] leading-normal text-ink-2">
-        <span aria-hidden="true" className={`mt-[5px] size-[9px] shrink-0 rounded-full ${STATE_DOT[state.state] ?? 'bg-ink-faint'}`} />
-        <span>
-          <b className={`font-semibold ${STATE_TEXT[state.state] ?? 'text-ink-faint'}`}>{state.lead}</b> · {state.rest}
-        </span>
-      </div>
-      <div className="mt-4">
-        <NumbersStrip items={stats} />
-      </div>
-    </>
-  );
   const actions = (
     <>
       {needsYou ? (
@@ -444,7 +399,6 @@ export function PhaseDetailPanel({
       stage={{ label: stageLabel(stage), tone: STAGE_TONE[stage] }}
       hrefFor={tabHref}
       banner={blocker !== null ? <BlockerBanner to={needsHref} lead={blocker} /> : undefined}
-      head={head}
       tabCounts={tabCounts}
       actions={actions}
     >

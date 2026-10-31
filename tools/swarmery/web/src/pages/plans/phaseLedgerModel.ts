@@ -123,37 +123,6 @@ export function phaseNote(
   return t`not started`;
 }
 
-/** The phase page's sentence: a coloured lead, and the ledger's note as its rest. */
-export function phaseStateLine(
-  p: EpicPhase,
-  status: PhaseStatus,
-  depsUnmet: readonly number[],
-  note: string,
-): { state: GlyphState; lead: string; rest: string } {
-  const state = phaseGlyph(p, status);
-  if (state === 'needs') {
-    if (heldByDecision(p)) {
-      return {
-        state,
-        lead: p.guardDecision != null ? t`Stopped by the guard` : t`Waiting for your decision`,
-        rest: t`${note}. The run is paused until you answer.`,
-      };
-    }
-    return { state, lead: t`Waiting for your check`, rest: t`every automatic criterion is green; ${note}.` };
-  }
-  if (state === 'working') {
-    return { state, lead: phaseStage(p, status) === 'review' ? t`In review` : t`Executing`, rest: `${note}.` };
-  }
-  if (state === 'done') return { state, lead: t`Landed`, rest: `${note}.` };
-  if (state === 'failed') return { state, lead: t`Failed`, rest: `${note}.` };
-  if (state === 'stopped') return { state, lead: t`Stopped`, rest: `${note}.` };
-  return {
-    state,
-    lead: t`Not started`,
-    rest: depsUnmet.length > 0 ? `${note}.` : status === 'pending' ? t`ready to run.` : `${note}.`,
-  };
-}
-
 /** The phase a person came to look at: the one running, else the next one that can
  * run, so its Run is on screen without a click. Null when neither exists. */
 export function defaultOpenSeq(phases: readonly EpicPhase[], resolvedSeqs: Set<number>, planActive: boolean): number | null {
