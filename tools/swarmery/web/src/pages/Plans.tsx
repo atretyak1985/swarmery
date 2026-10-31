@@ -474,11 +474,12 @@ export function Plans(): JSX.Element {
           />
         }
         detail={
-          <div className="max-w-[1040px] px-4 pt-[22px] pb-10 desk:px-7">
+          // No padding above: the plan's and the phase's bands start at the column's top.
+          <div className="px-4 pb-10 desk:px-7">
             {actionError !== null && (
               <div
                 role="alert"
-                className="mb-3 flex items-center gap-2 rounded-lg border border-red/40 bg-red/10 px-3 py-1.5 font-mono text-[11px] text-red"
+                className="my-3 flex items-center gap-2 rounded-lg border border-red/40 bg-red/10 px-3 py-1.5 font-mono text-[11px] text-red"
               >
                 <span className="min-w-0 flex-1">{actionError}</span>
                 <button type="button" onClick={() => setActionError(null)} aria-label={t`dismiss`} className="text-red/70">
@@ -491,7 +492,7 @@ export function Plans(): JSX.Element {
             {notice !== null && (
               <div
                 role="status"
-                className="mb-3 flex items-center gap-2 rounded-lg border border-amber/40 bg-amber/10 px-3 py-1.5 font-mono text-[11px] text-amber"
+                className="my-3 flex items-center gap-2 rounded-lg border border-amber/40 bg-amber/10 px-3 py-1.5 font-mono text-[11px] text-amber"
               >
                 <span className="min-w-0 flex-1">{notice}</span>
                 <button type="button" onClick={() => setNotice(null)} aria-label={t`dismiss notice`} className="text-amber/70">
@@ -501,9 +502,11 @@ export function Plans(): JSX.Element {
             )}
             {activeEpic === null ? (
               epics.length === 0 ? null : (
-                <Empty>
-                  {filtered.length === 0 ? <Trans>no {filterLabel} plans</Trans> : <Trans>select an epic</Trans>}
-                </Empty>
+                <div className="pt-[22px]">
+                  <Empty>
+                    {filtered.length === 0 ? <Trans>no {filterLabel} plans</Trans> : <Trans>select an epic</Trans>}
+                  </Empty>
+                </div>
               )
             ) : (
             <EpicDetail

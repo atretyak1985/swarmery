@@ -34,9 +34,9 @@ export function HandledDetail({
   const age = ageLabel(verdict.createdAt, now);
   const value = verdictWording(verdict);
   return (
-    <div className="max-w-[900px] px-7 pt-[22px] pb-10">
+    <div className="px-4 pb-10 desk:px-7">
       {error !== null && (
-        <div role="alert" className="mb-3 font-mono text-[11px] text-red">
+        <div role="alert" className="py-3 font-mono text-[11px] text-red">
           {error}
         </div>
       )}

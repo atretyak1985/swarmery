@@ -13,6 +13,10 @@
 //   6. useSidebarSignals feeds Inbox = the non-blocking part of the Inbox's items,
 //      Needs you = the queue's undismissed count, Sessions = the distinct sessions
 //      held up in that queue.
+//   7. The button and `[` collapse the rail to 52px of glyphs: the Needs you badge
+//      stays, every row keeps a name, and what has no room goes. `]` and `\` reach
+//      the other two panels from here, and the active place's badge is published
+//      for the collapsed list.
 //
 // Runs with the rest of the web suite: `npm test` (vitest, also a swarmery-ci
 // step). On its own: `npx vitest run src/components/Sidebar.test.tsx`.
@@ -25,6 +29,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Sidebar, sessionsNeedingYou, useSidebarSignals } from './Sidebar';
 import { fetchSessions, fetchStatsOverview } from '../api';
 import type { NeedsYouItem } from '../api/types';
+import { reloadPanels, setListBadge, useListBadge, usePanels } from '../lib/panels';
 import { ThemeProvider } from '../lib/theme';
 
 vi.mock('../api', () => ({
@@ -111,6 +116,8 @@ function row(name: string): HTMLElement {
 
 beforeEach(() => {
   window.localStorage.clear();
+  reloadPanels();
+  setListBadge(null);
   vi.clearAllMocks();
 });
 
@@ -280,6 +287,94 @@ describe('Sidebar', () => {
     field.remove();
     expect(screen.getByRole('status', { name: 'where' }).textContent).toBe('/p/shop');
     expect(document.documentElement.dataset.mode).toBe(before);
+  });
+});
+
+function PanelsProbe(): JSX.Element {
+  const panels = usePanels();
+  return <output aria-label="panels">{`${panels.nav}|${panels.list}|${panels.rail}|${useListBadge()}`}</output>;
+}
+
+describe('collapsing the rail', () => {
+  function collapse(): void {
+    fireEvent.click(screen.getByRole('button', { name: 'collapse sidebar · [' }));
+  }
+
+  it('collapses to 52px on the button and comes back on `[`', () => {
+    renderSidebar({ slug: null });
+    collapse();
+    expect(rail().className).toContain('w-[52px]');
+    expect(within(rail()).getByRole('link', { name: 'swarmery home' }).textContent).toBe('s');
+    fireEvent.keyDown(window, { key: '[' });
+    expect(rail().className).toContain('w-[196px]');
+    expect(within(rail()).getByRole('link', { name: 'swarmery home' }).textContent).toBe('swarmery');
+  });
+
+  it('keeps the Needs you badge and names every row by its label', () => {
+    renderSidebar({ slug: null, needsYouCount: 4 });
+    collapse();
+    expect(within(row('Needs you')).getByText('4')).toBeTruthy();
+    expect(row('Needs you').getAttribute('aria-label')).toBe('Needs you · 4 waiting');
+    for (const label of ['Today', 'Inbox', 'Sessions', 'Plans', 'Health', 'Docs', 'Settings']) {
+      expect(row(label).getAttribute('aria-label')).toBe(label);
+    }
+    expect(screen.getByRole('button', { name: 'Search & actions' })).toBeTruthy();
+  });
+
+  it('keeps the live dot, and says so in the row name', () => {
+    renderSidebar({ slug: null, liveSessions: true });
+    collapse();
+    expect(row('Sessions').getAttribute('aria-label')).toBe('Sessions · live sessions');
+    expect(screen.getByRole('img', { name: 'live sessions' })).toBeTruthy();
+  });
+
+  it('drops what has no room, and the keyboard still flips the theme', () => {
+    renderSidebar({ slug: null });
+    collapse();
+    expect(screen.queryByText('Improve')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'theme' })).toBeNull();
+    const before = document.documentElement.dataset.mode;
+    fireEvent.keyDown(window, { key: 't' });
+    expect(document.documentElement.dataset.mode).not.toBe(before);
+  });
+
+  it('shows the switcher as its dot and leaves the menu working', () => {
+    renderSidebar({ slug: null });
+    collapse();
+    const trigger = screen.getByRole('button', { name: 'switch project' });
+    expect(trigger.textContent).toBe('');
+    fireEvent.click(trigger);
+    expect(screen.getByRole('textbox', { name: 'search projects' })).toBeTruthy();
+  });
+
+  it('owns the list and rail keys too, and stays out of a field', () => {
+    render(
+      <MemoryRouter>
+        <ThemeProvider>
+          <Sidebar slug={null} inboxCount={0} liveSessions={false} />
+          <PanelsProbe />
+        </ThemeProvider>
+      </MemoryRouter>,
+    );
+    fireEvent.keyDown(window, { key: ']' });
+    fireEvent.keyDown(window, { key: '\\' });
+    expect(screen.getByRole('status', { name: 'panels' }).textContent).toBe('false|true|true|null');
+    const field = document.body.appendChild(document.createElement('input'));
+    fireEvent.keyDown(field, { key: '[' });
+    field.remove();
+    expect(screen.getByRole('status', { name: 'panels' }).textContent).toBe('false|true|true|null');
+  });
+
+  it('publishes the active place badge for the collapsed list', () => {
+    render(
+      <MemoryRouter initialEntries={['/needs-you']}>
+        <ThemeProvider>
+          <Sidebar slug={null} inboxCount={9} needsYouCount={4} liveSessions={false} />
+          <PanelsProbe />
+        </ThemeProvider>
+      </MemoryRouter>,
+    );
+    expect(screen.getByRole('status', { name: 'panels' }).textContent).toBe('false|false|false|4');
   });
 });
 

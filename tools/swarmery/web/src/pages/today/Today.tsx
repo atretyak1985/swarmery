@@ -19,6 +19,7 @@ import { useParams } from 'react-router-dom';
 import { fetchEpics, fetchProjectRecommendations, fetchRecommendations, fetchSessions } from '../../api';
 import { fetchDecisions } from '../../api/decisions';
 import type { Epic, Recommendation, Session, WSMessage } from '../../api/types';
+import { DetailHeader } from '../../components/place/DetailHeader';
 import { PlaceLayout } from '../../components/place/PlaceLayout';
 import { fmtEyebrowClock } from '../../lib/format';
 import { loadLastProject } from '../../lib/lastProject';
@@ -197,17 +198,22 @@ export function Today({ detail }: { detail: ReactNode }): JSX.Element {
       }
       detail={
         <div data-testid="today">
-          <div className="max-w-[1040px] px-4 pt-[22px] pb-6 desk:px-7">
-            <EyebrowClock scope={scopeLabel} />
-            <h2 className="m-0 mt-2 text-[22px] leading-[normal] font-semibold tracking-[-0.015em] text-ink">
-              {headline}
-            </h2>
-            <p className="m-0 mt-1.5 max-w-[72ch] text-[13px] leading-[1.55] text-ink-dim">
-              <Trans>
-                Every stage feeds the next. Numbers are the last 7 days; amber means something there is waiting on you.
-              </Trans>
-            </p>
-            <LoopMap stages={stages} />
+          <div className="px-4 pb-6 desk:px-7">
+            <DetailHeader bleed>
+              <EyebrowClock scope={scopeLabel} />
+              <h2 className="m-0 mt-2 text-[22px] leading-[normal] font-semibold tracking-[-0.015em] text-ink">
+                {headline}
+              </h2>
+              <p className="m-0 mt-1.5 max-w-[72ch] text-[13px] leading-[1.55] text-ink-dim">
+                <Trans>
+                  Every stage feeds the next. Numbers are the last 7 days; amber means something there is waiting on you.
+                </Trans>
+              </p>
+            </DetailHeader>
+            {/* The loop's own 20px, cut to the design's 18 under the band. */}
+            <div className="-mt-0.5">
+              <LoopMap stages={stages} />
+            </div>
             <div className="mt-[22px] grid grid-cols-1 gap-[22px] desk:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)]">
               <WaitingOnYou
                 items={needs.items}

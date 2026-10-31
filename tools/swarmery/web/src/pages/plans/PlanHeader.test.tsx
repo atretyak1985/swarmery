@@ -1,9 +1,11 @@
 // @vitest-environment jsdom
 //
 // The plan header (handoff §6). The claims: one main button per state; what the
-// design leaves out of the row stays reachable behind ⋯; the amber block appears
-// only when a phase waits and leads to Needs you; a forecast never appears, because
-// no dollar forecast exists (plan D-5); the goal comes from the README.
+// design leaves out of the row stays reachable behind ⋯; the blocker banner stands
+// over the band only when a phase waits, and leads to Needs you; the phase bar shows
+// each phase in its state and opens it, with a legend of what is present; the
+// metadata line invents nothing: a forecast never appears, because no dollar forecast
+// exists (plan D-5, D-10); the goal comes from the README.
 
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -96,6 +98,8 @@ function mount(e: Epic, over: Partial<PlanHeaderProps> = {}): {
         stagedCount={0}
         reviseBusy={false}
         onRevise={onRevise}
+        phaseRunModel="default"
+        phaseRunEffort="default"
         {...over}
       />
     </MemoryRouter>,
@@ -115,27 +119,94 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('PlanHeader', () => {
-  it('shows the goal from the README, the numbers, and no forecast', async () => {
+  it('shows the goal from the README, what was spent, and no forecast', async () => {
     mount(epic({ linkedSessions: [{ costUsd: 86 } as Epic['linkedSessions'][number]] }));
     await screen.findByText('Protect the API.');
-    expect(screen.getByText('phases landed')).toBeTruthy();
-    expect(screen.getByText('$86')).toBeTruthy();
-    expect(screen.getByText('2/6')).toBeTruthy();
-    expect(screen.queryByText(/forecast/i)).toBeNull();
+    expect(screen.getByText('$86').parentElement?.textContent).toBe('$86 spent');
+    expect(screen.getByText('2/6 criteria')).toBeTruthy();
+    expect(document.body.textContent).not.toMatch(/forecast/i);
+  });
+
+  it('keeps to what frames the phase when one is open under it', async () => {
+    mount(epic({ linkedSessions: [{ costUsd: 86 } as Epic['linkedSessions'][number]] }), { nested: true });
+    await new Promise((resolve) => setTimeout(resolve));
+    expect(screen.queryByText('Protect the API.')).toBeNull();
+    expect(screen.getByText('$86').parentElement?.className).toContain('whitespace-nowrap');
+    expect(screen.getByText('2/6 criteria')).toBeTruthy();
   });
 
   it('leaves `spent` out while no session is priced', () => {
     mount(epic());
-    expect(screen.queryByText('spent')).toBeNull();
+    expect(document.body.textContent).not.toContain('spent');
   });
 
-  it('points the amber block at Needs you when a phase waits, and hides it otherwise', () => {
+  it('stands the blocker over the band, leading to Needs you, and hides it otherwise', () => {
     mount(epic({ phases: [manual, idle] }));
-    const block = screen.getByRole('link', { name: /1 phase waits on a decision from you/ });
-    expect(block.getAttribute('href')).toBe('/p/orders-api/needs-you');
+    const banner = screen.getByRole('link', { name: /1 phase waits on a decision from you/ });
+    expect(banner.getAttribute('href')).toBe('/p/orders-api/needs-you');
+    expect(banner.textContent).toContain('1 manual check');
+    expect(banner.compareDocumentPosition(screen.getByRole('heading')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     cleanup();
     mount(epic());
     expect(screen.queryByRole('link', { name: /wait/ })).toBeNull();
+  });
+
+  it('draws a segment per phase, in its state, opening that phase', () => {
+    const landed = { ...idle, seq: 1, name: 'Bucket', completionState: 'complete' } as EpicPhase;
+    const live = { ...idle, seq: 2, name: 'Router', runState: 'running' } as EpicPhase;
+    const stopped = { ...idle, seq: 3, name: 'Migrate', guardDecision: { decisionId: 'D-1' } } as unknown as EpicPhase;
+    const waiting = { ...manual, seq: 4, name: 'Check' } as EpicPhase;
+    const next = { ...idle, seq: 5, name: 'Docs' } as EpicPhase;
+    mount(epic({ phases: [landed, live, stopped, waiting, next] }));
+    const segments = screen.getAllByRole('link', { name: /^phase \d/ });
+    expect(segments.map((s) => s.getAttribute('data-state'))).toEqual(['landed', 'running', 'guard', 'manual', 'pending']);
+    expect(segments.map((s) => s.className.match(/bg-[a-z-]+/)?.[0])).toEqual([
+      'bg-green',
+      'bg-blue',
+      'bg-red',
+      'bg-amber',
+      'bg-line-strong',
+    ]);
+    expect(segments[2]?.getAttribute('aria-label')).toBe('phase 3 · Migrate · guard stop');
+    expect(segments[1]?.getAttribute('href')).toBe('/p/orders-api/plans/2026-10-30-rate-limiter/phase/2');
+  });
+
+  it('counts only the states present in the legend', () => {
+    mount(epic({ phases: [manual, idle] }));
+    expect(screen.getAllByText('■').map((mark) => mark.parentElement?.textContent)).toEqual([
+      '■ 1 manual check',
+      '■ 1 not started',
+    ]);
+  });
+
+  it('shows a failed phase in red, named as failed, not as not started', () => {
+    const failed = { ...idle, seq: 1, name: 'Bucket', runState: 'failed' } as EpicPhase;
+    mount(epic({ phases: [failed] }));
+    const segment = screen.getByRole('link', { name: 'phase 1 · Bucket · failed' });
+    expect(segment.className).toContain('bg-red');
+    expect(screen.getByText('■').parentElement?.textContent).toBe('■ 1 failed');
+  });
+
+  it('prints what a run started now uses, from the page state', () => {
+    mount(epic(), { phaseRunModel: 'fable', phaseRunEffort: 'xhigh' });
+    expect(screen.getByText(/worktree per phase$/).textContent).toBe('fable · xhigh · worktree per phase');
+    cleanup();
+    mount(epic());
+    expect(screen.getByText(/worktree per phase$/).textContent).toContain('per phase doc, else');
+  });
+
+  it('says paused and archived in a notice above the content', () => {
+    mount(epic({ status: 'archived' }));
+    const notice = screen.getByText('archived · shown under Archived in the list; nothing runs');
+    expect(notice.compareDocumentPosition(screen.getByRole('heading')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it('keeps the action row to the design: spec moved to the metadata line', () => {
+    const { onOpenPlan } = mount(epic({ spec: { covered: 14, total: 20, criteria: [], unknownRefs: [] } as Epic['spec'] }));
+    const spec = screen.getByRole('button', { name: 'spec 14/20' });
+    expect(spec.className).toContain('text-amber');
+    fireEvent.click(spec);
+    expect(onOpenPlan).toHaveBeenCalledWith('spec');
   });
 
   it('offers run on an idle plan and opens the agent and mode panel', () => {

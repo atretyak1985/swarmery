@@ -47,6 +47,9 @@ describe('useGlobalKeys', () => {
     ['e', 'onPrimary'],
     ['x', 'onSecondary'],
     ['Escape', 'onEscape'],
+    ['[', 'onPanelNav'],
+    [']', 'onPanelList'],
+    ['\\', 'onPanelRail'],
   ] as const)('%s calls %s', (key, handler) => {
     const fn = vi.fn();
     render(<Probe handlers={{ [handler]: fn }} />);

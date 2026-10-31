@@ -349,7 +349,7 @@ export function TurnForecastPanel(): JSX.Element {
   const tokensText = tokens === null ? '—' : fmtNum(Math.round(tokens));
 
   return (
-    <section className="mt-2 max-w-3xl" aria-labelledby="turn-forecasts-heading">
+    <section className="mt-2" aria-labelledby="turn-forecasts-heading">
       <h2 id="turn-forecasts-heading" className="text-sm font-normal text-ink">
         <Trans>Turn forecasts</Trans>
       </h2>

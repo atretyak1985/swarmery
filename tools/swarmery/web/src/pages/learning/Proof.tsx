@@ -5,23 +5,26 @@
 
 import { Trans } from '@lingui/react/macro';
 import { Link } from 'react-router-dom';
+import { DetailHeader } from '../../components/place/DetailHeader';
 
 export function Proof({ inboxHref }: { inboxHref: string }): JSX.Element {
   return (
-    <section aria-labelledby="proof-heading" className="max-w-[70ch] px-4 pt-[22px] pb-10 desk:px-7">
-      <h2
-        id="proof-heading"
-        className="m-0 text-[22px] leading-tight font-semibold tracking-[-0.015em] text-ink"
-      >
-        <Trans>Because of you</Trans>
-      </h2>
-      <p className="mt-2 text-[14px] leading-[1.55] text-pretty text-ink-2">
-        <Trans>
-          Each row is something you accepted, what the system did with it, and whether the number it
-          was meant to move actually moved. Verification needs a week of traffic and a 20 % change.
-        </Trans>
-      </p>
-      <div className="relative mt-5 pl-[22px]">
+    <section aria-labelledby="proof-heading" className="px-4 pb-10 desk:px-7">
+      <DetailHeader bleed>
+        <h2
+          id="proof-heading"
+          className="m-0 text-[22px] leading-tight font-semibold tracking-[-0.015em] text-ink"
+        >
+          <Trans>Because of you</Trans>
+        </h2>
+        <p className="mt-2 max-w-[70ch] text-[14px] leading-[1.55] text-pretty text-ink-2">
+          <Trans>
+            Each row is something you accepted, what the system did with it, and whether the number it
+            was meant to move actually moved. Verification needs a week of traffic and a 20 % change.
+          </Trans>
+        </p>
+      </DetailHeader>
+      <div className="relative mt-5 max-w-[70ch] pl-[22px]">
         <span aria-hidden className="absolute top-[6px] bottom-[6px] left-[5px] w-px bg-line" />
         <div className="relative rounded-xl border border-dashed border-line-strong px-[14px] py-3">
           <span

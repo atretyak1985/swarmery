@@ -323,6 +323,16 @@ describe('Inbox', () => {
     expect(screen.getByText('needs you place')).toBeTruthy();
   });
 
+  it('heads the detail with the band: the eyebrow and title in it, the rest under it', async () => {
+    await renderInbox();
+    const article = screen.getByRole('article');
+    const band = within(article).getByRole('heading', { level: 2 }).parentElement?.parentElement as HTMLElement;
+    expect(band.className).toContain('border-b');
+    expect(band.className).toContain('bg-bg');
+    expect(article.firstElementChild).toBe(band);
+    expect(band.contains(primaries()[0] as Element)).toBe(false);
+  });
+
   it('has one primary per kind, and no triage banner', async () => {
     await renderInbox();
     for (const kind of ['lesson', 'advisor', 'classifier', 'proposal', 'retire']) {

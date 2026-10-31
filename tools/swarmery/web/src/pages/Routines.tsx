@@ -756,7 +756,7 @@ export function RoutineDetail({
     >
       {flash !== null && <div className="mt-3 font-mono text-[10.5px] text-ink-dim">{flash}</div>}
       {delErr !== null && <ErrorBox message={delErr} />}
-      <div className="mt-[18px] max-w-[760px]">
+      <div className="mt-[18px]">
         <SectionTitle>
           <Trans>Run history</Trans>
         </SectionTitle>
@@ -837,7 +837,7 @@ export function Routines({
   };
 
   return (
-    <div className={embedded ? 'max-w-4xl pb-6' : 'mx-auto max-w-4xl px-4 py-6'}>
+    <div className={embedded ? 'pb-6' : 'px-4 py-6'}>
       <div className="flex items-center justify-between">
         <div>
           {!embedded && (

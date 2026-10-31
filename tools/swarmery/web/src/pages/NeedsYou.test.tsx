@@ -187,6 +187,20 @@ describe('NeedsYou page', () => {
     }
   });
 
+  it('heads the decision with the band: eyebrow, title and command in it, the rest under it', async () => {
+    serve([item({ kind: 'approval', sessionName: 'one', requestId: 1, toolName: 'Bash', preview: 'rm -rf build' })]);
+    await renderPage();
+    const heading = within(screen.getByTestId('needs-you-detail')).getByRole('heading', { level: 2 });
+    const band = heading.parentElement?.parentElement as HTMLElement;
+    expect(band.className).toContain('border-b');
+    expect(band.className).toContain('bg-bg');
+    const code = band.querySelector('code') as HTMLElement;
+    expect(code.textContent).toBe('rm -rf build');
+    expect(code.className).toContain('bg-surface');
+    expect(code.className).toContain('[overflow-wrap:anywhere]');
+    expect(band.contains(within(screen.getByTestId('needs-you-detail')).getByRole('button', { name: /allow once/ }))).toBe(false);
+  });
+
   it('e allows the selected request; x asks for a reason, then denies', async () => {
     vi.mocked(api.fetchApprovals).mockResolvedValue([pending(11, { sessionId: 4 })]);
     serve([item({ kind: 'approval', sessionId: 4, sessionName: 'lint fix', requestId: 11, toolName: 'Bash' })]);

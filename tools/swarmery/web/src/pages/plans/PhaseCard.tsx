@@ -218,7 +218,7 @@ function DecisionRows({
   ];
   if (rows.length === 0) return null;
   return (
-    <div className="mt-[18px] max-w-[720px]">
+    <div className="mt-[18px]">
       <div className="font-mono text-[10px] leading-[normal] tracking-[0.12em] text-ink-faint uppercase">
         <Trans>decisions</Trans>
       </div>

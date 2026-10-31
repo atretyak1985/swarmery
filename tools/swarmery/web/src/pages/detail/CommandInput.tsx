@@ -107,7 +107,7 @@ export function CommandInput({
       : null;
 
   return (
-    <div className="sticky bottom-0 mt-1.5 max-w-[760px] bg-surface pt-2 pb-3">
+    <div className="sticky bottom-0 mt-1.5 bg-surface pt-2 pb-3">
       {hint !== null ? (
         <p className="mb-2 font-mono text-[10.5px] leading-relaxed text-ink-faint">{hint}</p>
       ) : (

@@ -361,6 +361,15 @@ describe('SC-2 — a phase URL opens the phase panel on that tab', () => {
     expect(within(d).getByRole('tab', { name: 'Story' }).getAttribute('aria-selected')).toBe('true');
   });
 
+  it('nests the phase under the plan header, which stays on the page', async () => {
+    mount(`${BASE}/${B.externalId}/phase/3`);
+    const d = await screen.findByRole('region', { name: 'Beta 3' });
+    expect(within(d).getByRole('heading', { level: 3, name: 'Beta 3' })).toBeTruthy();
+    const plan = screen.getByRole('heading', { level: 2 });
+    expect(d.contains(plan)).toBe(false);
+    expect(plan.compareDocumentPosition(d) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
   it('an invalid tab string is canonicalised to Story by replace', async () => {
     const r = mount('/elsewhere', `${BASE}/${B.externalId}/phase/2/bogus`);
     await settled(r, `${BASE}/${B.externalId}/phase/2`);

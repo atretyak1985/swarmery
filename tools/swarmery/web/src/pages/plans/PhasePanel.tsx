@@ -1,10 +1,10 @@
-// A phase's own page, in the plan's main column in place of the plan: a breadcrumb
-// back to the plan with ↑/↓, the name, one sentence of state, the numbers, the
-// blocker when one waits on the operator, then six tabs with the phase's actions on
-// the same line. The shell only: the body and every handler stay in
-// PhaseDetailPanel, which owns the doc, the checkbox writes and the runs. The way
-// back is the breadcrumb and Escape. Edit is an action, not a tab: its URL stays, so
-// an old link still opens the editor.
+// A phase's own page, in the plan's main column in place of the plan: one band with
+// the blocker banner over it when one waits on the operator, then a breadcrumb back
+// to the plan with ↑/↓, the name, one sentence of state, the numbers, and six tabs
+// with the phase's actions on the same line. The shell only: the body and every
+// handler stay in PhaseDetailPanel, which owns the doc, the checkbox writes and the
+// runs. The way back is the breadcrumb and Escape. Edit is an action, not a tab: its
+// URL stays, so an old link still opens the editor.
 
 import type { MessageDescriptor } from '@lingui/core';
 import { msg, plural, t } from '@lingui/core/macro';
@@ -12,6 +12,7 @@ import { useLingui } from '@lingui/react/macro';
 import { useEffect, useId, useLayoutEffect, useRef, type KeyboardEvent, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import type { Epic, EpicPhase } from '../../api/types';
+import { DetailHeader } from '../../components/place/DetailHeader';
 import { nextTabIndex } from '../../components/Tabs';
 import { modelShortName } from '../../lib/sessionModelChip';
 
@@ -71,8 +72,8 @@ export interface PhasePanelProps {
   /** The URL of each tab — when given, the tabs are real links (their click
    * navigates; `onTab` then only serves callers without it). */
   hrefFor?: ((tab: PhaseTab) => string) | undefined;
-  /** State sentence, numbers and blocker, between the name and the tabs. */
-  head?: ReactNode;
+  /** The BlockerBanner, above the band's content. */
+  banner?: ReactNode;
   /** The small number beside a tab's label. */
   tabCounts?: Partial<Record<PhaseTab, string>> | undefined;
   /** On the tabs' line, at its right edge. */
@@ -93,7 +94,7 @@ export function PhasePanel({
   onBack,
   stage,
   hrefFor,
-  head,
+  banner,
   tabCounts = {},
   actions,
   children,
@@ -143,7 +144,6 @@ export function PhasePanel({
   const at = epic.phases.findIndex((p) => p.seq === phase.seq);
   const position = String(at + 1);
   const count = String(epic.phases.length);
-  const planTitle = epic.title;
   const branch = phase.runBranch ?? '';
   const current = tabs.findIndex((def) => def.id === tab);
 
@@ -161,120 +161,121 @@ export function PhasePanel({
 
   return (
     <section ref={panelRef} aria-labelledby={titleId} tabIndex={-1} className="outline-none">
-      <div className="flex min-w-0 items-center gap-2 font-mono text-[10.5px] leading-[normal] text-ink-faint">
-        {onBack !== undefined && (
-          <>
+      <DetailHeader bleed flush banner={banner} stack="child">
+        <div className="flex min-w-0 items-center gap-2 font-mono text-[10.5px] leading-[normal] text-ink-faint">
+          {onBack !== undefined && (
+            <>
+              <button
+                type="button"
+                onClick={onBack}
+                data-tip={t`back to the plan (Esc)`}
+                className="shrink-0 cursor-pointer bg-transparent p-0 text-left whitespace-nowrap text-ink-3 transition-colors hover:text-brand"
+              >
+                {t`← all phases`}
+              </button>
+              <span aria-hidden="true">·</span>
+            </>
+          )}
+          <span className="shrink-0 whitespace-nowrap">{at >= 0 ? t`phase ${position} of ${count}` : `#${String(phase.seq)}`}</span>
+          {stage !== undefined && (
+            <>
+              <span aria-hidden="true">·</span>
+              <span className={`shrink-0 whitespace-nowrap ${stage.tone}`}>{stage.label}</span>
+            </>
+          )}
+          {branch !== '' && (
+            <>
+              <span aria-hidden="true">·</span>
+              <span className="min-w-0 truncate">{branch}</span>
+            </>
+          )}
+          <span className="ml-auto inline-flex shrink-0 gap-0.5">
             <button
               type="button"
-              onClick={onBack}
-              data-tip={t`back to the plan (Esc)`}
-              className="max-w-[40%] min-w-0 cursor-pointer truncate bg-transparent p-0 text-left whitespace-nowrap transition-colors hover:text-brand"
+              onClick={onPrev}
+              disabled={onPrev === undefined}
+              aria-label={t`previous phase`}
+              data-tip={t`previous phase · ↑`}
+              className={NAV_BUTTON}
             >
-              ← {planTitle}
+              ↑
             </button>
-            <span aria-hidden="true">·</span>
-          </>
-        )}
-        <span className="shrink-0 whitespace-nowrap">{at >= 0 ? t`phase ${position} of ${count}` : `#${String(phase.seq)}`}</span>
-        {stage !== undefined && (
-          <>
-            <span aria-hidden="true">·</span>
-            <span className={`shrink-0 whitespace-nowrap ${stage.tone}`}>{stage.label}</span>
-          </>
-        )}
-        {branch !== '' && (
-          <>
-            <span aria-hidden="true">·</span>
-            <span className="min-w-0 truncate">{branch}</span>
-          </>
-        )}
-        <span className="ml-auto inline-flex shrink-0 gap-0.5">
-          <button
-            type="button"
-            onClick={onPrev}
-            disabled={onPrev === undefined}
-            aria-label={t`previous phase`}
-            data-tip={t`previous phase · ↑`}
-            className={NAV_BUTTON}
-          >
-            ↑
-          </button>
-          <button
-            type="button"
-            onClick={onNext}
-            disabled={onNext === undefined}
-            aria-label={t`next phase`}
-            data-tip={t`next phase · ↓`}
-            className={NAV_BUTTON}
-          >
-            ↓
-          </button>
-        </span>
-      </div>
-      <h2 id={titleId} className="mt-2 text-[22px] leading-tight font-semibold tracking-[-0.015em] text-balance text-ink">
-        {phase.name}
-      </h2>
-      {head}
-      <div className="mt-[22px] flex flex-wrap items-center gap-0.5 border-b border-line">
-        <div
-          role="tablist"
-          aria-label={t`phase details tabs`}
-          onKeyDown={onTabsKey}
-          className="flex flex-wrap items-center gap-0.5"
-        >
-          {tabs.map((def, i) => {
-            const selected = def.id === tab;
-            const text = i18n._(def.label);
-            const ref = (el: HTMLElement | null): void => {
-              tabRefs.current[def.id] = el;
-            };
-            const className = `-mb-px inline-flex cursor-pointer items-center gap-1.5 border-b-2 bg-transparent px-3 py-2 text-[12.5px] leading-[normal] font-medium whitespace-nowrap transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-brand ${
-              selected ? 'border-brand text-ink' : 'border-transparent text-ink-dim hover:text-ink'
-            }`;
-            const tabIndex = selected || (current === -1 && i === 0) ? 0 : -1;
-            const body = (
-              <>
-                {text}
-                {tabCounts[def.id] !== undefined && (
-                  <span className="font-mono text-[10px] text-ink-faint">{tabCounts[def.id]}</span>
-                )}
-              </>
-            );
-            return hrefFor !== undefined ? (
-              <Link
-                key={def.id}
-                ref={ref}
-                to={hrefFor(def.id)}
-                role="tab"
-                aria-selected={selected}
-                tabIndex={tabIndex}
-                className={className}
-              >
-                {body}
-              </Link>
-            ) : (
-              <button
-                key={def.id}
-                ref={ref}
-                type="button"
-                role="tab"
-                aria-selected={selected}
-                tabIndex={tabIndex}
-                onClick={() => onTab(def.id)}
-                className={className}
-              >
-                {body}
-              </button>
-            );
-          })}
+            <button
+              type="button"
+              onClick={onNext}
+              disabled={onNext === undefined}
+              aria-label={t`next phase`}
+              data-tip={t`next phase · ↓`}
+              className={NAV_BUTTON}
+            >
+              ↓
+            </button>
+          </span>
         </div>
-        <span className="min-w-2 flex-1" />
-        {actions !== undefined && <div className="inline-flex flex-wrap gap-1.5 py-1">{actions}</div>}
-      </div>
+        <h3 id={titleId} className="mt-2 text-[18px] leading-[1.3] font-semibold tracking-[-0.01em] text-balance text-ink">
+          {phase.name}
+        </h3>
+        <div className="mt-[18px] flex flex-wrap items-center gap-0.5">
+          <div
+            role="tablist"
+            aria-label={t`phase details tabs`}
+            onKeyDown={onTabsKey}
+            className="flex flex-wrap items-center gap-0.5"
+          >
+            {tabs.map((def, i) => {
+              const selected = def.id === tab;
+              const text = i18n._(def.label);
+              const ref = (el: HTMLElement | null): void => {
+                tabRefs.current[def.id] = el;
+              };
+              const className = `-mb-px inline-flex cursor-pointer items-center gap-1.5 border-b-2 bg-transparent px-3 py-2 text-[12.5px] leading-[normal] font-medium whitespace-nowrap transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-brand ${
+                selected ? 'border-brand text-ink' : 'border-transparent text-ink-dim hover:text-ink'
+              }`;
+              const tabIndex = selected || (current === -1 && i === 0) ? 0 : -1;
+              const body = (
+                <>
+                  {text}
+                  {tabCounts[def.id] !== undefined && (
+                    <span className="font-mono text-[10px] text-ink-faint">{tabCounts[def.id]}</span>
+                  )}
+                </>
+              );
+              return hrefFor !== undefined ? (
+                <Link
+                  key={def.id}
+                  ref={ref}
+                  to={hrefFor(def.id)}
+                  role="tab"
+                  aria-selected={selected}
+                  tabIndex={tabIndex}
+                  className={className}
+                >
+                  {body}
+                </Link>
+              ) : (
+                <button
+                  key={def.id}
+                  ref={ref}
+                  type="button"
+                  role="tab"
+                  aria-selected={selected}
+                  tabIndex={tabIndex}
+                  onClick={() => onTab(def.id)}
+                  className={className}
+                >
+                  {body}
+                </button>
+              );
+            })}
+          </div>
+          <span className="min-w-2 flex-1" />
+          {actions !== undefined && <div className="inline-flex flex-wrap gap-1.5 py-1">{actions}</div>}
+        </div>
+      </DetailHeader>
       <div
         role="tabpanel"
         aria-label={label === undefined ? tab : i18n._(label.label)}
-        className="mt-3.5 text-[13px] leading-relaxed"
+        className="mt-[18px] text-[13px] leading-relaxed"
       >
         {children}
       </div>

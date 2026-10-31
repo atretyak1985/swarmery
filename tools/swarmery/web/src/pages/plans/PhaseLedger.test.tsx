@@ -111,6 +111,16 @@ const row = (name: RegExp | string): HTMLElement => screen.getByRole('button', {
 afterEach(cleanup);
 
 describe('PhaseLedger', () => {
+  it('heads the ledger with the phase count, what landed, and the hint', () => {
+    mount([
+      { ...base, id: 1, seq: 1, name: 'One', completionState: 'complete' } as EpicPhase,
+      { ...base, id: 2, seq: 2, name: 'Two' } as EpicPhase,
+    ]);
+    expect(screen.getByText('Phases')).toBeTruthy();
+    expect(screen.getByText('2 · 1 landed')).toBeTruthy();
+    expect(screen.getByText('click a name to open · ▸ to expand runs')).toBeTruthy();
+  });
+
   it('has the design’s columns, without a forecast', () => {
     mount([done]);
     for (const head of ['#', 'phase', 'stage', 'cost', 'runs']) expect(screen.getByText(head)).toBeTruthy();

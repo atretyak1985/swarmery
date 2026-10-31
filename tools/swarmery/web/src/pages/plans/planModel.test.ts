@@ -1,11 +1,15 @@
 // What a plan reads as. The claims: a phase needs the operator only when a decision
 // holds it or all that is left is manual; an unknown spend stays unknown rather than
 // $0; the glyph ranks what blocks over what runs; the goal is one sentence of prose
-// from the README, or nothing.
+// from the README, or nothing; a phase on the bar says what blocks it before what
+// runs it, the word `running` needs a process, and the legend counts only what is
+// there.
 
 import { describe, expect, it } from 'vitest';
 import type { Epic, EpicPhase, LinkedSession } from '../../api/types';
 import {
+  phaseStatus,
+  blockerDetail,
   computeResolvedSeqs,
   fmtSpent,
   needYouCount,
@@ -14,10 +18,16 @@ import {
   planBranch,
   planGlyph,
   planGoal,
+  planLegend,
   planSpent,
   planSummary,
   planUpdatedAt,
+  segmentLabel,
+  segmentState,
+  segmentWord,
+  type SegmentState,
 } from './planModel';
+import { phaseGlyph } from './phaseLedgerModel';
 
 function phase(over: Partial<EpicPhase> = {}): EpicPhase {
   return {
@@ -65,6 +75,105 @@ describe('phaseNeedsYou', () => {
   it('is false while an agent still has criteria to close', () => {
     expect(phaseNeedsYou(phase({ checkboxesDone: 0, checkboxesTotal: 3, manualOpen: 1 }))).toBe(false);
     expect(phaseNeedsYou(phase())).toBe(false);
+  });
+});
+
+describe('segmentState', () => {
+  const none = new Set<number>();
+  const decision = { decisionId: 'D-1' } as NonNullable<EpicPhase['guardDecision']>;
+  const hold = { detail: 'x', decisions: [] } as NonNullable<EpicPhase['decisionHold']>;
+
+  it.each([
+    ['landed', phase({ completionState: 'complete' })],
+    ['running', phase({ runState: 'running' })],
+    ['guard', phase({ guardDecision: decision })],
+    ['decision', phase({ decisionHold: hold })],
+    ['decision', phase({ reviewDecision: decision })],
+    ['manual', phase({ checkboxesDone: 2, manualOpen: 1 })],
+    ['started', phase({ checkboxesDone: 1 })],
+    ['started', phase({ completionState: 'unverified' })],
+    ['pending', phase()],
+    ['pending', phase({ dependsOn: [9] })],
+    ['failed', phase({ runState: 'failed' })],
+    ['failed', phase({ runOutcome: 'failed', checkboxesDone: 1 })],
+    ['blocked', phase({ runState: 'blocked' })],
+    ['running', phase({ verifyRunning: true })],
+  ])('reads %s', (state, p) => {
+    expect(segmentState(p, none)).toBe(state);
+  });
+
+  it('says what blocks a phase before saying it runs', () => {
+    expect(segmentState(phase({ runState: 'running', guardDecision: decision }), none)).toBe('guard');
+  });
+
+  // The bar stands over the ledger: the two must never tell a phase apart.
+  it.each<[EpicPhase, SegmentState]>([
+    [phase({ completionState: 'complete', manualOpen: 1, checkboxesDone: 2 }), 'manual'],
+    [phase({ completionState: 'complete', runState: 'running' }), 'running'],
+    [phase({ completionState: 'complete', runState: 'failed' }), 'landed'],
+    [phase({ runState: 'failed', checkboxesDone: 1 }), 'failed'],
+    [phase({ runState: 'blocked', checkboxesDone: 1 }), 'blocked'],
+  ])('agrees with the ledger glyph on %#', (p, state) => {
+    const glyph = phaseGlyph(p, phaseStatus(p, none));
+    const same: Partial<Record<typeof glyph, SegmentState>> = {
+      needs: 'manual',
+      working: 'running',
+      done: 'landed',
+      failed: 'failed',
+      stopped: 'blocked',
+    };
+    expect(same[glyph]).toBe(state);
+    expect(segmentState(p, none)).toBe(state);
+  });
+});
+
+describe('segmentWord', () => {
+  it('names every state on its own, with no count to strip', () => {
+    const states: SegmentState[] = ['landed', 'running', 'guard', 'decision', 'failed', 'manual', 'blocked', 'started', 'pending'];
+    expect(states.map(segmentWord)).toEqual([
+      'landed',
+      'running',
+      'guard stop',
+      'decision',
+      'failed',
+      'manual check',
+      'blocked',
+      'in progress',
+      'not started',
+    ]);
+  });
+});
+
+describe('planLegend', () => {
+  it('counts in the bar order and leaves out the states nobody is in', () => {
+    expect(planLegend(['pending', 'landed', 'manual', 'landed'])).toEqual([
+      { state: 'landed', count: 2 },
+      { state: 'manual', count: 1 },
+      { state: 'pending', count: 1 },
+    ]);
+  });
+
+  it('is empty for a plan with no phases', () => {
+    expect(planLegend([])).toEqual([]);
+  });
+});
+
+describe('segmentLabel', () => {
+  it('counts each state in words', () => {
+    expect(segmentLabel('landed', 2)).toBe('2 landed');
+    expect(segmentLabel('guard', 1)).toBe('1 guard stop');
+    expect(segmentLabel('guard', 2)).toBe('2 guard stops');
+    expect(segmentLabel('manual', 3)).toBe('3 manual checks');
+    expect(segmentLabel('pending', 1)).toBe('1 not started');
+    expect(segmentLabel('failed', 2)).toBe('2 failed');
+    expect(segmentLabel('blocked', 1)).toBe('1 blocked');
+  });
+});
+
+describe('blockerDetail', () => {
+  it('names only what waits on the operator', () => {
+    const legend = planLegend(['landed', 'guard', 'guard', 'manual', 'running']);
+    expect(blockerDetail(legend)).toBe('2 guard stops, 1 manual check');
   });
 });
 

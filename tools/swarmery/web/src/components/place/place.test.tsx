@@ -12,12 +12,15 @@
 //   5. NumbersStrip: a bar only where a limit was given, clamped to 100.
 //   6. DecisionCard: the main button repeats the picked option, tiers differ by
 //      shape.
+//   7. Collapsing: the pane stays mounted with its keys wired behind a strip that
+//      only exists from `desk` up, and the grid narrows only from `desk` up.
 //
 // Runs with the rest of the web suite: `npm test`.
 
 import { MemoryRouter } from 'react-router-dom';
-import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen } from '../../test/render';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { reloadPanels, setListBadge } from '../../lib/panels';
+import { act, cleanup, fireEvent, render, screen } from '../../test/render';
 import { DecisionCard } from './DecisionCard';
 import { ListGroup, useAccordion } from './ListGroup';
 import { ListPane } from './ListPane';
@@ -25,6 +28,12 @@ import { ListRow } from './ListRow';
 import { NumbersStrip } from './NumbersStrip';
 import { PlaceLayout } from './PlaceLayout';
 import { StateGlyph, type GlyphState } from './StateGlyph';
+
+beforeEach(() => {
+  window.localStorage.clear();
+  reloadPanels();
+  setListBadge(null);
+});
 
 afterEach(cleanup);
 
@@ -212,6 +221,64 @@ describe('ListPane', () => {
     expect(screen.queryByText(/^x /)).toBeNull();
     expect(screen.getByText('e open')).toBeTruthy();
   });
+
+  it('prints the panel keys in the footer, not the theme key', () => {
+    renderPane(() => undefined);
+    expect(screen.getByText('[ ] \\ panels')).toBeTruthy();
+    expect(screen.queryByText('t theme')).toBeNull();
+  });
+
+  it('puts the sub-line under the title row, with the collapse button on that row', () => {
+    renderPane(() => undefined);
+    const heading = screen.getByRole('heading', { name: 'Sessions' });
+    const button = screen.getByRole('button', { name: 'collapse list · ]' });
+    expect(button.parentElement).toBe(heading.parentElement);
+    expect(button.className).toContain('hidden');
+    expect(button.className).toContain('desk:block');
+    expect(screen.getByText('4 sessions').closest('div')).not.toBe(heading.parentElement);
+  });
+
+  it('keeps its full height below desk, where it shares a scroll with the detail', () => {
+    renderPane(() => undefined);
+    const pane = screen.getByRole('region', { name: 'Sessions' });
+    expect(pane.className).toContain('shrink-0');
+    expect(pane.className).toContain('desk:shrink');
+  });
+
+  it('collapses to a strip that only exists from desk up, with the title and badge', () => {
+    renderPane(() => undefined);
+    act(() => setListBadge(3));
+    fireEvent.click(screen.getByRole('button', { name: 'collapse list · ]' }));
+    const strip = screen.getByRole('button', { name: 'expand list · ]' });
+    expect(strip.className).toContain('hidden');
+    expect(strip.className).toContain('desk:flex');
+    expect(strip.textContent).toBe('▸Sessions3');
+  });
+
+  it('leaves the badge out of the strip when the place has none', () => {
+    renderPane(() => undefined);
+    fireEvent.click(screen.getByRole('button', { name: 'collapse list · ]' }));
+    expect(screen.getByRole('button', { name: 'expand list · ]' }).textContent).toBe('▸Sessions');
+  });
+
+  it('keeps the pane mounted behind desk:hidden, so refs and j/k survive', () => {
+    const onNext = vi.fn();
+    render(
+      <ListPane title="Sessions" query="" onQueryChange={() => undefined} searchHint="filter" keys={{ onNext }}>
+        <p>row</p>
+      </ListPane>,
+    );
+    const row = screen.getByText('row');
+    fireEvent.click(screen.getByRole('button', { name: 'collapse list · ]' }));
+    expect(screen.getByText('row')).toBe(row);
+    const hidden = screen.getByRole('searchbox').closest('.contents') as HTMLElement;
+    expect(hidden.className).toContain('desk:hidden');
+    fireEvent.keyDown(document.body, { key: 'j' });
+    expect(onNext).toHaveBeenCalledOnce();
+    fireEvent.click(screen.getByRole('button', { name: 'expand list · ]' }));
+    expect(screen.getByText('row')).toBe(row);
+    expect(screen.queryByRole('button', { name: 'expand list · ]' })).toBeNull();
+  });
 });
 
 describe('PlaceLayout', () => {
@@ -223,6 +290,25 @@ describe('PlaceLayout', () => {
     expect(screen.getByText('list').compareDocumentPosition(screen.getByText('detail'))).toBe(
       Node.DOCUMENT_POSITION_FOLLOWING,
     );
+  });
+
+  it('narrows the list column to 34px from desk up and stays one column below it', () => {
+    window.localStorage.setItem('swarmery.v4.panels', '{"list":true}');
+    reloadPanels();
+    const { container } = render(<PlaceLayout list={<p>list</p>} detail={<p>detail</p>} />);
+    const frame = container.firstElementChild as HTMLElement;
+    expect(frame.className).toContain('desk:grid-cols-[34px_minmax(0,1fr)]');
+    expect(frame.className).toContain('flex-col');
+    expect(frame.className).not.toContain('clamp');
+  });
+
+  it('animates the column on the design curve, and not under reduced motion', () => {
+    const { container } = render(<PlaceLayout list={<p>list</p>} detail={<p>detail</p>} />);
+    const frame = container.firstElementChild as HTMLElement;
+    expect(frame.className).toContain('transition-[grid-template-columns]');
+    expect(frame.className).toContain('duration-[180ms]');
+    expect(frame.className).toContain('ease-[cubic-bezier(0.22,1,0.36,1)]');
+    expect(frame.className).toContain('motion-reduce:transition-none');
   });
 });
 

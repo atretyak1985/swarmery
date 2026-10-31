@@ -327,7 +327,7 @@ function SendForm({
 
   return (
     <form
-      className="flex max-w-[640px] flex-col gap-2 rounded-lg border border-line bg-surface p-3"
+      className="flex flex-col gap-2 rounded-lg border border-line bg-surface p-3"
       data-testid="swarm-send"
       onSubmit={(e) => {
         e.preventDefault();

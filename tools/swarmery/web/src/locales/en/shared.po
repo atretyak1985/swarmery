@@ -101,6 +101,10 @@ msgstr "(patch)"
 msgid "(untitled session)"
 msgstr "(untitled session)"
 
+#: src/components/place/ListPane.tsx
+msgid "[ ] \\ panels"
+msgstr "[ ] \\ panels"
+
 #. placeholder {0}: s.changes
 #: src/components/FileContentionBanner.tsx
 msgid "{0, plural, one {# change} few {# changes} many {# changes} other {# changes}}"
@@ -1241,6 +1245,15 @@ msgstr "Code host"
 msgid "collapse {label}"
 msgstr "collapse {label}"
 
+#: src/components/place/ListPane.tsx
+#: src/components/place/ListPane.tsx
+msgid "collapse list · ]"
+msgstr "collapse list · ]"
+
+#: src/components/Sidebar.tsx
+msgid "collapse sidebar · ["
+msgstr "collapse sidebar · ["
+
 #: src/theme/ThemePicker.tsx
 msgid "color mode"
 msgstr "color mode"
@@ -1886,6 +1899,15 @@ msgstr "Executor said: {said}"
 msgid "exited"
 msgstr "exited"
 
+#: src/components/place/ListPane.tsx
+#: src/components/place/ListPane.tsx
+msgid "expand list · ]"
+msgstr "expand list · ]"
+
+#: src/components/Sidebar.tsx
+msgid "expand sidebar · ["
+msgstr "expand sidebar · ["
+
 #: src/components/SessionControls.tsx
 msgid "expired — the mod did not pick it up in time"
 msgstr "expired — the mod did not pick it up in time"
@@ -1914,6 +1936,10 @@ msgstr "failed"
 #: src/pages/Settings.tsx
 msgid "Failed"
 msgstr "Failed"
+
+#: src/lib/sessionRail.ts
+msgid "failed after {span}"
+msgstr "failed after {span}"
 
 #: src/components/SessionControls.tsx
 msgid "failed: {msg}"
@@ -2009,6 +2035,10 @@ msgstr "Finish it here: open a terminal already scoped to this account and log t
 #: src/pages/Settings.tsx
 msgid "Finished"
 msgstr "Finished"
+
+#: src/lib/sessionRail.ts
+msgid "finished in {span}"
+msgstr "finished in {span}"
 
 #: src/components/NotifySettings.tsx
 #: src/pages/Settings.tsx
@@ -2423,6 +2453,7 @@ msgid "live from session mod"
 msgstr "live from session mod"
 
 #: src/components/Sidebar.tsx
+#: src/components/Sidebar.tsx
 msgid "live sessions"
 msgstr "live sessions"
 
@@ -2469,6 +2500,10 @@ msgstr "looked in ({sourceCount})"
 #: src/pages/settings/WorktreesPanel.tsx
 msgid "main"
 msgstr "main"
+
+#: src/lib/sessionRail.ts
+msgid "main · {model}"
+msgstr "main · {model}"
 
 #: src/components/ProjectActions.tsx
 msgid "managed"
@@ -2525,6 +2560,7 @@ msgstr "mock data"
 msgid "Mockup of the board's three lanes"
 msgstr "Mockup of the board's three lanes"
 
+#: src/lib/sessionRail.ts
 #: src/workspace/NewTaskModal.tsx
 #: src/workspace/NewTaskModal.tsx
 #: src/workspace/NewTaskModal.tsx
@@ -2583,6 +2619,10 @@ msgstr "needs you"
 #: src/pages/Settings.tsx
 msgid "Needs you"
 msgstr "Needs you"
+
+#: src/components/place/DetailHeader.tsx
+msgid "Needs you →"
+msgstr "Needs you →"
 
 #: src/pages/Settings.tsx
 msgid "needs-you · finished · failed"
@@ -2982,6 +3022,10 @@ msgstr "pause this project"
 msgid "paused"
 msgstr "paused"
 
+#: src/lib/sessionRail.ts
+msgid "paused on your decision"
+msgstr "paused on your decision"
+
 #: src/components/place/StateGlyph.tsx
 msgid "pending"
 msgstr "pending"
@@ -3057,6 +3101,11 @@ msgstr "plain-language summary failed: {status}"
 msgid "plan"
 msgstr "plan"
 
+#. placeholder {0}: String(seq)
+#: src/lib/sessionRail.ts
+msgid "plan · phase {0}"
+msgstr "plan · phase {0}"
+
 #: src/components/HealthFooter.tsx
 msgid "plan {percent} %"
 msgstr "plan {percent} %"
@@ -3088,6 +3137,7 @@ msgstr "plan in"
 
 #: src/components/PlanRunCard.tsx
 #: src/components/SessionRow.tsx
+#: src/lib/sessionRail.ts
 msgid "plan run"
 msgstr "plan run"
 
@@ -3749,6 +3799,7 @@ msgid "search & actions"
 msgstr "search & actions"
 
 #: src/components/Sidebar.tsx
+#: src/components/Sidebar.tsx
 msgid "Search & actions"
 msgstr "Search & actions"
 
@@ -4062,6 +4113,10 @@ msgstr "starting…"
 msgid "state"
 msgstr "state"
 
+#: src/lib/sessionRail.ts
+msgid "step {steps}"
+msgstr "step {steps}"
+
 #: src/components/StopButton.tsx
 msgid "Stop"
 msgstr "Stop"
@@ -4176,10 +4231,6 @@ msgstr "System"
 #: src/main.tsx
 msgid "system…"
 msgstr "system…"
-
-#: src/components/place/ListPane.tsx
-msgid "t theme"
-msgstr "t theme"
 
 #: src/components/usage/UsageConnect.tsx
 msgid "tab didn't open? authorize here"
@@ -4529,6 +4580,10 @@ msgstr "Token"
 #: src/api.ts
 msgid "token sign-in failed"
 msgstr "token sign-in failed"
+
+#: src/lib/sessionRail.ts
+msgid "tracker task"
+msgstr "tracker task"
 
 #: src/pages/Settings.tsx
 msgid "translates the dashboard itself; text written by agents (plans, reports, lessons, advisor recommendations) and messages from the daemon stay in English"

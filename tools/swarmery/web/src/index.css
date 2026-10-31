@@ -589,6 +589,11 @@
  * and carries the 17px display face; h2/h4/h5 are derived steps around it.
  * ==========================================================================*/
 
+.docs-article [id] {
+  /* A deep link lands below the sticky header band, not under it. */
+  scroll-margin-top: var(--detail-band-h, 0px);
+}
+
 .docs-article p {
   margin: 0 0 12px;
   /* The renderer tags paragraphs `leading-relaxed` (1.625) for the chat/plan

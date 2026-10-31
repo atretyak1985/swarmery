@@ -283,7 +283,7 @@ export function CatalogDetail({
         title={item?.name ?? selectedKey}
         kv={item === undefined ? [] : [{ k: t`file`, v: item.fileName }, { k: t`path`, v: item.path }]}
       >
-        <div className="mt-[18px] max-w-[760px]">
+        <div className="mt-[18px]">
           <TemplateProfile name={selectedKey} projectId={rest.scopeSlug} onCopied={rest.onChanged} />
         </div>
       </PageDetail>

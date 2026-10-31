@@ -6,14 +6,16 @@
 // Permission tiers differ by SHAPE and not only by colour: destructive is a red
 // rectangle, write a blue dashed pill, question an amber pill.
 //
-// `gate` is the same decision inside a session's detail (handoff §5): a card with
-// the tier's border and a 14px headline, because there it sits among other blocks
-// rather than owning the pane.
+// Owning a pane, its eyebrow, title and command form the column's header band, so
+// the pane puts no padding above it. `gate` is the same decision inside a session's
+// detail (handoff §5): a card with the tier's border and a 14px headline, because
+// there it sits among other blocks rather than owning the pane.
 
 import type { MessageDescriptor } from '@lingui/core';
 import { msg } from '@lingui/core/macro';
 import { useLingui } from '@lingui/react/macro';
 import type { ReactNode } from 'react';
+import { DetailHeader } from './DetailHeader';
 
 export type DecisionTier = 'destructive' | 'write' | 'question';
 
@@ -142,14 +144,8 @@ export function DecisionCard({
   // The tier's colour is the gate's: a whole pane speaks in the one accent.
   const primaryTone = gate ? (tierDef?.primary ?? PRIMARY_DEFAULT) : PRIMARY_DEFAULT;
 
-  return (
-    <div
-      className={
-        gate
-          ? `mt-[18px] rounded-[10px] border bg-bg px-4 py-[14px] ${tierDef?.border ?? 'border-line-strong'}`
-          : 'flex min-h-full flex-col'
-      }
-    >
+  const head = (
+    <>
       <div className={`flex min-w-0 items-center font-mono text-[10.5px] leading-[normal] ${gate ? 'gap-[10px]' : 'gap-2'}`}>
         {tierDef !== undefined ? (
           <span className={`shrink-0 px-[7px] py-px font-bold whitespace-nowrap ${tierDef.badge} ${gate ? '' : '-my-0.5'}`}>
@@ -176,18 +172,34 @@ export function DecisionCard({
 
       {code !== undefined && (
         <code
-          className={`block rounded-[6px] border border-line bg-bg px-[10px] py-2 font-mono text-[12px] whitespace-pre-wrap text-ink-2 ${
-            gate ? 'mt-2' : 'mt-[10px] max-w-[642px] leading-[normal]'
+          className={`block rounded-[6px] border border-line px-[10px] py-2 font-mono text-[12px] whitespace-pre-wrap [overflow-wrap:anywhere] text-ink-2 ${
+            gate ? 'mt-2 bg-bg' : 'mt-[10px] bg-surface leading-[normal]'
           }`}
         >
           {code}
         </code>
       )}
+    </>
+  );
+
+  return (
+    <div
+      className={
+        gate
+          ? `mt-[18px] rounded-[10px] border bg-bg px-4 py-[14px] ${tierDef?.border ?? 'border-line-strong'}`
+          : 'flex min-h-full flex-col'
+      }
+    >
+      {gate ? (
+        head
+      ) : (
+        <DetailHeader bleed>{head}</DetailHeader>
+      )}
 
       {body !== undefined && (
         <div
-          className={`mt-[10px] max-w-[70ch] ${
-            gate ? 'text-[13px] leading-[1.55] text-ink-3' : 'text-[13.5px] leading-[1.6] text-ink-2'
+          className={`max-w-[70ch] ${
+            gate ? 'mt-[10px] text-[13px] leading-[1.55] text-ink-3' : 'mt-4 text-[13.5px] leading-[1.6] text-ink-2'
           }`}
         >
           {body}
@@ -202,7 +214,7 @@ export function DecisionCard({
         <div
           role="radiogroup"
           aria-label={title}
-          className={`flex flex-col gap-1 ${gate ? 'mt-3 max-w-[620px]' : 'mt-[14px] max-w-[640px]'}`}
+          className={`flex flex-col gap-1 ${gate ? 'mt-3' : 'mt-[14px]'}`}
         >
           {options.map((o) => {
             const on = o.id === picked;
@@ -244,7 +256,7 @@ export function DecisionCard({
           onChange={(e) => note.onChange(e.target.value)}
           placeholder={note.placeholder}
           aria-label={note.placeholder}
-          className="mt-[10px] w-full max-w-[640px] rounded-[7px] border border-line bg-bg px-[10px] py-[7px] text-[12.5px] leading-[normal] text-ink outline-none"
+          className="mt-[10px] w-full rounded-[7px] border border-line bg-bg px-[10px] py-[7px] text-[12.5px] leading-[normal] text-ink outline-none"
         />
       )}
 

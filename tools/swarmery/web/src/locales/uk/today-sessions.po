@@ -140,6 +140,11 @@ msgstr "{errorCount} пом."
 msgid "{events} events"
 msgstr "подій: {events}"
 
+#: src/pages/detail/SessionRail.tsx
+#: src/pages/detail/SessionRail.tsx
+msgid "{files, plural, one {# file} few {# files} many {# files} other {# files}}"
+msgstr "{files, plural, one {# файл} few {# файли} many {# файлів} other {# файлу}}"
+
 #: src/pages/today/loopModel.ts
 msgid "{finished} finished today, {failed} failed."
 msgstr "Сьогодні завершено: {finished}, зі збоєм: {failed}."
@@ -357,6 +362,11 @@ msgstr "→ відкат на"
 msgid "+ add rule"
 msgstr "+ додати правило"
 
+#. placeholder {0}: swarm.hidden
+#: src/pages/detail/SessionRail.tsx
+msgid "+{0} earlier"
+msgstr "+{0} раніше"
+
 #: src/pages/today/LiveNow.tsx
 msgid "+{extra} more"
 msgstr "ще +{extra}"
@@ -400,6 +410,14 @@ msgstr "пауза — це задум, а не збій"
 #: src/pages/detail/CommandInput.tsx
 msgid "a reply is being generated — Stop to cancel it."
 msgstr "відповідь генерується — «Стоп», щоб скасувати."
+
+#: src/pages/detail/SessionRail.tsx
+msgid "account"
+msgstr "акаунт"
+
+#: src/pages/detail/SessionRail.tsx
+msgid "accounts →"
+msgstr "акаунти →"
 
 #: src/pages/Approvals.tsx
 #: src/pages/NeedsYou.tsx
@@ -528,6 +546,10 @@ msgstr "З’явиться після першого написаного пл�
 #: src/pages/today/loopModel.ts
 msgid "Appears after you accept a change and it has run long enough to prove itself."
 msgstr "З’явиться, коли ви приймете зміну і вона попрацює достатньо, щоб себе довести."
+
+#: src/pages/detail/SessionRail.tsx
+msgid "applies here"
+msgstr "стосується цього місця"
 
 #: src/pages/Approvals.tsx
 msgid "Approvals"
@@ -716,6 +738,11 @@ msgstr "холодні перезапуски"
 msgid "Collapse activity"
 msgstr "Згорнути активність"
 
+#: src/pages/detail/SessionRail.tsx
+#: src/pages/detail/SessionRail.tsx
+msgid "collapse context · \\"
+msgstr "згорнути контекст · \\"
+
 #: src/pages/Approvals.tsx
 msgid "collapse raw request JSON"
 msgstr "згорнути сирий JSON запиту"
@@ -759,12 +786,18 @@ msgstr "вміст у main"
 
 #: src/pages/detail/SessionPane.tsx
 #: src/pages/detail/SessionPane.tsx
+#: src/pages/detail/SessionRail.tsx
+#: src/pages/detail/SessionRail.tsx
 msgid "context"
 msgstr "контекст"
 
 #: src/pages/detail/ContextHogsCard.tsx
 msgid "context hogs"
 msgstr "пожирачі контексту"
+
+#: src/pages/detail/HandoffCard.tsx
+msgid "Context is past {tokens} tokens; every turn re-reads it and costs more. The brief lets a fresh session pick up here."
+msgstr "Контекст перевищив {tokens} токенів; кожен хід перечитує його і коштує дорожче. Бриф дає новій сесії продовжити звідси."
 
 #: src/pages/sessions/CacheColdBadge.tsx
 msgid "continue from handoff"
@@ -836,6 +869,10 @@ msgstr "видалити"
 msgid "delete rule {pattern}"
 msgstr "видалити правило {pattern}"
 
+#: src/pages/detail/SessionRail.tsx
+msgid "deletes"
+msgstr "видалення"
+
 #: src/pages/Approvals.tsx
 msgid "denied"
 msgstr "відхилено"
@@ -862,6 +899,10 @@ msgstr "руйнівна дія: питає щоразу, без «завжди 
 #: src/pages/detail/SessionPane.tsx
 msgid "Diff"
 msgstr "Зміни"
+
+#: src/pages/detail/SessionRail.tsx
+msgid "diff →"
+msgstr "зміни →"
 
 #: src/pages/detail/SessionPane.tsx
 #: src/pages/NeedsYou.tsx
@@ -898,6 +939,10 @@ msgstr "тривалість"
 #: src/pages/Sessions.tsx
 msgid "Earlier"
 msgstr "Раніше"
+
+#: src/pages/detail/SessionRail.tsx
+msgid "edits"
+msgstr "правки"
 
 #: src/pages/detail/SessionPane.tsx
 msgid "elapsed"
@@ -955,6 +1000,11 @@ msgstr "Кожен етап живить наступний. Числа — за
 #: src/pages/detail/Chat.tsx
 msgid "Expand activity"
 msgstr "Розгорнути активність"
+
+#: src/pages/detail/SessionRail.tsx
+#: src/pages/detail/SessionRail.tsx
+msgid "expand context · \\"
+msgstr "розгорнути контекст · \\"
 
 #: src/pages/Approvals.tsx
 msgid "expand raw request JSON"
@@ -1081,6 +1131,10 @@ msgstr "передано моду сесії"
 msgid "handoff"
 msgstr "передача"
 
+#: src/pages/detail/HandoffCard.tsx
+msgid "handoff brief"
+msgstr "бриф передачі"
+
 #: src/pages/sessions/CacheColdBadge.tsx
 msgid "handoff request failed"
 msgstr "запит передачі не вдався"
@@ -1098,14 +1152,21 @@ msgstr "Здоров’я · останні 7 днів проти поперед
 msgid "Health →"
 msgstr "Здоров’я →"
 
+#: src/pages/detail/SessionRail.tsx
+msgid "heavy"
+msgstr "дорога"
+
 #: src/pages/sessions/SwarmPanel.tsx
 msgid "held by"
 msgstr "у роботі в"
 
 #: src/pages/detail/ContextHogsCard.tsx
-#: src/pages/detail/HandoffCard.tsx
 msgid "hide"
 msgstr "сховати"
+
+#: src/pages/detail/HandoffCard.tsx
+msgid "hide brief"
+msgstr "сховати бриф"
 
 #: src/pages/Approvals.tsx
 #: src/pages/Approvals.tsx
@@ -1187,6 +1248,10 @@ msgstr "Останнє"
 msgid "Learn"
 msgstr "Навчання"
 
+#: src/pages/detail/SessionRail.tsx
+msgid "learning →"
+msgstr "навчання →"
+
 #: src/pages/today/feedModel.ts
 msgid "Lesson may have stopped helping: {title}"
 msgstr "Урок, можливо, більше не допомагає: {title}"
@@ -1194,6 +1259,18 @@ msgstr "Урок, можливо, більше не допомагає: {title}"
 #: src/pages/today/feedModel.ts
 msgid "Lesson proposed: {title}"
 msgstr "Запропоновано урок: {title}"
+
+#: src/pages/detail/SessionRail.tsx
+msgid "lessons"
+msgstr "уроки"
+
+#: src/pages/detail/SessionRail.tsx
+msgid "lessons unavailable"
+msgstr "уроки недоступні"
+
+#: src/pages/detail/SessionRail.tsx
+msgid "linked"
+msgstr "прив’язано"
 
 #: src/pages/today/loopModel.ts
 msgid "live"
@@ -1313,6 +1390,14 @@ msgstr "needs you…"
 msgid "nested agents"
 msgstr "вкладені агенти"
 
+#: src/pages/detail/SessionRail.tsx
+msgid "new files"
+msgstr "нові файли"
+
+#: src/pages/detail/SessionRail.tsx
+msgid "no changes yet"
+msgstr "змін ще немає"
+
 #: src/pages/detail/Chat.tsx
 msgid "no conversation in this session yet"
 msgstr "у цій сесії ще немає розмови"
@@ -1380,6 +1465,10 @@ msgstr "погоджень не чекає — агенти працюють б�
 #: src/pages/today/loopModel.ts
 msgid "No phase carries a forecast yet — add one so a run has something to be measured against."
 msgstr "Жодна фаза ще не має прогнозу — додайте його, щоб запуск було з чим порівняти."
+
+#: src/pages/detail/SessionRail.tsx
+msgid "no plan · ad-hoc session"
+msgstr "без плану · сесія поза планом"
 
 #: src/pages/Projects.tsx
 msgid "no projects match the current filter — try a different search or clear it"
@@ -1453,6 +1542,10 @@ msgstr "немає"
 #: src/pages/today/loopModel.ts
 msgid "none checked by you yet."
 msgstr "ви ще жодної не перевірили."
+
+#: src/pages/detail/SessionRail.tsx
+msgid "none matched this session"
+msgstr "для цієї сесії нічого не знайдено"
 
 #: src/pages/detail/LiveActivity.tsx
 msgid "Noodling"
@@ -1533,6 +1626,10 @@ msgstr "Нічого не працює."
 #: src/pages/today/loopModel.ts
 msgid "Nothing to review. Lessons and Advisor findings land here after runs are measured."
 msgstr "Нічого переглядати. Уроки й знахідки радника з’являться тут після виміру запусків."
+
+#: src/pages/detail/SessionRail.tsx
+msgid "nothing touched yet"
+msgstr "поки нічого не змінено"
 
 #: src/pages/Overview.tsx
 msgid "Nothing waited on you today."
@@ -1733,6 +1830,7 @@ msgstr "Фаза {seq} застрягла"
 msgid "Phase / card"
 msgstr "Фаза / картка"
 
+#: src/pages/detail/SessionRail.tsx
 #: src/pages/NeedsYou.tsx
 msgid "phase →"
 msgstr "фаза →"
@@ -1769,6 +1867,10 @@ msgstr "закріплено"
 #: src/pages/today/loopModel.ts
 msgid "Plan"
 msgstr "План"
+
+#: src/pages/detail/SessionRail.tsx
+msgid "plan {percent} %"
+msgstr "план {percent} %"
 
 #: src/pages/detail/PendingRunNotice.tsx
 msgid "plan revision"
@@ -1869,9 +1971,17 @@ msgstr "у черзі, чекає, доки мод її забере"
 msgid "raw"
 msgstr "сирий"
 
+#: src/pages/detail/HandoffCard.tsx
+msgid "read brief"
+msgstr "читати бриф"
+
 #: src/pages/Overview.tsx
 msgid "Reading today's activity…"
 msgstr "Читаємо сьогоднішню активність…"
+
+#: src/pages/detail/HandoffCard.tsx
+msgid "ready · {age} ago"
+msgstr "готово · {age} тому"
 
 #: src/pages/Approvals.tsx
 msgid "reason (optional) — delivered to Claude verbatim"
@@ -1953,6 +2063,10 @@ msgstr "Відповісти цій сесії…  (⌘/Ctrl+Enter — наді�
 msgid "reply: {typed}"
 msgstr "відповісти: {typed}"
 
+#: src/pages/detail/SessionRail.tsx
+msgid "resets {at}"
+msgstr "скидання {at}"
+
 #: src/pages/detail/SessionPane.tsx
 msgid "resume with a reply"
 msgstr "відновити відповіддю"
@@ -2011,6 +2125,10 @@ msgstr "виконується"
 msgid "Running clean — nothing stopped, nothing waiting on you."
 msgstr "Працює чисто — нічого не зупинилося, ніщо на вас не чекає."
 
+#: src/pages/detail/SessionGate.tsx
+msgid "running in a terminal · answer there, or stop it to reply here"
+msgstr "працює в терміналі · дайте відповідь там або зупиніть, щоб відповісти тут"
+
 #: src/pages/detail/Timeline.tsx
 msgid "running…"
 msgstr "виконується…"
@@ -2050,6 +2168,10 @@ msgstr "надсилаємо…"
 msgid "Sending…"
 msgstr "Надсилаємо…"
 
+#: src/pages/detail/SessionRail.tsx
+msgid "sensitive"
+msgstr "чутливе"
+
 #: src/pages/sessions/SwarmPanel.tsx
 #: src/pages/sessions/SwarmPanel.tsx
 msgid "sent"
@@ -2066,6 +2188,10 @@ msgstr "сесія #{sessionId}"
 #: src/pages/Approvals.tsx
 msgid "session #{sessionNumber}"
 msgstr "сесія #{sessionNumber}"
+
+#: src/pages/detail/SessionRail.tsx
+msgid "session context"
+msgstr "контекст сесії"
 
 #: src/pages/detail/Timeline.tsx
 msgid "Session end"
@@ -2142,7 +2268,6 @@ msgid "Shipped <0>{tasks} tasks</0> this week — and asked you <1>{approvals} t
 msgstr "Цього тижня завершено <0>{tasks} задач</0> — і для цього вас запитали <1>{approvals} разів</1>."
 
 #: src/pages/detail/ContextHogsCard.tsx
-#: src/pages/detail/HandoffCard.tsx
 msgid "show"
 msgstr "показати"
 
@@ -2235,6 +2360,10 @@ msgstr "статус"
 msgid "Steps"
 msgstr "Кроки"
 
+#: src/pages/detail/SessionRail.tsx
+msgid "steps →"
+msgstr "кроки →"
+
 #: src/pages/Overview.tsx
 msgid "still blocked"
 msgstr "досі чекають"
@@ -2282,6 +2411,7 @@ msgid "suggested"
 msgstr "пропозиція"
 
 #: src/pages/detail/SessionPane.tsx
+#: src/pages/detail/SessionRail.tsx
 msgid "swarm"
 msgstr "рій"
 
@@ -2335,6 +2465,10 @@ msgstr "{kind} «{label}» завершено без запису транскр
 #: src/pages/detail/PendingRunNotice.tsx
 msgid "the {kind} “{label}” ended without writing a transcript ({started}) — the session never started or its transcript is gone"
 msgstr "{kind} «{label}» завершено без запису транскрипту ({started}) — сесія так і не стартувала або її транскрипт зник"
+
+#: src/pages/detail/HandoffCard.tsx
+msgid "The daemon wrote a brief for a fresh session."
+msgstr "Демон написав бриф для нової сесії."
 
 #: src/pages/Overview.tsx
 msgid "The day"
@@ -2400,6 +2534,10 @@ msgstr "Думає"
 msgid "This is a production deploy: confirm it in the session's own terminal"
 msgstr "Це розгортання в продакшн: підтвердьте його в терміналі самої сесії"
 
+#: src/pages/detail/SessionRail.tsx
+msgid "this session {spent}"
+msgstr "ця сесія {spent}"
+
 #: src/pages/ProjectOverview.tsx
 msgid "This week"
 msgstr "Цього тижня"
@@ -2458,6 +2596,10 @@ msgstr "шаблон інструмента"
 #: src/pages/detail/CallTree.tsx
 msgid "total time"
 msgstr "загальний час"
+
+#: src/pages/detail/SessionRail.tsx
+msgid "touches"
+msgstr "зачеплено"
 
 #: src/pages/Overview.tsx
 msgid "trace unavailable"
@@ -2554,6 +2696,10 @@ msgstr "Що його запуски можуть робити без запит
 #: src/pages/sessions/SwarmPanel.tsx
 msgid "What should the other session know?"
 msgstr "Що має знати інша сесія?"
+
+#: src/pages/detail/SessionRail.tsx
+msgid "what surrounds this session"
+msgstr "що оточує цю сесію"
 
 #: src/pages/ProjectOverview.tsx
 msgid "Where work sits"

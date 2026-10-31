@@ -54,7 +54,7 @@ type SettingsTab = (typeof SETTINGS_TABS)[number];
 /** A section of an existing panel under the detail's blocks. */
 function Section({ title, children }: { title?: ReactNode; children: ReactNode }): JSX.Element {
   return (
-    <section className="mt-[18px] max-w-[720px]">
+    <section className="mt-[18px]">
       {title !== undefined && (
         <div className="mb-2 font-mono text-[10px] leading-[normal] tracking-[0.12em] text-ink-faint uppercase">
           {title}

@@ -1106,11 +1106,15 @@ export function NeedsYou(): JSX.Element {
         <div
           data-testid="needs-you-detail"
           data-kind={selected?.kind}
-          className="flex min-h-full max-w-[900px] flex-col px-7 pt-[22px] pb-10 [&>*:last-child]:flex-1"
+          className="flex min-h-full flex-col px-4 pb-10 desk:px-7 [&>*:last-child]:flex-1"
         >
-          {error !== null && <ErrorBox message={error} onRetry={reload} />}
+          {error !== null && (
+            <div className="pt-[22px]">
+              <ErrorBox message={error} onRetry={reload} />
+            </div>
+          )}
           {actionError !== null && (
-            <div role="alert" className="mb-3 font-mono text-[11px] text-red">
+            <div role="alert" className="py-3 font-mono text-[11px] text-red">
               {actionError}
             </div>
           )}

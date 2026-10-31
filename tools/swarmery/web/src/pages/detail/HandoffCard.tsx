@@ -1,15 +1,19 @@
-// Detail-rail "Handoff" section: shown when the daemon has generated a
-// continuation brief for this fat session (migration 0039). Collapsed by
-// default; expanding fetches GET /api/sessions/{id}/handoff and renders the
-// markdown in the rail's prose style. A copy button yields the exact resume
-// command for a fresh session.
+// The session rail's handoff card: shown when the daemon has generated a
+// continuation brief for this fat session (migration 0039). It says the brief is
+// ready and offers the resume command; the header expands the brief itself, which
+// fetches GET /api/sessions/{id}/handoff and renders in the rail's prose style. The
+// design's button reads "continue in a fresh session"; this one only copies, so it
+// says that (D-6).
 
 import { Trans, useLingui } from '@lingui/react/macro';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import { fetchSessionHandoff } from '../../api';
-import type { SessionHandoffResponse } from '../../api/types';
+import type { Session, SessionHandoffResponse } from '../../api/types';
+import { fmtTokens } from '../../lib/format';
 import { Markdown } from '../../lib/markdown';
+import { usePanels } from '../../lib/panels';
+import { compactSpan } from '../../lib/sessionsView';
 
 /** The resume command a fresh session starts from — reads the brief and picks up. */
 function resumeCommand(path: string): string {
@@ -20,13 +24,20 @@ function resumeCommand(path: string): string {
 
 export function HandoffCard({
   sessionId,
-  handoffPath,
+  handoff,
+  hot,
+  nowMs,
 }: {
   sessionId: number;
-  handoffPath: string;
+  handoff: NonNullable<Session['handoff']>;
+  /** The context this brief escapes from is fat: the card turns red. */
+  hot: boolean;
+  nowMs: number;
 }): JSX.Element {
   const { t } = useLingui();
+  const handoffPath = handoff.path;
   const { hash } = useLocation();
+  const { rail: railCollapsed } = usePanels();
   const ref = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
   const [data, setData] = useState<SessionHandoffResponse | null>(null);
@@ -50,15 +61,21 @@ export function HandoffCard({
     if (next) load();
   }, [open, load]);
 
-  // «continue from handoff» (CacheColdBadge) lands here as #handoff: open the
-  // brief and bring it into view.
+  // «continue from handoff» (CacheColdBadge) lands here as #handoff: open the brief.
+  const arrived = hash === '#handoff';
   useEffect(() => {
-    if (hash !== '#handoff') return;
+    if (!arrived) return;
     setOpen(true);
     load();
-    ref.current?.scrollIntoView?.({ block: 'nearest' });
     // eslint-disable-next-line react-hooks/exhaustive-deps -- once per arrival, not per load state
-  }, [hash]);
+  }, [arrived]);
+
+  // Bring it into view once the rail shows it, a hidden node cannot scroll, and again
+  // when the brief lands and gives the card its height.
+  const briefLoaded = data !== null;
+  useEffect(() => {
+    if (arrived && !railCollapsed) ref.current?.scrollIntoView?.({ block: 'nearest' });
+  }, [arrived, railCollapsed, briefLoaded]);
 
   const copyResume = useCallback(() => {
     const cmd = resumeCommand(data?.path ?? handoffPath);
@@ -68,30 +85,54 @@ export function HandoffCard({
     });
   }, [data, handoffPath]);
 
+  const tone = hot ? 'text-red' : 'text-brand';
+  const age = compactSpan(nowMs - new Date(handoff.createdAt).getTime());
+  const tokens = fmtTokens(handoff.contextTokens);
+
   return (
-    <div id="handoff" ref={ref} className="rounded-xl border border-violet-500/30 bg-surface px-4 py-3.5">
-      <button
-        type="button"
-        onClick={toggle}
-        className="flex w-full items-baseline justify-between text-left"
+    <div
+      id="handoff"
+      ref={ref}
+      className={`border-b border-l-[3px] px-3.5 py-3 ${hot ? 'border-red bg-red-bg' : 'border-brand bg-brand-bg'}`}
+    >
+      <div
+        className={`flex items-center gap-1.5 font-mono text-[10px] leading-[normal] tracking-[0.12em] uppercase ${tone}`}
       >
-        <span className="font-mono text-[10.5px] tracking-[0.08em] text-violet-400 uppercase">
-          <Trans>handoff</Trans>
-        </span>
-        <span className="font-mono text-[11px] text-ink-dim">{open ? t`hide` : t`show`}</span>
-      </button>
+        <Trans>handoff</Trans>
+        <span className="ml-auto tracking-normal text-ink-faint normal-case">{t`ready · ${age} ago`}</span>
+      </div>
+      <p className="m-0 mt-1.5 text-[12.5px] leading-[1.5] text-ink-2">
+        {hot
+          ? t`Context is past ${tokens} tokens; every turn re-reads it and costs more. The brief lets a fresh session pick up here.`
+          : t`The daemon wrote a brief for a fresh session.`}
+      </p>
+      <div className="mt-2.5 flex flex-wrap items-center gap-2">
+        <button
+          type="button"
+          onClick={copyResume}
+          data-tip={t`Copy the command that starts a fresh session from this handoff`}
+          className={`rounded-[6px] border border-current bg-transparent px-2.5 py-1 font-mono text-[10.5px] leading-[normal] ${tone}`}
+        >
+          {copied ? t`copied ✓` : t`copy resume command`}
+        </button>
+        <button
+          type="button"
+          onClick={toggle}
+          aria-expanded={open}
+          className="bg-transparent p-0 font-mono text-[10.5px] leading-[normal] text-ink-faint transition-colors hover:text-brand"
+        >
+          {open ? t`hide brief` : t`read brief`}
+        </button>
+      </div>
 
       {open && (
-        <div className="mt-3">
-          <button
-            type="button"
-            onClick={copyResume}
-            data-tip={t`Copy the command that starts a fresh session from this handoff`}
-            className="mb-3 w-full rounded-lg border border-violet-500/40 bg-violet-500/10 px-3 py-2 text-left font-mono text-[11px] text-violet-300 transition-colors hover:bg-violet-500/20"
-          >
-            {copied ? t`copied ✓` : t`copy resume command`}
-          </button>
-
+        // The rail is sticky, so a brief taller than the window would run off its foot.
+        <div
+          role="region"
+          aria-label={t`handoff brief`}
+          tabIndex={0}
+          className="mt-3 max-h-[50vh] overflow-y-auto"
+        >
           {loading && <p className="font-mono text-[11px] text-ink-dim">
               <Trans>loading…</Trans>
             </p>}

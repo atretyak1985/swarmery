@@ -1,6 +1,7 @@
 // The global keyboard (handoff §10): 1–5 places, t theme, j/k or ↑/↓ list rows,
-// e the selected row's main action, x its secondary one, Esc close. ⌘K is not
-// here: the Sidebar owns it, and it must fire from inside a field.
+// e the selected row's main action, x its secondary one, Esc close, and [ ] \ the
+// panels: sidebar, list, session rail. ⌘K is not here: the Sidebar owns it, and it
+// must fire from inside a field.
 //
 // Several consumers run at once (the shell owns places and theme, a ListPane the
 // row keys), so each one registers only the keys it handles and a key nobody
@@ -19,6 +20,9 @@ export interface GlobalKeyHandlers {
   onPrimary?: () => void;
   onSecondary?: () => void;
   onEscape?: () => void;
+  onPanelNav?: () => void;
+  onPanelList?: () => void;
+  onPanelRail?: () => void;
 }
 
 const FIELD_TAGS: ReadonlySet<string> = new Set(['INPUT', 'TEXTAREA', 'SELECT']);
@@ -47,6 +51,12 @@ function keyHandler(key: string, h: GlobalKeyHandlers): (() => void) | undefined
       return h.onSecondary;
     case 'Escape':
       return h.onEscape;
+    case '[':
+      return h.onPanelNav;
+    case ']':
+      return h.onPanelList;
+    case '\\':
+      return h.onPanelRail;
     default: {
       const onPlace = h.onPlace;
       if (onPlace === undefined || !/^[1-5]$/.test(key)) return undefined;
