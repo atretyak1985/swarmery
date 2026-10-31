@@ -24,9 +24,23 @@ Grep("nodePort:", glob: "*.{yaml,tpl}", path: "<infrastructure-repo>")
 ```
 
 ### Cross-Repo
+
+A bare `path: "."` sweeps every repo, including `node_modules`/`vendor`/`dist`/`build`, and is the
+most common way to hit ripgrep's own timeout (see `search-procedure.md` → Mode 4). Always pair a
+repo-root search with a `glob` that excludes generated/dependency trees, or scope to the specific
+repos from `.claude/project.json` instead:
+
 ```
-Grep("DeviceService", path: ".")
+Grep("DeviceService", path: ".", glob: "!**/{node_modules,vendor,dist,build,.git}/**")
 Grep("/ws/", path: ".", glob: "*.{py,ts,yaml,tpl}")
+```
+
+If the repo list is small, prefer searching each repo explicitly over a single unscoped call:
+
+```
+Grep("DeviceService", path: "apps/<mainApp>")
+Grep("DeviceService", path: "<device>")
+Grep("DeviceService", path: "<infrastructure-repo>")
 ```
 
 ## Glob Patterns
