@@ -162,7 +162,7 @@ function InsightSection({
   children: React.ReactNode;
 }): JSX.Element {
   return (
-    <section id={id} className="overflow-hidden rounded-xl border border-line bg-surface">
+    <section id={id} className="scroll-mt-[var(--detail-band-h,0px)] overflow-hidden rounded-xl border border-line bg-surface">
       <div className="flex items-baseline gap-2 border-b border-line px-3.5 py-2.5">
         <h2 className="text-[13.5px] font-semibold text-ink">{title}</h2>
         <span className="font-mono text-[11px] text-ink-dim">{String(count)}</span>

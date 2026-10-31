@@ -1937,6 +1937,10 @@ msgstr "failed"
 msgid "Failed"
 msgstr "Failed"
 
+#: src/lib/sessionRail.ts
+msgid "failed after {span}"
+msgstr "failed after {span}"
+
 #: src/components/SessionControls.tsx
 msgid "failed: {msg}"
 msgstr "failed: {msg}"
@@ -2031,6 +2035,10 @@ msgstr "Finish it here: open a terminal already scoped to this account and log t
 #: src/pages/Settings.tsx
 msgid "Finished"
 msgstr "Finished"
+
+#: src/lib/sessionRail.ts
+msgid "finished in {span}"
+msgstr "finished in {span}"
 
 #: src/components/NotifySettings.tsx
 #: src/pages/Settings.tsx
@@ -2494,8 +2502,8 @@ msgid "main"
 msgstr "main"
 
 #: src/lib/sessionRail.ts
-msgid "main · step {steps}"
-msgstr "main · step {steps}"
+msgid "main · {model}"
+msgstr "main · {model}"
 
 #: src/components/ProjectActions.tsx
 msgid "managed"
@@ -4104,6 +4112,10 @@ msgstr "starting…"
 #: src/workspace/task/RunLog.tsx
 msgid "state"
 msgstr "state"
+
+#: src/lib/sessionRail.ts
+msgid "step {steps}"
+msgstr "step {steps}"
 
 #: src/components/StopButton.tsx
 msgid "Stop"

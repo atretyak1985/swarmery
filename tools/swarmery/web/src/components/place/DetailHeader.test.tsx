@@ -10,7 +10,7 @@
 // Runs with the rest of the web suite: `npm test`.
 
 import { MemoryRouter } from 'react-router-dom';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, render, screen } from '../../test/render';
 import { BlockerBanner, DetailHeader, NoticeBand } from './DetailHeader';
 
@@ -49,6 +49,35 @@ describe('DetailHeader', () => {
     const notice = screen.getByText('paused');
     expect(band(container).contains(notice)).toBe(true);
     expect(notice.compareDocumentPosition(screen.getByText('content'))).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+  });
+
+  it('stays at the top of the scroll from desk up, and only there', () => {
+    const { container } = render(<DetailHeader>content</DetailHeader>);
+    const classes = band(container).className.split(' ');
+    expect(classes).toContain('desk:sticky');
+    expect(classes).toContain('desk:top-0');
+    expect(classes).not.toContain('sticky');
+  });
+
+  it('publishes its height for what anchors beneath it, and takes it back', () => {
+    let measure = (): void => {};
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        constructor(callback: () => void) {
+          measure = callback;
+        }
+        observe(): void {}
+        disconnect(): void {}
+      },
+    );
+    const { container, unmount } = render(<DetailHeader>content</DetailHeader>);
+    vi.spyOn(band(container), 'offsetHeight', 'get').mockReturnValue(120);
+    measure();
+    expect(document.documentElement.style.getPropertyValue('--detail-band-h')).toBe('120px');
+    unmount();
+    expect(document.documentElement.style.getPropertyValue('--detail-band-h')).toBe('');
+    vi.unstubAllGlobals();
   });
 });
 

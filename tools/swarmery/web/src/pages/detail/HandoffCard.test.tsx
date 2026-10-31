@@ -46,7 +46,8 @@ function card(hot: boolean, wrapper: (props: { children: ReactNode }) => JSX.Ele
 describe('HandoffCard', () => {
   it('says how old the brief is and offers the command before anything is expanded', () => {
     card(false);
-    expect(screen.getByRole('button', { name: /handoff/i }).textContent).toContain('ready · 4m ago');
+    expect(screen.getByText('ready · 4m ago')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'read brief' }).getAttribute('aria-expanded')).toBe('false');
     expect(screen.getByText('The daemon wrote a brief for a fresh session.')).toBeTruthy();
     expect(screen.getByRole('button', { name: 'copy resume command' })).toBeTruthy();
   });
@@ -54,6 +55,7 @@ describe('HandoffCard', () => {
   it('turns red and names the context when it is fat', () => {
     card(true);
     expect(document.getElementById('handoff')?.className).toContain('border-red');
+    expect(document.getElementById('handoff')?.className).toContain('border-l-[3px]');
     expect(screen.getByText(/^Context is past 340K/)).toBeTruthy();
   });
 
@@ -64,7 +66,8 @@ describe('HandoffCard', () => {
 
   it('renders the Rejected section between Non-goals and Open risks', async () => {
     card(false);
-    fireEvent.click(screen.getByRole('button', { name: /handoff/i }));
+    fireEvent.click(screen.getByRole('button', { name: 'read brief' }));
+    expect(screen.getByRole('button', { name: 'hide brief' }).getAttribute('aria-expanded')).toBe('true');
 
     const rejected = await waitFor(() => screen.getByRole('heading', { name: 'Rejected' }));
     const headings = screen.getAllByRole('heading').map((h) => h.textContent ?? '');

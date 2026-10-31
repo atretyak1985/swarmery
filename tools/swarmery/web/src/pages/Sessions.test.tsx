@@ -305,7 +305,11 @@ describe('the detail', () => {
     expect(band.querySelector('h2')).toBeTruthy();
     const rail = screen.getByRole('complementary', { name: 'session context' });
     expect(band.contains(rail)).toBe(false);
-    expect(rail.parentElement).toBe(band.nextElementSibling);
+    // The band sits outside the scroller, so it never moves with the conversation.
+    const scroller = band.nextElementSibling as HTMLElement;
+    expect(scroller.className).toContain('overflow-y-auto');
+    expect(scroller.contains(band)).toBe(false);
+    expect(scroller.contains(rail)).toBe(true);
   });
 
   it('parks on a band around the foot, not on everything past it', () => {
@@ -322,7 +326,7 @@ describe('the detail', () => {
     // 2000, moving up as the panel scrolls.
     beforeEach(() => {
       vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function rect(this: Element) {
-        const scrolled = document.querySelector('[data-testid="session-detail"]')?.parentElement?.scrollTop ?? 0;
+        const scrolled = document.querySelector('[data-testid="session-detail"]')?.lastElementChild?.scrollTop ?? 0;
         return { bottom: this.className.includes('flex-[1_1_520px]') ? 2000 - scrolled : 900 } as DOMRect;
       });
     });
@@ -330,7 +334,7 @@ describe('the detail', () => {
       vi.restoreAllMocks();
     });
 
-    const panel = (): HTMLElement => screen.getByTestId('session-detail').parentElement as HTMLElement;
+    const panel = (): HTMLElement => screen.getByTestId('session-detail').lastElementChild as HTMLElement;
 
     it('opens a finished session at the top, with the way down on offer', async () => {
       open('/sessions/3');

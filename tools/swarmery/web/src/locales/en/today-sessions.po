@@ -141,6 +141,7 @@ msgid "{events} events"
 msgstr "{events} events"
 
 #: src/pages/detail/SessionRail.tsx
+#: src/pages/detail/SessionRail.tsx
 msgid "{files, plural, one {# file} few {# files} many {# files} other {# files}}"
 msgstr "{files, plural, one {# file} few {# files} many {# files} other {# files}}"
 
@@ -415,8 +416,8 @@ msgid "account"
 msgstr "account"
 
 #: src/pages/detail/SessionRail.tsx
-msgid "ad-hoc session"
-msgstr "ad-hoc session"
+msgid "accounts →"
+msgstr "accounts →"
 
 #: src/pages/Approvals.tsx
 #: src/pages/NeedsYou.tsx
@@ -738,6 +739,7 @@ msgid "Collapse activity"
 msgstr "Collapse activity"
 
 #: src/pages/detail/SessionRail.tsx
+#: src/pages/detail/SessionRail.tsx
 msgid "collapse context · \\"
 msgstr "collapse context · \\"
 
@@ -785,6 +787,7 @@ msgstr "content in main"
 #: src/pages/detail/SessionPane.tsx
 #: src/pages/detail/SessionPane.tsx
 #: src/pages/detail/SessionRail.tsx
+#: src/pages/detail/SessionRail.tsx
 msgid "context"
 msgstr "context"
 
@@ -793,8 +796,8 @@ msgid "context hogs"
 msgstr "context hogs"
 
 #: src/pages/detail/HandoffCard.tsx
-msgid "Context is past {tokens}; every turn re-reads it. A brief for a fresh session is ready."
-msgstr "Context is past {tokens}; every turn re-reads it. A brief for a fresh session is ready."
+msgid "Context is past {tokens} tokens; every turn re-reads it and costs more. The brief lets a fresh session pick up here."
+msgstr "Context is past {tokens} tokens; every turn re-reads it and costs more. The brief lets a fresh session pick up here."
 
 #: src/pages/sessions/CacheColdBadge.tsx
 msgid "continue from handoff"
@@ -866,6 +869,10 @@ msgstr "delete"
 msgid "delete rule {pattern}"
 msgstr "delete rule {pattern}"
 
+#: src/pages/detail/SessionRail.tsx
+msgid "deletes"
+msgstr "deletes"
+
 #: src/pages/Approvals.tsx
 msgid "denied"
 msgstr "denied"
@@ -892,6 +899,10 @@ msgstr "destructive: asks every time, no always-allow"
 #: src/pages/detail/SessionPane.tsx
 msgid "Diff"
 msgstr "Diff"
+
+#: src/pages/detail/SessionRail.tsx
+msgid "diff →"
+msgstr "diff →"
 
 #: src/pages/detail/SessionPane.tsx
 #: src/pages/NeedsYou.tsx
@@ -928,6 +939,10 @@ msgstr "duration"
 #: src/pages/Sessions.tsx
 msgid "Earlier"
 msgstr "Earlier"
+
+#: src/pages/detail/SessionRail.tsx
+msgid "edits"
+msgstr "edits"
 
 #: src/pages/detail/SessionPane.tsx
 msgid "elapsed"
@@ -986,6 +1001,7 @@ msgstr "Every stage feeds the next. Numbers are the last 7 days; amber means som
 msgid "Expand activity"
 msgstr "Expand activity"
 
+#: src/pages/detail/SessionRail.tsx
 #: src/pages/detail/SessionRail.tsx
 msgid "expand context · \\"
 msgstr "expand context · \\"
@@ -1148,6 +1164,10 @@ msgstr "held by"
 msgid "hide"
 msgstr "hide"
 
+#: src/pages/detail/HandoffCard.tsx
+msgid "hide brief"
+msgstr "hide brief"
+
 #: src/pages/Approvals.tsx
 #: src/pages/Approvals.tsx
 msgid "History"
@@ -1227,6 +1247,10 @@ msgstr "Latest"
 #: src/pages/today/loopModel.ts
 msgid "Learn"
 msgstr "Learn"
+
+#: src/pages/detail/SessionRail.tsx
+msgid "learning →"
+msgstr "learning →"
 
 #: src/pages/today/feedModel.ts
 msgid "Lesson may have stopped helping: {title}"
@@ -1366,6 +1390,14 @@ msgstr "needs you…"
 msgid "nested agents"
 msgstr "nested agents"
 
+#: src/pages/detail/SessionRail.tsx
+msgid "new files"
+msgstr "new files"
+
+#: src/pages/detail/SessionRail.tsx
+msgid "no changes yet"
+msgstr "no changes yet"
+
 #: src/pages/detail/Chat.tsx
 msgid "no conversation in this session yet"
 msgstr "no conversation in this session yet"
@@ -1435,8 +1467,8 @@ msgid "No phase carries a forecast yet — add one so a run has something to be 
 msgstr "No phase carries a forecast yet — add one so a run has something to be measured against."
 
 #: src/pages/detail/SessionRail.tsx
-msgid "no plan"
-msgstr "no plan"
+msgid "no plan · ad-hoc session"
+msgstr "no plan · ad-hoc session"
 
 #: src/pages/Projects.tsx
 msgid "no projects match the current filter — try a different search or clear it"
@@ -1512,8 +1544,8 @@ msgid "none checked by you yet."
 msgstr "none checked by you yet."
 
 #: src/pages/detail/SessionRail.tsx
-msgid "none matched"
-msgstr "none matched"
+msgid "none matched this session"
+msgstr "none matched this session"
 
 #: src/pages/detail/LiveActivity.tsx
 msgid "Noodling"
@@ -1798,6 +1830,7 @@ msgstr "Phase {seq} stalled"
 msgid "Phase / card"
 msgstr "Phase / card"
 
+#: src/pages/detail/SessionRail.tsx
 #: src/pages/NeedsYou.tsx
 msgid "phase →"
 msgstr "phase →"
@@ -1937,6 +1970,10 @@ msgstr "queued, waiting for the mod to pick it up"
 #: src/pages/NeedsYou.tsx
 msgid "raw"
 msgstr "raw"
+
+#: src/pages/detail/HandoffCard.tsx
+msgid "read brief"
+msgstr "read brief"
 
 #: src/pages/Overview.tsx
 msgid "Reading today's activity…"
@@ -2127,6 +2164,10 @@ msgstr "sending…"
 msgid "Sending…"
 msgstr "Sending…"
 
+#: src/pages/detail/SessionRail.tsx
+msgid "sensitive"
+msgstr "sensitive"
+
 #: src/pages/sessions/SwarmPanel.tsx
 #: src/pages/sessions/SwarmPanel.tsx
 msgid "sent"
@@ -2315,6 +2356,10 @@ msgstr "status"
 msgid "Steps"
 msgstr "Steps"
 
+#: src/pages/detail/SessionRail.tsx
+msgid "steps →"
+msgstr "steps →"
+
 #: src/pages/Overview.tsx
 msgid "still blocked"
 msgstr "still blocked"
@@ -2485,6 +2530,10 @@ msgstr "Thinking"
 msgid "This is a production deploy: confirm it in the session's own terminal"
 msgstr "This is a production deploy: confirm it in the session's own terminal"
 
+#: src/pages/detail/SessionRail.tsx
+msgid "this session {spent}"
+msgstr "this session {spent}"
+
 #: src/pages/ProjectOverview.tsx
 msgid "This week"
 msgstr "This week"
@@ -2643,6 +2692,10 @@ msgstr "What its runs may do without asking, and which account they use."
 #: src/pages/sessions/SwarmPanel.tsx
 msgid "What should the other session know?"
 msgstr "What should the other session know?"
+
+#: src/pages/detail/SessionRail.tsx
+msgid "what surrounds this session"
+msgstr "what surrounds this session"
 
 #: src/pages/ProjectOverview.tsx
 msgid "Where work sits"

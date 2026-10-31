@@ -230,7 +230,7 @@ export function Docs(): JSX.Element {
           {toc.length > 0 && (
             <nav
               aria-label={t`On this page`}
-              className="hidden desk:sticky desk:top-4 desk:mt-[18px] desk:block desk:max-h-[80vh] desk:self-start desk:overflow-y-auto"
+              className="hidden desk:sticky desk:top-[calc(var(--detail-band-h,0px)+16px)] desk:mt-[18px] desk:block desk:max-h-[80vh] desk:self-start desk:overflow-y-auto"
             >
               <div className="mb-2 font-mono text-[10px] tracking-[0.12em] text-ink-faint uppercase">
                 <Trans>On this page</Trans>

@@ -12,8 +12,8 @@
 // handoff brief to the rail; the Swarm tab and the usage blocks to folds under the
 // Steps ledger, which go deeper than the rail.
 //
-// The whole column scrolls, panelRef being its one scroller; the composer sticks to
-// its foot on the Chat tab, the rail to its top. A live session opens at the end of
+// The header stays put and everything under it scrolls, panelRef being the one
+// scroller; the composer sticks to its foot on the Chat tab, the rail to its top. A live session opens at the end of
 // the conversation, a finished one at the top. Chat is the tab with no parameter;
 // ?tab=steps|diff deep-link the others, and the old ?tab=timeline|diffs|swarm keep
 // working. Live: session_updated merges header state; event_appended is attributed
@@ -876,196 +876,196 @@ export function SessionPane({
         : t`reply to resume from the saved conversation`;
 
   return (
-    <div
-      ref={panelRef}
-      onScroll={tab === 'chat' ? onPanelScroll : undefined}
-      className="h-full min-h-0 overflow-y-auto [-webkit-overflow-scrolling:touch]"
-    >
-      <div data-testid="session-detail" className="pb-10">
-        <DetailHeader flush>
-          <BackLink to={listHref} />
+    <div data-testid="session-detail" className="flex h-full min-h-0 flex-col">
+      <DetailHeader flush>
+        <BackLink to={listHref} />
 
-          <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 font-mono text-[10.5px] leading-[normal] text-ink-faint">
-            <span className="inline-flex items-center gap-[5px]">
-              <span
-                aria-hidden="true"
-                className="h-1.5 w-1.5 rounded-full"
-                style={{ backgroundColor: colorFor(detail.projectSlug) }}
-              />
-              {projectLabel(detail.projectName, detail.projectSlug)}
-            </span>
-            <span aria-hidden="true">·</span>
-            <span>{plan ? t`plan run` : t`session`}</span>
-            {model !== null && (
-              <>
-                <span aria-hidden="true">·</span>
-                {/* Both ends of a move: amber and "fell back to" are kept for a move
-                    down, the thing that explains a weaker answer. */}
-                {moved === null ? (
-                  <span>{model}</span>
-                ) : (
-                  <span className={moved.fellBack ? 'text-amber' : undefined}>
-                    {modelShortName(moved.from)} {moved.fellBack ? t`→ fell back to` : t`→ changed to`}{' '}
-                    {modelShortName(moved.to)}
-                  </span>
-                )}
-              </>
-            )}
-            {detail.gitBranch !== null && (
-              <>
-                <span aria-hidden="true">·</span>
-                <span>{detail.gitBranch}</span>
-              </>
-            )}
-            {/* Only a non-default subscription: on a one-account machine it would
-                read "default" on every session. */}
-            {account !== null && (
-              <>
-                <span aria-hidden="true">·</span>
-                <span>{account}</span>
-              </>
-            )}
-            {detail.taskExternalId != null && (
-              <TaskChip
-                externalId={detail.taskExternalId}
-                linkSource={detail.taskLinkSource}
-                confidence={detail.taskConfidence}
-              />
-            )}
-          </div>
-
-          <TitleEditor title={detail.title} onRename={rename} />
-
-          <div className="mt-2 flex items-start gap-2 text-[13.5px] leading-[1.5] text-ink-2">
-            <span aria-hidden="true" className={`mt-[5px] inline-block h-[9px] w-[9px] shrink-0 rounded-full ${tone.dot}`} />
-            <span>
-              <b className={`font-semibold ${tone.text}`}>{sentence.lead}</b> {sentence.rest}
-            </span>
-          </div>
-
-          {/* Alarms that act: renders nothing on most sessions. */}
-          <div className="mt-2 flex flex-wrap items-center gap-2 empty:hidden">
-            <ConflictBadge sessionId={detail.id} />
-            <CacheColdBadge session={detail} />
-            <ModelSwitchBadge session={detail} />
-          </div>
-
-          {extractNote !== null && (
-            <div
-              role="status"
-              className={`mt-2 flex items-start gap-2 rounded-[6px] border px-2 py-1 font-mono text-[11px] ${
-                extractNote.tone === 'ok' ? 'border-green text-green' : 'border-red text-red'
-              }`}
-            >
-              <span className="min-w-0 flex-1 break-words">{extractNote.text}</span>
-              <button
-                type="button"
-                onClick={() => setExtractNote(null)}
-                aria-label={t`dismiss`}
-                className="shrink-0 opacity-70 transition-opacity hover:opacity-100"
-              >
-                ×
-              </button>
-            </div>
+        <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 font-mono text-[10.5px] leading-[normal] text-ink-faint">
+          <span className="inline-flex items-center gap-[5px]">
+            <span
+              aria-hidden="true"
+              className="h-1.5 w-1.5 rounded-full"
+              style={{ backgroundColor: colorFor(detail.projectSlug) }}
+            />
+            {projectLabel(detail.projectName, detail.projectSlug)}
+          </span>
+          <span aria-hidden="true">·</span>
+          <span>{plan ? t`plan run` : t`session`}</span>
+          {model !== null && (
+            <>
+              <span aria-hidden="true">·</span>
+              {/* Both ends of a move: amber and "fell back to" are kept for a move
+                  down, the thing that explains a weaker answer. */}
+              {moved === null ? (
+                <span>{model}</span>
+              ) : (
+                <span className={moved.fellBack ? 'text-amber' : undefined}>
+                  {modelShortName(moved.from)} {moved.fellBack ? t`→ fell back to` : t`→ changed to`}{' '}
+                  {modelShortName(moved.to)}
+                </span>
+              )}
+            </>
           )}
-
-          <div className="mt-4">
-            <NumbersStrip items={numbers} />
-          </div>
-
-          {gate !== undefined && (
-            <SessionGate
-              key={`${gate.kind}:${String(gate.requestId)}`}
-              item={gate}
-              session={detail}
-              onChanged={onGateChanged}
-              onOpenComposer={openComposer}
-              onSent={onSent}
-              actions={actions}
+          {detail.gitBranch !== null && (
+            <>
+              <span aria-hidden="true">·</span>
+              <span>{detail.gitBranch}</span>
+            </>
+          )}
+          {/* Only a non-default subscription: on a one-account machine it would
+              read "default" on every session. */}
+          {account !== null && (
+            <>
+              <span aria-hidden="true">·</span>
+              <span>{account}</span>
+            </>
+          )}
+          {detail.taskExternalId != null && (
+            <TaskChip
+              externalId={detail.taskExternalId}
+              linkSource={detail.taskLinkSource}
+              confidence={detail.taskConfidence}
             />
           )}
+        </div>
 
-          <div role="tablist" className="mt-[18px] flex flex-wrap items-center gap-0.5">
-            <TabButton active={tab === 'chat'} onClick={() => setTab('chat')} count={chatCount}>
-              {t`Chat`}
-            </TabButton>
-            <TabButton active={tab === 'steps'} onClick={() => setTab('steps')} count={stepCount}>
-              {t`Steps`}
-            </TabButton>
-            <TabButton active={tab === 'diff'} onClick={() => setTab('diff')} count={diffCount}>
-              {t`Diff`}
-            </TabButton>
-            <span className="min-w-2 flex-1" />
-            <div className="inline-flex gap-1.5 py-1">
-              {/* No `pause` (plan D-13): stopSession ends the process and records it
-                  as finished, so the word would lie. */}
-              {state === 'working' && redirect !== null && (
-                <button
-                  type="button"
-                  onClick={
-                    redirect === 'composer'
-                      ? openComposer
-                      : () => {
-                          setLinkPrompt(true);
-                          setTab('chat');
-                        }
-                  }
-                  className={BUTTON}
-                >
-                  {t`redirect`}
-                </button>
-              )}
-              {live &&
-                (killable === 'killable' ? (
-                  <KillButton session={detail} label={t`stop`} className={BUTTON_RED} />
-                ) : (
-                  <StopButton session={detail} label={t`stop`} className={BUTTON_RED} />
-                ))}
-              {state === 'done' && (
-                <>
-                  <Menu label={outcomeLabel} ariaLabel={t`session outcome`}>
-                    {outcomePicker}
-                  </Menu>
-                  {extractButton}
-                </>
-              )}
-              {(state === 'failed' || state === 'stopped') && (
-                <button type="button" onClick={openComposer} className={BUTTON_ACCENT}>
-                  {t`resume with a reply`}
-                </button>
-              )}
-              {state === 'needs' && focusHref !== null && (
-                <a href={focusHref} className={BUTTON}>
-                  {t`open in terminal ↗`}
-                </a>
-              )}
-              <Menu label="⋯" ariaLabel={t`more for this session`}>
-                {state !== 'done' && <MenuLine label={t`outcome`}>{outcomePicker}</MenuLine>}
-                {state !== 'done' && <MenuLine label={t`board`}>{extractButton}</MenuLine>}
-                {/* Stop vs Kill is explained once, here, next to the process. */}
-                <MenuLine label={t`process`}>
-                  <ExplainPair id="kill-vs-stop">
-                    <ProcBadge session={detail} />
-                  </ExplainPair>
-                  {!live && <KillButton session={detail} />}
-                </MenuLine>
-                <MenuLine label={t`live usage`}>
-                  <SessionLinkChips session={detail} />
-                </MenuLine>
-                <MenuLine label={t`labels`}>
-                  <SessionLabelChips uuid={detail.sessionUuid} />
-                </MenuLine>
-                {/* Link-mod remote control: always shown, disabled with the reason
-                    when no mod polls for this session. */}
-                <MenuLine label={t`remote control`}>
-                  <SessionControls session={detail} />
-                </MenuLine>
-              </Menu>
-            </div>
+        <TitleEditor title={detail.title} onRename={rename} />
+
+        <div className="mt-2 flex items-start gap-2 text-[13.5px] leading-[1.5] text-ink-2">
+          <span aria-hidden="true" className={`mt-[5px] inline-block h-[9px] w-[9px] shrink-0 rounded-full ${tone.dot}`} />
+          <span>
+            <b className={`font-semibold ${tone.text}`}>{sentence.lead}</b> {sentence.rest}
+          </span>
+        </div>
+
+        {/* Alarms that act: renders nothing on most sessions. */}
+        <div className="mt-2 flex flex-wrap items-center gap-2 empty:hidden">
+          <ConflictBadge sessionId={detail.id} />
+          <CacheColdBadge session={detail} />
+          <ModelSwitchBadge session={detail} />
+        </div>
+
+        {extractNote !== null && (
+          <div
+            role="status"
+            className={`mt-2 flex items-start gap-2 rounded-[6px] border px-2 py-1 font-mono text-[11px] ${
+              extractNote.tone === 'ok' ? 'border-green text-green' : 'border-red text-red'
+            }`}
+          >
+            <span className="min-w-0 flex-1 break-words">{extractNote.text}</span>
+            <button
+              type="button"
+              onClick={() => setExtractNote(null)}
+              aria-label={t`dismiss`}
+              className="shrink-0 opacity-70 transition-opacity hover:opacity-100"
+            >
+              ×
+            </button>
           </div>
-        </DetailHeader>
+        )}
 
-        <div className={`flex flex-wrap items-start gap-7 px-4 pt-1 desk:px-7 ${railCollapsed ? 'desk:gap-3' : ''}`}>
+        <div className="mt-4">
+          <NumbersStrip items={numbers} />
+        </div>
+
+        {gate !== undefined && (
+          <SessionGate
+            key={`${gate.kind}:${String(gate.requestId)}`}
+            item={gate}
+            session={detail}
+            onChanged={onGateChanged}
+            onOpenComposer={openComposer}
+            onSent={onSent}
+            actions={actions}
+          />
+        )}
+
+        <div role="tablist" className="mt-[18px] flex flex-wrap items-center gap-0.5">
+          <TabButton active={tab === 'chat'} onClick={() => setTab('chat')} count={chatCount}>
+            {t`Chat`}
+          </TabButton>
+          <TabButton active={tab === 'steps'} onClick={() => setTab('steps')} count={stepCount}>
+            {t`Steps`}
+          </TabButton>
+          <TabButton active={tab === 'diff'} onClick={() => setTab('diff')} count={diffCount}>
+            {t`Diff`}
+          </TabButton>
+          <span className="min-w-2 flex-1" />
+          <div className="inline-flex gap-1.5 py-1">
+            {/* No `pause` (plan D-13): stopSession ends the process and records it
+                as finished, so the word would lie. */}
+            {state === 'working' && redirect !== null && (
+              <button
+                type="button"
+                onClick={
+                  redirect === 'composer'
+                    ? openComposer
+                    : () => {
+                        setLinkPrompt(true);
+                        setTab('chat');
+                      }
+                }
+                className={BUTTON}
+              >
+                {t`redirect`}
+              </button>
+            )}
+            {live &&
+              (killable === 'killable' ? (
+                <KillButton session={detail} label={t`stop`} className={BUTTON_RED} />
+              ) : (
+                <StopButton session={detail} label={t`stop`} className={BUTTON_RED} />
+              ))}
+            {state === 'done' && (
+              <>
+                <Menu label={outcomeLabel} ariaLabel={t`session outcome`}>
+                  {outcomePicker}
+                </Menu>
+                {extractButton}
+              </>
+            )}
+            {(state === 'failed' || state === 'stopped') && (
+              <button type="button" onClick={openComposer} className={BUTTON_ACCENT}>
+                {t`resume with a reply`}
+              </button>
+            )}
+            {state === 'needs' && focusHref !== null && (
+              <a href={focusHref} className={BUTTON}>
+                {t`open in terminal ↗`}
+              </a>
+            )}
+            <Menu label="⋯" ariaLabel={t`more for this session`}>
+              {state !== 'done' && <MenuLine label={t`outcome`}>{outcomePicker}</MenuLine>}
+              {state !== 'done' && <MenuLine label={t`board`}>{extractButton}</MenuLine>}
+              {/* Stop vs Kill is explained once, here, next to the process. */}
+              <MenuLine label={t`process`}>
+                <ExplainPair id="kill-vs-stop">
+                  <ProcBadge session={detail} />
+                </ExplainPair>
+                {!live && <KillButton session={detail} />}
+              </MenuLine>
+              <MenuLine label={t`live usage`}>
+                <SessionLinkChips session={detail} />
+              </MenuLine>
+              <MenuLine label={t`labels`}>
+                <SessionLabelChips uuid={detail.sessionUuid} />
+              </MenuLine>
+              {/* Link-mod remote control: always shown, disabled with the reason
+                  when no mod polls for this session. */}
+              <MenuLine label={t`remote control`}>
+                <SessionControls session={detail} />
+              </MenuLine>
+            </Menu>
+          </div>
+        </div>
+      </DetailHeader>
+
+      <div
+        ref={panelRef}
+        onScroll={tab === 'chat' ? onPanelScroll : undefined}
+        className="min-h-0 flex-1 overflow-y-auto [-webkit-overflow-scrolling:touch]"
+      >
+        <div className={`flex flex-wrap items-start gap-7 px-4 pt-1 pb-10 desk:px-7 ${railCollapsed ? 'desk:gap-3' : ''}`}>
           <div ref={conversationRef} className="min-w-0 flex-[1_1_520px]">
             <div role="tabpanel">
               {tab === 'steps' && (
@@ -1121,7 +1121,14 @@ export function SessionPane({
               />
             )}
           </div>
-          <SessionRail detail={detail} state={state} nowMs={nowMs} costUsd={facts.cost} />
+          <SessionRail
+            detail={detail}
+            state={state}
+            nowMs={nowMs}
+            costUsd={facts.cost}
+            onShowSteps={() => setTab('steps')}
+            onShowDiff={() => showDiffs()}
+          />
         </div>
       </div>
     </div>

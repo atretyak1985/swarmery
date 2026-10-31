@@ -57,13 +57,18 @@ function subagentRow(event: Event, events: readonly Event[], live: boolean): Swa
  * session runs dozens, and the Steps folds keep the full list. */
 export function swarmRows(detail: SessionDetail, state: RowState, nowMs: number): SwarmBlock {
   const steps = String(detail.events.length);
+  const end = detail.endedAt === null ? nowMs : new Date(detail.endedAt).getTime();
+  const span = compactSpan(end - new Date(detail.startedAt).getTime());
   const note =
     state === 'needs'
       ? t`paused on your decision`
       : state === 'working'
-        ? t`main · step ${steps}`
-        : compactSpan(nowMs - new Date(detail.endedAt ?? nowMs).getTime());
-  const main: SwarmRow = { key: 'main', name: detail.modelLast ?? detail.model ?? t`model`, state, note };
+        ? t`step ${steps}`
+        : state === 'failed'
+          ? t`failed after ${span}`
+          : t`finished in ${span}`;
+  const model = detail.modelLast ?? detail.model ?? t`model`;
+  const main: SwarmRow = { key: 'main', name: t`main · ${model}`, state, note };
   const live = state === 'working' || state === 'needs';
   const started = detail.events.filter((e) => e.type === 'subagent_start');
   const shown = started.slice(-MAX_SUBAGENTS);
@@ -100,9 +105,13 @@ export function linkedRows(detail: SessionDetail, slug: string): LinkedRow[] {
   return rows;
 }
 
+/** How much care an area's changes ask for, worst first: the design's order. */
+export type AreaRisk = 'deletes' | 'sensitive' | 'new' | 'edits';
+
 export interface TouchedArea {
   area: string;
   files: number;
+  risk: AreaRisk;
 }
 
 export interface TouchedBlock {
@@ -118,22 +127,41 @@ function repoRelative(path: string, cwd: string | null): string {
   return path.startsWith(root) ? path.slice(root.length) : path;
 }
 
+const SENSITIVE_AREA = /migration|billing|payment/;
+
+function areaRisk(area: string, types: ReadonlySet<FileChange['changeType']>): AreaRisk {
+  if (types.has('delete')) return 'deletes';
+  if (SENSITIVE_AREA.test(area)) return 'sensitive';
+  return types.has('create') ? 'new' : 'edits';
+}
+
+function areaOf(path: string): string {
+  return path
+    .split('/')
+    .filter((segment) => segment !== '')
+    .slice(0, 2)
+    .join('/');
+}
+
 /** Files grouped by their first two path segments below the session's cwd. */
 export function touchedAreas(changes: readonly FileChange[], cwd: string | null): TouchedBlock {
-  const paths = new Set(changes.map((c) => repoRelative(c.filePath, cwd)));
-  const byArea = new Map<string, number>();
-  for (const path of paths) {
-    const area = path
-      .split('/')
-      .filter((segment) => segment !== '')
-      .slice(0, 2)
-      .join('/');
-    byArea.set(area, (byArea.get(area) ?? 0) + 1);
+  const byArea = new Map<string, { paths: Set<string>; types: Set<FileChange['changeType']> }>();
+  const all = new Set<string>();
+  for (const change of changes) {
+    const path = repoRelative(change.filePath, cwd);
+    const area = areaOf(path);
+    const seen = byArea.get(area) ?? { paths: new Set(), types: new Set() };
+    seen.paths.add(path);
+    seen.types.add(change.changeType);
+    byArea.set(area, seen);
+    all.add(path);
   }
   return {
     // A stable sort: areas with the same count keep the order they were first touched.
-    areas: [...byArea].map(([area, files]) => ({ area, files })).sort((a, b) => b.files - a.files),
-    total: paths.size,
+    areas: [...byArea]
+      .map(([area, { paths, types }]) => ({ area, files: paths.size, risk: areaRisk(area, types) }))
+      .sort((a, b) => b.files - a.files),
+    total: all.size,
   };
 }
 

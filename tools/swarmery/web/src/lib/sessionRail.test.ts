@@ -3,7 +3,8 @@
 //   1. swarmRows: the main model first, its note by state; subagents from their
 //      start and stop events, the latest few only, the total still counting them all.
 //   2. linkedRows: the plan and the tracker task, and nothing invented when neither.
-//   3. touchedAreas: paths lose the cwd, group on two segments, cap at four areas.
+//   3. touchedAreas: paths lose the cwd, group on two segments, cap at four areas,
+//      and each says what care it asks for.
 //   4. accountWindow: the session's own subscription, the same window rule as the
 //      footer, and nothing rather than another account's numbers.
 //   5. isHeavy and isHotHandoff draw their lines where the design does.
@@ -72,16 +73,44 @@ const stop = (id: number, parent: number, status: string, durationMs: number | n
 
 const change = (filePath: string): FileChange => ({ filePath }) as FileChange;
 
+describe('touchedAreas risk', () => {
+  const typed = (filePath: string, changeType: FileChange['changeType']): FileChange =>
+    ({ filePath, changeType }) as FileChange;
+  const risk = (changes: FileChange[]): string | undefined => touchedAreas(changes, '/r').areas[0]?.risk;
+
+  it('puts a delete above everything else in the area', () => {
+    expect(risk([typed('/r/db/migrations/1.sql', 'edit'), typed('/r/db/migrations/2.sql', 'delete')])).toBe('deletes');
+  });
+
+  it('calls migrations, billing and payments sensitive, whatever the change', () => {
+    expect(risk([typed('/r/db/migrations/1.sql', 'create')])).toBe('sensitive');
+    expect(risk([typed('/r/services/billing/a.go', 'edit')])).toBe('sensitive');
+    expect(risk([typed('/r/web/payment/a.ts', 'edit')])).toBe('sensitive');
+  });
+
+  it('tells new files from plain edits, and a rename is an edit', () => {
+    expect(risk([typed('/r/web/src/a.ts', 'edit'), typed('/r/web/src/b.ts', 'create')])).toBe('new');
+    expect(risk([typed('/r/web/src/a.ts', 'edit'), typed('/r/web/src/b.ts', 'rename')])).toBe('edits');
+  });
+
+  it('counts a file once however many times it changed', () => {
+    const touched = touchedAreas([typed('/r/web/src/a.ts', 'edit'), typed('/r/web/src/a.ts', 'edit')], '/r');
+    expect(touched.total).toBe(1);
+    expect(touched.areas[0]?.files).toBe(1);
+  });
+});
+
 describe('swarmRows', () => {
   it('leads with the last model and says what it is doing', () => {
     const needs = swarmRows(detail(), 'needs', NOW);
     expect(needs.rows).toEqual([
-      { key: 'main', name: 'claude-opus-5-5', state: 'needs', note: 'paused on your decision' },
+      { key: 'main', name: 'main · claude-opus-5-5', state: 'needs', note: 'paused on your decision' },
     ]);
     expect(needs.total).toBe(1);
     const working = swarmRows(detail({ events: [event(1, {}), event(2, {})] }), 'working', NOW);
-    expect(working.rows[0]?.note).toBe('main · step 2');
-    expect(swarmRows(detail(), 'done', NOW).rows[0]?.note).toBe('12m');
+    expect(working.rows[0]?.note).toBe('step 2');
+    expect(swarmRows(detail(), 'done', NOW).rows[0]?.note).toBe('finished in 48m');
+    expect(swarmRows(detail(), 'failed', NOW).rows[0]?.note).toBe('failed after 48m');
   });
 
   it('reads subagents from their start and stop events', () => {
@@ -111,7 +140,7 @@ describe('swarmRows', () => {
     const events = Array.from({ length: 8 }, (_, i) => start(i + 1, `agent-${String(i + 1)}`));
     const swarm = swarmRows(detail({ events }), 'working', NOW);
     expect(swarm.rows.map((r) => r.name)).toEqual([
-      'claude-opus-5-5',
+      'main · claude-opus-5-5',
       'agent-4',
       'agent-5',
       'agent-6',
@@ -157,8 +186,8 @@ describe('touchedAreas', () => {
     );
     expect(touched).toEqual({
       areas: [
-        { area: 'web/src', files: 2 },
-        { area: 'services/orders', files: 1 },
+        { area: 'web/src', files: 2, risk: 'edits' },
+        { area: 'services/orders', files: 1, risk: 'edits' },
       ],
       total: 3,
     });

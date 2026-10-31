@@ -1937,6 +1937,10 @@ msgstr "збій"
 msgid "Failed"
 msgstr "Невдача"
 
+#: src/lib/sessionRail.ts
+msgid "failed after {span}"
+msgstr "збій через {span}"
+
 #: src/components/SessionControls.tsx
 msgid "failed: {msg}"
 msgstr "збій: {msg}"
@@ -2031,6 +2035,10 @@ msgstr "Завершіть тут: відкрийте термінал, уже �
 #: src/pages/Settings.tsx
 msgid "Finished"
 msgstr "Завершено"
+
+#: src/lib/sessionRail.ts
+msgid "finished in {span}"
+msgstr "завершено за {span}"
 
 #: src/components/NotifySettings.tsx
 #: src/pages/Settings.tsx
@@ -2494,8 +2502,8 @@ msgid "main"
 msgstr "основне"
 
 #: src/lib/sessionRail.ts
-msgid "main · step {steps}"
-msgstr "головна · крок {steps}"
+msgid "main · {model}"
+msgstr "основна · {model}"
 
 #: src/components/ProjectActions.tsx
 msgid "managed"
@@ -4104,6 +4112,10 @@ msgstr "запуск…"
 #: src/workspace/task/RunLog.tsx
 msgid "state"
 msgstr "стан"
+
+#: src/lib/sessionRail.ts
+msgid "step {steps}"
+msgstr "крок {steps}"
 
 #: src/components/StopButton.tsx
 msgid "Stop"

@@ -141,6 +141,7 @@ msgid "{events} events"
 msgstr "подій: {events}"
 
 #: src/pages/detail/SessionRail.tsx
+#: src/pages/detail/SessionRail.tsx
 msgid "{files, plural, one {# file} few {# files} many {# files} other {# files}}"
 msgstr "{files, plural, one {# файл} few {# файли} many {# файлів} other {# файлу}}"
 
@@ -415,8 +416,8 @@ msgid "account"
 msgstr "акаунт"
 
 #: src/pages/detail/SessionRail.tsx
-msgid "ad-hoc session"
-msgstr "разова сесія"
+msgid "accounts →"
+msgstr "акаунти →"
 
 #: src/pages/Approvals.tsx
 #: src/pages/NeedsYou.tsx
@@ -738,6 +739,7 @@ msgid "Collapse activity"
 msgstr "Згорнути активність"
 
 #: src/pages/detail/SessionRail.tsx
+#: src/pages/detail/SessionRail.tsx
 msgid "collapse context · \\"
 msgstr "згорнути контекст · \\"
 
@@ -785,6 +787,7 @@ msgstr "вміст у main"
 #: src/pages/detail/SessionPane.tsx
 #: src/pages/detail/SessionPane.tsx
 #: src/pages/detail/SessionRail.tsx
+#: src/pages/detail/SessionRail.tsx
 msgid "context"
 msgstr "контекст"
 
@@ -793,8 +796,8 @@ msgid "context hogs"
 msgstr "пожирачі контексту"
 
 #: src/pages/detail/HandoffCard.tsx
-msgid "Context is past {tokens}; every turn re-reads it. A brief for a fresh session is ready."
-msgstr "Контекст перевищив {tokens}; кожен хід перечитує його. Бриф для нової сесії готовий."
+msgid "Context is past {tokens} tokens; every turn re-reads it and costs more. The brief lets a fresh session pick up here."
+msgstr "Контекст перевищив {tokens} токенів; кожен хід перечитує його і коштує дорожче. Бриф дає новій сесії продовжити звідси."
 
 #: src/pages/sessions/CacheColdBadge.tsx
 msgid "continue from handoff"
@@ -866,6 +869,10 @@ msgstr "видалити"
 msgid "delete rule {pattern}"
 msgstr "видалити правило {pattern}"
 
+#: src/pages/detail/SessionRail.tsx
+msgid "deletes"
+msgstr "видалення"
+
 #: src/pages/Approvals.tsx
 msgid "denied"
 msgstr "відхилено"
@@ -892,6 +899,10 @@ msgstr "руйнівна дія: питає щоразу, без «завжди 
 #: src/pages/detail/SessionPane.tsx
 msgid "Diff"
 msgstr "Зміни"
+
+#: src/pages/detail/SessionRail.tsx
+msgid "diff →"
+msgstr "зміни →"
 
 #: src/pages/detail/SessionPane.tsx
 #: src/pages/NeedsYou.tsx
@@ -928,6 +939,10 @@ msgstr "тривалість"
 #: src/pages/Sessions.tsx
 msgid "Earlier"
 msgstr "Раніше"
+
+#: src/pages/detail/SessionRail.tsx
+msgid "edits"
+msgstr "правки"
 
 #: src/pages/detail/SessionPane.tsx
 msgid "elapsed"
@@ -986,6 +1001,7 @@ msgstr "Кожен етап живить наступний. Числа — за
 msgid "Expand activity"
 msgstr "Розгорнути активність"
 
+#: src/pages/detail/SessionRail.tsx
 #: src/pages/detail/SessionRail.tsx
 msgid "expand context · \\"
 msgstr "розгорнути контекст · \\"
@@ -1148,6 +1164,10 @@ msgstr "у роботі в"
 msgid "hide"
 msgstr "сховати"
 
+#: src/pages/detail/HandoffCard.tsx
+msgid "hide brief"
+msgstr "сховати бриф"
+
 #: src/pages/Approvals.tsx
 #: src/pages/Approvals.tsx
 msgid "History"
@@ -1227,6 +1247,10 @@ msgstr "Останнє"
 #: src/pages/today/loopModel.ts
 msgid "Learn"
 msgstr "Навчання"
+
+#: src/pages/detail/SessionRail.tsx
+msgid "learning →"
+msgstr "навчання →"
 
 #: src/pages/today/feedModel.ts
 msgid "Lesson may have stopped helping: {title}"
@@ -1366,6 +1390,14 @@ msgstr "needs you…"
 msgid "nested agents"
 msgstr "вкладені агенти"
 
+#: src/pages/detail/SessionRail.tsx
+msgid "new files"
+msgstr "нові файли"
+
+#: src/pages/detail/SessionRail.tsx
+msgid "no changes yet"
+msgstr "змін ще немає"
+
 #: src/pages/detail/Chat.tsx
 msgid "no conversation in this session yet"
 msgstr "у цій сесії ще немає розмови"
@@ -1435,8 +1467,8 @@ msgid "No phase carries a forecast yet — add one so a run has something to be 
 msgstr "Жодна фаза ще не має прогнозу — додайте його, щоб запуск було з чим порівняти."
 
 #: src/pages/detail/SessionRail.tsx
-msgid "no plan"
-msgstr "без плану"
+msgid "no plan · ad-hoc session"
+msgstr "без плану · сесія поза планом"
 
 #: src/pages/Projects.tsx
 msgid "no projects match the current filter — try a different search or clear it"
@@ -1512,8 +1544,8 @@ msgid "none checked by you yet."
 msgstr "ви ще жодної не перевірили."
 
 #: src/pages/detail/SessionRail.tsx
-msgid "none matched"
-msgstr "нічого не збіглося"
+msgid "none matched this session"
+msgstr "для цієї сесії нічого не знайдено"
 
 #: src/pages/detail/LiveActivity.tsx
 msgid "Noodling"
@@ -1798,6 +1830,7 @@ msgstr "Фаза {seq} застрягла"
 msgid "Phase / card"
 msgstr "Фаза / картка"
 
+#: src/pages/detail/SessionRail.tsx
 #: src/pages/NeedsYou.tsx
 msgid "phase →"
 msgstr "фаза →"
@@ -1937,6 +1970,10 @@ msgstr "у черзі, чекає, доки мод її забере"
 #: src/pages/NeedsYou.tsx
 msgid "raw"
 msgstr "сирий"
+
+#: src/pages/detail/HandoffCard.tsx
+msgid "read brief"
+msgstr "читати бриф"
 
 #: src/pages/Overview.tsx
 msgid "Reading today's activity…"
@@ -2127,6 +2164,10 @@ msgstr "надсилаємо…"
 msgid "Sending…"
 msgstr "Надсилаємо…"
 
+#: src/pages/detail/SessionRail.tsx
+msgid "sensitive"
+msgstr "чутливе"
+
 #: src/pages/sessions/SwarmPanel.tsx
 #: src/pages/sessions/SwarmPanel.tsx
 msgid "sent"
@@ -2315,6 +2356,10 @@ msgstr "статус"
 msgid "Steps"
 msgstr "Кроки"
 
+#: src/pages/detail/SessionRail.tsx
+msgid "steps →"
+msgstr "кроки →"
+
 #: src/pages/Overview.tsx
 msgid "still blocked"
 msgstr "досі чекають"
@@ -2485,6 +2530,10 @@ msgstr "Думає"
 msgid "This is a production deploy: confirm it in the session's own terminal"
 msgstr "Це розгортання в продакшн: підтвердьте його в терміналі самої сесії"
 
+#: src/pages/detail/SessionRail.tsx
+msgid "this session {spent}"
+msgstr "ця сесія {spent}"
+
 #: src/pages/ProjectOverview.tsx
 msgid "This week"
 msgstr "Цього тижня"
@@ -2643,6 +2692,10 @@ msgstr "Що його запуски можуть робити без запит
 #: src/pages/sessions/SwarmPanel.tsx
 msgid "What should the other session know?"
 msgstr "Що має знати інша сесія?"
+
+#: src/pages/detail/SessionRail.tsx
+msgid "what surrounds this session"
+msgstr "що оточує цю сесію"
 
 #: src/pages/ProjectOverview.tsx
 msgid "Where work sits"

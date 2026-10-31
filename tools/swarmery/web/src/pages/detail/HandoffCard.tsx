@@ -93,32 +93,37 @@ export function HandoffCard({
     <div
       id="handoff"
       ref={ref}
-      className={`rounded-[9px] border px-3 py-2.5 ${hot ? 'border-red bg-red-bg' : 'border-brand bg-brand-bg'}`}
+      className={`border-b border-l-[3px] px-3.5 py-3 ${hot ? 'border-red bg-red-bg' : 'border-brand bg-brand-bg'}`}
     >
-      <button
-        type="button"
-        onClick={toggle}
-        aria-expanded={open}
-        className={`flex w-full items-center gap-1.5 text-left font-mono text-[10px] leading-[normal] tracking-[0.12em] uppercase ${tone}`}
+      <div
+        className={`flex items-center gap-1.5 font-mono text-[10px] leading-[normal] tracking-[0.12em] uppercase ${tone}`}
       >
         <Trans>handoff</Trans>
-        <span className="ml-auto tracking-normal text-ink-faint normal-case">
-          {t`ready · ${age} ago`} <span aria-hidden="true">{open ? '▾' : '▸'}</span>
-        </span>
-      </button>
+        <span className="ml-auto tracking-normal text-ink-faint normal-case">{t`ready · ${age} ago`}</span>
+      </div>
       <p className="m-0 mt-1.5 text-[12.5px] leading-[1.5] text-ink-2">
         {hot
-          ? t`Context is past ${tokens}; every turn re-reads it. A brief for a fresh session is ready.`
+          ? t`Context is past ${tokens} tokens; every turn re-reads it and costs more. The brief lets a fresh session pick up here.`
           : t`The daemon wrote a brief for a fresh session.`}
       </p>
-      <button
-        type="button"
-        onClick={copyResume}
-        data-tip={t`Copy the command that starts a fresh session from this handoff`}
-        className={`mt-2 rounded-[6px] border border-current bg-transparent px-2.5 py-1 font-mono text-[10.5px] leading-[normal] ${tone}`}
-      >
-        {copied ? t`copied ✓` : t`copy resume command`}
-      </button>
+      <div className="mt-2.5 flex flex-wrap items-center gap-2">
+        <button
+          type="button"
+          onClick={copyResume}
+          data-tip={t`Copy the command that starts a fresh session from this handoff`}
+          className={`rounded-[6px] border border-current bg-transparent px-2.5 py-1 font-mono text-[10.5px] leading-[normal] ${tone}`}
+        >
+          {copied ? t`copied ✓` : t`copy resume command`}
+        </button>
+        <button
+          type="button"
+          onClick={toggle}
+          aria-expanded={open}
+          className="bg-transparent p-0 font-mono text-[10.5px] leading-[normal] text-ink-faint transition-colors hover:text-brand"
+        >
+          {open ? t`hide brief` : t`read brief`}
+        </button>
+      </div>
 
       {open && (
         // The rail is sticky, so a brief taller than the window would run off its foot.

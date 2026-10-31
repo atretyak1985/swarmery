@@ -6,10 +6,17 @@
 //
 // `bleed` is for a band inside a padded column: it reaches back out to the column's
 // edges, the design's `margin: 0 -28px`.
+//
+// The band stays put while the detail scrolls under it, from `desk` up: below it the
+// list and the detail share one scroll and a tall band would take the screen. Its
+// parent must hold the body too, because sticky stops at the parent's edge. Its height
+// goes to `--detail-band-h`, for whatever anchors or sticks in the scroll beneath it.
 
 import { Trans } from '@lingui/react/macro';
-import type { ReactNode } from 'react';
+import { type ReactNode, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
+
+const BAND_HEIGHT_VAR = '--detail-band-h';
 
 export function DetailHeader({
   banner,
@@ -24,8 +31,26 @@ export function DetailHeader({
   bleed?: boolean;
   children: ReactNode;
 }): JSX.Element {
+  const bandRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    const band = bandRef.current;
+    if (band === null || typeof ResizeObserver === 'undefined') return;
+    const root = document.documentElement;
+    const observer = new ResizeObserver(() => {
+      root.style.setProperty(BAND_HEIGHT_VAR, `${String(band.offsetHeight)}px`);
+    });
+    observer.observe(band);
+    return () => {
+      observer.disconnect();
+      root.style.removeProperty(BAND_HEIGHT_VAR);
+    };
+  }, []);
+
   return (
-    <div className={`border-b border-line bg-bg ${bleed ? '-mx-4 desk:-mx-7' : ''}`}>
+    <div
+      ref={bandRef}
+      className={`shrink-0 border-b border-line bg-bg desk:sticky desk:top-0 desk:z-20 ${bleed ? '-mx-4 desk:-mx-7' : ''}`}
+    >
       {banner}
       <div className={`px-4 pt-[18px] desk:px-7 ${flush ? '' : 'pb-4'}`}>{children}</div>
     </div>

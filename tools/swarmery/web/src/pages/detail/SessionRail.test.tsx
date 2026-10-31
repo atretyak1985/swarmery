@@ -9,6 +9,9 @@
 //      mounted behind desk:hidden, because below `desk` the rail never collapses.
 //   4. Arriving at #handoff opens a collapsed rail.
 //   5. `heavy` past $20.
+//   6. One card under a `context` strip; each block links to where its detail lives,
+//      and the account shows its plan as a bar only when there is one.
+//   7. The branch leads Linked, and an area says what care it asks for.
 //
 // Runs with the rest of the web suite: `npm test`.
 
@@ -23,6 +26,8 @@ import { SessionRail } from './SessionRail';
 
 vi.mock('../../api/lessons', () => ({ fetchLessons: vi.fn() }));
 vi.mock('../../api', () => ({ fetchSessionHandoff: vi.fn(async () => ({ markdown: '## Brief', path: '/h.md', createdAt: '' })) }));
+const usage = vi.hoisted(() => ({ value: { accounts: [] as unknown[], providers: [] as unknown[] } }));
+vi.mock('../../lib/usageData', () => ({ useUsage: () => usage.value }));
 
 const NOW = Date.parse('2026-10-31T12:00:00Z');
 
@@ -64,13 +69,25 @@ function renderRail(over: Partial<SessionDetail> = {}, costUsd: number | null = 
         <Routes>
           <Route
             path="*"
-            element={<SessionRail detail={makeDetail(over)} state="needs" nowMs={NOW} costUsd={costUsd} />}
+            element={
+              <SessionRail
+                detail={makeDetail(over)}
+                state="needs"
+                nowMs={NOW}
+                costUsd={costUsd}
+                onShowSteps={onShowSteps}
+                onShowDiff={onShowDiff}
+              />
+            }
           />
         </Routes>
       </MemoryRouter>
     </StrictMode>,
   );
 }
+
+const onShowSteps = vi.fn();
+const onShowDiff = vi.fn();
 
 const rail = (): HTMLElement => screen.getByRole('complementary', { name: 'session context' });
 
@@ -79,6 +96,7 @@ beforeEach(() => {
   reloadPanels();
   vi.clearAllMocks();
   vi.mocked(lessons.fetchLessons).mockResolvedValue([]);
+  usage.value = { accounts: [], providers: [] };
 });
 
 afterEach(cleanup);
@@ -89,26 +107,25 @@ describe('SessionRail', () => {
     for (const label of ['swarm', 'linked', 'account', 'touches', 'lessons']) {
       expect(within(rail()).getByText(label)).toBeTruthy();
     }
-    expect(screen.getByText('claude-opus-5-5')).toBeTruthy();
+    expect(screen.getByText('main · claude-opus-5-5')).toBeTruthy();
     expect(screen.getByText('paused on your decision')).toBeTruthy();
-    expect(screen.getByText('no plan')).toBeTruthy();
-    expect(screen.getByText('ad-hoc session')).toBeTruthy();
+    expect(screen.getByText('no plan · ad-hoc session')).toBeTruthy();
     expect(screen.getByText('default')).toBeTruthy();
     expect(screen.getByText('nothing touched yet')).toBeTruthy();
-    expect(await screen.findByText('none matched')).toBeTruthy();
+    expect(await screen.findByText('none matched this session')).toBeTruthy();
   });
 
   it('counts the files and lists their areas', () => {
     renderRail({ fileChanges: FILES });
     expect(screen.getByText('services/orders')).toBeTruthy();
     expect(screen.getByText('web/src')).toBeTruthy();
-    expect(screen.getAllByText('1 file')).toHaveLength(2);
+    expect(screen.getAllByText('1 file · edits')).toHaveLength(2);
   });
 
   it('links a plan session to its phase', () => {
     renderRail({ planGroup: { taskId: 7, title: 'Rate limiter', role: 'phase', phaseId: 3, phaseSeq: 3, phaseName: 'x' } });
     expect(screen.getByRole('link', { name: /Rate limiter/ }).getAttribute('href')).toBe('/p/orders-api/plans?task=7&phase=3');
-    expect(screen.queryByText('no plan')).toBeNull();
+    expect(screen.queryByText('no plan · ad-hoc session')).toBeNull();
   });
 
   it('asks for the active lessons of each area and merges them', async () => {
@@ -147,7 +164,7 @@ describe('SessionRail', () => {
 
   it('asks for no lessons when the session touched nothing', async () => {
     renderRail();
-    await screen.findByText('none matched');
+    await screen.findByText('none matched this session');
     expect(lessons.fetchLessons).not.toHaveBeenCalled();
   });
 
@@ -155,7 +172,7 @@ describe('SessionRail', () => {
     vi.mocked(lessons.fetchLessons).mockRejectedValue(new Error('down'));
     renderRail({ fileChanges: FILES });
     expect(await screen.findByText('lessons unavailable')).toBeTruthy();
-    expect(screen.queryByText('none matched')).toBeNull();
+    expect(screen.queryByText('none matched this session')).toBeNull();
   });
 
   it('marks a session past $20 as heavy', () => {
@@ -179,11 +196,10 @@ describe('SessionRail', () => {
     renderRail({ handoff: HANDOFF });
     const block = screen.getByText('swarm');
     fireEvent.click(screen.getByRole('button', { name: 'collapse context · \\' }));
-    expect(screen.getByRole('button', { name: 'expand context · \\' }).textContent).toBe('◂');
+    expect(screen.getByRole('button', { name: 'expand context · \\' }).textContent).toBe('⇢context');
     expect(screen.getByText('swarm')).toBe(block);
     expect(document.getElementById('handoff')?.closest('.contents')?.className).toContain('desk:hidden');
     expect(rail().className).toContain('desk:flex-[0_0_28px]');
-    expect(screen.getByText('context')).toBeTruthy();
     expect(screen.getByText('⇢')).toBeTruthy();
   });
 
@@ -191,7 +207,7 @@ describe('SessionRail', () => {
     window.localStorage.setItem('swarmery.v4.panels', '{"rail":true}');
     reloadPanels();
     renderRail();
-    expect(screen.getByText('context')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'expand context · \\' }).textContent).toBe('context');
     expect(screen.queryByText('⇢')).toBeNull();
   });
 
@@ -223,6 +239,72 @@ describe('SessionRail', () => {
     expect(brief.className).toContain('max-h-[50vh]');
     expect(brief.className).toContain('overflow-y-auto');
     expect(brief.contains(await screen.findByRole('heading', { name: 'Brief' }))).toBe(true);
+  });
+
+  it('is one card under a context strip', () => {
+    renderRail();
+    expect(rail().className).toContain('rounded-[10px]');
+    expect(rail().className).toContain('self-start');
+    expect(screen.getByText(/what surrounds this session/)).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'collapse context · \\' }).textContent).toBe('»');
+  });
+
+  it('links each block to where its detail lives', () => {
+    renderRail({ fileChanges: FILES });
+    fireEvent.click(screen.getByRole('button', { name: 'steps →' }));
+    expect(onShowSteps).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByRole('button', { name: 'diff →' }));
+    expect(onShowDiff).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole('link', { name: 'accounts →' }).getAttribute('href')).toBe('/settings?tab=accounts');
+    expect(screen.getByRole('link', { name: 'learning →' }).getAttribute('href')).toBe('/learning');
+  });
+
+  it('offers no diff link when nothing was touched', () => {
+    renderRail();
+    expect(screen.queryByRole('button', { name: 'diff →' })).toBeNull();
+  });
+
+  it('sends a phase run to its phase instead of the steps', () => {
+    renderRail({ planGroup: { taskId: 7, title: 'Rate limiter', role: 'phase', phaseId: 3, phaseSeq: 3, phaseName: 'x' } });
+    expect(screen.getByRole('link', { name: 'phase →' }).getAttribute('href')).toBe('/p/orders-api/plans?task=7&phase=3');
+    expect(screen.queryByRole('button', { name: 'steps →' })).toBeNull();
+  });
+
+  it('leads Linked with the branch, which opens the diff', () => {
+    renderRail({ gitBranch: 'feat/rate', fileChanges: FILES });
+    const branch = screen.getByRole('button', { name: /feat\/rate/ });
+    expect(branch.textContent).toContain('2 files');
+    fireEvent.click(branch);
+    expect(onShowDiff).toHaveBeenCalledTimes(1);
+  });
+
+  it('says so when the branch has no changes, and leaves a missing branch out', () => {
+    renderRail({ gitBranch: 'main' });
+    expect(screen.getByText('no changes yet')).toBeTruthy();
+    cleanup();
+    renderRail({ gitBranch: null });
+    expect(screen.queryByText('no changes yet')).toBeNull();
+  });
+
+  it('colours an area by the care it asks for', () => {
+    renderRail({
+      fileChanges: [{ filePath: '/work/repo/db/migrations/1.sql', changeType: 'create' }] as SessionDetail['fileChanges'],
+    });
+    expect(screen.getByText('1 file · sensitive').className).toContain('text-brand');
+  });
+
+  it('draws the plan as a bar with the session on the line, and no bar without a plan', () => {
+    renderRail({}, 3);
+    expect(rail().querySelector('.bg-brand')).toBeNull();
+    expect(screen.getByText('this session $3.00')).toBeTruthy();
+    cleanup();
+    usage.value = {
+      accounts: [],
+      providers: [{ status: 'ok', windows: [{ key: 'session', percentUsed: 41 }] }],
+    };
+    renderRail({}, 3);
+    expect((rail().querySelector('.bg-brand') as HTMLElement).style.width).toBe('41%');
+    expect(screen.getByText('plan 41 % · this session $3.00')).toBeTruthy();
   });
 
   it('stays collapsed on #handoff when the session has no brief', () => {
