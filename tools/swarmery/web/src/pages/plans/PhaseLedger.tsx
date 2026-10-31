@@ -2,8 +2,8 @@
 // plan's state reads top to bottom. A click on a line opens it in place to its runs,
 // its criteria and every action the phase offers; the phase's name opens the phase's
 // own page. The running phase, else the next runnable one, is open until the operator
-// picks another: that is the one a person came to look at. PhaseRunLine, above the
-// ledger, says what a run started now will use.
+// picks another: that is the one a person came to look at. What a run started now
+// will use is on the plan's metadata line, above the ledger.
 
 import { Trans, useLingui } from '@lingui/react/macro';
 import { useState } from 'react';
@@ -34,14 +34,12 @@ import {
 import {
   DocModelChip,
   PhaseRunEffortPicker,
-  phaseRunEffortLine,
-  phaseRunModelLine,
   PhaseRunModelPicker,
   RunModelChip,
   type PhaseRunEffort,
   type PhaseRunModel,
 } from './PhaseRunPickers';
-import { fmtSpent, phaseNeedsYou, phaseStatus, type PhaseStatus } from './planModel';
+import { fmtSpent, phaseNeedsYou, phasesLanded, phaseStatus, type PhaseStatus } from './planModel';
 import type { PhaseDetailTab } from './plansTarget';
 import { TerminalBadge } from './TerminalBadge';
 import { reverifyAction, type Reverify } from './useReverify';
@@ -319,10 +317,23 @@ export function PhaseLedger({
   const costs = epic.phases.map((p) => phaseCost(phaseRuns(sessions, p.id)));
   const maxCost = Math.max(0, ...costs.flatMap((c) => (c === null ? [] : [c])));
 
+  const total = epic.phases.length;
+  const landed = phasesLanded(epic, resolvedSeqs);
+
   return (
     <div>
+      <div className="flex items-baseline gap-2 font-mono text-[10px] leading-[normal] text-ink-faint">
+        <span className="tracking-[0.12em] uppercase">
+          <Trans>Phases</Trans>
+        </span>
+        <span>{t`${total} · ${landed} landed`}</span>
+        <span className="flex-1" />
+        <span className="hidden desk:inline">
+          <Trans>click a name to open · ▸ to expand runs</Trans>
+        </span>
+      </div>
       <div
-        className={`${GRID} border-b border-line pb-1.5 font-mono text-[10px] leading-[normal] tracking-[0.1em] text-ink-faint uppercase`}
+        className={`${GRID} mt-2.5 border-b border-line pb-1.5 font-mono text-[10px] leading-[normal] tracking-[0.1em] text-ink-faint uppercase`}
       >
         <span />
         <span>#</span>
@@ -463,24 +474,6 @@ export function PhaseLedger({
           );
         })}
       </ol>
-    </div>
-  );
-}
-
-/** What a run started now will use: the pickers' values, then how runs are isolated. */
-export function PhaseRunLine({ model, effort }: { model: PhaseRunModel; effort: PhaseRunEffort }): JSX.Element {
-  const { t } = useLingui();
-  return (
-    <div className="mt-3 flex flex-wrap gap-x-[22px] gap-y-1.5 font-mono text-[10.5px] leading-[normal] text-ink-faint">
-      <span>
-        {t`run model`} · <span className="text-ink-dim">{phaseRunModelLine(model)}</span>
-      </span>
-      <span>
-        {t`effort`} · <span className="text-ink-dim">{phaseRunEffortLine(effort)}</span>
-      </span>
-      <span>
-        {t`isolation`} · <span className="text-ink-dim">{t`worktree per phase`}</span>
-      </span>
     </div>
   );
 }

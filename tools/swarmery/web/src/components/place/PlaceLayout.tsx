@@ -10,8 +10,12 @@
 // on a route that keeps the shell's scroller, and `flex-1` the same on a fill
 // route. The grid row is `minmax(0,1fr)`: an auto row would grow to the list's
 // content and the list would never scroll.
+//
+// A collapsed list (lib/panels.ts) leaves a 34px strip, only from `desk` up: below
+// it there is one column and nothing to collapse (D-3).
 
 import type { ReactNode } from 'react';
+import { PANEL_EASE, usePanels } from '../../lib/panels';
 
 export type NarrowPane = 'both' | 'list' | 'detail';
 
@@ -25,8 +29,14 @@ export function PlaceLayout({
   /** Below `desk`: which pane shows. From `desk` up both always do. */
   narrow?: NarrowPane;
 }): JSX.Element {
+  const { list: collapsed } = usePanels();
+  const columns = collapsed
+    ? 'desk:grid-cols-[34px_minmax(0,1fr)]'
+    : 'desk:grid-cols-[clamp(280px,28vw,360px)_minmax(0,1fr)]';
   return (
-    <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-y-auto desk:grid desk:grid-cols-[clamp(280px,28vw,360px)_minmax(0,1fr)] desk:grid-rows-[minmax(0,1fr)] desk:overflow-hidden">
+    <div
+      className={`flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-y-auto transition-[grid-template-columns] desk:grid desk:grid-rows-[minmax(0,1fr)] desk:overflow-hidden ${columns} ${PANEL_EASE}`}
+    >
       <div className={narrow === 'detail' ? 'hidden desk:contents' : 'contents'}>{list}</div>
       <div
         className={`min-h-0 min-w-0 bg-surface desk:block desk:overflow-y-auto ${

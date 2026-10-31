@@ -20,6 +20,7 @@ vi.mock('../../api', async (orig) => ({
     conflicts: [{ path: '/r/a.go', sessions: [{ sessionId: 1, sessionUuid: 'u1' }, { sessionId: 2, sessionUuid: 'u2' }] }],
   }),
 }));
+vi.mock('../../api/lessons', () => ({ fetchLessons: vi.fn(async () => []) }));
 vi.mock('../../lib/ws', () => ({ useLiveUpdates: () => undefined }));
 vi.mock('../../lib/scope', () => ({
   useScope: () => ({ scope: null, scopeName: null, scopeProject: null, projects: [], setScope: () => undefined }),

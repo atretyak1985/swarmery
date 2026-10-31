@@ -21,6 +21,7 @@ import { postGroundTruth, type QueueItem } from '../../api/decisions';
 import { acceptLesson, confirmRetirement, dismissLesson, keepLesson } from '../../api/lessons';
 import { ackReview } from '../../api/reviews';
 import { acceptTriageVerdict, type TriageAudit } from '../../api/triage';
+import { DetailHeader } from '../../components/place/DetailHeader';
 import { UI_TERMS } from '../../lib/glossary';
 import {
   ageLabel,
@@ -530,26 +531,29 @@ export function InboxDetail({
   return (
     <article
       aria-label={item.title}
-      className="box-border flex min-h-full max-w-[900px] flex-col px-7 pt-[22px] pb-10"
+      className="box-border flex min-h-full max-w-[900px] flex-col px-4 pb-10 desk:px-7"
     >
-      <div className="flex min-w-0 items-center gap-2 font-mono text-[10.5px] leading-[normal]">
-        <span className={`shrink-0 whitespace-nowrap ${meta.text}`}>● {meta.label}</span>
-        <span className="min-w-0 truncate text-ink-faint">· {item.context}</span>
-        {fleetWide && (
-          <span className="shrink-0 text-ink-faint">
-            <Trans>· fleet-wide</Trans>
-          </span>
-        )}
-        {item.expiresIso !== undefined && item.urgent && (
-          <span className="ml-auto shrink-0 text-amber">
-            <Trans>expires in {expiresIn}</Trans>
-          </span>
-        )}
-      </div>
-      <h2 className="mt-[10px] mb-0 text-[20px] leading-[1.3] font-semibold tracking-[-0.015em] text-balance text-ink">
-        {title}
-      </h2>
-      {body}
+      <DetailHeader bleed>
+        <div className="flex min-w-0 items-center gap-2 font-mono text-[10.5px] leading-[normal]">
+          <span className={`shrink-0 whitespace-nowrap ${meta.text}`}>● {meta.label}</span>
+          <span className="min-w-0 truncate text-ink-faint">· {item.context}</span>
+          {fleetWide && (
+            <span className="shrink-0 text-ink-faint">
+              <Trans>· fleet-wide</Trans>
+            </span>
+          )}
+          {item.expiresIso !== undefined && item.urgent && (
+            <span className="ml-auto shrink-0 text-amber">
+              <Trans>expires in {expiresIn}</Trans>
+            </span>
+          )}
+        </div>
+        <h2 className="mt-[10px] mb-0 text-[20px] leading-[1.3] font-semibold tracking-[-0.015em] text-balance text-ink">
+          {title}
+        </h2>
+      </DetailHeader>
+      {/* The bodies open with their own 10px: 16px under the band. */}
+      <div className="pt-1.5">{body}</div>
       {hasSuggestion && suggestion !== undefined && (
         <section
           aria-label={t`agent suggestion`}

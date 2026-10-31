@@ -84,6 +84,121 @@ export function needYouCount(epic: Epic): number {
   return epic.phases.filter(phaseNeedsYou).length;
 }
 
+/** A phase on the plan's bar. `started` is what the design has no word for: a phase
+ * with progress but no process, which is neither `running` nor `not started`. */
+export type SegmentState =
+  | 'landed'
+  | 'running'
+  | 'guard'
+  | 'decision'
+  | 'failed'
+  | 'manual'
+  | 'blocked'
+  | 'started'
+  | 'pending';
+
+/** In the order of the ledger's glyph (phaseGlyph), so the bar never disagrees with
+ * the row under it. A phase waiting on you outranks a run: that it runs is not what
+ * the operator has to know about it. */
+export function segmentState(p: EpicPhase, resolvedSeqs: Set<number>): SegmentState {
+  if (phaseNeedsYou(p)) {
+    if (p.guardDecision != null) return 'guard';
+    return p.decisionHold != null || p.reviewDecision != null ? 'decision' : 'manual';
+  }
+  if (p.runState === 'running' || p.verifyRunning === true) return 'running';
+  const status = phaseStatus(p, resolvedSeqs);
+  if (status === 'done') return 'landed';
+  if (p.runState === 'failed' || p.runOutcome === 'failed') return 'failed';
+  if (p.runState === 'blocked') return 'blocked';
+  return status === 'pending' || status === 'blocked' ? 'pending' : 'started';
+}
+
+const SEGMENT_ORDER: readonly SegmentState[] = [
+  'landed',
+  'running',
+  'guard',
+  'decision',
+  'failed',
+  'manual',
+  'blocked',
+  'started',
+  'pending',
+];
+
+export interface LegendEntry {
+  state: SegmentState;
+  count: number;
+}
+
+/** How many phases stand in each state, leaving out the states nobody is in. */
+export function planLegend(states: readonly SegmentState[]): LegendEntry[] {
+  return SEGMENT_ORDER.flatMap((state) => {
+    const count = states.filter((s) => s === state).length;
+    return count === 0 ? [] : [{ state, count }];
+  });
+}
+
+/** The state in one word or two, for a single phase. */
+export function segmentWord(state: SegmentState): string {
+  switch (state) {
+    case 'landed':
+      return t`landed`;
+    case 'running':
+      return t`running`;
+    case 'guard':
+      return t`guard stop`;
+    case 'decision':
+      return t`decision`;
+    case 'failed':
+      return t`failed`;
+    case 'manual':
+      return t`manual check`;
+    case 'blocked':
+      return t`blocked`;
+    case 'started':
+      return t`in progress`;
+    case 'pending':
+      return t`not started`;
+  }
+}
+
+/** How many phases are in a state, for the legend and the blocker banner. */
+export function segmentLabel(state: SegmentState, count: number): string {
+  switch (state) {
+    case 'landed':
+      return t`${count} landed`;
+    case 'running':
+      return t`${count} running`;
+    case 'failed':
+      return t`${count} failed`;
+    case 'blocked':
+      return t`${count} blocked`;
+    case 'guard':
+      return plural(count, { one: '# guard stop', few: '# guard stops', many: '# guard stops', other: '# guard stops' });
+    case 'decision':
+      return plural(count, { one: '# decision', few: '# decisions', many: '# decisions', other: '# decisions' });
+    case 'manual':
+      return plural(count, {
+        one: '# manual check',
+        few: '# manual checks',
+        many: '# manual checks',
+        other: '# manual checks',
+      });
+    case 'started':
+      return t`${count} in progress`;
+    case 'pending':
+      return t`${count} not started`;
+  }
+}
+
+/** The grey half of the blocker banner: what the waiting phases wait for. */
+export function blockerDetail(legend: readonly LegendEntry[]): string {
+  return legend
+    .filter((e) => e.state === 'guard' || e.state === 'decision' || e.state === 'manual')
+    .map((e) => segmentLabel(e.state, e.count))
+    .join(', ');
+}
+
 export function phasesLanded(epic: Epic, resolvedSeqs: Set<number>): number {
   return epic.phases.filter((p) => phaseStatus(p, resolvedSeqs) === 'done').length;
 }

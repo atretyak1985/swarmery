@@ -20,11 +20,14 @@ export function ProjectSwitcher({
   currentSlug,
   /** Current workspace sub-tab (e.g. "board") to preserve across a switch. */
   subPath,
+  compact = false,
 }: {
   projects: Project[];
   /** The project in scope, or null for All projects (no project). */
   currentSlug: string | null;
   subPath: string;
+  /** The collapsed sidebar: the trigger shrinks to its swatch, the menu stays whole. */
+  compact?: boolean;
 }): JSX.Element {
   const navigate = useNavigate();
   const { t } = useLingui();
@@ -103,6 +106,7 @@ export function ProjectSwitcher({
         aria-haspopup="listbox"
         aria-expanded={open}
         aria-label={t`switch project`}
+        data-tip={compact ? label : undefined}
         onClick={() => setOpen((v) => !v)}
         onKeyDown={(e) => {
           if (e.key === 'ArrowDown' && open) {
@@ -118,14 +122,18 @@ export function ProjectSwitcher({
           className={`h-[7px] w-[7px] shrink-0 rounded-full ${allProjects ? 'bg-ink-dim' : ''}`}
           style={allProjects ? undefined : { backgroundColor: colorFor(current?.slug ?? currentSlug) }}
         />
-        <span
-          className={`min-w-0 flex-1 truncate font-mono text-[11px] leading-[normal] ${allProjects ? 'text-ink-dim' : 'text-ink-2'}`}
-        >
-          {label}
-        </span>
-        <span aria-hidden="true" className="font-mono text-[11px] leading-[normal] text-ink-faint">
-          ▾
-        </span>
+        {!compact && (
+          <>
+            <span
+              className={`min-w-0 flex-1 truncate font-mono text-[11px] leading-[normal] ${allProjects ? 'text-ink-dim' : 'text-ink-2'}`}
+            >
+              {label}
+            </span>
+            <span aria-hidden="true" className="font-mono text-[11px] leading-[normal] text-ink-faint">
+              ▾
+            </span>
+          </>
+        )}
       </button>
       {open && (
         <div

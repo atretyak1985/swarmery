@@ -69,6 +69,20 @@ describe('PageDetail', () => {
     expect(document.querySelector('pre')).toBeNull();
   });
 
+  it('keeps eyebrow, title and lead in the header band, and the numbers under it', () => {
+    render(
+      <MemoryRouter>
+        <PageDetail kind="health" title="A sentence." lead="Lead." stats={[{ label: 'runs', value: '12' }]} />
+      </MemoryRouter>,
+    );
+    const band = screen.getByRole('heading', { level: 2 }).parentElement?.parentElement as HTMLElement;
+    expect(band.className).toContain('border-b');
+    expect(band.className).toContain('desk:-mx-7');
+    expect(band.contains(screen.getByText('health'))).toBe(true);
+    expect(band.contains(screen.getByText('Lead.'))).toBe(true);
+    expect(band.contains(screen.getByText('runs'))).toBe(false);
+  });
+
   it('renders every block, the last trend bar coloured and children under them', () => {
     const onChange = vi.fn();
     const onPick = vi.fn();

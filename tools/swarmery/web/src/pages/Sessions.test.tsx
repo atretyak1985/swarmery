@@ -11,7 +11,7 @@ import type { NeedsYouItem, Session, SessionDetail, SessionStatus } from '../api
 import * as api from '../api';
 import { useLocation } from 'react-router-dom';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '../test/render';
-import { parseTab } from './detail/SessionPane';
+import { parkedAtFoot, parseTab } from './detail/SessionPane';
 import { Sessions } from './Sessions';
 import { SessionDetailPage } from './SessionDetail';
 
@@ -26,14 +26,18 @@ vi.mock('../api', async (orig) => ({
   resolveApproval: vi.fn(async () => undefined),
   stopSession: vi.fn(async () => undefined),
 }));
+const live = vi.hoisted(() => ({ handlers: new Set<(msg: unknown) => void>() }));
 vi.mock('../lib/ws', () => ({
-  useLiveUpdates: () => undefined,
+  useLiveUpdates: (onMessage: (msg: unknown) => void) => {
+    live.handlers.add(onMessage);
+  },
   applySessionMessage: (s: unknown) => s,
 }));
 vi.mock('../lib/scope', () => ({
   useScope: () => ({ scope: null, scopeName: null, scopeProject: null, projects: [], setScope: () => undefined }),
 }));
 vi.mock('../components/FileContentionBanner', () => ({ FileContentionBanner: () => null }));
+vi.mock('../api/lessons', () => ({ fetchLessons: vi.fn(async () => []) }));
 
 const NOW = Date.now();
 const ago = (minutes: number): string => new Date(NOW - minutes * 60_000).toISOString();
@@ -125,6 +129,7 @@ const paneTitle = (name: string): Promise<HTMLElement> => screen.findByRole('but
 
 beforeEach(() => {
   vi.clearAllMocks();
+  live.handlers.clear();
   Element.prototype.scrollIntoView = () => undefined; // jsdom has no layout
   vi.mocked(api.fetchSessions).mockResolvedValue({ sessions: ALL, nextCursor: null });
   vi.mocked(api.getNeedsYou).mockResolvedValue({ items: [GATE], generatedAt: ago(0) });
@@ -259,13 +264,183 @@ describe('the detail', () => {
     expect(within(menu).getByRole('button', { name: /Stop turn/ })).toBeTruthy();
   });
 
-  it('moves the old tab names onto the new tabs', () => {
-    expect(parseTab(null)).toBe('steps');
+  it('moves the old tab names onto the new tabs, with Chat the default', () => {
+    expect(parseTab(null)).toBe('chat');
+    expect(parseTab('chat')).toBe('chat');
+    expect(parseTab('nonsense')).toBe('chat');
+    expect(parseTab('steps')).toBe('steps');
     expect(parseTab('timeline')).toBe('steps');
     expect(parseTab('swarm')).toBe('steps');
     expect(parseTab('diffs')).toBe('diff');
     expect(parseTab('diff')).toBe('diff');
-    expect(parseTab('chat')).toBe('chat');
+  });
+
+  it('opens on Chat, first in the tab row, and keeps Chat out of the URL', async () => {
+    open('/sessions/3?tab=steps');
+    const chat = await screen.findByRole('tab', { name: /Chat/ });
+    const tabs = within(screen.getByTestId('session-detail')).getAllByRole('tab');
+    expect(tabs.map((tab) => tab.textContent?.replace(/\d+$/, ''))).toEqual(['Chat', 'Steps', 'Diff']);
+    expect(screen.getByRole('tab', { name: /Steps/ }).getAttribute('aria-selected')).toBe('true');
+    fireEvent.click(chat);
+    await waitFor(() => expect(screen.getByRole('status', { name: 'where' }).textContent).toBe('/sessions/3'));
+    expect(chat.getAttribute('aria-selected')).toBe('true');
+    cleanup();
+    open('/sessions/3');
+    expect((await screen.findByRole('tab', { name: /Chat/ })).getAttribute('aria-selected')).toBe('true');
+  });
+
+  it('puts Steps in the URL, which Chat never needs', async () => {
+    open('/sessions/3');
+    fireEvent.click(await screen.findByRole('tab', { name: /Steps/ }));
+    await waitFor(() => expect(screen.getByRole('status', { name: 'where' }).textContent).toBe('/sessions/3?tab=steps'));
+  });
+
+  it('draws one band: the tabs live inside it, and the rail sits under it', async () => {
+    open('/sessions/3');
+    const tabs = within(await screen.findByTestId('session-detail')).getByRole('tablist');
+    const band = tabs.parentElement?.parentElement as HTMLElement;
+    expect(band.className).toContain('border-b');
+    expect(band.className).toContain('bg-bg');
+    expect(tabs.className).not.toContain('border-b');
+    expect(band.querySelector('h2')).toBeTruthy();
+    const rail = screen.getByRole('complementary', { name: 'session context' });
+    expect(band.contains(rail)).toBe(false);
+    expect(rail.parentElement).toBe(band.nextElementSibling);
+  });
+
+  it('parks on a band around the foot, not on everything past it', () => {
+    expect(parkedAtFoot(0, 900)).toBe(true);
+    expect(parkedAtFoot(47, 900)).toBe(true);
+    expect(parkedAtFoot(-47, 900)).toBe(true);
+    expect(parkedAtFoot(48, 900)).toBe(false);
+    expect(parkedAtFoot(-48, 900)).toBe(false);
+    expect(parkedAtFoot(-400, 0)).toBe(true);
+  });
+
+  describe('where the conversation opens', () => {
+    // jsdom has no layout: the panel's foot sits at 900 and the conversation's at
+    // 2000, moving up as the panel scrolls.
+    beforeEach(() => {
+      vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function rect(this: Element) {
+        const scrolled = document.querySelector('[data-testid="session-detail"]')?.parentElement?.scrollTop ?? 0;
+        return { bottom: this.className.includes('flex-[1_1_520px]') ? 2000 - scrolled : 900 } as DOMRect;
+      });
+    });
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    const panel = (): HTMLElement => screen.getByTestId('session-detail').parentElement as HTMLElement;
+
+    it('opens a finished session at the top, with the way down on offer', async () => {
+      open('/sessions/3');
+      await paneTitle('session 3');
+      await waitFor(() => expect(screen.getByRole('button', { name: 'Jump to latest' })).toBeTruthy());
+      expect(panel().scrollTop).toBe(0);
+    });
+
+    it('opens a working session at the foot of the conversation', async () => {
+      open('/sessions/2');
+      await paneTitle('session 2');
+      await waitFor(() => expect(panel().scrollTop).toBe(1100));
+      expect(screen.queryByRole('button', { name: 'Jump to latest' })).toBeNull();
+    });
+
+    it('opens a session that needs you at the top, where its gate is', async () => {
+      open('/sessions/1');
+      await screen.findByRole('button', { name: /allow once/ });
+      await paneTitle('session 1');
+      expect(panel().scrollTop).toBe(0);
+    });
+
+    it('opens at the top on the session status alone, with nothing in the queue', async () => {
+      vi.mocked(api.getNeedsYou).mockResolvedValue({ items: [], generatedAt: ago(0) });
+      vi.mocked(api.fetchSession).mockResolvedValue(detailOf(makeSession(2, 'waiting_approval')));
+      open('/sessions/2');
+      await paneTitle('session 2');
+      await screen.findByRole('button', { name: 'Jump to latest' });
+      expect(panel().scrollTop).toBe(0);
+    });
+
+    it('goes up to the gate when the queue answers after the session', async () => {
+      let answer: (value: { items: NeedsYouItem[]; generatedAt: string }) => void = () => undefined;
+      vi.mocked(api.getNeedsYou).mockReturnValue(new Promise((resolve) => (answer = resolve)));
+      open('/sessions/1');
+      await paneTitle('session 1');
+      await waitFor(() => expect(panel().scrollTop).toBe(1100));
+      await act(async () => {
+        answer({ items: [GATE], generatedAt: ago(0) });
+      });
+      await screen.findByRole('button', { name: /allow once/ });
+      expect(panel().scrollTop).toBe(0);
+    });
+
+    it('leaves a landing on the brief alone', async () => {
+      vi.mocked(api.fetchSession).mockResolvedValue(
+        detailOf(WORKING, { handoff: { path: '/h.md', createdAt: ago(4), contextTokens: 1000 } }),
+      );
+      open('/sessions/2#handoff');
+      await paneTitle('session 2');
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      expect(panel().scrollTop).toBe(0);
+    });
+
+    it('does not count a reader past the conversation, down in the rail, as parked', async () => {
+      open('/sessions/2');
+      await paneTitle('session 2');
+      await waitFor(() => expect(panel().scrollTop).toBe(1100));
+      expect(screen.queryByRole('button', { name: 'Jump to latest' })).toBeNull();
+      panel().scrollTop = 1500;
+      fireEvent.scroll(panel());
+      await waitFor(() => expect(screen.getByRole('button', { name: 'Jump to latest' })).toBeTruthy());
+    });
+
+    /** A new event on a session, as the WS brings it. */
+    const newEvent = async (id: number): Promise<void> => {
+      await act(async () => {
+        for (const handler of live.handlers) {
+          handler({ type: 'event_appended', payload: { sessionId: 2, event: { id, type: 'tool_call', ts: ago(0) } } });
+        }
+        await Promise.resolve();
+      });
+    };
+
+    it('leaves a reader in the rail alone when a working session gets an event', async () => {
+      open('/sessions/2');
+      await paneTitle('session 2');
+      await waitFor(() => expect(panel().scrollTop).toBe(1100));
+      panel().scrollTop = 1500;
+      fireEvent.scroll(panel());
+      await screen.findByRole('button', { name: 'Jump to latest' });
+      await newEvent(901);
+      expect(panel().scrollTop).toBe(1500);
+    });
+
+    it('still follows a reader parked at the foot', async () => {
+      open('/sessions/2');
+      await paneTitle('session 2');
+      await waitFor(() => expect(panel().scrollTop).toBe(1100));
+      panel().scrollTop = 1090;
+      fireEvent.scroll(panel());
+      await newEvent(902);
+      expect(panel().scrollTop).toBe(1100);
+    });
+
+    it('goes back to the top of a finished session when Chat is reopened', async () => {
+      open('/sessions/3?tab=steps');
+      fireEvent.click(await screen.findByRole('tab', { name: /Chat/ }));
+      await waitFor(() => expect(screen.getByRole('button', { name: 'Jump to latest' })).toBeTruthy());
+      expect(panel().scrollTop).toBe(0);
+    });
+  });
+
+  it('keeps the composer in the conversation column, beside the rail', async () => {
+    open('/sessions/3');
+    const composer = await screen.findByRole('textbox', { name: /reply|message/i });
+    const rail = screen.getByRole('complementary', { name: 'session context' });
+    expect(rail.contains(composer)).toBe(false);
+    expect(composer.closest('.sticky')).toBeTruthy();
+    expect(composer.closest('[class*="flex-[1_1_520px]"]')?.parentElement).toBe(rail.parentElement);
   });
 
   it('opens the swarm fold on the old ?tab=swarm link', async () => {

@@ -147,6 +147,25 @@ describe('PhasePanel', () => {
     expect(p.onTab).toHaveBeenCalledWith('criteria');
   });
 
+  it('keeps the breadcrumb, name, head and tabs in one band, with the body under it', () => {
+    renderPanel({ head: <p>state line</p> });
+    const band = screen.getByRole('heading', { level: 2 }).parentElement?.parentElement as HTMLElement;
+    expect(band.className).toContain('border-b');
+    expect(band.className).toContain('bg-bg');
+    expect(band.contains(screen.getByText('state line'))).toBe(true);
+    expect(band.contains(screen.getByRole('tablist'))).toBe(true);
+    expect(screen.getByRole('tablist').parentElement?.className).not.toContain('border-b');
+    expect(band.contains(screen.getByRole('tabpanel'))).toBe(false);
+  });
+
+  it('stands the banner above the breadcrumb, inside the band', () => {
+    renderPanel({ onBack: vi.fn(), banner: <p>blocked</p> });
+    const banner = screen.getByText('blocked');
+    const crumb = screen.getByText('phase 2 of 3');
+    expect(banner.compareDocumentPosition(crumb) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.getByRole('heading', { level: 2 }).parentElement?.parentElement?.contains(banner)).toBe(true);
+  });
+
   it('puts the actions on the tabs line; Edit is one of them, not a tab', () => {
     renderPanel({ actions: <button type="button">edit</button> });
     expect(screen.queryByRole('tab', { name: 'Edit' })).toBeNull();

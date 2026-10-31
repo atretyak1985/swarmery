@@ -10,23 +10,17 @@
 import { useLingui } from '@lingui/react/macro';
 import { useEffect, useState } from 'react';
 import { fetchStatsToday, MOCK } from '../api';
-import type { UsageProvider, UsageWindow } from '../api/types';
+import type { UsageWindow } from '../api/types';
 import { useActiveUsageAccount } from '../lib/activeAccount';
 import { fmtCost } from '../lib/format';
 import { useHealth, versionLabel, versionTitle } from '../lib/health';
+import { planWindow } from '../lib/sessionRail';
 import { useUsage } from '../lib/usageData';
 import { PluginDriftBadge } from './PluginDriftBadge';
 import { fmtResetAt } from './usage/format';
 import { UsageModal } from './usage/UsageModal';
 
 const POLL_MS = 60_000;
-
-/** The session window of the first healthy provider, same rule as the usage chip. */
-function planWindow(providers: readonly UsageProvider[]): UsageWindow | null {
-  const healthy = providers.find((p) => p.status === 'ok');
-  if (healthy === undefined) return null;
-  return healthy.windows.find((w) => w.key.startsWith('session')) ?? healthy.windows[0] ?? null;
-}
 
 /** Over-pace burns red at any percentage: the chip's rule, never the bar's width. */
 function barTone(w: UsageWindow): string {

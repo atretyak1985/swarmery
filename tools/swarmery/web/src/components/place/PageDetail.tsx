@@ -12,6 +12,7 @@
 import { useLingui } from '@lingui/react/macro';
 import { Fragment, useCallback, useMemo, useState, type ReactNode } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
+import { DetailHeader } from './DetailHeader';
 import { ListGroup, type GroupTone } from './ListGroup';
 import { ListPane } from './ListPane';
 import { ListRow } from './ListRow';
@@ -404,15 +405,17 @@ export function PageDetail({
   children,
 }: PageDetailProps): JSX.Element {
   return (
-    <div className="max-w-[980px] px-4 pt-[22px] pb-10 leading-[normal] desk:px-7">
-      <div className="flex min-w-0 items-center gap-2 font-mono text-[10.5px]">
-        <span className={`shrink-0 whitespace-nowrap ${TEXT_TONE[kindTone]}`}>{kind}</span>
-        {meta !== undefined && <span className="min-w-0 truncate text-ink-faint">· {meta}</span>}
-      </div>
-      <h2 className="mt-2 text-[22px] leading-tight font-semibold tracking-[-0.015em] text-balance text-ink">{title}</h2>
-      {lead !== undefined && lead !== null && lead !== '' && (
-        <p className="mt-2 max-w-[70ch] text-[14px] leading-[1.55] text-pretty text-ink-2">{lead}</p>
-      )}
+    <div className="max-w-[980px] px-4 pb-10 leading-[normal] desk:px-7">
+      <DetailHeader bleed>
+        <div className="flex min-w-0 items-center gap-2 font-mono text-[10.5px]">
+          <span className={`shrink-0 whitespace-nowrap ${TEXT_TONE[kindTone]}`}>{kind}</span>
+          {meta !== undefined && <span className="min-w-0 truncate text-ink-faint">· {meta}</span>}
+        </div>
+        <h2 className="mt-2 text-[22px] leading-tight font-semibold tracking-[-0.015em] text-balance text-ink">{title}</h2>
+        {lead !== undefined && lead !== null && lead !== '' && (
+          <p className="mt-2 max-w-[70ch] text-[14px] leading-[1.55] text-pretty text-ink-2">{lead}</p>
+        )}
+      </DetailHeader>
       {stats.length > 0 && (
         <div className="mt-4">
           <NumbersStrip items={stats} />

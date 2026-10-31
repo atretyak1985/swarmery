@@ -1,6 +1,6 @@
-// What used to be the session detail's right rail, now a fold under the Steps
-// ledger (plan D-4): the handoff brief, context hogs, then usage blocks — MODELS,
-// AGENTS, SKILLS — each in its own card with a per-row bar showing how much it was
+// The numbers behind the session, a fold under the Steps ledger (plan D-7): it goes
+// deeper than the rail beside the conversation. Context hogs, then usage blocks —
+// MODELS, AGENTS, SKILLS — each in its own card with a per-row bar showing how much it was
 // used relative to the group's top entry. Then the CALL TREE (who called what:
 // skills → tools → subagents, recursive) and FILES CHANGED aggregated per path
 // (one row per file, +/− summed across all its edits, sorted by churn). Category
@@ -15,7 +15,6 @@ import { subagentDescription, subagentName, skillName } from '../../lib/payload'
 import { buildCallTree } from '../../lib/calltree';
 import { CallTreeCard } from './CallTree';
 import { ContextHogsCard } from './ContextHogsCard';
-import { HandoffCard } from './HandoffCard';
 
 interface UsageRow {
   name: string;
@@ -177,15 +176,12 @@ function UsageBlock({
 
 export function DetailRail({
   sessionId,
-  handoff,
   turns,
   events,
   fileChanges,
   onShowDiffs,
 }: {
   sessionId: number;
-  /** Latest daemon-generated handoff brief for this session, or null. */
-  handoff: { path: string } | null | undefined;
   turns: Turn[];
   events: Event[];
   fileChanges: FileChange[];
@@ -199,7 +195,6 @@ export function DetailRail({
   const files = useMemo(() => aggregateFileChanges(fileChanges), [fileChanges]);
 
   if (
-    handoff == null &&
     models.length === 0 &&
     agents.length === 0 &&
     skills.length === 0 &&
@@ -211,7 +206,6 @@ export function DetailRail({
 
   return (
     <div className="grid min-w-0 grid-cols-[repeat(auto-fit,minmax(280px,1fr))] items-start gap-2.5">
-      {handoff != null && <HandoffCard sessionId={sessionId} handoffPath={handoff.path} />}
       <ContextHogsCard sessionId={sessionId} />
       {models.length > 0 && (
         <UsageBlock label={t`models`} labelTone="text-ink-dim" barTone="bg-ink-dim/60" rows={models} />

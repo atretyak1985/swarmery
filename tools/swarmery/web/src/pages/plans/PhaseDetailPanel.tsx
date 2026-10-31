@@ -1,4 +1,4 @@
-// One phase's page, in place of the plan: its head (state, numbers, blocker), its
+// One phase's page, in place of the plan: its blocker, its head (state, numbers), its
 // actions, and the six tabs' bodies. PhasePanel is the shell around them.
 
 import { plural } from '@lingui/core/macro';
@@ -7,6 +7,7 @@ import { type ReactNode, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { togglePlanCheckbox } from '../../api';
 import type { DecisionHoldRef, Epic, EpicPhase, PlanRevision, ProviderTerms, Session } from '../../api/types';
+import { BlockerBanner } from '../../components/place/DetailHeader';
 import { NumbersStrip, type NumberItem } from '../../components/place/NumbersStrip';
 import type { GlyphState } from '../../components/place/StateGlyph';
 import { actionClass } from '../../components/place/PageDetail';
@@ -374,20 +375,6 @@ export function PhaseDetailPanel({
       <div className="mt-4">
         <NumbersStrip items={stats} />
       </div>
-      {blocker !== null && (
-        <Link
-          to={needsHref}
-          className="mt-3.5 inline-flex items-center gap-2 rounded-lg border border-brand bg-brand-bg px-3 py-[7px] text-[12.5px] leading-[normal] text-ink"
-        >
-          <span aria-hidden="true" className="font-mono text-brand">
-            ●
-          </span>
-          {blocker}
-          <span className="font-mono text-[10.5px] text-brand">
-            <Trans>Needs you →</Trans>
-          </span>
-        </Link>
-      )}
     </>
   );
   const actions = (
@@ -456,6 +443,7 @@ export function PhaseDetailPanel({
       onBack={onBack}
       stage={{ label: stageLabel(stage), tone: STAGE_TONE[stage] }}
       hrefFor={tabHref}
+      banner={blocker !== null ? <BlockerBanner to={needsHref} lead={blocker} /> : undefined}
       head={head}
       tabCounts={tabCounts}
       actions={actions}

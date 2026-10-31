@@ -12,7 +12,7 @@ import { DepsUnmergedActions } from './DepsUnmergedActions';
 import { NEUTRAL_TERMS } from './landingModel';
 import { useNow } from './phaseChips';
 import { PhaseDetailPanel } from './PhaseDetailPanel';
-import { PhaseLedger, PhaseRunLine } from './PhaseLedger';
+import { PhaseLedger } from './PhaseLedger';
 import type { PhaseRunEffort, PhaseRunModel } from './PhaseRunPickers';
 import { PlanDetailPanel } from './PlanDetailPanel';
 import { PlanHeader } from './PlanHeader';
@@ -235,9 +235,9 @@ export function EpicDetail({
           setReviseOpenRevId(null);
           setReviseOpen(true);
         }}
+        phaseRunModel={phaseRunModel}
+        phaseRunEffort={phaseRunEffort}
       />}
-
-      {!onPhasePage && <PhaseRunLine model={phaseRunModel} effort={phaseRunEffort} />}
 
       {/* Leaving the details is the first thing offered while they are open. */}
       {detail?.kind === 'plan' && (
@@ -247,7 +247,11 @@ export function EpicDetail({
       )}
 
       {runMsg !== null && (
-        <div className={`${onPhasePage ? 'mb-3' : 'mt-3'} flex items-start gap-2 rounded-md border border-red/40 bg-red/10 px-2.5 py-1.5 font-mono text-[10.5px] text-red`}>
+        <div
+          data-testid="run-error"
+          // On a phase page this is the first thing in the column, above the band.
+          className={`${onPhasePage ? 'my-3' : 'mt-3'} flex items-start gap-2 rounded-md border border-red/40 bg-red/10 px-2.5 py-1.5 font-mono text-[10.5px] text-red`}
+        >
           <div className="min-w-0 flex-1">
             <span>{runMsg}</span>
             {runBranches.length > 0 && (
@@ -277,7 +281,7 @@ export function EpicDetail({
 
       {/* The plan's details open in place of the ledger; "← all phases" (or Escape)
           backs out to it. The sessions stay under either, and under a phase's Runs. */}
-      <div className={`${onPhasePage ? '' : 'mt-[22px]'} min-w-0`}>
+      <div className={`${onPhasePage ? '' : detail?.kind === 'plan' ? 'mt-[22px]' : 'mt-[18px]'} min-w-0`}>
           {detail?.kind === 'phase' ? (
             <PhaseDetailPanel
               epic={epic}

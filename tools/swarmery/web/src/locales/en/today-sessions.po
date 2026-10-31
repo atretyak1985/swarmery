@@ -140,6 +140,10 @@ msgstr "{errorCount} err"
 msgid "{events} events"
 msgstr "{events} events"
 
+#: src/pages/detail/SessionRail.tsx
+msgid "{files, plural, one {# file} few {# files} many {# files} other {# files}}"
+msgstr "{files, plural, one {# file} few {# files} many {# files} other {# files}}"
+
 #: src/pages/today/loopModel.ts
 msgid "{finished} finished today, {failed} failed."
 msgstr "{finished} finished today, {failed} failed."
@@ -357,6 +361,11 @@ msgstr "→ fell back to"
 msgid "+ add rule"
 msgstr "+ add rule"
 
+#. placeholder {0}: swarm.hidden
+#: src/pages/detail/SessionRail.tsx
+msgid "+{0} earlier"
+msgstr "+{0} earlier"
+
 #: src/pages/today/LiveNow.tsx
 msgid "+{extra} more"
 msgstr "+{extra} more"
@@ -400,6 +409,14 @@ msgstr "a pause is a feature, not a failure"
 #: src/pages/detail/CommandInput.tsx
 msgid "a reply is being generated — Stop to cancel it."
 msgstr "a reply is being generated — Stop to cancel it."
+
+#: src/pages/detail/SessionRail.tsx
+msgid "account"
+msgstr "account"
+
+#: src/pages/detail/SessionRail.tsx
+msgid "ad-hoc session"
+msgstr "ad-hoc session"
 
 #: src/pages/Approvals.tsx
 #: src/pages/NeedsYou.tsx
@@ -528,6 +545,10 @@ msgstr "Appears after the first plan is written — phases and what each one exp
 #: src/pages/today/loopModel.ts
 msgid "Appears after you accept a change and it has run long enough to prove itself."
 msgstr "Appears after you accept a change and it has run long enough to prove itself."
+
+#: src/pages/detail/SessionRail.tsx
+msgid "applies here"
+msgstr "applies here"
 
 #: src/pages/Approvals.tsx
 msgid "Approvals"
@@ -716,6 +737,10 @@ msgstr "cold restarts"
 msgid "Collapse activity"
 msgstr "Collapse activity"
 
+#: src/pages/detail/SessionRail.tsx
+msgid "collapse context · \\"
+msgstr "collapse context · \\"
+
 #: src/pages/Approvals.tsx
 msgid "collapse raw request JSON"
 msgstr "collapse raw request JSON"
@@ -759,12 +784,17 @@ msgstr "content in main"
 
 #: src/pages/detail/SessionPane.tsx
 #: src/pages/detail/SessionPane.tsx
+#: src/pages/detail/SessionRail.tsx
 msgid "context"
 msgstr "context"
 
 #: src/pages/detail/ContextHogsCard.tsx
 msgid "context hogs"
 msgstr "context hogs"
+
+#: src/pages/detail/HandoffCard.tsx
+msgid "Context is past {tokens}; every turn re-reads it. A brief for a fresh session is ready."
+msgstr "Context is past {tokens}; every turn re-reads it. A brief for a fresh session is ready."
 
 #: src/pages/sessions/CacheColdBadge.tsx
 msgid "continue from handoff"
@@ -956,6 +986,10 @@ msgstr "Every stage feeds the next. Numbers are the last 7 days; amber means som
 msgid "Expand activity"
 msgstr "Expand activity"
 
+#: src/pages/detail/SessionRail.tsx
+msgid "expand context · \\"
+msgstr "expand context · \\"
+
 #: src/pages/Approvals.tsx
 msgid "expand raw request JSON"
 msgstr "expand raw request JSON"
@@ -1081,6 +1115,10 @@ msgstr "handed to the session's mod"
 msgid "handoff"
 msgstr "handoff"
 
+#: src/pages/detail/HandoffCard.tsx
+msgid "handoff brief"
+msgstr "handoff brief"
+
 #: src/pages/sessions/CacheColdBadge.tsx
 msgid "handoff request failed"
 msgstr "handoff request failed"
@@ -1098,12 +1136,15 @@ msgstr "Health · last 7 days vs previous"
 msgid "Health →"
 msgstr "Health →"
 
+#: src/pages/detail/SessionRail.tsx
+msgid "heavy"
+msgstr "heavy"
+
 #: src/pages/sessions/SwarmPanel.tsx
 msgid "held by"
 msgstr "held by"
 
 #: src/pages/detail/ContextHogsCard.tsx
-#: src/pages/detail/HandoffCard.tsx
 msgid "hide"
 msgstr "hide"
 
@@ -1194,6 +1235,18 @@ msgstr "Lesson may have stopped helping: {title}"
 #: src/pages/today/feedModel.ts
 msgid "Lesson proposed: {title}"
 msgstr "Lesson proposed: {title}"
+
+#: src/pages/detail/SessionRail.tsx
+msgid "lessons"
+msgstr "lessons"
+
+#: src/pages/detail/SessionRail.tsx
+msgid "lessons unavailable"
+msgstr "lessons unavailable"
+
+#: src/pages/detail/SessionRail.tsx
+msgid "linked"
+msgstr "linked"
 
 #: src/pages/today/loopModel.ts
 msgid "live"
@@ -1381,6 +1434,10 @@ msgstr "no pending approvals — agents are running unattended. <0>permission_re
 msgid "No phase carries a forecast yet — add one so a run has something to be measured against."
 msgstr "No phase carries a forecast yet — add one so a run has something to be measured against."
 
+#: src/pages/detail/SessionRail.tsx
+msgid "no plan"
+msgstr "no plan"
+
 #: src/pages/Projects.tsx
 msgid "no projects match the current filter — try a different search or clear it"
 msgstr "no projects match the current filter — try a different search or clear it"
@@ -1453,6 +1510,10 @@ msgstr "none"
 #: src/pages/today/loopModel.ts
 msgid "none checked by you yet."
 msgstr "none checked by you yet."
+
+#: src/pages/detail/SessionRail.tsx
+msgid "none matched"
+msgstr "none matched"
 
 #: src/pages/detail/LiveActivity.tsx
 msgid "Noodling"
@@ -1533,6 +1594,10 @@ msgstr "Nothing running."
 #: src/pages/today/loopModel.ts
 msgid "Nothing to review. Lessons and Advisor findings land here after runs are measured."
 msgstr "Nothing to review. Lessons and Advisor findings land here after runs are measured."
+
+#: src/pages/detail/SessionRail.tsx
+msgid "nothing touched yet"
+msgstr "nothing touched yet"
 
 #: src/pages/Overview.tsx
 msgid "Nothing waited on you today."
@@ -1770,6 +1835,10 @@ msgstr "pinned"
 msgid "Plan"
 msgstr "Plan"
 
+#: src/pages/detail/SessionRail.tsx
+msgid "plan {percent} %"
+msgstr "plan {percent} %"
+
 #: src/pages/detail/PendingRunNotice.tsx
 msgid "plan revision"
 msgstr "plan revision"
@@ -1873,6 +1942,10 @@ msgstr "raw"
 msgid "Reading today's activity…"
 msgstr "Reading today's activity…"
 
+#: src/pages/detail/HandoffCard.tsx
+msgid "ready · {age} ago"
+msgstr "ready · {age} ago"
+
 #: src/pages/Approvals.tsx
 msgid "reason (optional) — delivered to Claude verbatim"
 msgstr "reason (optional) — delivered to Claude verbatim"
@@ -1952,6 +2025,10 @@ msgstr "Reply to this session…  (⌘/Ctrl+Enter to send)"
 #: src/pages/NeedsYou.tsx
 msgid "reply: {typed}"
 msgstr "reply: {typed}"
+
+#: src/pages/detail/SessionRail.tsx
+msgid "resets {at}"
+msgstr "resets {at}"
 
 #: src/pages/detail/SessionPane.tsx
 msgid "resume with a reply"
@@ -2067,6 +2144,10 @@ msgstr "session #{sessionId}"
 msgid "session #{sessionNumber}"
 msgstr "session #{sessionNumber}"
 
+#: src/pages/detail/SessionRail.tsx
+msgid "session context"
+msgstr "session context"
+
 #: src/pages/detail/Timeline.tsx
 msgid "Session end"
 msgstr "Session end"
@@ -2142,7 +2223,6 @@ msgid "Shipped <0>{tasks} tasks</0> this week — and asked you <1>{approvals} t
 msgstr "Shipped <0>{tasks} tasks</0> this week — and asked you <1>{approvals} times</1> to do it."
 
 #: src/pages/detail/ContextHogsCard.tsx
-#: src/pages/detail/HandoffCard.tsx
 msgid "show"
 msgstr "show"
 
@@ -2282,6 +2362,7 @@ msgid "suggested"
 msgstr "suggested"
 
 #: src/pages/detail/SessionPane.tsx
+#: src/pages/detail/SessionRail.tsx
 msgid "swarm"
 msgstr "swarm"
 
@@ -2335,6 +2416,10 @@ msgstr "the {kind} “{label}” ended without writing a transcript — the sess
 #: src/pages/detail/PendingRunNotice.tsx
 msgid "the {kind} “{label}” ended without writing a transcript ({started}) — the session never started or its transcript is gone"
 msgstr "the {kind} “{label}” ended without writing a transcript ({started}) — the session never started or its transcript is gone"
+
+#: src/pages/detail/HandoffCard.tsx
+msgid "The daemon wrote a brief for a fresh session."
+msgstr "The daemon wrote a brief for a fresh session."
 
 #: src/pages/Overview.tsx
 msgid "The day"
@@ -2458,6 +2543,10 @@ msgstr "tool pattern"
 #: src/pages/detail/CallTree.tsx
 msgid "total time"
 msgstr "total time"
+
+#: src/pages/detail/SessionRail.tsx
+msgid "touches"
+msgstr "touches"
 
 #: src/pages/Overview.tsx
 msgid "trace unavailable"

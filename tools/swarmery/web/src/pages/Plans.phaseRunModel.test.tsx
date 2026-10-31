@@ -141,6 +141,7 @@ function stubFetch(): void {
           json: () => Promise.resolve(body),
         } as Response);
       if (url.startsWith('/api/epics?')) return json(epics);
+      if (url.includes('/docs?')) return json({ path: 'doc.md', content: '## Goal\n' });
       if (/\/phases\/\d+\/run$/.test(url)) {
         const reply = runReplies.shift();
         if (reply !== undefined) return json(reply.body, reply.status);
@@ -392,6 +393,17 @@ describe('a blocked phase nothing has changed for', () => {
     });
     expect(runCalls()[0]?.init?.body).toBeUndefined();
     expect(runCalls()[1]?.init?.body).toBe('{"force":true}');
+  });
+
+  // On a phase page the strip is the column's first thing: it needs air above it too.
+  it('keeps the refusal off the column top on a phase page', async () => {
+    runReplies = [blocked];
+    await mountPlans();
+    const [segment] = screen.getAllByRole('link', { name: /^phase \d/ });
+    fireEvent.click(segment as HTMLElement);
+    fireEvent.click(await screen.findByRole('button', { name: '▶ run this phase now' }));
+    await screen.findByRole('button', { name: 'Run anyway' });
+    expect(screen.getByTestId('run-error').className).toContain('my-3');
   });
 
   // Force overrides that ONE refusal; the model the operator chose still rides along.

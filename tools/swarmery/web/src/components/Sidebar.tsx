@@ -14,9 +14,14 @@
 // sessions in that state). Sessions shows a live dot while it has no badge.
 //
 // The sidebar also owns the global keyboard: ⌘K / Ctrl+K and the palette it
-// opens, 1–5 and t, so they work the same in both shells. The palette renders
-// OUTSIDE the <nav>: the rail is display:none below `desk`, and a fixed overlay
-// inside a hidden parent would never paint.
+// opens, 1–5, t and the panel keys [ ] \, so they work the same in both shells. The
+// palette renders OUTSIDE the <nav>: the rail is display:none below `desk`, and a
+// fixed overlay inside a hidden parent would never paint.
+//
+// Collapsed (lib/panels.ts) the rail is 52px of glyphs: every label, the language
+// and theme switches, the Improve eyebrow and the footer go. The badge moves onto
+// the glyph's corner (D-4): the design clips it there, and the Needs you count must
+// never be lost.
 
 import { plural } from '@lingui/core/macro';
 import { Trans, useLingui } from '@lingui/react/macro';
@@ -27,6 +32,7 @@ import type { NeedsYouItem, NeedsYouKind, WSMessage } from '../api/types';
 import { ProjectSwitcher } from '../workspace/ProjectSwitcher';
 import { loadLastProject } from '../lib/lastProject';
 import { PLACES, placesIn, resolvePlaceHref, type Place } from '../lib/nav';
+import { PANEL_EASE, setListBadge, togglePanel, usePanels } from '../lib/panels';
 import { useScope } from '../lib/scope';
 import { useTheme } from '../lib/theme';
 import { useGlobalKeys } from '../lib/useGlobalKeys';
@@ -172,6 +178,7 @@ export function Sidebar({
   const { pathname } = useLocation();
   const navigate = useNavigate();
   const { theme, toggle: toggleTheme } = useTheme();
+  const { nav: collapsed } = usePanels();
   const [paletteOpen, setPaletteOpen] = useState(false);
   const togglePalette = useCallback(() => setPaletteOpen((prev) => !prev), []);
   usePaletteShortcut(togglePalette);
@@ -181,7 +188,15 @@ export function Sidebar({
       if (place !== undefined) navigate(resolvePlaceHref(place, slug, slug === null ? loadLastProject() : null));
     },
     onTheme: toggleTheme,
+    onPanelNav: () => togglePanel('nav'),
+    onPanelList: () => togglePanel('list'),
+    onPanelRail: () => togglePanel('rail'),
   });
+
+  const activePlace = PLACES.find((place) => place.match(pathname));
+  const activeBadge =
+    activePlace === undefined ? null : badgeFor(activePlace, inboxCount, needsYouCount, sessionsNeedCount);
+  useEffect(() => setListBadge(activeBadge), [activeBadge]);
 
   const row = (place: Place): JSX.Element => (
     <SidebarRow
@@ -191,8 +206,10 @@ export function Sidebar({
       active={place.match(pathname)}
       badge={badgeFor(place, inboxCount, needsYouCount, sessionsNeedCount)}
       live={place.id === 'sessions' && liveSessions && sessionsNeedCount === 0}
+      compact={collapsed}
     />
   );
+  const navToggleLabel = collapsed ? t`expand sidebar · [` : t`collapse sidebar · [`;
 
   return (
     <>
@@ -200,52 +217,75 @@ export function Sidebar({
           wider than the rail and an overflow container would clip it. */}
       <nav
         aria-label={t`primary`}
-        className="hidden w-[196px] shrink-0 flex-col border-r border-line bg-surface px-[10px] py-3 desk:flex"
+        className={`hidden shrink-0 flex-col border-r border-line bg-surface px-[10px] py-3 transition-[width] desk:flex ${
+          collapsed ? 'w-[52px]' : 'w-[196px]'
+        } ${PANEL_EASE}`}
       >
-        <div className="flex items-center justify-between px-1.5 pt-0.5">
+        <div className={`flex items-center px-1.5 pt-0.5 ${collapsed ? 'justify-center' : 'justify-between'}`}>
           <Link
             to="/"
             aria-label={slug === null ? t`swarmery home` : t`back to all projects`}
             className="font-mono text-[13px] leading-[normal] font-bold tracking-[-0.02em] text-ink hover:text-brand"
           >
             {/* i18n-ignore — the product's name */}
-            swarmery
+            {collapsed ? 's' : 'swarmery'}
           </Link>
-          <span className="flex items-center gap-1">
+          <span className="flex items-center gap-0.5">
             {/* The toggle is 26px tall; the row stays the design's 22px. */}
-            <span className="-my-0.5">
-              <LanguageToggle />
-            </span>
+            {!collapsed && (
+              <span className="-my-0.5 mr-0.5">
+                <LanguageToggle />
+              </span>
+            )}
             <button
               type="button"
-              onClick={toggleTheme}
-              aria-label={t`theme`}
-              data-tip={t`theme · t`}
-              className="h-[22px] w-[22px] rounded-[5px] text-[12px] leading-none text-ink-dim transition-colors hover:bg-surface2 hover:text-ink"
+              onClick={() => togglePanel('nav')}
+              aria-label={navToggleLabel}
+              data-tip={navToggleLabel}
+              className="h-[22px] w-[22px] rounded-[5px] font-mono text-[11px] leading-none text-ink-dim transition-colors hover:bg-surface2 hover:text-ink"
             >
-              {theme === 'dark' ? '☾' : '☀'}
+              {collapsed ? '▸' : '◂'}
             </button>
+            {!collapsed && (
+              <button
+                type="button"
+                onClick={toggleTheme}
+                aria-label={t`theme`}
+                data-tip={t`theme · t`}
+                className="h-[22px] w-[22px] rounded-[5px] text-[12px] leading-none text-ink-dim transition-colors hover:bg-surface2 hover:text-ink"
+              >
+                {theme === 'dark' ? '☾' : '☀'}
+              </button>
+            )}
           </span>
         </div>
         <div className="mt-3">
-          <ProjectSwitcher projects={projects} currentSlug={slug} subPath={slug === null ? '' : subPath} />
+          <ProjectSwitcher
+            projects={projects}
+            currentSlug={slug}
+            subPath={slug === null ? '' : subPath}
+            compact={collapsed}
+          />
         </div>
         <div className="mt-4 flex min-h-0 flex-1 flex-col overflow-y-auto">
           <div className="flex flex-col gap-px">{placesIn('main').map(row)}</div>
           <div className="mt-[18px] flex flex-col gap-px">
             {/* Section eyebrow — the mono micro-label idiom, rail-sized. */}
-            <div className="px-2 pb-1.5 font-mono text-[9.5px] leading-[normal] tracking-[0.12em] text-ink-faint uppercase">
-              <Trans>Improve</Trans>
-            </div>
+            {!collapsed && (
+              <div className="px-2 pb-1.5 font-mono text-[9.5px] leading-[normal] tracking-[0.12em] text-ink-faint uppercase">
+                <Trans>Improve</Trans>
+              </div>
+            )}
             {placesIn('improve').map(row)}
           </div>
-          {children}
+          {!collapsed && children}
           <div className="mt-auto flex flex-col gap-px pt-[18px]">
             {placesIn('bottom').map(row)}
             <button
               type="button"
               onClick={togglePalette}
               aria-haspopup="dialog"
+              aria-label={collapsed ? t`Search & actions` : undefined}
               data-tip={t`jump to anything, or type a task and dispatch it`}
               className="flex w-full items-center gap-2 rounded-[7px] px-2 py-1.5 text-[13px] leading-[normal] font-medium text-ink-dim transition-colors hover:bg-surface2/50 hover:text-ink"
             >
@@ -253,11 +293,13 @@ export function Sidebar({
               <span aria-hidden="true" className="w-4 shrink-0 text-center font-mono text-[11px] text-ink-faint">
                 ⌘K
               </span>
-              <span className="flex-1 text-left">
-                <Trans>Search &amp; actions</Trans>
-              </span>
+              {!collapsed && (
+                <span className="flex-1 text-left">
+                  <Trans>Search &amp; actions</Trans>
+                </span>
+              )}
             </button>
-            <HealthFooter />
+            {!collapsed && <HealthFooter />}
           </div>
         </div>
       </nav>
@@ -285,12 +327,15 @@ function SidebarRow({
   active,
   badge,
   live,
+  compact,
 }: {
   place: Place;
   slug: string | null;
   active: boolean;
   badge: number | null;
   live: boolean;
+  /** The collapsed rail: glyph only, the badge on its corner. */
+  compact: boolean;
 }): JSX.Element {
   const { t } = useLingui();
   const viaLastProject = slug === null && place.projectOnly;
@@ -298,25 +343,36 @@ function SidebarRow({
   // Amber is for what blocks: Inbox blocks nothing, so its badge stays grey.
   const urgent = place.id === 'needs-you' || place.id === 'sessions';
   const glyphTone = active && place.section !== 'bottom' ? 'text-brand' : 'text-ink-faint';
+  const waiting =
+    badge === null
+      ? null
+      : plural(badge, { one: '# waiting', few: '# waiting', many: '# waiting', other: '# waiting' });
+  const hint = viaLastProject ? t`${label} — opens in a project` : undefined;
   return (
     <Link
       to={resolvePlaceHref(place, slug, viaLastProject ? loadLastProject() : null)}
       aria-current={active ? 'page' : undefined}
-      title={viaLastProject ? t`${label} — opens in a project` : undefined}
-      className={`flex shrink-0 items-center gap-2 rounded-[7px] px-2 py-1.5 text-[13px] leading-[normal] font-medium transition-colors ${
+      // The label is gone from the collapsed row, and an aria-label replaces the
+      // row's content, so it has to carry the count and the live dot as well.
+      aria-label={
+        compact ? [label, waiting, live ? t`live sessions` : null].filter((part) => part !== null).join(' · ') : undefined
+      }
+      data-tip={compact ? (hint ?? label) : undefined}
+      title={compact ? undefined : hint}
+      className={`relative flex shrink-0 items-center gap-2 rounded-[7px] px-2 py-1.5 text-[13px] leading-[normal] font-medium transition-colors ${
         active ? 'bg-surface2 text-ink' : 'text-ink-dim hover:bg-surface2/50 hover:text-ink'
       }`}
     >
       <span aria-hidden="true" className={`w-4 shrink-0 text-center font-mono text-[12px] ${glyphTone}`}>
         {place.glyph}
       </span>
-      <span className="min-w-0 flex-1 truncate">{label}</span>
+      {!compact && <span className="min-w-0 flex-1 truncate">{label}</span>}
       {badge !== null && (
         <span
-          aria-label={plural(badge, { one: '# waiting', few: '# waiting', many: '# waiting', other: '# waiting' })}
-          className={`rounded-full px-1.5 font-mono text-[10px] leading-4 font-bold ${
-            urgent ? 'bg-brand-bg text-brand' : 'bg-surface2 text-ink-dim'
-          }`}
+          aria-label={compact ? undefined : (waiting ?? undefined)}
+          className={`rounded-full font-mono font-bold ${
+            compact ? 'absolute top-0 right-0 px-[3px] text-[9px] leading-3' : 'px-1.5 text-[10px] leading-4'
+          } ${urgent ? 'bg-brand-bg text-brand' : 'bg-surface2 text-ink-dim'}`}
         >
           {badge}
         </span>
@@ -325,7 +381,9 @@ function SidebarRow({
         <span
           role="img"
           aria-label={t`live sessions`}
-          className="ml-auto h-[6px] w-[6px] shrink-0 animate-pulse-dot rounded-full bg-green"
+          className={`h-[6px] w-[6px] shrink-0 animate-pulse-dot rounded-full bg-green ${
+            compact ? 'absolute top-1 right-1' : 'ml-auto'
+          }`}
         />
       )}
     </Link>

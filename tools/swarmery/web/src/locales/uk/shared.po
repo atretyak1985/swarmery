@@ -101,6 +101,10 @@ msgstr "(патч)"
 msgid "(untitled session)"
 msgstr "(сесія без назви)"
 
+#: src/components/place/ListPane.tsx
+msgid "[ ] \\ panels"
+msgstr "[ ] \\ панелі"
+
 #. placeholder {0}: s.changes
 #: src/components/FileContentionBanner.tsx
 msgid "{0, plural, one {# change} few {# changes} many {# changes} other {# changes}}"
@@ -1241,6 +1245,15 @@ msgstr "Хостинг коду"
 msgid "collapse {label}"
 msgstr "згорнути {label}"
 
+#: src/components/place/ListPane.tsx
+#: src/components/place/ListPane.tsx
+msgid "collapse list · ]"
+msgstr "згорнути список · ]"
+
+#: src/components/Sidebar.tsx
+msgid "collapse sidebar · ["
+msgstr "згорнути бічну панель · ["
+
 #: src/theme/ThemePicker.tsx
 msgid "color mode"
 msgstr "режим кольору"
@@ -1886,6 +1899,15 @@ msgstr "Виконавець сказав: {said}"
 msgid "exited"
 msgstr "завершився"
 
+#: src/components/place/ListPane.tsx
+#: src/components/place/ListPane.tsx
+msgid "expand list · ]"
+msgstr "розгорнути список · ]"
+
+#: src/components/Sidebar.tsx
+msgid "expand sidebar · ["
+msgstr "розгорнути бічну панель · ["
+
 #: src/components/SessionControls.tsx
 msgid "expired — the mod did not pick it up in time"
 msgstr "прострочено — мод не забрав команду вчасно"
@@ -2423,6 +2445,7 @@ msgid "live from session mod"
 msgstr "наживо від мода сесії"
 
 #: src/components/Sidebar.tsx
+#: src/components/Sidebar.tsx
 msgid "live sessions"
 msgstr "живі сесії"
 
@@ -2469,6 +2492,10 @@ msgstr "де шукали ({sourceCount})"
 #: src/pages/settings/WorktreesPanel.tsx
 msgid "main"
 msgstr "основне"
+
+#: src/lib/sessionRail.ts
+msgid "main · step {steps}"
+msgstr "головна · крок {steps}"
 
 #: src/components/ProjectActions.tsx
 msgid "managed"
@@ -2525,6 +2552,7 @@ msgstr "тестові дані"
 msgid "Mockup of the board's three lanes"
 msgstr "Макет трьох доріжок дошки"
 
+#: src/lib/sessionRail.ts
 #: src/workspace/NewTaskModal.tsx
 #: src/workspace/NewTaskModal.tsx
 #: src/workspace/NewTaskModal.tsx
@@ -2583,6 +2611,10 @@ msgstr "потребує вас"
 #: src/pages/Settings.tsx
 msgid "Needs you"
 msgstr "Потребує вас"
+
+#: src/components/place/DetailHeader.tsx
+msgid "Needs you →"
+msgstr "Потребує вас →"
 
 #: src/pages/Settings.tsx
 msgid "needs-you · finished · failed"
@@ -2982,6 +3014,10 @@ msgstr "поставити проєкт на паузу"
 msgid "paused"
 msgstr "на паузі"
 
+#: src/lib/sessionRail.ts
+msgid "paused on your decision"
+msgstr "чекає на ваше рішення"
+
 #: src/components/place/StateGlyph.tsx
 msgid "pending"
 msgstr "очікує"
@@ -3057,6 +3093,11 @@ msgstr "не вдалося підготувати пояснення: {status}"
 msgid "plan"
 msgstr "план"
 
+#. placeholder {0}: String(seq)
+#: src/lib/sessionRail.ts
+msgid "plan · phase {0}"
+msgstr "план · фаза {0}"
+
 #: src/components/HealthFooter.tsx
 msgid "plan {percent} %"
 msgstr "план {percent} %"
@@ -3088,6 +3129,7 @@ msgstr "план у проєкті"
 
 #: src/components/PlanRunCard.tsx
 #: src/components/SessionRow.tsx
+#: src/lib/sessionRail.ts
 msgid "plan run"
 msgstr "запуск плану"
 
@@ -3749,6 +3791,7 @@ msgid "search & actions"
 msgstr "пошук і дії"
 
 #: src/components/Sidebar.tsx
+#: src/components/Sidebar.tsx
 msgid "Search & actions"
 msgstr "Пошук і дії"
 
@@ -4177,10 +4220,6 @@ msgstr "Система"
 msgid "system…"
 msgstr "система…"
 
-#: src/components/place/ListPane.tsx
-msgid "t theme"
-msgstr "t тема"
-
 #: src/components/usage/UsageConnect.tsx
 msgid "tab didn't open? authorize here"
 msgstr "вкладка не відкрилась? авторизуйтесь тут"
@@ -4529,6 +4568,10 @@ msgstr "Токен"
 #: src/api.ts
 msgid "token sign-in failed"
 msgstr "вхід за токеном не вдався"
+
+#: src/lib/sessionRail.ts
+msgid "tracker task"
+msgstr "задача в трекері"
 
 #: src/pages/Settings.tsx
 msgid "translates the dashboard itself; text written by agents (plans, reports, lessons, advisor recommendations) and messages from the daemon stay in English"
