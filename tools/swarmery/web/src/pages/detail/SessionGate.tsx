@@ -8,7 +8,9 @@
 //                      (several questions, multi-select, a free answer) keeps the
 //                      Approvals form, which already handles it
 //   awaiting reply     the session's question, its suggested replies when the
-//                      daemon extracted them, and the composer otherwise
+//                      daemon extracted them, and the composer otherwise; with
+//                      no way to reach a live process the card says so instead of
+//                      offering buttons that do nothing
 //
 // The tier has no field of its own: a prod-deploy request is `destructive`, the
 // rest `write`. `always allow in <project>` needs the rules form, so the card opens
@@ -45,6 +47,7 @@ export function SessionGate({
   session,
   onChanged,
   onOpenComposer,
+  canCompose,
   onSent,
   actions,
 }: {
@@ -53,6 +56,8 @@ export function SessionGate({
   /** The queue moved: reload it, so the card and the row settle. */
   onChanged: () => void;
   onOpenComposer: () => void;
+  /** A written reply has a way in: the composer, or the link mod's prompt. */
+  canCompose: boolean;
   /** Echoes a reply the card sent as a pending bubble. */
   onSent: (text: string) => void;
   actions: MutableRefObject<PaneActions>;
@@ -133,7 +138,7 @@ export function SessionGate({
     } else if (asks && pickedLabel !== null) {
       reply(pickedLabel);
     } else if (asks) {
-      onOpenComposer();
+      if (canCompose) onOpenComposer();
     } else if (localOnly) {
       resolve('deny', reason.trim() === '' ? undefined : reason.trim());
     } else {
@@ -142,8 +147,9 @@ export function SessionGate({
   };
   const secondary = (): void => {
     if (busy) return;
-    if (asks) onOpenComposer();
-    else if (!denying) setDenying(true);
+    if (asks) {
+      if (canCompose) onOpenComposer();
+    } else if (!denying) setDenying(true);
     else resolve('deny', reason.trim() === '' ? undefined : reason.trim());
   };
 
@@ -201,7 +207,7 @@ export function SessionGate({
         primary={{
           label: asks ? t`reply` : localOnly ? t`deny` : t`allow once`,
           onClick: primary,
-          disabled: busy || (asks && single === null && request !== null),
+          disabled: busy || (asks && single === null && (request !== null || (pickedLabel === null && !canCompose))),
         }}
         {...(!asks && !localOnly
           ? {
@@ -213,8 +219,14 @@ export function SessionGate({
           : {})}
         {...(localOnly
           ? {}
-          : { secondary: { label: asks ? t`write my own` : t`deny`, onClick: secondary, disabled: busy } })}
-        foot={asks ? t`your pick is pasted as the reply` : t`a denial stops the session · the transcript stays`}
+          : { secondary: { label: asks ? t`write my own` : t`deny`, onClick: secondary, disabled: busy || (asks && !canCompose) } })}
+        foot={
+          asks
+            ? canCompose
+              ? t`your pick is pasted as the reply`
+              : t`running in a terminal · answer there, or stop it to reply here`
+            : t`a denial stops the session · the transcript stays`
+        }
       />
       {error !== null && (
         <div role="alert" className="mt-2 font-mono text-[11px] text-red">

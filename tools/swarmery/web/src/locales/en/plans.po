@@ -326,6 +326,10 @@ msgstr "{total} · {landed} landed"
 msgid "{turns, plural, one {{model} (# turn)} few {{model} (# turns)} many {{model} (# turns)} other {{model} (# turns)}}"
 msgstr "{turns, plural, one {{model} (# turn)} few {{model} (# turns)} many {{model} (# turns)} other {{model} (# turns)}}"
 
+#: src/pages/plans/PhasePanel.tsx
+msgid "← all phases"
+msgstr "← all phases"
+
 #. placeholder {0}: fmtSpent(spent)
 #: src/pages/plans/PlanHeader.tsx
 msgid "<0>{0}</0> spent"

@@ -127,6 +127,14 @@ describe('PlanHeader', () => {
     expect(document.body.textContent).not.toMatch(/forecast/i);
   });
 
+  it('keeps to what frames the phase when one is open under it', async () => {
+    mount(epic({ linkedSessions: [{ costUsd: 86 } as Epic['linkedSessions'][number]] }), { nested: true });
+    await new Promise((resolve) => setTimeout(resolve));
+    expect(screen.queryByText('Protect the API.')).toBeNull();
+    expect(screen.getByText('$86').parentElement?.className).toContain('whitespace-nowrap');
+    expect(screen.getByText('2/6 criteria')).toBeTruthy();
+  });
+
   it('leaves `spent` out while no session is priced', () => {
     mount(epic());
     expect(document.body.textContent).not.toContain('spent');

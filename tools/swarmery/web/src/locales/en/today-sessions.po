@@ -2125,6 +2125,10 @@ msgstr "running"
 msgid "Running clean — nothing stopped, nothing waiting on you."
 msgstr "Running clean — nothing stopped, nothing waiting on you."
 
+#: src/pages/detail/SessionGate.tsx
+msgid "running in a terminal · answer there, or stop it to reply here"
+msgstr "running in a terminal · answer there, or stop it to reply here"
+
 #: src/pages/detail/Timeline.tsx
 msgid "running…"
 msgstr "running…"

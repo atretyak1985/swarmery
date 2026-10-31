@@ -11,17 +11,22 @@
 // list and the detail share one scroll and a tall band would take the screen. Its
 // parent must hold the body too, because sticky stops at the parent's edge. Its height
 // goes to `--detail-band-h`, for whatever anchors or sticks in the scroll beneath it.
+//
+// A phase nests under its plan (`stack`): the plan's band stays on top and publishes
+// its height, and the phase's band, one step lighter, sticks right under it.
 
 import { Trans } from '@lingui/react/macro';
 import { type ReactNode, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 
 const BAND_HEIGHT_VAR = '--detail-band-h';
+const PARENT_BAND_HEIGHT_VAR = '--detail-parent-band-h';
 
 export function DetailHeader({
   banner,
   flush = false,
   bleed = false,
+  stack,
   children,
 }: {
   /** Full-width strips above the content: BlockerBanner, NoticeBand. */
@@ -29,27 +34,34 @@ export function DetailHeader({
   /** Tabs close the band, so it has no foot of its own. */
   flush?: boolean;
   bleed?: boolean;
+  /** Two bands in one column: `parent` on top, `child` under it. */
+  stack?: 'parent' | 'child' | undefined;
   children: ReactNode;
 }): JSX.Element {
+  const child = stack === 'child';
+  const heightVar = stack === 'parent' ? PARENT_BAND_HEIGHT_VAR : BAND_HEIGHT_VAR;
   const bandRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
     const band = bandRef.current;
     if (band === null || typeof ResizeObserver === 'undefined') return;
     const root = document.documentElement;
     const observer = new ResizeObserver(() => {
-      root.style.setProperty(BAND_HEIGHT_VAR, `${String(band.offsetHeight)}px`);
+      root.style.setProperty(heightVar, `${String(band.offsetHeight)}px`);
     });
     observer.observe(band);
     return () => {
       observer.disconnect();
-      root.style.removeProperty(BAND_HEIGHT_VAR);
+      root.style.removeProperty(heightVar);
     };
-  }, []);
+  }, [heightVar]);
 
   return (
     <div
       ref={bandRef}
-      className={`shrink-0 border-b border-line bg-bg desk:sticky desk:top-0 desk:z-20 ${bleed ? '-mx-4 desk:-mx-7' : ''}`}
+      style={child ? { top: `var(${PARENT_BAND_HEIGHT_VAR}, 0px)` } : undefined}
+      className={`shrink-0 border-b border-line desk:sticky ${
+        child ? 'bg-surface desk:z-10' : 'bg-bg desk:top-0 desk:z-20'
+      } ${bleed ? '-mx-4 desk:-mx-7' : ''}`}
     >
       {banner}
       <div className={`px-4 pt-[18px] desk:px-7 ${flush ? '' : 'pb-4'}`}>{children}</div>

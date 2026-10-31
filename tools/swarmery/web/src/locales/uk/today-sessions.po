@@ -2125,6 +2125,10 @@ msgstr "виконується"
 msgid "Running clean — nothing stopped, nothing waiting on you."
 msgstr "Працює чисто — нічого не зупинилося, ніщо на вас не чекає."
 
+#: src/pages/detail/SessionGate.tsx
+msgid "running in a terminal · answer there, or stop it to reply here"
+msgstr "працює в терміналі · дайте відповідь там або зупиніть, щоб відповісти тут"
+
 #: src/pages/detail/Timeline.tsx
 msgid "running…"
 msgstr "виконується…"

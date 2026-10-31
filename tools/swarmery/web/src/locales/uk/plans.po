@@ -326,6 +326,10 @@ msgstr "{total} · {landed} злито"
 msgid "{turns, plural, one {{model} (# turn)} few {{model} (# turns)} many {{model} (# turns)} other {{model} (# turns)}}"
 msgstr "{turns, plural, one {{model} (# хід)} few {{model} (# ходи)} many {{model} (# ходів)} other {{model} (# ходу)}}"
 
+#: src/pages/plans/PhasePanel.tsx
+msgid "← all phases"
+msgstr "← усі фази"
+
 #. placeholder {0}: fmtSpent(spent)
 #: src/pages/plans/PlanHeader.tsx
 msgid "<0>{0}</0> spent"

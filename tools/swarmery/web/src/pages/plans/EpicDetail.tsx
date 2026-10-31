@@ -215,7 +215,7 @@ export function EpicDetail({
 
   return (
     <div>
-      {!onPhasePage && <PlanHeader
+      <PlanHeader
         epic={epic}
         resolvedSeqs={resolvedSeqs}
         complete={complete}
@@ -237,7 +237,8 @@ export function EpicDetail({
         }}
         phaseRunModel={phaseRunModel}
         phaseRunEffort={phaseRunEffort}
-      />}
+        nested={onPhasePage}
+      />
 
       {/* Leaving the details is the first thing offered while they are open. */}
       {detail?.kind === 'plan' && (
@@ -249,7 +250,7 @@ export function EpicDetail({
       {runMsg !== null && (
         <div
           data-testid="run-error"
-          // On a phase page this is the first thing in the column, above the band.
+          // On a phase page it stands between the plan's band and the phase's.
           className={`${onPhasePage ? 'my-3' : 'mt-3'} flex items-start gap-2 rounded-md border border-red/40 bg-red/10 px-2.5 py-1.5 font-mono text-[10.5px] text-red`}
         >
           <div className="min-w-0 flex-1">

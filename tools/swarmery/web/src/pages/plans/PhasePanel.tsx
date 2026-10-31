@@ -147,7 +147,6 @@ export function PhasePanel({
   const at = epic.phases.findIndex((p) => p.seq === phase.seq);
   const position = String(at + 1);
   const count = String(epic.phases.length);
-  const planTitle = epic.title;
   const branch = phase.runBranch ?? '';
   const current = tabs.findIndex((def) => def.id === tab);
 
@@ -165,7 +164,7 @@ export function PhasePanel({
 
   return (
     <section ref={panelRef} aria-labelledby={titleId} tabIndex={-1} className="outline-none">
-      <DetailHeader bleed flush banner={banner}>
+      <DetailHeader bleed flush banner={banner} stack="child">
         <div className="flex min-w-0 items-center gap-2 font-mono text-[10.5px] leading-[normal] text-ink-faint">
           {onBack !== undefined && (
             <>
@@ -173,9 +172,9 @@ export function PhasePanel({
                 type="button"
                 onClick={onBack}
                 data-tip={t`back to the plan (Esc)`}
-                className="max-w-[40%] min-w-0 cursor-pointer truncate bg-transparent p-0 text-left whitespace-nowrap transition-colors hover:text-brand"
+                className="shrink-0 cursor-pointer bg-transparent p-0 text-left whitespace-nowrap text-ink-3 transition-colors hover:text-brand"
               >
-                ← {planTitle}
+                {t`← all phases`}
               </button>
               <span aria-hidden="true">·</span>
             </>
@@ -216,9 +215,9 @@ export function PhasePanel({
             </button>
           </span>
         </div>
-        <h2 id={titleId} className="mt-2 text-[22px] leading-tight font-semibold tracking-[-0.015em] text-balance text-ink">
+        <h3 id={titleId} className="mt-2 text-[18px] leading-[1.3] font-semibold tracking-[-0.01em] text-balance text-ink">
           {phase.name}
-        </h2>
+        </h3>
         {head}
         <div className="mt-[18px] flex flex-wrap items-center gap-0.5">
           <div

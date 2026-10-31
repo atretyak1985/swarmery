@@ -81,6 +81,35 @@ describe('DetailHeader', () => {
   });
 });
 
+describe('DetailHeader, two bands in one column', () => {
+  it('sticks the child right under the parent, whose height it reads', () => {
+    let measure = (): void => {};
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        constructor(callback: () => void) {
+          measure = callback;
+        }
+        observe(): void {}
+        disconnect(): void {}
+      },
+    );
+    const { container } = render(<DetailHeader stack="parent">plan</DetailHeader>);
+    vi.spyOn(band(container), 'offsetHeight', 'get').mockReturnValue(170);
+    measure();
+    expect(document.documentElement.style.getPropertyValue('--detail-parent-band-h')).toBe('170px');
+    expect(document.documentElement.style.getPropertyValue('--detail-band-h')).toBe('');
+    expect(band(container).className).toContain('desk:top-0');
+    cleanup();
+    vi.unstubAllGlobals();
+
+    const child = render(<DetailHeader stack="child">phase</DetailHeader>);
+    expect(band(child.container).style.top).toBe('var(--detail-parent-band-h, 0px)');
+    expect(band(child.container).className).toContain('bg-surface');
+    expect(band(child.container).className).not.toContain('desk:top-0');
+  });
+});
+
 describe('BlockerBanner', () => {
   function banner(detail?: string): void {
     render(

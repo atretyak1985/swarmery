@@ -616,6 +616,14 @@ export function SessionPane({
   }, [tab, loaded]);
   // With the composer off, `redirect` goes through the link mod's prompt instead.
   const [linkPrompt, setLinkPrompt] = useState(false);
+  const openLinkPrompt = useCallback((): void => {
+    setLinkPrompt(true);
+    setTab('chat');
+  }, [setTab]);
+  // It opens under the conversation, out of view of the header that asked for it.
+  useEffect(() => {
+    if (linkPrompt && tab === 'chat') scrollToLatest();
+  }, [linkPrompt, tab, scrollToLatest]);
 
   // `e` with no gate is the composer; SessionGate takes both keys while it is up.
   useEffect(() => {
@@ -974,7 +982,8 @@ export function SessionPane({
             item={gate}
             session={detail}
             onChanged={onGateChanged}
-            onOpenComposer={openComposer}
+            onOpenComposer={redirect === 'link' ? openLinkPrompt : openComposer}
+            canCompose={redirect !== null}
             onSent={onSent}
             actions={actions}
           />
@@ -997,14 +1006,7 @@ export function SessionPane({
             {state === 'working' && redirect !== null && (
               <button
                 type="button"
-                onClick={
-                  redirect === 'composer'
-                    ? openComposer
-                    : () => {
-                        setLinkPrompt(true);
-                        setTab('chat');
-                      }
-                }
+                onClick={redirect === 'composer' ? openComposer : openLinkPrompt}
                 className={BUTTON}
               >
                 {t`redirect`}

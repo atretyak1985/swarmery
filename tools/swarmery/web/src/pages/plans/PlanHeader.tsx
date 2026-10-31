@@ -152,6 +152,8 @@ export interface PlanHeaderProps {
   /** What a phase run started now uses, as the ledger's pickers hold it. */
   phaseRunModel: PhaseRunModel;
   phaseRunEffort: PhaseRunEffort;
+  /** A phase is open under this header: it keeps to what frames the phase. */
+  nested?: boolean;
 }
 
 export function PlanHeader({
@@ -172,6 +174,7 @@ export function PlanHeader({
   onRevise,
   phaseRunModel,
   phaseRunEffort,
+  nested = false,
 }: PlanHeaderProps): JSX.Element {
   const { t } = useLingui();
   const { project, slug } = useProjectWorkspace();
@@ -264,7 +267,7 @@ export function PlanHeader({
   return (
     // `contents`: the band sticks against the whole plan, not this element.
     <header className="contents">
-      <DetailHeader bleed flush banner={banner}>
+      <DetailHeader bleed flush banner={banner} stack={nested ? 'parent' : undefined}>
         <div className="flex flex-wrap items-start gap-5">
           <div className="min-w-0 flex-[1_1_360px]">
             <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 font-mono text-[10.5px] leading-[normal] text-ink-faint">
@@ -314,7 +317,7 @@ export function PlanHeader({
                 {epic.title}
               </button>
             </h2>
-            {goal !== null && <p className="mt-1.5 max-w-[72ch] text-[13px] leading-[1.55] text-ink-dim">{goal}</p>}
+            {!nested && goal !== null && <p className="mt-1.5 max-w-[72ch] text-[13px] leading-[1.55] text-ink-dim">{goal}</p>}
           </div>
 
           <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
@@ -423,7 +426,7 @@ export function PlanHeader({
         <div className="mt-3.5 flex flex-wrap gap-x-6 gap-y-1 border-t border-line py-2.5 font-mono text-[11px] leading-[normal] text-ink-dim">
           {/* An unknown spend is not $0. No forecast: no dollar figure exists for one. */}
           {spent !== null && (
-            <span>
+            <span className="whitespace-nowrap">
               <Trans>
                 <span className="text-brand">{fmtSpent(spent)}</span> spent
               </Trans>
