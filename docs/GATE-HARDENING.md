@@ -202,6 +202,11 @@ This hook fires on every `Grep`/`Glob` tool call, independent of whether the `co
 loaded — it is what gives that skill's Mode 4a/4b/4c guidance reach beyond the two agents that
 explicitly read it.
 
+Warn-mode guidance here also travels to the model via `hookSpecificOutput.additionalContext` on
+stdout, not just the log file, so the burn-in review below can henceforth also check whether the
+model acted on the guidance (narrowed its next call), not only whether the same broad call
+recurred.
+
 | Rule | Hits | Sessions | False positives reviewed | Decision | Reviewed on |
 |---|---|---|---|---|---|
 | `glob-broad-path` | new rule, burn-in starts 2026-11-01 | — | — | stay in warn | — |

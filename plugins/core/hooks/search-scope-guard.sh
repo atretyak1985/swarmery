@@ -18,7 +18,11 @@
 #
 # WARN-MODE BURN-IN (same convention as bash-shape-guard.sh, see
 # docs/GATE-HARDENING.md): every rule is new, starts in `warn`, logs its
-# decision, and never blocks until a filled row argues the flip.
+# decision, and never blocks until a filled row argues the flip. Unlike
+# bash-shape-guard.sh, warn mode here also emits `additionalContext` on
+# stdout (see warn() below) — this hook's whole point is pre-call guidance
+# the model needs *before* the built-in tool's internal timeout, not just an
+# audit trail.
 # ── enforcement, per rule ─────────────────────────────────────────
 rule_mode() {
   case "$1" in
@@ -89,10 +93,14 @@ log_decision() {
 
 # warn <rule-id> <headline> [extra lines…] — same contract as
 # bash-shape-guard.sh's refuse(): exit 2 only once a rule is flipped to
-# `block`; every rule here ships in `warn`, so this always exits 0.
+# `block`; every rule here ships in `warn`, so this always exits 0. Unlike
+# bash-shape-guard.sh's refuse(), warn mode here ALSO emits the message on
+# stdout as `hookSpecificOutput.additionalContext` — a warn-mode exit 0 never
+# surfaces its stderr to the model, only to the log file, which defeats the
+# point of pre-call guidance.
 warn() {
   local rule="$1"; shift
-  local mode exit_code
+  local mode exit_code full_message
   mode=$(rule_mode "$rule")
   if [ "$mode" = "block" ]; then exit_code=2; else exit_code=0; fi
   log_decision "$rule" "$mode"
@@ -101,29 +109,51 @@ warn() {
   else
     printf '🚫 BLOCKED: [%s] %s\n' "$rule" "$1" >&2
   fi
+  full_message="[$rule] $1"
   shift
   local line
   for line in "$@"; do
     printf '%s\n' "$line" >&2
+    full_message="$full_message
+$line"
   done
+  if [ "$exit_code" -eq 0 ]; then
+    jq -cn --arg ctx "$full_message" \
+      '{hookSpecificOutput:{hookEventName:"PreToolUse",permissionDecision:"allow",additionalContext:$ctx}}'
+  fi
   exit "$exit_code"
 }
 
-# is_dep_tree_path <text> — does this string name a dependency/build tree as a
-# path segment (not a substring match — "vendor" must not fire on a source
-# folder literally named "vendoring"). Checked against both `pattern` and
-# `path`: Mode 4b is "the tree itself is the target", which can show up in
-# either field.
-is_dep_tree_path() {
+# is_dep_tree_pattern <text> — does this glob pattern name a dependency/build
+# tree as a path segment anywhere in it (not a substring match — "vendor"
+# must not fire on a source folder literally named "vendoring"). Checked
+# against `pattern`: Mode 4b is "the tree itself is the target", and a
+# pattern can embed that tree name at any depth (e.g. `**/node_modules/...`).
+is_dep_tree_pattern() {
   printf '%s' "$1" | grep -Eq '(^|/)(node_modules|vendor|\.pnpm|dist|build|\.git)(/|$)'
+}
+
+# is_dep_tree_root <path> — true only when `path` itself (its full value, not
+# merely some ancestor segment) IS a dependency/build tree directory. An
+# ordinary path that happens to pass through a same-named ancestor — e.g.
+# /home/me/build/app, where "build" is just a directory someone created —
+# must not fire: the real signal for "path targets the tree" is that `path`
+# is that directory, not that it descends from one.
+is_dep_tree_root() {
+  printf '%s' "$1" | grep -Eq '(^|/)(node_modules|vendor|\.pnpm|dist|build|\.git)$'
 }
 
 # literal_ancestor <pattern> — the directory prefix of `pattern` that contains
 # no glob metacharacter (`*`, `?`, `[`), i.e. the part a directory walk could
 # actually be scoped to. Empty when the pattern's first path segment already
-# starts with a wildcard (nothing literal to push `path` down to).
+# starts with a wildcard (nothing literal to push `path` down to), or when
+# the pattern has no wildcard at all (an exact filename — nothing to narrow).
 literal_ancestor() {
   local pat="$1" head
+  case "$pat" in
+    *[*?\[]*) ;;
+    *) printf ''; return ;;
+  esac
   # Strip from the first metacharacter onward, then back up to the last `/`.
   head=$(printf '%s' "$pat" | sed -E 's/[*?[].*$//')
   case "$head" in
@@ -149,7 +179,7 @@ path_covers_ancestor() {
 
 if [ "$tool_name" = "Glob" ]; then
   fallback_path="${path:-.}"
-  if is_dep_tree_path "$pattern" || is_dep_tree_path "$path"; then
+  if is_dep_tree_pattern "$pattern" || is_dep_tree_root "$path"; then
     # Mode 4b: the dependency/build tree IS the target. No `path` narrowing is
     # possible — excluding it would exclude what is being searched for — so
     # this rule never suggests one. It only surfaces the Bash fallback once,
@@ -198,7 +228,7 @@ fi
 
 if [ "$tool_name" = "Grep" ]; then
   path_is_broad=0
-  if [ -z "$path" ] || [ "$path" = "." ]; then
+  if [ -z "$path" ] || [ "$path" = "." ] || { [ -n "$hook_cwd" ] && [ "$path" = "$hook_cwd" ]; }; then
     path_is_broad=1
   fi
   if [ "$path_is_broad" -eq 1 ] && [ -z "$glob" ]; then
