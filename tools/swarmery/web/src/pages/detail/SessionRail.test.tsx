@@ -61,7 +61,12 @@ const HANDOFF = { path: '/h.md', createdAt: '2026-10-31T11:56:00Z', contextToken
 const LESSON = { id: 4, title: 'Dry-run migrations' } as lessons.Lesson;
 const FILES = [{ filePath: '/work/repo/services/orders/a.go' }, { filePath: '/work/repo/web/src/b.ts' }] as SessionDetail['fileChanges'];
 
-function renderRail(over: Partial<SessionDetail> = {}, costUsd: number | null = 3, path = '/sessions/1'): void {
+function renderRail(
+  over: Partial<SessionDetail> = {},
+  costUsd: number | null = 3,
+  path = '/sessions/1',
+  column = false,
+): void {
   render(
     // StrictMode as main.tsx has it: effects run twice on mount.
     <StrictMode>
@@ -77,6 +82,7 @@ function renderRail(over: Partial<SessionDetail> = {}, costUsd: number | null = 
                 costUsd={costUsd}
                 onShowSteps={onShowSteps}
                 onShowDiff={onShowDiff}
+                column={column}
               />
             }
           />
@@ -247,6 +253,16 @@ describe('SessionRail', () => {
     expect(rail().className).toContain('self-start');
     expect(screen.getByText(/what surrounds this session/)).toBeTruthy();
     expect(screen.getByRole('button', { name: 'collapse context · \\' }).textContent).toBe('»');
+  });
+
+  it('as a column takes 260px, a strip 28px, and keeps its header in reach', () => {
+    renderRail({}, 3, '/sessions/1', true);
+    expect(rail().className).toContain('w-[260px]');
+    expect(rail().className).not.toContain('rounded');
+    expect(screen.getByText(/what surrounds this session/).parentElement?.className).toContain('sticky');
+    fireEvent.click(screen.getByRole('button', { name: 'collapse context · \\' }));
+    expect(rail().className).toContain('w-7');
+    expect(screen.getByRole('button', { name: 'expand context · \\' }).className).toContain('flex-1');
   });
 
   it('links each block to where its detail lives', () => {
