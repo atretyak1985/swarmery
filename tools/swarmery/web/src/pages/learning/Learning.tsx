@@ -100,10 +100,10 @@ export function Learning(): JSX.Element {
   const [recs, setRecs] = useState<Recommendation[] | null>(null);
 
   const loadLessons = useCallback((): void => {
-    fetchLessons()
+    fetchLessons(undefined, undefined, slug)
       .then(setLessons)
       .catch(() => setLessons(null));
-  }, []);
+  }, [slug]);
   useEffect(loadLessons, [loadLessons]);
 
   useEffect(() => {

@@ -134,6 +134,11 @@ afterEach(() => {
 });
 
 describe('Learning', () => {
+  it('keeps a project page to the lessons learned in that project', async () => {
+    renderAt('/p/cars/learning');
+    await waitFor(() => expect(lessons.fetchLessons).toHaveBeenCalledWith(undefined, undefined, 'cars'));
+  });
+
   it('renders three groups with Lessons open first and its lessons as rows', async () => {
     renderAt('/learning');
     const list = within(screen.getByRole('region', { name: 'Learning' }));
@@ -141,7 +146,7 @@ describe('Learning', () => {
     expect(list.getAllByRole('tab', { selected: true })).toHaveLength(1);
     await waitFor(() => expect(group('Lessons').textContent).toMatch(/3/));
     expect(group('Lessons').getAttribute('aria-selected')).toBe('true');
-    expect(lessons.fetchLessons).toHaveBeenCalledWith();
+    expect(lessons.fetchLessons).toHaveBeenCalledWith(undefined, undefined, undefined);
     expect(await screen.findByRole('button', { name: /lesson 1/ })).toBeTruthy();
     // One page heading (Learning) and no calibration panel.
     expect(screen.getAllByRole('heading', { level: 1 }).map((h) => h.textContent)).toEqual(['Learning']);

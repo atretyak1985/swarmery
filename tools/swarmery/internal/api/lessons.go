@@ -52,7 +52,7 @@ func (h *Handler) listLessons(w http.ResponseWriter, r *http.Request) {
 		writeClientErr(w, http.StatusBadRequest, "status must be candidate, active, retired, dismissed or merged")
 		return
 	}
-	ls, err := lessons.List(h.DB, status)
+	ls, err := lessons.ListProject(h.DB, status, r.URL.Query().Get("project"))
 	if area := r.URL.Query().Get("area"); err == nil && area != "" {
 		ls = filterLessonsByArea(ls, area)
 	}

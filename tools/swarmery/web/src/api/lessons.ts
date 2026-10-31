@@ -334,13 +334,15 @@ async function jsonOrThrow<T>(res: Response, what: string): Promise<T> {
   return (await res.json()) as T;
 }
 
-/** GET /api/lessons — the queue, optionally filtered by status and by the
- * repo-relative area a lesson's globs must overlap (the mock has no matcher). */
-export async function fetchLessons(status?: LessonStatus, area?: string): Promise<Lesson[]> {
+/** GET /api/lessons — the queue, optionally filtered by status, by the repo-relative
+ * area a lesson's globs must overlap, and by the project it was learned in (the mock
+ * has no matcher and no projects). */
+export async function fetchLessons(status?: LessonStatus, area?: string, project?: string): Promise<Lesson[]> {
   if (MOCK) return MOCK_LESSONS.filter((l) => status === undefined || l.status === status);
   const params = new URLSearchParams();
   if (status !== undefined) params.set('status', status);
   if (area !== undefined) params.set('area', area);
+  if (project !== undefined) params.set('project', project);
   const q = params.size === 0 ? '' : `?${params.toString()}`;
   const body = await jsonOrThrow<{ lessons: Lesson[] }>(
     await apiFetch(`/api/lessons${q}`),

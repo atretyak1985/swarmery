@@ -106,6 +106,10 @@ func TestLessonsAreaFilterAndPromoteErrors(t *testing.T) {
 	if len(got.Lessons) != 1 || got.Lessons[0].ID != store {
 		t.Fatalf("area filter = %+v, want only lesson %d", got.Lessons, store)
 	}
+	getJSON(t, srv.URL+"/api/lessons?status=active&project=no-such-project", &got)
+	if len(got.Lessons) != 0 {
+		t.Fatalf("project filter = %+v, want none", got.Lessons)
+	}
 	for _, tc := range []struct {
 		id   string
 		want int

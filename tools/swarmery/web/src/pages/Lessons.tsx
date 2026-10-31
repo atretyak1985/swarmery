@@ -4,7 +4,7 @@ import { msg, t as tr } from '@lingui/core/macro';
 import { Trans, useLingui } from '@lingui/react/macro';
 import { PageDetail, type PageAction } from '../components/place/PageDetail';
 import { useCallback, useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useParams } from 'react-router-dom';
 import {
   acceptLesson,
   confirmRetirement,
@@ -603,19 +603,20 @@ export function Lessons({
   onChanged?: () => void;
 } = {}): JSX.Element {
   const { i18n, t } = useLingui();
+  const { slug } = useParams<{ slug?: string }>();
   const [filter, setFilter] = useState<LessonStatus | undefined>('candidate');
   const [items, setItems] = useState<Lesson[] | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   const load = useCallback((f: LessonStatus | undefined) => {
-    fetchLessons(f)
+    fetchLessons(f, undefined, slug)
       .then((ls) => {
         setItems(ls);
         setErr(null);
       })
       .catch((e: unknown) => setErr(String(e)));
-  }, []);
+  }, [slug]);
 
   useEffect(() => {
     load(filter);
