@@ -9,7 +9,7 @@ import type { EpicPhase, Session, SessionStatus } from '../../api/types';
 import type { GlyphState } from '../../components/place/StateGlyph';
 import { offPlanBand, type OffPlanBand } from '../../lib/offPlan';
 import { isUnresolvedOutcome, outcomeChipLabel } from './phaseChips';
-import { phaseNeedsYou, phaseStatus, type PhaseStatus } from './planModel';
+import { phaseNeedsYou, type PhaseStatus } from './planModel';
 
 export type PhaseStage = 'landed' | 'review' | 'exec' | 'decision' | 'manual' | 'none';
 
@@ -57,47 +57,6 @@ export function phaseGlyph(p: EpicPhase, status: PhaseStatus): GlyphState {
   if (p.runState === 'failed' || p.runOutcome === 'failed') return 'failed';
   if (p.runState === 'blocked') return 'stopped';
   return 'pending';
-}
-
-/** The sentence at the top of an open line: what is happening, and whose move it is. */
-export function phaseLead(p: EpicPhase, status: PhaseStatus, depsUnmet: readonly number[], note: string): string {
-  const stage = phaseStage(p, status);
-  if (stage === 'decision') {
-    return p.guardDecision != null
-      ? t`The guard stopped the run. Nothing moves until you answer.`
-      : t`The run waits on your decision. Nothing moves until you answer.`;
-  }
-  if (stage === 'manual') return t`Every automatic criterion is green; only you can close the rest.`;
-  if (stage === 'review') return t`Code is written; the reviewer is reading the diff.`;
-  if (p.runState === 'running') return t`The executor is working.`;
-  if (status === 'done') return t`Landed.`;
-  if (depsUnmet.length === 0 && status === 'pending') return t`Ready to run.`;
-  return `${note.charAt(0).toUpperCase()}${note.slice(1)}.`;
-}
-
-export interface PhaseVerdict {
-  text: string;
-  tone: 'red' | 'green' | 'brand' | 'faint';
-}
-
-/** The verdict at the foot of an open line, against the phase's forecast when one
- * exists: no band, no claim about the plan. */
-export function phaseVerdict(p: EpicPhase, status: PhaseStatus, ranAtAll: boolean): PhaseVerdict | null {
-  const stage = phaseStage(p, status);
-  const band = phaseCostBand(p);
-  const off = band !== null && band !== 'on plan';
-  if (p.guardDecision != null) return { text: t`stopped off plan`, tone: 'red' };
-  if (stage === 'decision') return null;
-  if (stage === 'manual') return { text: t`ready to hand off`, tone: 'brand' };
-  if (status === 'done') {
-    if (band === null) return { text: t`landed`, tone: 'faint' };
-    return off ? { text: t`landed off plan`, tone: 'red' } : { text: t`landed on plan`, tone: 'green' };
-  }
-  if (p.runState === 'running' || stage === 'review') {
-    if (band === null) return { text: t`running`, tone: 'faint' };
-    return off ? { text: t`running · off plan`, tone: 'red' } : { text: t`running · on plan so far`, tone: 'green' };
-  }
-  return ranAtAll ? null : { text: t`not run yet`, tone: 'faint' };
 }
 
 /** The one line under the phase's name. */
@@ -164,32 +123,6 @@ export function phaseNote(
     });
   }
   return t`not started`;
-}
-
-/** The phase a person came to look at: the one running, else the next one that can
- * run, so its Run is on screen without a click. Null when neither exists. */
-export function defaultOpenSeq(phases: readonly EpicPhase[], resolvedSeqs: Set<number>, planActive: boolean): number | null {
-  const running = phases.find((p) => p.runState === 'running');
-  if (running !== undefined) return running.seq;
-  if (!planActive) return null;
-  const next = phases.find(
-    (p) =>
-      phaseStatus(p, resolvedSeqs) !== 'done' &&
-      !phaseNeedsYou(p) &&
-      p.dependsOn.every((seq) => resolvedSeqs.has(seq)),
-  );
-  return next?.seq ?? null;
-}
-
-/** The criteria line of the expansion: `6/8 · 1 [MANUAL] · 1 [LAND] pending`. */
-export function criteriaLine(p: EpicPhase): string {
-  const parts = [`${String(p.checkboxesDone)}/${String(p.checkboxesTotal)}`];
-  if (p.manualOpen > 0) parts.push(`${String(p.manualOpen)} [MANUAL]`);
-  if (p.landOpen > 0) {
-    const land = String(p.landOpen);
-    parts.push(t`${land} [LAND] pending`);
-  }
-  return parts.join(' · ');
 }
 
 /** The sessions the daemon grouped under this phase, oldest first. */

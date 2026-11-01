@@ -27,6 +27,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Epic, EpicPhase } from '../api/types';
 import { Plans } from './Plans';
 import { PLANS_ROUTE_PATHS } from './plans/plansUrl';
+import { openPhaseRuns, RUN_PHASE } from '../test/planPhase';
 
 /** Plans reads its selection from the route (plans-deep-links phase 1), so it
  * mounts under the real /p/:slug/plans… child paths, not a bare router. */
@@ -157,7 +158,8 @@ async function mountPlans(): Promise<void> {
   render(
     <PlansAtRoute />,
   );
-  await screen.findByRole('button', { name: 'Run phase' });
+  await openPhaseRuns();
+  await screen.findByRole('button', { name: RUN_PHASE });
 }
 
 function picker(): HTMLSelectElement {
@@ -216,7 +218,7 @@ describe('phase run model picker', () => {
   it('sends the chosen model as a JSON body', async () => {
     await mountPlans();
     fireEvent.change(picker(), { target: { value: 'sonnet' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Run phase' }));
+    fireEvent.click(screen.getByRole('button', { name: RUN_PHASE }));
 
     await waitFor(() => {
       expect(runCall()).toBeDefined();
@@ -234,7 +236,7 @@ describe('phase run model picker', () => {
   it('sends NO body at all for "daemon default"', async () => {
     await mountPlans();
     expect(picker().value).toBe('default');
-    fireEvent.click(screen.getByRole('button', { name: 'Run phase' }));
+    fireEvent.click(screen.getByRole('button', { name: RUN_PHASE }));
 
     await waitFor(() => {
       expect(runCall()).toBeDefined();
@@ -249,7 +251,7 @@ describe('phase run model picker', () => {
   it('remembers the choice across a remount', async () => {
     await mountPlans();
     fireEvent.change(picker(), { target: { value: 'opus' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Run phase' }));
+    fireEvent.click(screen.getByRole('button', { name: RUN_PHASE }));
     await waitFor(() => {
       expect(runCall()).toBeDefined();
     });
@@ -272,7 +274,7 @@ describe('phase run model picker', () => {
     await mountPlans();
     expect(picker().value).toBe('default');
     fireEvent.change(picker(), { target: { value: 'fable' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Run phase' }));
+    fireEvent.click(screen.getByRole('button', { name: RUN_PHASE }));
 
     await waitFor(() => {
       expect(runCall()).toBeDefined();
@@ -304,7 +306,7 @@ describe('which model a finished run used (SC-6)', () => {
     render(
       <PlansAtRoute />,
     );
-    fireEvent.click(await screen.findByRole('button', { name: /^Phase 1 — / }));
+    await openPhaseRuns();
     const chip = await screen.findByText('fable');
     // The full pinned ID stays reachable — the label shortens, it does not erase.
     expect(chip.getAttribute('data-tip')).toContain('claude-fable-5-1');
@@ -327,6 +329,7 @@ describe('which model a finished run used (SC-6)', () => {
     render(
       <PlansAtRoute />,
     );
+    await openPhaseRuns();
     const chip = await screen.findByText('opus');
     expect(chip.getAttribute('data-tip')).toContain('claude-opus-5[1m]');
   });
@@ -382,7 +385,7 @@ describe('a blocked phase nothing has changed for', () => {
   it('offers "Run anyway", which repeats the run with force', async () => {
     runReplies = [blocked];
     await mountPlans();
-    fireEvent.click(screen.getByRole('button', { name: 'Run phase' }));
+    fireEvent.click(screen.getByRole('button', { name: RUN_PHASE }));
 
     const anyway = await screen.findByRole('button', { name: 'Run anyway' });
     expect(screen.getByText(/has been blocked since/)).toBeTruthy();
@@ -411,7 +414,7 @@ describe('a blocked phase nothing has changed for', () => {
     runReplies = [blocked];
     await mountPlans();
     fireEvent.change(picker(), { target: { value: 'sonnet' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Run phase' }));
+    fireEvent.click(screen.getByRole('button', { name: RUN_PHASE }));
     fireEvent.click(await screen.findByRole('button', { name: 'Run anyway' }));
 
     await waitFor(() => {
@@ -430,7 +433,7 @@ describe('a blocked phase nothing has changed for', () => {
       },
     ];
     await mountPlans();
-    fireEvent.click(screen.getByRole('button', { name: 'Run phase' }));
+    fireEvent.click(screen.getByRole('button', { name: RUN_PHASE }));
 
     await screen.findByText('phase dependencies unmet');
     expect(screen.queryByRole('button', { name: 'Run anyway' })).toBeNull();

@@ -16,6 +16,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Epic, EpicPhase, VcsInfo } from '../api/types';
 import { Plans } from './Plans';
 import { PLANS_ROUTE_PATHS } from './plans/plansUrl';
+import { phaseLink, RUN_PHASE } from '../test/planPhase';
 
 function PlansAtRoute(): JSX.Element {
   return (
@@ -141,6 +142,7 @@ function stubFetch(): void {
       calls.push({ url, init });
       const json = (body: unknown, status = 200): Promise<Response> =>
         Promise.resolve({ ok: status < 400, status, json: () => Promise.resolve(body) } as Response);
+      if (url.includes('/docs?')) return json({ path: 'doc.md', content: '## Goal\n' });
       if (url.startsWith('/api/epics?')) return json([EPIC]);
       if (url.startsWith('/api/projects/3/vcs'))
         return vcsStatus === 200 ? json(VCS) : json({ error: 'vcs probe failed' }, vcsStatus);
@@ -178,8 +180,8 @@ afterEach(() => {
 describe('the deps-unmerged refusal', () => {
   it('offers Open <changeShort> per mapped branch; a click opens the change request and shows its link', async () => {
     render(<PlansAtRoute />);
-    const runs = await screen.findAllByRole('button', { name: 'Run phase' });
-    fireEvent.click(runs[runs.length - 1] as HTMLElement);
+    fireEvent.click(await phaseLink(2));
+    fireEvent.click(await screen.findByRole('button', { name: RUN_PHASE }));
     await waitFor(() => expect(calls.some((c) => c.url === '/api/epics/77/phases/12/run')).toBe(true));
 
     await screen.findByText(DEPS_UNMERGED.message);
@@ -202,9 +204,9 @@ describe('the deps-unmerged refusal', () => {
   it('keeps the Open buttons when the project /vcs fetch failed, labelled with the neutral terms', async () => {
     vcsStatus = 500;
     render(<PlansAtRoute />);
-    const runs = await screen.findAllByRole('button', { name: 'Run phase' });
     await waitFor(() => expect(calls.some((c) => c.url.startsWith('/api/projects/3/vcs'))).toBe(true));
-    fireEvent.click(runs[runs.length - 1] as HTMLElement);
+    fireEvent.click(await phaseLink(2));
+    fireEvent.click(await screen.findByRole('button', { name: RUN_PHASE }));
 
     await screen.findByText(DEPS_UNMERGED.message);
     const open = await screen.findByRole('button', { name: 'Open CR for swarm/phase-11' });

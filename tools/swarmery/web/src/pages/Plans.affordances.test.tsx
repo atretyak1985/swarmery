@@ -365,8 +365,8 @@ describe('SC-9 — every selection is a real anchor with its canonical href', ()
 
     const name = screen.getByRole('link', { name: 'Beta 2' });
     expect(name.getAttribute('href')).toBe(`${BASE}/${B.externalId}/phase/2?scope=swarmery`);
-    // The row keeps its button role; the anchor is only the name inside it.
-    expect(screen.getByRole('button', { name: 'Phase 2 — Beta 2' }).contains(name)).toBe(true);
+    // The whole line opens the phase; the name is its real anchor.
+    expect(name.closest('li')).toBeTruthy();
 
     // The strip is the list's: `+ new` opens New plan, ⌘K reaches Board and Playbooks.
     expect(screen.queryByRole('tab', { name: /New plan/ })).toBeNull();

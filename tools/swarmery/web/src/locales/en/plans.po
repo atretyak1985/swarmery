@@ -226,10 +226,6 @@ msgstr "{label} (no cards)"
 msgid "{label}: {subject} is open in session {shortId} ({liveNote})"
 msgstr "{label}: {subject} is open in session {shortId} ({liveNote})"
 
-#: src/pages/plans/phaseLedgerModel.ts
-msgid "{land} [LAND] pending"
-msgstr "{land} [LAND] pending"
-
 #: src/pages/plans/forecastStoryModel.ts
 msgid "{m, plural, one {# minute} few {# minutes} many {# minutes} other {# minutes}}"
 msgstr "{m, plural, one {# minute} few {# minutes} many {# minutes} other {# minutes}}"
@@ -421,7 +417,6 @@ msgstr "a small"
 
 #: src/pages/Plans.tsx
 #: src/pages/plans/PhaseDetailPanel.tsx
-#: src/pages/plans/PhaseLedger.tsx
 msgid "a whole-plan run is executing this plan"
 msgstr "a whole-plan run is executing this plan"
 
@@ -487,7 +482,6 @@ msgid "an unmeasured time"
 msgstr "an unmeasured time"
 
 #: src/pages/plans/PhaseDetailPanel.tsx
-#: src/pages/plans/PhaseLedger.tsx
 msgid "answer in Needs you"
 msgstr "answer in Needs you"
 
@@ -738,10 +732,6 @@ msgstr "Claude is writing a plain-language explanation…"
 msgid "clear label filter"
 msgstr "clear label filter"
 
-#: src/pages/plans/PhaseLedger.tsx
-msgid "click a name to open · ▸ to expand runs"
-msgstr "click a name to open · ▸ to expand runs"
-
 #: src/pages/planning/HistoryDrawer.tsx
 #: src/pages/Routines.tsx
 msgid "close"
@@ -754,10 +744,6 @@ msgstr "closed"
 #: src/pages/plans/CriterionLint.tsx
 msgid "closed by push / PR / merge — ticked when the change request merges"
 msgstr "closed by push / PR / merge — ticked when the change request merges"
-
-#: src/pages/plans/phaseLedgerModel.ts
-msgid "Code is written; the reviewer is reading the diff."
-msgstr "Code is written; the reviewer is reading the diff."
 
 #: src/pages/plans/RunsReviewBlock.tsx
 msgid "code review"
@@ -779,10 +765,6 @@ msgstr "continue on failure"
 #: src/pages/planning/RunningPlanPanel.tsx
 msgid "Continue with the plan"
 msgstr "Continue with the plan"
-
-#: src/pages/plans/PhaseLedger.tsx
-msgid "controller"
-msgstr "controller"
 
 #: src/pages/Playbooks.tsx
 msgid "copies the markdown into the project so its prompts become editable"
@@ -1105,10 +1087,6 @@ msgstr "ending blocked"
 msgid "epics…"
 msgstr "epics…"
 
-#: src/pages/plans/phaseLedgerModel.ts
-msgid "Every automatic criterion is green; only you can close the rest."
-msgstr "Every automatic criterion is green; only you can close the rest."
-
 #: src/pages/Routines.tsx
 msgid "every minute"
 msgstr "every minute"
@@ -1132,7 +1110,6 @@ msgstr "execution mode"
 msgid "execution record"
 msgstr "execution record"
 
-#: src/pages/plans/PhaseLedger.tsx
 #: src/pages/plans/StalledBadge.tsx
 msgid "executor"
 msgstr "executor"
@@ -1151,7 +1128,6 @@ msgid "fable 5.1 — most capable, ~2.5× cost"
 msgstr "fable 5.1 — most capable, ~2.5× cost"
 
 #: src/pages/plans/phaseChips.tsx
-#: src/pages/plans/PhaseLedger.tsx
 #: src/pages/plans/PlanDetailPanel.tsx
 #: src/pages/plans/planModel.ts
 msgid "failed"
@@ -1196,10 +1172,6 @@ msgstr "findings ({count})"
 #: src/pages/plans/RunsReviewBlock.tsx
 msgid "findings (none blocking)"
 msgstr "findings (none blocking)"
-
-#: src/pages/plans/PhaseLedger.tsx
-msgid "finished"
-msgstr "finished"
 
 #: src/pages/plans/ReviewFindings.tsx
 msgid "finished before review findings were recorded — nothing is missing and nothing is required"
@@ -1410,7 +1382,6 @@ msgstr "label: any"
 
 #: src/pages/plans/phaseLedgerModel.ts
 #: src/pages/plans/phaseLedgerModel.ts
-#: src/pages/plans/phaseLedgerModel.ts
 #: src/pages/plans/planModel.ts
 msgid "landed"
 msgstr "landed"
@@ -1418,18 +1389,6 @@ msgstr "landed"
 #: src/pages/plans/phaseLedgerModel.ts
 msgid "landed · {change}"
 msgstr "landed · {change}"
-
-#: src/pages/plans/phaseLedgerModel.ts
-msgid "landed off plan"
-msgstr "landed off plan"
-
-#: src/pages/plans/phaseLedgerModel.ts
-msgid "landed on plan"
-msgstr "landed on plan"
-
-#: src/pages/plans/phaseLedgerModel.ts
-msgid "Landed."
-msgstr "Landed."
 
 #: src/pages/Routines.tsx
 msgid "last {lastRun}"
@@ -1596,10 +1555,6 @@ msgstr "Name"
 #: src/pages/plans/CriterionLint.tsx
 msgid "Names a settings file — cite where Claude Code reads it (config-channels)"
 msgstr "Names a settings file — cite where Claude Code reads it (config-channels)"
-
-#: src/pages/plans/PhaseLedger.tsx
-msgid "needs you"
-msgstr "needs you"
 
 #: src/pages/Routines.tsx
 #: src/pages/Routines.tsx
@@ -1823,10 +1778,6 @@ msgstr "not live"
 msgid "not reviewed: {0}"
 msgstr "not reviewed: {0}"
 
-#: src/pages/plans/phaseLedgerModel.ts
-msgid "not run yet"
-msgstr "not run yet"
-
 #: src/pages/plans/ForecastVsActual.tsx
 msgid "not run yet — a score appears once a run of this phase has finished and been measured"
 msgstr "not run yet — a score appears once a run of this phase has finished and been measured"
@@ -1939,10 +1890,6 @@ msgstr "open in terminal"
 msgid "open phase"
 msgstr "open phase"
 
-#: src/pages/plans/PhaseLedger.tsx
-msgid "open phase →"
-msgstr "open phase →"
-
 #: src/pages/plans/PlanHeader.tsx
 msgid "open plan details"
 msgstr "open plan details"
@@ -1952,7 +1899,6 @@ msgid "open Plans →"
 msgstr "open Plans →"
 
 #: src/pages/plans/PhaseDetailPanel.tsx
-#: src/pages/plans/PhaseLedger.tsx
 msgid "open run"
 msgstr "open run"
 
@@ -2081,10 +2027,6 @@ msgstr "phase {seq}"
 msgid "Phase {seq}"
 msgstr "Phase {seq}"
 
-#: src/pages/plans/PhaseLedger.tsx
-msgid "Phase {seq} — {name}"
-msgstr "Phase {seq} — {name}"
-
 #: src/pages/plans/PlanHeader.tsx
 msgid "phase {seq} · {name} · {word}"
 msgstr "phase {seq} · {name} · {word}"
@@ -2168,7 +2110,6 @@ msgstr "plan doc source"
 
 #: src/pages/Plans.tsx
 #: src/pages/plans/PhaseDetailPanel.tsx
-#: src/pages/plans/PhaseLedger.tsx
 #: src/pages/plans/PlanHeader.tsx
 msgid "plan is not active"
 msgstr "plan is not active"
@@ -2357,11 +2298,6 @@ msgstr "Pushing…"
 msgid "Questions, answers, and AI reasoning for each plan update."
 msgstr "Questions, answers, and AI reasoning for each plan update."
 
-#: src/pages/plans/PhaseLedger.tsx
-#: src/pages/plans/PhaseLedger.tsx
-msgid "queued"
-msgstr "queued"
-
 #: src/pages/Board.tsx
 msgid "Queued — waiting for a dispatch slot"
 msgstr "Queued — waiting for a dispatch slot"
@@ -2390,17 +2326,9 @@ msgstr "reading the repo and preparing the next question…"
 msgid "readme…"
 msgstr "readme…"
 
-#: src/pages/plans/phaseLedgerModel.ts
-msgid "ready to hand off"
-msgstr "ready to hand off"
-
 #: src/pages/plans/landingModel.ts
 msgid "ready to land"
 msgstr "ready to land"
-
-#: src/pages/plans/phaseLedgerModel.ts
-msgid "Ready to run."
-msgstr "Ready to run."
 
 #: src/pages/plans/DecisionTable.tsx
 msgid "reason: {rowReason}"
@@ -2514,7 +2442,6 @@ msgstr "resolved in the plan round"
 
 #: src/pages/plans/PhaseDetailPanel.tsx
 #: src/pages/plans/PhaseDetailPanel.tsx
-#: src/pages/plans/PhaseLedger.tsx
 msgid "Retry run"
 msgstr "Retry run"
 
@@ -2693,7 +2620,6 @@ msgid "Run now"
 msgstr "Run now"
 
 #: src/pages/plans/PhaseDetailPanel.tsx
-#: src/pages/plans/PhaseLedger.tsx
 msgid "Run phase"
 msgstr "Run phase"
 
@@ -2706,7 +2632,6 @@ msgid "run this phase again even though nothing has changed since it blocked"
 msgstr "run this phase again even though nothing has changed since it blocked"
 
 #: src/pages/plans/PhaseDetailPanel.tsx
-#: src/pages/plans/PhaseLedger.tsx
 msgid "run this phase headlessly in an isolated worktree"
 msgstr "run this phase headlessly in an isolated worktree"
 
@@ -2715,8 +2640,6 @@ msgid "run_one (one catch-up)"
 msgstr "run_one (one catch-up)"
 
 #: src/pages/plans/phaseChips.tsx
-#: src/pages/plans/PhaseLedger.tsx
-#: src/pages/plans/phaseLedgerModel.ts
 #: src/pages/plans/phaseLedgerModel.ts
 #: src/pages/plans/planModel.ts
 msgid "running"
@@ -2730,14 +2653,6 @@ msgstr "Running"
 #: src/pages/plans/phaseLedgerModel.ts
 msgid "running · {elapsed}"
 msgstr "running · {elapsed}"
-
-#: src/pages/plans/phaseLedgerModel.ts
-msgid "running · off plan"
-msgstr "running · off plan"
-
-#: src/pages/plans/phaseLedgerModel.ts
-msgid "running · on plan so far"
-msgstr "running · on plan so far"
 
 #: src/pages/planning/RunningPlanPanel.tsx
 msgid "running plan"
@@ -2754,10 +2669,6 @@ msgstr "runs"
 #: src/pages/plans/PhasePanel.tsx
 msgid "Runs"
 msgstr "Runs"
-
-#: src/pages/plans/PhaseLedger.tsx
-msgid "runs of phase {seq}"
-msgstr "runs of phase {seq}"
 
 #: src/pages/plans/PhaseDetailPanel.tsx
 msgid "runs of this phase"
@@ -3005,14 +2916,6 @@ msgstr "stop phase"
 msgid "stop: {trigger}"
 msgstr "stop: {trigger}"
 
-#: src/pages/plans/PhaseLedger.tsx
-msgid "stopped"
-msgstr "stopped"
-
-#: src/pages/plans/phaseLedgerModel.ts
-msgid "stopped off plan"
-msgstr "stopped off plan"
-
 #: src/pages/plans/PlanHeader.tsx
 msgid "stops new runs from starting; the run in flight keeps going"
 msgstr "stops new runs from starting; the run in flight keeps going"
@@ -3098,10 +3001,6 @@ msgstr "The diff was not measured, so we can't say which areas it touched."
 msgid "the executor is actively editing this phase doc"
 msgstr "the executor is actively editing this phase doc"
 
-#: src/pages/plans/phaseLedgerModel.ts
-msgid "The executor is working."
-msgstr "The executor is working."
-
 #: src/pages/plans/forecastStoryModel.ts
 msgid "The forecast named no size, duration or outcome."
 msgstr "The forecast named no size, duration or outcome."
@@ -3109,10 +3008,6 @@ msgstr "The forecast named no size, duration or outcome."
 #: src/pages/plans/PhaseDetailPanel.tsx
 msgid "the guard stop waits on your answer"
 msgstr "the guard stop waits on your answer"
-
-#: src/pages/plans/phaseLedgerModel.ts
-msgid "The guard stopped the run. Nothing moves until you answer."
-msgstr "The guard stopped the run. Nothing moves until you answer."
 
 #: src/pages/plans/PhaseCard.tsx
 msgid "The last run failed."
@@ -3279,10 +3174,6 @@ msgstr "the run ticked every criterion ({total}/{total}); the doc has since chan
 msgid "the run ticked some criteria but did not finish the phase — click for why"
 msgstr "the run ticked some criteria but did not finish the phase — click for why"
 
-#: src/pages/plans/phaseLedgerModel.ts
-msgid "The run waits on your decision. Nothing moves until you answer."
-msgstr "The run waits on your decision. Nothing moves until you answer."
-
 #: src/pages/plans/ForecastVsActual.tsx
 msgid "the run’s diff was not measured"
 msgstr "the run’s diff was not measured"
@@ -3352,7 +3243,6 @@ msgid "this run changed model mid-flight: {trail}"
 msgstr "this run changed model mid-flight: {trail}"
 
 #: src/pages/plans/PhaseDetailPanel.tsx
-#: src/pages/plans/PhaseLedger.tsx
 msgid "tick criteria"
 msgstr "tick criteria"
 
@@ -3454,7 +3344,6 @@ msgid "verifying…"
 msgstr "verifying…"
 
 #: src/pages/plans/PhaseDetailPanel.tsx
-#: src/pages/plans/PhaseLedger.tsx
 msgid "waiting on phase {waitingOn}"
 msgstr "waiting on phase {waitingOn}"
 
