@@ -2,9 +2,9 @@
 //
 // The sidebar's bottom block. The claims:
 //
-//   1. It shows today's spend, the plan percentage and the reset clock from real
-//      sources, and stays honest (`—`, no plan line) until they answer.
-//   2. It opens the Usage modal, so the header chip's detail is still reachable.
+//   1. It shows today's spend and a bar per subscription from real sources, and
+//      stays honest (`—`, no bar width) until they answer.
+//   2. It opens the limits panel, and keeps the bars alone when the rail is collapsed.
 //   3. It keeps the daemon's health: version when up, red when unreachable.
 //
 // Runs with the rest of the web suite: `npm test`.
@@ -31,20 +31,22 @@ vi.mock('../lib/health', () => ({
 vi.mock('../lib/usageData', () => ({ useUsage: vi.fn() }));
 vi.mock('../lib/activeAccount', () => ({ useActiveUsageAccount: () => null }));
 vi.mock('./PluginDriftBadge', () => ({ PluginDriftBadge: () => null }));
-vi.mock('./usage/UsageModal', () => ({
-  UsageModal: ({ open }: { open: boolean }) => (open ? <div role="dialog" aria-label="usage modal" /> : null),
+vi.mock('./usage/LimitsPanel', () => ({
+  LimitsPanel: () => <div role="dialog" aria-label="limits panel" />,
+  limitBarClass: (percent: number) => (percent >= 90 ? 'bg-red' : 'bg-green'),
+  limitTextClass: () => 'text-green',
 }));
 
 const setModalOpen = vi.fn();
 
 function withPlan(percentUsed: number, status = 'ok'): void {
-  vi.mocked(useUsage).mockReturnValue({
-    providers: [
-      {
+  const provider = {
+        source: 'oauth',
         status,
         windows: [{ key: 'session', percentUsed, resetAt: new Date(Date.now() + 3_600_000).toISOString() }],
-      },
-    ],
+  };
+  vi.mocked(useUsage).mockReturnValue({
+    accounts: [{ account: 'default', providers: [provider] }],
     setModalOpen,
   } as never);
 }
@@ -68,11 +70,12 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('HealthFooter', () => {
-  it('shows spend, plan and the reset clock', async () => {
+  it('shows spend, the state and a line per account', async () => {
     await renderFooter();
     expect(screen.getByText('$12.40 today')).toBeTruthy();
-    expect(screen.getByText('plan 41 %')).toBeTruthy();
-    expect(screen.getByText(/^resets /)).toBeTruthy();
+    expect(screen.getByText('all clear')).toBeTruthy();
+    expect(screen.getByText('default')).toBeTruthy();
+    expect(screen.getByText('41%')).toBeTruthy();
   });
 
   it('draws the plan bar at the used percentage, capped at the track', async () => {
@@ -92,18 +95,37 @@ describe('HealthFooter', () => {
 
   it('says it does not know yet instead of showing a zero', async () => {
     vi.mocked(fetchStatsToday).mockResolvedValueOnce({ cost_usd: null } as never);
-    vi.mocked(useUsage).mockReturnValue({ providers: [], setModalOpen } as never);
+    vi.mocked(useUsage).mockReturnValue({
+      accounts: [{ account: 'default', providers: [{ source: 'oauth', status: 'error', windows: [] }] }],
+      setModalOpen,
+    } as never);
     await renderFooter();
     expect(screen.getByText('— today')).toBeTruthy();
-    expect(screen.queryByText(/^plan /)).toBeNull();
+    expect(screen.getByText('no data')).toBeTruthy();
+    expect(screen.getByText('—')).toBeTruthy();
   });
 
-  it('opens the Usage modal and registers it with the shared poller', async () => {
+  it('opens the limits panel and registers it with the shared poller', async () => {
     await renderFooter();
-    expect(screen.queryByRole('dialog', { name: 'usage modal' })).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: 'Subscription usage' }));
-    expect(screen.getByRole('dialog', { name: 'usage modal' })).toBeTruthy();
+    expect(screen.queryByRole('dialog', { name: 'limits panel' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: /today/ }));
+    expect(screen.getByRole('dialog', { name: 'limits panel' })).toBeTruthy();
     expect(setModalOpen).toHaveBeenCalledWith(true);
+  });
+
+  it('keeps the bars alone on a collapsed rail, and still opens the panel', async () => {
+    render(
+      <MemoryRouter>
+        <HealthFooter compact />
+      </MemoryRouter>,
+    );
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(screen.queryByText('$12.40 today')).toBeNull();
+    expect(screen.queryByText('v0.2.2')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Subscription limits' }));
+    expect(screen.getByRole('dialog', { name: 'limits panel' })).toBeTruthy();
   });
 
   it('keeps the daemon version on the line', async () => {

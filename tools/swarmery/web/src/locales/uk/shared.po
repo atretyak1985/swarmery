@@ -37,6 +37,7 @@ msgstr " · кілька варіантів"
 msgid " · no usage data for this account"
 msgstr " · немає даних про використання для цього акаунта"
 
+#: src/components/usage/LimitsPanel.tsx
 #: src/components/usage/UsageModal.tsx
 msgid " · refresh failed"
 msgstr " · оновлення не вдалося"
@@ -120,6 +121,21 @@ msgstr "{0, plural, one {# незакомічений} few {# незакоміч
 msgid "{0, plural, one {# evidence citation} few {# evidence citations} many {# evidence citations} other {# evidence citations}}"
 msgstr "{0, plural, one {# посилання на докази} few {# посилання на докази} many {# посилань на докази} other {# посилання на докази}}"
 
+#. placeholder {0}: stopped.name
+#: src/lib/limits.ts
+msgid "{0} at limit"
+msgstr "{0} на ліміті"
+
+#. placeholder {0}: stopped.name
+#: src/lib/limits.ts
+msgid "{0} hit a limit"
+msgstr "{0} досяг ліміту"
+
+#. placeholder {0}: stopped.name
+#: src/lib/limits.ts
+msgid "{0} hit a limit · {reset}"
+msgstr "{0} досяг ліміту · {reset}"
+
 #: src/components/usage/UsageChip.tsx
 msgid "{account} — not connected"
 msgstr "{account} — не під’єднано"
@@ -139,6 +155,10 @@ msgstr "{base} · призупинено диспетчером"
 #: src/workspace/boardModel.ts
 msgid "{base} · paused by you"
 msgstr "{base} · призупинено вами"
+
+#: src/lib/limits.ts
+msgid "{blind} without data"
+msgstr "без даних: {blind}"
 
 #: src/components/DiffView.tsx
 msgid "{branch} · base {base}"
@@ -175,6 +195,10 @@ msgstr "{commits, plural, one {# коміт} few {# коміти} many {# ком
 #: src/components/PlanRunCard.tsx
 msgid "{count, plural, one {# session} few {# sessions} many {# sessions} other {# sessions}}"
 msgstr "{count, plural, one {# сесія} few {# сесії} many {# сесій} other {# сесії}}"
+
+#: src/components/usage/LimitsPanel.tsx
+msgid "{count} of {total}"
+msgstr "{count} із {total}"
 
 #: src/components/RunOutcomeModal.tsx
 msgid "{criteriaAfter} of {criteriaTotal} criteria ticked"
@@ -614,10 +638,15 @@ msgstr "акаунти"
 msgid "Accounts"
 msgstr "Акаунти"
 
+#: src/components/usage/LimitsPanel.tsx
+msgid "accounts →"
+msgstr "акаунти →"
+
 #: src/lib/glossary.ts
 msgid "acting"
 msgstr "діє"
 
+#: src/components/usage/LimitsPanel.tsx
 #: src/components/usage/UsageProviderCard.tsx
 #: src/lib/sessionsView.ts
 msgid "active"
@@ -699,6 +728,10 @@ msgstr "агенти…"
 #: src/components/NotifySettings.tsx
 msgid "alerts"
 msgstr "сповіщення"
+
+#: src/lib/limits.ts
+msgid "all clear"
+msgstr "усе гаразд"
 
 #: src/components/ProjectDropdown.tsx
 msgid "all projects"
@@ -873,6 +906,10 @@ msgstr "питати"
 #: src/components/VcsSignInDialog.tsx
 msgid "Asking for a code…"
 msgstr "Запитуємо код…"
+
+#: src/components/usage/LimitsPanel.tsx
+msgid "at limit"
+msgstr "на ліміті"
 
 #: src/components/ProjectActions.tsx
 msgid "attach"
@@ -1212,6 +1249,10 @@ msgstr "Закрити"
 #: src/api.ts
 msgid "close failed"
 msgstr "закрити не вдалося"
+
+#: src/components/usage/LimitsPanel.tsx
+msgid "Close limits"
+msgstr "Закрити ліміти"
 
 #: src/workspace/task/TaskActions.tsx
 msgid "close the card and move it to done"
@@ -1887,6 +1928,10 @@ msgstr "помилки"
 msgid "Every tool call waits for you. The safe default — nothing runs unattended."
 msgstr "Кожен виклик інструмента чекає на вас. Безпечний типовий режим — нічого не виконується без нагляду."
 
+#: src/lib/limits.ts
+msgid "every window has room"
+msgstr "у всіх вікнах є запас"
+
 #: src/workspace/task/TaskActions.tsx
 msgid "evidence"
 msgstr "докази"
@@ -2436,6 +2481,11 @@ msgstr "світла"
 msgid "Light"
 msgstr "Світла"
 
+#: src/components/HealthFooter.tsx
+#: src/components/usage/LimitsPanel.tsx
+msgid "limits"
+msgstr "ліміти"
+
 #: src/components/TaskChip.tsx
 msgid "linked heuristically"
 msgstr "пов’язано евристично"
@@ -2581,6 +2631,10 @@ msgstr "більше дій"
 msgid "Motion"
 msgstr "Анімація"
 
+#: src/components/usage/LimitsPanel.tsx
+msgid "move ▾"
+msgstr "перенести ▾"
+
 #: src/pages/Settings.tsx
 msgid "move selection"
 msgstr "рух по рядках"
@@ -2678,6 +2732,10 @@ msgstr "Без автопогодження, І диспетчер відмов�
 msgid "No blockers detected — the executor exited without ticking criteria; open the session to see why."
 msgstr "Блокерів не виявлено — виконавець вийшов, не відмітивши критеріїв; відкрийте сесію, щоб побачити чому."
 
+#: src/lib/limits.ts
+msgid "no data"
+msgstr "немає даних"
+
 #: src/workspace/ProjectSwitcher.tsx
 msgid "no match"
 msgstr "збігів немає"
@@ -2689,6 +2747,10 @@ msgstr "збігів немає"
 #: src/components/ConnectorsSection.tsx
 msgid "no mcp servers configured"
 msgstr "mcp-сервери не налаштовано"
+
+#: src/components/usage/LimitsPanel.tsx
+msgid "no numbers for this account"
+msgstr "для цього акаунта немає цифр"
 
 #: src/theme/ThemePicker.tsx
 msgid "no palette matches"
@@ -2742,6 +2804,10 @@ msgstr "жоден провайдер використання не відпов
 msgid "no worktrees on this machine"
 msgstr "на цій машині немає worktree"
 
+#: src/components/usage/LimitsPanel.tsx
+msgid "none"
+msgstr "немає"
+
 #: src/workspace/task/TaskActions.tsx
 msgid "not a defect"
 msgstr "не дефект"
@@ -2768,6 +2834,7 @@ msgstr "не збережено — {fields} змінилися на серве�
 msgid "not sent: {msg}"
 msgstr "не надіслано: {msg}"
 
+#: src/components/usage/LimitsPanel.tsx
 #: src/components/usage/UsageModal.tsx
 msgid "not yet loaded"
 msgstr "ще не завантажено"
@@ -3106,10 +3173,6 @@ msgstr "план"
 msgid "plan · phase {0}"
 msgstr "план · фаза {0}"
 
-#: src/components/HealthFooter.tsx
-msgid "plan {percent} %"
-msgstr "план {percent} %"
-
 #: src/workspace/boardModel.ts
 msgid "plan {planId}"
 msgstr "план {planId}"
@@ -3290,6 +3353,10 @@ msgstr "Проєкти"
 msgid "Projects on the locked-down preset — refused, stamped into dispatchError"
 msgstr "Проєкти на пресеті «заблоковано» — відмова, записана в dispatchError"
 
+#: src/components/usage/LimitsPanel.tsx
+msgid "projects running as {account}"
+msgstr "проєкти під акаунтом {account}"
+
 #: src/workspace/task/TaskBrief.tsx
 msgid "prompt"
 msgstr "промпт"
@@ -3468,6 +3535,7 @@ msgstr "Довідка"
 msgid "refine planning failed: {status}"
 msgstr "уточнення плану не вдалося: {status}"
 
+#: src/components/usage/LimitsPanel.tsx
 #: src/components/usage/UsageModal.tsx
 msgid "refresh"
 msgstr "оновити"
@@ -3555,9 +3623,14 @@ msgstr "перезапуск не вдався"
 msgid "reset"
 msgstr "скинути"
 
-#: src/components/HealthFooter.tsx
+#: src/lib/limits.ts
 msgid "resets {at}"
 msgstr "скидання {at}"
+
+#. placeholder {0}: compactSpan(left)
+#: src/lib/limits.ts
+msgid "resets {at} · {0}"
+msgstr "скидання {at} · {0}"
 
 #: src/components/usage/format.ts
 msgid "resets in {days}d"
@@ -4045,6 +4118,10 @@ msgstr "пропущено: {skippedCount}"
 msgid "slug"
 msgstr "slug"
 
+#: src/lib/limits.ts
+msgid "some numbers are not available"
+msgstr "частина цифр недоступна"
+
 #: src/workspace/TaskCard.tsx
 msgid "someone commented on GitHub since this card was last handled — the newest comments are in its description"
 msgstr "на GitHub з’явився коментар після того, як картку востаннє розібрали, — найновіші коментарі в її описі"
@@ -4060,10 +4137,6 @@ msgstr "джерело"
 #: src/workspace/boardModel.ts
 msgid "spawned by verification to repair {externalId}"
 msgstr "створено перевіркою для виправлення {externalId}"
-
-#: src/components/HealthFooter.tsx
-msgid "spend today · plan window"
-msgstr "витрати сьогодні · вікно плану"
 
 #: src/pages/Settings.tsx
 msgid "Spinning and pulsing state glyphs"
@@ -4159,6 +4232,10 @@ msgid "subscription account"
 msgstr "акаунт підписки"
 
 #: src/components/HealthFooter.tsx
+#: src/components/usage/LimitsPanel.tsx
+msgid "Subscription limits"
+msgstr "Ліміти підписки"
+
 #: src/components/usage/UsageChip.tsx
 #: src/components/usage/UsageChip.tsx
 #: src/components/usage/UsageModal.tsx
@@ -4448,6 +4525,10 @@ msgstr "налаштування теми"
 msgid "third"
 msgstr "третя"
 
+#: src/components/usage/LimitsPanel.tsx
+msgid "this account cannot run"
+msgstr "цей акаунт не може запускати"
+
 #: src/components/NotifySettings.tsx
 #: src/pages/Settings.tsx
 msgid "this browser does not support the Notifications API"
@@ -4541,6 +4622,11 @@ msgstr "назва і промпт не можуть бути порожніми
 msgid "title is required"
 msgstr "назва обов’язкова"
 
+#. placeholder {0}: target.key
+#: src/components/usage/LimitsPanel.tsx
+msgid "to {0}"
+msgstr "до {0}"
+
 #: src/workspace/boardModel.ts
 msgid "today"
 msgstr "сьогодні"
@@ -4556,6 +4642,11 @@ msgstr "сьогодні · {name}"
 #: src/pages/Settings.tsx
 msgid "Today · Inbox · Needs you · Sessions · Plans"
 msgstr "Today · Inbox · Needs you · Sessions · Plans"
+
+#. placeholder {0}: fmtCost(spentToday)
+#: src/components/usage/LimitsPanel.tsx
+msgid "today <0>{0}</0>"
+msgstr "сьогодні <0>{0}</0>"
 
 #: src/api.ts
 msgid "toggle checkbox failed: {status}"
@@ -4637,11 +4728,16 @@ msgstr "оновлення не вдалося: {status}"
 msgid "update routine failed: {status}"
 msgstr "оновлення рутини не вдалося: {status}"
 
+#: src/components/usage/LimitsPanel.tsx
+msgid "updated {updated}"
+msgstr "оновлено {updated}"
+
 #: src/components/usage/UsageChip.tsx
 #: src/components/usage/UsageModal.tsx
 msgid "usage"
 msgstr "використання"
 
+#: src/components/usage/LimitsPanel.tsx
 #: src/components/usage/UsageModal.tsx
 msgid "usage accounts"
 msgstr "акаунти використання"

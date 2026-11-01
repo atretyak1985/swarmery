@@ -299,7 +299,7 @@ export function Sidebar({
                 </span>
               )}
             </button>
-            {!collapsed && <HealthFooter />}
+            <HealthFooter compact={collapsed} />
           </div>
         </div>
       </nav>
