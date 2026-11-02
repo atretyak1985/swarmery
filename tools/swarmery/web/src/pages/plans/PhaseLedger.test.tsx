@@ -2,7 +2,9 @@
 //
 // The phase ledger (handoff §6). The claims: the columns are the design's, with no
 // forecast and no tick (plan D-5); a line opens the phase's page, from anywhere on it,
-// and opens nothing in place; the name stays a real link.
+// and opens nothing in place; the name stays a real link. The action column carries
+// the one thing a line needs now — run, stop, tick, or the green report link — and
+// using it does not open the phase.
 
 import { MemoryRouter, useLocation } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -57,6 +59,9 @@ const live = {
   runStartedAt: new Date(Date.now() - 60_000).toISOString(),
 } as EpicPhase;
 
+const onRun = vi.fn();
+const onCancelRun = vi.fn();
+
 const run = (id: number, phaseId: number, title: string, costUsd: number | null): Session =>
   ({
     id,
@@ -81,6 +86,10 @@ function mount(phases: EpicPhase[], sessions: Session[] = []): void {
     <MemoryRouter initialEntries={['/plan']}>
       <PhaseLedger
         epic={{ taskId: 7, status: 'active', phases } as unknown as Epic}
+        runBusy={null}
+        planRunning={false}
+        onRun={onRun}
+        onCancelRun={onCancelRun}
         resolvedSeqs={computeResolvedSeqs(phases)}
         sessions={sessions}
         terminalSessions={[]}
@@ -96,7 +105,10 @@ function mount(phases: EpicPhase[], sessions: Session[] = []): void {
 const line = (name: string): HTMLElement => screen.getByRole('link', { name }).closest('li') as HTMLElement;
 const at = (): string | null => screen.getByRole('status', { name: 'location' }).textContent;
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.clearAllMocks();
+});
 
 describe('PhaseLedger', () => {
   it('heads the ledger with the phase count and what landed', () => {
@@ -122,17 +134,62 @@ describe('PhaseLedger', () => {
     expect(screen.getByRole('link', { name: 'Limiter core' }).getAttribute('href')).toBe('/plan/phase/2/story');
   });
 
-  it('opens nothing in place: no expansion, no caret, no actions', () => {
+  it('opens nothing in place: no expansion, no caret', () => {
     mount([live, idle]);
     fireEvent.click(within(line('Design bucket')).getByText('1'));
     expect(document.querySelector('[aria-expanded]')).toBeNull();
     expect(document.body.textContent).not.toMatch(/[▸▾]/);
-    expect(screen.queryByRole('button', { name: /Run phase|Cancel/ })).toBeNull();
   });
 
-  it('sums a phase’s runs and counts them on the line', () => {
+  it('sums a phase’s runs, without a run-count column', () => {
     mount([done], [run(1, 12, 'spec + ADR', 6), run(2, 12, 'pass', 2)]);
     expect(within(line('Limiter core')).getByText('$8')).toBeTruthy();
-    expect(within(line('Limiter core')).getAllByText('2')).toHaveLength(2); // the seq, then the count
+    expect(within(line('Limiter core')).getAllByText('2')).toHaveLength(1); // the seq alone
+    expect(screen.getByText('action')).toBeTruthy();
+    expect(screen.queryByText('runs')).toBeNull();
+  });
+
+  it('runs a ready phase from its line without opening it', () => {
+    mount([idle]);
+    fireEvent.click(within(line('Design bucket')).getByRole('button', { name: '▶ run' }));
+    expect(onRun).toHaveBeenCalledWith(11);
+    expect(at()).toBe('/plan');
+  });
+
+  it('stops a live phase from its line', () => {
+    mount([live]);
+    fireEvent.click(within(line('Router')).getByRole('button', { name: 'stop' }));
+    expect(onCancelRun).toHaveBeenCalledWith(13);
+  });
+
+  it('links a landed phase to its report, in green', () => {
+    mount([done]);
+    const report = within(line('Limiter core')).getByRole('link', { name: '✓ report' });
+    expect(report.getAttribute('href')).toBe('/plan/phase/2/report');
+    expect(report.className).toContain('text-green');
+  });
+
+  it('names what a phase depends on, a landed dependency in green', () => {
+    const third = { ...base, id: 16, seq: 3, name: 'Wiring', dependsOn: [1, 2] } as EpicPhase;
+    mount([idle, done, third]);
+    const deps = within(line('Wiring'));
+    expect(deps.getByText('depends on')).toBeTruthy();
+    expect(deps.getByText('#2').className).toContain('text-green');
+    expect(deps.getByText('#1').className).not.toContain('text-green');
+    expect(within(line('Design bucket')).queryByText('depends on')).toBeNull();
+  });
+
+  it('offers nothing to a phase still waiting on another', () => {
+    const waiting = { ...base, id: 14, seq: 4, name: 'Budgets', dependsOn: [1] } as EpicPhase;
+    mount([idle, waiting]);
+    expect(within(line('Budgets')).queryByRole('button')).toBeNull();
+  });
+
+  it('sends a phase only you can close to its criteria', () => {
+    const manual = { ...base, id: 15, seq: 5, name: 'Store review', manualOpen: 1, checkboxesDone: 2 } as EpicPhase;
+    mount([manual]);
+    expect(within(line('Store review')).getByRole('link', { name: 'tick criteria' }).getAttribute('href')).toBe(
+      '/plan/phase/5/criteria',
+    );
   });
 });

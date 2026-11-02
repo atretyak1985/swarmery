@@ -322,6 +322,10 @@ msgstr "{turns, plural, one {{model} (# turn)} few {{model} (# turns)} many {{mo
 msgid "← all phases"
 msgstr "← all phases"
 
+#: src/pages/plans/PhaseLedger.tsx
+msgid "↻ retry"
+msgstr "↻ retry"
+
 #. placeholder {0}: fmtSpent(spent)
 #: src/pages/plans/PlanHeader.tsx
 msgid "<0>{0}</0> spent"
@@ -339,6 +343,10 @@ msgstr "▶ resume plan"
 msgid "▶ retry plan"
 msgstr "▶ retry plan"
 
+#: src/pages/plans/PhaseLedger.tsx
+msgid "▶ run"
+msgstr "▶ run"
+
 #: src/pages/plans/PlanRunControls.tsx
 msgid "▶ Run"
 msgstr "▶ Run"
@@ -350,6 +358,10 @@ msgstr "▶ run plan"
 #: src/pages/plans/PhaseDetailPanel.tsx
 msgid "▶ run this phase now"
 msgstr "▶ run this phase now"
+
+#: src/pages/plans/PhaseLedger.tsx
+msgid "✓ report"
+msgstr "✓ report"
 
 #: src/pages/plans/PlanHeader.tsx
 msgid "✓ summary"
@@ -417,12 +429,17 @@ msgstr "a small"
 
 #: src/pages/Plans.tsx
 #: src/pages/plans/PhaseDetailPanel.tsx
+#: src/pages/plans/PhaseLedger.tsx
 msgid "a whole-plan run is executing this plan"
 msgstr "a whole-plan run is executing this plan"
 
 #: src/pages/planning/RunningPlanPanel.tsx
 msgid "acceptance criteria"
 msgstr "acceptance criteria"
+
+#: src/pages/plans/PhaseLedger.tsx
+msgid "action"
+msgstr "action"
 
 #: src/pages/plans/PlanList.tsx
 #: src/pages/plans/plansTarget.ts
@@ -480,6 +497,10 @@ msgstr "an extra-small"
 #: src/pages/plans/forecastStoryModel.ts
 msgid "an unmeasured time"
 msgstr "an unmeasured time"
+
+#: src/pages/plans/PhaseLedger.tsx
+msgid "answer"
+msgstr "answer"
 
 #: src/pages/plans/PhaseDetailPanel.tsx
 msgid "answer in Needs you"
@@ -874,12 +895,18 @@ msgid "Delete this routine"
 msgstr "Delete this routine"
 
 #: src/pages/plans/PhaseDetailPanel.tsx
+#: src/pages/plans/PhaseLedger.tsx
 msgid "dependency pending"
 msgstr "dependency pending"
 
 #: src/pages/plans/PhaseDetailPanel.tsx
+#: src/pages/plans/PhaseLedger.tsx
 msgid "dependency resolved"
 msgstr "dependency resolved"
+
+#: src/pages/plans/PhaseLedger.tsx
+msgid "depends on"
+msgstr "depends on"
 
 #: src/pages/planning/RefineModal.tsx
 msgid "Describe what should change. The plan will update, and the next questions will follow your direction."
@@ -2593,6 +2620,7 @@ msgid "run this phase again even though nothing has changed since it blocked"
 msgstr "run this phase again even though nothing has changed since it blocked"
 
 #: src/pages/plans/PhaseDetailPanel.tsx
+#: src/pages/plans/PhaseLedger.tsx
 msgid "run this phase headlessly in an isolated worktree"
 msgstr "run this phase headlessly in an isolated worktree"
 
@@ -2622,10 +2650,6 @@ msgstr "running plan"
 #: src/pages/plans/PlanRunControls.tsx
 msgid "Running plan"
 msgstr "Running plan"
-
-#: src/pages/plans/PhaseLedger.tsx
-msgid "runs"
-msgstr "runs"
 
 #: src/pages/plans/PhasePanel.tsx
 msgid "Runs"
@@ -2866,6 +2890,10 @@ msgstr "step name"
 #: src/pages/Routines.tsx
 msgid "Steps"
 msgstr "Steps"
+
+#: src/pages/plans/PhaseLedger.tsx
+msgid "stop"
+msgstr "stop"
 
 #: src/pages/plans/PhaseDetailPanel.tsx
 msgid "stop phase"
@@ -3201,6 +3229,7 @@ msgid "this run changed model mid-flight: {trail}"
 msgstr "this run changed model mid-flight: {trail}"
 
 #: src/pages/plans/PhaseDetailPanel.tsx
+#: src/pages/plans/PhaseLedger.tsx
 msgid "tick criteria"
 msgstr "tick criteria"
 
@@ -3349,6 +3378,10 @@ msgstr "what to fix on the next pass"
 #: src/pages/plans/PlanDetailPanel.tsx
 msgid "what was done"
 msgstr "what was done"
+
+#: src/pages/plans/PhaseLedger.tsx
+msgid "what was done — the executor's Completion Report and execution record"
+msgstr "what was done — the executor's Completion Report and execution record"
 
 #: src/pages/plans/PlanHeader.tsx
 msgid "what was shipped — per-phase executed work"

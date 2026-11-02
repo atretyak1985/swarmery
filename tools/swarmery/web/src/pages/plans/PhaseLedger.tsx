@@ -1,18 +1,23 @@
 // The phase ledger (handoff §6): one line per phase, in the design's grid, so a
 // plan's state reads top to bottom. A line opens the phase's own page, where its runs,
-// criteria and every action it offers live. What a run started now will use is on the
-// plan's metadata line, above the ledger.
+// criteria and every action it offers live. The last column carries the one action the
+// line needs now (LedgerAction): run or retry, stop, answer, tick, or the green link
+// to a landed phase's report. What a run started now will use is on the plan's
+// metadata line, above the ledger.
 
 import { Trans, useLingui } from '@lingui/react/macro';
 import { Link, useNavigate } from 'react-router-dom';
-import type { Epic, ProviderTerms, Session, TerminalSession } from '../../api/types';
+import type { Epic, EpicPhase, ProviderTerms, Session, TerminalSession } from '../../api/types';
 import { StateGlyph } from '../../components/place/StateGlyph';
 import type { OffPlanBand } from '../../lib/offPlan';
 import { fmtElapsed } from '../../lib/format';
 import { useSessionHref } from '../../lib/sessionHref';
 import { modelShortName } from '../../lib/sessionModelChip';
 import { compactSpan } from '../../lib/sessionsView';
+import { useProjectWorkspace } from '../../workspace/ProjectContext';
+import { isUnresolvedOutcome } from './phaseChips';
 import {
+  heldByDecision,
   phaseCost,
   phaseCostBand,
   phaseGlyph,
@@ -23,13 +28,16 @@ import {
   stageLabel,
   type PhaseStage,
 } from './phaseLedgerModel';
-import { fmtSpent, phaseNeedsYou, phasesLanded, phaseStatus } from './planModel';
+import { fmtSpent, phaseNeedsYou, phasesLanded, phaseStatus, type PhaseStatus } from './planModel';
 import type { PhaseDetailTab } from './plansTarget';
 import { TerminalBadge } from './TerminalBadge';
 
 /** Below `desk` the stage and the cost drop out: the note still says where it is. */
 const GRID =
-  'grid grid-cols-[18px_24px_minmax(0,1fr)_40px] gap-[10px] desk:grid-cols-[18px_24px_minmax(0,1.7fr)_minmax(56px,0.4fr)_minmax(88px,0.7fr)_40px]';
+  'grid grid-cols-[18px_24px_minmax(0,1fr)_auto] gap-[10px] desk:grid-cols-[18px_24px_minmax(0,1fr)_72px_56px_minmax(92px,auto)]';
+
+const PILL =
+  'inline-flex items-center rounded-md border px-2 py-[3px] font-mono text-[11px] leading-[normal] whitespace-nowrap transition-colors disabled:cursor-not-allowed disabled:opacity-50';
 
 export const STAGE_TONE: Record<PhaseStage, string> = {
   decision: 'text-brand',
@@ -68,6 +76,115 @@ function CostCell({ cost, maxCost, band }: { cost: number | null; maxCost: numbe
         />
       </span>
     </div>
+  );
+}
+
+export interface LedgerRunControls {
+  /** The phase a run request is in flight for, or null. */
+  runBusy: number | null;
+  /** A whole-plan run owns the plan: no phase starts beside it. */
+  planRunning: boolean;
+  onRun: (phaseId: number) => void;
+  onCancelRun: (phaseId: number) => void;
+}
+
+/** The one action a line needs now, or nothing when the phase can only wait. */
+function LedgerAction({
+  phase,
+  status,
+  depsUnmet,
+  active,
+  controls,
+  phaseHref,
+  needsHref,
+}: {
+  phase: EpicPhase;
+  status: PhaseStatus;
+  depsUnmet: readonly number[];
+  active: boolean;
+  controls: LedgerRunControls;
+  phaseHref: (seq: number, tab: PhaseDetailTab) => string;
+  needsHref: string;
+}): JSX.Element | null {
+  const { t } = useLingui();
+  const { runBusy, planRunning, onRun, onCancelRun } = controls;
+  const stop = (e: { stopPropagation: () => void }): void => e.stopPropagation();
+  if (phaseNeedsYou(phase)) {
+    return heldByDecision(phase) || phase.guardDecision != null ? (
+      <Link to={needsHref} onClick={stop} className={`${PILL} border-brand/60 bg-brand-bg text-brand hover:border-brand`}>
+        <Trans>answer</Trans>
+      </Link>
+    ) : (
+      <Link
+        to={phaseHref(phase.seq, 'criteria')}
+        onClick={stop}
+        className={`${PILL} border-brand/60 bg-brand-bg text-brand hover:border-brand`}
+      >
+        <Trans>tick criteria</Trans>
+      </Link>
+    );
+  }
+  if (phase.runState === 'running') {
+    return (
+      <button
+        type="button"
+        disabled={runBusy !== null}
+        onClick={(e) => {
+          stop(e);
+          onCancelRun(phase.id);
+        }}
+        className={`${PILL} border-red/50 text-red hover:bg-red/10`}
+      >
+        {runBusy === phase.id ? '…' : <Trans>stop</Trans>}
+      </button>
+    );
+  }
+  if (status === 'done') {
+    return (
+      <Link
+        to={phaseHref(phase.seq, 'report')}
+        onClick={stop}
+        data-tip={t`what was done — the executor's Completion Report and execution record`}
+        className="font-mono text-[11px] leading-[normal] whitespace-nowrap text-green underline-offset-2 hover:underline"
+      >
+        <Trans>✓ report</Trans>
+      </Link>
+    );
+  }
+  if (!active || depsUnmet.length > 0) return null;
+  const retry = isUnresolvedOutcome(phase.runOutcome);
+  return (
+    <button
+      type="button"
+      disabled={runBusy !== null || planRunning}
+      data-tip={planRunning ? t`a whole-plan run is executing this plan` : t`run this phase headlessly in an isolated worktree`}
+      onClick={(e) => {
+        stop(e);
+        onRun(phase.id);
+      }}
+      className={`${PILL} border-brand/60 text-brand hover:bg-brand-bg`}
+    >
+      {runBusy === phase.id ? '…' : retry ? <Trans>↻ retry</Trans> : <Trans>▶ run</Trans>}
+    </button>
+  );
+}
+
+/** Which phases this one waits for: a landed one in green, an open one faint. */
+function DependsOn({ deps, resolvedSeqs }: { deps: readonly number[]; resolvedSeqs: Set<number> }): JSX.Element {
+  const { t } = useLingui();
+  return (
+    <span className="flex shrink-0 items-baseline gap-1 font-mono text-[10.5px] leading-[normal] whitespace-nowrap text-ink-faint">
+      <Trans>depends on</Trans>
+      {deps.map((dep) => (
+        <span
+          key={dep}
+          className={resolvedSeqs.has(dep) ? 'text-green' : 'text-ink-dim'}
+          data-tip={resolvedSeqs.has(dep) ? t`dependency resolved` : t`dependency pending`}
+        >
+          #{dep}
+        </span>
+      ))}
+    </span>
   );
 }
 
@@ -116,7 +233,8 @@ export function PhaseLedger({
   terms,
   phaseHref,
   now,
-}: {
+  ...controls
+}: LedgerRunControls & {
   epic: Epic;
   resolvedSeqs: Set<number>;
   /** The plan's sessions; null until they load. */
@@ -130,6 +248,8 @@ export function PhaseLedger({
 }): JSX.Element {
   const { t } = useLingui();
   const navigate = useNavigate();
+  const { slug } = useProjectWorkspace();
+  const needsHref = `/p/${encodeURIComponent(slug)}/needs-you`;
 
   const costs = epic.phases.map((p) => phaseCost(phaseRuns(sessions, p.id)));
   const maxCost = Math.max(0, ...costs.flatMap((c) => (c === null ? [] : [c])));
@@ -160,14 +280,13 @@ export function PhaseLedger({
           <Trans>cost</Trans>
         </span>
         <span className="text-right">
-          <Trans>runs</Trans>
+          <Trans>action</Trans>
         </span>
       </div>
       <ol>
         {epic.phases.map((p, i) => {
           const status = phaseStatus(p, resolvedSeqs);
           const depsUnmet = p.dependsOn.filter((seq) => !resolvedSeqs.has(seq));
-          const runs = phaseRuns(sessions, p.id);
           const pending = status === 'pending' || status === 'blocked';
           const elapsed = p.runStartedAt === null ? '' : fmtElapsed(p.runStartedAt, now);
           const seq = String(p.seq);
@@ -199,14 +318,27 @@ export function PhaseLedger({
                       <TerminalBadge sessions={terminalSessions.filter((s) => s.phaseId === String(p.id))} scope="phase" />
                     </span>
                   </div>
-                  <div className={`mt-0.5 truncate text-[12px] leading-[normal] ${phaseNeedsYou(p) ? 'text-brand' : 'text-ink-dim'}`}>
-                    {phaseNote(p, status, depsUnmet, elapsed, terms?.changeShort ?? null)}
+                  <div className="mt-0.5 flex min-w-0 items-baseline gap-2">
+                    <span
+                      className={`min-w-0 truncate text-[12px] leading-[normal] ${phaseNeedsYou(p) ? 'text-brand' : 'text-ink-dim'}`}
+                    >
+                      {phaseNote(p, status, depsUnmet, elapsed, terms?.changeShort ?? null)}
+                    </span>
+                    {p.dependsOn.length > 0 && <DependsOn deps={p.dependsOn} resolvedSeqs={resolvedSeqs} />}
                   </div>
                 </div>
                 <StageLabel stage={phaseStage(p, status)} />
                 <CostCell cost={costs[i] ?? null} maxCost={maxCost} band={phaseCostBand(p)} />
-                <span className="text-right font-mono text-[11px] leading-[normal] text-ink-faint">
-                  {runs.length > 0 ? String(runs.length) : ''}
+                <span className="flex justify-end">
+                  <LedgerAction
+                    phase={p}
+                    status={status}
+                    depsUnmet={depsUnmet}
+                    active={epic.status === 'active'}
+                    controls={controls}
+                    phaseHref={phaseHref}
+                    needsHref={needsHref}
+                  />
                 </span>
               </div>
             </li>

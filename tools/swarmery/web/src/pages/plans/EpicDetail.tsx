@@ -329,6 +329,10 @@ export function EpicDetail({
           ) : (
             <PhaseLedger
               epic={epic}
+              runBusy={runBusy}
+              planRunning={planRunning}
+              onRun={onRun}
+              onCancelRun={onCancelRun}
               resolvedSeqs={resolvedSeqs}
               sessions={sessions}
               now={now}
