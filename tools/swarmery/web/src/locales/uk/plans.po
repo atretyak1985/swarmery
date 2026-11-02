@@ -486,7 +486,6 @@ msgid "answer in Needs you"
 msgstr "відповісти в «Потребує вас»"
 
 #: src/pages/plans/PhaseCard.tsx
-#: src/pages/plans/PhaseCard.tsx
 msgid "answer it →"
 msgstr "відповісти →"
 
@@ -565,7 +564,6 @@ msgid "archiving…"
 msgstr "архівація…"
 
 #: src/pages/plans/ForecastVsActual.tsx
-#: src/pages/plans/ForecastVsActual.tsx
 msgid "areas"
 msgstr "зони"
 
@@ -581,7 +579,6 @@ msgstr "зони прибрано: {areasDropped}"
 msgid "as {outcome}"
 msgstr "зі статусом {outcome}"
 
-#: src/pages/plans/ForecastVsActual.tsx
 #: src/pages/plans/ForecastVsActual.tsx
 msgid "as forecast"
 msgstr "за прогнозом"
@@ -690,8 +687,6 @@ msgid "caught by nobody"
 msgstr "ніхто не впіймав"
 
 #: src/pages/plans/PhaseReview.tsx
-#: src/pages/plans/PhaseReview.tsx
-#: src/pages/plans/PhaseReview.tsx
 msgid "change request"
 msgstr "пул-реквест"
 
@@ -728,7 +723,6 @@ msgid "Claude is writing a plain-language explanation…"
 msgstr "Claude пише пояснення простими словами…"
 
 #: src/pages/Board.tsx
-#: src/pages/Board.tsx
 msgid "clear label filter"
 msgstr "скинути фільтр міток"
 
@@ -749,7 +743,6 @@ msgstr "закривається push / PR / злиттям — відмічає
 msgid "code review"
 msgstr "код-рев’ю"
 
-#: src/pages/plans/ForecastVsActual.tsx
 #: src/pages/plans/ForecastVsActual.tsx
 msgid "confidence"
 msgstr "упевненість"
@@ -857,7 +850,6 @@ msgid "decisions"
 msgstr "рішення"
 
 #: src/pages/plans/DecisionTable.tsx
-#: src/pages/plans/DecisionTable.tsx
 msgid "Decisions and criteria"
 msgstr "Рішення й критерії"
 
@@ -866,7 +858,6 @@ msgid "Decisions and criteria: {total} ids"
 msgstr "Рішення й критерії: {total} ідентифікаторів"
 
 #: src/pages/Routines.tsx
-#: src/pages/Routines.tsx
 msgid "Delete"
 msgstr "Видалити"
 
@@ -874,7 +865,6 @@ msgstr "Видалити"
 msgid "delete routine"
 msgstr "видалити рутину"
 
-#: src/pages/Routines.tsx
 #: src/pages/Routines.tsx
 msgid "Delete routine?"
 msgstr "Видалити рутину?"
@@ -936,7 +926,6 @@ msgstr "Відкинути нотатку?"
 msgid "Discard unsaved changes to {path}?"
 msgstr "Відкинути незбережені зміни в {path}?"
 
-#: src/pages/Board.tsx
 #: src/pages/Board.tsx
 #: src/pages/Plans.tsx
 msgid "dismiss"
@@ -1000,7 +989,6 @@ msgid "Duplicating…"
 msgstr "Дублювання…"
 
 #: src/pages/plans/ForecastVsActual.tsx
-#: src/pages/plans/ForecastVsActual.tsx
 msgid "duration"
 msgstr "тривалість"
 
@@ -1047,7 +1035,6 @@ msgid "effort"
 msgstr "зусилля"
 
 #: src/pages/Board.tsx
-#: src/pages/Board.tsx
 msgid "empty"
 msgstr "порожньо"
 
@@ -1091,7 +1078,6 @@ msgstr "епіки…"
 msgid "every minute"
 msgstr "щохвилини"
 
-#: src/pages/plans/DecisionTable.tsx
 #: src/pages/plans/DecisionTable.tsx
 #: src/pages/plans/ReviewFindings.tsx
 msgid "evidence"
@@ -1226,7 +1212,6 @@ msgid "From phase diagnosis"
 msgstr "З діагностики фази"
 
 #: src/pages/Routines.tsx
-#: src/pages/Routines.tsx
 msgid "global"
 msgstr "глобально"
 
@@ -1297,7 +1282,6 @@ msgstr "історія"
 
 #: src/pages/Board.tsx
 #: src/pages/planning/HistoryDrawer.tsx
-#: src/pages/PlanningMode.tsx
 #: src/pages/PlanningMode.tsx
 msgid "History"
 msgstr "Історія"
@@ -1380,7 +1364,6 @@ msgstr "лишити картку плану"
 msgid "label: any"
 msgstr "мітка: будь-яка"
 
-#: src/pages/plans/phaseLedgerModel.ts
 #: src/pages/plans/phaseLedgerModel.ts
 #: src/pages/plans/planModel.ts
 msgid "landed"
@@ -1557,8 +1540,6 @@ msgid "Names a settings file — cite where Claude Code reads it (config-channel
 msgstr "Називає файл налаштувань — вкажіть, звідки Claude Code його читає (config-channels)"
 
 #: src/pages/Routines.tsx
-#: src/pages/Routines.tsx
-#: src/pages/Routines.tsx
 msgid "never run"
 msgstr "не запускали"
 
@@ -1570,7 +1551,6 @@ msgstr "Новий план"
 msgid "new routine"
 msgstr "нова рутина"
 
-#: src/pages/Routines.tsx
 #: src/pages/Routines.tsx
 msgid "New routine"
 msgstr "Нова рутина"
@@ -1659,7 +1639,6 @@ msgstr "без прогнозу — ця фаза не має розділу ## 
 msgid "No lesson was proposed: the report has no Where reality diverged paragraph."
 msgstr "Урок не пропонується: у звіті немає абзацу «Where reality diverged»."
 
-#: src/pages/Routines.tsx
 #: src/pages/Routines.tsx
 msgid "no next run"
 msgstr "наступного запуску немає"
@@ -1761,7 +1740,6 @@ msgid "not delivered"
 msgstr "не доставлено"
 
 #: src/pages/plans/DecisionTable.tsx
-#: src/pages/plans/DecisionTable.tsx
 msgid "not implemented"
 msgstr "не реалізовано"
 
@@ -1792,11 +1770,9 @@ msgstr "без оцінки — фактичні показники запуск
 
 #: src/pages/plans/phaseLedgerModel.ts
 #: src/pages/plans/planModel.ts
-#: src/pages/plans/planModel.ts
 msgid "not started"
 msgstr "не розпочато"
 
-#: src/pages/plans/DecisionTable.tsx
 #: src/pages/plans/DecisionTable.tsx
 msgid "not verified"
 msgstr "не перевірено"
@@ -1904,8 +1880,6 @@ msgstr "відкрити запуск"
 
 #: src/pages/planning/RevisionReview.tsx
 #: src/pages/PlanningMode.tsx
-#: src/pages/PlanningMode.tsx
-#: src/pages/PlanningMode.tsx
 msgid "open session →"
 msgstr "відкрити сесію →"
 
@@ -1934,7 +1908,6 @@ msgstr "opus 5.5"
 msgid "opus 5.5 — default"
 msgstr "opus 5.5 — типово"
 
-#: src/pages/plans/ForecastVsActual.tsx
 #: src/pages/plans/ForecastVsActual.tsx
 msgid "outcome"
 msgstr "результат"
@@ -1993,7 +1966,6 @@ msgid "perm {permissionMode}"
 msgstr "дозволи {permissionMode}"
 
 #: src/pages/Routines.tsx
-#: src/pages/Routines.tsx
 msgid "Permanently delete <0>{routineName}</0> and its run history? This cannot be undone."
 msgstr "Назавжди видалити <0>{routineName}</0> та історію її запусків? Це незворотно."
 
@@ -2044,7 +2016,6 @@ msgid "phase run effort"
 msgstr "зусилля запуску фази"
 
 #: src/pages/plans/PhaseRunPickers.tsx
-#: src/pages/plans/PhaseRunPickers.tsx
 msgid "phase run model"
 msgstr "модель запуску фази"
 
@@ -2078,7 +2049,6 @@ msgstr "Простими словами"
 
 #: src/pages/plans/PlanDetailPanel.tsx
 #: src/pages/plans/PlanHeader.tsx
-#: src/pages/plans/PlanHeader.tsx
 #: src/pages/plans/PlanSessions.tsx
 msgid "plan"
 msgstr "план"
@@ -2095,7 +2065,6 @@ msgstr "План {externalId} не знайдено — показано спи�
 msgid "Plan #{id} not found"
 msgstr "План #{id} не знайдено"
 
-#: src/pages/plans/PlanHeader.tsx
 #: src/pages/plans/PlanHeader.tsx
 msgid "plan actions"
 msgstr "дії плану"
@@ -2203,8 +2172,6 @@ msgid "planning…"
 msgstr "планування…"
 
 #: src/pages/plans/PlanList.tsx
-#: src/pages/plans/PlanList.tsx
-#: src/pages/plans/PlansPlace.tsx
 #: src/pages/plans/PlansPlace.tsx
 msgid "Plans"
 msgstr "Плани"
@@ -2343,7 +2310,6 @@ msgid "Refine"
 msgstr "Уточнити"
 
 #: src/pages/planning/RefineModal.tsx
-#: src/pages/planning/RefineModal.tsx
 msgid "Refine the plan and next questions"
 msgstr "Уточнити план і наступні питання"
 
@@ -2363,7 +2329,6 @@ msgstr "Оновлення…"
 msgid "Refused: the run branch {branch} is the base branch{base}, so landing would push straight onto it. Set swarmery.vcs.allowPushToBase=true in .claude/settings.local.json to allow it."
 msgstr "Відхилено: гілка запуску {branch} — це базова гілка{base}, тож здача запушила б прямо в неї. Щоб дозволити це, задайте swarmery.vcs.allowPushToBase=true у .claude/settings.local.json."
 
-#: src/pages/planning/RevisionReview.tsx
 #: src/pages/planning/RevisionReview.tsx
 msgid "Reject"
 msgstr "Відхилити"
@@ -2441,7 +2406,6 @@ msgid "resolved in the plan round"
 msgstr "виправлено в раунді плану"
 
 #: src/pages/plans/PhaseDetailPanel.tsx
-#: src/pages/plans/PhaseDetailPanel.tsx
 msgid "Retry run"
 msgstr "Повторити запуск"
 
@@ -2493,7 +2457,6 @@ msgid "Review did not settle — the operator decides"
 msgstr "Рев’ю не завершилося само — вирішує оператор"
 
 #: src/pages/plans/ReviewFindings.tsx
-#: src/pages/plans/ReviewFindings.tsx
 msgid "Review findings"
 msgstr "Знахідки рев’ю"
 
@@ -2537,7 +2500,6 @@ msgstr "рев’юер"
 msgid "Revise plan"
 msgstr "Ревізія плану"
 
-#: src/pages/planning/ReviseModal.tsx
 #: src/pages/planning/ReviseModal.tsx
 msgid "Revise this plan"
 msgstr "Ревізія цього плану"
@@ -2606,7 +2568,6 @@ msgstr "запуск невдалий"
 msgid "Run failed"
 msgstr "Запуск невдалий"
 
-#: src/pages/Routines.tsx
 #: src/pages/Routines.tsx
 msgid "Run history"
 msgstr "Історія запусків"
@@ -2788,7 +2749,6 @@ msgid "silent"
 msgstr "мовчить"
 
 #: src/pages/plans/ForecastVsActual.tsx
-#: src/pages/plans/ForecastVsActual.tsx
 msgid "size"
 msgstr "розмір"
 
@@ -2861,7 +2821,6 @@ msgstr "застрягла: {stage} — {reason} {minutes} хв"
 msgid "Start again"
 msgstr "Почати знову"
 
-#: src/pages/PlanningMode.tsx
 #: src/pages/PlanningMode.tsx
 msgid "Start another plan"
 msgstr "Ще один план"
@@ -3085,7 +3044,6 @@ msgstr "Фаза ще виконується — здайте її, коли з�
 msgid "the phase waits on your answer"
 msgstr "фаза чекає на вашу відповідь"
 
-#: src/pages/PlanningMode.tsx
 #: src/pages/PlanningMode.tsx
 msgid "the plan"
 msgstr "план"
@@ -3352,11 +3310,9 @@ msgid "waits on decision {held}"
 msgstr "чекає на рішення {held}"
 
 #: src/pages/plans/PhaseCard.tsx
-#: src/pages/plans/PhaseCard.tsx
 msgid "waits on decision {id}"
 msgstr "чекає на рішення {id}"
 
-#: src/pages/Routines.tsx
 #: src/pages/Routines.tsx
 msgid "webhook"
 msgstr "вебхук"
@@ -3406,7 +3362,6 @@ msgstr "коли цей документ фази редагували оста�
 msgid "where"
 msgstr "де"
 
-#: src/pages/plans/ForecastVsActual.tsx
 #: src/pages/plans/ForecastVsActual.tsx
 msgid "where reality diverged"
 msgstr "де реальність розійшлася з планом"

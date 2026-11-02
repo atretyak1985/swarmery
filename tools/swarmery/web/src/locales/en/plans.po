@@ -486,7 +486,6 @@ msgid "answer in Needs you"
 msgstr "answer in Needs you"
 
 #: src/pages/plans/PhaseCard.tsx
-#: src/pages/plans/PhaseCard.tsx
 msgid "answer it →"
 msgstr "answer it →"
 
@@ -565,7 +564,6 @@ msgid "archiving…"
 msgstr "archiving…"
 
 #: src/pages/plans/ForecastVsActual.tsx
-#: src/pages/plans/ForecastVsActual.tsx
 msgid "areas"
 msgstr "areas"
 
@@ -581,7 +579,6 @@ msgstr "areas dropped: {areasDropped}"
 msgid "as {outcome}"
 msgstr "as {outcome}"
 
-#: src/pages/plans/ForecastVsActual.tsx
 #: src/pages/plans/ForecastVsActual.tsx
 msgid "as forecast"
 msgstr "as forecast"
@@ -690,8 +687,6 @@ msgid "caught by nobody"
 msgstr "caught by nobody"
 
 #: src/pages/plans/PhaseReview.tsx
-#: src/pages/plans/PhaseReview.tsx
-#: src/pages/plans/PhaseReview.tsx
 msgid "change request"
 msgstr "change request"
 
@@ -728,7 +723,6 @@ msgid "Claude is writing a plain-language explanation…"
 msgstr "Claude is writing a plain-language explanation…"
 
 #: src/pages/Board.tsx
-#: src/pages/Board.tsx
 msgid "clear label filter"
 msgstr "clear label filter"
 
@@ -749,7 +743,6 @@ msgstr "closed by push / PR / merge — ticked when the change request merges"
 msgid "code review"
 msgstr "code review"
 
-#: src/pages/plans/ForecastVsActual.tsx
 #: src/pages/plans/ForecastVsActual.tsx
 msgid "confidence"
 msgstr "confidence"
@@ -857,7 +850,6 @@ msgid "decisions"
 msgstr "decisions"
 
 #: src/pages/plans/DecisionTable.tsx
-#: src/pages/plans/DecisionTable.tsx
 msgid "Decisions and criteria"
 msgstr "Decisions and criteria"
 
@@ -866,7 +858,6 @@ msgid "Decisions and criteria: {total} ids"
 msgstr "Decisions and criteria: {total} ids"
 
 #: src/pages/Routines.tsx
-#: src/pages/Routines.tsx
 msgid "Delete"
 msgstr "Delete"
 
@@ -874,7 +865,6 @@ msgstr "Delete"
 msgid "delete routine"
 msgstr "delete routine"
 
-#: src/pages/Routines.tsx
 #: src/pages/Routines.tsx
 msgid "Delete routine?"
 msgstr "Delete routine?"
@@ -936,7 +926,6 @@ msgstr "Discard note?"
 msgid "Discard unsaved changes to {path}?"
 msgstr "Discard unsaved changes to {path}?"
 
-#: src/pages/Board.tsx
 #: src/pages/Board.tsx
 #: src/pages/Plans.tsx
 msgid "dismiss"
@@ -1000,7 +989,6 @@ msgid "Duplicating…"
 msgstr "Duplicating…"
 
 #: src/pages/plans/ForecastVsActual.tsx
-#: src/pages/plans/ForecastVsActual.tsx
 msgid "duration"
 msgstr "duration"
 
@@ -1047,7 +1035,6 @@ msgid "effort"
 msgstr "effort"
 
 #: src/pages/Board.tsx
-#: src/pages/Board.tsx
 msgid "empty"
 msgstr "empty"
 
@@ -1091,7 +1078,6 @@ msgstr "epics…"
 msgid "every minute"
 msgstr "every minute"
 
-#: src/pages/plans/DecisionTable.tsx
 #: src/pages/plans/DecisionTable.tsx
 #: src/pages/plans/ReviewFindings.tsx
 msgid "evidence"
@@ -1226,7 +1212,6 @@ msgid "From phase diagnosis"
 msgstr "From phase diagnosis"
 
 #: src/pages/Routines.tsx
-#: src/pages/Routines.tsx
 msgid "global"
 msgstr "global"
 
@@ -1297,7 +1282,6 @@ msgstr "history"
 
 #: src/pages/Board.tsx
 #: src/pages/planning/HistoryDrawer.tsx
-#: src/pages/PlanningMode.tsx
 #: src/pages/PlanningMode.tsx
 msgid "History"
 msgstr "History"
@@ -1380,7 +1364,6 @@ msgstr "keep the plan card"
 msgid "label: any"
 msgstr "label: any"
 
-#: src/pages/plans/phaseLedgerModel.ts
 #: src/pages/plans/phaseLedgerModel.ts
 #: src/pages/plans/planModel.ts
 msgid "landed"
@@ -1557,8 +1540,6 @@ msgid "Names a settings file — cite where Claude Code reads it (config-channel
 msgstr "Names a settings file — cite where Claude Code reads it (config-channels)"
 
 #: src/pages/Routines.tsx
-#: src/pages/Routines.tsx
-#: src/pages/Routines.tsx
 msgid "never run"
 msgstr "never run"
 
@@ -1570,7 +1551,6 @@ msgstr "New plan"
 msgid "new routine"
 msgstr "new routine"
 
-#: src/pages/Routines.tsx
 #: src/pages/Routines.tsx
 msgid "New routine"
 msgstr "New routine"
@@ -1659,7 +1639,6 @@ msgstr "no forecast — this phase declares no ## Forecast, so there is nothing 
 msgid "No lesson was proposed: the report has no Where reality diverged paragraph."
 msgstr "No lesson was proposed: the report has no Where reality diverged paragraph."
 
-#: src/pages/Routines.tsx
 #: src/pages/Routines.tsx
 msgid "no next run"
 msgstr "no next run"
@@ -1761,7 +1740,6 @@ msgid "not delivered"
 msgstr "not delivered"
 
 #: src/pages/plans/DecisionTable.tsx
-#: src/pages/plans/DecisionTable.tsx
 msgid "not implemented"
 msgstr "not implemented"
 
@@ -1792,11 +1770,9 @@ msgstr "not scored — the run’s actuals are not recorded yet, or nothing abou
 
 #: src/pages/plans/phaseLedgerModel.ts
 #: src/pages/plans/planModel.ts
-#: src/pages/plans/planModel.ts
 msgid "not started"
 msgstr "not started"
 
-#: src/pages/plans/DecisionTable.tsx
 #: src/pages/plans/DecisionTable.tsx
 msgid "not verified"
 msgstr "not verified"
@@ -1904,8 +1880,6 @@ msgstr "open run"
 
 #: src/pages/planning/RevisionReview.tsx
 #: src/pages/PlanningMode.tsx
-#: src/pages/PlanningMode.tsx
-#: src/pages/PlanningMode.tsx
 msgid "open session →"
 msgstr "open session →"
 
@@ -1934,7 +1908,6 @@ msgstr "opus 5.5"
 msgid "opus 5.5 — default"
 msgstr "opus 5.5 — default"
 
-#: src/pages/plans/ForecastVsActual.tsx
 #: src/pages/plans/ForecastVsActual.tsx
 msgid "outcome"
 msgstr "outcome"
@@ -1993,7 +1966,6 @@ msgid "perm {permissionMode}"
 msgstr "perm {permissionMode}"
 
 #: src/pages/Routines.tsx
-#: src/pages/Routines.tsx
 msgid "Permanently delete <0>{routineName}</0> and its run history? This cannot be undone."
 msgstr "Permanently delete <0>{routineName}</0> and its run history? This cannot be undone."
 
@@ -2044,7 +2016,6 @@ msgid "phase run effort"
 msgstr "phase run effort"
 
 #: src/pages/plans/PhaseRunPickers.tsx
-#: src/pages/plans/PhaseRunPickers.tsx
 msgid "phase run model"
 msgstr "phase run model"
 
@@ -2078,7 +2049,6 @@ msgstr "Plain words"
 
 #: src/pages/plans/PlanDetailPanel.tsx
 #: src/pages/plans/PlanHeader.tsx
-#: src/pages/plans/PlanHeader.tsx
 #: src/pages/plans/PlanSessions.tsx
 msgid "plan"
 msgstr "plan"
@@ -2095,7 +2065,6 @@ msgstr "Plan {externalId} not found — showing the plan list"
 msgid "Plan #{id} not found"
 msgstr "Plan #{id} not found"
 
-#: src/pages/plans/PlanHeader.tsx
 #: src/pages/plans/PlanHeader.tsx
 msgid "plan actions"
 msgstr "plan actions"
@@ -2203,8 +2172,6 @@ msgid "planning…"
 msgstr "planning…"
 
 #: src/pages/plans/PlanList.tsx
-#: src/pages/plans/PlanList.tsx
-#: src/pages/plans/PlansPlace.tsx
 #: src/pages/plans/PlansPlace.tsx
 msgid "Plans"
 msgstr "Plans"
@@ -2343,7 +2310,6 @@ msgid "Refine"
 msgstr "Refine"
 
 #: src/pages/planning/RefineModal.tsx
-#: src/pages/planning/RefineModal.tsx
 msgid "Refine the plan and next questions"
 msgstr "Refine the plan and next questions"
 
@@ -2363,7 +2329,6 @@ msgstr "Refreshing…"
 msgid "Refused: the run branch {branch} is the base branch{base}, so landing would push straight onto it. Set swarmery.vcs.allowPushToBase=true in .claude/settings.local.json to allow it."
 msgstr "Refused: the run branch {branch} is the base branch{base}, so landing would push straight onto it. Set swarmery.vcs.allowPushToBase=true in .claude/settings.local.json to allow it."
 
-#: src/pages/planning/RevisionReview.tsx
 #: src/pages/planning/RevisionReview.tsx
 msgid "Reject"
 msgstr "Reject"
@@ -2441,7 +2406,6 @@ msgid "resolved in the plan round"
 msgstr "resolved in the plan round"
 
 #: src/pages/plans/PhaseDetailPanel.tsx
-#: src/pages/plans/PhaseDetailPanel.tsx
 msgid "Retry run"
 msgstr "Retry run"
 
@@ -2493,7 +2457,6 @@ msgid "Review did not settle — the operator decides"
 msgstr "Review did not settle — the operator decides"
 
 #: src/pages/plans/ReviewFindings.tsx
-#: src/pages/plans/ReviewFindings.tsx
 msgid "Review findings"
 msgstr "Review findings"
 
@@ -2537,7 +2500,6 @@ msgstr "reviewer"
 msgid "Revise plan"
 msgstr "Revise plan"
 
-#: src/pages/planning/ReviseModal.tsx
 #: src/pages/planning/ReviseModal.tsx
 msgid "Revise this plan"
 msgstr "Revise this plan"
@@ -2606,7 +2568,6 @@ msgstr "run failed"
 msgid "Run failed"
 msgstr "Run failed"
 
-#: src/pages/Routines.tsx
 #: src/pages/Routines.tsx
 msgid "Run history"
 msgstr "Run history"
@@ -2788,7 +2749,6 @@ msgid "silent"
 msgstr "silent"
 
 #: src/pages/plans/ForecastVsActual.tsx
-#: src/pages/plans/ForecastVsActual.tsx
 msgid "size"
 msgstr "size"
 
@@ -2861,7 +2821,6 @@ msgstr "stalled: {stage} — {reason} {minutes} min"
 msgid "Start again"
 msgstr "Start again"
 
-#: src/pages/PlanningMode.tsx
 #: src/pages/PlanningMode.tsx
 msgid "Start another plan"
 msgstr "Start another plan"
@@ -3085,7 +3044,6 @@ msgstr "The phase is still running — land it once the run has finished."
 msgid "the phase waits on your answer"
 msgstr "the phase waits on your answer"
 
-#: src/pages/PlanningMode.tsx
 #: src/pages/PlanningMode.tsx
 msgid "the plan"
 msgstr "the plan"
@@ -3352,11 +3310,9 @@ msgid "waits on decision {held}"
 msgstr "waits on decision {held}"
 
 #: src/pages/plans/PhaseCard.tsx
-#: src/pages/plans/PhaseCard.tsx
 msgid "waits on decision {id}"
 msgstr "waits on decision {id}"
 
-#: src/pages/Routines.tsx
 #: src/pages/Routines.tsx
 msgid "webhook"
 msgstr "webhook"
@@ -3406,7 +3362,6 @@ msgstr "when this phase doc was last edited — no run is attached to it"
 msgid "where"
 msgstr "where"
 
-#: src/pages/plans/ForecastVsActual.tsx
 #: src/pages/plans/ForecastVsActual.tsx
 msgid "where reality diverged"
 msgstr "where reality diverged"
