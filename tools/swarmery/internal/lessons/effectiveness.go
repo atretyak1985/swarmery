@@ -44,11 +44,19 @@ const (
 	// EnvAutoRetireDays is how long a retirement proposal waits for the operator
 	// before the daemon retires the lesson itself. "off" or "0" disables it.
 	EnvAutoRetireDays = "SWARMERY_LESSON_AUTO_RETIRE_DAYS"
+	// EnvEffectEpsilon is the smallest median drop (either sign) that reads as
+	// an effect: |drop| < epsilon is no_effect.
+	EnvEffectEpsilon = "SWARMERY_LESSON_EFFECT_EPSILON"
+	// EnvModelShare is the share of a side's runs (with a known model) one model
+	// must reach to be that side's dominant model for the model_switch confounder.
+	EnvModelShare = "SWARMERY_LESSON_MODEL_SHARE"
 
 	DefaultWindowRuns     = 10
 	MinEffectRuns         = 5
 	DefaultStaleChurn     = 0.5
 	DefaultAutoRetireDays = 14
+	DefaultEffectEpsilon  = 0.05
+	DefaultModelShare     = 0.6
 	UnusedDays            = 60
 	// KeepCooldownDays: a proposal the operator answered "keep" is not re-made
 	// for the same reason inside this many days.
@@ -63,6 +71,8 @@ type VerifyConfig struct {
 	AutoRetireDays int // 0 = never auto-retire
 	UnusedDays     int
 	KeepCooldown   int
+	Epsilon        float64 // |median drop| below it is no_effect
+	ModelShare     float64 // dominant-model share for the model_switch confounder
 }
 
 // DefaultVerifyConfig is the documented behaviour.
@@ -70,10 +80,11 @@ func DefaultVerifyConfig() VerifyConfig {
 	return VerifyConfig{
 		WindowRuns: DefaultWindowRuns, MinRuns: MinEffectRuns, StaleChurn: DefaultStaleChurn,
 		AutoRetireDays: DefaultAutoRetireDays, UnusedDays: UnusedDays, KeepCooldown: KeepCooldownDays,
+		Epsilon: DefaultEffectEpsilon, ModelShare: DefaultModelShare,
 	}
 }
 
-// VerifyConfigFromEnv reads the three knobs; an unreadable value keeps its
+// VerifyConfigFromEnv reads the knobs; an unreadable value keeps its
 // default and is reported as a warning.
 func VerifyConfigFromEnv(getenv func(string) string) (VerifyConfig, []string) {
 	c := DefaultVerifyConfig()
@@ -101,6 +112,20 @@ func VerifyConfigFromEnv(getenv func(string) string) (VerifyConfig, []string) {
 			warn = append(warn, fmt.Sprintf("%s: ignoring %q (want days ≥ 0 or off)", EnvAutoRetireDays, v))
 		}
 	}
+	if v := strings.TrimSpace(getenv(EnvEffectEpsilon)); v != "" {
+		if f, err := strconv.ParseFloat(v, 64); err == nil && f >= 0 && f < 1 {
+			c.Epsilon = f
+		} else {
+			warn = append(warn, fmt.Sprintf("%s: ignoring %q (want a surprise delta in [0, 1))", EnvEffectEpsilon, v))
+		}
+	}
+	if v := strings.TrimSpace(getenv(EnvModelShare)); v != "" {
+		if f, err := strconv.ParseFloat(v, 64); err == nil && f > 0.5 && f <= 1 {
+			c.ModelShare = f
+		} else {
+			warn = append(warn, fmt.Sprintf("%s: ignoring %q (want a share in (0.5, 1])", EnvModelShare, v))
+		}
+	}
 	return c, warn
 }
 
@@ -109,8 +134,8 @@ func (c VerifyConfig) String() string {
 	if c.AutoRetireDays > 0 {
 		auto = strconv.Itoa(c.AutoRetireDays) + "d"
 	}
-	return fmt.Sprintf("window=%d runs (min %d), stale churn>%.2f, unused>%dd, auto-retire=%s",
-		c.WindowRuns, c.MinRuns, c.StaleChurn, c.UnusedDays, auto)
+	return fmt.Sprintf("window=%d runs (min %d), effect epsilon=%.2f, model share≥%.2f, stale churn>%.2f, unused>%dd, auto-retire=%s",
+		c.WindowRuns, c.MinRuns, c.Epsilon, c.ModelShare, c.StaleChurn, c.UnusedDays, auto)
 }
 
 // EffectivenessRow is one lesson_effectiveness row. Pointer fields are nil for
@@ -128,6 +153,10 @@ type EffectivenessRow struct {
 	Relied       int      `json:"relied"`
 	ReliedRate   *float64 `json:"reliedRate"`
 	ComputedAt   string   `json:"computedAt"`
+	// Verdict is the attributable effect (confound.go); Confounders the changes
+	// inside the measured window that make a drop unattributable ([] for none).
+	Verdict     EffectVerdict `json:"verdict"`
+	Confounders []Confounder  `json:"confounders"`
 }
 
 // AreaRun is one scored run as effectiveness reads it.
@@ -136,6 +165,7 @@ type AreaRun struct {
 	At          time.Time
 	Index       float64
 	Areas       []string
+	Model       string // sessions.model; "" when the session was never ingested
 }
 
 // Median of xs (nil for none).
@@ -156,9 +186,15 @@ func Median(xs []float64) *float64 {
 // Effect splits runs (any order) around activatedAt and measures the drop: the
 // window runs closest to the activation on each side. Pure; unit-tested.
 func Effect(runs []AreaRun, activatedAt time.Time, window, minRuns int) (before, after []float64, drop, mb, ma *float64) {
+	_, _, before, after, drop, mb, ma = effectRuns(runs, activatedAt, window, minRuns)
+	return before, after, drop, mb, ma
+}
+
+// effectRuns is Effect that also returns the runs it selected on each side,
+// oldest first: the confounder window is their span.
+func effectRuns(runs []AreaRun, activatedAt time.Time, window, minRuns int) (pre, post []AreaRun, before, after []float64, drop, mb, ma *float64) {
 	sorted := append([]AreaRun(nil), runs...)
 	sort.SliceStable(sorted, func(i, j int) bool { return sorted[i].At.Before(sorted[j].At) })
-	var pre, post []AreaRun
 	for _, r := range sorted {
 		if r.At.Before(activatedAt) {
 			pre = append(pre, r)
@@ -179,11 +215,11 @@ func Effect(runs []AreaRun, activatedAt time.Time, window, minRuns int) (before,
 		after = append(after, r.Index)
 	}
 	if len(before) < minRuns || len(after) < minRuns {
-		return before, after, nil, nil, nil
+		return pre, post, before, after, nil, nil, nil
 	}
 	mb, ma = Median(before), Median(after)
 	d := math.Round((*mb-*ma)*1e4) / 1e4
-	return before, after, &d, mb, ma
+	return pre, post, before, after, &d, mb, ma
 }
 
 func parseTS(s string) (time.Time, bool) {
@@ -199,7 +235,7 @@ func parseTS(s string) (time.Time, bool) {
 // LoadAreaRuns reads every scored, non-post-hoc run with the areas it names.
 func LoadAreaRuns(db *sql.DB) ([]AreaRun, error) {
 	rows, err := db.Query(`SELECT ps.session_uuid, ps.surprise_index, ps.detail_json,
-		COALESCE(s.started_at, pa.computed_at, ps.computed_at), COALESCE(pa.areas_json, '[]')
+		COALESCE(s.started_at, pa.computed_at, ps.computed_at), COALESCE(pa.areas_json, '[]'), COALESCE(s.model, '')
 		FROM phase_surprise ps
 		LEFT JOIN sessions s ON s.session_uuid = ps.session_uuid
 		LEFT JOIN phase_actuals pa ON pa.session_uuid = ps.session_uuid
@@ -216,7 +252,7 @@ func LoadAreaRuns(db *sql.DB) ([]AreaRun, error) {
 			d                  struct{ ForecastAreas, ActualAreas []string }
 			actualAreas        []string
 		)
-		if err := rows.Scan(&r.SessionUUID, &r.Index, &detail, &at, &actual); err != nil {
+		if err := rows.Scan(&r.SessionUUID, &r.Index, &detail, &at, &actual, &r.Model); err != nil {
 			return nil, err
 		}
 		t, ok := parseTS(at)
@@ -243,12 +279,26 @@ func inArea(globs []string, runs []AreaRun) []AreaRun {
 	return out
 }
 
-// ComputeEffectiveness measures one lesson against pre-loaded runs.
+// ComputeEffectiveness measures one lesson against pre-loaded runs: the drop,
+// its confounders and the verdict. A measured lesson reads the confounder
+// sources from db; a failed read is returned, never guessed past — a lesson
+// whose confounders could not be checked must not be stored as helped.
 func ComputeEffectiveness(db *sql.DB, l Active, runs []AreaRun, cfg VerifyConfig, now time.Time) (EffectivenessRow, error) {
-	row := EffectivenessRow{LessonID: l.ID, WindowN: cfg.WindowRuns, MinRuns: cfg.MinRuns, ComputedAt: stamp(now)}
+	row := EffectivenessRow{LessonID: l.ID, WindowN: cfg.WindowRuns, MinRuns: cfg.MinRuns, ComputedAt: stamp(now),
+		Verdict: EffectInsufficient, Confounders: []Confounder{}}
 	if act, ok := parseTS(l.ActivatedAt); ok {
-		before, after, drop, mb, ma := Effect(inArea(l.AreaGlobs, runs), act, cfg.WindowRuns, cfg.MinRuns)
+		pre, post, before, after, drop, mb, ma := effectRuns(inArea(l.AreaGlobs, runs), act, cfg.WindowRuns, cfg.MinRuns)
 		row.BeforeN, row.AfterN, row.MedianDrop, row.MedianBefore, row.MedianAfter = len(before), len(after), drop, mb, ma
+		if drop != nil {
+			src, err := loadConfoundSource(db)
+			if err != nil {
+				return row, fmt.Errorf("confounders: %w", err)
+			}
+			if cs := src.confounders(l, pre, post, cfg.modelShare()); len(cs) > 0 {
+				row.Confounders = cs
+			}
+		}
+		row.Verdict = Verdict(drop, row.Confounders, cfg.Epsilon)
 	}
 	if err := db.QueryRow(`SELECT COUNT(*), COALESCE(SUM(relied_on), 0) FROM lesson_uses WHERE lesson_id = ?`,
 		l.ID).Scan(&row.Uses, &row.Relied); err != nil {
@@ -264,15 +314,25 @@ func ComputeEffectiveness(db *sql.DB, l Active, runs []AreaRun, cfg VerifyConfig
 // StoreEffectiveness replaces the lesson's row.
 func StoreEffectiveness(db *sql.DB, r EffectivenessRow) error {
 	_, err := db.Exec(`INSERT INTO lesson_effectiveness (lesson_id, window_n, min_runs, before_n, after_n,
-		median_before, median_after, median_drop, uses, relied, relied_rate, computed_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		median_before, median_after, median_drop, uses, relied, relied_rate, computed_at, verdict, confounders_json)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(lesson_id) DO UPDATE SET window_n = excluded.window_n, min_runs = excluded.min_runs,
 		before_n = excluded.before_n, after_n = excluded.after_n, median_before = excluded.median_before,
 		median_after = excluded.median_after, median_drop = excluded.median_drop, uses = excluded.uses,
-		relied = excluded.relied, relied_rate = excluded.relied_rate, computed_at = excluded.computed_at`,
+		relied = excluded.relied, relied_rate = excluded.relied_rate, computed_at = excluded.computed_at,
+		verdict = excluded.verdict, confounders_json = excluded.confounders_json`,
 		r.LessonID, r.WindowN, r.MinRuns, r.BeforeN, r.AfterN, nullF(r.MedianBefore), nullF(r.MedianAfter),
-		nullF(r.MedianDrop), r.Uses, r.Relied, nullF(r.ReliedRate), r.ComputedAt)
+		nullF(r.MedianDrop), r.Uses, r.Relied, nullF(r.ReliedRate), r.ComputedAt, verdictOrInsufficient(r.Verdict),
+		MarshalConfounders(r.Confounders))
 	return err
+}
+
+// modelShare guards a zero-valued config (a literal VerifyConfig{} in a caller).
+func (c VerifyConfig) modelShare() float64 {
+	if c.ModelShare <= 0.5 || c.ModelShare > 1 {
+		return DefaultModelShare
+	}
+	return c.ModelShare
 }
 
 func nullF(p *float64) any {
@@ -283,16 +343,18 @@ func nullF(p *float64) any {
 }
 
 const selectEffectiveness = `SELECT lesson_id, window_n, min_runs, before_n, after_n, median_before,
-	median_after, median_drop, uses, relied, relied_rate, computed_at FROM lesson_effectiveness`
+	median_after, median_drop, uses, relied, relied_rate, computed_at, verdict, confounders_json FROM lesson_effectiveness`
 
 func scanEffectiveness(scan func(...any) error) (EffectivenessRow, error) {
 	var (
 		r              EffectivenessRow
 		mb, ma, d, rel sql.NullFloat64
+		verdict, conf  string
 	)
 	err := scan(&r.LessonID, &r.WindowN, &r.MinRuns, &r.BeforeN, &r.AfterN, &mb, &ma, &d, &r.Uses, &r.Relied,
-		&rel, &r.ComputedAt)
+		&rel, &r.ComputedAt, &verdict, &conf)
 	r.MedianBefore, r.MedianAfter, r.MedianDrop, r.ReliedRate = fptr(mb), fptr(ma), fptr(d), fptr(rel)
+	r.Verdict, r.Confounders = verdictOrInsufficient(EffectVerdict(verdict)), unmarshalConfounders(conf)
 	return r, err
 }
 
@@ -330,7 +392,9 @@ func LoadEffectiveness(db *sql.DB, ids []int64) (map[int64]EffectivenessRow, err
 }
 
 // StoredEffectiveness is the injection ranking hook: the stored median drop of
-// every lesson that has one. A lesson without enough data stays unscored.
+// every lesson whose verdict is attributable (helped or hurt). A lesson that is
+// insufficient, confounded or no_effect stays unscored and ranks by recency —
+// it is never dropped from selection by its verdict.
 func StoredEffectiveness(db *sql.DB, ids []int64) (map[int64]float64, error) {
 	if len(ids) == 0 {
 		return nil, nil
@@ -341,7 +405,7 @@ func StoredEffectiveness(db *sql.DB, ids []int64) (map[int64]float64, error) {
 	}
 	out := map[int64]float64{}
 	for id, r := range rows {
-		if r.MedianDrop != nil {
+		if r.MedianDrop != nil && r.Verdict.Scores() {
 			out[id] = *r.MedianDrop
 		}
 	}
@@ -368,4 +432,13 @@ func attachEffectiveness(db *sql.DB, ls []Lesson) error {
 		}
 	}
 	return nil
+}
+
+// verdictOrInsufficient maps an empty or unknown stored verdict to insufficient.
+func verdictOrInsufficient(v EffectVerdict) EffectVerdict {
+	switch v {
+	case EffectHelped, EffectHurt, EffectNoEffect, EffectConfounded, EffectInsufficient:
+		return v
+	}
+	return EffectInsufficient
 }
