@@ -93,6 +93,8 @@ function lesson(id: number): lessons.Lesson {
     reviewType: '',
     reviewArea: '',
     findings: [],
+    confidence: 'medium',
+    confidenceReason: '',
     effectiveness: null,
   };
 }
