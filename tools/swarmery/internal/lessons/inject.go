@@ -35,8 +35,9 @@ package lessons
 // run we cannot place gets nothing rather than everything.
 //
 // RANKING. Effectiveness first (phase 16's stored median surprise drop; a
-// lesson without enough data is unscored), then recency (activated_at, newest first),
-// then id. The block is cut at the budget: lessons are taken in rank order and
+// lesson without enough data is unscored), then — at an equal score — the
+// lesson's confidence (high > medium > low, 0133), then recency (activated_at,
+// newest first), then id. The block is cut at the budget: lessons are taken in rank order and
 // the first one that would push the WHOLE injected text (separator and header
 // included) past SWARMERY_LESSON_BUDGET_TOKENS stops the selection — a strict
 // cut keeps "rank" meaning what it says. Tokens are estimated as bytes/4
@@ -127,6 +128,8 @@ type Active struct {
 	Guidance    string
 	AreaGlobs   []string
 	ActivatedAt string
+	// Confidence is the lesson's grade (high|medium|low); "" ranks as medium.
+	Confidence string
 	// Effectiveness is phase 16's score (higher is better); nil = unscored.
 	Effectiveness *float64
 }
@@ -176,7 +179,8 @@ func Matches(globs []string, sc Scope) bool {
 }
 
 // Rank orders lessons in place: effectiveness (scored before unscored, higher
-// first), then activated_at newest first, then id newest first.
+// first), then at an equal score confidence (high > medium > low), then
+// activated_at newest first, then id newest first.
 func Rank(ls []Active) {
 	sort.SliceStable(ls, func(i, j int) bool {
 		a, b := ls[i], ls[j]
@@ -185,6 +189,9 @@ func Rank(ls []Active) {
 		}
 		if a.Effectiveness != nil && *a.Effectiveness != *b.Effectiveness {
 			return *a.Effectiveness > *b.Effectiveness
+		}
+		if ca, cb := confidenceRank[orMedium(a.Confidence)], confidenceRank[orMedium(b.Confidence)]; ca != cb {
+			return ca > cb
 		}
 		if a.ActivatedAt != b.ActivatedAt {
 			return a.ActivatedAt > b.ActivatedAt
@@ -232,7 +239,7 @@ type Selection struct {
 
 // loadActive reads every active surprise lesson.
 func loadActive(db *sql.DB) ([]Active, error) {
-	rows, err := db.Query(`SELECT id, title, guidance, area_globs, COALESCE(activated_at, updated_at)
+	rows, err := db.Query(`SELECT id, title, guidance, area_globs, COALESCE(activated_at, updated_at), confidence
 		FROM surprise_lessons WHERE status = ?`, StatusActive)
 	if err != nil {
 		return nil, err
@@ -244,7 +251,7 @@ func loadActive(db *sql.DB) ([]Active, error) {
 			a     Active
 			globs string
 		)
-		if err := rows.Scan(&a.ID, &a.Title, &a.Guidance, &globs, &a.ActivatedAt); err != nil {
+		if err := rows.Scan(&a.ID, &a.Title, &a.Guidance, &globs, &a.ActivatedAt, &a.Confidence); err != nil {
 			return nil, err
 		}
 		// A review lesson accepted before anyone wrote its sentence has nothing to say.

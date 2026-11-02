@@ -31,6 +31,10 @@ import (
 var (
 	ErrNotFound = errors.New("no such lesson")
 	ErrState    = errors.New("the lesson is not in a state that allows this")
+	// ErrNeedsConfirm refuses Accept of a low-confidence lesson without the
+	// operator's explicit confirm. It wraps ErrState, so every caller that maps
+	// ErrState to 409 answers it the same way.
+	ErrNeedsConfirm = fmt.Errorf("%w: the lesson is low confidence — accepting it needs an explicit confirm", ErrState)
 )
 
 // Lesson is one surprise_lessons row as the dashboard reads it.
@@ -74,6 +78,10 @@ type Lesson struct {
 	// ReviewType / ReviewArea are a review lesson's group identity; "" otherwise.
 	ReviewType string `json:"reviewType"`
 	ReviewArea string `json:"reviewArea"`
+	// Confidence is the generator's grade (high|medium|low, 0133; ungraded rows
+	// read medium); ConfidenceReason its one-sentence why.
+	Confidence       string `json:"confidence"`
+	ConfidenceReason string `json:"confidenceReason"`
 	// Findings resolves the lesson's "finding:<id>" evidence for the dashboard's
 	// links; a finding whose row is gone (its block left the doc) is omitted.
 	Findings []FindingLink `json:"findings"`
@@ -114,7 +122,7 @@ const selectLesson = `SELECT l.id, l.phase_id, COALESCE(e.name, ''), COALESCE(t.
 	l.recurrence_runs_json, l.model, l.created_at, l.updated_at, l.activated_at, l.retired_at, l.retire_reason,
 	COALESCE((SELECT p.branch FROM lesson_promotions p WHERE p.lesson_id = l.id AND p.error = ''
 	          ORDER BY p.id DESC LIMIT 1), ''),
-	l.source, l.review_type, l.review_area
+	l.source, l.review_type, l.review_area, l.confidence, l.confidence_reason
 	FROM surprise_lessons l
 	LEFT JOIN epic_phases e ON e.id = l.phase_id
 	LEFT JOIN tasks t ON t.id = e.workspace_task_id`
@@ -130,7 +138,7 @@ func scanLesson(scan func(...any) error) (Lesson, error) {
 	if err := scan(&l.ID, &l.PhaseID, &l.PhaseName, &l.PlanID, &l.SourcePhaseRun, &l.Title, &l.NormTitle,
 		&l.Guidance, &areas, &ev, &l.Cause, &l.SourceParagraph, &idx, &l.Status, &l.LinkedNormTitle,
 		&merged, &l.Recurrences, &runs, &l.Model, &l.CreatedAt, &l.UpdatedAt, &activated, &retired, &retireWhy,
-		&l.PromotedBranch, &l.Source, &l.ReviewType, &l.ReviewArea); err != nil {
+		&l.PromotedBranch, &l.Source, &l.ReviewType, &l.ReviewArea, &l.Confidence, &l.ConfidenceReason); err != nil {
 		return l, err
 	}
 	l.AreaGlobs = splitGlobs(areas)
@@ -426,10 +434,22 @@ func stamp(now time.Time) string { return now.UTC().Format(time.RFC3339) }
 // Accept makes a candidate active. It is the ONLY function in the daemon that
 // writes status = 'active' (activeguard_test.go enforces this), and it is only
 // reachable from the operator endpoint POST /api/lessons/{id}/accept.
-func Accept(db *sql.DB, id int64, now time.Time) (Lesson, error) {
+//
+// A low-confidence candidate needs confirmLow — the dashboard's second click
+// ({"confirm": true}); without it Accept answers ErrNeedsConfirm and writes
+// nothing. The guard is in the UPDATE itself, so a lesson regraded between the
+// read and the write cannot slip through.
+func Accept(db *sql.DB, id int64, confirmLow bool, now time.Time) (Lesson, error) {
 	ts := stamp(now)
 	res, err := db.Exec(`UPDATE surprise_lessons SET status = 'active', activated_at = ?, updated_at = ?
-		WHERE id = ? AND status = 'candidate'`, ts, ts, id)
+		WHERE id = ? AND status = 'candidate' AND (? OR confidence <> 'low')`, ts, ts, id, confirmLow)
+	if err == nil {
+		if n, _ := res.RowsAffected(); n != 1 {
+			if cur, gerr := Get(db, id); gerr == nil && cur.Status == StatusCandidate && cur.Confidence == ConfidenceLow {
+				return cur, ErrNeedsConfirm
+			}
+		}
+	}
 	return transition(db, id, res, err)
 }
 

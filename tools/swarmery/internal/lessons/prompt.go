@@ -282,16 +282,25 @@ const promptHead = `You extract durable lessons from ONE software-agent run that
 A lesson is guidance a FUTURE run in the same code area should receive before it starts, so it does not repeat the miss.
 
 Rules:
-- Return 0, 1 or 2 lessons. Zero is the right answer when the divergence paragraph does not explain a cause that will recur (bad luck, one-off env trouble, a mis-sized estimate with no lesson in it).
+- Return 0 or 1 lessons. Zero is the right answer when the divergence paragraph does not explain a cause that will recur (bad luck, one-off env trouble, a mis-sized estimate with no lesson in it) — then say why in "no_entry_reason".
 - "guidance": ONE imperative sentence, specific to this codebase (name the file, table, flag or convention). No generic advice ("write tests", "read the code first").
 - "area_globs": 1-5 repo-relative globs where the lesson applies (e.g. "tools/x/internal/ingest/**"). Never "*".
 - "cause": one sentence saying what differed from the assumption and why, taken from the divergence paragraph.
 - "evidence": 1-8 ids copied VERBATIM from the [E:kind:id] markers below, without the brackets (e.g. "divergence:12", "file:internal/x.go"). Never invent an id; a lesson citing an id that is not below is discarded.
+` + confidenceRules
+
+// confidenceRules is shared by both prompts. The wording — one lesson at most,
+// a stated confidence with its reason, and "nothing transferable" as a valid
+// answer — is adapted from Harness²'s reflector prompt (plan decision D6).
+const confidenceRules = `- "confidence": "high", "medium" or "low" — how sure you are the lesson will hold for the next run there. A lesson resting on a single run, or on a run where several things changed at once, is at most "low".
+- "confidence_reason": one sentence saying why that confidence, naming what the lesson rests on.
+- No concrete, reusable contrast between what was assumed and what was true? Return {"lessons":[],"no_entry_reason":"…"} with one sentence saying why nothing here transfers. An empty "lessons" without a no_entry_reason is discarded.
 `
 
 const promptTail = `
-Reply with ONLY this JSON object, no prose, no code fence:
-{"lessons":[{"title":"…","guidance":"…","area_globs":["…"],"cause":"…","evidence":["…"]}]}
+Reply with ONLY one of these JSON objects, no prose, no code fence:
+{"lessons":[{"title":"…","guidance":"…","area_globs":["…"],"cause":"…","evidence":["…"],"confidence":"high|medium|low","confidence_reason":"…"}]}
+{"lessons":[],"no_entry_reason":"…"}
 `
 
 func orDash(s string) string {
@@ -391,10 +400,10 @@ func oneLine(s string) string { return capRunes(strings.Join(strings.Fields(s), 
 const reviewPromptHead = `You turn a REPEATED code-review finding into one durable lesson. Independent reviewers raised the same kind of finding in the same code area in two or more separate phases; the lesson is what a FUTURE run working there should check first so the reviewer stops finding it.
 
 Rules:
-- Return 0 or 1 lesson. Return 1 when the findings share a thread a future run could check for — the same kind of mistake, the same invariant broken, the same fragile file or convention — even when the individual bugs differ. Return 0 only when they share nothing beyond their type and directory.
+- Return 0 or 1 lessons. Return 1 when the findings share a thread a future run could check for — the same kind of mistake, the same invariant broken, the same fragile file or convention — even when the individual bugs differ. Return 0 only when they share nothing beyond their type and directory, and say so in "no_entry_reason".
 - "title": a short name for the lesson, at most 120 characters.
 - "guidance": ONE imperative sentence of at most 280 characters, specific to this codebase (name the file, function, table, flag or convention the findings point at). No generic advice ("write tests", "handle errors").
 - "area_globs": return exactly the area_globs listed under "The repeat".
 - "cause": one sentence naming the thread that keeps recurring, taken from the findings.
 - "evidence": 2-8 ids copied VERBATIM from the [E:finding:<id>] markers below, without the brackets (e.g. "finding:12"). Never invent an id; a lesson citing an id that is not below is discarded.
-`
+` + confidenceRules
