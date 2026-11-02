@@ -189,13 +189,18 @@ func (s *Service) runApply(ctx context.Context, id int64, targetKind, agent, tar
 	// ANYTHING outside the target agent file was touched. The semver bump happens
 	// AFTER this gate and re-stages its two manifests just before commit, so at
 	// gate time the ONLY allowed changed path is the agent file itself.
-	changed, total, err := s.changedPaths(ctx, tmp)
+	files, err := s.changedFiles(ctx, tmp)
 	if err != nil {
 		return s.failWrap(id, err)
 	}
+	changed, total := filesPathsTotal(files)
 	if err := checkPathScope(changed, targetPath); err != nil {
 		return s.failWrap(id, err)
 	}
+
+	// Always-on net growth: a WARNING, never a failure. Measured on the staged
+	// tree (the exact commit), it replaces the generate-time estimate.
+	s.recordWarnings(id, alwaysOnGrowthWarnings(files))
 
 	// Step 4: guardrails, in order (reusing the changed-path list from above).
 	if err := s.guardrails(ctx, tmp, changed, total); err != nil {
@@ -254,7 +259,7 @@ func (s *Service) runApply(ctx context.Context, id int64, targetKind, agent, tar
 	return nil
 }
 
-// changedPaths runs the numstat diff of the STAGED tree in the worktree and
+// changedFiles runs the numstat diff of the STAGED tree in the worktree and
 // parses it into the changed-path list + total (added+deleted) line count. It is
 // called once, right after `git add -N .`, so both the path-scope gate and the
 // guardrails reuse the same file list (a single git invocation).
@@ -269,18 +274,37 @@ func (s *Service) runApply(ctx context.Context, id int64, targetKind, agent, tar
 //     an `old => new` token that would parse to an ambiguous path).
 //   - core.quotepath=false keeps non-ASCII paths verbatim instead of arriving as
 //     "\303\251…" quoted strings that would dodge the exact string compare.
-func (s *Service) changedPaths(ctx context.Context, tmp string) ([]string, int, error) {
+func (s *Service) changedFiles(ctx context.Context, tmp string) ([]gitstat.FileStat, error) {
 	// "add\tdel\tpath" per file, one path column per row under --no-renames.
 	numstat, err := s.Exec.Run(ctx, tmp,
 		"git", "-c", "core.quotepath=false", "diff", "--cached", "--numstat", "--no-renames", "HEAD")
 	if err != nil {
-		return nil, 0, &gateErr{gate: "changed lines", msg: fmt.Sprintf("git diff: %v (%s)", err, numstat)}
+		return nil, &gateErr{gate: "changed lines", msg: fmt.Sprintf("git diff: %v (%s)", err, numstat)}
 	}
-	changed, total, err := parseNumstat(numstat)
+	files, err := gitstat.ParseNumstat(numstat)
 	if err != nil {
-		return nil, 0, &gateErr{gate: "changed lines", msg: err.Error()}
+		return nil, &gateErr{gate: "changed lines", msg: err.Error()}
 	}
-	return changed, total, nil
+	return files, nil
+}
+
+// filesPathsTotal is the (paths, added+deleted) view of a numstat the scope gate
+// and the size cap read.
+func filesPathsTotal(files []gitstat.FileStat) ([]string, int) {
+	if len(files) == 0 {
+		return nil, 0
+	}
+	added, removed := gitstat.Totals(files)
+	return gitstat.Paths(files), added + removed
+}
+
+// recordWarnings stores the apply gate's non-blocking warnings on the row. A
+// failed write is logged and ignored: a warning must never fail the apply.
+func (s *Service) recordWarnings(id int64, warnings []string) {
+	if _, err := s.DB.Exec(`UPDATE agent_change_proposals SET warnings_json = ? WHERE id = ?`,
+		marshalJSONList(warnings), id); err != nil {
+		log.Printf("warn: improve: apply %d: record warnings: %v", id, err)
+	}
 }
 
 // checkPathScope is the HARD apply-scope gate. It rejects (gate "path scope") if
@@ -332,7 +356,7 @@ func repoRel(repo, agentPath string) (string, error) {
 }
 
 // guardrails runs the three gates in order over the pre-computed changed-path
-// list (from changedPaths). Any gate failure is a *gateErr naming it.
+// list (from changedFiles). Any gate failure is a *gateErr naming it.
 func (s *Service) guardrails(ctx context.Context, tmp string, changed []string, total int) error {
 	// 1) neutrality scan.
 	out, err := s.Exec.Run(ctx, tmp, "bash", "scripts/scan-flavor.sh")
@@ -413,11 +437,8 @@ func parseNumstat(out string) (paths []string, total int, err error) {
 	if err != nil {
 		return nil, 0, err
 	}
-	added, removed := gitstat.Totals(files)
-	if len(files) == 0 {
-		return nil, 0, nil
-	}
-	return gitstat.Paths(files), added + removed, nil
+	paths, total = filesPathsTotal(files)
+	return paths, total, nil
 }
 
 // branchName derives the deterministic branch {kind}-improve/{slug}-{yyyymmdd}

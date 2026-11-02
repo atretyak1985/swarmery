@@ -106,8 +106,8 @@ func (s *Service) RouteSkill(ctx context.Context, req SkillRouteReq) (int64, err
 	}
 	defer s.releaseOnPanic(id)
 
-	diff, rationale, runErr := s.runSkill(ctx, ev)
-	if err := s.finishProposal(id, ev, diff, rationale, runErr); err != nil {
+	parsed, runErr := s.runSkill(ctx, ev)
+	if err := s.finishProposal(id, ev, parsed, runErr); err != nil {
 		return 0, err
 	}
 	return id, nil
@@ -200,19 +200,8 @@ func (s *Service) insertSkillPlaceholder(req SkillRouteReq, norm string, ev *Evi
 
 // runSkill is run()'s skill variant: the skill prompt instead of the agent one,
 // the same output contract.
-func (s *Service) runSkill(ctx context.Context, ev *Evidence) (diff, rationale string, err error) {
-	out, err := s.Runner.Run(ctx, renderSkillPrompt(ev.AgentPath, ev.AgentContent, ev.Bundle))
-	if err != nil {
-		return "", "", err
-	}
-	diff, rationale, err = splitDiffRationale(out)
-	if errors.Is(err, ErrNoChange) {
-		return "", "", errors.New(errNoChangeRow)
-	}
-	if err != nil {
-		return "", "", fmt.Errorf("output contract: %w", err)
-	}
-	return diff, rationale, nil
+func (s *Service) runSkill(ctx context.Context, ev *Evidence) (*Parsed, error) {
+	return s.runPrompt(ctx, renderSkillPrompt(ev.AgentPath, ev.AgentContent, ev.Bundle))
 }
 
 // lessonAction resolves the `**Action**:` line the routing target is derived

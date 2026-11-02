@@ -98,8 +98,8 @@ func (s *Service) Generate(ctx context.Context, req GenerateReq) (int64, error) 
 	// spawnImprove recover still logs it.
 	defer s.releaseOnPanic(id)
 
-	diff, rationale, runErr := s.run(ctx, ev)
-	if err := s.finishProposal(id, ev, diff, rationale, runErr); err != nil {
+	parsed, runErr := s.run(ctx, ev)
+	if err := s.finishProposal(id, ev, parsed, runErr); err != nil {
 		return 0, err
 	}
 	return id, nil
@@ -152,9 +152,16 @@ func (s *Service) insertPlaceholder(req GenerateReq, ev *Evidence) (int64, error
 }
 
 // finishProposal writes the pipeline outcome onto the reserved row: the diff +
-// rationale on success, or status='failed' with the error text otherwise (which
-// releases the open slot for a retry).
-func (s *Service) finishProposal(id int64, ev *Evidence, diff, rationale string, runErr error) error {
+// rationale + form/lens/follow-ups on success, or status='failed' with the
+// error text otherwise (which releases the open slot for a retry).
+//
+// A KEEP_BASE answer is TERMINAL: status 'rejected' with outcome 'kept_base',
+// the reason in rationale, no diff. 'rejected' is outside the partial unique
+// index idx_agent_proposals_one_open (proposed|approved|needs_target), so the
+// target's one open slot is free again. It is not an operator correction —
+// internal/corrections records only operator endpoints, and nothing here calls
+// it.
+func (s *Service) finishProposal(id int64, ev *Evidence, p *Parsed, runErr error) error {
 	if runErr != nil {
 		log.Printf("warn: improve: agent %s: %v", ev.AgentPath, runErr)
 		_, err := s.DB.Exec(`
@@ -163,11 +170,38 @@ func (s *Service) finishProposal(id int64, ev *Evidence, diff, rationale string,
 			 WHERE id = ?`, runErr.Error(), id)
 		return err
 	}
+	c := p.columns(ev.AgentPath)
 	_, err := s.DB.Exec(`
 		UPDATE agent_change_proposals
-		   SET diff = ?, rationale = ?, status = 'proposed', error = NULL
-		 WHERE id = ?`, diff, rationale, id)
+		   SET diff = ?, rationale = ?, status = ?, outcome = ?, lens = ?, form = ?,
+		       suggested_followups_json = ?, warnings_json = ?, error = NULL,
+		       decided_at = CASE WHEN ? = 'rejected' THEN ? ELSE decided_at END
+		 WHERE id = ?`,
+		p.Diff, p.Rationale, c.status, c.outcome, p.Lens, p.Form,
+		c.followups, c.warnings, c.status, fmtTS(time.Now()), id)
 	return err
+}
+
+// proposalColumns are the derived cells a parsed answer writes.
+type proposalColumns struct {
+	status, outcome, followups, warnings string
+}
+
+// columns derives the stored cells from a parsed answer: the status/outcome
+// pair (KEEP_BASE → rejected/kept_base, otherwise proposed/''), the follow-ups
+// JSON, and the generate-time warnings (today: always-on net growth, the same
+// check the apply gate re-runs on the staged tree).
+func (p *Parsed) columns(target string) proposalColumns {
+	c := proposalColumns{status: "proposed", followups: marshalJSONList(p.Followups), warnings: "[]"}
+	if p.KeepBase {
+		c.status, c.outcome = "rejected", OutcomeKeptBase
+		return c
+	}
+	added, removed := diffLineCounts(p.Diff)
+	if w := alwaysOnGrowthWarning(target, added, removed); w != "" {
+		c.warnings = marshalJSONList([]string{w})
+	}
+	return c
 }
 
 // isUniqueViolation reports whether err is a SQLite UNIQUE-constraint failure
@@ -177,21 +211,26 @@ func isUniqueViolation(err error) bool {
 	return err != nil && strings.Contains(err.Error(), "UNIQUE constraint failed")
 }
 
-// run executes the runner + output-contract parse, folding every failure
-// into one error the caller stores on the row.
-func (s *Service) run(ctx context.Context, ev *Evidence) (diff, rationale string, err error) {
-	out, err := s.Runner.Run(ctx, renderPrompt(ev.AgentPath, ev.AgentContent, ev.Bundle))
+// run executes the runner + output-contract parse for an agent target.
+func (s *Service) run(ctx context.Context, ev *Evidence) (*Parsed, error) {
+	return s.runPrompt(ctx, renderPrompt(ev.AgentPath, ev.AgentContent, ev.Bundle))
+}
+
+// runPrompt runs one rendered prompt and parses the answer, folding every
+// failure into one error the caller stores on the row (status 'failed').
+func (s *Service) runPrompt(ctx context.Context, prompt string) (*Parsed, error) {
+	out, err := s.Runner.Run(ctx, prompt)
 	if err != nil {
-		return "", "", err
+		return nil, err
 	}
-	diff, rationale, err = splitDiffRationale(out)
+	p, err := parseOutput(out)
 	if errors.Is(err, ErrNoChange) {
-		return "", "", errors.New(errNoChangeRow)
+		return nil, errors.New(errNoChangeRow)
 	}
 	if err != nil {
-		return "", "", fmt.Errorf("output contract: %w", err)
+		return nil, fmt.Errorf("output contract: %w", err)
 	}
-	return diff, rationale, nil
+	return p, nil
 }
 
 // Retry re-runs the pipeline for a failed proposal, updating the row in
@@ -233,7 +272,7 @@ func (s *Service) Retry(ctx context.Context, id int64) error {
 	if err != nil {
 		return err
 	}
-	diff, rationale, runErr := run(ctx, ev)
+	parsed, runErr := run(ctx, ev)
 	if runErr != nil {
 		log.Printf("warn: improve: retry %d (%s %s): %v", id, targetKind, agent, runErr)
 		_, err = s.DB.Exec(`
@@ -242,21 +281,27 @@ func (s *Service) Retry(ctx context.Context, id int64) error {
 			ev.BaseSHA256, runErr.Error(), id)
 		return err
 	}
+	// A KEEP_BASE retry lands terminal (rejected/kept_base) like a first run.
+	c := parsed.columns(ev.AgentPath)
 	_, err = s.DB.Exec(`
 		UPDATE agent_change_proposals
 		   SET agent_path = CASE WHEN target_kind = 'skill' THEN agent_path ELSE ? END,
 		       target_path = CASE WHEN target_kind = 'skill' THEN ? ELSE target_path END,
 		       base_sha256 = ?, diff = ?, rationale = ?,
-		       status = 'proposed', error = NULL
+		       status = ?, outcome = ?, lens = ?, form = ?,
+		       suggested_followups_json = ?, warnings_json = ?, error = NULL,
+		       decided_at = CASE WHEN ? = 'rejected' THEN ? ELSE decided_at END
 		 WHERE id = ? AND status = 'failed'`,
-		ev.AgentPath, ev.AgentPath, ev.BaseSHA256, diff, rationale, id)
+		ev.AgentPath, ev.AgentPath, ev.BaseSHA256, parsed.Diff, parsed.Rationale,
+		c.status, c.outcome, parsed.Lens, parsed.Form, c.followups, c.warnings,
+		c.status, fmtTS(time.Now()), id)
 	return err
 }
 
 // retryEvidence rebuilds the bundle for a retry and returns the matching model
 // runner, so Retry itself stays kind-agnostic.
 func (s *Service) retryEvidence(targetKind, agent, targetPath string) (
-	*Evidence, func(context.Context, *Evidence) (string, string, error), error) {
+	*Evidence, func(context.Context, *Evidence) (*Parsed, error), error) {
 	if targetKind != TargetSkill {
 		ev, err := s.buildEvidence(agent)
 		return ev, s.run, err

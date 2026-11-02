@@ -12,6 +12,7 @@ package api
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
@@ -262,6 +263,42 @@ type proposalDTO struct {
 	PRURL            *string `json:"pr_url"`
 	CreatedAt        string  `json:"created_at"`
 	DecidedAt        *string `json:"decided_at"`
+	// Harness² phase 3 (migration 0134). Outcome 'kept_base' marks the model's
+	// KEEP_BASE answer on a 'rejected' row — not an operator rejection.
+	Outcome            string          `json:"outcome"`
+	Lens               string          `json:"lens"`
+	Form               string          `json:"form"`
+	SuggestedFollowups json.RawMessage `json:"suggested_followups"`
+	Warnings           json.RawMessage `json:"warnings"`
+}
+
+// proposalCols is the SELECT list scanProposal reads, shared by every handler
+// that returns a proposalDTO so the column order cannot drift between them.
+const proposalCols = `id, recommendation_id, agent, agent_path, target_kind, target_path,
+	base_sha256, diff, rationale, status, error, pr_url, created_at, decided_at,
+	outcome, lens, form, suggested_followups_json, warnings_json`
+
+// scanProposal scans one proposalCols row.
+func scanProposal(sc interface{ Scan(...any) error }) (proposalDTO, error) {
+	var d proposalDTO
+	var followups, warnings string
+	err := sc.Scan(&d.ID, &d.RecommendationID, &d.Agent, &d.AgentPath,
+		&d.TargetKind, &d.TargetPath,
+		&d.BaseSHA256, &d.Diff, &d.Rationale, &d.Status, &d.Error, &d.PRURL,
+		&d.CreatedAt, &d.DecidedAt,
+		&d.Outcome, &d.Lens, &d.Form, &followups, &warnings)
+	d.SuggestedFollowups = jsonArrayOr(followups)
+	d.Warnings = jsonArrayOr(warnings)
+	return d, err
+}
+
+// jsonArrayOr passes a stored JSON array through, or "[]" when the cell is not
+// valid JSON — a hand-edited cell must not break the whole list response.
+func jsonArrayOr(s string) json.RawMessage {
+	if s == "" || !json.Valid([]byte(s)) {
+		return json.RawMessage("[]")
+	}
+	return json.RawMessage(s)
 }
 
 type proposalsDTO struct {
@@ -279,9 +316,7 @@ var propStatuses = map[string]bool{
 // GET /api/retro/proposals?status=proposed,failed — newest first; no filter
 // returns everything.
 func (h *Handler) listProposals(w http.ResponseWriter, r *http.Request) {
-	q := `SELECT id, recommendation_id, agent, agent_path, target_kind, target_path,
-	             base_sha256, diff, rationale, status, error, pr_url, created_at, decided_at
-	        FROM agent_change_proposals`
+	q := `SELECT ` + proposalCols + ` FROM agent_change_proposals`
 	var args []any
 	if filter := r.URL.Query().Get("status"); filter != "" {
 		parts := strings.Split(filter, ",")
@@ -307,11 +342,8 @@ func (h *Handler) listProposals(w http.ResponseWriter, r *http.Request) {
 	defer rows.Close()
 	out := proposalsDTO{Proposals: []proposalDTO{}}
 	for rows.Next() {
-		var d proposalDTO
-		if err := rows.Scan(&d.ID, &d.RecommendationID, &d.Agent, &d.AgentPath,
-			&d.TargetKind, &d.TargetPath,
-			&d.BaseSHA256, &d.Diff, &d.Rationale, &d.Status, &d.Error, &d.PRURL,
-			&d.CreatedAt, &d.DecidedAt); err != nil {
+		d, err := scanProposal(rows)
+		if err != nil {
 			writeErr(w, err)
 			return
 		}
