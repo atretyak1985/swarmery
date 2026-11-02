@@ -464,7 +464,7 @@ describe('friction triage', () => {
     const row = (example: string): HTMLElement =>
       screen
         .getAllByRole('button')
-        .find((b) => b.hasAttribute('aria-expanded') && (b.textContent ?? '').includes(`▸ ${example}`)) as HTMLElement;
+        .find((b) => b.hasAttribute('aria-expanded') && b.querySelector('[data-chevron]') !== null && (b.textContent ?? '').trim().startsWith(example)) as HTMLElement;
     fireEvent.click(row('muted failure'));
     fireEvent.click(screen.getByRole('button', { name: 'not noise: muted failure' }));
     fireEvent.click(row('other muted failure'));

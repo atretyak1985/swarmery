@@ -79,6 +79,7 @@ import { DetailRail } from './DetailRail';
 import { PendingRunNotice } from './PendingRunNotice';
 import { gateTier, SessionGate } from './SessionGate';
 import { SessionRail } from './SessionRail';
+import { Chevron } from '../../components/Chevron';
 
 /** What `e` and `x` do on the open session, read by the list's keys. */
 export interface PaneActions {
@@ -284,7 +285,7 @@ function Fold({
         className="flex w-full items-center justify-between py-2 font-mono text-[10px] tracking-[0.12em] text-ink-faint uppercase transition-colors hover:text-ink"
       >
         <span>{label}</span>
-        <span aria-hidden="true">{open ? '▾' : '▸'}</span>
+        <span aria-hidden="true"><Chevron open={open} /></span>
       </button>
       {open && <div className="pb-3">{children}</div>}
     </div>

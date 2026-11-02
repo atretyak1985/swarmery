@@ -28,6 +28,7 @@ import { ForecastVsActual, OFF_PLAN_LABEL } from './ForecastVsActual';
 import { GuardBadge } from './GuardBadge';
 import { landingChip, type LandingChip as LandingChipModel } from './landingModel';
 import { StalledBadge } from './StalledBadge';
+import { Chevron } from '../../components/Chevron';
 
 // OffPlanChip lives here so the story and the card share one band→tone mapping
 // (ForecastStory.tsx imports it from this file).
@@ -330,7 +331,7 @@ function Fold({ label, children }: { label: string; children: ReactNode }): JSX.
   return (
     <details className="group open:w-full">
       <summary className="cursor-pointer list-none transition-colors hover:text-ink-3 [&::-webkit-details-marker]:hidden">
-        <span className="mr-1 inline-block transition-transform group-open:rotate-90">▸</span>
+        <Chevron open={false} className="mr-1 text-ink-dim group-open:rotate-90" />
         {label}
       </summary>
       <div className="mt-2 font-sans text-[12.5px] text-ink-2">{children}</div>

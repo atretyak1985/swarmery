@@ -34,6 +34,7 @@ import { Markdown } from '../../lib/markdown';
 import { useProjectColor } from '../../lib/projectColors';
 import { DiffBlock } from './ItemDetail';
 import { ScopeBadge, SeverityChip } from './shared';
+import { Chevron } from '../../components/Chevron';
 
 /* ----- shared atoms ----- */
 
@@ -138,7 +139,7 @@ function ExpandableRow({
         className="flex w-full items-center gap-2 px-3.5 py-2.5 text-left transition-colors hover:bg-surface2/50"
       >
         <span aria-hidden="true" className="w-3 shrink-0 font-mono text-[10px] text-ink-faint">
-          {open ? '▾' : '▸'}
+          <Chevron open={open} />
         </span>
         {header}
       </button>

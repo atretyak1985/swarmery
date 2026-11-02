@@ -34,6 +34,7 @@ import { useUsage } from '../../lib/usageData';
 import { UsageDisconnect } from './UsageDisconnect';
 import { fmtClock } from './format';
 import { UsageProviderCard } from './UsageProviderCard';
+import { Chevron } from '../Chevron';
 
 const TICK_MS = 30_000;
 const NO_WINDOWS: readonly string[] = [];
@@ -164,7 +165,7 @@ function Projects({
         className="flex w-full items-center gap-2 bg-transparent px-4 py-2.5 text-left font-mono text-[10.5px] leading-[normal] text-ink-3 transition-colors hover:text-ink"
       >
         <span aria-hidden="true" className="text-[10px] text-ink-faint">
-          {open ? '▾' : '▸'}
+          <Chevron open={open} />
         </span>
         <span className="min-w-0 truncate">{t`projects running as ${account}`}</span>
         <span className="ml-auto whitespace-nowrap text-ink-faint">{projects.length === 0 ? t`none` : t`${count} of ${total}`}</span>

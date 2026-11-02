@@ -50,6 +50,7 @@ import { usePlanDoc } from './usePlanDoc';
 import { reverifyAction, type Reverify } from './useReverify';
 import { VerifyVerdictChip } from './VerifyVerdictChip';
 import { WorkaroundHits } from './WorkaroundHits';
+import { Chevron } from '../../components/Chevron';
 
 type CriterionKind = 'auto' | 'manual' | 'land';
 
@@ -622,9 +623,7 @@ export function PhaseDetailPanel({
           {doc !== null && (
             <details className="group mt-4">
               <summary className="cursor-pointer list-none font-mono text-[11px] text-ink-dim transition-colors hover:text-brand [&::-webkit-details-marker]:hidden">
-                <span aria-hidden="true" className="mr-1.5 inline-block transition-transform group-open:rotate-90">
-                  ▸
-                </span>
+                <Chevron open={false} className="mr-1.5 text-ink-dim group-open:rotate-90" />
                 <Trans>doc</Trans>
               </summary>
               <div className="mt-2">

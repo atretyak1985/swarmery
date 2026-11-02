@@ -14,15 +14,14 @@ import { UI_TERMS } from '../../lib/glossary';
 import type { OffPlanBand } from '../../lib/offPlan';
 import { forecastStory } from './forecastStoryModel';
 import { ForecastSection, ForecastVsActual, OFF_PLAN_LABEL } from './ForecastVsActual';
+import { Chevron } from '../../components/Chevron';
 
 /** A folded layer under the story: one ruled line, its content under it. */
 function Fold({ label, children }: { label: string; children: ReactNode }): JSX.Element {
   return (
     <details className="group border-b border-line">
       <summary className="flex cursor-pointer list-none items-center gap-2 py-[9px] text-[12.5px] text-ink-2 transition-colors hover:text-brand [&::-webkit-details-marker]:hidden">
-        <span aria-hidden="true" className="font-mono text-[10px] text-ink-faint transition-transform group-open:rotate-90">
-          ▸
-        </span>
+        <Chevron open={false} className="text-ink-dim group-open:rotate-90" />
         {label}
       </summary>
       <div className="pb-3 pl-[18px]">{children}</div>

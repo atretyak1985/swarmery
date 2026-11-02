@@ -16,6 +16,7 @@ import { projectLabel } from '../lib/format';
 import { plansTaskHref } from '../pages/plans/plansUrl';
 import { planRowNotes, planRowTag, planRowTitle, statusSummary, type PlanRun } from '../lib/sessionsView';
 import { SessionRow } from './SessionRow';
+import { Chevron } from './Chevron';
 
 export function PlanRunCard({
   run,
@@ -68,7 +69,7 @@ export function PlanRunCard({
       >
         <div className="flex min-w-0 items-baseline gap-1.5">
           <span aria-hidden="true" className="w-2 shrink-0 font-mono text-[10.5px] text-ink-faint">
-            {expanded ? '▾' : '▸'}
+            <Chevron open={expanded} />
           </span>
           <span className="min-w-0 truncate text-[13px] font-medium text-ink">{run.title}</span>
           <span className="shrink-0 font-mono text-[10px] text-ink-faint">

@@ -69,6 +69,7 @@ import { RetroImproveCard } from '../components/RetroImproveCard';
 import { HowItWorks } from '../components/HowItWorks';
 import { ApproxHint, Empty, ErrorBox, Loading, SectionTitle } from '../components/ui';
 import { ImproveModal } from '../components/ImproveModal';
+import { Chevron } from '../components/Chevron';
 
 const PRESETS = [7, 14, 30, 90] as const;
 
@@ -335,7 +336,7 @@ function RecCard({
           aria-expanded={open}
           className="ml-auto font-mono text-[10px] text-ink-faint transition-colors hover:text-ink"
         >
-          {open ? '▾' : '▸'} {t`evidence`}
+          <Chevron open={open} /> {t`evidence`}
         </button>
       </div>
       {open && (
@@ -460,7 +461,7 @@ function RecommendationsRail(): JSX.Element | null {
             }}
             className="font-mono text-[10.5px] text-ink-faint transition-colors hover:text-ink"
           >
-            {verifiedOpen ? '▾' : '▸'} <Trans>Closed</Trans>
+            <Chevron open={verifiedOpen} /> <Trans>Closed</Trans>
             {verified !== null ? ` (${String(verified.length)})` : ''}
           </button>
           {verifiedOpen && verified !== null && (
@@ -713,7 +714,7 @@ function ProposalCard({
           aria-expanded={open}
           className="font-mono text-[10px] text-ink-faint transition-colors hover:text-ink"
         >
-          {open ? '▾' : '▸'} <Trans>diff</Trans>
+          <Chevron open={open} /> <Trans>diff</Trans>
         </button>
       </div>
       {open && (
@@ -900,7 +901,7 @@ function JudgedSessionRow({
           aria-expanded={open}
           className="font-mono text-[10px] text-ink-faint transition-colors hover:text-ink"
         >
-          {open ? '▾' : '▸'} <Trans>judgment</Trans>
+          <Chevron open={open} /> <Trans>judgment</Trans>
         </button>
       </div>
       <div className="mt-0.5 font-mono text-[10px] text-ink-faint">
@@ -1757,7 +1758,7 @@ function ErrorGroupsPanel({
               className={`flex w-full items-baseline gap-2 text-left font-mono text-[11.5px] ${state === 'muted' ? 'opacity-60' : ''}`}
             >
               <span className="min-w-0 flex-1 truncate text-ink-3">
-                {open === g.key ? '▾ ' : '▸ '}
+                <Chevron open={open === g.key} />{' '}
                 {g.example}
               </span>
               <span className="w-10 text-right text-red">{g.count}×</span>

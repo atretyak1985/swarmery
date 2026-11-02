@@ -12,6 +12,7 @@
 import { Trans } from '@lingui/react/macro';
 import { useState } from 'react';
 import type { TaskDiff } from '../api/types';
+import { Chevron } from './Chevron';
 
 /** One file's slice of the unified patch. */
 export interface PatchSection {
@@ -68,7 +69,7 @@ function PatchBlock({ section }: { section: PatchSection }): JSX.Element {
         className="flex w-full items-center gap-1.5 py-1 text-left font-mono text-[10.5px] text-ink-2 transition-colors hover:text-ink"
       >
         <span aria-hidden="true" className="w-2 shrink-0 text-ink-faint">
-          {open ? '▾' : '▸'}
+          <Chevron open={open} />
         </span>
         <span className="min-w-0 flex-1 truncate">{section.path === '' ? <Trans>(patch)</Trans> : section.path}</span>
       </button>

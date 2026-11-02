@@ -25,6 +25,7 @@ import { buildTimeline, countEvents, type TimelineNode } from '../../lib/timelin
 import type { DecisionTier } from '../../components/place/DecisionCard';
 import { StateGlyph, type GlyphState } from '../../components/place/StateGlyph';
 import { Empty } from '../../components/ui';
+import { Chevron } from '../../components/Chevron';
 
 const TYPE_LABELS: Partial<Record<Event['type'], MessageDescriptor>> = {
   permission_request: msg`Permission`,
@@ -148,7 +149,7 @@ function SubagentBlock({
             {description !== null ? type : t`subagent`} · <Trans>{events} events</Trans>
           </span>
           <span aria-hidden="true" className="shrink-0 font-mono text-[10px] text-ink-faint">
-            {open ? '▾' : '▸'}
+            <Chevron open={open} />
           </span>
         </button>
         <span className={STEP_DURATION}>{duration}</span>

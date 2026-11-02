@@ -21,6 +21,7 @@ import { ProjectName } from '../components/ProjectName';
 import { PluginBadge, ProjectActions } from '../components/ProjectActions';
 import { PageSearchInput } from '../components/PageSearchInput';
 import { Card, Empty, ErrorBox, Loading, SectionTitle } from '../components/ui';
+import { Chevron } from '../components/Chevron';
 
 function Metric({ label, value }: { label: string; value: string }): JSX.Element {
   return (
@@ -156,7 +157,7 @@ function SystemSection({
         onClick={() => setOpen((v) => !v)}
         className="flex items-center gap-2 font-mono text-[11px] text-ink-faint transition-colors hover:text-ink"
       >
-        <span aria-hidden>{open ? '▾' : '▸'}</span>
+        <span aria-hidden><Chevron open={open} /></span>
         <span>
           <Trans>System</Trans>
         </span>
