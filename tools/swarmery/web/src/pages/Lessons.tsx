@@ -24,6 +24,8 @@ import {
   retireLesson,
 } from '../api/lessons';
 import { CalibrationPanel } from './LessonsCalibration';
+import { ConfounderList, EffectVerdictChip } from './lessons/EffectVerdictChip';
+import { confoundedShare, effectVerdictOf } from './lessons/effectVerdict';
 import { plansPath, plansTaskHref } from './plans/plansUrl';
 
 const BTN = 'rounded border border-line px-2 py-px font-mono text-[11px] text-ink-dim hover:text-ink';
@@ -318,9 +320,15 @@ function LessonCard({
       {lesson.status === 'active' &&
         lesson.effectiveness !== undefined &&
         lesson.effectiveness !== null && (
-          <div className="mt-1 font-mono text-[10px] text-ink-dim">
-            <Trans>effectiveness:</Trans> {effectivenessLabel(lesson.effectiveness)}
-          </div>
+          <>
+            <div className="mt-1 flex flex-wrap items-center gap-1 font-mono text-[10px] text-ink-dim">
+              <EffectVerdictChip verdict={effectVerdictOf(lesson.effectiveness)} />
+              <span>
+                <Trans>effectiveness:</Trans> {effectivenessLabel(lesson.effectiveness)}
+              </span>
+            </div>
+            <ConfounderList confounders={lesson.effectiveness.confounders ?? []} />
+          </>
         )}
       {lesson.promotedBranch !== '' && (
         <div className="mt-1 font-mono text-[10px] text-ink-dim">
@@ -565,9 +573,15 @@ export function LessonDetail({
       <div className="mt-[18px]">
         {lesson.evidence.length > 0 && <EvidenceList lesson={lesson} />}
         {isActive && eff !== null && (
-          <div className="mt-1 font-mono text-[10px] text-ink-dim">
-            <Trans>effectiveness:</Trans> {effectivenessLabel(eff)}
-          </div>
+          <>
+            <div className="mt-1 flex flex-wrap items-center gap-1 font-mono text-[10px] text-ink-dim">
+              <EffectVerdictChip verdict={effectVerdictOf(eff)} />
+              <span>
+                <Trans>effectiveness:</Trans> {effectivenessLabel(eff)}
+              </span>
+            </div>
+            <ConfounderList confounders={eff.confounders ?? []} />
+          </>
         )}
         {lesson.promotedBranch !== '' && (
           <div className="mt-1 font-mono text-[10px] text-ink-dim">
@@ -587,6 +601,24 @@ export function LessonDetail({
         )}
       </div>
     </PageDetail>
+  );
+}
+
+/** The confounded share of the listed active lessons that have a measured
+ *  drop: how much of the measured learning can actually be attributed. */
+function ConfoundedShareLine({ lessons }: { lessons: readonly Lesson[] }): JSX.Element | null {
+  const { measured, confounded, share } = confoundedShare(lessons);
+  if (measured === 0) return null;
+  const n = String(confounded);
+  const of = String(measured);
+  const pct = String(Math.round(share * 100));
+  return (
+    <p data-testid="confounded-share" className="mt-3 font-mono text-[11px] text-ink-dim">
+      <Trans>
+        {n} of {of} measured lessons are confounded ({pct}%): their drop cannot be credited to the lesson
+        alone, so they rank like unmeasured lessons and are never proposed as ineffective.
+      </Trans>
+    </p>
   );
 }
 
@@ -688,6 +720,7 @@ export function Lessons({
           <Trans>No lessons here.</Trans>
         </div>
       )}
+      {items !== null && <ConfoundedShareLine lessons={items} />}
       {items !== null && items.length > 0 && (
         <ul className="mt-4 grid gap-3">
           {items.map((l) => (

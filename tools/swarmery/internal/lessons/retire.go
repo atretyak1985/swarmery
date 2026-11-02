@@ -5,9 +5,10 @@ package lessons
 // A periodic daemon pass (Verifier.Run) re-measures every ACTIVE lesson and
 // PROPOSES a retirement when one of four reasons holds:
 //
-//	ineffective  the area's median surprise did not drop after the lesson
-//	             (a MEASURED drop ≤ 0 with ≥ MinRuns runs on each side; not
-//	             enough data is never ineffective)
+//	ineffective  the lesson's effect verdict is no_effect or hurt (a MEASURED
+//	             drop below +Epsilon with ≥ MinRuns runs on each side and no
+//	             confounder in the window); insufficient and confounded are
+//	             never ineffective
 //	stale        the area's code churned past StaleChurn of its lines since
 //	             activated_at (git numstat, baseline = the last commit before
 //	             activation)
@@ -267,18 +268,29 @@ func (v *Verifier) keptRecently(id int64, reason string, now time.Time) (bool, e
 	return n > 0, err
 }
 
+// ineffective reads the effect verdict (confound.go): it fires on no_effect and
+// hurt only, is definitely-not on helped, and is UNKNOWN on confounded and
+// insufficient — muddy evidence neither proposes a retirement nor withdraws one
+// already open.
 func ineffective(eff EffectivenessRow) verdict {
-	if eff.MedianDrop == nil {
+	if eff.MedianDrop == nil || eff.MedianBefore == nil || eff.MedianAfter == nil {
 		return verdict{}
 	}
 	ev := map[string]any{"beforeN": eff.BeforeN, "afterN": eff.AfterN, "medianBefore": *eff.MedianBefore,
-		"medianAfter": *eff.MedianAfter, "medianDrop": *eff.MedianDrop}
-	if *eff.MedianDrop > 0 {
+		"medianAfter": *eff.MedianAfter, "medianDrop": *eff.MedianDrop, "verdict": string(eff.Verdict)}
+	switch eff.Verdict {
+	case EffectHelped:
 		return verdict{known: true, evidence: ev}
+	case EffectNoEffect, EffectHurt:
+		what := "no attributable drop"
+		if eff.Verdict == EffectHurt {
+			what = "the area got more surprising"
+		}
+		return verdict{fires: true, known: true, evidence: ev, detail: fmt.Sprintf(
+			"%s: median surprise %.2f over %d runs before activation, %.2f over %d runs after",
+			what, *eff.MedianBefore, eff.BeforeN, *eff.MedianAfter, eff.AfterN)}
 	}
-	return verdict{fires: true, known: true, evidence: ev, detail: fmt.Sprintf(
-		"no measured drop: median surprise %.2f over %d runs before activation, %.2f over %d runs after",
-		*eff.MedianBefore, eff.BeforeN, *eff.MedianAfter, eff.AfterN)}
+	return verdict{}
 }
 
 func superseded(l activeLesson, all []activeLesson) verdict {
