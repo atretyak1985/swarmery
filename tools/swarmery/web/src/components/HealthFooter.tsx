@@ -1,41 +1,26 @@
-// The sidebar's bottom block (handoff §2): `$12.40 today · plan 41 %`, the plan
-// bar, then `resets 16:00` with the daemon's health on the same line. With the top
-// header gone on desktop this block carries what the header's usage chip and
-// status did: clicking it opens the same Usage modal, and health keeps its version
-// and its plugin-drift badge.
+// The sidebar's bottom block (Swarmery v4): the limits button, spend today and one bar
+// per subscription, then the daemon's health. With the top header gone on desktop it
+// carries what the header's usage chip and status did: the button opens the limits
+// panel, and health keeps its version and its plugin-drift badge. Collapsed, the rail
+// keeps the bars alone.
 //
-// Spend is GET /api/stats/today (one aggregate, polled like health). The plan
-// numbers come from the shared usage poller and never from a fetch of their own.
+// Spend is GET /api/stats/today (one aggregate, polled like health). The numbers come
+// from the shared usage poller and never from a fetch of their own.
 
 import { useLingui } from '@lingui/react/macro';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { fetchStatsToday, MOCK } from '../api';
-import type { UsageWindow } from '../api/types';
 import { useActiveUsageAccount } from '../lib/activeAccount';
 import { fmtCost } from '../lib/format';
 import { useHealth, versionLabel, versionTitle } from '../lib/health';
-import { planWindow } from '../lib/sessionRail';
+import { accountLimit, limitsHead } from '../lib/limits';
 import { useUsage } from '../lib/usageData';
 import { PluginDriftBadge } from './PluginDriftBadge';
-import { fmtResetAt } from './usage/format';
-import { UsageModal } from './usage/UsageModal';
+import { LimitsPanel, limitBarClass, limitTextClass } from './usage/LimitsPanel';
 
 const POLL_MS = 60_000;
 
-/** Over-pace burns red at any percentage: the chip's rule, never the bar's width. */
-function barTone(w: UsageWindow): string {
-  return w.percentUsed > 90 || w.pace?.status === 'ahead' ? 'bg-red' : 'bg-brand';
-}
-
-/** The absolute clock when the window has one; the server's own text otherwise. */
-function resetLabel(w: UsageWindow | null, plain: (at: string) => string): string {
-  if (w === null) return '';
-  if (w.resetAt !== undefined) {
-    const at = fmtResetAt(w.resetAt, Date.now());
-    if (at !== '') return plain(at);
-  }
-  return w.resetText ?? '';
-}
+const HEAD_TONE = { red: 'text-red', brand: 'text-brand', green: 'text-green', faint: 'text-ink-faint' } as const;
 
 function useTodaySpend(): number | null {
   const [cost, setCost] = useState<number | null>(null);
@@ -58,53 +43,80 @@ function useTodaySpend(): number | null {
   return cost;
 }
 
-export function HealthFooter(): JSX.Element {
+export function HealthFooter({ compact = false }: { compact?: boolean }): JSX.Element {
   const { t } = useLingui();
   const { health, unreachable } = useHealth();
-  const { providers, setModalOpen } = useUsage();
-  const spend = fmtCost(useTodaySpend());
+  const { accounts, setModalOpen } = useUsage();
+  const today = useTodaySpend();
+  const spend = fmtCost(today);
   const [open, setOpen] = useState(false);
   const active = useActiveUsageAccount(open);
+  const limits = useMemo(() => accounts.map(accountLimit), [accounts]);
+  const head = limitsHead(limits);
 
-  // Registering the open modal bumps the shared poller's cadence, as the chip does.
+  // Registering the open panel bumps the shared poller's cadence, as the chip does.
   useEffect(() => {
     if (!open) return undefined;
     setModalOpen(true);
     return () => setModalOpen(false);
   }, [open, setModalOpen]);
 
-  const plan = planWindow(providers);
-  const percent = plan === null ? null : Math.round(plan.percentUsed);
-  const reset = resetLabel(plan, (at) => t`resets ${at}`);
+  const bar = (percent: number | null): JSX.Element => (
+    <span aria-hidden="true" className={`block overflow-hidden rounded-[2px] bg-line ${compact ? 'h-[3px] w-[18px]' : 'h-1'}`}>
+      {percent !== null && (
+        <span className={`block h-full ${limitBarClass(percent)}`} style={{ width: `${String(Math.min(percent, 100))}%` }} />
+      )}
+    </span>
+  );
 
   return (
-    <div className="mt-3 border-t border-line px-2 pt-2 pb-0.5 font-mono text-[10.5px] leading-[normal] text-ink-dim">
+    <div className="mt-2 border-t border-line pt-1 pb-0.5 font-mono text-[10.5px] leading-[normal] text-ink-dim">
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
         aria-haspopup="dialog"
-        aria-label={t`Subscription usage`}
-        data-tip={t`spend today · plan window`}
-        className="block w-full cursor-pointer text-left transition-colors hover:text-ink"
+        aria-label={compact ? t`Subscription limits` : undefined}
+        data-tip={t`limits`}
+        className={`block w-full cursor-pointer rounded-lg text-left transition-colors hover:bg-surface2 ${
+          open ? 'bg-surface2' : ''
+        } ${compact ? 'py-2.5' : 'px-2 pt-2.5 pb-2'}`}
       >
-        <span className="flex justify-between">
-          <span>{t`${spend} today`}</span>
-          {percent !== null && <span>{t`plan ${percent} %`}</span>}
-        </span>
-        <span className="mt-1.5 block h-1 overflow-hidden rounded-[2px] bg-line">
-          {plan !== null && (
-            <span
-              className={`block h-full ${barTone(plan)}`}
-              style={{ width: `${String(Math.min(plan.percentUsed, 100))}%` }}
-            />
-          )}
-        </span>
+        {compact ? (
+          <span className="flex flex-col items-center gap-[3px]">
+            {limits.map((limit) => (
+              <span key={limit.name}>{bar(limit.session === null ? null : Math.round(limit.session.percentUsed))}</span>
+            ))}
+          </span>
+        ) : (
+          <>
+            <span className="flex items-baseline justify-between gap-2">
+              <span className="shrink-0 whitespace-nowrap text-ink-2">{t`${spend} today`}</span>
+              <span className={`min-w-0 truncate ${HEAD_TONE[head.tone]}`} title={head.text}>
+                {head.text}
+              </span>
+            </span>
+            <span className="mt-1.5 flex flex-col gap-1">
+              {limits.map((limit) => {
+                const percent = limit.session === null ? null : Math.round(limit.session.percentUsed);
+                return (
+                  <span key={limit.name} className="grid grid-cols-[44px_minmax(0,1fr)_34px] items-center gap-2 text-[10px]">
+                    <span className={`truncate ${limit.state === 'limit' ? 'text-brand' : 'text-ink-3'}`}>{limit.name}</span>
+                    {bar(percent)}
+                    <span className={`text-right ${percent === null ? 'text-ink-faint' : limitTextClass(percent)}`}>
+                      {percent === null ? '—' : `${String(percent)}%`}
+                    </span>
+                  </span>
+                );
+              })}
+            </span>
+          </>
+        )}
       </button>
       {/* One line, whatever the width: a wrap here lifts the whole bottom cluster.
-          The clock keeps its width and health gives way, its text in the tooltip. */}
-      <div className="mt-1 flex items-center justify-between gap-2 text-ink-faint">
-        <span className="shrink-0">{reset}</span>
+          Health gives way, its text in the tooltip. */}
+      {!compact && (
+        <div className="mt-1 flex items-center justify-end gap-2 px-2 text-ink-faint">
         <span className="flex min-w-0 items-center justify-end gap-1">
           {MOCK ? (
             <>
@@ -133,12 +145,8 @@ export function HealthFooter(): JSX.Element {
           )}
         </span>
       </div>
-      {/* The modal's desktop popover anchors to its parent's right edge, built for
-          a chip in the top-right corner. This fixed box hands it one that opens
-          to the right of the rail, inside the viewport. */}
-      <span className="fixed top-2 left-[204px] z-40 block w-[380px]">
-        <UsageModal open={open} onClose={() => setOpen(false)} active={active} />
-      </span>
+      )}
+      {open && <LimitsPanel onClose={() => setOpen(false)} activeAccount={active?.account ?? null} spentToday={today} />}
     </div>
   );
 }

@@ -37,6 +37,7 @@ msgstr " · multi"
 msgid " · no usage data for this account"
 msgstr " · no usage data for this account"
 
+#: src/components/usage/LimitsPanel.tsx
 #: src/components/usage/UsageModal.tsx
 msgid " · refresh failed"
 msgstr " · refresh failed"
@@ -120,6 +121,21 @@ msgstr "{0, plural, one {# dirty} few {# dirty} many {# dirty} other {# dirty}}"
 msgid "{0, plural, one {# evidence citation} few {# evidence citations} many {# evidence citations} other {# evidence citations}}"
 msgstr "{0, plural, one {# evidence citation} few {# evidence citations} many {# evidence citations} other {# evidence citations}}"
 
+#. placeholder {0}: stopped.name
+#: src/lib/limits.ts
+msgid "{0} at limit"
+msgstr "{0} at limit"
+
+#. placeholder {0}: stopped.name
+#: src/lib/limits.ts
+msgid "{0} hit a limit"
+msgstr "{0} hit a limit"
+
+#. placeholder {0}: stopped.name
+#: src/lib/limits.ts
+msgid "{0} hit a limit · {reset}"
+msgstr "{0} hit a limit · {reset}"
+
 #: src/components/usage/UsageChip.tsx
 msgid "{account} — not connected"
 msgstr "{account} — not connected"
@@ -139,6 +155,10 @@ msgstr "{base} · paused by the dispatcher"
 #: src/workspace/boardModel.ts
 msgid "{base} · paused by you"
 msgstr "{base} · paused by you"
+
+#: src/lib/limits.ts
+msgid "{blind} without data"
+msgstr "{blind} without data"
 
 #: src/components/DiffView.tsx
 msgid "{branch} · base {base}"
@@ -175,6 +195,10 @@ msgstr "{commits, plural, one {# commit} few {# commits} many {# commits} other 
 #: src/components/PlanRunCard.tsx
 msgid "{count, plural, one {# session} few {# sessions} many {# sessions} other {# sessions}}"
 msgstr "{count, plural, one {# session} few {# sessions} many {# sessions} other {# sessions}}"
+
+#: src/components/usage/LimitsPanel.tsx
+msgid "{count} of {total}"
+msgstr "{count} of {total}"
 
 #: src/components/RunOutcomeModal.tsx
 msgid "{criteriaAfter} of {criteriaTotal} criteria ticked"
@@ -614,10 +638,15 @@ msgstr "accounts"
 msgid "Accounts"
 msgstr "Accounts"
 
+#: src/components/usage/LimitsPanel.tsx
+msgid "accounts →"
+msgstr "accounts →"
+
 #: src/lib/glossary.ts
 msgid "acting"
 msgstr "acting"
 
+#: src/components/usage/LimitsPanel.tsx
 #: src/components/usage/UsageProviderCard.tsx
 #: src/lib/sessionsView.ts
 msgid "active"
@@ -699,6 +728,10 @@ msgstr "agents…"
 #: src/components/NotifySettings.tsx
 msgid "alerts"
 msgstr "alerts"
+
+#: src/lib/limits.ts
+msgid "all clear"
+msgstr "all clear"
 
 #: src/components/ProjectDropdown.tsx
 msgid "all projects"
@@ -873,6 +906,10 @@ msgstr "ask"
 #: src/components/VcsSignInDialog.tsx
 msgid "Asking for a code…"
 msgstr "Asking for a code…"
+
+#: src/components/usage/LimitsPanel.tsx
+msgid "at limit"
+msgstr "at limit"
 
 #: src/components/ProjectActions.tsx
 msgid "attach"
@@ -1212,6 +1249,10 @@ msgstr "Close"
 #: src/api.ts
 msgid "close failed"
 msgstr "close failed"
+
+#: src/components/usage/LimitsPanel.tsx
+msgid "Close limits"
+msgstr "Close limits"
 
 #: src/workspace/task/TaskActions.tsx
 msgid "close the card and move it to done"
@@ -1887,6 +1928,10 @@ msgstr "errors"
 msgid "Every tool call waits for you. The safe default — nothing runs unattended."
 msgstr "Every tool call waits for you. The safe default — nothing runs unattended."
 
+#: src/lib/limits.ts
+msgid "every window has room"
+msgstr "every window has room"
+
 #: src/workspace/task/TaskActions.tsx
 msgid "evidence"
 msgstr "evidence"
@@ -2436,6 +2481,11 @@ msgstr "light"
 msgid "Light"
 msgstr "Light"
 
+#: src/components/HealthFooter.tsx
+#: src/components/usage/LimitsPanel.tsx
+msgid "limits"
+msgstr "limits"
+
 #: src/components/TaskChip.tsx
 msgid "linked heuristically"
 msgstr "linked heuristically"
@@ -2581,6 +2631,10 @@ msgstr "more actions"
 msgid "Motion"
 msgstr "Motion"
 
+#: src/components/usage/LimitsPanel.tsx
+msgid "move ▾"
+msgstr "move ▾"
+
 #: src/pages/Settings.tsx
 msgid "move selection"
 msgstr "move selection"
@@ -2678,6 +2732,10 @@ msgstr "No auto-approval AND the dispatcher refuses to run this project’s queu
 msgid "No blockers detected — the executor exited without ticking criteria; open the session to see why."
 msgstr "No blockers detected — the executor exited without ticking criteria; open the session to see why."
 
+#: src/lib/limits.ts
+msgid "no data"
+msgstr "no data"
+
 #: src/workspace/ProjectSwitcher.tsx
 msgid "no match"
 msgstr "no match"
@@ -2689,6 +2747,10 @@ msgstr "no matches"
 #: src/components/ConnectorsSection.tsx
 msgid "no mcp servers configured"
 msgstr "no mcp servers configured"
+
+#: src/components/usage/LimitsPanel.tsx
+msgid "no numbers for this account"
+msgstr "no numbers for this account"
 
 #: src/theme/ThemePicker.tsx
 msgid "no palette matches"
@@ -2742,6 +2804,10 @@ msgstr "no usage providers reported"
 msgid "no worktrees on this machine"
 msgstr "no worktrees on this machine"
 
+#: src/components/usage/LimitsPanel.tsx
+msgid "none"
+msgstr "none"
+
 #: src/workspace/task/TaskActions.tsx
 msgid "not a defect"
 msgstr "not a defect"
@@ -2768,6 +2834,7 @@ msgstr "not saved — {fields} changed on the server while you were editing. Clo
 msgid "not sent: {msg}"
 msgstr "not sent: {msg}"
 
+#: src/components/usage/LimitsPanel.tsx
 #: src/components/usage/UsageModal.tsx
 msgid "not yet loaded"
 msgstr "not yet loaded"
@@ -3106,10 +3173,6 @@ msgstr "plan"
 msgid "plan · phase {0}"
 msgstr "plan · phase {0}"
 
-#: src/components/HealthFooter.tsx
-msgid "plan {percent} %"
-msgstr "plan {percent} %"
-
 #: src/workspace/boardModel.ts
 msgid "plan {planId}"
 msgstr "plan {planId}"
@@ -3290,6 +3353,10 @@ msgstr "Projects"
 msgid "Projects on the locked-down preset — refused, stamped into dispatchError"
 msgstr "Projects on the locked-down preset — refused, stamped into dispatchError"
 
+#: src/components/usage/LimitsPanel.tsx
+msgid "projects running as {account}"
+msgstr "projects running as {account}"
+
 #: src/workspace/task/TaskBrief.tsx
 msgid "prompt"
 msgstr "prompt"
@@ -3468,6 +3535,7 @@ msgstr "Reference"
 msgid "refine planning failed: {status}"
 msgstr "refine planning failed: {status}"
 
+#: src/components/usage/LimitsPanel.tsx
 #: src/components/usage/UsageModal.tsx
 msgid "refresh"
 msgstr "refresh"
@@ -3555,9 +3623,14 @@ msgstr "rerun failed"
 msgid "reset"
 msgstr "reset"
 
-#: src/components/HealthFooter.tsx
+#: src/lib/limits.ts
 msgid "resets {at}"
 msgstr "resets {at}"
+
+#. placeholder {0}: compactSpan(left)
+#: src/lib/limits.ts
+msgid "resets {at} · {0}"
+msgstr "resets {at} · {0}"
 
 #: src/components/usage/format.ts
 msgid "resets in {days}d"
@@ -4045,6 +4118,10 @@ msgstr "skipped: {skippedCount}"
 msgid "slug"
 msgstr "slug"
 
+#: src/lib/limits.ts
+msgid "some numbers are not available"
+msgstr "some numbers are not available"
+
 #: src/workspace/TaskCard.tsx
 msgid "someone commented on GitHub since this card was last handled — the newest comments are in its description"
 msgstr "someone commented on GitHub since this card was last handled — the newest comments are in its description"
@@ -4060,10 +4137,6 @@ msgstr "source"
 #: src/workspace/boardModel.ts
 msgid "spawned by verification to repair {externalId}"
 msgstr "spawned by verification to repair {externalId}"
-
-#: src/components/HealthFooter.tsx
-msgid "spend today · plan window"
-msgstr "spend today · plan window"
 
 #: src/pages/Settings.tsx
 msgid "Spinning and pulsing state glyphs"
@@ -4159,6 +4232,10 @@ msgid "subscription account"
 msgstr "subscription account"
 
 #: src/components/HealthFooter.tsx
+#: src/components/usage/LimitsPanel.tsx
+msgid "Subscription limits"
+msgstr "Subscription limits"
+
 #: src/components/usage/UsageChip.tsx
 #: src/components/usage/UsageChip.tsx
 #: src/components/usage/UsageModal.tsx
@@ -4448,6 +4525,10 @@ msgstr "theme settings"
 msgid "third"
 msgstr "third"
 
+#: src/components/usage/LimitsPanel.tsx
+msgid "this account cannot run"
+msgstr "this account cannot run"
+
 #: src/components/NotifySettings.tsx
 #: src/pages/Settings.tsx
 msgid "this browser does not support the Notifications API"
@@ -4541,6 +4622,11 @@ msgstr "title and prompt cannot be empty"
 msgid "title is required"
 msgstr "title is required"
 
+#. placeholder {0}: target.key
+#: src/components/usage/LimitsPanel.tsx
+msgid "to {0}"
+msgstr "to {0}"
+
 #: src/workspace/boardModel.ts
 msgid "today"
 msgstr "today"
@@ -4556,6 +4642,11 @@ msgstr "today · {name}"
 #: src/pages/Settings.tsx
 msgid "Today · Inbox · Needs you · Sessions · Plans"
 msgstr "Today · Inbox · Needs you · Sessions · Plans"
+
+#. placeholder {0}: fmtCost(spentToday)
+#: src/components/usage/LimitsPanel.tsx
+msgid "today <0>{0}</0>"
+msgstr "today <0>{0}</0>"
 
 #: src/api.ts
 msgid "toggle checkbox failed: {status}"
@@ -4637,11 +4728,16 @@ msgstr "update failed: {status}"
 msgid "update routine failed: {status}"
 msgstr "update routine failed: {status}"
 
+#: src/components/usage/LimitsPanel.tsx
+msgid "updated {updated}"
+msgstr "updated {updated}"
+
 #: src/components/usage/UsageChip.tsx
 #: src/components/usage/UsageModal.tsx
 msgid "usage"
 msgstr "usage"
 
+#: src/components/usage/LimitsPanel.tsx
 #: src/components/usage/UsageModal.tsx
 msgid "usage accounts"
 msgstr "usage accounts"
