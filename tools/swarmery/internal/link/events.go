@@ -106,6 +106,19 @@ type normalized struct {
 	swarm *swarmEvent
 }
 
+// backgroundAgents reads a turn.complete payload's count of agents still at
+// work. The field is optional and advisory: anything unreadable is 0, the plain
+// turn.complete of a mod that sends no count.
+func backgroundAgents(payload json.RawMessage) int {
+	var p struct {
+		BackgroundAgents int `json:"backgroundAgents"`
+	}
+	if err := json.Unmarshal(payload, &p); err != nil {
+		return 0
+	}
+	return p.BackgroundAgents
+}
+
 // Ingest stores a batch of mod events in one transaction and returns its
 // counts. For each event it finds the sessions row by Claude session id —
 // minting a minimal source='mod' row (project resolved from cwd through
@@ -405,6 +418,9 @@ func apply(ctx context.Context, tx *sql.Tx, sid int64, n normalized) error {
 		return fmt.Errorf("link ingest: seen_at: %w", err)
 	}
 	if status, ok := statusFor[n.Kind]; ok {
+		if n.Kind == KindTurnComplete && backgroundAgents(n.Payload) > 0 {
+			status = StatusWorking
+		}
 		if _, err := tx.ExecContext(ctx,
 			`UPDATE sessions SET link_status = ? WHERE id = ? AND NOT EXISTS (
 			   SELECT 1 FROM link_events

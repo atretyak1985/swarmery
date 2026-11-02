@@ -72,7 +72,7 @@ It also needs the daemon's link token (below). Without it the mod does nothing.
 | `turn.start` | `turn.start` |
 | `tool.call` | `tool.call` with `{ tool, inputHash, agentId? }`, then lets the call run |
 | `session.measure` | `session.measure`: `context`, `rateLimits`, `cost`, `changed` |
-| `turn.complete` (main loop only) | `turn.complete` with `{ durationMs, stopReason }`, plus a `session.measure` snapshot from `$.session.usage()` |
+| `turn.complete` (main loop only) | `turn.complete` with `{ durationMs, stopReason }`, and `backgroundAgents` when `$.agent.list()` shows agents still at work, plus a `session.measure` snapshot from `$.session.usage()` |
 | `session.end` | `session.end` with `{ reason }`, and a last flush that waits at most 1.2 s, even behind a request already in flight |
 
 - **`/clear` starts a new session in the same process.** The engine ends the old
