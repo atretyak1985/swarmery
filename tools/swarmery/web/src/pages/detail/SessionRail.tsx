@@ -4,6 +4,10 @@
 // its detail lives. Real data only (D-5): no PR row, no pushed state, and lessons are
 // what applies to these areas, because nothing records which lesson a session received.
 //
+// From `wide` up (`column`) it is a column of its own beside the whole session, header
+// included, with its own scroll: 260px, 28px collapsed. Below that there is no room
+// for one, and it is a card in the session's flow under the conversation.
+//
 // It collapses to a narrow strip with `\` or the button, from `desk` up only: below
 // it the rail wraps under the conversation, whatever the stored state says (D-3). So
 // the blocks stay mounted behind `desk:hidden`, as the list does.
@@ -351,6 +355,7 @@ export function SessionRail({
   costUsd,
   onShowSteps,
   onShowDiff,
+  column = false,
 }: {
   detail: SessionDetail;
   state: RowState;
@@ -359,6 +364,7 @@ export function SessionRail({
   costUsd: number | null;
   onShowSteps: () => void;
   onShowDiff: () => void;
+  column?: boolean;
 }): JSX.Element {
   const { t } = useLingui();
   const { hash } = useLocation();
@@ -373,12 +379,20 @@ export function SessionRail({
   return (
     <aside
       aria-label={t`session context`}
-      className={`mt-2.5 flex min-w-0 flex-[1_1_220px] flex-col self-start overflow-hidden rounded-[10px] border border-line bg-bg desk:sticky desk:top-0 ${
-        collapsed ? 'desk:flex-[0_0_28px]' : ''
-      }`}
+      className={
+        column
+          ? `flex min-h-0 shrink-0 flex-col overflow-y-auto border-l border-line bg-bg ${collapsed ? 'w-7' : 'w-[260px]'}`
+          : `mt-2.5 flex min-w-0 flex-[1_1_220px] flex-col self-start overflow-hidden rounded-[10px] border border-line bg-bg desk:sticky desk:top-0 ${
+              collapsed ? 'desk:flex-[0_0_28px]' : ''
+            }`
+      }
     >
       <div className={collapsed ? 'contents desk:hidden' : 'contents'}>
-        <div className="flex items-center gap-2 border-b border-line bg-surface2 px-3.5 py-2 font-mono text-[10px] leading-[normal]">
+        <div
+          className={`flex items-center gap-2 border-b border-line bg-surface2 px-3.5 py-3 font-mono text-[10px] leading-[normal] ${
+            column ? 'sticky top-0 z-[2]' : ''
+          }`}
+        >
           <span className="tracking-[0.12em] text-ink-2 uppercase">
             <Trans>context</Trans>
           </span>
@@ -416,7 +430,9 @@ export function SessionRail({
           onClick={() => togglePanel('rail')}
           aria-label={t`expand context · \\`}
           data-tip={t`expand context · \\`}
-          className="hidden flex-col items-center gap-2.5 py-2.5 desk:flex"
+          className={`hidden flex-col items-center gap-2.5 desk:flex ${
+            column ? 'flex-1 py-3.5 transition-colors hover:bg-surface2' : 'py-2.5'
+          }`}
         >
           {hasHandoff && (
             <span
