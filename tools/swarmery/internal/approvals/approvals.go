@@ -1025,6 +1025,7 @@ func (s *Service) Sweep() {
 	}
 
 	s.sweepLeases()
+	s.resolveAnsweredInTranscript()
 
 	// Self-heal: waiting_approval must never be sticky.
 	stuck, err := s.db.Query(
