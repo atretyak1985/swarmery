@@ -66,6 +66,7 @@ import { Segmented } from '../components/Segmented';
 import { useScope } from '../lib/scope';
 import { useTheme } from '../lib/theme';
 import { ApproxHint, Empty, ErrorBox, Loading, SectionTitle } from '../components/ui';
+import { Chevron } from '../components/Chevron';
 
 /* ----- metric / pivot vocabulary ----- */
 
@@ -1159,7 +1160,11 @@ function UsagePanel({
         const cells = (
           <div className="flex items-baseline gap-2 font-mono text-[11.5px]">
             <span className="min-w-0 flex-1 truncate text-ink-3">
-              {showAgents ? (open === r.name ? '▾ ' : '▸ ') : ''}
+              {showAgents && (
+                <>
+                  <Chevron open={open === r.name} />{' '}
+                </>
+              )}
               {r.name}
             </span>
             <span className="w-16 text-right text-ink">{r.calls}</span>

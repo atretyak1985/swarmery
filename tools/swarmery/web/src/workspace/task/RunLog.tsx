@@ -22,6 +22,7 @@ import { useScope } from '../../lib/scope';
 import { isAccountPause, isQuotaWait, stateLabel } from '../boardModel';
 import { TaskDiff } from '../TaskDiff';
 import { FieldLabel } from '../TaskFields';
+import { Chevron } from '../../components/Chevron';
 
 /**
  * Whether this card has a run to show — the tab's whole existence test.
@@ -72,7 +73,7 @@ function DispatchedPrompt({ prompt }: { prompt: string }): JSX.Element {
         onClick={() => setOpen((v) => !v)}
         className="font-mono text-[10px] tracking-[0.08em] text-ink-faint uppercase transition-colors hover:text-ink-dim"
       >
-        {open ? '▾' : '▸'} <Trans>dispatched prompt</Trans>
+        <Chevron open={open} /> <Trans>dispatched prompt</Trans>
       </button>
       {open && (
         <pre className="mt-1.5 max-h-64 overflow-auto rounded-md border border-line bg-field px-2.5 py-2 font-mono text-[10.5px] leading-relaxed whitespace-pre-wrap text-ink-dim">

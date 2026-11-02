@@ -38,6 +38,7 @@ import { LoopMap } from './LoopMap';
 import { buildLoop, epicCounts, sessionOutcomes } from './loopModel';
 import { SpendWeek } from './SpendWeek';
 import { WaitingOnYou } from './WaitingOnYou';
+import { Chevron } from '../../components/Chevron';
 
 const SESSION_PAGE = 100;
 
@@ -242,7 +243,7 @@ export function Today({ detail }: { detail: ReactNode }): JSX.Element {
             >
               <Trans>Today in detail</Trans>
               <span aria-hidden="true" className="h-px flex-1 bg-line" />
-              <span aria-hidden="true">{deckOpen ? '▾' : '▸'}</span>
+              <span aria-hidden="true"><Chevron open={deckOpen} /></span>
             </button>
           </div>
           {deckOpen && <div data-testid="today-detail">{detail}</div>}

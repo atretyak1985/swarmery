@@ -29,6 +29,7 @@ import { TASK_MODELS, TASK_PRIORITIES } from '../boardModel';
 import { PlaybookHint, PlaybookSelect } from '../PlaybookPicker';
 import { ChipEditor, FieldLabel } from '../TaskFields';
 import type { DraftSetter, TaskDraft } from './useTaskDraft';
+import { Chevron } from '../../components/Chevron';
 
 /** The three choices the summary line reads, in draft shape ('' / 'default' = unset). */
 export interface RunConfigChoice {
@@ -167,7 +168,7 @@ export function RunConfig({
         </span>
         <span className="min-w-0 flex-1 truncate font-mono text-[11px] text-ink-2">{summary}</span>
         <span aria-hidden="true" className="shrink-0 font-mono text-[10px] text-ink-faint">
-          {open ? '▾' : '▸'}
+          <Chevron open={open} />
         </span>
       </button>
 
@@ -209,7 +210,7 @@ export function RunConfig({
               onClick={() => setAdvanced((v) => !v)}
               className="font-mono text-[10px] tracking-[0.1em] text-ink-faint uppercase transition-colors hover:text-ink-dim"
             >
-              {advanced ? '▾' : '▸'} <Trans>advanced</Trans>
+              <Chevron open={advanced} /> <Trans>advanced</Trans>
             </button>
             {advanced && (
               <div className="mt-2 flex flex-col gap-3">

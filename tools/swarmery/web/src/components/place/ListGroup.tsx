@@ -7,6 +7,7 @@
 // list hides the head: the tab already names the group.
 
 import { useCallback, useState, type ReactNode } from 'react';
+import { Chevron } from '../Chevron';
 
 export type GroupTone = 'default' | 'amber' | 'green' | 'red' | 'blue' | 'purple';
 
@@ -40,8 +41,8 @@ export function ListGroup({
 }): JSX.Element {
   const header = (
     <>
-      <span aria-hidden="true" className="w-2.5 shrink-0 font-mono text-[10px] text-ink-faint">
-        {onToggle === undefined ? '' : open ? '▾' : '▸'}
+      <span aria-hidden="true" className="flex w-3 shrink-0 items-center">
+        {onToggle === undefined ? null : <Chevron open={open} />}
       </span>
       <span className={`font-mono text-[10px] tracking-[0.12em] uppercase ${LABEL_TONE[tone]}`}>{label}</span>
       <span className="font-mono text-[10px] text-ink-faint">{count}</span>

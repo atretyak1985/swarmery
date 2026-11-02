@@ -63,6 +63,7 @@ import { TaskCard } from '../workspace/TaskCard';
 import { TaskModal } from '../workspace/TaskModal';
 import { TaskGraph } from '../workspace/TaskGraph';
 import { Empty, ErrorBox, Loading } from '../components/ui';
+import { Chevron } from '../components/Chevron';
 
 /** A muted group heading INSIDE a lane or the history strip. Deliberately
  * quieter than a lane title: a group is a subdivision of one lane, and it must
@@ -654,7 +655,7 @@ export function Board(): JSX.Element {
                 <Trans>History</Trans>
               </span>
               <span aria-hidden="true" className="font-mono text-[9px] text-ink-faint">
-                {historyOpen ? '▾' : '▸'}
+                <Chevron open={historyOpen} />
               </span>
               <span className="font-mono text-[10px] text-ink-faint">
                 <Trans>{doneCount} done</Trans>

@@ -26,6 +26,7 @@ import { PageDetail } from '../components/place/PageDetail';
 import { ConfirmDialog, Empty, ErrorBox, Loading, SectionTitle } from '../components/ui';
 import { useDiscardGuard } from '../components/useDiscardGuard';
 import { ProjectName } from '../components/ProjectName';
+import { Chevron } from '../components/Chevron';
 
 /* ---------------------------------------------------------------- cron help */
 
@@ -216,7 +217,7 @@ function RoutineRow({
           className="flex min-w-0 flex-1 items-center gap-2 text-left"
           aria-expanded={expanded}
         >
-          <span className="font-mono text-[11px] text-ink-faint">{expanded ? '▾' : '▸'}</span>
+          <span className="font-mono text-[11px] text-ink-faint"><Chevron open={expanded} /></span>
           <span className="min-w-0">
             <span className="block truncate font-display text-[13px] font-semibold text-ink">
               {routine.name}

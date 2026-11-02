@@ -96,6 +96,7 @@ import { useNeedsYou } from '../lib/useNeedsYou';
 import { gateTier } from './detail/SessionGate';
 import type { PhaseTab } from './plans/PhasePanel';
 import { plansPath } from './plans/plansUrl';
+import { Chevron } from '../components/Chevron';
 
 const COPIED_MS = 2_000;
 /** The deep-link schemes a terminal's focus URL may use (Warp's WARP_FOCUS_URL). */
@@ -258,7 +259,7 @@ function PermissionDecision({ ctx, request }: { ctx: CardContext; request: Permi
             <ChannelBadge channel={request?.channel ?? item.channel} />
             {request !== null && (
               <button type="button" onClick={() => setRaw((v) => !v)} aria-expanded={raw} className={INLINE}>
-                <Trans>raw</Trans> {raw ? '▾' : '▸'}
+                <Trans>raw</Trans> <Chevron open={raw} />
               </button>
             )}
             <Link to={ctx.manageTo} className={INLINE}>

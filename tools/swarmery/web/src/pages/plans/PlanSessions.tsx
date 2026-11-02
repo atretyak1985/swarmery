@@ -10,6 +10,7 @@ import { Empty, ErrorBox, Loading } from '../../components/ui';
 import { fmtCost, fmtDateTime } from '../../lib/format';
 import { scopePlanSessions, type PlanSessionScope } from '../../lib/planSessionScope';
 import { useSessionHref } from '../../lib/sessionHref';
+import { Chevron } from '../../components/Chevron';
 
 const SESSION_DOT: Record<SessionStatus, string> = {
   active: 'bg-green',
@@ -111,7 +112,7 @@ export function PlanSessions({
           className="flex cursor-pointer items-center gap-2 font-mono text-[10px] tracking-[0.1em] text-ink-faint uppercase transition-colors hover:text-ink"
         >
           <Trans>sessions</Trans>
-          <span aria-hidden="true">{open ? '▾' : '▸'}</span>
+          <span aria-hidden="true"><Chevron open={open} /></span>
         </button>
         <span aria-hidden="true" className="h-px flex-1 bg-line" />
         {sessions !== null &&

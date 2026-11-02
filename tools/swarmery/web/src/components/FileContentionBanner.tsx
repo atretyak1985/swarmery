@@ -22,6 +22,7 @@ import type { ContentionPath, WSMessage } from '../api/types';
 import { fmtAgo } from '../lib/format';
 import { useSessionHref } from '../lib/sessionHref';
 import { useLiveUpdates } from '../lib/ws';
+import { Chevron } from './Chevron';
 
 /** Trailing coalesce window for WS-triggered refetches. */
 const REFETCH_DEBOUNCE_MS = 2000;
@@ -123,7 +124,7 @@ export function FileContentionBanner({ project }: { project: string | null }): J
         className="flex w-full items-center gap-2 rounded-[6px] text-left font-mono text-[11px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber"
       >
         <span aria-hidden="true" className="text-amber">
-          {open ? '▾' : '▸'}
+          <Chevron open={open} />
         </span>
         <span className="font-semibold text-amber">
           <Trans>shared files</Trans>

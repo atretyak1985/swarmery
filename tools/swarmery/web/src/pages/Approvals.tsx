@@ -58,6 +58,7 @@ import { ProjectName } from '../components/ProjectName';
 import { ApprovalContext } from '../components/ApprovalContext';
 import { ChannelBadge } from '../components/ChannelBadge';
 import { QuestionBlock } from '../components/QuestionForm';
+import { Chevron } from '../components/Chevron';
 
 const HISTORY_LIMIT = 50;
 
@@ -362,7 +363,7 @@ export function PendingCard({
         aria-label={expanded ? t`collapse raw request JSON` : t`expand raw request JSON`}
         className="mt-1.5 flex items-center gap-1.5 font-mono text-[10px] text-ink-faint transition-colors hover:text-ink-dim"
       >
-        <span aria-hidden="true">{expanded ? '▾' : '▸'}</span>
+        <span aria-hidden="true"><Chevron open={expanded} /></span>
         <Trans>raw</Trans>
       </button>
       {expanded && (

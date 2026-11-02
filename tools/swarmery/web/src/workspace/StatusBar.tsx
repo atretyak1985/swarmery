@@ -12,6 +12,7 @@ import { VcsAuthBanner } from '../components/VcsAuthBanner';
 import { useHealth, versionLabel, versionTitle } from '../lib/health';
 import { projectScopeKey } from './scopeKey';
 import type { BoardCounts } from './boardModel';
+import { Chevron } from '../components/Chevron';
 
 const POLL_MS = 15_000;
 
@@ -110,7 +111,7 @@ export function StatusBar({
           >
             <span aria-hidden="true">❯_</span>
             <Trans>Terminal</Trans>
-            <span aria-hidden="true">{terminalOpen ? '▾' : '▸'}</span>
+            <span aria-hidden="true"><Chevron open={terminalOpen} /></span>
           </button>
         )}
         {dispatch !== null && (

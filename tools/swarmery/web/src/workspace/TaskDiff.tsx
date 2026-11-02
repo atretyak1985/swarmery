@@ -15,6 +15,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { getBoardTaskDiff } from '../api';
 import type { TaskDiff as TaskDiffData } from '../api/types';
 import { DiffView } from '../components/DiffView';
+import { Chevron } from '../components/Chevron';
 
 export { splitPatch } from '../components/DiffView';
 
@@ -61,7 +62,7 @@ export function TaskDiff({ taskId }: { taskId: number }): JSX.Element {
         className="flex w-full items-center gap-1.5 px-2.5 py-1.5 text-left font-mono text-[10.5px] tracking-[0.08em] text-ink-dim uppercase transition-colors hover:text-ink"
       >
         <span aria-hidden="true" className="w-2 shrink-0">
-          {open ? '▾' : '▸'}
+          <Chevron open={open} />
         </span>
         <Trans>diff</Trans>
         {diff !== null && (

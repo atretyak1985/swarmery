@@ -33,6 +33,7 @@ import { Markdown } from '../lib/markdown';
 import { fmtAgo } from '../lib/format';
 import { ConfirmDialog, Empty, ErrorBox, Loading } from '../components/ui';
 import { StaleFactsPanel } from './memory/StaleFactsPanel';
+import { Chevron } from '../components/Chevron';
 
 export const KIND_LABELS: Record<MemoryKind, MessageDescriptor> = {
   'claude-md': msg`Project instructions`,
@@ -298,7 +299,7 @@ function ConsolidatePanel({ dir, onApplied }: { dir: string; onApplied: () => vo
           aria-expanded={open}
           className="font-mono text-[11px] text-ink-dim transition-colors hover:text-ink"
         >
-          {open ? '▾' : '▸'} <Trans>Consolidate index</Trans>
+          <Chevron open={open} /> <Trans>Consolidate index</Trans>
         </button>
         <span className="min-w-0 flex-1 truncate text-[12px] text-ink-faint">
           {plan !== null
