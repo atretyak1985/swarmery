@@ -169,6 +169,25 @@ function LedgerAction({
   );
 }
 
+/** Which phases this one waits for: a landed one in green, an open one faint. */
+function DependsOn({ deps, resolvedSeqs }: { deps: readonly number[]; resolvedSeqs: Set<number> }): JSX.Element {
+  const { t } = useLingui();
+  return (
+    <span className="flex shrink-0 items-baseline gap-1 font-mono text-[10.5px] leading-[normal] whitespace-nowrap text-ink-faint">
+      <Trans>depends on</Trans>
+      {deps.map((dep) => (
+        <span
+          key={dep}
+          className={resolvedSeqs.has(dep) ? 'text-green' : 'text-ink-dim'}
+          data-tip={resolvedSeqs.has(dep) ? t`dependency resolved` : t`dependency pending`}
+        >
+          #{dep}
+        </span>
+      ))}
+    </span>
+  );
+}
+
 /** How long a run took, or has been going. */
 export function runSpan(run: Session, now: number): string {
   const end = run.endedAt === null ? now : new Date(run.endedAt).getTime();
@@ -299,8 +318,13 @@ export function PhaseLedger({
                       <TerminalBadge sessions={terminalSessions.filter((s) => s.phaseId === String(p.id))} scope="phase" />
                     </span>
                   </div>
-                  <div className={`mt-0.5 truncate text-[12px] leading-[normal] ${phaseNeedsYou(p) ? 'text-brand' : 'text-ink-dim'}`}>
-                    {phaseNote(p, status, depsUnmet, elapsed, terms?.changeShort ?? null)}
+                  <div className="mt-0.5 flex min-w-0 items-baseline gap-2">
+                    <span
+                      className={`min-w-0 truncate text-[12px] leading-[normal] ${phaseNeedsYou(p) ? 'text-brand' : 'text-ink-dim'}`}
+                    >
+                      {phaseNote(p, status, depsUnmet, elapsed, terms?.changeShort ?? null)}
+                    </span>
+                    {p.dependsOn.length > 0 && <DependsOn deps={p.dependsOn} resolvedSeqs={resolvedSeqs} />}
                   </div>
                 </div>
                 <StageLabel stage={phaseStage(p, status)} />

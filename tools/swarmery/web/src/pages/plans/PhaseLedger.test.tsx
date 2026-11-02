@@ -169,6 +169,16 @@ describe('PhaseLedger', () => {
     expect(report.className).toContain('text-green');
   });
 
+  it('names what a phase depends on, a landed dependency in green', () => {
+    const third = { ...base, id: 16, seq: 3, name: 'Wiring', dependsOn: [1, 2] } as EpicPhase;
+    mount([idle, done, third]);
+    const deps = within(line('Wiring'));
+    expect(deps.getByText('depends on')).toBeTruthy();
+    expect(deps.getByText('#2').className).toContain('text-green');
+    expect(deps.getByText('#1').className).not.toContain('text-green');
+    expect(within(line('Design bucket')).queryByText('depends on')).toBeNull();
+  });
+
   it('offers nothing to a phase still waiting on another', () => {
     const waiting = { ...base, id: 14, seq: 4, name: 'Budgets', dependsOn: [1] } as EpicPhase;
     mount([idle, waiting]);

@@ -895,12 +895,18 @@ msgid "Delete this routine"
 msgstr "Видалити цю рутину"
 
 #: src/pages/plans/PhaseDetailPanel.tsx
+#: src/pages/plans/PhaseLedger.tsx
 msgid "dependency pending"
 msgstr "залежність очікує"
 
 #: src/pages/plans/PhaseDetailPanel.tsx
+#: src/pages/plans/PhaseLedger.tsx
 msgid "dependency resolved"
 msgstr "залежність виконано"
+
+#: src/pages/plans/PhaseLedger.tsx
+msgid "depends on"
+msgstr "залежить від"
 
 #: src/pages/planning/RefineModal.tsx
 msgid "Describe what should change. The plan will update, and the next questions will follow your direction."
