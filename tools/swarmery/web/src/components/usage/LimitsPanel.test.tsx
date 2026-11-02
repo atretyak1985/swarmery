@@ -7,6 +7,7 @@
 //   3. The projects an account runs, the default taking every unbound one, and a move
 //      that writes the binding: '' for the default account.
 //   4. An account that cannot run is no target. Escape closes.
+//   5. Inside a project (the sidebar's scope) the list shows that project only.
 //
 // Runs with the rest of the web suite: `npm test`.
 
@@ -14,6 +15,7 @@ import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as api from '../../api';
 import type { UsageAccount, UsageProvider } from '../../api/types';
+import { useScope } from '../../lib/scope';
 import { useUsage } from '../../lib/usageData';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '../../test/render';
 import { LimitsPanel } from './LimitsPanel';
@@ -25,6 +27,7 @@ vi.mock('../../api', async (importOriginal) => ({
   putProjectAccount: vi.fn(async () => ({})),
 }));
 vi.mock('../../lib/usageData', () => ({ useUsage: vi.fn() }));
+vi.mock('../../lib/scope', () => ({ useScope: vi.fn() }));
 
 const provider = (account: string, percentUsed: number): UsageProvider =>
   ({
@@ -65,6 +68,7 @@ function mount(accounts: UsageAccount[] = ACCOUNTS, activeAccount: string | null
 }
 
 beforeEach(() => {
+  vi.mocked(useScope).mockReturnValue({ scopeProject: null } as never);
   vi.mocked(api.fetchAccounts).mockResolvedValue({
     accounts: [account('default', true, []), account('na', false, ['/work/cars'])],
   } as never);
@@ -140,6 +144,17 @@ describe('LimitsPanel', () => {
     fireEvent.click(screen.getByRole('button', { name: 'move ▾' }));
     fireEvent.click(screen.getByRole('menuitem', { name: /to default/ }));
     expect((await screen.findByRole('alert')).textContent).toBe('locked');
+  });
+
+  it('lists only the scoped project inside a project', async () => {
+    vi.mocked(useScope).mockReturnValue({ scopeProject: { id: 2, path: '/work/orders', slug: 'orders' } } as never);
+    mount();
+    fireEvent.click(screen.getByRole('tab', { name: /^default/ }));
+    expect(await screen.findByText('Orders')).toBeTruthy();
+    expect(screen.getByText('1 of 1')).toBeTruthy();
+    fireEvent.click(screen.getByRole('tab', { name: /^na/ }));
+    expect(await screen.findByText('none')).toBeTruthy();
+    expect(screen.queryByText('Cars')).toBeNull();
   });
 
   it('closes on Escape', () => {

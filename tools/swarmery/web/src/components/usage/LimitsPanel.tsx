@@ -9,6 +9,9 @@
 //
 // It does not poll: the numbers arrive from the app-wide poller (lib/usageData.tsx). The
 // accounts and projects are read on open, and again after a move.
+//
+// Inside a project (the sidebar's scope) the project list shows that project only;
+// under All projects it shows every project the account runs.
 
 import { Trans, useLingui } from '@lingui/react/macro';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -30,6 +33,7 @@ import {
   windowName,
 } from '../../lib/limits';
 import { usePanels } from '../../lib/panels';
+import { useScope } from '../../lib/scope';
 import { useUsage } from '../../lib/usageData';
 import { UsageDisconnect } from './UsageDisconnect';
 import { fmtClock } from './format';
@@ -112,24 +116,33 @@ interface Binding {
   projects: Project[];
 }
 
+/** The projects the panel speaks for: the scoped project inside one, every project
+ * under All projects. */
+function inScope(projects: Project[], scoped: number | null): Project[] {
+  return scoped === null ? projects : projects.filter((p) => p.id === scoped);
+}
+
 /** The projects an account runs: the ones bound to it, and on the default account every
  * project bound to nothing. */
-function projectsOf(binding: Binding, key: string): Project[] {
+function projectsOf(binding: Binding, key: string, scoped: number | null): Project[] {
   const account = binding.accounts.find((a) => a.key === key);
   if (account === undefined) return [];
   const bound = new Set(binding.accounts.flatMap((a) => a.projects));
-  return binding.projects.filter((p) => account.projects.includes(p.path) || (account.isDefault && !bound.has(p.path)));
+  return inScope(binding.projects, scoped).filter((p) => account.projects.includes(p.path) || (account.isDefault && !bound.has(p.path)));
 }
 
 function Projects({
   account,
   binding,
   limits,
+  scoped,
   onMoved,
 }: {
   account: string;
   binding: Binding | null;
   limits: readonly AccountLimit[];
+  /** The scoped project's id, null under All projects. */
+  scoped: number | null;
   onMoved: () => void;
 }): JSX.Element | null {
   const { t } = useLingui();
@@ -138,7 +151,7 @@ function Projects({
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   if (binding === null) return null;
-  const projects = projectsOf(binding, account);
+  const projects = projectsOf(binding, account, scoped);
   const targets = binding.accounts.filter((a) => a.key !== account);
   const move = (project: Project, target: Account): void => {
     setBusy(true);
@@ -153,7 +166,7 @@ function Projects({
       .catch((e: unknown) => setErr(e instanceof Error ? e.message : String(e)))
       .finally(() => setBusy(false));
   };
-  const total = String(binding.projects.length);
+  const total = String(inScope(binding.projects, scoped).length);
   const count = String(projects.length);
   return (
     <div className="border-b border-line">
@@ -241,6 +254,7 @@ export function LimitsPanel({
   const { t } = useLingui();
   const { accounts, error, loading, lastUpdated, refresh } = useUsage();
   const { nav: collapsed } = usePanels();
+  const { scopeProject } = useScope();
   const limits = useMemo(() => accounts.map(accountLimit), [accounts]);
   const [tab, setTab] = useState<string | null>(null);
   const [now, setNow] = useState(() => Date.now());
@@ -389,7 +403,13 @@ export function LimitsPanel({
           </div>
         )}
 
-        {shown !== undefined && <Projects account={shown.name} binding={binding} limits={limits} onMoved={loadBinding} />}
+        {shown !== undefined && <Projects
+            account={shown.name}
+            binding={binding}
+            limits={limits}
+            scoped={scopeProject?.id ?? null}
+            onMoved={loadBinding}
+          />}
 
         <div className="flex items-center gap-3.5 px-4 py-2.5 font-mono text-[10.5px] leading-[normal] text-ink-3">
           <span>
