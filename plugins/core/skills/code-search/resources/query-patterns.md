@@ -24,9 +24,23 @@ Grep("nodePort:", glob: "*.{yaml,tpl}", path: "<infrastructure-repo>")
 ```
 
 ### Cross-Repo
+
+A bare `path: "."` sweeps every repo, including `node_modules`/`vendor`/`dist`/`build`, and is the
+most common way to hit ripgrep's own timeout (see `search-procedure.md` → Mode 4). Always pair a
+repo-root search with a `glob` that excludes generated/dependency trees, or scope to the specific
+repos from `.claude/project.json` instead:
+
 ```
-Grep("DeviceService", path: ".")
+Grep("DeviceService", path: ".", glob: "!**/{node_modules,vendor,dist,build,.git}/**")
 Grep("/ws/", path: ".", glob: "*.{py,ts,yaml,tpl}")
+```
+
+If the repo list is small, prefer searching each repo explicitly over a single unscoped call:
+
+```
+Grep("DeviceService", path: "apps/<mainApp>")
+Grep("DeviceService", path: "<device>")
+Grep("DeviceService", path: "<infrastructure-repo>")
 ```
 
 ## Glob Patterns
@@ -47,6 +61,42 @@ Glob("<infrastructure-repo>/**/values*.yaml")
 
 # Database migrations
 Glob("<infrastructure-repo>/files/backendMigration/*.sql")
+```
+
+### Scoping `path` to the pattern's literal ancestor (Mode 4a)
+
+Glob's directory walk is driven by `path`, not by the literal prefix already baked into
+`pattern` — a narrow pattern at a broad `path` still walks the whole tree underneath `path`
+before the pattern ever filters anything:
+
+```
+# Slow: path is the repo root, so Glob walks the entire tree even though the
+# pattern only matches a handful of files deep inside it.
+Glob("<infrastructure-repo>/files/backendMigration/01[23]*.sql", path: "<infrastructure-repo>")
+
+# Fast: path is pushed down to the pattern's narrowest literal ancestor
+# directory; Glob only walks that directory.
+Glob("01[23]*.sql", path: "<infrastructure-repo>/files/backendMigration")
+```
+
+### Searching inside a dependency tree on purpose (Mode 4b)
+
+When the target deliberately sits inside `node_modules/.pnpm`, `vendor`, or a build cache,
+no exclusion helps — excluding the tree would exclude the thing being searched for. Don't
+retry the built-in Glob/Grep call; fall back to `Bash` with an explicit, adjustable timeout
+instead (the built-in tools' internal ripgrep timeout is fixed at ~20s and not configurable
+from this repo):
+
+```
+Bash(
+  command: "find <device>/node_modules/.pnpm -path '*some-package*/node_modules/some-package/build/*env*'",
+  timeout: 120000
+)
+# or, for a text match rather than a filename pattern:
+Bash(
+  command: "rg --files <device>/node_modules/.pnpm | grep 'some-package/build'",
+  timeout: 120000
+)
 ```
 
 ## Worked example: finding all uses of the telemetry emitter

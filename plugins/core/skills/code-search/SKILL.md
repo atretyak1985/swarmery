@@ -8,7 +8,7 @@ disable-model-invocation: true
 docs:
   status: reviewed
   source_sha: ccc8c6baa5c1
-  updated: 2026-08-06
+  updated: 2026-11-01
 ---
 
 # Purpose
@@ -21,6 +21,9 @@ Selects the most efficient search tool — Grep for exact symbol lookup, Glob fo
 - Every result carries a `file:line` citation, never a bare file path; max 50 results per search.
 - Verify the top 2 codebase-retrieval results with Read; anything mismatched is marked `[POTENTIALLY-STALE]`, never presented as authoritative.
 - No hardcoded absolute paths, never search the filesystem root — scope to the workspace; repo names come from `.claude/project.json` → `repos`.
+- Never run an unscoped `path: "."` Grep over a large repo without excluding `node_modules`/`vendor`/`dist`/`build`/`.git` — that combination is the usual cause of a ripgrep timeout.
+- For Glob, narrow `path` to the pattern's literal ancestor rather than relying on the pattern alone; if the target is intentionally inside `node_modules`/`vendor`/`.pnpm`/build caches, use Bash (`find`/`rg --files`) with an explicit timeout instead of retrying Glob/Grep.
+- `plugins/core/hooks/search-scope-guard.sh` enforces the two rules above as a `PreToolUse` hook on every `Grep`/`Glob` call project-wide, in `warn` mode — heed its guidance (delivered via `additionalContext` before the call runs, not just its log) instead of retrying the same call, even in a session that never loaded this skill.
 - Zero-result searches report the alternatives attempted before saying "not found".
 - Refuse searches outside the project workspace; stop and ask on >50 results or an ambiguous query.
 
