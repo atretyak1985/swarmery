@@ -106,7 +106,7 @@ func TestProposalConfounder(t *testing.T) {
 	self := Active{ID: 1, AreaGlobs: []string{"plugins/core/skills/testing/**"}}
 	in := ts(fixedNow)
 	ps := []AppliedProposal{
-		{ID: 10, Agent: "testing", TargetKind: "skill", Path: "plugins/core/skills/testing/SKILL.md", DecidedAt: in},
+		{ID: 10, Agent: "testing", TargetKind: "skill", Path: "plugins/core/skills/testing/SKILL.md", DecidedAt: in, Lens: "procedure"},
 		{ID: 11, Agent: phaserun.RoleExecutor, TargetKind: "agent", Path: "plugins/core/agents/implementation-agent.md", DecidedAt: in},
 		{ID: 12, Agent: "ui-developer", TargetKind: "agent", Path: "plugins/core/agents/ui-developer.md", DecidedAt: in},
 		{ID: 13, Agent: "testing", TargetKind: "skill", Path: "plugins/core/skills/testing/SKILL.md", DecidedAt: ts(fixedNow.Add(72 * time.Hour))},
@@ -122,6 +122,13 @@ func TestProposalConfounder(t *testing.T) {
 	}
 	if !strings.Contains(got[1].Detail, "implementation-agent is a role phase runs spawn") {
 		t.Fatalf("role rule detail = %q", got[1].Detail)
+	}
+	// The stored lens rides in the detail; a pre-0134 row says so.
+	if !strings.Contains(got[0].Detail, "for testing (lens procedure)") {
+		t.Fatalf("lens missing from detail = %q", got[0].Detail)
+	}
+	if !strings.Contains(got[1].Detail, "(lens unrecorded)") {
+		t.Fatalf("legacy row detail = %q", got[1].Detail)
 	}
 	if got := proposalConfounders(self, ps, nil, win); len(got) != 1 {
 		t.Fatalf("without the role list only the target rule may fire: %+v", got)
@@ -429,5 +436,25 @@ func TestConfoundedLessonRanksAsUnmeasured(t *testing.T) {
 	}
 	if sel.Lessons[3].Effectiveness != nil {
 		t.Fatalf("a confounded lesson must be unscored: %+v", sel.Lessons[3])
+	}
+}
+
+// The loader reads the stored lens off agent_change_proposals, so the detail
+// a pass writes names it.
+func TestLoadConfoundSourceReadsLens(t *testing.T) {
+	db := openDB(t)
+	id := seedApplied(t, db, phaserun.RoleExecutor, "agent", "plugins/core/agents/implementation-agent.md", "", fixedNow)
+	mustExec(t, db, `UPDATE agent_change_proposals SET lens = 'mixed' WHERE id = ?`, id)
+	src, err := loadConfoundSource(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(src.proposals) != 1 || src.proposals[0].Lens != "mixed" {
+		t.Fatalf("proposals = %+v", src.proposals)
+	}
+	w := Window{From: fixedNow.Add(-time.Hour), To: fixedNow.Add(time.Hour)}
+	got := proposalConfounders(Active{ID: 1}, src.proposals, src.roles, w)
+	if len(got) != 1 || !strings.Contains(got[0].Detail, "(lens mixed)") {
+		t.Fatalf("confounders = %+v", got)
 	}
 }
