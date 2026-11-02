@@ -3058,7 +3058,8 @@ export interface SystemInsights {
   skillAuditReport?: SystemSkillAuditReport | null;
   /**
    * Active session-start cost findings — claude_md_oversized,
-   * claude_md_over_200_lines, mcp_server_unused_30d. Additive optional.
+   * claude_md_over_200_lines, mcp_server_unused_30d, always_on_budget.
+   * Additive optional.
    */
   startCost?: SystemStartCost[];
 }

@@ -157,6 +157,7 @@ func TestSystemInsightsStartCost(t *testing.T) {
 	seedFinding(t, db, "mcp:user:idle", sysscan.RuleMCPServerUnused30d, "info", "unused", "")
 	seedFinding(t, db, "mcp:local:pw|/Volumes/Work/other", sysscan.RuleMCPServerUnused30d, "info", "unused there", "")
 	seedFinding(t, db, "mcp:user:was-idle", sysscan.RuleMCPServerUnused30d, "info", "fixed", "2026-07-28T10:00:00Z")
+	seedFinding(t, db, sysscan.AlwaysOnTarget("/Volumes/Work/other"), sysscan.RuleAlwaysOnBudget, "info", "over budget", "")
 	seedFinding(t, db, "agent:1", sysscan.RuleAgentDead, "info", "not a start-cost rule", "")
 
 	var fleet systemInsightsDTO
@@ -165,8 +166,11 @@ func TestSystemInsightsStartCost(t *testing.T) {
 	for _, d := range fleet.StartCost {
 		byTarget[d.Target] = d
 	}
-	if len(byTarget) != 3 {
-		t.Fatalf("startCost has %d rows, want 3: %+v", len(fleet.StartCost), fleet.StartCost)
+	if len(byTarget) != 4 {
+		t.Fatalf("startCost has %d rows, want 4: %+v", len(fleet.StartCost), fleet.StartCost)
+	}
+	if budget := byTarget[sysscan.AlwaysOnTarget("/Volumes/Work/other")]; budget.ProjectSlug == nil || *budget.ProjectSlug != "other" {
+		t.Errorf("always_on_budget finding must resolve to 'other', got %+v", budget)
 	}
 	if md := byTarget["claude_md:"+filepath.Join(p1, "CLAUDE.md")]; md.ProjectSlug == nil || md.ProjectPath != p1 {
 		t.Errorf("CLAUDE.md finding must resolve to project 1, got %+v", md)
