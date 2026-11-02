@@ -126,19 +126,21 @@ msgstr "{0, plural, one {# evidence citation} few {# evidence citations} many {#
 msgid "{0} at limit"
 msgstr "{0} at limit"
 
-#. placeholder {0}: stopped.name
-#: src/lib/limits.ts
-msgid "{0} hit a limit"
-msgstr "{0} hit a limit"
-
-#. placeholder {0}: stopped.name
-#: src/lib/limits.ts
-msgid "{0} hit a limit · {reset}"
-msgstr "{0} hit a limit · {reset}"
-
 #: src/components/usage/UsageChip.tsx
 msgid "{account} — not connected"
 msgstr "{account} — not connected"
+
+#: src/lib/limits.ts
+msgid "{account} hit a limit"
+msgstr "{account} hit a limit"
+
+#: src/lib/limits.ts
+msgid "{account} hit its {window} window"
+msgstr "{account} hit its {window} window"
+
+#: src/lib/limits.ts
+msgid "{account} hit its {window} window · resets {when}"
+msgstr "{account} hit its {window} window · resets {when}"
 
 #: src/components/usage/UsageModal.tsx
 msgid "{activeProject} runs as <0>{activeKey}</0>"
@@ -264,6 +266,7 @@ msgstr "{label} — opens in a project"
 msgid "{label} palette — {hint}"
 msgstr "{label} palette — {hint}"
 
+#: src/components/usage/LimitsPanel.tsx
 #: src/components/usage/UsageWindowRow.tsx
 msgid "{left}% left"
 msgstr "{left}% left"
@@ -364,6 +367,7 @@ msgstr "{title} — column {column}, depends on {deps}"
 msgid "{title} — column {column}, no dependencies"
 msgstr "{title} — column {column}, no dependencies"
 
+#: src/components/usage/LimitsPanel.tsx
 #: src/components/usage/UsageWindowRow.tsx
 msgid "{used}% used"
 msgstr "{used}% used"
@@ -522,6 +526,10 @@ msgstr "1–5 places"
 #: src/lib/docFigures.tsx
 msgid "2 done · 237 archived"
 msgstr "2 done · 237 archived"
+
+#: src/lib/limits.ts
+msgid "5-hour"
+msgstr "5-hour"
 
 #: src/components/SessionLinkChips.tsx
 msgid "5-hour window"
@@ -715,6 +723,10 @@ msgstr "agent said"
 msgid "agents…"
 msgstr "agents…"
 
+#: src/lib/limits.ts
+msgid "Ahead of time elapsed · may run out before reset"
+msgstr "Ahead of time elapsed · may run out before reset"
+
 #: src/components/NotifySettings.tsx
 msgid "alerts"
 msgstr "alerts"
@@ -722,6 +734,10 @@ msgstr "alerts"
 #: src/lib/limits.ts
 msgid "all clear"
 msgstr "all clear"
+
+#: src/lib/limits.ts
+msgid "all models"
+msgstr "all models"
 
 #: src/components/ProjectDropdown.tsx
 msgid "all projects"
@@ -892,10 +908,6 @@ msgstr "ask"
 #: src/components/VcsSignInDialog.tsx
 msgid "Asking for a code…"
 msgstr "Asking for a code…"
-
-#: src/components/usage/LimitsPanel.tsx
-msgid "at limit"
-msgstr "at limit"
 
 #: src/components/ProjectActions.tsx
 msgid "attach"
@@ -2447,6 +2459,10 @@ msgstr "light"
 msgid "Light"
 msgstr "Light"
 
+#: src/lib/limits.ts
+msgid "Limit reached · sessions wait for the reset"
+msgstr "Limit reached · sessions wait for the reset"
+
 #: src/components/HealthFooter.tsx
 #: src/components/usage/LimitsPanel.tsx
 msgid "limits"
@@ -2869,6 +2885,10 @@ msgstr "on"
 msgid "on macOS the CLI stores a non-default account's login in the login Keychain (no credentials file) — the dashboard reads it from there, so press “check now” on the account after logging in"
 msgstr "on macOS the CLI stores a non-default account's login in the login Keychain (no credentials file) — the dashboard reads it from there, so press “check now” on the account after logging in"
 
+#: src/lib/limits.ts
+msgid "On pace with time elapsed"
+msgstr "On pace with time elapsed"
+
 #: src/components/NewProjectButton.tsx
 msgid "onboard"
 msgstr "onboard"
@@ -3042,6 +3062,7 @@ msgstr "pause failed: {status}"
 msgid "pause this project"
 msgstr "pause this project"
 
+#: src/components/usage/LimitsPanel.tsx
 #: src/workspace/TaskCard.tsx
 msgid "paused"
 msgstr "paused"
@@ -3568,15 +3589,6 @@ msgstr "rerun failed"
 #: src/components/PermissionPresets.tsx
 msgid "reset"
 msgstr "reset"
-
-#: src/lib/limits.ts
-msgid "resets {at}"
-msgstr "resets {at}"
-
-#. placeholder {0}: compactSpan(left)
-#: src/lib/limits.ts
-msgid "resets {at} · {0}"
-msgstr "resets {at} · {0}"
 
 #: src/components/usage/format.ts
 msgid "resets in {days}d"
@@ -4562,6 +4574,10 @@ msgstr "today · {name}"
 msgid "Today · Inbox · Needs you · Sessions · Plans"
 msgstr "Today · Inbox · Needs you · Sessions · Plans"
 
+#: src/lib/limits.ts
+msgid "today {at}"
+msgstr "today {at}"
+
 #. placeholder {0}: fmtCost(spentToday)
 #: src/components/usage/LimitsPanel.tsx
 msgid "today <0>{0}</0>"
@@ -4789,6 +4805,10 @@ msgstr "Warning"
 #: src/lib/glossary.ts
 msgid "watching"
 msgstr "watching"
+
+#: src/lib/limits.ts
+msgid "Well under pace"
+msgstr "Well under pace"
 
 #: src/lib/glossary.ts
 msgid "what actually happened"

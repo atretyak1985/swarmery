@@ -10,7 +10,17 @@
 
 import { describe, expect, it } from 'vitest';
 import type { UsageAccount, UsageProvider, UsageWindow } from '../api/types';
-import { accountLimit, limitsHead, limitsSentence, limitTone, openingAccount, resetLine } from './limits';
+import {
+  accountLimit,
+  limitsHead,
+  limitsSentence,
+  limitTone,
+  openingAccount,
+  paceLine,
+  resetsIn,
+  resetWhen,
+  windowName,
+} from './limits';
 
 const NOW = Date.parse('2026-11-01T12:00:00Z');
 
@@ -54,14 +64,42 @@ describe('accountLimit', () => {
   });
 });
 
-describe('resetLine', () => {
-  it('gives the clock and what is left', () => {
-    const line = resetLine(win('session', 1, { resetAt: new Date(NOW + 2 * 3_600_000).toISOString() }), NOW);
-    expect(line).toMatch(/^resets .+ · 2h$/);
+describe('windowName', () => {
+  it('reads the daemon’s labels as the design’s two lines', () => {
+    expect(windowName(win('session-5h', 1, { label: 'Session (5h)' }))).toEqual({ name: '5-hour', scope: 'all models' });
+    expect(windowName(win('weekly', 1, { label: 'Weekly' }))).toEqual({ name: 'Weekly', scope: 'all models' });
+    expect(windowName(win('weekly-fable', 1, { label: 'Weekly (Fable)' }))).toEqual({ name: 'Weekly', scope: 'Fable' });
+  });
+});
+
+describe('paceLine', () => {
+  const paced = (status: 'ahead' | 'on-track' | 'behind', used = 40): UsageWindow =>
+    win('weekly', used, { pace: { status, percentElapsed: 50, message: '' } });
+
+  it('reads the daemon’s pace the right way round', () => {
+    expect(paceLine(paced('ahead'))).toMatchObject({ glyph: '▲', tone: 'brand' });
+    expect(paceLine(paced('on-track'))?.text).toBe('On pace with time elapsed');
+    expect(paceLine(paced('behind'))).toMatchObject({ glyph: '✓', text: 'Well under pace', tone: 'green' });
+  });
+
+  it('says a full window waits, pace or not', () => {
+    expect(paceLine(win('session', 100))).toMatchObject({ glyph: '■', tone: 'red' });
+    expect(paceLine(win('session', 40))).toBeNull();
+  });
+});
+
+describe('resetsIn and resetWhen', () => {
+  it('counts down and names the day', () => {
+    const today = win('session', 1, { resetAt: new Date(NOW + 2 * 3_600_000).toISOString() });
+    expect(resetsIn(today, NOW)).toBe('resets in 2h 0m');
+    expect(resetWhen(today, NOW)).toMatch(/^today /);
+    const later = win('weekly', 1, { resetAt: new Date(NOW + 3 * 86_400_000).toISOString() });
+    expect(resetWhen(later, NOW)).not.toMatch(/^today /);
   });
 
   it('falls back to the server’s words', () => {
-    expect(resetLine(win('session', 1, { resetText: 'resets in 3h' }), NOW)).toBe('resets in 3h');
+    expect(resetsIn(win('session', 1, { resetText: 'resets in 3h' }), NOW)).toBe('resets in 3h');
+    expect(resetWhen(win('session', 1), NOW)).toBe('');
   });
 });
 
@@ -72,7 +110,11 @@ describe('limitsHead and limitsSentence', () => {
 
   it('names the account at its limit first', () => {
     expect(limitsHead([ok, full, blind])).toEqual({ text: 'na at limit', tone: 'brand' });
-    expect(limitsSentence([ok, full], NOW)).toBe('na hit a limit');
+    expect(limitsSentence([ok, full], NOW)).toBe('na hit its 5-hour window');
+    const timed = accountLimit(
+      account('na', [win('session', 100, { resetAt: new Date(NOW + 3_600_000).toISOString() })]),
+    );
+    expect(limitsSentence([timed], NOW)).toMatch(/^na hit its 5-hour window · resets today /);
   });
 
   it('says all clear only when every account answered', () => {

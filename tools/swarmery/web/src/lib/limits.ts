@@ -4,9 +4,8 @@
 
 import { t } from '@lingui/core/macro';
 import type { UsageAccount, UsageProvider, UsageWindow } from '../api/types';
-import { fmtResetAt } from '../components/usage/format';
+import { fmtResetAt, fmtResetsIn } from '../components/usage/format';
 import { DEFAULT_ACCOUNT } from './sessionAccount';
-import { compactSpan } from './sessionsView';
 
 export type LimitTone = 'red' | 'brand' | 'green';
 export type LimitState = 'active' | 'limit' | 'unavailable';
@@ -40,16 +39,49 @@ export function accountLimit(account: UsageAccount): AccountLimit {
   return { name: account.account, state, provider, windows, session };
 }
 
-/** `resets 4:00 PM · 2h 12m`, or the server's own text when it has no instant. */
-export function resetLine(window: UsageWindow, now: number): string {
+/** A window's two-line name: the daemon's "Session (5h)", "Weekly" and "Weekly (Fable)"
+ * read as 5-hour · all models, Weekly · all models and Weekly · Fable. */
+export function windowName(window: UsageWindow): { name: string; scope: string } {
+  const match = /^(.*?)\s*\((.*)\)$/.exec(window.label);
+  const base = match?.[1] ?? window.label;
+  const inner = match?.[2] ?? '';
+  if (window.key.startsWith('session') || base === 'Session') return { name: t`5-hour`, scope: t`all models` };
+  return { name: base, scope: inner === '' ? t`all models` : inner };
+}
+
+export interface PaceLine {
+  glyph: string;
+  text: string;
+  tone: LimitTone;
+}
+
+/** The line under a bar. The daemon's pace reads backwards at first: `ahead` burns faster
+ * than the window elapses, `behind` slower (components/usage/UsageWindowRow.tsx). */
+export function paceLine(window: UsageWindow): PaceLine | null {
+  if (window.percentUsed >= 100) return { glyph: '■', text: t`Limit reached · sessions wait for the reset`, tone: 'red' };
+  const pace = window.pace;
+  if (pace === undefined) return null;
+  if (pace.status === 'ahead') return { glyph: '▲', text: t`Ahead of time elapsed · may run out before reset`, tone: 'brand' };
+  if (pace.status === 'on-track') return { glyph: '✓', text: t`On pace with time elapsed`, tone: 'green' };
+  return { glyph: '✓', text: t`Well under pace`, tone: 'green' };
+}
+
+/** `resets in 4h 12m`: the live countdown when the window has an instant, else the
+ * server's own text. */
+export function resetsIn(window: UsageWindow, now: number): string {
   if (window.resetAt !== undefined) {
-    const at = fmtResetAt(window.resetAt, now);
-    if (at !== '') {
-      const left = new Date(window.resetAt).getTime() - now;
-      return left > 0 ? t`resets ${at} · ${compactSpan(left)}` : t`resets ${at}`;
-    }
+    const text = fmtResetsIn(window.resetAt, now);
+    if (text !== '') return text;
   }
   return window.resetText ?? '';
+}
+
+/** `today 18:00`, `Tue 03:00`: when the window resets. */
+export function resetWhen(window: UsageWindow, now: number): string {
+  if (window.resetAt === undefined) return '';
+  const at = fmtResetAt(window.resetAt, now);
+  if (at === '') return '';
+  return new Date(window.resetAt).toDateString() === new Date(now).toDateString() ? t`today ${at}` : at;
 }
 
 export interface LimitsHead {
@@ -73,8 +105,11 @@ export function limitsSentence(limits: readonly AccountLimit[], now: number): st
   const stopped = limits.find((l) => l.state === 'limit');
   if (stopped !== undefined) {
     const full = stopped.windows.find((w) => w.percentUsed >= 100);
-    const reset = full === undefined ? '' : resetLine(full, now);
-    return reset === '' ? t`${stopped.name} hit a limit` : t`${stopped.name} hit a limit · ${reset}`;
+    const account = stopped.name;
+    if (full === undefined) return t`${account} hit a limit`;
+    const window = windowName(full).name;
+    const when = resetWhen(full, now);
+    return when === '' ? t`${account} hit its ${window} window` : t`${account} hit its ${window} window · resets ${when}`;
   }
   if (limits.every((l) => l.state === 'active') && limits.length > 0) return t`every window has room`;
   return t`some numbers are not available`;

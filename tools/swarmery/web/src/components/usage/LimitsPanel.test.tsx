@@ -32,7 +32,7 @@ const provider = (account: string, percentUsed: number): UsageProvider =>
     name: 'Claude',
     source: 'oauth',
     status: 'ok',
-    windows: [{ key: 'session', label: '5-hour window', percentUsed, percentLeft: 100 - percentUsed, source: 'oauth' }],
+    windows: [{ key: 'session-5h', label: 'Session (5h)', percentUsed, percentLeft: 100 - percentUsed, source: 'oauth' }],
   }) as UsageProvider;
 
 const ACCOUNTS: UsageAccount[] = [
@@ -83,9 +83,13 @@ describe('LimitsPanel', () => {
   it('opens on the account at its limit, with its windows', async () => {
     mount();
     expect(screen.getByRole('tab', { name: /^na/ }).getAttribute('aria-selected')).toBe('true');
-    expect(screen.getByText('at limit')).toBeTruthy();
-    expect(screen.getByText('5-hour window')).toBeTruthy();
-    expect(screen.getByText('na hit a limit')).toBeTruthy();
+    expect(screen.getByText('paused')).toBeTruthy();
+    expect(screen.getByText('5-hour')).toBeTruthy();
+    expect(screen.getByText('all models')).toBeTruthy();
+    expect(screen.getByText('100% used')).toBeTruthy();
+    expect(screen.getByText('0% left')).toBeTruthy();
+    expect(screen.getByText('Limit reached · sessions wait for the reset')).toBeTruthy();
+    expect(screen.getByText('na hit its 5-hour window')).toBeTruthy();
     await screen.findByText('Cars');
   });
 
@@ -98,7 +102,7 @@ describe('LimitsPanel', () => {
     const failed = { ...provider('default', 0), status: 'error', error: 'rate-limited', windows: [] } as UsageProvider;
     mount([{ account: 'default', providers: [failed] }]);
     expect(screen.getByText('rate-limited')).toBeTruthy();
-    expect(screen.queryByText('at limit')).toBeNull();
+    expect(screen.queryByText('paused')).toBeNull();
   });
 
   it('gives the default account every unbound project', async () => {
