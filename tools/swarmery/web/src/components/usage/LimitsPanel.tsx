@@ -24,7 +24,10 @@ import {
   limitsSentence,
   limitTone,
   openingAccount,
-  resetLine,
+  paceLine,
+  resetsIn,
+  resetWhen,
+  windowName,
 } from '../../lib/limits';
 import { usePanels } from '../../lib/panels';
 import { useUsage } from '../../lib/usageData';
@@ -45,19 +48,62 @@ export function limitTextClass(percent: number): string {
   return TEXT[limitTone(percent)];
 }
 
+/** One window as a row: its name, the bar with the time-elapsed tick and the pace line,
+ * and when it resets. */
 function Window({ window: w, now }: { window: UsageWindow; now: number }): JSX.Element {
+  const { t } = useLingui();
   const percent = Math.round(w.percentUsed);
+  const used = String(percent);
+  const left = String(Math.max(0, Math.round(w.percentLeft)));
+  const { name, scope } = windowName(w);
+  const pace = paceLine(w);
+  const elapsed = w.pace === undefined ? null : Math.min(100, Math.max(0, w.pace.percentElapsed));
+  const inText = resetsIn(w, now);
+  const when = resetWhen(w, now);
   return (
-    <div className="min-w-0 font-mono text-[10px] leading-[normal]">
-      <div className="flex justify-between gap-2 text-ink-faint">
-        <span className="truncate">{w.label}</span>
-        <span className={limitTextClass(percent)}>{percent}%</span>
+    <li className="grid grid-cols-[84px_minmax(0,1fr)_auto] items-center gap-3 border-b border-line py-3 last:border-b-0">
+      <div className="min-w-0">
+        <div className="truncate text-[13px] leading-[normal] font-medium text-ink">{name}</div>
+        <div className="mt-0.5 truncate font-mono text-[10.5px] leading-[normal] text-ink-faint">{scope}</div>
       </div>
-      <div className="mt-[5px] h-1.5 overflow-hidden rounded-[3px] bg-line">
-        <div className={`h-full ${limitBarClass(percent)}`} style={{ width: `${String(Math.min(percent, 100))}%` }} />
+      <div className="min-w-0 font-mono text-[10.5px] leading-[normal]">
+        <div className="flex justify-between gap-2">
+          <span className={limitTextClass(percent)}>{t`${used}% used`}</span>
+          <span className="text-ink-3">{t`${left}% left`}</span>
+        </div>
+        <div className="relative mt-1.5">
+          <div
+            role="progressbar"
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuenow={Math.min(percent, 100)}
+            aria-label={`${name} · ${scope}`}
+            className="h-1.5 overflow-hidden rounded-[3px] bg-line"
+          >
+            <div className={`h-full ${limitBarClass(percent)}`} style={{ width: `${String(Math.min(percent, 100))}%` }} />
+          </div>
+          {elapsed !== null && (
+            <span
+              aria-hidden="true"
+              className="absolute -top-px h-2 w-px bg-ink-3"
+              style={{ left: `${elapsed.toFixed(1)}%` }}
+            />
+          )}
+        </div>
+        {pace !== null && (
+          <div className={`mt-1.5 flex gap-1.5 leading-[1.45] ${TEXT[pace.tone]}`}>
+            <span aria-hidden="true" className="shrink-0">
+              {pace.glyph}
+            </span>
+            <span className="min-w-0">{pace.text}</span>
+          </div>
+        )}
       </div>
-      <div className="mt-1 truncate text-ink-3">{resetLine(w, now)}</div>
-    </div>
+      <div className="text-right font-mono text-[10.5px] leading-[normal] whitespace-nowrap">
+        {inText !== '' && <div className="text-ink-2">{inText}</div>}
+        {when !== '' && <div className="mt-0.5 text-ink-faint">{when}</div>}
+      </div>
+    </li>
   );
 }
 
@@ -247,7 +293,7 @@ export function LimitsPanel({
           <span className="font-mono text-[10px] leading-[normal] tracking-[0.12em] text-ink-faint uppercase">
             <Trans>limits</Trans>
           </span>
-          <span className="min-w-0 truncate text-[12.5px] leading-[normal] text-ink-2">{limitsSentence(limits, now)}</span>
+          <span className="min-w-0 text-[12.5px] leading-[1.4] text-ink-2">{limitsSentence(limits, now)}</span>
           <button
             type="button"
             onClick={onClose}
@@ -292,7 +338,7 @@ export function LimitsPanel({
               <>
                 <div className="flex items-center gap-2 font-mono text-[10.5px] leading-[normal]">
                   <span className={shown.state === 'limit' ? 'text-brand' : 'text-green'}>
-                    {shown.state === 'limit' ? t`at limit` : t`active`}
+                    {shown.state === 'limit' ? t`paused` : t`active`}
                   </span>
                   {provider?.plan !== undefined && <span className="text-ink-faint">{provider.plan}</span>}
                   {provider?.connectedVia === 'swarmery' && (
@@ -301,11 +347,11 @@ export function LimitsPanel({
                     </span>
                   )}
                 </div>
-                <div className="mt-2.5 grid grid-cols-2 gap-3.5">
+                <ul className="m-0 mt-1 list-none p-0">
                   {shown.windows.map((w) => (
                     <Window key={w.key} window={w} now={now} />
                   ))}
-                </div>
+                </ul>
               </>
             ) : (
               provider !== null && (

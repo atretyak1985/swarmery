@@ -126,19 +126,21 @@ msgstr "{0, plural, one {# посилання на докази} few {# поси
 msgid "{0} at limit"
 msgstr "{0} на ліміті"
 
-#. placeholder {0}: stopped.name
-#: src/lib/limits.ts
-msgid "{0} hit a limit"
-msgstr "{0} досяг ліміту"
-
-#. placeholder {0}: stopped.name
-#: src/lib/limits.ts
-msgid "{0} hit a limit · {reset}"
-msgstr "{0} досяг ліміту · {reset}"
-
 #: src/components/usage/UsageChip.tsx
 msgid "{account} — not connected"
 msgstr "{account} — не під’єднано"
+
+#: src/lib/limits.ts
+msgid "{account} hit a limit"
+msgstr "{account} досяг ліміту"
+
+#: src/lib/limits.ts
+msgid "{account} hit its {window} window"
+msgstr "{account}: вікно «{window}» вичерпано"
+
+#: src/lib/limits.ts
+msgid "{account} hit its {window} window · resets {when}"
+msgstr "{account}: вікно «{window}» вичерпано · скидається {when}"
 
 #: src/components/usage/UsageModal.tsx
 msgid "{activeProject} runs as <0>{activeKey}</0>"
@@ -264,6 +266,7 @@ msgstr "{label} — відкривається в проєкті"
 msgid "{label} palette — {hint}"
 msgstr "палітра {label} — {hint}"
 
+#: src/components/usage/LimitsPanel.tsx
 #: src/components/usage/UsageWindowRow.tsx
 msgid "{left}% left"
 msgstr "{left}% лишилось"
@@ -364,6 +367,7 @@ msgstr "{title} — колонка {column}, залежить від {deps}"
 msgid "{title} — column {column}, no dependencies"
 msgstr "{title} — колонка {column}, без залежностей"
 
+#: src/components/usage/LimitsPanel.tsx
 #: src/components/usage/UsageWindowRow.tsx
 msgid "{used}% used"
 msgstr "використано {used}%"
@@ -522,6 +526,10 @@ msgstr "1–5 місця"
 #: src/lib/docFigures.tsx
 msgid "2 done · 237 archived"
 msgstr "2 готово · 237 в архіві"
+
+#: src/lib/limits.ts
+msgid "5-hour"
+msgstr "5 годин"
 
 #: src/components/SessionLinkChips.tsx
 msgid "5-hour window"
@@ -715,6 +723,10 @@ msgstr "агент сказав"
 msgid "agents…"
 msgstr "агенти…"
 
+#: src/lib/limits.ts
+msgid "Ahead of time elapsed · may run out before reset"
+msgstr "Швидше, ніж минає час · може скінчитися до скидання"
+
 #: src/components/NotifySettings.tsx
 msgid "alerts"
 msgstr "сповіщення"
@@ -722,6 +734,10 @@ msgstr "сповіщення"
 #: src/lib/limits.ts
 msgid "all clear"
 msgstr "усе гаразд"
+
+#: src/lib/limits.ts
+msgid "all models"
+msgstr "усі моделі"
 
 #: src/components/ProjectDropdown.tsx
 msgid "all projects"
@@ -892,10 +908,6 @@ msgstr "питати"
 #: src/components/VcsSignInDialog.tsx
 msgid "Asking for a code…"
 msgstr "Запитуємо код…"
-
-#: src/components/usage/LimitsPanel.tsx
-msgid "at limit"
-msgstr "на ліміті"
 
 #: src/components/ProjectActions.tsx
 msgid "attach"
@@ -2447,6 +2459,10 @@ msgstr "світла"
 msgid "Light"
 msgstr "Світла"
 
+#: src/lib/limits.ts
+msgid "Limit reached · sessions wait for the reset"
+msgstr "Ліміт вичерпано · сесії чекають скидання"
+
 #: src/components/HealthFooter.tsx
 #: src/components/usage/LimitsPanel.tsx
 msgid "limits"
@@ -2869,6 +2885,10 @@ msgstr "увімк."
 msgid "on macOS the CLI stores a non-default account's login in the login Keychain (no credentials file) — the dashboard reads it from there, so press “check now” on the account after logging in"
 msgstr "на macOS CLI зберігає вхід недефолтного акаунта в Keychain входу (без файлу облікових даних) — дашборд читає його звідти, тож після входу натисніть «перевірити зараз» на акаунті"
 
+#: src/lib/limits.ts
+msgid "On pace with time elapsed"
+msgstr "У темпі з часом, що минув"
+
 #: src/components/NewProjectButton.tsx
 msgid "onboard"
 msgstr "підключити"
@@ -3042,6 +3062,7 @@ msgstr "пауза не вдалася: {status}"
 msgid "pause this project"
 msgstr "поставити проєкт на паузу"
 
+#: src/components/usage/LimitsPanel.tsx
 #: src/workspace/TaskCard.tsx
 msgid "paused"
 msgstr "на паузі"
@@ -3568,15 +3589,6 @@ msgstr "перезапуск не вдався"
 #: src/components/PermissionPresets.tsx
 msgid "reset"
 msgstr "скинути"
-
-#: src/lib/limits.ts
-msgid "resets {at}"
-msgstr "скидання {at}"
-
-#. placeholder {0}: compactSpan(left)
-#: src/lib/limits.ts
-msgid "resets {at} · {0}"
-msgstr "скидання {at} · {0}"
 
 #: src/components/usage/format.ts
 msgid "resets in {days}d"
@@ -4562,6 +4574,10 @@ msgstr "сьогодні · {name}"
 msgid "Today · Inbox · Needs you · Sessions · Plans"
 msgstr "Today · Inbox · Needs you · Sessions · Plans"
 
+#: src/lib/limits.ts
+msgid "today {at}"
+msgstr "сьогодні {at}"
+
 #. placeholder {0}: fmtCost(spentToday)
 #: src/components/usage/LimitsPanel.tsx
 msgid "today <0>{0}</0>"
@@ -4789,6 +4805,10 @@ msgstr "Увага"
 #: src/lib/glossary.ts
 msgid "watching"
 msgstr "спостерігає"
+
+#: src/lib/limits.ts
+msgid "Well under pace"
+msgstr "Значно повільніше за темп"
 
 #: src/lib/glossary.ts
 msgid "what actually happened"
