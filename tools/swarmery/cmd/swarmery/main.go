@@ -77,6 +77,7 @@ import (
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/onboard"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/phasereport"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/phaserun"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/plainsum"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/planning"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/planrun"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/playbooks"
@@ -2090,6 +2091,18 @@ func cmdServe(args []string) error {
 			}
 		})
 		log.Printf("swarmery workspace scanner watching %s (rescan %s)", wsCfg.WorkspaceRoot, wsingest.DefaultRescanInterval)
+
+		// A new plan without `## In plain words` gets one written into its docs
+		// once it is quiet (internal/plainsum/fill.go), so the Plans page shows
+		// authored text instead of a model run on first view.
+		if os.Getenv("SWARMERY_PLAIN_FILL") != "off" {
+			filler := &plainsum.Filler{
+				Svc:   &plainsum.Service{DB: db, Runner: plainsum.ClaudeRunner{}, Model: plainsum.ResolveModel()},
+				Root:  wsCfg.WorkspaceRoot,
+				Since: plainsum.FillSince,
+			}
+			go filler.Run(context.Background())
+		}
 
 		// phase 4: system registry — read-only scanner of the agent-system
 		// config (agents/skills/hooks/commands) with fsnotify + periodic
