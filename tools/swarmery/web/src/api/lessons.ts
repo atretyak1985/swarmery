@@ -79,6 +79,20 @@ export interface Lesson {
   findings: LessonFinding[];
 }
 
+/** How much of a lesson's measured drop it can be credited with (Go
+ *  lessons.EffectVerdict). Precedence: insufficient > confounded > helped /
+ *  hurt / no_effect. Only helped and hurt rank a lesson at injection. */
+export type EffectVerdict = 'helped' | 'hurt' | 'no_effect' | 'confounded' | 'insufficient';
+
+/** A change inside the measured window that could own the drop (Go lessons.Confounder). */
+export interface LessonConfounder {
+  kind: 'lesson' | 'proposal' | 'model_switch';
+  /** L-<n> for a lesson, the proposal id, or "<before>→<after>" for a model switch. */
+  id: string;
+  at: string;
+  detail: string;
+}
+
 /** lesson_effectiveness: median area surprise before vs after activation.
  *  The medians and the drop are null when either side has fewer than minRuns runs. */
 export interface LessonEffectiveness {
@@ -95,6 +109,10 @@ export interface LessonEffectiveness {
   relied: number;
   reliedRate: number | null;
   computedAt: string;
+  /** Absent on a daemon older than the verdict migration; read it as insufficient. */
+  verdict?: EffectVerdict;
+  /** Sorted by at, then kind; [] for none. */
+  confounders?: LessonConfounder[];
 }
 
 export type RetireReason = 'ineffective' | 'stale' | 'unused_60d' | 'superseded';
