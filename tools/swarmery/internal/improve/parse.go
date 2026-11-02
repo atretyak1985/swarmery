@@ -172,10 +172,16 @@ func splitSections(out string) map[string]string {
 	return sec
 }
 
+// headingOf matches a contract heading case-insensitively, alone on its line
+// or followed by a space and a note ("## Follow-ups (optional)") — never as the
+// prefix of a longer word.
 func headingOf(line string) string {
 	t := strings.TrimSpace(line)
 	for _, h := range contractHeadings {
-		if strings.EqualFold(t, h) {
+		if len(t) < len(h) || !strings.EqualFold(t[:len(h)], h) {
+			continue
+		}
+		if len(t) == len(h) || t[len(h)] == ' ' {
 			return h
 		}
 	}

@@ -188,7 +188,7 @@ type proposalColumns struct {
 }
 
 // columns derives the stored cells from a parsed answer: the status/outcome
-// pair (KEEP_BASE → rejected/kept_base, otherwise proposed/''), the follow-ups
+// pair (KEEP_BASE → rejected/kept_base, otherwise proposed with no outcome), the follow-ups
 // JSON, and the generate-time warnings (today: always-on net growth, the same
 // check the apply gate re-runs on the staged tree).
 func (p *Parsed) columns(target string) proposalColumns {

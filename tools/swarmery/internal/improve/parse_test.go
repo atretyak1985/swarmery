@@ -226,3 +226,19 @@ func TestRenderPrompt(t *testing.T) {
 		}
 	}
 }
+
+func TestHeadingOf(t *testing.T) {
+	for in, want := range map[string]string{
+		"## Form":                  hForm,
+		"## form\n":                hForm,
+		"## Follow-ups (optional)": hFollowups,
+		"  ## Rationale  ":         hRationale,
+		"## Diffusion":             "",
+		"### Diff":                 "",
+		" existing ## Diff":        "",
+	} {
+		if got := headingOf(in); got != want {
+			t.Errorf("headingOf(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
