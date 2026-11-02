@@ -11,6 +11,7 @@ import { Trans, useLingui } from '@lingui/react/macro';
 import type { ReactNode } from 'react';
 import { togglePanel, useListBadge, usePanels } from '../../lib/panels';
 import { useGlobalKeys, type GlobalKeyHandlers } from '../../lib/useGlobalKeys';
+import { PanelIcon } from '../PanelIcon';
 
 export type ListKeys = Pick<GlobalKeyHandlers, 'onNext' | 'onPrev' | 'onPrimary' | 'onSecondary' | 'onEscape'>;
 
@@ -69,9 +70,7 @@ export function ListPane({
           data-tip={t`expand list · ]`}
           className="hidden min-h-0 flex-1 flex-col items-center gap-2.5 py-3.5 transition-colors hover:bg-surface desk:flex"
         >
-          <span aria-hidden="true" className="font-mono text-[11px] leading-[normal] text-ink-dim">
-            ▸
-          </span>
+          <PanelIcon side="left" className="text-ink-dim" />
           <span className="rotate-180 text-[12px] leading-[normal] font-semibold tracking-[0.02em] text-ink-2 [writing-mode:vertical-rl]">
             {title}
           </span>
@@ -91,9 +90,9 @@ export function ListPane({
               onClick={() => togglePanel('list')}
               aria-label={t`collapse list · ]`}
               data-tip={t`collapse list · ]`}
-              className="ml-auto hidden h-5 w-[22px] self-center rounded-[5px] border border-transparent p-0 font-mono text-[11px] leading-[normal] text-ink-faint transition-colors hover:border-line-strong hover:text-ink desk:block"
+              className="ml-auto hidden h-5 w-[22px] place-items-center self-center rounded-[5px] border border-transparent p-0 text-ink-dim transition-colors hover:border-line-strong hover:text-ink desk:grid"
             >
-              ◂
+              <PanelIcon side="left" />
             </button>
           </div>
           {sub !== undefined && (

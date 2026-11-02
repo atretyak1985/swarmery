@@ -234,7 +234,8 @@ describe('ListPane', () => {
     const button = screen.getByRole('button', { name: 'collapse list · ]' });
     expect(button.parentElement).toBe(heading.parentElement);
     expect(button.className).toContain('hidden');
-    expect(button.className).toContain('desk:block');
+    expect(button.className).toContain('desk:grid');
+    expect(button.querySelector('svg')).not.toBeNull();
     expect(screen.getByText('4 sessions').closest('div')).not.toBe(heading.parentElement);
   });
 
@@ -252,13 +253,14 @@ describe('ListPane', () => {
     const strip = screen.getByRole('button', { name: 'expand list · ]' });
     expect(strip.className).toContain('hidden');
     expect(strip.className).toContain('desk:flex');
-    expect(strip.textContent).toBe('▸Sessions3');
+    expect(strip.textContent).toBe('Sessions3');
+    expect(strip.querySelector('svg')).not.toBeNull();
   });
 
   it('leaves the badge out of the strip when the place has none', () => {
     renderPane(() => undefined);
     fireEvent.click(screen.getByRole('button', { name: 'collapse list · ]' }));
-    expect(screen.getByRole('button', { name: 'expand list · ]' }).textContent).toBe('▸Sessions');
+    expect(screen.getByRole('button', { name: 'expand list · ]' }).textContent).toBe('Sessions');
   });
 
   it('keeps the pane mounted behind desk:hidden, so refs and j/k survive', () => {

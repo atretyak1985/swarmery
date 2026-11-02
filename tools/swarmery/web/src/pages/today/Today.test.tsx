@@ -3,8 +3,8 @@
 // Today (handoff §3). The claims:
 //
 //   1. With no data the loop still renders five stages, each teaching what
-//      will appear (no "0 · n/a"), and the old deck stays one click down under
-//      "Today in detail".
+//      will appear (no "0 · n/a"), and the old deck is open under "Today in
+//      detail" until folded.
 //   2. A blocked session turns Run the accent and a lesson candidate turns Learn;
 //      Waiting on you shows at most four rows and "Needs you · N →"; Live now
 //      lists the running session; the feed links a row to its entity.
@@ -192,9 +192,9 @@ describe('Today', () => {
     await waitFor(() => {
       expect(screen.getByText(/Nothing waits on you · 0 running/)).toBeTruthy();
     });
-    expect(screen.queryByTestId('today-detail')).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: /Today in detail/ }));
     expect(within(screen.getByTestId('today-detail')).getByText('fleet command deck')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: /Today in detail/ }));
+    expect(screen.queryByTestId('today-detail')).toBeNull();
   });
 
   it('turns Run and Learn to the accent, caps waiting rows at four and lists live sessions', async () => {
@@ -252,7 +252,6 @@ describe('Today', () => {
     await waitFor(() => {
       expect(within(screen.getByTestId('spend-week')).getByText('$35')).toBeTruthy();
     });
-    fireEvent.click(screen.getByRole('button', { name: /Today in detail/ }));
     expect(within(screen.getByTestId('today-detail')).getByText('project overview deck')).toBeTruthy();
   });
 });

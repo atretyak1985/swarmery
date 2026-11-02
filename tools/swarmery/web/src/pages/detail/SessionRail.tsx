@@ -18,6 +18,7 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Link, useLocation, useParams } from 'react-router-dom';
 import { fetchLessons, type Lesson } from '../../api/lessons';
 import type { SessionDetail } from '../../api/types';
+import { PanelIcon } from '../../components/PanelIcon';
 import { StateGlyph } from '../../components/place/StateGlyph';
 import { fmtResetAt } from '../../components/usage/format';
 import { setPanel, togglePanel, usePanels } from '../../lib/panels';
@@ -404,9 +405,9 @@ export function SessionRail({
             onClick={() => togglePanel('rail')}
             aria-label={t`collapse context · \\`}
             data-tip={t`collapse context · \\`}
-            className="ml-auto hidden bg-transparent p-0 text-[11px] leading-[normal] text-ink-faint transition-colors hover:text-brand desk:block"
+            className="ml-auto hidden h-5 w-[22px] place-items-center rounded-[5px] bg-transparent p-0 text-ink-dim transition-colors hover:bg-surface2 hover:text-ink desk:grid"
           >
-            »
+            <PanelIcon side="right" />
           </button>
         </div>
         {detail.handoff != null && (
@@ -434,6 +435,7 @@ export function SessionRail({
             column ? 'flex-1 py-3.5 transition-colors hover:bg-surface2' : 'py-2.5'
           }`}
         >
+          <PanelIcon side="right" className="text-ink-dim" />
           {hasHandoff && (
             <span
               aria-hidden="true"
