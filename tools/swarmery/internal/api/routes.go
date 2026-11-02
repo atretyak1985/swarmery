@@ -163,6 +163,7 @@ func Routes(root *http.ServeMux, h *Handler) {
 	// lessons from surprise (phase 14): the operator's review queue. Accept is the
 	// only path by which a lesson becomes active.
 	mux.HandleFunc("GET /api/lessons", h.listLessons)
+	mux.HandleFunc("GET /api/lessons/generations", h.listLessonGenerations)
 	mux.HandleFunc("PATCH /api/lessons/{id}", requireLocalOrigin(h.editLesson))
 	mux.HandleFunc("POST /api/lessons/{id}/accept", requireLocalOrigin(h.acceptLesson))
 	mux.HandleFunc("POST /api/lessons/{id}/merge", requireLocalOrigin(h.mergeLesson))

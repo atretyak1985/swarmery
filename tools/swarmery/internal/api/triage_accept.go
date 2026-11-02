@@ -234,7 +234,7 @@ func (h *Handler) planAccept(v triage.Verdict) (acceptAction, int, error) {
 
 	switch v.Kind + "/" + v.Value {
 	case "lesson/accept":
-		return lessonAction(func(now time.Time) error { _, err := lessons.Accept(h.DB, ref, now); return err }), 0, nil
+		return lessonAction(func(now time.Time) error { _, err := lessons.Accept(h.DB, ref, false, now); return err }), 0, nil
 	case "lesson/not-useful":
 		return lessonAction(func(now time.Time) error { _, err := lessons.Dismiss(h.DB, ref, v.Reason, now); return err }), 0, nil
 	case "retire/stop":

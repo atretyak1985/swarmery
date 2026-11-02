@@ -10,12 +10,15 @@ import {
   confirmRetirement,
   dismissLesson,
   editLesson,
+  fetchLessonGenerations,
   fetchLessons,
   fetchRetirements,
   keepLesson,
   type Lesson,
+  type LessonConfidence,
   type LessonEffectiveness,
   type LessonFinding,
+  type LessonGeneration,
   type LessonMatch,
   type LessonStatus,
   mergeLesson,
@@ -132,6 +135,128 @@ function RetirementQueue(): JSX.Element | null {
         })}
       </ul>
     </section>
+  );
+}
+
+const CONFIDENCE_LABEL: Record<LessonConfidence, MessageDescriptor> = {
+  high: msg`high confidence`,
+  medium: msg`medium confidence`,
+  low: msg`low confidence`,
+};
+
+const CONFIDENCE_TONE: Record<LessonConfidence, string> = {
+  high: 'border-green text-green',
+  medium: 'border-line text-ink-dim',
+  low: 'border-amber text-amber',
+};
+
+/** The generator's own grade of a lesson; its reason is the tooltip. */
+export function ConfidenceBadge({ lesson }: { lesson: Lesson }): JSX.Element {
+  const { i18n } = useLingui();
+  const c: LessonConfidence = lesson.confidence in CONFIDENCE_LABEL ? lesson.confidence : 'medium';
+  return (
+    <span
+      data-testid="confidence-badge"
+      className={`mr-1 rounded border px-1 ${CONFIDENCE_TONE[c]}`}
+      {...(lesson.confidenceReason !== '' ? { title: lesson.confidenceReason } : {})}
+    >
+      {i18n._(CONFIDENCE_LABEL[c])}
+    </span>
+  );
+}
+
+/** The confirm step a low-confidence Accept opens: the second click is the
+ *  explicit confirm the daemon requires ({"confirm": true}). */
+function LowConfidenceConfirm({
+  lesson,
+  busy,
+  onConfirm,
+  onCancel,
+}: {
+  lesson: Lesson;
+  busy: boolean;
+  onConfirm: () => void;
+  onCancel: () => void;
+}): JSX.Element {
+  const reason = lesson.confidenceReason;
+  return (
+    <div role="group" aria-label={tr`confirm accepting a low-confidence lesson`} className="mt-2 rounded border border-amber p-2 text-[12px]">
+      <p className="text-ink">
+        <Trans>The generator rated this lesson low confidence. Accepting it injects it into future runs.</Trans>
+      </p>
+      {reason !== '' && <p className="mt-1 text-[11px] text-ink-dim">{reason}</p>}
+      <div className="mt-2 flex gap-2">
+        <button type="button" disabled={busy} className={BTN_PRIMARY} onClick={onConfirm}>
+          <Trans>accept anyway</Trans>
+        </button>
+        <button type="button" disabled={busy} className={BTN} onClick={onCancel}>
+          <Trans>cancel</Trans>
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/** Runs the review queue's Accept: a low-confidence lesson takes two clicks — the
+ *  first opens the confirm step, the second sends the confirm flag. */
+function useAccept(
+  lesson: Lesson,
+  act: (run: () => Promise<Lesson>) => void,
+): { confirming: boolean; accept: () => void; confirm: () => void; cancel: () => void } {
+  const [confirming, setConfirming] = useState(false);
+  return {
+    confirming,
+    accept: () => {
+      if (lesson.confidence === 'low') setConfirming(true);
+      else act(() => acceptLesson(lesson.id));
+    },
+    confirm: () => {
+      setConfirming(false);
+      act(() => acceptLesson(lesson.id, true));
+    },
+    cancel: () => setConfirming(false),
+  };
+}
+
+/** The generation log: recent eligible runs that produced no candidate, each with
+ *  why — the model's "nothing transferable here" (no_entry_reason), every lesson
+ *  rejected, or a failure. */
+function GenerationLog({ project }: { project: string | undefined }): JSX.Element | null {
+  const [items, setItems] = useState<LessonGeneration[] | null>(null);
+  useEffect(() => {
+    fetchLessonGenerations(project)
+      .then((gs) => setItems(gs.filter((g) => g.state !== 'running' && g.inserted + g.linked === 0)))
+      .catch(() => setItems([]));
+  }, [project]);
+  if (items === null || items.length === 0) return null;
+  const count = String(items.length);
+  return (
+    <details className="mt-4 text-[12px]" data-testid="generation-log">
+      <summary className="cursor-pointer text-ink-dim">
+        <Trans>Runs that produced no lesson ({count})</Trans>
+      </summary>
+      <ul className="mt-2 grid gap-1">
+        {items.map((g) => {
+          const rejected = String(g.rejected.length);
+          const why =
+            g.state === 'failed'
+              ? tr`failed: ${g.error}`
+              : g.noEntryReason !== ''
+                ? g.noEntryReason
+                : g.rejected.length > 0
+                  ? tr`${rejected} lesson(s) rejected: ${g.rejected[0]?.reason ?? ''}`
+                  : tr`no reason recorded`;
+          return (
+            <li key={g.sourcePhaseRun} className="rounded border border-line px-2 py-1">
+              <div className="font-mono text-[10px] text-ink-dim">
+                {g.planId} · {g.phaseName} · {g.createdAt.slice(0, 10)}
+              </div>
+              <p className="text-[11px] text-ink">{why}</p>
+            </li>
+          );
+        })}
+      </ul>
+    </details>
   );
 }
 
@@ -272,6 +397,7 @@ function LessonCard({
 }): JSX.Element {
   const { t } = useLingui();
   const [editing, setEditing] = useState(false);
+  const acceptFlow = useAccept(lesson, act);
   const isCandidate = lesson.status === 'candidate';
   const surprise = lesson.surpriseIndex?.toFixed(2) ?? null;
   const recurrences = String(lesson.recurrences);
@@ -283,6 +409,7 @@ function LessonCard({
       <div className="flex items-baseline justify-between gap-3">
         <div className="text-ink">{lesson.title}</div>
         <div className="shrink-0 font-mono text-[10px] text-ink-dim">
+          <ConfidenceBadge lesson={lesson} />
           {lesson.source === 'review' && (
             <span
               className="mr-1 rounded border border-brand px-1 text-brand"
@@ -356,15 +483,12 @@ function LessonCard({
             act(() => editLesson(lesson.id, { title, guidance, areaGlobs }));
           }}
         />
+      ) : acceptFlow.confirming ? (
+        <LowConfidenceConfirm lesson={lesson} busy={busy} onConfirm={acceptFlow.confirm} onCancel={acceptFlow.cancel} />
       ) : (
         <div className="mt-2 flex flex-wrap items-center gap-2">
           {isCandidate && (
-            <button
-              type="button"
-              disabled={busy}
-              className={BTN_PRIMARY}
-              onClick={() => act(() => acceptLesson(lesson.id))}
-            >
+            <button type="button" disabled={busy} className={BTN_PRIMARY} onClick={acceptFlow.accept}>
               <Trans>accept</Trans>
             </button>
           )}
@@ -455,8 +579,9 @@ export function LessonDetail({
   busy: boolean;
   act: (run: () => Promise<Lesson>) => void;
 }): JSX.Element {
-  const { t } = useLingui();
+  const { i18n, t } = useLingui();
   const [editing, setEditing] = useState(false);
+  const acceptFlow = useAccept(lesson, act);
   const eff = lesson.effectiveness ?? null;
   const uses = eff?.uses ?? 0;
   const before = eff?.medianBefore?.toFixed(2) ?? null;
@@ -485,6 +610,11 @@ export function LessonDetail({
     { k: t`injected when`, v: lesson.areaGlobs.length > 0 ? lesson.areaGlobs.join(' · ') : t`every run` },
     { k: t`origin`, v: planLine },
   ];
+  const confidence = i18n._(CONFIDENCE_LABEL[lesson.confidence in CONFIDENCE_LABEL ? lesson.confidence : 'medium']);
+  kv.push({
+    k: t`confidence`,
+    v: lesson.confidenceReason !== '' ? `${confidence} — ${lesson.confidenceReason}` : confidence,
+  });
   if (lesson.source === 'review') kv.push({ k: t`source`, v: t`review` });
   if (surprise !== null) kv.push({ k: t`surprise`, v: surprise });
   if (lesson.recurrences > 1) kv.push({ k: t`seen`, v: `${String(lesson.recurrences)}×` });
@@ -492,7 +622,7 @@ export function LessonDetail({
 
   const actions: PageAction[] = [];
   if (isCandidate) {
-    actions.push({ label: t`accept`, tone: 'brand', disabled: busy, onClick: () => act(() => acceptLesson(lesson.id)) });
+    actions.push({ label: t`accept`, tone: 'brand', disabled: busy, onClick: acceptFlow.accept });
   }
   if (isCandidate || isActive) {
     actions.push({ label: t`edit wording`, disabled: busy, onClick: () => setEditing(true) });
@@ -557,8 +687,11 @@ export function LessonDetail({
         : {})}
       kv={kv}
       paras={lesson.cause !== '' ? [lesson.guidance, t`cause: ${lesson.cause}`] : [lesson.guidance]}
-      actions={editing ? [] : actions}
+      actions={editing || acceptFlow.confirming ? [] : actions}
     >
+      {acceptFlow.confirming && (
+        <LowConfidenceConfirm lesson={lesson} busy={busy} onConfirm={acceptFlow.confirm} onCancel={acceptFlow.cancel} />
+      )}
       {editing && (
         <EditForm
           lesson={lesson}
@@ -678,8 +811,9 @@ export function Lessons({
       <p className={`${embedded ? '' : 'mt-1 '}max-w-2xl text-[12px] text-ink-dim`}>
         <Trans>
           When a phase run lands far from its forecast and its report explains why, a cheap model
-          proposes up to two lessons, each citing evidence from that run. A candidate reaches future
-          runs only after you accept it here. Merge it into an existing lesson when it repeats one.
+          proposes at most one lesson, citing evidence from that run and rating its own confidence, or
+          says why nothing there transfers. A candidate reaches future runs only after you accept it
+          here; a low-confidence one asks you to confirm. Merge it into an existing lesson when it repeats one.
           Active lessons are re-measured against their area&apos;s surprise; one that stops earning
           its place is proposed for retirement below, and retired on its own after 14 days without
           an answer.
@@ -728,6 +862,7 @@ export function Lessons({
           ))}
         </ul>
       )}
+      <GenerationLog project={slug} />
       {!embedded && <CalibrationPanel />}
     </div>
   );

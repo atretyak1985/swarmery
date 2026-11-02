@@ -52,7 +52,7 @@ func (r *citingRunner) Run(_ context.Context, prompt string) (string, error) {
 		}
 	}
 	evJSON, _ := json.Marshal(ev)
-	return fmt.Sprintf(`{"lessons":[{"title":"Check the call path the findings name","guidance":"Before finishing, trace each changed handler's error path end to end.","area_globs":["somewhere/else/**"],"cause":"The same mistake recurred across phases.","evidence":%s}]}`, evJSON), nil
+	return fmt.Sprintf(`{"lessons":[{"title":"Check the call path the findings name","guidance":"Before finishing, trace each changed handler's error path end to end.","area_globs":["somewhere/else/**"],"cause":"The same mistake recurred across phases.","evidence":%s,"confidence":"medium","confidence_reason":"Several independent phases raised it."}]}`, evJSON), nil
 }
 
 // reviewNow is the review tests' clock: after the seed's findings were first seen
@@ -302,20 +302,20 @@ func TestDraftReviewRejectsAnInventedFindingID(t *testing.T) {
 		t.Fatalf("allowed = %v", in.Allowed)
 	}
 	_, err = ValidateCandidate(Candidate{Title: "t", Guidance: "Do it.", Cause: "c", AreaGlobs: in.AreaGlobs,
-		Evidence: []string{"finding:8", "finding:999"}}, in.Allowed)
+		Confidence: "medium", ConfidenceReason: "r", Evidence: []string{"finding:8", "finding:999"}}, in.Allowed)
 	if !errors.Is(err, ErrInvalid) || !strings.Contains(err.Error(), "finding:999") {
 		t.Fatalf("invented id: err = %v", err)
 	}
 	// A finding of ANOTHER group is just as foreign to this input.
 	if _, err := ValidateCandidate(Candidate{Title: "t", Guidance: "Do it.", Cause: "c", AreaGlobs: in.AreaGlobs,
-		Evidence: []string{"finding:7"}}, in.Allowed); !errors.Is(err, ErrInvalid) {
+		Confidence: "medium", ConfidenceReason: "r", Evidence: []string{"finding:7"}}, in.Allowed); !errors.Is(err, ErrInvalid) {
 		t.Fatalf("another group's finding: err = %v", err)
 	}
 
 	r := &citingRunner{cite: []string{"finding:8", "finding:999"}}
-	c, ok, rejected, err := DraftReview(context.Background(), r, in)
-	if err != nil || ok || len(rejected) != 1 || !strings.Contains(rejected[0].Reason, "not in its input") {
-		t.Fatalf("DraftReview = %+v, %t, %+v, %v; want the lesson rejected", c, ok, rejected, err)
+	d, err := DraftReview(context.Background(), r, in)
+	if err != nil || d.OK || len(d.Rejected) != 1 || !strings.Contains(d.Rejected[0].Reason, "not in its input") {
+		t.Fatalf("DraftReview = %+v, %v; want the lesson rejected", d, err)
 	}
 
 	p := newProposer(db, r, reviewNow)
@@ -536,16 +536,17 @@ func TestADeclinedDraftSaysSoOnThePlaceholder(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	p := newProposer(db, &fakeRunner{out: `{"lessons":[]}`}, reviewNow)
+	p := newProposer(db, &fakeRunner{out: `{"lessons":[],"no_entry_reason":"They only share a directory."}`}, reviewNow)
 	pr, err := p.ProposeFromReview(context.Background(), groups[2])
-	if err != nil || pr.Action != ProposalInserted || pr.DraftErr != noLessonReason {
+	if err != nil || pr.Action != ProposalInserted || pr.DraftErr != noLessonReason ||
+		pr.NoEntryReason != "They only share a directory." {
 		t.Fatalf("proposal = %+v, %v", pr, err)
 	}
 	var guidance, cause string
 	if err := db.QueryRow(`SELECT guidance, cause FROM surprise_lessons WHERE id = ?`, pr.LessonID).Scan(&guidance, &cause); err != nil {
 		t.Fatal(err)
 	}
-	if guidance != DraftPendingGuidance || !strings.Contains(cause, "found no thread they share") {
+	if guidance != DraftPendingGuidance || !strings.Contains(cause, "found no thread they share (They only share a directory)") {
 		t.Errorf("placeholder: guidance %q cause %q", guidance, cause)
 	}
 }
