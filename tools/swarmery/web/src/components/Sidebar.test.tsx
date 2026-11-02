@@ -390,8 +390,8 @@ describe('sessionsNeedingYou', () => {
   });
 });
 
-function SignalsProbe(): JSX.Element {
-  const s = useSidebarSignals();
+function SignalsProbe({ scope = null }: { scope?: string | null }): JSX.Element {
+  const s = useSidebarSignals(scope);
   return <output>{`${s.inboxCount}|${s.needsYouCount}|${s.sessionsNeedCount}|${String(s.liveSessions)}`}</output>;
 }
 
@@ -423,6 +423,20 @@ describe('useSidebarSignals', () => {
     });
     expect(fetchSessions).toHaveBeenCalledWith({ status: 'active' }, { limit: 1 });
     expect(fetchStatsOverview).not.toHaveBeenCalled();
+  });
+
+  // Inside a project the list shows that project only, so a live session of
+  // another project must not light the dot over an empty Working tab.
+  it('asks for the scoped project only inside a project', async () => {
+    render(
+      <MemoryRouter>
+        <SignalsProbe scope="carsfinders" />
+      </MemoryRouter>,
+    );
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(fetchSessions).toHaveBeenCalledWith({ project: 'carsfinders', status: 'active' }, { limit: 1 });
   });
 
   it('turns the live dot off when no session is active', async () => {
