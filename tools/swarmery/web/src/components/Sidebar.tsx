@@ -30,6 +30,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { fetchSessions } from '../api';
 import type { NeedsYouItem, NeedsYouKind, WSMessage } from '../api/types';
 import { ProjectSwitcher } from '../workspace/ProjectSwitcher';
+import { PanelIcon } from './PanelIcon';
 import { loadLastProject } from '../lib/lastProject';
 import { PLACES, placesIn, resolvePlaceHref, type Place } from '../lib/nav';
 import { PANEL_EASE, setListBadge, togglePanel, usePanels } from '../lib/panels';
@@ -244,9 +245,9 @@ export function Sidebar({
               onClick={() => togglePanel('nav')}
               aria-label={navToggleLabel}
               data-tip={navToggleLabel}
-              className="h-[22px] w-[22px] rounded-[5px] font-mono text-[11px] leading-none text-ink-dim transition-colors hover:bg-surface2 hover:text-ink"
+              className="grid h-[22px] w-[22px] place-items-center rounded-[5px] text-ink-dim transition-colors hover:bg-surface2 hover:text-ink"
             >
-              {collapsed ? '▸' : '◂'}
+              <PanelIcon side="left" />
             </button>
             {!collapsed && (
               <button

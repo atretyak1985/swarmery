@@ -1,9 +1,9 @@
 // Today (handoff §3) — the home of both scopes: `/` (All projects) and `/p/:slug`
 // (one project). The list column is the event feed, what happened (EventFeed); the
 // detail is the day: the loop, what waits on you, what is live, the week's spend.
-// The previous home, the fleet command deck or the project overview, stays one
-// click down under "Today in detail", so nothing it did is lost. It mounts on open:
-// it fetches a page's worth of its own, and the home should not pay for that.
+// The previous home, the fleet command deck or the project overview, sits under
+// "Today in detail", open by default by the operator's word, so nothing it did is
+// lost; the toggle folds it away.
 //
 // The deck arrives as the `detail` prop: main.tsx lazy-loads ProjectOverview,
 // and a static import here would pull it into the fleet's initial bundle.
@@ -79,7 +79,7 @@ export function Today({ detail }: { detail: ReactNode }): JSX.Element {
   const [sessionsLoading, setSessionsLoading] = useState(true);
   const [classifier, setClassifier] = useState({ calls: 0, checked: 0 });
   const [recs, setRecs] = useState<Recommendation[]>([]);
-  const [deckOpen, setDeckOpen] = useState(false);
+  const [deckOpen, setDeckOpen] = useState(true);
 
   // A project scope waits for its numeric id; the fleet asks for every epic.
   const epicScopeReady = slug === null || projectId !== null;

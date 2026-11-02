@@ -252,7 +252,7 @@ describe('SessionRail', () => {
     expect(rail().className).toContain('rounded-[10px]');
     expect(rail().className).toContain('self-start');
     expect(screen.getByText(/what surrounds this session/)).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'collapse context · \\' }).textContent).toBe('»');
+    expect(screen.getByRole('button', { name: 'collapse context · \\' }).querySelector('svg')).not.toBeNull();
   });
 
   it('as a column takes 260px, a strip 28px, and keeps its header in reach', () => {
