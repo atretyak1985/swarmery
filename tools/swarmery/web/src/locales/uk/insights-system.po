@@ -946,6 +946,10 @@ msgstr "уже актуальна"
 msgid "always allow {tool}"
 msgstr "завжди дозволяти {tool}"
 
+#: src/pages/agent-hub/ProposalFacets.tsx
+msgid "always-on text"
+msgstr "постійний текст"
+
 #: src/pages/inbox/inboxModel.ts
 msgid "An agent drafts a change to its instructions. Nothing is applied: the draft comes back to this Inbox for your approval."
 msgstr "Агент готує чернетку зміни своїх інструкцій. Нічого не застосовується: чернетка повертається в цей Вхідні на ваше погодження."
@@ -2021,6 +2025,14 @@ msgstr "тека"
 msgid "folder path"
 msgstr "шлях до теки"
 
+#: src/pages/agent-hub/ProposalFacets.tsx
+msgid "follow-ups"
+msgstr "подальші кроки"
+
+#: src/pages/agent-hub/ProposalFacets.tsx
+msgid "Follow-ups the rewriter could not make itself"
+msgstr "Подальші кроки, яких переписувач не може зробити сам"
+
 #: src/pages/LessonsCalibration.tsx
 msgid "forecast calibration"
 msgstr "калібрування прогнозів"
@@ -2241,6 +2253,7 @@ msgstr "Частка влучань"
 msgid "hit rate per confidence bin"
 msgstr "частка влучань за інтервалом упевненості"
 
+#: src/pages/agent-hub/ProposalFacets.tsx
 #: src/pages/system/ModsTab.tsx
 msgid "hook"
 msgstr "хук"
@@ -2512,6 +2525,10 @@ msgstr "лише kebab-case: малі літери, цифри, одинарні
 msgid "keep"
 msgstr "залишити"
 
+#: src/pages/agent-hub/ProposalFacets.tsx
+msgid "keep as is"
+msgstr "залишити як є"
+
 #: src/pages/inbox/inboxModel.ts
 msgid "keep it"
 msgstr "залишити"
@@ -2519,6 +2536,14 @@ msgstr "залишити"
 #: src/pages/system/ModsTab.tsx
 msgid "keeps a store"
 msgstr "зберігає дані"
+
+#: src/pages/agent-hub/ProposalFacets.tsx
+msgid "kept as is"
+msgstr "залишено як є"
+
+#: src/pages/agent-hub/ProposalFacets.tsx
+msgid "knowledge"
+msgstr "знання"
 
 #: src/pages/knowledge/Knowledge.tsx
 msgid "Knowledge"
@@ -3549,6 +3574,14 @@ msgstr "таблиця цін"
 msgid "probe & resume"
 msgstr "перевірити й відновити"
 
+#: src/pages/agent-hub/ProposalFacets.tsx
+msgid "procedure"
+msgstr "процедура"
+
+#: src/pages/agent-hub/ProposalFacets.tsx
+msgid "procedure + knowledge"
+msgstr "процедура + знання"
+
 #: src/pages/Analytics.tsx
 msgid "Productivity"
 msgstr "Продуктивність"
@@ -4016,6 +4049,10 @@ msgstr "картки оцінок · оцінені сесії"
 msgid "scored phase run"
 msgstr "оцінений запуск фази"
 
+#: src/pages/agent-hub/ProposalFacets.tsx
+msgid "script"
+msgstr "скрипт"
+
 #: src/pages/Analytics.tsx
 msgid "SDLC funnel"
 msgstr "Воронка SDLC"
@@ -4151,6 +4188,7 @@ msgstr "схожі описи скілів і скіли, завантажені
 msgid "similar skills"
 msgstr "схожі скіли"
 
+#: src/pages/agent-hub/ProposalFacets.tsx
 #: src/pages/Analytics.tsx
 #: src/pages/Retro.tsx
 msgid "skill"
@@ -4201,6 +4239,10 @@ msgstr "скіли…"
 #: src/pages/inbox/InboxDetail.tsx
 msgid "skip"
 msgstr "пропустити"
+
+#: src/pages/agent-hub/ProposalFacets.tsx
+msgid "Some hunks change how to act, others change what is true."
+msgstr "Одні фрагменти змінюють те, як діяти, інші — те, що є правдою."
 
 #: src/pages/lessons/EffectVerdictChip.tsx
 msgid "Something else changed in the measured window, so the drop cannot be credited to this lesson alone. It ranks like an unmeasured lesson and is never proposed as ineffective."
@@ -4309,6 +4351,10 @@ msgstr "перестати застосовувати урок?"
 #: src/pages/inbox/inboxModel.ts
 msgid "stop using it"
 msgstr "перестати застосовувати"
+
+#: src/pages/agent-hub/ProposalFacets.tsx
+msgid "subagent"
+msgstr "субагент"
 
 #: src/pages/Retro.tsx
 msgid "success"
@@ -4460,6 +4506,14 @@ msgstr "Після цього уроку здивування в області 
 msgid "The candidate is closed as not useful. Nothing is added to any brief."
 msgstr "Кандидата закрито як некорисного. У жоден бриф нічого не додається."
 
+#: src/pages/agent-hub/ProposalFacets.tsx
+msgid "The change is about how to act: steps, rules, checks."
+msgstr "Зміна про те, як діяти: кроки, правила, перевірки."
+
+#: src/pages/agent-hub/ProposalFacets.tsx
+msgid "The change is about what is true: facts, paths, conventions."
+msgstr "Зміна про те, що є правдою: факти, шляхи, домовленості."
+
 #: src/pages/system/HooksTab.tsx
 msgid "The command will <0>stop executing in Claude Code</0> — {event} no longer triggers it. The entry stays in the settings file (parked under <1>_swarmery_disabled_hooks</1>) and can be re-enabled here."
 msgstr "Команда <0>перестане виконуватись у Claude Code</0> — {event} більше її не запускає. Запис лишається у файлі налаштувань (відкладений у <1>_swarmery_disabled_hooks</1>), і його можна знову ввімкнути тут."
@@ -4585,6 +4639,10 @@ msgstr "Рев’ю зникає з Вхідні. Воно лишається в
 #: src/pages/inbox/ReviewItem.tsx
 msgid "The reviewer left no findings text."
 msgstr "Рев’юер не лишив тексту знахідок."
+
+#: src/pages/agent-hub/ProposalFacets.tsx
+msgid "The rewriter found the file already does the job and proposed no change. Nobody rejected it."
+msgstr "Переписувач з'ясував, що файл уже робить свою справу, і не запропонував змін. Ніхто цього не відхиляв."
 
 #: src/pages/inbox/InboxDetail.tsx
 msgid "the task"
@@ -4947,6 +5005,7 @@ msgstr "проти попер. {prevRunsCount}"
 msgid "waiting on you"
 msgstr "чекає на вас"
 
+#: src/pages/agent-hub/ProposalFacets.tsx
 #: src/pages/system/ModsTab.tsx
 msgid "warnings"
 msgstr "попередження"
@@ -5019,6 +5078,10 @@ msgstr "Куди пішли гроші й токени."
 msgid "Where the pick differed"
 msgstr "Де вибір відрізнявся"
 
+#: src/pages/agent-hub/ProposalFacets.tsx
+msgid "Where the rewriter put this change on the form ladder (skill, script, subagent, hook, always-on text last)."
+msgstr "Де на драбині форм переписувач розмістив цю зміну (скіл, скрипт, субагент, хук, постійний текст — в останню чергу)."
+
 #: src/pages/SystemShell.tsx
 msgid "which packs a project enables"
 msgstr "які паки вмикає проєкт"
@@ -5030,6 +5093,10 @@ msgstr "Чому він провалився?"
 #: src/pages/learning/classifierModel.ts
 msgid "Why did the run leave the plan?"
 msgstr "Чому запуск зійшов із плану?"
+
+#: src/pages/agent-hub/ProposalFacets.tsx
+msgid "Why the file stays as it is"
+msgstr "Чому файл залишається як є"
 
 #: src/pages/learning/TurnForecastPanel.tsx
 msgid "window"
