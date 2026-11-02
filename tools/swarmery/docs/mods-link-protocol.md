@@ -227,7 +227,7 @@ Limits:
 | `turn.start` | `prompt.submit` | none | `link_status = 'working'` |
 | `tool.call` | `tool.call` | `{ "tool": string, "inputHash": string, "agentId"?: string }` | `link_seen_at` |
 | `session.measure` | `session.measure` | the M2 `e` shape: `context{tokens?,window,percent?}`, `rateLimits[]`, `cost{usd}`, `changed[]` ([`testdata/fixtures/mods/session-usage.json`](../testdata/fixtures/mods/session-usage.json)) | `link_context_pct`, `link_rate_limits`, `link_cost_usd` |
-| `turn.complete` | `turn.complete` | none required | `link_status = 'waiting'` |
+| `turn.complete` | `turn.complete` | none required; `{ "backgroundAgents": int > 0 }` when agents are still at work | `link_status = 'waiting'`, or `'working'` with a `backgroundAgents` count: the main loop stopped, the session did not |
 | `session.end` | `session.end` | optional, e.g. `{ "reason": "prompt_input_exit" }` | `link_status = 'done'` |
 
 Every accepted event also advances `sessions.link_seen_at` to the newest `at` seen.

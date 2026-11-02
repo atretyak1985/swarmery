@@ -303,6 +303,21 @@ function flush($: EngineInterface, link: Link, timeoutMs: number): Promise<void>
   return link.flushing
 }
 
+/**
+ * How many of the session's agents are at work: the ones a main-loop turn can
+ * end without, because the Agent tool answered "launched" and they run on. An
+ * `idle` teammate waits for a message, so it holds nothing up. A failed list
+ * counts none: the turn is still reported, as it was before the count.
+ */
+async function agentsAtWork($: EngineInterface): Promise<number> {
+  try {
+    const agents = await $.agent.list()
+    return agents.filter(a => a.status === 'running' || a.status === 'pending' || a.status === 'waiting').length
+  } catch {
+    return 0
+  }
+}
+
 /** Arms the periodic flush once; it re-arms while events remain. */
 function arm($: EngineInterface, link: Link): void {
   if (link.timer !== undefined || !isActive(link)) return
@@ -1094,7 +1109,12 @@ export const register: Register = (on, options) => {
     /** Lines shown beneath the answer: each feature that has one adds it here. */
     const beneath: string[] = []
     try {
-      await push($, link, 'turn.complete', { durationMs: e.durationMs, stopReason: e.reason })
+      const backgroundAgents = await agentsAtWork($)
+      await push($, link, 'turn.complete', {
+        durationMs: e.durationMs,
+        stopReason: e.reason,
+        ...(backgroundAgents > 0 ? { backgroundAgents } : {}),
+      })
       if (forecaster !== undefined) await finishForecast($, link, forecaster, e.turnId)
       if (swarm !== undefined) beneath.push(...(await endSwarmTurn($, link, swarm)))
       const snapshot = measurePayload(await $.session.usage())

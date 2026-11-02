@@ -236,6 +236,50 @@ func TestIngestSessionMeasureFixture(t *testing.T) {
 	}
 }
 
+// A main-loop turn that ended with background agents still running leaves the
+// session working: nothing waits for the operator until those agents report and
+// the main loop's next turn ends with none left.
+func TestIngestTurnCompleteWithBackgroundAgentsStaysWorking(t *testing.T) {
+	db := testDB(t)
+	mustIngest(t, db, nil, []Event{
+		{SessionID: "u-bg", Kind: KindTurnStart, At: "2026-10-13T20:00:00Z"},
+		{SessionID: "u-bg", Kind: KindTurnComplete, At: "2026-10-13T20:00:05Z",
+			Payload: json.RawMessage(`{"durationMs":5000,"stopReason":"answer","backgroundAgents":1}`)},
+	})
+	if r := readRow(t, db, "u-bg"); r.linkStatus.String != StatusWorking {
+		t.Fatalf("with a background agent running: link_status = %v, want working", r.linkStatus)
+	}
+	mustIngest(t, db, nil, []Event{
+		{SessionID: "u-bg", Kind: KindTurnStart, At: "2026-10-13T20:05:00Z"},
+		{SessionID: "u-bg", Kind: KindTurnComplete, At: "2026-10-13T20:05:05Z",
+			Payload: json.RawMessage(`{"durationMs":5000,"stopReason":"answer"}`)},
+	})
+	if r := readRow(t, db, "u-bg"); r.linkStatus.String != StatusWaiting {
+		t.Fatalf("with none left: link_status = %v, want waiting", r.linkStatus)
+	}
+}
+
+// A payload the status cannot read keeps the plain turn.complete meaning: the
+// event is stored and the session waits, as with a mod that sends no count.
+func TestIngestTurnCompleteUnreadableBackgroundCountWaits(t *testing.T) {
+	for name, payload := range map[string]string{
+		"string":   `{"backgroundAgents":"two"}`,
+		"negative": `{"backgroundAgents":-1}`,
+		"zero":     `{"backgroundAgents":0}`,
+		"array":    `[1]`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			db := testDB(t)
+			mustIngest(t, db, nil, []Event{
+				{SessionID: "u-odd", Kind: KindTurnComplete, At: "2026-10-13T20:00:05Z", Payload: json.RawMessage(payload)},
+			})
+			if r := readRow(t, db, "u-odd"); r.linkStatus.String != StatusWaiting {
+				t.Fatalf("link_status = %v, want waiting", r.linkStatus)
+			}
+		})
+	}
+}
+
 // link_status follows the newest status-bearing event, whatever the arrival
 // order; session.end → done.
 func TestIngestStatusTransitions(t *testing.T) {

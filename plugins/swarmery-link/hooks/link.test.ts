@@ -153,6 +153,42 @@ test('a subagent turn.complete is not reported as the session waiting', async ($
   expect(sent(w.requests).map(e => e.kind)).toEqual(['session.start'])
 })
 
+const agent = (id: string, status: string): Readonly<Record<string, unknown>> => ({ id, description: id, type: 'general-purpose', status })
+
+test('turn.complete counts the agents still at work, so the daemon does not call the session waiting', async ($, on) => {
+  const w = world(on, { tokens: [`${TOKEN}\n`] })
+  on('agent.list', () => ({
+    value: [agent('running', 'running'), agent('pending', 'pending'), agent('held', 'waiting'), agent('between-turns', 'idle'), agent('ended', 'completed'), agent('broke', 'failed'), agent('stopped', 'killed')],
+  }) as never)
+  await $.session.start(START)
+  await $.turn.complete(COMPLETE)
+  await w.clock.advance(0)
+  const complete = sent(w.requests).find(e => e.kind === 'turn.complete')
+  expect(complete?.payload).toEqual({ durationMs: 1200, stopReason: 'answer', backgroundAgents: 3 })
+})
+
+test('turn.complete with only ended agents sends no count', async ($, on) => {
+  const w = world(on, { tokens: [`${TOKEN}\n`] })
+  on('agent.list', () => ({ value: [agent('ended', 'completed')] }) as never)
+  await $.session.start(START)
+  await $.turn.complete(COMPLETE)
+  await w.clock.advance(0)
+  const complete = sent(w.requests).find(e => e.kind === 'turn.complete')
+  expect(complete?.payload).toEqual({ durationMs: 1200, stopReason: 'answer' })
+})
+
+test('an agent list that fails still reports the turn', async ($, on) => {
+  const w = world(on, { tokens: [`${TOKEN}\n`] })
+  on('agent.list', () => {
+    throw new Error('no agents here')
+  })
+  await $.session.start(START)
+  await $.turn.complete(COMPLETE)
+  await w.clock.advance(0)
+  const complete = sent(w.requests).find(e => e.kind === 'turn.complete')
+  expect(complete?.payload).toEqual({ durationMs: 1200, stopReason: 'answer' })
+})
+
 test('a daemon that never answers never holds a turn: turn-boundary flushes are fire-and-forget', async ($, on) => {
   const w = world(on, { tokens: [TOKEN], replies: ['hang'] })
   await $.session.start(START)
