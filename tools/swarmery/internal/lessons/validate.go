@@ -34,7 +34,7 @@ type Candidate struct {
 	ConfidenceReason string `json:"confidence_reason"`
 }
 
-// Lesson confidences (surprise_lessons.confidence, 0133). A lesson resting on a
+// Lesson confidences (surprise_lessons.confidence, 0134). A lesson resting on a
 // single run, or on a run where several things changed at once, is at most low;
 // Accepting a low one needs the operator's explicit confirm (review.go).
 const (

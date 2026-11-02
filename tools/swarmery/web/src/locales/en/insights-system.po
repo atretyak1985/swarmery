@@ -417,6 +417,10 @@ msgstr "{missingCount, plural, one {# missing} few {# missing} many {# missing} 
 msgid "{n, plural, one {# turn with a confidence} few {# turns with a confidence} many {# turns with a confidence} other {# turns with a confidence}}"
 msgstr "{n, plural, one {# turn with a confidence} few {# turns with a confidence} many {# turns with a confidence} other {# turns with a confidence}}"
 
+#: src/pages/Lessons.tsx
+msgid "{n} of {of} measured lessons are confounded ({pct}%): their drop cannot be credited to the lesson alone, so they rank like unmeasured lessons and are never proposed as ineffective."
+msgstr "{n} of {of} measured lessons are confounded ({pct}%): their drop cannot be credited to the lesson alone, so they rank like unmeasured lessons and are never proposed as ineffective."
+
 #: src/pages/inbox/TriageBanner.tsx
 msgid "{nAccept, plural, one {# suggestion} few {# suggestions} many {# suggestions} other {# suggestions}}"
 msgstr "{nAccept, plural, one {# suggestion} few {# suggestions} many {# suggestions} other {# suggestions}}"
@@ -979,6 +983,10 @@ msgstr "analyzing…"
 msgid "and"
 msgstr "and"
 
+#: src/pages/lessons/EffectVerdictChip.tsx
+msgid "another lesson"
+msgstr "another lesson"
+
 #: src/pages/learning/classifierModel.ts
 msgid "answer"
 msgstr "answer"
@@ -990,6 +998,10 @@ msgstr "answering — no check went without a verdict in the last hour"
 #: src/pages/learning/Classifier.tsx
 msgid "Answers above the question's confidence bar (60 % unless set otherwise) are used — as labels on sessions, and in D1 to decide what happens after a run."
 msgstr "Answers above the question's confidence bar (60 % unless set otherwise) are used — as labels on sessions, and in D1 to decide what happens after a run."
+
+#: src/pages/lessons/EffectVerdictChip.tsx
+msgid "applied agent change"
+msgstr "applied agent change"
 
 #: src/pages/Memory.tsx
 msgid "apply"
@@ -1394,6 +1406,18 @@ msgstr "confident and wrong"
 #: src/pages/Lessons.tsx
 msgid "confirm accepting a low-confidence lesson"
 msgstr "confirm accepting a low-confidence lesson"
+
+#: src/pages/lessons/EffectVerdictChip.tsx
+msgid "confounded"
+msgstr "confounded"
+
+#: src/pages/lessons/EffectVerdictChip.tsx
+msgid "confounded by:"
+msgstr "confounded by:"
+
+#: src/pages/lessons/EffectVerdictChip.tsx
+msgid "confounders"
+msgstr "confounders"
 
 #: src/pages/knowledge/Knowledge.tsx
 msgid "consolidate · lines that went stale"
@@ -2212,6 +2236,10 @@ msgstr "held"
 msgid "held back"
 msgstr "held back"
 
+#: src/pages/lessons/EffectVerdictChip.tsx
+msgid "helped"
+msgstr "helped"
+
 #: src/pages/system/ModsTab.tsx
 msgid "hide the validate report of {name}"
 msgstr "hide the validate report of {name}"
@@ -2308,6 +2336,10 @@ msgstr "How the modes work"
 #: src/pages/Analytics.tsx
 msgid "Human-hours saved is an estimate: {formula}"
 msgstr "Human-hours saved is an estimate: {formula}"
+
+#: src/pages/lessons/EffectVerdictChip.tsx
+msgid "hurt"
+msgstr "hurt"
 
 #: src/pages/system/InsightsTab.tsx
 msgid "identical"
@@ -2804,6 +2836,10 @@ msgstr "model / effort"
 msgid "model <0>(optional)</0>"
 msgstr "model <0>(optional)</0>"
 
+#: src/pages/lessons/EffectVerdictChip.tsx
+msgid "model switch"
+msgstr "model switch"
+
 #: src/pages/system/ModsTab.tsx
 msgid "moderate risk"
 msgstr "moderate risk"
@@ -2963,6 +2999,7 @@ msgid "no docs published by the daemon"
 msgstr "no docs published by the daemon"
 
 #: src/pages/learning/Learning.tsx
+#: src/pages/lessons/EffectVerdictChip.tsx
 msgid "no effect"
 msgstr "no effect"
 
@@ -3192,6 +3229,7 @@ msgstr "none"
 msgid "Not asked. Nothing logged."
 msgstr "Not asked. Nothing logged."
 
+#: src/pages/lessons/EffectVerdictChip.tsx
 #: src/pages/system-hub/Profiles.tsx
 msgid "not enough data"
 msgstr "not enough data"
@@ -4203,6 +4241,10 @@ msgstr "skills…"
 msgid "skip"
 msgstr "skip"
 
+#: src/pages/lessons/EffectVerdictChip.tsx
+msgid "Something else changed in the measured window, so the drop cannot be credited to this lesson alone. It ranks like an unmeasured lesson and is never proposed as ineffective."
+msgstr "Something else changed in the measured window, so the drop cannot be credited to this lesson alone. It ranks like an unmeasured lesson and is never proposed as ineffective."
+
 #: src/pages/system/shared.tsx
 msgid "sort by"
 msgstr "sort by"
@@ -4440,6 +4482,18 @@ msgstr "The account is checked for real — its sign-in, then one short model ca
 msgid "The agent has not closed anything in the last 7 days."
 msgstr "The agent has not closed anything in the last 7 days."
 
+#: src/pages/lessons/EffectVerdictChip.tsx
+msgid "The area got less surprising after this lesson, and nothing else changed there in the measured window."
+msgstr "The area got less surprising after this lesson, and nothing else changed there in the measured window."
+
+#: src/pages/lessons/EffectVerdictChip.tsx
+msgid "The area got more surprising after this lesson, and nothing else changed there in the measured window."
+msgstr "The area got more surprising after this lesson, and nothing else changed there in the measured window."
+
+#: src/pages/lessons/EffectVerdictChip.tsx
+msgid "The area's surprise barely moved after this lesson."
+msgstr "The area's surprise barely moved after this lesson."
+
 #: src/pages/inbox/InboxDetail.tsx
 #: src/pages/inbox/inboxModel.ts
 msgid "The candidate is closed as not useful. Nothing is added to any brief."
@@ -4663,6 +4717,10 @@ msgstr "To do"
 #: src/pages/Analytics.tsx
 msgid "Tokens"
 msgstr "Tokens"
+
+#: src/pages/lessons/EffectVerdictChip.tsx
+msgid "Too few scored runs on one side of the activation to judge yet."
+msgstr "Too few scored runs on one side of the activation to judge yet."
 
 #: src/pages/Analytics.tsx
 #: src/pages/Retro.tsx

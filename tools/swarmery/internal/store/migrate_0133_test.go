@@ -2,11 +2,9 @@ package store
 
 import "testing"
 
-// TestMigrate0133LessonConfidence: surprise_lessons grows confidence (default
-// 'medium', CHECKed) and confidence_reason; lesson_generations grows
-// no_entry_reason. A row written without the new columns — every row that
-// existed before the migration — reads as 'medium'.
-func TestMigrate0133LessonConfidence(t *testing.T) {
+// TestMigrate0133LessonEffectVerdict: verdict and confounders_json land on
+// lesson_effectiveness with defaults that read as "cannot tell yet".
+func TestMigrate0133LessonEffectVerdict(t *testing.T) {
 	db, err := Open(t.TempDir() + "/m133.db")
 	if err != nil {
 		t.Fatal(err)
@@ -16,32 +14,19 @@ func TestMigrate0133LessonConfidence(t *testing.T) {
 	if err := db.QueryRow(`SELECT name FROM schema_migrations WHERE version = 133`).Scan(&name); err != nil {
 		t.Fatalf("migration 133 not recorded: %v", err)
 	}
-	if name != "0133_lesson_confidence.sql" {
+	if name != "0133_lesson_effect_verdict.sql" {
 		t.Errorf("migration 133 name = %s", name)
 	}
-	const ins = `INSERT INTO surprise_lessons (source_phase_run, phase_id, seq, title, guidance, created_at, updated_at)
-		VALUES (?, 1, 1, 't', 'g', '2026-11-02T00:00:00Z', '2026-11-02T00:00:00Z')`
-	if _, err := db.Exec(ins, "run-old"); err != nil {
+	if _, err := db.Exec(`INSERT INTO lesson_effectiveness (lesson_id, window_n, min_runs, computed_at)
+		VALUES (1, 10, 5, '2026-11-02T00:00:00Z')`); err != nil {
 		t.Fatal(err)
 	}
-	var conf, why string
-	if err := db.QueryRow(`SELECT confidence, confidence_reason FROM surprise_lessons WHERE source_phase_run = 'run-old'`).
-		Scan(&conf, &why); err != nil {
+	var verdict, conf string
+	if err := db.QueryRow(`SELECT verdict, confounders_json FROM lesson_effectiveness WHERE lesson_id = 1`).
+		Scan(&verdict, &conf); err != nil {
 		t.Fatal(err)
 	}
-	if conf != "medium" || why != "" {
-		t.Errorf("default = (%q, %q), want (medium, \"\")", conf, why)
-	}
-	for _, c := range []string{"high", "low"} {
-		if _, err := db.Exec(`UPDATE surprise_lessons SET confidence = ? WHERE source_phase_run = 'run-old'`, c); err != nil {
-			t.Errorf("confidence %q refused: %v", c, err)
-		}
-	}
-	if _, err := db.Exec(`UPDATE surprise_lessons SET confidence = 'certain' WHERE source_phase_run = 'run-old'`); err == nil {
-		t.Error("confidence 'certain' accepted")
-	}
-	if _, err := db.Exec(`INSERT INTO lesson_generations (source_phase_run, phase_id, state, created_at, no_entry_reason)
-		VALUES ('run-old', 1, 'done', '2026-11-02T00:00:00Z', 'nothing transferable')`); err != nil {
-		t.Fatalf("no_entry_reason: %v", err)
+	if verdict != "insufficient" || conf != "[]" {
+		t.Errorf("defaults: verdict=%q confounders=%q", verdict, conf)
 	}
 }

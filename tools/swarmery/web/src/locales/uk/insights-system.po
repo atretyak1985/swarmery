@@ -417,6 +417,10 @@ msgstr "{missingCount, plural, one {бракує #} few {бракує #} many {�
 msgid "{n, plural, one {# turn with a confidence} few {# turns with a confidence} many {# turns with a confidence} other {# turns with a confidence}}"
 msgstr "{n, plural, one {# хід з упевненістю} few {# ходи з упевненістю} many {# ходів з упевненістю} other {# ходу з упевненістю}}"
 
+#: src/pages/Lessons.tsx
+msgid "{n} of {of} measured lessons are confounded ({pct}%): their drop cannot be credited to the lesson alone, so they rank like unmeasured lessons and are never proposed as ineffective."
+msgstr "{n} з {of} виміряних уроків змішані з іншими змінами ({pct}%): їхнє зниження не можна приписати лише уроку, тож вони ранжуються як невиміряні й ніколи не пропонуються як неефективні."
+
 #: src/pages/inbox/TriageBanner.tsx
 msgid "{nAccept, plural, one {# suggestion} few {# suggestions} many {# suggestions} other {# suggestions}}"
 msgstr "{nAccept, plural, one {# пропозиція} few {# пропозиції} many {# пропозицій} other {# пропозиції}}"
@@ -979,6 +983,10 @@ msgstr "аналізуємо…"
 msgid "and"
 msgstr "і"
 
+#: src/pages/lessons/EffectVerdictChip.tsx
+msgid "another lesson"
+msgstr "інший урок"
+
 #: src/pages/learning/classifierModel.ts
 msgid "answer"
 msgstr "відповідь"
@@ -990,6 +998,10 @@ msgstr "відповідає — за останню годину жодна п�
 #: src/pages/learning/Classifier.tsx
 msgid "Answers above the question's confidence bar (60 % unless set otherwise) are used — as labels on sessions, and in D1 to decide what happens after a run."
 msgstr "Відповіді вище порога впевненості питання (60 %, якщо не задано інше) використовуються — як мітки на сесіях і в D1, щоб вирішити, що буде після запуску."
+
+#: src/pages/lessons/EffectVerdictChip.tsx
+msgid "applied agent change"
+msgstr "застосована зміна агента"
 
 #: src/pages/Memory.tsx
 msgid "apply"
@@ -1394,6 +1406,18 @@ msgstr "впевнений, але хибний"
 #: src/pages/Lessons.tsx
 msgid "confirm accepting a low-confidence lesson"
 msgstr "підтвердьте прийняття уроку з низькою впевненістю"
+
+#: src/pages/lessons/EffectVerdictChip.tsx
+msgid "confounded"
+msgstr "змішаний"
+
+#: src/pages/lessons/EffectVerdictChip.tsx
+msgid "confounded by:"
+msgstr "змішаний з:"
+
+#: src/pages/lessons/EffectVerdictChip.tsx
+msgid "confounders"
+msgstr "змішувальні чинники"
 
 #: src/pages/knowledge/Knowledge.tsx
 msgid "consolidate · lines that went stale"
@@ -2212,6 +2236,10 @@ msgstr "справдилась"
 msgid "held back"
 msgstr "притримано"
 
+#: src/pages/lessons/EffectVerdictChip.tsx
+msgid "helped"
+msgstr "допоміг"
+
 #: src/pages/system/ModsTab.tsx
 msgid "hide the validate report of {name}"
 msgstr "сховати звіт validate для {name}"
@@ -2308,6 +2336,10 @@ msgstr "Як працюють режими"
 #: src/pages/Analytics.tsx
 msgid "Human-hours saved is an estimate: {formula}"
 msgstr "Заощаджені людино-години — оцінка: {formula}"
+
+#: src/pages/lessons/EffectVerdictChip.tsx
+msgid "hurt"
+msgstr "зашкодив"
 
 #: src/pages/system/InsightsTab.tsx
 msgid "identical"
@@ -2804,6 +2836,10 @@ msgstr "модель / зусилля"
 msgid "model <0>(optional)</0>"
 msgstr "модель <0>(необов’язково)</0>"
 
+#: src/pages/lessons/EffectVerdictChip.tsx
+msgid "model switch"
+msgstr "зміна моделі"
+
 #: src/pages/system/ModsTab.tsx
 msgid "moderate risk"
 msgstr "помірний ризик"
@@ -2963,6 +2999,7 @@ msgid "no docs published by the daemon"
 msgstr "демон не опублікував документації"
 
 #: src/pages/learning/Learning.tsx
+#: src/pages/lessons/EffectVerdictChip.tsx
 msgid "no effect"
 msgstr "без ефекту"
 
@@ -3192,6 +3229,7 @@ msgstr "немає"
 msgid "Not asked. Nothing logged."
 msgstr "Не ставиться. Нічого не записується."
 
+#: src/pages/lessons/EffectVerdictChip.tsx
 #: src/pages/system-hub/Profiles.tsx
 msgid "not enough data"
 msgstr "недостатньо даних"
@@ -4203,6 +4241,10 @@ msgstr "скіли…"
 msgid "skip"
 msgstr "пропустити"
 
+#: src/pages/lessons/EffectVerdictChip.tsx
+msgid "Something else changed in the measured window, so the drop cannot be credited to this lesson alone. It ranks like an unmeasured lesson and is never proposed as ineffective."
+msgstr "У виміряному вікні змінилося щось іще, тож зниження не можна приписати лише цьому уроку. Він ранжується як невиміряний і ніколи не пропонується як неефективний."
+
 #: src/pages/system/shared.tsx
 msgid "sort by"
 msgstr "сортувати за"
@@ -4440,6 +4482,18 @@ msgstr "Акаунт перевіряється по-справжньому: с�
 msgid "The agent has not closed anything in the last 7 days."
 msgstr "За останні 7 днів агент нічого не закрив."
 
+#: src/pages/lessons/EffectVerdictChip.tsx
+msgid "The area got less surprising after this lesson, and nothing else changed there in the measured window."
+msgstr "Після цього уроку область стала менш несподіваною, і нічого іншого там у виміряному вікні не змінилося."
+
+#: src/pages/lessons/EffectVerdictChip.tsx
+msgid "The area got more surprising after this lesson, and nothing else changed there in the measured window."
+msgstr "Після цього уроку область стала більш несподіваною, і нічого іншого там у виміряному вікні не змінилося."
+
+#: src/pages/lessons/EffectVerdictChip.tsx
+msgid "The area's surprise barely moved after this lesson."
+msgstr "Після цього уроку здивування в області майже не змінилося."
+
 #: src/pages/inbox/InboxDetail.tsx
 #: src/pages/inbox/inboxModel.ts
 msgid "The candidate is closed as not useful. Nothing is added to any brief."
@@ -4663,6 +4717,10 @@ msgstr "До роботи"
 #: src/pages/Analytics.tsx
 msgid "Tokens"
 msgstr "Токени"
+
+#: src/pages/lessons/EffectVerdictChip.tsx
+msgid "Too few scored runs on one side of the activation to judge yet."
+msgstr "Замало оцінених запусків з одного боку від активації, щоб судити."
 
 #: src/pages/Analytics.tsx
 #: src/pages/Retro.tsx

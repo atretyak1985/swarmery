@@ -10,12 +10,13 @@ import { useLingui } from '@lingui/react/macro';
 import { useCallback, useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { fetchProjectRecommendations, fetchRecommendations } from '../../api';
-import { type Lesson, fetchLessons } from '../../api/lessons';
+import { type EffectVerdict, type Lesson, fetchLessons } from '../../api/lessons';
 import type { Recommendation } from '../../api/types';
 import { PageDetail, PagePlace, type PageTone, type PlaceGroup, type PlaceItem, usePlaceParams } from '../../components/place/PageDetail';
 import { fmtAgo } from '../../lib/format';
 import { PLACES } from '../../lib/nav';
 import { LessonDetail, Lessons, lessonStanding } from '../Lessons';
+import { effectVerdictOf } from '../lessons/effectVerdict';
 import { CalibrationPanel } from '../LessonsCalibration';
 import { RecDetail } from '../health/HealthOverview';
 import { Classifier } from './Classifier';
@@ -35,6 +36,16 @@ function verdictWord(verdict: ProofVerdict): string {
   if (verdict === 'proven') return tr`proven`;
   return verdict === 'gathering' ? tr`gathering` : tr`no effect`;
 }
+
+/** The before→after figure is green only when the drop is attributable to the
+ *  lesson (helped); a confounded drop is amber, whatever its sign. */
+const EFFECT_TONE: Record<EffectVerdict, PageTone> = {
+  helped: 'green',
+  hurt: 'red',
+  confounded: 'amber',
+  no_effect: 'faint',
+  insufficient: 'faint',
+};
 
 function lessonItem(lesson: Lesson): PlaceItem {
   const eff = lesson.effectiveness ?? null;
@@ -58,7 +69,7 @@ function lessonItem(lesson: Lesson): PlaceItem {
     ...(lesson.planId !== '' ? { tag: lesson.planId } : {}),
     summary: uses > 0 ? `${status} · ${reached}` : status,
     ...(before !== null && after !== null
-      ? { right: `${before}→${after}`, rightTone: (eff?.medianDrop ?? 0) > 0 ? ('green' as const) : ('faint' as const) }
+      ? { right: `${before}→${after}`, rightTone: EFFECT_TONE[effectVerdictOf(eff)] }
       : active && uses > 0
         ? { right: tr`gathering` }
         : {}),

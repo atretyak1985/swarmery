@@ -78,7 +78,7 @@ type Lesson struct {
 	// ReviewType / ReviewArea are a review lesson's group identity; "" otherwise.
 	ReviewType string `json:"reviewType"`
 	ReviewArea string `json:"reviewArea"`
-	// Confidence is the generator's grade (high|medium|low, 0133; ungraded rows
+	// Confidence is the generator's grade (high|medium|low, 0134; ungraded rows
 	// read medium); ConfidenceReason its one-sentence why.
 	Confidence       string `json:"confidence"`
 	ConfidenceReason string `json:"confidenceReason"`

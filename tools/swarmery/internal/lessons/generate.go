@@ -84,7 +84,7 @@ type Outcome struct {
 	Linked   int         // lessons folded into an existing identity (14.5)
 	Rejected []Rejection // lessons that failed validation, or were dropped past MaxLessons
 	// NoEntryReason is the model's "nothing transferable here" answer, stored on
-	// the lesson_generations row (0133).
+	// the lesson_generations row (0134).
 	NoEntryReason string
 }
 

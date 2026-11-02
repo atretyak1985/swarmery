@@ -3,7 +3,7 @@ package lessons
 // The generation log as the dashboard reads it: one lesson_generations row per
 // run that was eligible for a lesson. Shown under the review queue, so a run
 // that produced no candidate still says why — a failure, every lesson rejected,
-// or the model's own "nothing transferable here" (no_entry_reason, 0133).
+// or the model's own "nothing transferable here" (no_entry_reason, 0134).
 
 import (
 	"database/sql"

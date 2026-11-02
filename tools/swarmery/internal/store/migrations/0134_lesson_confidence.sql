@@ -1,4 +1,4 @@
--- 0133: lesson discipline (Harness² D6) — one lesson, a stated confidence, and
+-- 0134: lesson discipline (Harness² D6) — one lesson, a stated confidence, and
 -- "nothing transferable here" as a recorded answer.
 --
 -- surprise_lessons.confidence is the generator's own grade of a lesson: 'high',
@@ -16,7 +16,7 @@
 -- The ALTERs are instant on the live tables (constant defaults, no rebuild); the
 -- CHECK is evaluated against the existing rows, which all take the default.
 --
--- WHY 0133: 0132 (decision_evidence) is the highest on main.
+-- WHY 0134: 0133 (lesson_effect_verdict, Harness² phase 1) is the highest on main.
 --
 -- Rollback: ALTER TABLE lesson_generations DROP COLUMN no_entry_reason;
 --           ALTER TABLE surprise_lessons DROP COLUMN confidence_reason;

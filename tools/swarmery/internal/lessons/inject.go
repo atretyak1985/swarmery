@@ -36,7 +36,7 @@ package lessons
 //
 // RANKING. Effectiveness first (phase 16's stored median surprise drop; a
 // lesson without enough data is unscored), then — at an equal score — the
-// lesson's confidence (high > medium > low, 0133), then recency (activated_at,
+// lesson's confidence (high > medium > low, 0134), then recency (activated_at,
 // newest first), then id. The block is cut at the budget: lessons are taken in rank order and
 // the first one that would push the WHOLE injected text (separator and header
 // included) past SWARMERY_LESSON_BUDGET_TOKENS stops the selection — a strict
