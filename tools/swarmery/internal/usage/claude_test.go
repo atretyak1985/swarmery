@@ -392,6 +392,110 @@ func TestFetch429ExhaustsRetries(t *testing.T) {
 	}
 }
 
+// usageRequests reads the stub's call count under its lock.
+func (s *stub) usageRequests() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.usageCalls
+}
+
+// A 429 after a good reading keeps that reading on the card, still as an error
+// so nothing downstream takes it for a fresh quota (quota.Poller records OK only).
+func TestFetch429KeepsTheLastReading(t *testing.T) {
+	body := fixture(t, "usage-full.json")
+	s := newStub(t, func(attempt int, w http.ResponseWriter) {
+		if attempt == 1 {
+			serveJSON(body)(attempt, w)
+			return
+		}
+		w.WriteHeader(http.StatusTooManyRequests)
+	}, nil)
+	c, _ := newClient(s, testCreds())
+	now := testNow
+	c.Now = func() time.Time { return now }
+
+	first := c.Fetch(context.Background())
+	if first.Status != StatusOK || len(first.Windows) == 0 {
+		t.Fatalf("first fetch = %q with %d windows, want ok with windows", first.Status, len(first.Windows))
+	}
+
+	now = now.Add(3 * time.Minute)
+	p := c.Fetch(context.Background())
+	if p.Status != StatusError {
+		t.Errorf("status = %q, want error: a kept reading is not a fresh one", p.Status)
+	}
+	if len(p.Windows) != len(first.Windows) {
+		t.Fatalf("windows = %d, want the %d of the last reading", len(p.Windows), len(first.Windows))
+	}
+	if !strings.Contains(p.Error, "429") || !strings.Contains(p.Error, "3m ago") {
+		t.Errorf("error = %q, want the 429 and the reading's age", p.Error)
+	}
+	// The reset countdown is read against now, not frozen at the fetch.
+	if p.Windows[0].ResetMs >= first.Windows[0].ResetMs {
+		t.Errorf("resetMs = %d, want it below the first reading's %d", p.Windows[0].ResetMs, first.Windows[0].ResetMs)
+	}
+}
+
+// After a 429 no request goes out until the cooldown ends: a modal polling every
+// 30s otherwise keeps the limit from ever clearing.
+func TestFetch429CoolsDown(t *testing.T) {
+	s := newStub(t, func(_ int, w http.ResponseWriter) {
+		w.WriteHeader(http.StatusTooManyRequests)
+	}, nil)
+	c, _ := newClient(s, testCreds())
+	now := testNow
+	c.Now = func() time.Time { return now }
+
+	c.Fetch(context.Background())
+	if got := s.usageRequests(); got != maxRetries {
+		t.Fatalf("usage requests = %d, want %d", got, maxRetries)
+	}
+
+	now = now.Add(rateLimitCooldown - time.Second)
+	p := c.Fetch(context.Background())
+	if got := s.usageRequests(); got != maxRetries {
+		t.Errorf("usage requests during the cooldown = %d, want still %d", got, maxRetries)
+	}
+	if p.Status != StatusError || !strings.Contains(p.Error, "429") {
+		t.Errorf("provider = %q / %q, want the 429 error during the cooldown", p.Status, p.Error)
+	}
+
+	now = now.Add(2 * time.Second)
+	c.Fetch(context.Background())
+	if got := s.usageRequests(); got != 2*maxRetries {
+		t.Errorf("usage requests after the cooldown = %d, want %d", got, 2*maxRetries)
+	}
+}
+
+// A Retry-After too long to sleep through a request ends the attempt at once and
+// sets the cooldown: nothing blocks a dashboard poll for ten minutes.
+func TestFetch429LongRetryAfterSetsTheCooldown(t *testing.T) {
+	s := newStub(t, func(_ int, w http.ResponseWriter) {
+		w.Header().Set("Retry-After", "600")
+		w.WriteHeader(http.StatusTooManyRequests)
+	}, nil)
+	c, slept := newClient(s, testCreds())
+	now := testNow
+	c.Now = func() time.Time { return now }
+
+	p := c.Fetch(context.Background())
+	if p.Status != StatusError || !strings.Contains(p.Error, "429") {
+		t.Fatalf("provider = %q / %q, want a 429 error", p.Status, p.Error)
+	}
+	if len(*slept) != 0 {
+		t.Errorf("slept %v, want no wait inside the request", *slept)
+	}
+	if got := s.usageRequests(); got != 1 {
+		t.Fatalf("usage requests = %d, want 1", got)
+	}
+
+	now = now.Add(599 * time.Second)
+	c.Fetch(context.Background())
+	if got := s.usageRequests(); got != 1 {
+		t.Errorf("usage requests before Retry-After ended = %d, want 1", got)
+	}
+}
+
 func TestFetchRefreshesOn401AndReusesToken(t *testing.T) {
 	body := fixture(t, "usage-full.json")
 	s := newStub(t, func(attempt int, w http.ResponseWriter) {

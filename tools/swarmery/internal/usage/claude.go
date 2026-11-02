@@ -32,6 +32,11 @@ const (
 	userAgent        = "swarmery-dashboard"
 	maxRetries       = 3
 	initialRetryWait = time.Second
+	// rateLimitCooldown is the shortest pause after a 429; a longer Retry-After wins.
+	rateLimitCooldown = 2 * time.Minute
+	// maxInlineRetryWait is the longest backoff slept inside a request. A longer
+	// one ends the attempt and becomes the cooldown instead.
+	maxInlineRetryWait = 5 * time.Second
 )
 
 const (
@@ -84,6 +89,81 @@ type Client struct {
 
 	mu             sync.Mutex
 	refreshedToken string // in-memory only, daemon lifetime
+	// lastReading is the newest usage body that parsed, kept in memory only and
+	// holding quota percentages, no credential. A 429 shows it, re-read against
+	// now so its reset countdown keeps moving.
+	lastReading   []byte
+	lastReadingAt time.Time
+	// coolUntil is when the next usage request may go out after a 429.
+	coolUntil time.Time
+}
+
+// rateLimitedMsg is the 429 outcome's message; keepReading appends the age of
+// the reading it keeps.
+const rateLimitedMsg = "Claude usage rate-limited (HTTP 429)"
+
+// coolingDown reports a 429 outcome while the cooldown of an earlier one runs.
+func (c *Client) coolingDown() *fail {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.now().Before(c.coolUntil) {
+		return rateLimitedFail()
+	}
+	return nil
+}
+
+func rateLimitedFail() *fail {
+	return &fail{msg: rateLimitedMsg + " — retry later", rateLimited: true}
+}
+
+// coolDown starts the pause after a 429: at least rateLimitCooldown, longer when
+// the server's Retry-After says so.
+func (c *Client) coolDown(retryAfter string) {
+	wait := rateLimitCooldown
+	if s := strings.TrimSpace(retryAfter); s != "" {
+		if d := retryDelay(s, 0); d > wait {
+			wait = d
+		}
+	}
+	c.mu.Lock()
+	c.coolUntil = c.now().Add(wait)
+	c.mu.Unlock()
+}
+
+func (c *Client) rememberReading(body []byte) {
+	c.mu.Lock()
+	c.lastReading, c.lastReadingAt = body, c.now()
+	c.mu.Unlock()
+}
+
+// keepReading puts the last good reading on a rate-limited card. The card stays
+// StatusError: the windows are old, and quota.Poller records OK readings only.
+func (c *Client) keepReading(p *Provider) {
+	c.mu.Lock()
+	body, at := c.lastReading, c.lastReadingAt
+	c.mu.Unlock()
+	if body == nil {
+		return
+	}
+	now := c.now()
+	windows, err := parsePayload(body, now)
+	if err != nil {
+		return
+	}
+	p.Windows = windows
+	p.Error = rateLimitedMsg + " — showing the reading from " + ageText(now.Sub(at))
+}
+
+// ageText renders a reading's age in the card's error line.
+func ageText(d time.Duration) string {
+	switch {
+	case d < time.Minute:
+		return "under a minute ago"
+	case d < time.Hour:
+		return fmt.Sprintf("%dm ago", int(d.Minutes()))
+	default:
+		return fmt.Sprintf("%dh %dm ago", int(d.Hours()), int(d.Minutes())%60)
+	}
 }
 
 func (c *Client) httpClient() *http.Client {
@@ -211,6 +291,8 @@ type fail struct {
 	// tokenExpired marks the NoRefresh outcome: the stored token is expired
 	// and this client will not refresh it.
 	tokenExpired bool
+	// rateLimited marks the 429 outcome, the one that keeps the last reading.
+	rateLimited bool
 }
 
 // apply encodes a failure on the provider. A hinted failure is "not connected
@@ -286,9 +368,16 @@ func (c *Client) Fetch(ctx context.Context) Provider {
 		return p
 	}
 
-	body, f := c.fetchUsage(ctx, creds, token, refreshed)
+	f = c.coolingDown()
+	var body []byte
+	if f == nil {
+		body, f = c.fetchUsage(ctx, creds, token, refreshed)
+	}
 	if f != nil {
 		p.apply(f)
+		if f.rateLimited {
+			c.keepReading(&p)
+		}
 		return p
 	}
 
@@ -298,6 +387,7 @@ func (c *Client) Fetch(ctx context.Context) Provider {
 		p.Error = "Claude usage response was not valid JSON"
 		return p
 	}
+	c.rememberReading(body)
 	p.Status = StatusOK
 	p.Windows = windows
 	return p
@@ -353,7 +443,8 @@ func (c *Client) tokenExpired(expiresAtMs int64) bool {
 // fetchUsage performs GET /api/oauth/usage with the retry/refresh policy:
 // one refresh attempt on 401/403, up to maxRetries attempts on 429 honouring
 // Retry-After (seconds) or exponential backoff from 1s, and immediate failure
-// on any other non-200.
+// on any other non-200. The last 429, or one whose wait exceeds
+// maxInlineRetryWait, starts the cooldown (coolDown).
 func (c *Client) fetchUsage(ctx context.Context, creds *Creds, token string, refreshed bool) (body []byte, f *fail) {
 	for attempt := 0; attempt < maxRetries; attempt++ {
 		status, header, b, err := c.get(ctx, c.apiBase()+oauthUsagePath, token)
@@ -372,11 +463,13 @@ func (c *Client) fetchUsage(ctx context.Context, creds *Creds, token string, ref
 			return nil, c.authRejected(creds)
 
 		case status == http.StatusTooManyRequests:
-			if attempt < maxRetries-1 {
-				c.wait(retryDelay(header.Get("Retry-After"), attempt))
+			retryAfter := header.Get("Retry-After")
+			if delay := retryDelay(retryAfter, attempt); attempt < maxRetries-1 && delay <= maxInlineRetryWait {
+				c.wait(delay)
 				continue
 			}
-			return nil, &fail{msg: "Claude usage rate-limited (HTTP 429) — retry later"}
+			c.coolDown(retryAfter)
+			return nil, rateLimitedFail()
 
 		case status != http.StatusOK:
 			if s := snippet(b); s != "" {
