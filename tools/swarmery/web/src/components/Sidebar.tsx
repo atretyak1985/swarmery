@@ -91,10 +91,12 @@ export function useSidebarSignals(scope: string | null = null): SidebarSignals {
     // connection, stalled every other page while it ran — and this fires on
     // every page load and 2 s after every session update. Its
     // `waiting_approval` was a constant 0, so nothing is lost.
-    fetchSessions({ status: 'active' }, { limit: 1 })
+    // Scoped like the badges: inside a project the dot answers for that
+    // project's list, which another project's live session must not light.
+    fetchSessions(scope === null ? { status: 'active' } : { project: scope, status: 'active' }, { limit: 1 })
       .then((r) => setLive(r.sessions.length > 0))
       .catch(() => setLive(false));
-  }, []);
+  }, [scope]);
   useEffect(syncLive, [syncLive]);
 
   // Accept/Dismiss/Analyze on Retro change the waiting count: refetch whenever
