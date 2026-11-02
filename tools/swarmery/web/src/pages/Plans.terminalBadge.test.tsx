@@ -177,13 +177,15 @@ function stubFetch(): void {
 }
 
 function phaseRow(seq: number, name: string): HTMLElement {
-  return screen.getByRole('button', { name: `Phase ${String(seq)} — ${name}` });
+  const row = screen.getByRole('link', { name }).closest('li');
+  if (row === null) throw new Error(`no ledger line for phase ${String(seq)}`);
+  return row;
 }
 
 async function mountPlans(): Promise<void> {
   render(<PlansAtRoute />);
   await waitFor(() => {
-    expect(screen.getByRole('button', { name: /^Phase 1/ })).toBeTruthy();
+    expect(document.querySelector('li a[href*="/phase/1"]')).toBeTruthy();
   });
 }
 
@@ -265,8 +267,8 @@ describe('terminal badge on the Plans page', () => {
     expect(badge.tagName).toBe('A');
     expect(badge.getAttribute('tabindex')).not.toBe('-1');
     fireEvent.click(badge);
-    // The row did not open its phase panel (the list is still showing).
-    expect(screen.queryByRole('button', { name: 'all phases' })).toBeNull();
+    // The row did not open its phase page: the ledger is still showing.
+    expect(screen.queryByRole('tab', { name: /^Runs/ })).toBeNull();
   });
 
   it('renders nothing for an empty list', async () => {
@@ -332,7 +334,7 @@ describe('terminal badge on the Plans page', () => {
     // Leave plan A while its terminal-sessions call is still out.
     fireEvent.click(screen.getByRole('link', { name: /plan beta/ }));
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: /^Phase 1 — Beta work/ })).toBeTruthy();
+      expect(document.querySelector('li a[href*="/phase/1"]')).toBeTruthy();
     });
     await waitFor(() => {
       expect(terminalCalls).toContain(TASK_B);

@@ -29,6 +29,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Epic, EpicPhase } from '../api/types';
 import { Plans } from './Plans';
 import { PLANS_ROUTE_PATHS } from './plans/plansUrl';
+import { openPhaseRuns, RUN_PHASE } from '../test/planPhase';
 
 /** Plans reads its selection from the route (plans-deep-links phase 1), so it
  * mounts under the real /p/:slug/plans… child paths, not a bare router. */
@@ -133,6 +134,7 @@ function stubFetch(): void {
           json: () => Promise.resolve(body),
         } as Response);
       if (url.startsWith('/api/epics?')) return json(epics);
+      if (url.includes('/docs?')) return json({ path: 'doc.md', content: '## Goal\n' });
       if (/\/phases\/\d+\/run$/.test(url)) return json({ status: 'running', sessionUuid: 'u-1' });
       return json([]);
     }),
@@ -143,7 +145,8 @@ async function mountPlans(): Promise<void> {
   render(
     <PlansAtRoute />,
   );
-  await screen.findByRole('button', { name: 'Run phase' });
+  await openPhaseRuns();
+  await screen.findByRole('button', { name: RUN_PHASE });
 }
 
 function picker(): HTMLSelectElement {
@@ -195,7 +198,7 @@ describe('phase doc model chip', () => {
   it('sends no body when the picker is on default, leaving the doc in charge', async () => {
     epics = [epic([phase({ docModel: 'sonnet' })])];
     await mountPlans();
-    fireEvent.click(screen.getByRole('button', { name: 'Run phase' }));
+    fireEvent.click(screen.getByRole('button', { name: RUN_PHASE }));
     await waitFor(() => {
       expect(runCall()).toBeDefined();
     });
@@ -215,7 +218,7 @@ describe('phase doc model chip', () => {
     });
     expect(docChip()?.getAttribute('data-tip')).toContain('overrides it');
 
-    fireEvent.click(screen.getByRole('button', { name: 'Run phase' }));
+    fireEvent.click(screen.getByRole('button', { name: RUN_PHASE }));
     await waitFor(() => {
       expect(runCall()).toBeDefined();
     });

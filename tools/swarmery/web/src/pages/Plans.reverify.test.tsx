@@ -22,6 +22,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Epic, EpicPhase } from '../api/types';
 import { Plans } from './Plans';
 import { PLANS_ROUTE_PATHS } from './plans/plansUrl';
+import { phaseLink } from '../test/planPhase';
 
 // The whole Plans tree on a loaded machine can outlast the 1 s default.
 configure({ asyncUtilTimeout: 3000 });
@@ -123,10 +124,9 @@ let releaseVerify: (() => void) | null = null;
 const verifyCalls = (): { url: string; init: RequestInit | undefined }[] =>
   calls.filter((c) => /\/phases\/\d+\/verify$/.test(c.url));
 
-/** The phase's actions live in its expansion. */
+/** The phase's actions live on its page. */
 async function openRow(): Promise<void> {
-  const row = await screen.findByRole('button', { name: /^Phase 1 — / });
-  if (row.getAttribute('aria-expanded') !== 'true') fireEvent.click(row);
+  fireEvent.click(await phaseLink());
 }
 
 function stubFetch(): void {
@@ -268,6 +268,7 @@ describe('Verify again — run diagnosis modal', () => {
     epics = [epic([phase({ runOutcome: 'partial' })])];
     render(<PlansAt path={LIST} />);
     await openRow();
+    fireEvent.click(await screen.findByRole('tab', { name: /^Runs/ }));
     fireEvent.click(await screen.findByRole('button', { name: 'ran · 3/3' }));
     const dialog = await screen.findByRole('dialog', { name: 'Phase run diagnosis' });
     await within(dialog).findByText('the grade never landed');

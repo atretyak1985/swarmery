@@ -226,10 +226,6 @@ msgstr "{label} (no cards)"
 msgid "{label}: {subject} is open in session {shortId} ({liveNote})"
 msgstr "{label}: {subject} is open in session {shortId} ({liveNote})"
 
-#: src/pages/plans/phaseLedgerModel.ts
-msgid "{land} [LAND] pending"
-msgstr "{land} [LAND] pending"
-
 #: src/pages/plans/forecastStoryModel.ts
 msgid "{m, plural, one {# minute} few {# minutes} many {# minutes} other {# minutes}}"
 msgstr "{m, plural, one {# minute} few {# minutes} many {# minutes} other {# minutes}}"
@@ -355,7 +351,6 @@ msgstr "▶ run plan"
 msgid "▶ run this phase now"
 msgstr "▶ run this phase now"
 
-#: src/pages/plans/PhaseLedger.tsx
 #: src/pages/plans/PlanHeader.tsx
 msgid "✓ summary"
 msgstr "✓ summary"
@@ -422,17 +417,12 @@ msgstr "a small"
 
 #: src/pages/Plans.tsx
 #: src/pages/plans/PhaseDetailPanel.tsx
-#: src/pages/plans/PhaseLedger.tsx
 msgid "a whole-plan run is executing this plan"
 msgstr "a whole-plan run is executing this plan"
 
 #: src/pages/planning/RunningPlanPanel.tsx
 msgid "acceptance criteria"
 msgstr "acceptance criteria"
-
-#: src/pages/plans/PhaseLedger.tsx
-msgid "activated"
-msgstr "activated"
 
 #: src/pages/plans/PlanList.tsx
 #: src/pages/plans/plansTarget.ts
@@ -674,7 +664,6 @@ msgstr "cancel"
 #: src/pages/planning/ReviseModal.tsx
 #: src/pages/planning/RevisionReview.tsx
 #: src/pages/plans/PhaseDetailPanel.tsx
-#: src/pages/plans/PhaseLedger.tsx
 #: src/pages/plans/PlanRunControls.tsx
 #: src/pages/Routines.tsx
 msgid "Cancel"
@@ -742,10 +731,6 @@ msgstr "Claude is writing a plain-language explanation…"
 #: src/pages/Board.tsx
 msgid "clear label filter"
 msgstr "clear label filter"
-
-#: src/pages/plans/PhaseLedger.tsx
-msgid "click a name to open · ▸ to expand runs"
-msgstr "click a name to open · ▸ to expand runs"
 
 #: src/pages/planning/HistoryDrawer.tsx
 #: src/pages/Routines.tsx
@@ -816,10 +801,6 @@ msgstr "Create"
 #: src/pages/plans/PlanDetailPanel.tsx
 msgid "created {created}"
 msgstr "created {created}"
-
-#: src/pages/plans/PhaseLedger.tsx
-msgid "criteria"
-msgstr "criteria"
 
 #: src/pages/plans/PhasePanel.tsx
 msgid "Criteria"
@@ -903,18 +884,12 @@ msgid "Delete this routine"
 msgstr "Delete this routine"
 
 #: src/pages/plans/PhaseDetailPanel.tsx
-#: src/pages/plans/PhaseLedger.tsx
 msgid "dependency pending"
 msgstr "dependency pending"
 
 #: src/pages/plans/PhaseDetailPanel.tsx
-#: src/pages/plans/PhaseLedger.tsx
 msgid "dependency resolved"
 msgstr "dependency resolved"
-
-#: src/pages/plans/PhaseLedger.tsx
-msgid "depends on"
-msgstr "depends on"
 
 #: src/pages/planning/RefineModal.tsx
 msgid "Describe what should change. The plan will update, and the next questions will follow your direction."
@@ -1042,10 +1017,6 @@ msgstr "edit"
 #: src/pages/Routines.tsx
 msgid "Edit"
 msgstr "Edit"
-
-#: src/pages/plans/PhaseLedger.tsx
-msgid "edit doc"
-msgstr "edit doc"
 
 #: src/pages/plans/PlanHeader.tsx
 msgid "Edit phases"
@@ -1300,7 +1271,6 @@ msgid "happened"
 msgstr "happened"
 
 #: src/pages/plans/PhaseDetailPanel.tsx
-#: src/pages/plans/PhaseLedger.tsx
 msgid "headless run in progress"
 msgstr "headless run in progress"
 
@@ -1746,10 +1716,6 @@ msgstr "no revisions — \"Revise plan\" in the action row starts one"
 msgid "No routines yet. Create one to schedule recurring work."
 msgstr "No routines yet. Create one to schedule recurring work."
 
-#: src/pages/plans/PhaseLedger.tsx
-msgid "no runs yet"
-msgstr "no runs yet"
-
 #: src/pages/plans/PhaseDetailPanel.tsx
 msgid "No runs yet — this phase starts when the previous one lands."
 msgstr "No runs yet — this phase starts when the previous one lands."
@@ -2061,10 +2027,6 @@ msgstr "phase {seq}"
 msgid "Phase {seq}"
 msgstr "Phase {seq}"
 
-#: src/pages/plans/PhaseLedger.tsx
-msgid "Phase {seq} — {name}"
-msgstr "Phase {seq} — {name}"
-
 #: src/pages/plans/PlanHeader.tsx
 msgid "phase {seq} · {name} · {word}"
 msgstr "phase {seq} · {name} · {word}"
@@ -2148,7 +2110,6 @@ msgstr "plan doc source"
 
 #: src/pages/Plans.tsx
 #: src/pages/plans/PhaseDetailPanel.tsx
-#: src/pages/plans/PhaseLedger.tsx
 #: src/pages/plans/PlanHeader.tsx
 msgid "plan is not active"
 msgstr "plan is not active"
@@ -2464,7 +2425,6 @@ msgid "reply"
 msgstr "reply"
 
 #: src/pages/plans/DecisionTable.tsx
-#: src/pages/plans/PhaseLedger.tsx
 msgid "report"
 msgstr "report"
 
@@ -2482,7 +2442,6 @@ msgstr "resolved in the plan round"
 
 #: src/pages/plans/PhaseDetailPanel.tsx
 #: src/pages/plans/PhaseDetailPanel.tsx
-#: src/pages/plans/PhaseLedger.tsx
 msgid "Retry run"
 msgstr "Retry run"
 
@@ -2516,10 +2475,6 @@ msgstr "review"
 #: src/pages/plans/PhasePanel.tsx
 msgid "Review"
 msgstr "Review"
-
-#: src/pages/plans/PhaseLedger.tsx
-msgid "review & land"
-msgstr "review & land"
 
 #: src/pages/PlanningMode.tsx
 msgid "Review changes →"
@@ -2665,7 +2620,6 @@ msgid "Run now"
 msgstr "Run now"
 
 #: src/pages/plans/PhaseDetailPanel.tsx
-#: src/pages/plans/PhaseLedger.tsx
 msgid "Run phase"
 msgstr "Run phase"
 
@@ -2678,7 +2632,6 @@ msgid "run this phase again even though nothing has changed since it blocked"
 msgstr "run this phase again even though nothing has changed since it blocked"
 
 #: src/pages/plans/PhaseDetailPanel.tsx
-#: src/pages/plans/PhaseLedger.tsx
 msgid "run this phase headlessly in an isolated worktree"
 msgstr "run this phase headlessly in an isolated worktree"
 
@@ -2710,17 +2663,12 @@ msgid "Running plan"
 msgstr "Running plan"
 
 #: src/pages/plans/PhaseLedger.tsx
-#: src/pages/plans/PhaseLedger.tsx
 msgid "runs"
 msgstr "runs"
 
 #: src/pages/plans/PhasePanel.tsx
 msgid "Runs"
 msgstr "Runs"
-
-#: src/pages/plans/PhaseLedger.tsx
-msgid "runs of phase {seq}"
-msgstr "runs of phase {seq}"
 
 #: src/pages/plans/PhaseDetailPanel.tsx
 msgid "runs of this phase"
@@ -2795,7 +2743,6 @@ msgstr "sending…"
 msgid "Sends the phase back to its agent: your feedback is appended to the next run's prompt."
 msgstr "Sends the phase back to its agent: your feedback is appended to the next run's prompt."
 
-#: src/pages/plans/PhaseLedger.tsx
 #: src/pages/plans/PlanRunControls.tsx
 msgid "session"
 msgstr "session"
@@ -2972,10 +2919,6 @@ msgstr "stop: {trigger}"
 #: src/pages/plans/PlanHeader.tsx
 msgid "stops new runs from starting; the run in flight keeps going"
 msgstr "stops new runs from starting; the run in flight keeps going"
-
-#: src/pages/plans/PhaseLedger.tsx
-msgid "story"
-msgstr "story"
 
 #: src/pages/plans/PhasePanel.tsx
 msgid "Story"
@@ -3401,7 +3344,6 @@ msgid "verifying…"
 msgstr "verifying…"
 
 #: src/pages/plans/PhaseDetailPanel.tsx
-#: src/pages/plans/PhaseLedger.tsx
 msgid "waiting on phase {waitingOn}"
 msgstr "waiting on phase {waitingOn}"
 
@@ -3451,10 +3393,6 @@ msgstr "what to fix on the next pass"
 #: src/pages/plans/PlanDetailPanel.tsx
 msgid "what was done"
 msgstr "what was done"
-
-#: src/pages/plans/PhaseLedger.tsx
-msgid "what was done — the executor's Completion Report and execution record"
-msgstr "what was done — the executor's Completion Report and execution record"
 
 #: src/pages/plans/PlanHeader.tsx
 msgid "what was shipped — per-phase executed work"

@@ -332,21 +332,9 @@ export function EpicDetail({
               resolvedSeqs={resolvedSeqs}
               sessions={sessions}
               now={now}
-              runBusy={runBusy}
-              planRunning={planRunning}
               terminalSessions={terminalSessions}
               terms={terms}
-              phaseRunModel={phaseRunModel}
-              onPhaseRunModel={onPhaseRunModel}
-              phaseRunEffort={phaseRunEffort}
-              onPhaseRunEffort={onPhaseRunEffort}
-              onOpenPhase={onOpenPhase}
               phaseHref={phaseHref}
-              onRun={onRun}
-              onCancelRun={onCancelRun}
-              reverify={reverify}
-              onReverify={onReverify}
-              onOpenOutcome={onOpenOutcome}
             />
           )}
         {/* Mounted through a phase's other tabs: the operator's pick of the slice

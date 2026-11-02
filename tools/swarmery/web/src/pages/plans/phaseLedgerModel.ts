@@ -9,7 +9,7 @@ import type { EpicPhase, Session, SessionStatus } from '../../api/types';
 import type { GlyphState } from '../../components/place/StateGlyph';
 import { offPlanBand, type OffPlanBand } from '../../lib/offPlan';
 import { isUnresolvedOutcome, outcomeChipLabel } from './phaseChips';
-import { phaseNeedsYou, phaseStatus, type PhaseStatus } from './planModel';
+import { phaseNeedsYou, type PhaseStatus } from './planModel';
 
 export type PhaseStage = 'landed' | 'review' | 'exec' | 'decision' | 'manual' | 'none';
 
@@ -52,6 +52,8 @@ export function phaseGlyph(p: EpicPhase, status: PhaseStatus): GlyphState {
   if (phaseNeedsYou(p)) return 'needs';
   if (p.runState === 'running' || p.verifyRunning === true) return 'working';
   if (status === 'done') return 'done';
+  // Its stage reads review: the run ended, and the work is still moving through landing.
+  if (p.landing?.state === 'pushed' || p.landing?.state === 'pr_open') return 'working';
   if (p.runState === 'failed' || p.runOutcome === 'failed') return 'failed';
   if (p.runState === 'blocked') return 'stopped';
   return 'pending';
@@ -121,32 +123,6 @@ export function phaseNote(
     });
   }
   return t`not started`;
-}
-
-/** The phase a person came to look at: the one running, else the next one that can
- * run, so its Run is on screen without a click. Null when neither exists. */
-export function defaultOpenSeq(phases: readonly EpicPhase[], resolvedSeqs: Set<number>, planActive: boolean): number | null {
-  const running = phases.find((p) => p.runState === 'running');
-  if (running !== undefined) return running.seq;
-  if (!planActive) return null;
-  const next = phases.find(
-    (p) =>
-      phaseStatus(p, resolvedSeqs) !== 'done' &&
-      !phaseNeedsYou(p) &&
-      p.dependsOn.every((seq) => resolvedSeqs.has(seq)),
-  );
-  return next?.seq ?? null;
-}
-
-/** The criteria line of the expansion: `6/8 · 1 [MANUAL] · 1 [LAND] pending`. */
-export function criteriaLine(p: EpicPhase): string {
-  const parts = [`${String(p.checkboxesDone)}/${String(p.checkboxesTotal)}`];
-  if (p.manualOpen > 0) parts.push(`${String(p.manualOpen)} [MANUAL]`);
-  if (p.landOpen > 0) {
-    const land = String(p.landOpen);
-    parts.push(t`${land} [LAND] pending`);
-  }
-  return parts.join(' · ');
 }
 
 /** The sessions the daemon grouped under this phase, oldest first. */

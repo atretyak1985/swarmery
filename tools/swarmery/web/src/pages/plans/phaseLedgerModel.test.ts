@@ -5,10 +5,8 @@
 
 import { describe, expect, it } from 'vitest';
 import type { EpicPhase, NeedsYouDecision, Session } from '../../api/types';
-import { computeResolvedSeqs, phaseStatus } from './planModel';
+import { phaseStatus } from './planModel';
 import {
-  criteriaLine,
-  defaultOpenSeq,
   phaseCost,
   phaseCostBand,
   phaseGlyph,
@@ -68,6 +66,12 @@ describe('phaseStage', () => {
 });
 
 describe('phaseGlyph', () => {
+  it('keeps a phase moving through landing at working: its stage reads review', () => {
+    for (const state of ['pushed', 'pr_open']) {
+      expect(glyph(phase({ landing: { state } } as unknown as Partial<EpicPhase>))).toBe('working');
+    }
+  });
+
   it('ranks what blocks over what runs', () => {
     expect(glyph(phase({ runState: 'running', guardDecision: guard }))).toBe('needs');
     expect(glyph(phase({ runState: 'running' }))).toBe('working');
@@ -109,15 +113,6 @@ describe('phaseNote', () => {
   });
 });
 
-describe('criteriaLine', () => {
-  it('shows the count, then what an agent cannot close', () => {
-    expect(criteriaLine(phase({ checkboxesDone: 6, checkboxesTotal: 8 }))).toBe('6/8');
-    expect(criteriaLine(phase({ checkboxesDone: 6, checkboxesTotal: 8, manualOpen: 1, landOpen: 1 }))).toBe(
-      '6/8 · 1 [MANUAL] · 1 [LAND] pending',
-    );
-  });
-});
-
 describe('phaseRuns / phaseCost', () => {
   const run = (id: number, phaseId: number | null, costUsd: number | null, startedAt: string): Session =>
     ({
@@ -147,29 +142,6 @@ describe('phaseCostBand', () => {
   it('gives a verdict only where the daemon has one', () => {
     expect(phaseCostBand(phase())).toBeNull();
     expect(phaseCostBand(phase({ surprise: { index: 0 } as EpicPhase['surprise'] }))).toBe('on plan');
-  });
-});
-
-describe('defaultOpenSeq', () => {
-  const at = (seq: number, over: Partial<EpicPhase> = {}): EpicPhase => phase({ id: seq, seq, ...over });
-  const open = (phases: EpicPhase[], active = true): number | null =>
-    defaultOpenSeq(phases, computeResolvedSeqs(phases), active);
-
-  it('opens the running phase first', () => {
-    expect(open([at(1), at(2, { runState: 'running' })])).toBe(2);
-    expect(open([at(1, { runState: 'running' })], false)).toBe(1);
-  });
-  it('else the next phase that can run', () => {
-    const landed = at(1, { completionState: 'complete' });
-    expect(open([landed, at(2, { dependsOn: [1] }), at(3)])).toBe(2);
-  });
-  it('skips what waits on a person or on a dependency', () => {
-    expect(open([at(1, { guardDecision: guard }), at(2, { dependsOn: [1] }), at(3)])).toBe(3);
-    expect(open([at(1, { guardDecision: guard })])).toBeNull();
-  });
-  it('opens nothing on a finished or inactive plan', () => {
-    expect(open([at(1, { completionState: 'complete' })])).toBeNull();
-    expect(open([at(1)], false)).toBeNull();
   });
 });
 

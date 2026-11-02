@@ -1,17 +1,15 @@
 // @vitest-environment jsdom
 //
 // The phase ledger (handoff §6). The claims: the columns are the design's, with no
-// forecast and no tick (plan D-5); a line opens in place; the opened line holds the
-// runs, each a link to its session, and every action the phase offers; the name stays
-// the way to the full details; a done phase offers no doc edit.
+// forecast and no tick (plan D-5); a line opens the phase's page, from anywhere on it,
+// and opens nothing in place; the name stays a real link.
 
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter, useLocation } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Epic, EpicPhase, Session } from '../../api/types';
 import { cleanup, fireEvent, render, screen, within } from '../../test/render';
 import { PhaseLedger } from './PhaseLedger';
 import { computeResolvedSeqs } from './planModel';
-import type { Reverify } from './useReverify';
 
 vi.mock('../../workspace/ProjectContext', () => ({
   useProjectWorkspace: () => ({ project: { name: 'orders-api' }, slug: 'orders-api' }),
@@ -73,142 +71,68 @@ const run = (id: number, phaseId: number, title: string, costUsd: number | null)
     planGroup: { taskId: 7, role: 'phase', phaseId, phaseSeq: 1, phaseName: 'x', title: 'x' },
   }) as unknown as Session;
 
-function mount(phases: EpicPhase[], sessions: Session[] = [], status: Epic['status'] = 'active'): { onOpenPhase: ReturnType<typeof vi.fn>; onRun: ReturnType<typeof vi.fn>; onCancelRun: ReturnType<typeof vi.fn> } {
-  const epic = { taskId: 7, status, phases } as unknown as Epic;
-  const onOpenPhase = vi.fn();
-  const onRun = vi.fn();
-  const onCancelRun = vi.fn();
+function Location(): JSX.Element {
+  const { pathname } = useLocation();
+  return <output aria-label="location">{pathname}</output>;
+}
+
+function mount(phases: EpicPhase[], sessions: Session[] = []): void {
   render(
-    <MemoryRouter>
+    <MemoryRouter initialEntries={['/plan']}>
       <PhaseLedger
-        epic={epic}
+        epic={{ taskId: 7, status: 'active', phases } as unknown as Epic}
         resolvedSeqs={computeResolvedSeqs(phases)}
         sessions={sessions}
         terminalSessions={[]}
         terms={null}
         now={Date.now()}
-        runBusy={null}
-        planRunning={false}
-        phaseRunModel="default"
-        onPhaseRunModel={() => undefined}
-        phaseRunEffort="default"
-        onPhaseRunEffort={() => undefined}
-        onOpenPhase={onOpenPhase}
         phaseHref={(seq, tab) => `/plan/phase/${String(seq)}/${tab}`}
-        onRun={onRun}
-        onCancelRun={onCancelRun}
-        reverify={{ busyPhaseId: null, start: () => undefined } as unknown as Reverify}
-        onReverify={() => undefined}
-        onOpenOutcome={() => undefined}
       />
+      <Location />
     </MemoryRouter>,
   );
-  return { onOpenPhase, onRun, onCancelRun };
 }
 
-const row = (name: RegExp | string): HTMLElement => screen.getByRole('button', { name });
+const line = (name: string): HTMLElement => screen.getByRole('link', { name }).closest('li') as HTMLElement;
+const at = (): string | null => screen.getByRole('status', { name: 'location' }).textContent;
 
 afterEach(cleanup);
 
 describe('PhaseLedger', () => {
-  it('heads the ledger with the phase count, what landed, and the hint', () => {
-    mount([
-      { ...base, id: 1, seq: 1, name: 'One', completionState: 'complete' } as EpicPhase,
-      { ...base, id: 2, seq: 2, name: 'Two' } as EpicPhase,
-    ]);
+  it('heads the ledger with the phase count and what landed', () => {
+    mount([done, idle]);
     expect(screen.getByText('Phases')).toBeTruthy();
     expect(screen.getByText('2 · 1 landed')).toBeTruthy();
-    expect(screen.getByText('click a name to open · ▸ to expand runs')).toBeTruthy();
   });
 
   it('has the design’s columns, without a forecast', () => {
     mount([done]);
-    for (const head of ['#', 'phase', 'stage', 'cost', 'runs']) expect(screen.getByText(head)).toBeTruthy();
-    expect(screen.queryByText(/forecast/i)).toBeNull();
+    expect(screen.getByText('cost')).toBeTruthy();
+    expect(document.body.textContent).not.toMatch(/forecast/i);
   });
 
-  it('shows the running phase open, and a click closes it', () => {
-    mount([done, live]);
-    expect(row('Phase 3 — Router').getAttribute('aria-expanded')).toBe('true');
-    expect(row('Phase 2 — Limiter core').getAttribute('aria-expanded')).toBe('false');
-    fireEvent.click(row('Phase 3 — Router'));
-    expect(row('Phase 3 — Router').getAttribute('aria-expanded')).toBe('false');
+  it('opens the phase from anywhere on its line', () => {
+    mount([done, idle]);
+    fireEvent.click(within(line('Design bucket')).getByText('1'));
+    expect(at()).toBe('/plan/phase/1/story');
   });
 
-  it('opens one line at a time, from the keyboard too', () => {
-    mount([done, live]);
-    fireEvent.keyDown(row('Phase 2 — Limiter core'), { key: 'Enter' });
-    expect(row('Phase 2 — Limiter core').getAttribute('aria-expanded')).toBe('true');
-    expect(row('Phase 3 — Router').getAttribute('aria-expanded')).toBe('false');
-  });
-
-  it('keeps the name a link to the details, and clicking it does not toggle the line', () => {
+  it('keeps the name a real link, for the keyboard and a new tab', () => {
     mount([done]);
-    const name = screen.getByRole('link', { name: 'Limiter core' });
-    expect(name.getAttribute('href')).toBe('/plan/phase/2/story');
-    fireEvent.click(name);
-    expect(row('Phase 2 — Limiter core').getAttribute('aria-expanded')).toBe('false');
+    expect(screen.getByRole('link', { name: 'Limiter core' }).getAttribute('href')).toBe('/plan/phase/2/story');
   });
 
-  it('sums a phase’s runs, counts them, and links each to its session', () => {
+  it('opens nothing in place: no expansion, no caret, no actions', () => {
+    mount([live, idle]);
+    fireEvent.click(within(line('Design bucket')).getByText('1'));
+    expect(document.querySelector('[aria-expanded]')).toBeNull();
+    expect(document.body.textContent).not.toMatch(/[▸▾]/);
+    expect(screen.queryByRole('button', { name: /Run phase|Cancel/ })).toBeNull();
+  });
+
+  it('sums a phase’s runs and counts them on the line', () => {
     mount([done], [run(1, 12, 'spec + ADR', 6), run(2, 12, 'pass', 2)]);
-    expect(within(row('Phase 2 — Limiter core')).getByText('$8')).toBeTruthy();
-    expect(within(row('Phase 2 — Limiter core')).getByText(/^2 /)).toBeTruthy();
-    fireEvent.click(row('Phase 2 — Limiter core'));
-    const links = within(screen.getByRole('list', { name: 'runs of phase 2' })).getAllByRole('link');
-    expect(links).toHaveLength(2);
-    expect(links[0]?.textContent).toContain('spec + ADR');
-    expect(links[0]?.textContent).toContain('41m');
-  });
-
-  it('offers Run on the next runnable phase, without a click', () => {
-    const { onRun } = mount([done, idle]);
-    fireEvent.click(screen.getByRole('button', { name: 'Run phase' }));
-    expect(onRun).toHaveBeenCalledWith(11);
-  });
-
-  it('keeps Cancel, the session and the live chip on a running phase', () => {
-    const { onCancelRun } = mount([live]);
-    expect(screen.getByRole('link', { name: 'session' })).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
-    expect(onCancelRun).toHaveBeenCalledWith(13);
-  });
-
-  it('keeps the summary on a done phase and offers no doc edit', () => {
-    const { onOpenPhase } = mount([done]);
-    fireEvent.click(row('Phase 2 — Limiter core'));
-    fireEvent.click(screen.getByRole('button', { name: '✓ summary' }));
-    expect(onOpenPhase).toHaveBeenCalledWith(2, 'report');
-    expect(screen.queryByRole('link', { name: 'edit doc' })).toBeNull();
-    expect(screen.queryByRole('button', { name: 'Run phase' })).toBeNull();
-  });
-
-  it('links every detail tab from an open line, and criteria to where they are ticked', () => {
-    mount([idle]);
-    const href = (name: string | RegExp): string | null => screen.getByRole('link', { name }).getAttribute('href');
-    expect(href('story')).toBe('/plan/phase/1/story');
-    expect(href('runs')).toBe('/plan/phase/1/runs');
-    expect(href('report')).toBe('/plan/phase/1/report');
-    expect(href('edit doc')).toBe('/plan/phase/1/edit');
-    expect(href(/^criteria · 0\/3/)).toBe('/plan/phase/1/criteria');
-  });
-
-  it('puts the model and effort pickers beside the Run they govern', () => {
-    mount([idle]);
-    expect(screen.getByRole('button', { name: 'Run phase' })).toBeTruthy();
-    expect(screen.getAllByRole('combobox')).toHaveLength(2);
-  });
-
-  it('leaves the pickers out while the phase waits on the operator, and keeps Run', () => {
-    mount([{ ...idle, checkboxesDone: 2, manualOpen: 1 } as EpicPhase]);
-    fireEvent.click(row('Phase 1 — Design bucket'));
-    expect(screen.getByRole('button', { name: 'Run phase' })).toBeTruthy();
-    expect(screen.queryAllByRole('combobox')).toHaveLength(0);
-  });
-
-  it('disables Run on a plan that is not active', () => {
-    mount([live, idle], [], 'paused');
-    fireEvent.click(row('Phase 1 — Design bucket'));
-    expect((screen.getByRole('button', { name: 'Run phase' }) as HTMLButtonElement).disabled).toBe(true);
+    expect(within(line('Limiter core')).getByText('$8')).toBeTruthy();
+    expect(within(line('Limiter core')).getAllByText('2')).toHaveLength(2); // the seq, then the count
   });
 });
