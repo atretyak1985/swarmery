@@ -169,11 +169,25 @@ func splitGlobs(s string) []string {
 
 // List returns lessons, newest first; status "" means every status. Candidates
 // carry their merge suggestions.
-func List(db *sql.DB, status string) ([]Lesson, error) {
-	q, args := selectLesson, []any{}
+func List(db *sql.DB, status string) ([]Lesson, error) { return ListProject(db, status, "") }
+
+// ListProject is List narrowed to the lessons learned in one project, by slug: where
+// the lesson's phase ran. "" is every project. A lesson whose phase is gone belongs to
+// none, so it shows only in the whole list.
+func ListProject(db *sql.DB, status, project string) ([]Lesson, error) {
+	var where []string
+	args := []any{}
 	if status != "" {
-		q += ` WHERE l.status = ?`
+		where = append(where, `l.status = ?`)
 		args = append(args, status)
+	}
+	if project != "" {
+		where = append(where, `t.project_id IN (SELECT id FROM projects WHERE slug = ?)`)
+		args = append(args, project)
+	}
+	q := selectLesson
+	if len(where) > 0 {
+		q += ` WHERE ` + strings.Join(where, ` AND `)
 	}
 	rows, err := db.Query(q+` ORDER BY l.id DESC LIMIT 500`, args...)
 	if err != nil {

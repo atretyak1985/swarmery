@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/repopath"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/worktree"
 )
 
@@ -68,6 +69,72 @@ func TestAreaDir(t *testing.T) {
 		if _, err := AreaDir(bad); !errors.Is(err, ErrInvalid) {
 			t.Errorf("AreaDir(%q) err = %v, want ErrInvalid", bad, err)
 		}
+	}
+}
+
+func TestListProjectKeepsToTheProjectTheLessonWasLearnedIn(t *testing.T) {
+	db := openDB(t)
+	phaseID := seedRun(t, db, "scoped", 0.2, "")
+	here := seedActive(t, db, phaseID, 1, "Learned here.", "internal/store/**", "2026-09-01T00:00:00Z")
+	orphan := seedActive(t, db, 987654, 2, "Phase is gone.", "internal/store/**", "2026-09-01T00:00:00Z")
+	var slug string
+	if err := db.QueryRow(`SELECT p.slug FROM epic_phases e JOIN tasks t ON t.id = e.workspace_task_id
+		JOIN projects p ON p.id = t.project_id WHERE e.id = ?`, phaseID).Scan(&slug); err != nil {
+		t.Fatal(err)
+	}
+	ids := func(ls []Lesson, err error) []int64 {
+		t.Helper()
+		if err != nil {
+			t.Fatal(err)
+		}
+		out := []int64{}
+		for _, l := range ls {
+			out = append(out, l.ID)
+		}
+		return out
+	}
+	if got := ids(ListProject(db, StatusActive, slug)); len(got) != 1 || got[0] != here {
+		t.Errorf("own project = %v, want [%d]", got, here)
+	}
+	if got := ids(ListProject(db, StatusActive, "another-project")); len(got) != 0 {
+		t.Errorf("another project = %v, want none", got)
+	}
+	if got := ids(List(db, StatusActive)); len(got) != 2 || got[0] != orphan {
+		t.Errorf("whole list = %v, want the orphan too", got)
+	}
+}
+
+// A multi-repo project is no repository itself, and a lesson outlives its phase's repo
+// cell: the live 500 named a worktree long gone. project.json's mainApp is the way in,
+// as it is for a run; a longer repos[] alone stays no answer (repopath.FileHints).
+func TestPromoteFallsBackToTheMainAppProjectJSONDeclares(t *testing.T) {
+	db := openDB(t)
+	project := t.TempDir()
+	repo := filepath.Join(project, "app")
+	if err := os.MkdirAll(filepath.Join(project, ".claude"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(project, ".claude", "project.json"), []byte(`{"mainApp":"app","repos":["app","tools"]}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Rename(gitRepo(t), repo); err != nil {
+		t.Fatal(err)
+	}
+	phaseID := seedRun(t, db, "multi", 0.2, "")
+	id := seedActive(t, db, phaseID, 1, "Keep the fixtures small.", "internal/store/**", "2026-09-01T00:00:00Z")
+	if _, err := db.Exec(`UPDATE epic_phases SET repo = 'app-wt-gone (feat/gone)' WHERE id = ?`, phaseID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec(`UPDATE projects SET path = ? WHERE id = (SELECT t.project_id FROM epic_phases e
+		JOIN tasks t ON t.id = e.workspace_task_id WHERE e.id = ?)`, project, phaseID); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := Promote(db, worktree.ExecGit{}, repopath.Resolve, id, PromoteInput{}, time.Now()); err != nil {
+		t.Fatalf("Promote: %v", err)
+	}
+	if body := gitOut(t, repo, "show", PromoteBranch(id)+":internal/store/CLAUDE.md"); !strings.Contains(body, "Keep the fixtures small.") {
+		t.Errorf("CLAUDE.md = %q", body)
 	}
 }
 

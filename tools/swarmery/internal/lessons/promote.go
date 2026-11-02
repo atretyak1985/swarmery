@@ -29,6 +29,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/repopath"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/surprise"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/worktree"
 )
@@ -113,13 +114,17 @@ func Promote(db *sql.DB, git worktree.Git, resolve RepoResolver, id int64, in Pr
 	if err != nil {
 		return l, err
 	}
-	var projectPath, repoCell string
-	if err := db.QueryRow(`SELECT p.path, COALESCE(e.repo, '') FROM epic_phases e
+	var projectPath, repoCell, workspaceRoot string
+	if err := db.QueryRow(`SELECT p.path, COALESCE(e.repo, ''), COALESCE(w.root_path, '') FROM epic_phases e
 		JOIN tasks t ON t.id = e.workspace_task_id JOIN projects p ON p.id = t.project_id
-		WHERE e.id = ?`, l.PhaseID).Scan(&projectPath, &repoCell); err != nil {
+		LEFT JOIN workspaces w ON w.project_id = p.id
+		WHERE e.id = ?`, l.PhaseID).Scan(&projectPath, &repoCell, &workspaceRoot); err != nil {
 		return l, fmt.Errorf("%w: the lesson's phase no longer maps to a project: %v", ErrState, err)
 	}
-	root, err := resolve(projectPath, repoCell)
+	// The engines' own candidate list: a lesson outlives its phase's repo cell, which
+	// can name a worktree long gone, and a multi-repo project declares its repositories
+	// in project.json rather than being one itself.
+	root, err := resolve(projectPath, repopath.Cells(projectPath, workspaceRoot, repoCell)...)
 	if err != nil {
 		return l, fmt.Errorf("resolve the project's repository: %w", err)
 	}
