@@ -1,4 +1,5 @@
 import { defineConfig } from '@lingui/conf';
+import { formatter } from '@lingui/format-po';
 import { CATALOGS, type CatalogName, LOCALES, SOURCE_LOCALE } from './src/i18n/catalogs';
 
 // Which source files each catalog owns — the Legs table of the extraction
@@ -81,9 +82,8 @@ export default defineConfig({
     // macros and must be extracted like any other message.
     exclude: ['**/*.test.*'],
   })),
-  format: 'po',
   // No line numbers in origins: a code edit above a message would otherwise
   // rewrite every .po it lands in, and parallel legs would conflict on them.
-  formatOptions: { lineNumbers: false },
+  format: formatter({ lineNumbers: false }),
   compileNamespace: 'es',
 });
