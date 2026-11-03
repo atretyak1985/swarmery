@@ -283,6 +283,10 @@ msgstr "{mod} — за даними Claude Code для цього процесу
 msgid "{n, plural, one {# file is being edited by more than one live session} few {# files are being edited by more than one live session} many {# files are being edited by more than one live session} other {# files are being edited by more than one live session}}"
 msgstr "{n, plural, one {# файл редагує більше однієї живої сесії} few {# файли редагує більше однієї живої сесії} many {# файлів редагує більше однієї живої сесії} other {# файла редагує більше однієї живої сесії}}"
 
+#: src/lib/needsYou.ts
+msgid "{n, plural, one {# protected path} few {# protected paths} many {# protected paths} other {# protected paths}}"
+msgstr "{n, plural, one {# захищений шлях} few {# захищені шляхи} many {# захищених шляхів} other {# захищеного шляху}}"
+
 #: src/components/BulkPromptBar.tsx
 msgid "{n} selected of {selectableCount} with a polling link mod"
 msgstr "вибрано {n} з {selectableCount} з активним модом swarmery link"
@@ -978,16 +982,16 @@ msgid "auto-approve presets are configured per project — open a project's Sett
 msgstr "пресети автопогодження задаються для кожного проєкту окремо — відкрийте Налаштування проєкту, щоб їх налаштувати"
 
 #: src/lib/needsYou.ts
-msgid "awaiting merge"
-msgstr "чекає на злиття"
+msgid "Awaiting merge"
+msgstr "Чекає на злиття"
 
 #: src/lib/sessionsView.ts
 msgid "awaiting reply"
 msgstr "чекає відповіді"
 
 #: src/lib/needsYou.ts
-msgid "awaiting your reply"
-msgstr "чекає на вашу відповідь"
+msgid "Awaiting reply"
+msgstr "Чекає відповіді"
 
 #: src/components/Sidebar.tsx
 #: src/workspace/WorkspaceShell.tsx
@@ -1156,6 +1160,10 @@ msgstr "не вдалося змінити вартість: {status}"
 #: src/components/ProjectPlugins.tsx
 msgid "check"
 msgstr "перевірити"
+
+#: src/lib/needsYou.ts
+msgid "Check by hand"
+msgstr "Перевірити вручну"
 
 #: src/components/AccountReadyBanner.tsx
 #: src/components/AccountsSection.tsx
@@ -1351,8 +1359,8 @@ msgid "confirm detach"
 msgstr "підтвердити відключення"
 
 #: src/lib/needsYou.ts
-msgid "confirm locally"
-msgstr "підтвердити локально"
+msgid "Confirm in terminal"
+msgstr "Підтвердити в терміналі"
 
 #: src/components/SessionControls.tsx
 msgid "Confirm stop"
@@ -1973,7 +1981,6 @@ msgstr "провал"
 #: src/components/ProjectPlugins.tsx
 #: src/components/RunOutcomeModal.tsx
 #: src/components/SessionControls.tsx
-#: src/lib/needsYou.ts
 msgid "failed"
 msgstr "збій"
 
@@ -2182,9 +2189,12 @@ msgid "Git writes (add, commit, checkout, worktree)"
 msgstr "Записи git (add, commit, checkout, worktree)"
 
 #: src/components/place/StateGlyph.tsx
-#: src/lib/needsYou.ts
 msgid "guard stop"
 msgstr "зупинка guard"
+
+#: src/lib/needsYou.ts
+msgid "Guard stopped the run"
+msgstr "Guard зупинив запуск"
 
 #: src/pages/docsRail.ts
 msgid "Guides"
@@ -2557,7 +2567,6 @@ msgid "managed"
 msgstr "керований"
 
 #: src/components/place/StateGlyph.tsx
-#: src/lib/needsYou.ts
 msgid "manual check"
 msgstr "ручна перевірка"
 
@@ -3096,9 +3105,12 @@ msgid "per-category overrides apply only under the unrestricted preset"
 msgstr "перевизначення за категоріями діють лише в пресеті «без обмежень»"
 
 #: src/components/place/StateGlyph.tsx
-#: src/lib/needsYou.ts
 msgid "permission"
 msgstr "дозвіл"
+
+#: src/lib/needsYou.ts
+msgid "Permission"
+msgstr "Дозвіл"
 
 #: src/components/PermissionPresets.tsx
 msgid "permissions"
@@ -3144,6 +3156,10 @@ msgstr "запуск фази не вдався ({status})"
 #: src/lib/sessionsView.ts
 msgid "Phase running"
 msgstr "Фаза виконується"
+
+#: src/lib/needsYou.ts
+msgid "Phase stalled"
+msgstr "Фаза застрягла"
 
 #: src/lib/docFigures.tsx
 msgid "Phases with no edge between them run in parallel; each phase document carries its own copy-paste agent prompt and acceptance criteria, so it is executable standalone."
@@ -3390,9 +3406,12 @@ msgstr "повернути картку у Вхідних"
 
 #: src/components/place/DecisionCard.tsx
 #: src/components/place/StateGlyph.tsx
-#: src/lib/needsYou.ts
 msgid "question"
 msgstr "питання"
+
+#: src/lib/needsYou.ts
+msgid "Question"
+msgstr "Питання"
 
 #: src/components/QuestionForm.tsx
 msgid "question {number}"
@@ -3927,6 +3946,10 @@ msgstr "помилка сесії"
 msgid "Session error"
 msgstr "Помилка сесії"
 
+#: src/lib/needsYou.ts
+msgid "Session failed"
+msgstr "Сесія впала"
+
 #: src/components/NotifySettings.tsx
 msgid "session finished"
 msgstr "сесія завершилась"
@@ -4109,10 +4132,6 @@ msgstr "Гліфи стану обертаються й пульсують"
 #: src/workspace/boardModel.ts
 msgid "stale"
 msgstr "застаріло"
-
-#: src/lib/needsYou.ts
-msgid "stalled phase"
-msgstr "фаза застрягла"
 
 #: src/workspace/NewTaskModal.tsx
 msgid "start immediately — the dispatcher picks it up"
@@ -4915,8 +4934,8 @@ msgid "worktree"
 msgstr "worktree"
 
 #: src/lib/needsYou.ts
-msgid "worktree cleanup"
-msgstr "прибирання worktree"
+msgid "Worktree cleanup"
+msgstr "Прибирання worktree"
 
 #: src/workspace/task/TaskActions.tsx
 msgid "worktree reclaimed — nothing to re-grade"

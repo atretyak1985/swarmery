@@ -23,8 +23,11 @@
 //   worktree_cleanup     one repository's worktrees whose content is proven in
 //                        main: a table with checkboxes, and "Remove selected"
 //
-// `e` and `x` run what the card's two buttons show; the card publishes them through
-// a ref, the same way the session gate does.
+// Artboard 3b on v4 (plan D-9): a row names the kind as a word (red only for a
+// guard stop), the phase or session, a one-word hint and the age; the detail pane
+// stays the one DecisionCard. `e` only moves focus onto the card's main action
+// (D-4), so a stray key never allows or answers anything; `x` runs the card's
+// secondary button where it carries the key; `o`/→ go into the pane, ← back.
 
 import { plural, t } from '@lingui/core/macro';
 import { Trans, useLingui } from '@lingui/react/macro';
@@ -37,6 +40,7 @@ import {
   useState,
   type MutableRefObject,
   type ReactNode,
+  type RefObject,
 } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import {
@@ -63,7 +67,6 @@ import { ListPane } from '../components/place/ListPane';
 import { ListEmpty } from '../components/place/ListTabs';
 import { ListRow } from '../components/place/ListRow';
 import { PlaceLayout } from '../components/place/PlaceLayout';
-import { StateGlyph } from '../components/place/StateGlyph';
 import { QuestionBlock } from '../components/QuestionForm';
 import { ErrorBox, Loading } from '../components/ui';
 import {
@@ -79,8 +82,10 @@ import { projectLabel } from '../lib/format';
 import {
   filterItems,
   groupItems,
-  itemGlyph,
+  isAlarmKind,
   itemKey,
+  itemPreview,
+  itemTitle,
   kindLabel,
   replyPrefix,
   replyWithOption,
@@ -114,9 +119,9 @@ async function copyText(text: string): Promise<boolean> {
   }
 }
 
-/** `e` and `x` for the open card: what its two buttons do right now. */
+/** `x` for the open card: what its secondary button does right now. `e` only
+ * focuses the main button (D-4), through `primaryRef`. */
 interface CardKeys {
-  primary: (() => void) | undefined;
   secondary: (() => void) | undefined;
 }
 
@@ -136,20 +141,22 @@ interface CardContext {
   go: (to: string) => void;
   dismiss: () => void;
   keys: MutableRefObject<CardKeys>;
+  /** The card's main button, for `e`. */
+  primaryRef: RefObject<HTMLButtonElement | null>;
   nowMs: number;
 }
 
-/** A card's published `e` / `x`, renewed every render so they close over its state. */
-function useCardKeys(ctx: CardContext, primary?: () => void, secondary?: () => void): void {
+/** A card's published `x`, renewed every render so it closes over its state. */
+function useCardKeys(ctx: CardContext, secondary?: () => void): void {
   const { keys, busy } = ctx;
-  // A layout effect: the keys are published in the same commit as the card, not a
-  // passive-effect tick later, when a window keydown could still see the old ones
-  // (or none) — and a card that unmounts retires them in that commit too.
+  // A layout effect: the key is published in the same commit as the card, not a
+  // passive-effect tick later, when a window keydown could still see the old one
+  // (or none) — and a card that unmounts retires it in that commit too.
   useLayoutEffect(() => {
-    keys.current = { primary: busy ? undefined : primary, secondary: busy ? undefined : secondary };
-    // Once the card is gone its keys must not answer a request that left the queue.
+    keys.current = { secondary: busy ? undefined : secondary };
+    // Once the card is gone its key must not answer a request that left the queue.
     return () => {
-      keys.current = { primary: undefined, secondary: undefined };
+      keys.current = { secondary: undefined };
     };
   });
 }
@@ -220,7 +227,7 @@ function PermissionDecision({ ctx, request }: { ctx: CardContext; request: Permi
       },
     );
   };
-  useCardKeys(ctx, primary, localOnly ? undefined : deny);
+  useCardKeys(ctx, localOnly ? undefined : deny);
 
   const project = ctx.project;
   const facts = localOnly
@@ -241,7 +248,8 @@ function PermissionDecision({ ctx, request }: { ctx: CardContext; request: Permi
 
   return (
     <DecisionCard
-      tier={tier}
+      kind={kindLabel(item.kind)}
+      kindTone="default"
       meta={ctx.meta}
       {...(clock === null ? {} : { expires: t`expires in ${clock}` })}
       title={
@@ -298,6 +306,7 @@ function PermissionDecision({ ctx, request }: { ctx: CardContext; request: Permi
       }
       facts={facts}
       {...(note === undefined ? {} : { note })}
+      primaryRef={ctx.primaryRef}
       primary={{ label: localOnly ? t`deny` : t`allow once`, onClick: primary, disabled: busy }}
       {...(canRule
         ? {
@@ -366,7 +375,7 @@ function QuestionDecision({
     const trimmed = reason.trim();
     run(() => resolveApproval(requestId, 'deny', trimmed === '' ? undefined : trimmed, undefined));
   };
-  useCardKeys(ctx, primary, deny);
+  useCardKeys(ctx, deny);
 
   const count = questions.length;
   const note = denying
@@ -377,7 +386,8 @@ function QuestionDecision({
 
   return (
     <DecisionCard
-      tier="question"
+      kind={kindLabel(ctx.item.kind)}
+      kindTone="default"
       meta={ctx.meta}
       title={single?.question ?? t`Claude is asking you ${plural(count, { one: '# question', few: '# questions', many: '# questions', other: '# questions' })}`}
       body={
@@ -414,6 +424,7 @@ function QuestionDecision({
             },
           })}
       {...(note === undefined ? {} : { note })}
+      primaryRef={ctx.primaryRef}
       primary={{
         label: single === null ? t`submit answers` : typed === '' ? t`reply` : t`reply: ${typed}`,
         onClick: primary,
@@ -461,12 +472,13 @@ function ReplyDecision({ ctx }: { ctx: CardContext }): JSX.Element {
     if (picked === null) copyPick();
     else run(() => sendSessionMessage(item.sessionId, picked));
   };
-  useCardKeys(ctx, primary, ctx.dismiss);
+  useCardKeys(ctx, ctx.dismiss);
 
   const question = item.suggestion?.question || item.question || item.preview;
   return (
     <DecisionCard
-      tier="question"
+      kind={kindLabel(item.kind)}
+      kindTone="default"
       meta={ctx.meta}
       title={question}
       body={<Trans>The session stopped to ask rather than guess. It does nothing until it hears from you.</Trans>}
@@ -477,11 +489,12 @@ function ReplyDecision({ ctx }: { ctx: CardContext }): JSX.Element {
       )}
       picked={picked === null ? null : String(pick)}
       onPick={(id) => setPick(Number(id))}
+      primaryRef={ctx.primaryRef}
       primary={{ label: picked === null ? t`copy reply` : t`reply`, onClick: primary, disabled: busy }}
       {...(picked === null ? {} : { extra: { label: t`copy reply`, onClick: copyPick } })}
       secondary={{ label: t`dismiss`, onClick: ctx.dismiss }}
       {...(copied === null
-        ? { link: sessionLink(ctx, t`open session →`) }
+        ? { link: sessionLink(ctx, t`session →`) }
         : { foot: copied === 'ok' ? t`Copied — paste it into the session` : t`Copy failed` })}
     />
   );
@@ -499,15 +512,16 @@ function ConfirmLocally({ ctx }: { ctx: CardContext }): JSX.Element {
     if (focusHref === null) ctx.go(ctx.sessionTo);
     else window.location.assign(focusHref);
   };
-  useCardKeys(ctx, primary);
-  const kind = kindLabel(item.kind);
+  useCardKeys(ctx);
   return (
     <DecisionCard
-      tier="destructive"
-      meta={`${kind} · ${ctx.meta}`}
+      kind={kindLabel(item.kind)}
+      kindTone="default"
+      meta={ctx.meta}
       title={t`Production deploy — confirm in the session's terminal`}
       {...(item.preview === '' ? {} : { code: item.preview })}
       facts={t`destructive: asks every time, no always-allow`}
+      primaryRef={ctx.primaryRef}
       primary={{ label: focusHref === null ? t`open session` : t`Focus terminal`, onClick: primary }}
       link={sessionLink(ctx, t`open session →`)}
     />
@@ -516,10 +530,9 @@ function ConfirmLocally({ ctx }: { ctx: CardContext }): JSX.Element {
 
 /* ----- phase_decision: a guard decision or an agent-declared stop ----- */
 
-/** What the guard found, as the card's one mono line. */
+/** What the guard found, as one part of the card's mono facts line. */
 function guardFacts(decision: NeedsYouDecision): string {
   const f = guardFindings(decision.guard);
-  const flagList = (decision.flags ?? []).join(', ');
   const parts: string[] = [];
   if (f !== null && f.changed.length > 0) {
     parts.push(
@@ -543,66 +556,141 @@ function guardFacts(decision: NeedsYouDecision): string {
     );
   }
   if (f?.unreadable === true) parts.push(t`guard block unreadable`);
-  if (flagList !== '') parts.push(t`contract broken: ${flagList}`);
   return parts.join(' · ');
 }
 
+/** One part of the facts line; the stop's parts keep their test ids. */
+interface Fact {
+  key: string;
+  text: string;
+  testId?: string;
+}
+
+/** The facts as one grey mono line: the parts joined by ` · `. */
+function FactsLine({ facts }: { facts: readonly Fact[] }): JSX.Element {
+  return (
+    <>
+      {facts.map((f, i) => (
+        <span key={f.key}>
+          {i > 0 && ' · '}
+          <span {...(f.testId === undefined ? {} : { 'data-testid': f.testId })}>{f.text}</span>
+        </span>
+      ))}
+    </>
+  );
+}
+
+type PhaseField = 'none' | 'note' | 'own';
+
+/**
+ * A guard decision or an agent-declared stop. A stop lists its options as a radio
+ * group, and one button repeats the pick; `own answer…` opens a field whose text,
+ * once typed, the button sends as `other` instead. A plain guard decision (allow
+ * or reject) is two buttons. Either way `+ note` opens the note sent with the
+ * answer. `x` does nothing here: a stray key must not answer a guard.
+ */
 function PhaseDecision({ ctx }: { ctx: CardContext }): JSX.Element | null {
   const { t } = useLingui();
   const { item, busy, run } = ctx;
-  const [note, setNote] = useState('');
+  const [field, setField] = useState<PhaseField>('none');
+  const [text, setText] = useState('');
   const [pick, setPick] = useState(0);
+  useCardKeys(ctx);
   const decision = item.decision;
-  const reviewTo = phaseHref(item, 'review');
-  const picked = decision?.options[pick];
-  const own = note.trim();
-  const isStop = decision !== undefined && (decision.trigger !== undefined || decision.freeText === true);
-
-  const answer = (option: string): void => {
-    if (decision === undefined) return;
-    run(() => answerGuardDecision(decision.taskId, decision.phaseId, decision.decisionId, option, own));
-  };
-  const primary = (): void => {
-    if (picked !== undefined) answer(picked.id);
-  };
-  const ownAnswer = (): void => {
-    if (own !== '') answer('other');
-  };
-  useCardKeys(ctx, primary, isStop ? ownAnswer : undefined);
   if (decision === undefined) return null;
 
-  const decisionId = decision.decisionId;
+  const reviewTo = phaseHref(item, 'review');
+  const typed = text.trim();
+  const isStop = decision.trigger !== undefined || decision.freeText === true;
+  const options = decision.options;
+  const ids = options.map((o) => o.id);
+  // A guard decision is allow-or-reject: two buttons, nothing to pick from.
+  const twoWay = !isStop && options.length === 2 && ids.includes(ALLOW_OPTION) && ids.includes('reject');
+  const owning = field === 'own' && typed !== '';
+  const picked = owning ? undefined : options[pick];
+  const note = field === 'note' ? typed : '';
+
+  const answer = (option: string, withNote: string): void => {
+    run(() => answerGuardDecision(decision.taskId, decision.phaseId, decision.decisionId, option, withNote));
+  };
+  const primary = (): void => {
+    if (owning) answer('other', typed);
+    else if (twoWay) answer(ALLOW_OPTION, note);
+    else if (picked !== undefined) answer(picked.id, note);
+  };
+  const openField = (next: Exclude<PhaseField, 'none'>): void => {
+    setField((prev) => (prev === next ? 'none' : next));
+    setText('');
+  };
+
   const trigger = decision.trigger !== undefined && decision.trigger !== '' ? decision.trigger : t`no trigger`;
   const reason = decision.reason !== undefined && decision.reason !== '' ? decision.reason : decision.question;
   const pathList = (decision.paths ?? []).join(', ');
-  const facts = guardFacts(decision);
-  const optionLabel = (id: string, label: string): string =>
-    id === ALLOW_OPTION && !isStop ? t`Allow (add to scope)` : id === 'reject' && !isStop ? t`Reject` : label;
+  const flagList = (decision.flags ?? []).join(', ');
+  const found = guardFacts(decision);
+  const facts: Fact[] = [
+    ...(isStop ? [{ key: 'trigger', text: trigger, testId: 'stop-trigger' }] : []),
+    ...(found === '' ? [] : [{ key: 'guard', text: found }]),
+    ...(flagList === '' ? [] : [{ key: 'flags', text: t`contract broken: ${flagList}`, testId: 'stop-flags' }]),
+    ...(pathList === '' ? [] : [{ key: 'paths', text: t`allow releases: ${pathList}`, testId: 'stop-paths' }]),
+  ];
+  const linkClass = `${INLINE} aria-expanded:text-brand`;
 
   return (
     <DecisionCard
-      kind={`${kindLabel(item.kind)} · ${decisionId}`}
+      kind={`${kindLabel(item.kind)} · ${decision.decisionId}`}
       kindTone="red"
       meta={ctx.meta}
-      title={isStop ? t`The executor stopped: ${trigger}` : decision.question}
-      {...(isStop ? { body: reason } : {})}
-      {...(facts === '' ? {} : { facts })}
-      options={decision.options.map((o) => {
-        const released = o.id === ALLOW_OPTION && pathList !== '' ? t`Allowing this releases: ${pathList}` : '';
-        const consequence = [o.consequence ?? '', released].filter((s) => s !== '').join(' · ');
-        const label = optionLabel(o.id, o.label);
-        return consequence === '' ? { id: o.id, label } : { id: o.id, label, consequence };
-      })}
-      picked={picked?.id ?? null}
-      onPick={(id) => setPick(decision.options.findIndex((o) => o.id === id))}
-      pickLimit={34}
-      note={{
-        value: note,
-        onChange: setNote,
-        placeholder: t`note — recorded with the answer in the phase doc (optional)`,
+      title={isStop ? reason : decision.question}
+      {...(facts.length === 0 ? {} : { facts: <FactsLine facts={facts} /> })}
+      {...(twoWay
+        ? {}
+        : {
+            options: options.map((o) =>
+              o.consequence === undefined || o.consequence === ''
+                ? { id: o.id, label: o.label }
+                : { id: o.id, label: o.label, consequence: o.consequence },
+            ),
+            picked: picked?.id ?? null,
+            onPick: (id: string) => {
+              setPick(options.findIndex((o) => o.id === id));
+              if (field === 'own') setText('');
+            },
+            pickLimit: 34,
+          })}
+      tools={
+        <>
+          <button type="button" onClick={() => openField('note')} aria-expanded={field === 'note'} className={linkClass}>
+            {t`+ note`}
+          </button>
+          {isStop && (
+            <button type="button" onClick={() => openField('own')} aria-expanded={field === 'own'} className={linkClass}>
+              {t`own answer…`}
+            </button>
+          )}
+        </>
+      }
+      {...(field === 'none'
+        ? {}
+        : {
+            note: {
+              value: text,
+              onChange: setText,
+              placeholder:
+                field === 'note'
+                  ? t`note — recorded with the answer in the phase doc (optional)`
+                  : t`own answer — sent instead of an option`,
+            },
+          })}
+      primaryRef={ctx.primaryRef}
+      primary={{
+        label: twoWay ? t`Allow · add to scope` : owning ? t`answer: ${typed}` : t`answer`,
+        onClick: primary,
+        disabled: busy || (!twoWay && !owning && picked === undefined),
       }}
-      primary={{ label: t`answer`, onClick: primary, disabled: busy || picked === undefined }}
-      {...(isStop ? { secondary: { label: t`own answer…`, onClick: ownAnswer, disabled: busy || own === '' } } : {})}
+      {...(twoWay
+        ? { secondary: { label: t`Reject`, onClick: () => answer('reject', note), disabled: busy }, secondaryKey: false }
+        : {})}
       {...(reviewTo === null ? {} : { link: { label: t`phase review →`, onClick: () => ctx.go(reviewTo) } })}
     />
   );
@@ -613,7 +701,7 @@ function PhaseDecision({ ctx }: { ctx: CardContext }): JSX.Element | null {
 function OpenDecision({
   ctx,
   title,
-  tone = 'amber',
+  tone = 'default',
   body,
   facts,
   label,
@@ -632,7 +720,7 @@ function OpenDecision({
   const primary = (): void => {
     if (to !== null) ctx.go(to);
   };
-  useCardKeys(ctx, primary);
+  useCardKeys(ctx);
   return (
     <DecisionCard
       kind={kindLabel(ctx.item.kind)}
@@ -641,6 +729,7 @@ function OpenDecision({
       title={title}
       {...(body === undefined ? {} : { body })}
       {...(facts === undefined ? {} : { facts })}
+      primaryRef={ctx.primaryRef}
       primary={{ label, onClick: primary, disabled: to === null }}
       {...(link === undefined ? {} : { link })}
     />
@@ -655,7 +744,6 @@ function ManualPhase({ ctx }: { ctx: CardContext }): JSX.Element {
   return (
     <OpenDecision
       ctx={ctx}
-      tone="default"
       title={plural(n, {
         one: '# criterion marked [MANUAL] — only you can close it',
         few: '# criteria marked [MANUAL] — only you can close them',
@@ -683,7 +771,7 @@ function AwaitingMerge({ ctx }: { ctx: CardContext }): JSX.Element {
   return (
     <OpenDecision
       ctx={ctx}
-      title={item.sessionName}
+      title={itemTitle(item)}
       body={item.preview}
       label={t`open review`}
       to={phaseHref(item, 'review')}
@@ -735,7 +823,7 @@ function WorktreeCleanup({ ctx }: { ctx: CardContext }): JSX.Element | null {
       },
     );
   };
-  useCardKeys(ctx, remove);
+  useCardKeys(ctx);
   if (cleanup === undefined) return null;
 
   const candidates = cleanup.candidates;
@@ -851,6 +939,7 @@ function WorktreeCleanup({ ctx }: { ctx: CardContext }): JSX.Element | null {
         </>
       }
       facts={t`${selectedCount} selected`}
+      primaryRef={ctx.primaryRef}
       primary={{
         label: busy ? t`Removing…` : t`Remove selected`,
         onClick: remove,
@@ -895,7 +984,6 @@ function Decision({ ctx, request }: { ctx: CardContext; request: PermissionReque
       return (
         <OpenDecision
           ctx={ctx}
-          tone="red"
           title={item.sessionName}
           {...(item.preview === '' ? {} : { body: item.preview })}
           label={t`open session`}
@@ -910,7 +998,7 @@ function Decision({ ctx, request }: { ctx: CardContext; request: PermissionReque
       return (
         <OpenDecision
           ctx={ctx}
-          title={item.sessionName}
+          title={itemTitle(item)}
           body={item.preview}
           label={t`open phase`}
           to={phaseHref(item, 'runs')}
@@ -937,9 +1025,15 @@ export function NeedsYou(): JSX.Element {
   const nowMs = useNowMs();
   const [query, setQuery] = useState('');
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
+  // Where the picked row stood: once it is answered and leaves the queue, the row
+  // that moved into its place is the one shown.
+  const [selectedAt, setSelectedAt] = useState(0);
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
-  const keys = useRef<CardKeys>({ primary: undefined, secondary: undefined });
+  const keys = useRef<CardKeys>({ secondary: undefined });
+  const primaryRef = useRef<HTMLButtonElement | null>(null);
+  const listRef = useRef<HTMLDivElement>(null);
+  const detailRef = useRef<HTMLDivElement>(null);
 
   // The pending rows behind approval / question items, for their tool input and
   // questions. Refetched whenever that id set changes.
@@ -987,28 +1081,42 @@ export function NeedsYou(): JSX.Element {
       ? (ordered.find((i) => i.requestId !== null && String(i.requestId) === wantedRequest) ??
         ordered.find((i) => i.kind === 'approval'))
       : undefined);
-  const selected = ordered.find((i) => itemKey(i) === selectedKey) ?? wanted ?? ordered[0];
+  const neighbour = selectedKey === null ? undefined : ordered[Math.min(selectedAt, ordered.length - 1)];
+  const selected = ordered.find((i) => itemKey(i) === selectedKey) ?? wanted ?? neighbour ?? ordered[0];
   const currentKey = selected === undefined ? null : itemKey(selected);
 
   const select = (key: string | undefined): void => {
     if (key === undefined) return;
     setSelectedKey(key);
+    setSelectedAt(Math.max(0, orderedKeys.indexOf(key)));
     setActionError(null);
+  };
+
+  // j/k moves the selection; keep the moved-to row in view.
+  useEffect(() => {
+    listRef.current?.querySelector('[aria-current="true"]')?.scrollIntoView?.({ block: 'nearest' });
+  }, [currentKey]);
+
+  // `e` lands on the card's main action and never runs it (D-4): Enter then acts.
+  // A disabled main button (nothing ticked yet) hands focus to the first live one.
+  const focusPrimary = (): void => {
+    const main = primaryRef.current;
+    const target =
+      main !== null && !main.disabled ? main : detailRef.current?.querySelector<HTMLElement>('button:not(:disabled)');
+    target?.focus();
+  };
+  // o and →: into the open decision; ←: back to its row in the list.
+  const openSelected = (): void => {
+    if (selected !== undefined) detailRef.current?.focus();
+  };
+  const backToList = (): void => {
+    listRef.current?.querySelector<HTMLElement>('[aria-current="true"]')?.focus();
   };
 
   const hint = selected?.kind;
   const selectedRequest = selected?.requestId == null ? null : (requests.get(selected.requestId) ?? null);
-  // A prod-deploy request can only be denied here, so `e` is the deny.
+  // A production deploy request can only be denied here, so `x` does nothing.
   const denyOnly = hint === 'approval' && selectedRequest?.riskClass === 'prod-deploy';
-  const primaryHint = denyOnly
-    ? t`deny`
-    : hint === 'approval'
-      ? t`approve`
-      : hint === 'awaiting_reply' || hint === 'question'
-        ? t`reply`
-        : hint === 'phase_decision'
-          ? t`answer`
-          : undefined;
   const secondaryHint = denyOnly
     ? undefined
     : hint === 'approval' || hint === 'question'
@@ -1040,6 +1148,7 @@ export function NeedsYou(): JSX.Element {
       go: (to) => navigate(to),
       dismiss: () => dismiss(item),
       keys,
+      primaryRef,
       nowMs,
     };
   };
@@ -1056,11 +1165,14 @@ export function NeedsYou(): JSX.Element {
           keys={{
             onNext: () => select(stepKey(orderedKeys, currentKey, 1)),
             onPrev: () => select(stepKey(orderedKeys, currentKey, -1)),
-            onPrimary: () => keys.current.primary?.(),
+            onPrimary: focusPrimary,
             onSecondary: () => keys.current.secondary?.(),
+            onOpen: openSelected,
+            onBack: backToList,
           }}
-          {...(primaryHint === undefined ? {} : { primaryHint })}
+          primaryHint={t`focus action`}
           {...(secondaryHint === undefined ? {} : { secondaryHint })}
+          extraHints={[t`o → open`, t`← list`]}
           {...(!loading && error === null && groups.length === 0
             ? {
                 empty: (
@@ -1074,40 +1186,45 @@ export function NeedsYou(): JSX.Element {
             : {})}
         >
           {loading && error === null && <Loading label={t`needs you…`} />}
-          {groups.map((g) => (
-            <ListGroup
-              key={g.id}
-              label={g.id === 'decide' ? t`Decide here` : t`Open & tick by hand`}
-              count={g.items.length}
-              tone={g.id === 'decide' ? 'amber' : 'default'}
-            >
-              {g.items.map((item) => {
-                const key = itemKey(item);
-                const project = findProject(projects, item.projectSlug);
-                return (
-                  <div key={key} data-testid="needs-you-row" data-kind={item.kind} data-name={item.sessionName}>
-                    <ListRow
-                      glyph={<StateGlyph state={itemGlyph(item.kind)} size={11} />}
-                      title={item.phase?.name ?? item.sessionName}
-                      {...(scope === null ? { tag: projectLabel(project?.name ?? null, item.projectSlug) } : {})}
-                      {...(item.preview === '' ? {} : { summary: item.preview })}
-                      summaryTone="needs"
-                      age={compactSpan(nowMs - Date.parse(item.blockingSince))}
-                      selected={key === currentKey}
-                      onSelect={() => select(key)}
-                    />
-                  </div>
-                );
-              })}
-            </ListGroup>
-          ))}
+          <div ref={listRef}>
+            {groups.map((g) => (
+              <ListGroup
+                key={g.id}
+                label={g.id === 'decide' ? t`Decide here` : t`Open & tick by hand`}
+                count={g.items.length}
+                tone={g.id === 'decide' ? 'amber' : 'default'}
+              >
+                {g.items.map((item) => {
+                  const key = itemKey(item);
+                  const project = findProject(projects, item.projectSlug);
+                  const preview = itemPreview(item);
+                  return (
+                    <div key={key} data-testid="needs-you-row" data-kind={item.kind} data-name={item.sessionName}>
+                      <ListRow
+                        kicker={kindLabel(item.kind)}
+                        kickerTone={isAlarmKind(item.kind) ? 'alarm' : 'default'}
+                        title={itemTitle(item)}
+                        {...(scope === null ? { tag: projectLabel(project?.name ?? null, item.projectSlug) } : {})}
+                        {...(preview === '' ? {} : { summary: preview })}
+                        age={compactSpan(nowMs - Date.parse(item.blockingSince))}
+                        selected={key === currentKey}
+                        onSelect={() => select(key)}
+                      />
+                    </div>
+                  );
+                })}
+              </ListGroup>
+            ))}
+          </div>
         </ListPane>
       }
       detail={
         <div
+          ref={detailRef}
+          tabIndex={-1}
           data-testid="needs-you-detail"
           data-kind={selected?.kind}
-          className="flex min-h-full flex-col px-4 pb-10 desk:px-7 [&>*:last-child]:flex-1"
+          className="flex min-h-full flex-col px-4 pb-10 outline-none desk:px-7 [&>*:last-child]:flex-1"
         >
           {error !== null && (
             <div className="pt-[22px]">

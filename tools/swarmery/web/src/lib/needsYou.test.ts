@@ -10,11 +10,15 @@ import {
   dismissKey,
   filterItems,
   groupItems,
+  isAlarmKind,
+  itemPreview,
+  itemTitle,
   kindLabel,
   oldestFirst,
   REPLY_QUOTE_MAX,
   replyPrefix,
   replyWithOption,
+  stripPhasePrefix,
   visibleItems,
 } from './needsYou';
 
@@ -72,17 +76,103 @@ describe('replyPrefix', () => {
 });
 
 describe('kindLabel', () => {
-  it('names the kinds in the eyebrow wording', () => {
+  it('names every kind as a word (artboard 3b)', () => {
     const cases: [NeedsYouKind, string][] = [
-      ['approval', 'permission'],
-      ['question', 'question'],
-      ['phase_decision', 'guard stop'],
-      ['manual_phase', 'manual check'],
-      ['prod_deploy_local', 'confirm locally'],
-      ['awaiting_reply', 'awaiting your reply'],
-      ['failed', 'failed'],
+      ['approval', 'Permission'],
+      ['question', 'Question'],
+      ['phase_decision', 'Guard stopped the run'],
+      ['manual_phase', 'Check by hand'],
+      ['prod_deploy_local', 'Confirm in terminal'],
+      ['awaiting_reply', 'Awaiting reply'],
+      ['failed', 'Session failed'],
+      ['stalled_phase', 'Phase stalled'],
+      ['awaiting_merge', 'Awaiting merge'],
+      ['worktree_cleanup', 'Worktree cleanup'],
     ];
     for (const [k, label] of cases) expect(kindLabel(k), k).toBe(label);
+  });
+
+  it('keeps red for the guard stop alone', () => {
+    const kinds: NeedsYouKind[] = [
+      'approval',
+      'question',
+      'phase_decision',
+      'manual_phase',
+      'prod_deploy_local',
+      'awaiting_reply',
+      'failed',
+      'stalled_phase',
+      'awaiting_merge',
+      'worktree_cleanup',
+    ];
+    expect(kinds.filter(isAlarmKind)).toEqual(['phase_decision']);
+  });
+});
+
+const PHASE = { taskId: 7, planExternalId: 'p', planTitle: 'Orders', phaseId: 4, seq: 3, name: 'Rollout', manualOpen: 0 };
+
+describe('itemTitle', () => {
+  it('names a phase kind by its phase, without the Phase N prefix', () => {
+    const entry = item({ kind: 'manual_phase', sessionName: 'Orders · Phase 3: Rollout', phase: PHASE });
+    expect(itemTitle(entry)).toBe('Rollout');
+  });
+
+  it('removes a doubled prefix the phase name carries itself', () => {
+    const entry = item({
+      kind: 'phase_decision',
+      sessionName: 'Orders · Phase 3: Phase 3 — Rollout',
+      phase: { ...PHASE, name: 'Phase 3 — Phase 3 — Rollout' },
+    });
+    expect(itemTitle(entry)).toBe('Rollout');
+    expect(stripPhasePrefix('Phase 3: Rollout')).toBe('Rollout');
+    expect(stripPhasePrefix('phase 12 - Rollout')).toBe('Rollout');
+  });
+
+  it('never empties a name that is only a prefix', () => {
+    expect(stripPhasePrefix('Phase 3 —')).toBe('Phase 3 —');
+  });
+
+  it('falls back to the session name tail when the phase block is missing', () => {
+    const entry = item({ kind: 'stalled_phase', sessionName: 'Orders · Phase 4: Sync', phase: undefined });
+    expect(itemTitle(entry)).toBe('Sync');
+    expect(itemTitle(item({ kind: 'stalled_phase', sessionName: 'nightly' }))).toBe('nightly');
+  });
+
+  it('names a session kind by its session, even when it stalls a phase', () => {
+    expect(itemTitle(item({ kind: 'approval', sessionName: 'verifier of sync', phase: PHASE }))).toBe('verifier of sync');
+    expect(itemTitle(item({ kind: 'awaiting_reply' }))).toBe('orders refactor');
+  });
+});
+
+describe('itemPreview', () => {
+  const decision = {
+    taskId: 7,
+    phaseId: 4,
+    decisionId: 'D-1',
+    question: 'The run touched protected paths: a_test.go, b_test.go. Allow?',
+    options: [],
+    guard: {},
+  };
+
+  it('says a stop in one word: its trigger', () => {
+    const entry = item({ kind: 'phase_decision', preview: 'D-1: long reason', decision: { ...decision, trigger: 'out-of-scope' } });
+    expect(itemPreview(entry)).toBe('out-of-scope');
+  });
+
+  it('counts the protected paths of a guard decision', () => {
+    const entry = item({
+      kind: 'phase_decision',
+      preview: 'D-1: long reason',
+      decision: { ...decision, guard: { protectedChanged: ['a_test.go', 'b_test.go'] } },
+    });
+    expect(itemPreview(entry)).toBe('2 protected paths');
+    const one = item({ kind: 'phase_decision', decision: { ...decision, paths: ['a_test.go'] } });
+    expect(itemPreview(one)).toBe('1 protected path');
+  });
+
+  it('keeps the queue preview otherwise', () => {
+    expect(itemPreview(item({ kind: 'phase_decision', preview: 'D-1: review', decision }))).toBe('D-1: review');
+    expect(itemPreview(item())).toBe('Should I keep the old endpoint?');
   });
 });
 
@@ -104,6 +194,11 @@ describe('filterItems', () => {
     expect(filterItems(items, 'rate')).toHaveLength(1);
     expect(filterItems(items, 'drop')).toHaveLength(1);
     expect(filterItems(items, '  ')).toHaveLength(2);
+  });
+
+  it('matches the row title of a phase kind', () => {
+    const entry = item({ kind: 'manual_phase', sessionName: 'Orders · Phase 3: x', preview: '', phase: PHASE });
+    expect(filterItems([entry], 'rollout')).toHaveLength(1);
   });
 });
 

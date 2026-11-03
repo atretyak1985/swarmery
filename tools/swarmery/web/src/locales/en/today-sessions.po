@@ -348,6 +348,7 @@ msgstr "{topCount, plural, one {# tool caused {topShare}% of it.} few {# tools c
 msgid "{verifiedChanges, plural, one {{count} change proved it helped.} few {{count} changes proved they helped.} many {{count} changes proved they helped.} other {{count} changes proved they helped.}}"
 msgstr "{verifiedChanges, plural, one {{count} change proved it helped.} few {{count} changes proved they helped.} many {{count} changes proved they helped.} other {{count} changes proved they helped.}}"
 
+#: src/pages/NeedsYou.tsx
 #: src/pages/Sessions.tsx
 msgid "← list"
 msgstr "← list"
@@ -371,6 +372,10 @@ msgstr "→ fell back to"
 #: src/pages/Approvals.tsx
 msgid "+ add rule"
 msgstr "+ add rule"
+
+#: src/pages/NeedsYou.tsx
+msgid "+ note"
+msgstr "+ note"
 
 #. placeholder {0}: swarm.hidden
 #: src/pages/detail/SessionRail.tsx
@@ -492,8 +497,8 @@ msgid "all sessions →"
 msgstr "all sessions →"
 
 #: src/pages/NeedsYou.tsx
-msgid "Allow (add to scope)"
-msgstr "Allow (add to scope)"
+msgid "Allow · add to scope"
+msgstr "Allow · add to scope"
 
 #: src/pages/detail/SessionGate.tsx
 #: src/pages/NeedsYou.tsx
@@ -501,8 +506,8 @@ msgid "allow once"
 msgstr "allow once"
 
 #: src/pages/NeedsYou.tsx
-msgid "Allowing this releases: {pathList}"
-msgstr "Allowing this releases: {pathList}"
+msgid "allow releases: {pathList}"
+msgstr "allow releases: {pathList}"
 
 #: src/pages/detail/SessionPane.tsx
 msgid "already running"
@@ -542,6 +547,10 @@ msgstr "answer in terminal →"
 #: src/pages/Overview.tsx
 msgid "answer required"
 msgstr "answer required"
+
+#: src/pages/NeedsYou.tsx
+msgid "answer: {typed}"
+msgstr "answer: {typed}"
 
 #: src/pages/sessions/CacheColdBadge.tsx
 msgid "API-key"
@@ -584,7 +593,6 @@ msgid "approvals…"
 msgstr "approvals…"
 
 #: src/pages/Approvals.tsx
-#: src/pages/NeedsYou.tsx
 #: src/pages/Overview.tsx
 #: src/pages/today/WaitingOnYou.tsx
 msgid "approve"
@@ -1099,6 +1107,7 @@ msgstr "first request"
 msgid "first request…"
 msgstr "first request…"
 
+#: src/pages/NeedsYou.tsx
 #: src/pages/Sessions.tsx
 msgid "focus action"
 msgstr "focus action"
@@ -1667,6 +1676,7 @@ msgstr "Nothing waits on you."
 msgid "Nothing was stopped or failed."
 msgstr "Nothing was stopped or failed."
 
+#: src/pages/NeedsYou.tsx
 #: src/pages/Sessions.tsx
 msgid "o → open"
 msgstr "o → open"
@@ -1770,6 +1780,10 @@ msgstr "outcome ▾"
 #: src/pages/NeedsYou.tsx
 msgid "own answer — overrides the selection"
 msgstr "own answer — overrides the selection"
+
+#: src/pages/NeedsYou.tsx
+msgid "own answer — sent instead of an option"
+msgstr "own answer — sent instead of an option"
 
 #: src/pages/NeedsYou.tsx
 msgid "own answer…"
@@ -2202,6 +2216,10 @@ msgstr "session #{sessionId}"
 msgid "session #{sessionNumber}"
 msgstr "session #{sessionNumber}"
 
+#: src/pages/NeedsYou.tsx
+msgid "session →"
+msgstr "session →"
+
 #: src/pages/detail/SessionRail.tsx
 msgid "session context"
 msgstr "session context"
@@ -2487,10 +2505,6 @@ msgstr "The daemon wrote a brief for a fresh session."
 #: src/pages/Overview.tsx
 msgid "The day"
 msgstr "The day"
-
-#: src/pages/NeedsYou.tsx
-msgid "The executor stopped: {trigger}"
-msgstr "The executor stopped: {trigger}"
 
 #: src/pages/detail/SessionPane.tsx
 msgid "the link mod is not polling for commands"

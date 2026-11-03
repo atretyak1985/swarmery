@@ -13,6 +13,9 @@
 //   5. Dismiss hides the row, survives a remount, and a new blocking episode
 //      of the same session re-surfaces.
 //   6. A WS permission_resolved frame refetches GET /api/needs-you.
+//   7. Every kind is one row (artboard 3b on v4, plan D-9): the kind as a word,
+//      the title, the hint and the age; one row is open at a time, and once it is
+//      answered the row that moved into its place opens.
 //
 // Runs with the rest of the web suite: `npm test`. On its own:
 // `npx vitest run src/pages/NeedsYou.test.tsx`.
@@ -146,7 +149,7 @@ describe('NeedsYou page', () => {
     expect(rows().map((r) => r.dataset.kind)).toEqual(['prod_deploy_local', 'awaiting_reply', 'failed']);
     expect(screen.getByText('Decide here')).toBeTruthy();
     expect(screen.getByText('Open & tick by hand')).toBeTruthy();
-    expect(within(rowOf('nightly build')).getByText('failed')).toBeTruthy();
+    expect(within(rowOf('nightly build')).getByText('Session failed')).toBeTruthy();
   });
 
   it('renders every kind as a decision: an eyebrow, a heading and a main action with its key', async () => {
@@ -178,6 +181,12 @@ describe('NeedsYou page', () => {
     serve(all);
     await renderPage();
     expect(new Set(all.map((i) => i.kind)).size).toBe(10);
+    expect(rows()).toHaveLength(10);
+    for (const r of rows()) {
+      const kicker = within(r).getByTestId('row-kicker');
+      expect(kicker.className.includes('text-red'), r.dataset.kind).toBe(r.dataset.kind === 'phase_decision');
+      expect(r.querySelector('[role="img"]'), r.dataset.kind).toBeNull(); // no glyph or badge
+    }
     for (const it of all) {
       const card = rowOf(it.sessionName);
       expect(card.dataset.kind, it.kind).toBe(it.kind);
@@ -201,24 +210,44 @@ describe('NeedsYou page', () => {
     expect(band.contains(within(screen.getByTestId('needs-you-detail')).getByRole('button', { name: /allow once/ }))).toBe(false);
   });
 
-  it('e allows the selected request; x asks for a reason, then denies', async () => {
+  it('e only focuses allow; x asks for a reason, then denies', async () => {
     vi.mocked(api.fetchApprovals).mockResolvedValue([pending(11, { sessionId: 4 })]);
     serve([item({ kind: 'approval', sessionId: 4, sessionName: 'lint fix', requestId: 11, toolName: 'Bash' })]);
     await renderPage();
-    await screen.findByRole('button', { name: /^allow once/ });
+    const allow = await screen.findByRole('button', { name: /^allow once/ });
     await act(async () => {
       fireEvent.keyDown(window, { key: 'e' });
     });
-    expect(api.resolveApproval).toHaveBeenCalledWith(11, 'approve', undefined, undefined);
+    expect(document.activeElement).toBe(allow);
+    expect(api.resolveApproval).not.toHaveBeenCalled();
     await act(async () => {
       fireEvent.keyDown(window, { key: 'x' });
     });
-    expect(api.resolveApproval).toHaveBeenCalledTimes(1);
+    expect(api.resolveApproval).not.toHaveBeenCalled();
     fireEvent.change(screen.getByRole('textbox'), { target: { value: 'not this table' } });
     await act(async () => {
       fireEvent.keyDown(window, { key: 'x' });
     });
     expect(api.resolveApproval).toHaveBeenCalledWith(11, 'deny', 'not this table', undefined);
+  });
+
+  it('keeps one row open, and opens the next once the open one is answered', async () => {
+    const a = item({ sessionId: 1, sessionName: 'first', blockingSince: iso(-30) });
+    const b = item({ sessionId: 2, sessionName: 'second', blockingSince: iso(-20) });
+    const c = item({ sessionId: 3, sessionName: 'third', blockingSince: iso(-10) });
+    serve([a, b, c]);
+    await renderPage();
+    const open = (): (string | undefined)[] =>
+      rows()
+        .filter((r) => within(r).getByRole('button').getAttribute('aria-current') === 'true')
+        .map((r) => r.dataset.name);
+    expect(open()).toEqual(['first']);
+    rowOf('second');
+    expect(open()).toEqual(['second']);
+    expect(screen.getAllByTestId('needs-you-detail')).toHaveLength(1);
+    serve([a, c]);
+    fireEvent.click(within(screen.getByTestId('needs-you-detail')).getByRole('button', { name: /^dismiss/ }));
+    await waitFor(() => expect(open()).toEqual(['third']));
   });
 
   it('opens the decision ?item= names, falls back when it is gone, and a click wins', async () => {
@@ -270,7 +299,7 @@ describe('NeedsYou page', () => {
     serve([PROD]);
     await renderPage();
     const row = rowOf('release train');
-    expect(within(row).getByText(/confirm locally/)).toBeTruthy();
+    expect(within(row).getByText('Confirm in terminal')).toBeTruthy();
     expect(within(row).getByText("Production deploy — confirm in the session's terminal")).toBeTruthy();
     expect(within(row).queryByRole('button', { name: /allow|approve/i })).toBeNull();
     expect(within(row).queryByRole('button', { name: /deny/i })).toBeNull();
@@ -400,7 +429,8 @@ describe('NeedsYou page', () => {
     await renderPage();
     expect(rows().map((r) => r.dataset.kind)).toEqual(['awaiting_reply', 'manual_phase']);
     const row = rowOf('Line items · Phase 3: Rollout');
-    expect(within(row).getByText('manual check')).toBeTruthy();
+    expect(within(row).getByText('Check by hand')).toBeTruthy();
+    expect(within(row).getByRole('heading', { level: 2 }).textContent).not.toContain('Phase 3');
     expect(within(row).getByText('2 [MANUAL] criteria left — only you can close them')).toBeTruthy();
     const want = '/p/shop/plans/2026-10-01-line-items/phase/3/criteria';
     fireEvent.click(within(row).getByRole('button', { name: /^open criteria/ }));
@@ -437,7 +467,8 @@ describe('NeedsYou page', () => {
     expect(rows().map((r) => r.dataset.kind)).toEqual(['awaiting_reply', 'awaiting_merge', 'awaiting_merge']);
 
     const ready = rowOf('Line items · Phase 1: Land 1');
-    expect(within(ready).getByText('awaiting merge')).toBeTruthy();
+    expect(within(ready).getByText('Awaiting merge')).toBeTruthy();
+    expect(within(ready).getByRole('heading', { name: 'Land 1' })).toBeTruthy();
     expect(within(ready).getByText('1 [LAND] criterion left — ready')).toBeTruthy();
     const reviewHref = '/p/shop/plans/2026-10-01-line-items/phase/1/review';
     fireEvent.click(within(ready).getByRole('button', { name: /^open review/ }));
@@ -476,7 +507,7 @@ describe('NeedsYou page', () => {
     await renderPage();
     expect(rows().map((r) => r.dataset.kind)).toEqual(['awaiting_reply', 'stalled_phase']);
     const row = rowOf('Line items · Phase 4: Sync');
-    expect(within(row).getByText('stalled phase')).toBeTruthy();
+    expect(within(row).getByText('Phase stalled')).toBeTruthy();
     expect(within(row).getByText('executor — no new turn for 25 min')).toBeTruthy();
     const want = '/p/shop/plans/2026-10-01-line-items/phase/4/runs';
     fireEvent.click(within(row).getByRole('button', { name: /^open phase/ }));
@@ -563,7 +594,7 @@ describe('NeedsYou page', () => {
     await renderPage();
     const row = rowOf('shop');
     expect(row.dataset.kind).toBe('worktree_cleanup');
-    expect(within(row).getByText('worktree cleanup')).toBeTruthy();
+    expect(within(row).getByText('Worktree cleanup')).toBeTruthy();
     fireEvent.click(within(row).getByRole('button', { name: 'janitor journal →' }));
     expect(nav.to).toHaveBeenCalledWith('/settings');
 
