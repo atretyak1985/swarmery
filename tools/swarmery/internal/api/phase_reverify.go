@@ -36,7 +36,7 @@ func (h *Handler) phasesVerifying(phases []epicPhaseDTO) map[int64]bool {
 	for _, p := range phases {
 		byKey[verify.PhaseKey(p.ID)] = p.ID
 	}
-	rows, err := h.DB.Query(
+	rows, err := h.rdb().Query(
 		`SELECT target_key FROM verification_runs WHERE status = 'running' AND target_key LIKE 'phase:%'`)
 	if err != nil {
 		log.Printf("warning: epics: running verifications unreadable: %v", err)

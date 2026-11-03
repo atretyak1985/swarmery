@@ -140,7 +140,7 @@ func jsonStrings(raw string) []string {
 // phaseReviews: a read error yields an empty map.
 func (h *Handler) phaseReviewBlocks(taskID int64, docs map[int64]string) map[int64][]reviewBlockDTO {
 	out := map[int64][]reviewBlockDTO{}
-	byDoc, err := loadReviewBlocks(h.DB, `workspace_task_id = ?`, taskID)
+	byDoc, err := loadReviewBlocks(h.rdb(), `workspace_task_id = ?`, taskID)
 	if err != nil {
 		log.Printf("warning: epics: review blocks unreadable (task %d): %v", taskID, err)
 		return out

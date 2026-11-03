@@ -73,6 +73,10 @@ func TestHotGetsServeWhileWriterHeld(t *testing.T) {
 		"/api/health",
 		"/api/projects",
 		fmt.Sprintf("/api/projects/%d", projectID),
+		// The Plans page: ~15 queries per plan, re-fetched on every plan or task
+		// event — on the writer it queued behind ingest for seconds.
+		"/api/epics",
+		fmt.Sprintf("/api/epics?projectId=%d", projectID),
 	} {
 		start := time.Now()
 		resp, err := client.Get(srv.URL + p)

@@ -29,7 +29,7 @@ type phaseStallDTO struct {
 // and reads as "no stalls" — a badge is a hint, never a reason to fail the plan.
 func (h *Handler) phaseStalls(taskID int64, now time.Time) map[int64]*phaseStallDTO {
 	out := map[int64]*phaseStallDTO{}
-	rows, err := h.DB.Query(`
+	rows, err := h.rdb().Query(`
 		SELECT n.phase_id, n.stage, n.reason, n.since, n.session_uuid, n.request_id
 		  FROM stall_notices n
 		  JOIN epic_phases e ON e.id = n.phase_id
