@@ -15,8 +15,9 @@
 # - stub-error exits 1 with is_error:true -> error:true, pass:false, check skipped
 # - a missing BENCH_CLAUDE aborts run.sh before any task runs
 # - stub-args records its argv: no --plugin-dir/--agent by default; with
-#   BENCH_PLUGIN_DIR and BENCH_AGENT both are passed and the isolation flags
-#   stay; a BENCH_PLUGIN_DIR without a plugin manifest aborts the run
+#   BENCH_PLUGIN_DIR and BENCH_AGENT both are passed, the plugin's hooks are
+#   disabled, and the isolation flags stay; a BENCH_PLUGIN_DIR without a
+#   plugin manifest aborts the run
 # checks on hand-made workdirs (edge cases):
 # - b01 correct fix + an added regression test         -> pass
 # - b01 no fix, fixture test rewritten to pass         -> fail
@@ -124,10 +125,10 @@ else
 fi
 
 BENCH_ARGS_LOG="$tmp/args-plain.txt" run_with stub-args "$tmp/args-plain.json" "${all[0]}"
-if grep -Eqx -- '--plugin-dir|--agent' "$tmp/args-plain.txt"; then
-  bad "run.sh passed --plugin-dir/--agent with BENCH_PLUGIN_DIR and BENCH_AGENT unset"
+if grep -Eqx -- '--plugin-dir|--agent|--settings' "$tmp/args-plain.txt"; then
+  bad "run.sh passed --plugin-dir/--agent/--settings with BENCH_PLUGIN_DIR and BENCH_AGENT unset"
 else
-  echo "plain run:      no --plugin-dir, no --agent"
+  echo "plain run:      no --plugin-dir, no --agent, no --settings"
 fi
 mkdir -p "$tmp/plugin/.claude-plugin"
 echo '{"name":"demo"}' >"$tmp/plugin/.claude-plugin/plugin.json"
@@ -135,8 +136,9 @@ BENCH_ARGS_LOG="$tmp/args-plugin.txt" BENCH_PLUGIN_DIR="$tmp/plugin" BENCH_AGENT
   run_with stub-args "$tmp/args-plugin.json" "${all[0]}"
 if grep -A1 -x -- '--plugin-dir' "$tmp/args-plugin.txt" | grep -qx -- "$tmp/plugin" &&
   grep -A1 -x -- '--agent' "$tmp/args-plugin.txt" | grep -qx -- 'demo:worker' &&
+  grep -A1 -x -- '--settings' "$tmp/args-plugin.txt" | grep -qx -- '{"disableAllHooks":true}' &&
   grep -qx -- '--strict-mcp-config' "$tmp/args-plugin.txt" && grep -qx -- '--no-session-persistence' "$tmp/args-plugin.txt"; then
-  echo "plugin run:     --plugin-dir and --agent passed, isolation flags kept"
+  echo "plugin run:     --plugin-dir, --agent and hooks-off passed, isolation flags kept"
 else
   bad "BENCH_PLUGIN_DIR/BENCH_AGENT not passed through: $(tr '\n' ' ' <"$tmp/args-plugin.txt")"
 fi

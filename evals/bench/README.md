@@ -77,6 +77,14 @@ from `ANTHROPIC_API_KEY` in the environment.
 | `BENCH_PLUGIN_DIR` | unset    | A plugin directory to load with `--plugin-dir`. The isolation flags stay, so it is the only non-builtin plugin the session sees. `run.sh` refuses a directory without `.claude-plugin/plugin.json`. |
 | `BENCH_AGENT`      | unset    | Run the session as this agent (`--agent <plugin>:<name>`), normally one from `BENCH_PLUGIN_DIR`.                                                                                                    |
 
+With `BENCH_PLUGIN_DIR` set, `run.sh` also passes
+`--settings '{"disableAllHooks":true}'`. Left on, a plugin's hooks read the
+operator's live state into the session (core's SessionStart banner reports the
+day's activity). They also write session logs into the fixture repo (SessionEnd
+leaves `.swarmery/sessions/*.json` and `.claude-workspace/metrics/*.jsonl`),
+which fails b04's clean-tree check. The bench measures the plugin's agents,
+the same on every machine.
+
 With both unset, the session is the plain frozen bench, as before. The two
 together are how the dashboard's proposal probe runs a bench step: it loads one
 temp copy of the target's plugin without the proposal (base) and one with it

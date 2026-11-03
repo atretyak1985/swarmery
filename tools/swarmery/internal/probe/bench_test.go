@@ -414,7 +414,7 @@ jq -nc '{type:"result",subtype:"success",is_error:false,num_turns:2,duration_ms:
 		t.Fatal(err)
 	}
 	argv := "\n" + string(args)
-	for _, want := range []string{"\n--plugin-dir\n" + side.PluginDir + "\n", "\n--agent\ncore:demo\n", "\n--strict-mcp-config\n"} {
+	for _, want := range []string{"\n--plugin-dir\n" + side.PluginDir + "\n", "\n--agent\ncore:demo\n", "\n--strict-mcp-config\n", "\n--settings\n{\"disableAllHooks\":true}\n"} {
 		if !strings.Contains(argv, want) {
 			t.Errorf("argv lacks %q:\n%s", want, args)
 		}

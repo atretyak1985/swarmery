@@ -12,7 +12,9 @@ package probe
 // Both sides load the plugin the same way, so the only difference between the
 // two sessions is the proposal. evals/bench/run.sh keeps its isolation flags
 // (user settings, MCP servers and session persistence all off), which the
-// phase-6 spike showed leaves the copy as the only non-builtin plugin.
+// phase-6 spike showed leaves the copy as the only non-builtin plugin, and it
+// turns the copy's hooks off: they would read the operator's live state into
+// the session and write session logs into the fixture repo.
 //
 // One sample per task: a single flip is noise. The cap is checked between
 // tasks (a bench task cannot be stopped half-way without wasting what it

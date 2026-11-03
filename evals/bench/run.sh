@@ -13,7 +13,8 @@
 #                  is recorded as pass:false, timedOut:true
 #   BENCH_KEEP=1   keep each task's workdir and print its path
 #   BENCH_PLUGIN_DIR  a plugin directory to load for the session (--plugin-dir);
-#                  the isolation flags stay, so it is the only non-builtin plugin
+#                  the isolation flags stay, so it is the only non-builtin plugin,
+#                  and its hooks are disabled (--settings disableAllHooks)
 #   BENCH_AGENT    run the session as this agent (--agent <plugin>:<name>),
 #                  normally an agent of the plugin BENCH_PLUGIN_DIR loads
 # Exported to the binary: BENCH_TASK_DIR (absolute path of the task being run).
@@ -49,7 +50,11 @@ if [ -n "${BENCH_PLUGIN_DIR:-}" ]; then
     echo "run.sh: BENCH_PLUGIN_DIR=$BENCH_PLUGIN_DIR has no .claude-plugin/plugin.json" >&2
     exit 2
   }
-  extra+=(--plugin-dir "$BENCH_PLUGIN_DIR")
+  # The plugin's hooks stay off: they read the operator's live state into the
+  # prompt (SessionStart) and write session logs into the fixture repo
+  # (SessionEnd), which breaks a check like b04's clean-tree rule. What the
+  # bench measures is the plugin's agents, the same on every machine.
+  extra+=(--plugin-dir "$BENCH_PLUGIN_DIR" --settings '{"disableAllHooks":true}')
 fi
 if [ -n "${BENCH_AGENT:-}" ]; then extra+=(--agent "$BENCH_AGENT"); fi
 
