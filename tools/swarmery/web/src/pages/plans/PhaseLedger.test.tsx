@@ -123,6 +123,21 @@ describe('PhaseLedger', () => {
     expect(document.body.textContent).not.toMatch(/forecast/i);
   });
 
+  it('counts ticked criteria and links them to the criteria tab without opening the story', () => {
+    const manual = { ...base, id: 14, seq: 4, name: 'Store accounts', checkboxesDone: 2, checkboxesTotal: 4, manualOpen: 1 } as EpicPhase;
+    const none = { ...base, id: 15, seq: 5, name: 'Empty', checkboxesTotal: 0 } as EpicPhase;
+    mount([done, manual, none]);
+    expect(screen.getByText('criteria')).toBeTruthy();
+    const full = within(line('Limiter core')).getByText('3/3');
+    expect(full.className).toContain('text-green');
+    const open = within(line('Store accounts')).getByText('2/4');
+    expect(open.className).toContain('text-brand');
+    expect(open.getAttribute('data-tip')).toBe('2 of 4 criteria ticked · 1 [MANUAL] wait on you');
+    expect(within(line('Empty')).queryByText(/\d+\/\d+/)).toBeNull();
+    fireEvent.click(open);
+    expect(at()).toBe('/plan/phase/4/criteria');
+  });
+
   it('opens the phase from anywhere on its line', () => {
     mount([done, idle]);
     fireEvent.click(within(line('Design bucket')).getByText('1'));

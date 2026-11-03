@@ -194,6 +194,14 @@ msgstr "{docCount, plural, one {# plan doc will change on disk: {docs}. This is 
 msgid "{done} of {total} checkboxes done"
 msgstr "{done} of {total} checkboxes done"
 
+#: src/pages/plans/PhaseLedger.tsx
+msgid "{done} of {total} criteria ticked"
+msgstr "{done} of {total} criteria ticked"
+
+#: src/pages/plans/PhaseLedger.tsx
+msgid "{done} of {total} criteria ticked · {manualOpen} [MANUAL] wait on you"
+msgstr "{done} of {total} criteria ticked · {manualOpen} [MANUAL] wait on you"
+
 #: src/pages/plans/PhaseDetailPanel.tsx
 msgid "{done}/{total} acceptance criteria met · full list on the Criteria tab"
 msgstr "{done}/{total} acceptance criteria met · full list on the Criteria tab"
@@ -815,6 +823,10 @@ msgstr "Create"
 #: src/pages/plans/PlanDetailPanel.tsx
 msgid "created {created}"
 msgstr "created {created}"
+
+#: src/pages/plans/PhaseLedger.tsx
+msgid "criteria"
+msgstr "criteria"
 
 #: src/pages/plans/PhasePanel.tsx
 msgid "Criteria"

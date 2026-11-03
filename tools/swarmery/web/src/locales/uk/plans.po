@@ -194,6 +194,14 @@ msgstr "{docCount, plural, one {# документ плану зміниться
 msgid "{done} of {total} checkboxes done"
 msgstr "{done} з {total} чекбоксів відмічено"
 
+#: src/pages/plans/PhaseLedger.tsx
+msgid "{done} of {total} criteria ticked"
+msgstr "{done} з {total} критеріїв відмічено"
+
+#: src/pages/plans/PhaseLedger.tsx
+msgid "{done} of {total} criteria ticked · {manualOpen} [MANUAL] wait on you"
+msgstr "{done} з {total} критеріїв відмічено · [MANUAL] чекають на вас: {manualOpen}"
+
 #: src/pages/plans/PhaseDetailPanel.tsx
 msgid "{done}/{total} acceptance criteria met · full list on the Criteria tab"
 msgstr "{done}/{total} критеріїв приймання виконано · повний список на вкладці «Критерії»"
@@ -815,6 +823,10 @@ msgstr "Створити"
 #: src/pages/plans/PlanDetailPanel.tsx
 msgid "created {created}"
 msgstr "створено {created}"
+
+#: src/pages/plans/PhaseLedger.tsx
+msgid "criteria"
+msgstr "критерії"
 
 #: src/pages/plans/PhasePanel.tsx
 msgid "Criteria"
