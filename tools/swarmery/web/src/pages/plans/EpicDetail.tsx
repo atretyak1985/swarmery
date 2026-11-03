@@ -333,6 +333,8 @@ export function EpicDetail({
               planRunning={planRunning}
               onRun={onRun}
               onCancelRun={onCancelRun}
+              reverify={reverify}
+              onReverify={onReverify}
               resolvedSeqs={resolvedSeqs}
               sessions={sessions}
               now={now}
