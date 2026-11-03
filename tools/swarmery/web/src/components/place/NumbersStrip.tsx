@@ -30,17 +30,23 @@ export interface NumberItem {
   tone?: NumberTone;
   /** 0–100 draws the bar; absent means no bar. */
   barPercent?: number;
+  /** Past its threshold: value, bar and label all turn red. */
+  alarm?: boolean;
 }
 
 export function NumbersStrip({ items }: { items: readonly NumberItem[] }): JSX.Element {
   return (
     <div className="flex flex-wrap items-end gap-[26px]">
       {items.map((item) => {
-        const tone = item.tone ?? 'default';
+        const tone = item.alarm === true ? 'red' : (item.tone ?? 'default');
         return (
-          <div key={item.label} className="min-w-16">
+          <div key={item.label} className="min-w-16" data-alarm={item.alarm === true ? '' : undefined}>
             <div className={`font-mono text-[17px] leading-none font-medium ${VALUE_TONE[tone]}`}>{item.value}</div>
-            <div className="mt-1 font-mono text-[9.5px] leading-[normal] tracking-[0.06em] text-ink-faint uppercase">
+            <div
+              className={`mt-1 font-mono text-[9.5px] leading-[normal] tracking-[0.06em] uppercase ${
+                item.alarm === true ? 'text-red' : 'text-ink-faint'
+              }`}
+            >
               {item.label}
             </div>
             {item.barPercent !== undefined && (

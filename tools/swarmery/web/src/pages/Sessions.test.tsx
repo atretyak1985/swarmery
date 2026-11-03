@@ -237,7 +237,7 @@ describe('the detail', () => {
   });
 
   it.each([
-    ['working', '/sessions/2', ['redirect', 'stop']],
+    ['working', '/sessions/2', ['Stop turn', 'send prompt']],
     ['done', '/sessions/3', ['session outcome', 'extract tasks']],
     ['failed', '/sessions/4', ['resume with a reply']],
   ])('offers the %s actions beside the tabs', async (_state, path, names) => {
@@ -249,19 +249,24 @@ describe('the detail', () => {
   // Plan D-13: stopSession ends the process, so nothing calls it a pause.
   it('offers no pause on a working session', async () => {
     open('/sessions/2');
-    await screen.findByRole('button', { name: 'redirect' });
+    await screen.findByRole('button', { name: 'send prompt' });
     expect(screen.queryByRole('button', { name: /pause/i })).toBeNull();
   });
 
-  it('keeps Kill, the outcome, extract tasks and the remote controls in ⋯', async () => {
+  it('keeps extract tasks, stop process and rename in ⋯, the outcome on the bar', async () => {
     vi.mocked(api.fetchSession).mockResolvedValue(detailOf({ ...FAILED, procPid: 42, procState: 'dead' }));
     open('/sessions/4');
-    fireEvent.click(await screen.findByRole('button', { name: 'more for this session' }));
-    const menu = screen.getByRole('group', { name: 'more for this session' });
-    expect(within(menu).getByRole('group', { name: 'session outcome' })).toBeTruthy();
-    expect(within(menu).getByRole('button', { name: 'extract tasks' })).toBeTruthy();
-    expect(within(menu).getByText('exited')).toBeTruthy();
-    expect(within(menu).getByRole('button', { name: /Stop turn/ })).toBeTruthy();
+    expect(await screen.findByRole('button', { name: 'session outcome' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'more for this session' }));
+    const menu = screen.getByRole('menu', { name: 'more for this session' });
+    expect(within(menu).getAllByRole('menuitem').map((item) => item.firstChild?.textContent)).toEqual([
+      'extract tasks',
+      'stop process…',
+      'rename',
+    ]);
+    const stop = within(menu).getByRole('menuitem', { name: /stop process/ });
+    expect(stop.getAttribute('aria-disabled')).toBe('true');
+    expect(stop.textContent).toContain('the process already exited');
   });
 
   it('moves the old tab names onto the new tabs, with Chat the default', () => {
@@ -659,16 +664,19 @@ describe('the pane keeps every datum of the old chips', () => {
     expect(text()).toContain('2026-11-03-line-items');
     expect(text()).toContain('work');
     expect(text()).toContain('fell back to');
-    // Alarms: cache cold and the conflict.
+    // The plan's limit, in the numbers strip and past its threshold.
+    const numbers = within(detail).getByTestId('session-numbers');
+    expect(numbers.textContent).toContain('91 %');
+    // The conflict alarm, and cache cold said in the sentence.
     await waitFor(() => expect(within(detail).getByTestId('swarm-conflict')).toBeTruthy());
-    expect(text().toLowerCase()).toContain('cold');
+    expect(within(detail).getByTestId('state-sentence').textContent).toContain('Prompt cache cold since');
     // Rail: the handoff brief.
     const rail = screen.getByRole('complementary', { name: 'session context' });
     expect(within(rail).getByRole('button', { name: 'copy resume command' })).toBeTruthy();
-    // ⋯: the process and the plan limit.
+    // ⋯: continue from the handoff, and the process that already exited.
     fireEvent.click(screen.getByRole('button', { name: 'more for this session' }));
-    const menu = screen.getByRole('group', { name: 'more for this session' });
-    expect(within(menu).getByText('exited')).toBeTruthy();
-    expect(menu.textContent).toContain('91');
+    const menu = screen.getByRole('menu', { name: 'more for this session' });
+    expect(within(menu).getByRole('menuitem', { name: /continue from handoff/ })).toBeTruthy();
+    expect(within(menu).getByRole('menuitem', { name: /stop process/ }).textContent).toContain('exited');
   });
 });

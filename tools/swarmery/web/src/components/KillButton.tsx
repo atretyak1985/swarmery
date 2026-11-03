@@ -41,14 +41,20 @@ export function KillButton({
   session,
   label,
   className,
+  confirmAtStart = false,
+  onCancel,
 }: {
   session: Session;
   /** The resting label and look, for a host with its own buttons. */
   label?: string;
   className?: string;
+  /** Mount on the confirm step: a menu item already asked for it. */
+  confirmAtStart?: boolean;
+  /** Cancel on the confirm step, for a host that hides the control then. */
+  onCancel?: () => void;
 }): JSX.Element | null {
   const { t } = useLingui();
-  const [confirming, setConfirming] = useState(false);
+  const [confirming, setConfirming] = useState(confirmAtStart);
   const [killing, setKilling] = useState(false);
   const [forceReady, setForceReady] = useState(false);
 
@@ -119,7 +125,7 @@ export function KillButton({
         </button>
         <button
           type="button"
-          onClick={(e) => { stop(e); setConfirming(false); }}
+          onClick={(e) => { stop(e); setConfirming(false); onCancel?.(); }}
           className="font-mono text-[10.5px] text-ink-dim hover:text-ink"
         >
           <Trans>Cancel</Trans>

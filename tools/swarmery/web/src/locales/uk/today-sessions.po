@@ -25,6 +25,10 @@ msgstr "? питання"
 msgid "… (truncated)"
 msgstr "… (обрізано)"
 
+#: src/pages/detail/headerSentence.ts
+msgid "· last action {ago} ago — {now}."
+msgstr "· остання дія {ago} тому — {now}."
+
 #: src/pages/detail/Chat.tsx
 #: src/pages/detail/Timeline.tsx
 msgid "(empty prompt)"
@@ -119,6 +123,10 @@ msgstr "{classifierCalls, plural, one {Класифікатор позначив
 #: src/pages/detail/Chat.tsx
 msgid "{commands, plural, one {ran {count} command} few {ran {count} commands} many {ran {count} commands} other {ran {count} commands}}"
 msgstr "{commands, plural, one {виконано {count} команду} few {виконано {count} команди} many {виконано {count} команд} other {виконано {count} команди}}"
+
+#: src/pages/detail/headerSentence.ts
+msgid "{count, plural, one {# file changed} few {# files changed} many {# files changed} other {# files changed}}"
+msgstr "{count, plural, one {# файл змінено} few {# файли змінено} many {# файлів змінено} other {# файлу змінено}}"
 
 #: src/pages/sessions/ModelSwitchBadge.tsx
 msgid "{count, plural, one {# model} few {# models} many {# models} other {# models}}"
@@ -496,6 +504,10 @@ msgstr "дозволити раз"
 msgid "Allowing this releases: {pathList}"
 msgstr "Дозвіл відкриває: {pathList}"
 
+#: src/pages/detail/SessionPane.tsx
+msgid "already running"
+msgstr "вже виконується"
+
 #: src/pages/detail/SessionGate.tsx
 #: src/pages/NeedsYou.tsx
 msgid "always allow in {project}"
@@ -637,6 +649,10 @@ msgstr "чекає погодження · {since} — дайте відпові
 msgid "Bash patterns match the command PREFIX — `Bash(git *)` also matches `git status && rm -rf /`. Keep rules narrow; auto-approvals stay in History (via rule)."
 msgstr "Шаблони Bash збігаються з ПРЕФІКСОМ команди — `Bash(git *)` збігається і з `git status && rm -rf /`. Тримайте правила вузькими; автопогодження лишаються в Історії (через правило)."
 
+#: src/pages/detail/SessionPane.tsx
+msgid "being written"
+msgstr "пишеться"
+
 #: src/pages/NeedsYou.tsx
 msgid "blocked {age}"
 msgstr "заблоковано {age}"
@@ -644,10 +660,6 @@ msgstr "заблоковано {age}"
 #: src/pages/Overview.tsx
 msgid "Blocked on you · {count}"
 msgstr "Чекають на вас · {count}"
-
-#: src/pages/detail/SessionPane.tsx
-msgid "board"
-msgstr "дошка"
 
 #: src/pages/NeedsYou.tsx
 msgid "Branch"
@@ -931,10 +943,6 @@ msgstr "Раніше"
 msgid "edits"
 msgstr "правки"
 
-#: src/pages/detail/SessionPane.tsx
-msgid "elapsed"
-msgstr "минуло"
-
 #: src/pages/Approvals.tsx
 msgid "elsewhere"
 msgstr "деінде"
@@ -1012,6 +1020,10 @@ msgstr "минає {expires}"
 #: src/pages/NeedsYou.tsx
 msgid "expires in {clock}"
 msgstr "спливає за {clock}"
+
+#: src/pages/detail/headerSentence.ts
+msgid "Expires in {clock}."
+msgstr "Минає за {clock}."
 
 #: src/pages/Approvals.tsx
 msgid "expiring…"
@@ -1095,6 +1107,18 @@ msgstr "фокус на дію"
 msgid "Focus terminal"
 msgstr "До термінала"
 
+#: src/pages/detail/headerSentence.ts
+msgid "for {waited}"
+msgstr "вже {waited}"
+
+#: src/pages/detail/headerSentence.ts
+msgid "for {waited} · {tool}"
+msgstr "вже {waited} · {tool}"
+
+#: src/pages/detail/headerSentence.ts
+msgid "for {waited} · {tool}: {command}"
+msgstr "вже {waited} · {tool}: {command}"
+
 #: src/pages/ProjectOverview.tsx
 msgid "generate insights"
 msgstr "згенерувати інсайти"
@@ -1172,6 +1196,14 @@ msgstr "простій"
 msgid "idle {age}"
 msgstr "простій {age}"
 
+#: src/pages/detail/headerSentence.ts
+msgid "in {elapsed} · {files}, marked {result}."
+msgstr "за {elapsed} · {files}, позначено «{result}»."
+
+#: src/pages/detail/headerSentence.ts
+msgid "in {elapsed} · {files}."
+msgstr "за {elapsed} · {files}."
+
 #: src/pages/ProjectOverview.tsx
 msgid "in progress"
 msgstr "у роботі"
@@ -1207,10 +1239,6 @@ msgstr "журнал прибирання →"
 #: src/pages/detail/SessionPane.tsx
 msgid "Jump to latest"
 msgstr "До останнього"
-
-#: src/pages/detail/SessionPane.tsx
-msgid "labels"
-msgstr "мітки"
 
 #: src/pages/ProjectDetail.tsx
 #: src/pages/Projects.tsx
@@ -1269,10 +1297,6 @@ msgstr "наживо · тихо працює"
 #: src/pages/today/LiveNow.tsx
 msgid "Live now"
 msgstr "Зараз наживо"
-
-#: src/pages/detail/SessionPane.tsx
-msgid "live usage"
-msgstr "поточне використання"
 
 #: src/pages/Sessions.tsx
 msgid "loading more…"
@@ -1414,6 +1438,10 @@ msgstr "у цій сесії ще немає подій"
 msgid "No files are claimed right now."
 msgstr "Зараз жоден файл не зайнято."
 
+#: src/pages/detail/headerSentence.ts
+msgid "no files changed"
+msgstr "файли не змінено"
+
 #: src/pages/detail/Diffs.tsx
 msgid "No files changed yet."
 msgstr "Файли ще не змінено."
@@ -1425,6 +1453,10 @@ msgstr "немає фінального повідомлення (stop_reason={n
 #: src/pages/Projects.tsx
 msgid "no health data yet"
 msgstr "даних здоров’я ще немає"
+
+#: src/pages/detail/SessionPane.tsx
+msgid "no link mod on this session"
+msgstr "у цій сесії немає мода swarmery link"
 
 #: src/pages/sessions/SwarmPanel.tsx
 msgid "No messages between this project's sessions yet."
@@ -1453,6 +1485,10 @@ msgstr "Жодна фаза ще не має прогнозу — додайте
 #: src/pages/detail/SessionRail.tsx
 msgid "no plan · ad-hoc session"
 msgstr "без плану · сесія поза планом"
+
+#: src/pages/detail/SessionPane.tsx
+msgid "no process to stop"
+msgstr "немає процесу, щоб зупинити"
 
 #: src/pages/Projects.tsx
 msgid "no projects match the current filter — try a different search or clear it"
@@ -1722,10 +1758,6 @@ msgstr "решта"
 msgid "out of scope"
 msgstr "поза межами"
 
-#: src/pages/detail/SessionPane.tsx
-msgid "outcome"
-msgstr "результат"
-
 #. placeholder {0}: OUTCOME_GLYPH[outcome].glyph
 #: src/pages/detail/SessionPane.tsx
 msgid "outcome {0} ▾"
@@ -1849,6 +1881,10 @@ msgstr "закріпити зверху"
 msgid "pinned"
 msgstr "закріплено"
 
+#: src/pages/detail/SessionPane.tsx
+msgid "plan"
+msgstr "план"
+
 #: src/pages/today/loopModel.ts
 msgid "Plan"
 msgstr "План"
@@ -1898,10 +1934,6 @@ msgstr "заповнити правило автопогодження за ци
 msgid "prev 7d"
 msgstr "попер. 7д"
 
-#: src/pages/detail/SessionPane.tsx
-msgid "process"
-msgstr "процес"
-
 #: src/pages/Approvals.tsx
 #: src/pages/NeedsYou.tsx
 msgid "Production deploy — confirm in the session's terminal"
@@ -1928,6 +1960,10 @@ msgstr "Проєкти"
 #: src/pages/Projects.tsx
 msgid "projects…"
 msgstr "проєкти…"
+
+#: src/pages/detail/headerSentence.ts
+msgid "Prompt cache cold since {at}."
+msgstr "Кеш промптів холодний з {at}."
 
 #: src/pages/NeedsYou.tsx
 msgid "Proof"
@@ -1994,10 +2030,6 @@ msgstr "Отримувач"
 msgid "recovered"
 msgstr "відновлено"
 
-#: src/pages/detail/SessionPane.tsx
-msgid "redirect"
-msgstr "скерувати"
-
 #: src/pages/NeedsYou.tsx
 msgid "Reject"
 msgstr "Відхилити"
@@ -2006,10 +2038,6 @@ msgstr "Відхилити"
 msgid "release with no decision — the native selector renders in the terminal (E12d/E12e)"
 msgstr "відпустити без рішення — рідний селектор з’явиться в терміналі (E12d/E12e)"
 
-#: src/pages/detail/SessionPane.tsx
-msgid "remote control"
-msgstr "віддалене керування"
-
 #: src/pages/NeedsYou.tsx
 msgid "Remove selected"
 msgstr "Видалити вибрані"
@@ -2017,6 +2045,10 @@ msgstr "Видалити вибрані"
 #: src/pages/NeedsYou.tsx
 msgid "Removing…"
 msgstr "Видалення…"
+
+#: src/pages/detail/SessionPane.tsx
+msgid "rename"
+msgstr "перейменувати"
 
 #: src/pages/detail/SessionPane.tsx
 msgid "rename session"
@@ -2136,6 +2168,10 @@ msgstr "Надіслати"
 #: src/pages/sessions/SwarmPanel.tsx
 msgid "Send a message from this session"
 msgstr "Надіслати повідомлення від цієї сесії"
+
+#: src/pages/detail/SessionPane.tsx
+msgid "send prompt"
+msgstr "надіслати промпт"
 
 #: src/pages/detail/Chat.tsx
 #: src/pages/sessions/SwarmPanel.tsx
@@ -2340,10 +2376,6 @@ msgstr "кроки →"
 msgid "still blocked"
 msgstr "досі чекають"
 
-#: src/pages/detail/SessionPane.tsx
-msgid "stop"
-msgstr "зупинити"
-
 #: src/pages/detail/CommandInput.tsx
 msgid "Stop"
 msgstr "Зупинити"
@@ -2351,6 +2383,10 @@ msgstr "Зупинити"
 #: src/pages/Overview.tsx
 msgid "stop asking"
 msgstr "не питати"
+
+#: src/pages/detail/SessionPane.tsx
+msgid "stop process…"
+msgstr "зупинити процес…"
 
 #: src/pages/Sessions.tsx
 msgid "stopped"
@@ -2380,6 +2416,10 @@ msgstr "надіслати відповіді"
 #: src/pages/sessions/CacheColdBadge.tsx
 msgid "subscription"
 msgstr "підписка"
+
+#: src/pages/detail/headerSentence.ts
+msgid "success"
+msgstr "успіх"
 
 #: src/pages/NeedsYou.tsx
 msgid "suggested"
@@ -2452,6 +2492,10 @@ msgstr "День"
 msgid "The executor stopped: {trigger}"
 msgstr "Виконавець зупинився: {trigger}"
 
+#: src/pages/detail/SessionPane.tsx
+msgid "the link mod is not polling for commands"
+msgstr "мод swarmery link не опитує команди"
+
 #: src/pages/today/LoopMap.tsx
 msgid "The loop, this week"
 msgstr "Цикл цього тижня"
@@ -2459,6 +2503,10 @@ msgstr "Цикл цього тижня"
 #: src/pages/detail/LiveActivity.tsx
 msgid "the OS process is alive (procwatch, 30s resolution); nothing written to the transcript during this stretch — typical for long builds/tests"
 msgstr "процес ОС живий (procwatch, крок 30 с); за цей час у транскрипт нічого не записано — типово для довгих збірок і тестів"
+
+#: src/pages/detail/SessionPane.tsx
+msgid "the process already exited"
+msgstr "процес уже завершився"
 
 #: src/pages/detail/Chat.tsx
 msgid "The prompt cache expired during the pause before this turn, so it re-wrote the whole context instead of reading it from cache."
