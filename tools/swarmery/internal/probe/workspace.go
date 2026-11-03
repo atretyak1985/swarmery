@@ -91,7 +91,7 @@ func untar(r io.Reader, dst string) error {
 			if err := os.MkdirAll(filepath.Dir(out), 0o755); err != nil {
 				return err
 			}
-			f, err := os.OpenFile(out, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o644)
+			f, err := os.OpenFile(out, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, fileMode(fs.FileMode(h.Mode)))
 			if err != nil {
 				return err
 			}
@@ -202,10 +202,24 @@ func copyTree(src, dst string) error {
 		if !d.Type().IsRegular() {
 			return nil
 		}
+		info, err := d.Info()
+		if err != nil {
+			return err
+		}
 		b, err := os.ReadFile(p)
 		if err != nil {
 			return err
 		}
-		return os.WriteFile(out, b, 0o644)
+		return os.WriteFile(out, b, fileMode(info.Mode()))
 	})
+}
+
+// fileMode keeps only the executable bit of a source mode: a plugin's hooks
+// and bin scripts, and a bench fixture's own scripts, must still run inside
+// the copy (the bench step loads the copy as a live plugin).
+func fileMode(src fs.FileMode) fs.FileMode {
+	if src.Perm()&0o111 != 0 {
+		return 0o755
+	}
+	return 0o644
 }
