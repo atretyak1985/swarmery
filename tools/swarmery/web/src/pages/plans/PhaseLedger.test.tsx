@@ -3,8 +3,9 @@
 // The phase ledger (handoff §6). The claims: the columns are the design's, with no
 // forecast and no tick (plan D-5); a line opens the phase's page, from anywhere on it,
 // and opens nothing in place; the name stays a real link. The action column carries
-// the one thing a line needs now — run, stop, tick, or the green report link — and
-// using it does not open the phase.
+// the one thing a line needs now — run, stop, tick, verify again, write the report, or
+// the green report link — and using it does not open the phase. A phase with every
+// criterion ticked never offers a run, whatever its last run's outcome.
 
 import { MemoryRouter, useLocation } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -61,6 +62,7 @@ const live = {
 
 const onRun = vi.fn();
 const onCancelRun = vi.fn();
+const onReverify = vi.fn();
 
 const run = (id: number, phaseId: number, title: string, costUsd: number | null): Session =>
   ({
@@ -90,6 +92,8 @@ function mount(phases: EpicPhase[], sessions: Session[] = []): void {
         planRunning={false}
         onRun={onRun}
         onCancelRun={onCancelRun}
+        reverify={{ busy: new Set(), start: vi.fn() }}
+        onReverify={onReverify}
         resolvedSeqs={computeResolvedSeqs(phases)}
         sessions={sessions}
         terminalSessions={[]}
@@ -206,5 +210,45 @@ describe('PhaseLedger', () => {
     expect(within(line('Store review')).getByRole('link', { name: 'tick criteria' }).getAttribute('href')).toBe(
       '/plan/phase/5/criteria',
     );
+  });
+
+  // All ticked, the verifier timed out, and the last run (a rebase) ticked nothing:
+  // the line offered "↻ retry", which would re-run a finished phase.
+  const unverified = {
+    ...base,
+    id: 16,
+    seq: 6,
+    name: 'Lesson discipline',
+    checkboxesDone: 3,
+    completionState: 'unverified',
+    runState: 'done',
+    runOutcome: 'noop',
+    verifyVerdict: 'inconclusive',
+    canReverify: true,
+  } as EpicPhase;
+
+  it('verifies an unconfirmed phase again instead of re-running it', () => {
+    mount([unverified]);
+    const row = line('Lesson discipline');
+    expect(within(row).queryByText('↻ retry')).toBeNull();
+    expect(within(row).getByText('verification could not conclude')).toBeTruthy();
+    fireEvent.click(within(row).getByRole('button', { name: 'Verify again' }));
+    expect(onReverify).toHaveBeenCalledWith(16);
+    expect(onRun).not.toHaveBeenCalled();
+    expect(at()).toBe('/plan');
+  });
+
+  it('offers nothing to an unconfirmed phase the server will not re-grade', () => {
+    mount([{ ...unverified, canReverify: false } as EpicPhase]);
+    expect(within(line('Lesson discipline')).queryByRole('button')).toBeNull();
+  });
+
+  it('sends an unreported phase to its report, not to a run', () => {
+    const unreported = { ...unverified, completionState: 'unreported', verifyVerdict: 'pass' } as EpicPhase;
+    mount([unreported]);
+    const row = line('Lesson discipline');
+    expect(within(row).queryByRole('button')).toBeNull();
+    expect(within(row).getByText('no completion report')).toBeTruthy();
+    expect(within(row).getByRole('link', { name: 'write report' }).getAttribute('href')).toBe('/plan/phase/6/report');
   });
 });

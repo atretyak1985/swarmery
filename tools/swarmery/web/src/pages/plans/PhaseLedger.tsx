@@ -2,8 +2,10 @@
 // plan's state reads top to bottom. A line opens the phase's own page, where its runs,
 // criteria and every action it offers live. The criteria column counts ticked of all
 // acceptance criteria and links to them. The last column carries the one action the
-// line needs now (LedgerAction): run or retry, stop, answer, tick, or the green link
-// to a landed phase's report. What a run started now will use is on the plan's
+// line needs now (LedgerAction): run or retry, stop, answer, tick, verify again, write
+// the report, or the green link to a landed phase's report. A phase whose criteria are
+// all ticked never offers a run: what it lacks is a verdict or a report, not work. What
+// a run started now will use is on the plan's
 // metadata line, above the ledger.
 
 import { Trans, useLingui } from '@lingui/react/macro';
@@ -32,6 +34,7 @@ import {
 import { fmtSpent, phaseNeedsYou, phasesLanded, phaseStatus, type PhaseStatus } from './planModel';
 import type { PhaseDetailTab } from './plansTarget';
 import { TerminalBadge } from './TerminalBadge';
+import { reverifyAction, type Reverify } from './useReverify';
 
 /** Below `desk` the stage and the cost drop out: the note still says where it is. */
 const GRID =
@@ -119,6 +122,9 @@ export interface LedgerRunControls {
   planRunning: boolean;
   onRun: (phaseId: number) => void;
   onCancelRun: (phaseId: number) => void;
+  /** Re-grade a finished phase with the read-only verifier (no executor runs). */
+  reverify: Reverify;
+  onReverify: (phaseId: number) => void;
 }
 
 /** The one action a line needs now, or nothing when the phase can only wait. */
@@ -139,8 +145,8 @@ function LedgerAction({
   phaseHref: (seq: number, tab: PhaseDetailTab) => string;
   needsHref: string;
 }): JSX.Element | null {
-  const { t } = useLingui();
-  const { runBusy, planRunning, onRun, onCancelRun } = controls;
+  const { t, i18n } = useLingui();
+  const { runBusy, planRunning, onRun, onCancelRun, reverify, onReverify } = controls;
   const stop = (e: { stopPropagation: () => void }): void => e.stopPropagation();
   if (phaseNeedsYou(phase)) {
     return heldByDecision(phase) || phase.guardDecision != null ? (
@@ -181,6 +187,39 @@ function LedgerAction({
         className="font-mono text-[11px] leading-[normal] whitespace-nowrap text-green underline-offset-2 hover:underline"
       >
         <Trans>✓ report</Trans>
+      </Link>
+    );
+  }
+  // The criteria are all ticked: a run would redo finished work and tick nothing.
+  // An unconfirmed phase needs the verifier again; an unreported one needs its
+  // Completion Report written.
+  if (status === 'unverified') {
+    const again = reverifyAction(phase, reverify, onReverify, i18n);
+    if (again === null) return null;
+    return (
+      <button
+        type="button"
+        disabled={again.disabled}
+        data-tip={again.tip}
+        onClick={(e) => {
+          stop(e);
+          again.onClick();
+        }}
+        className={`${PILL} border-brand/60 text-brand hover:bg-brand-bg`}
+      >
+        {again.label}
+      </button>
+    );
+  }
+  if (status === 'unreported') {
+    return (
+      <Link
+        to={phaseHref(phase.seq, 'report')}
+        onClick={stop}
+        data-tip={t`the work is confirmed; the phase doc's Completion Report is empty`}
+        className={`${PILL} border-brand/60 text-brand hover:bg-brand-bg`}
+      >
+        <Trans>write report</Trans>
       </Link>
     );
   }

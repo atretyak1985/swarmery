@@ -3196,6 +3196,10 @@ msgstr "the whole plan is running{agentPart} (mode: {mode})"
 msgid "the wizard finished; its staged diff is being picked up by the daemon…"
 msgstr "the wizard finished; its staged diff is being picked up by the daemon…"
 
+#: src/pages/plans/PhaseLedger.tsx
+msgid "the work is confirmed; the phase doc's Completion Report is empty"
+msgstr "the work is confirmed; the phase doc's Completion Report is empty"
+
 #: src/pages/plans/PhaseDetailPanel.tsx
 msgid "this doc was changed by an applied revision {revisedAgo} — <0>see Revisions</0>"
 msgstr "this doc was changed by an applied revision {revisedAgo} — <0>see Revisions</0>"
@@ -3312,6 +3316,10 @@ msgstr "unverified"
 #: src/pages/plans/PlanHeader.tsx
 msgid "updated {ago} ago"
 msgstr "updated {ago} ago"
+
+#: src/pages/plans/phaseLedgerModel.ts
+msgid "verification could not conclude"
+msgstr "verification could not conclude"
 
 #: src/pages/plans/VerifyVerdictChip.tsx
 msgid "verified"
@@ -3444,6 +3452,10 @@ msgstr "workspace…"
 #: src/pages/plans/PlanHeader.tsx
 msgid "worktree per phase"
 msgstr "worktree per phase"
+
+#: src/pages/plans/PhaseLedger.tsx
+msgid "write report"
+msgstr "write report"
 
 #: src/pages/planning/RevisionReview.tsx
 msgid "write the staged changes into the plan docs"
