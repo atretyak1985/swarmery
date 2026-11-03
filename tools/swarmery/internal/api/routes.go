@@ -227,6 +227,10 @@ func Routes(root *http.ServeMux, h *Handler) {
 	// stuck-approved proposal after a gh outage. Same D4 origin hardening.
 	mux.HandleFunc("PATCH /api/retro/proposals/{id}", requireLocalOrigin(h.patchProposal))
 	mux.HandleFunc("POST /api/retro/proposals/{id}/apply", requireLocalOrigin(h.applyProposal))
+	// harness² phase 4: advisory probe of a proposal against its promptfoo
+	// suite (improve_probe.go) — a background job; never changes the proposal.
+	mux.HandleFunc("POST /api/improve/proposals/{id}/probe", requireLocalOrigin(h.startProposalProbe))
+	mux.HandleFunc("GET /api/improve/proposals/{id}/probes", h.listProposalProbes)
 
 	// phase 3.5: workspaces
 	mux.HandleFunc("GET /api/tasks", h.listTasks)
