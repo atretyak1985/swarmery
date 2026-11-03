@@ -1167,6 +1167,10 @@ msgstr "Перш ніж пропонувати нового агента, роз
 msgid "behavior {behavior}"
 msgstr "поведінка {behavior}"
 
+#: src/pages/agent-hub/ProposalProbes.tsx
+msgid "bench cap {benchCap}"
+msgstr "ліміт бенча {benchCap}"
+
 #: src/pages/learning/TurnForecastPanel.tsx
 msgid "biggest miss"
 msgstr "найбільший промах"
@@ -1878,6 +1882,10 @@ msgstr "Оцінки"
 msgid "Estimation accuracy"
 msgstr "Точність оцінок"
 
+#: src/pages/agent-hub/ProposalProbes.tsx
+msgid "eval suite"
+msgstr "eval-набір"
+
 #: src/pages/Retro.tsx
 msgid "evals {evalPassed}/{evalTotal}"
 msgstr "евали {evalPassed}/{evalTotal}"
@@ -2120,6 +2128,10 @@ msgstr "з рекомендації #{recId}"
 #: src/pages/system/ItemDetail.tsx
 msgid "Frontmatter"
 msgstr "Frontmatter"
+
+#: src/pages/agent-hub/ProposalProbes.tsx
+msgid "frozen bench"
+msgstr "заморожений бенч"
 
 #: src/pages/learning/Learning.tsx
 msgid "gathering"
@@ -4051,6 +4063,14 @@ msgstr "Зробіть пробний прогін, щоб побачити, я�
 msgid "Run an OpenAI-compatible model server: LM Studio (<0>localhost:1234</0>), Ollama (<1>localhost:11434/v1</1>), llama.cpp or vLLM. A 7–14B instruct model is enough."
 msgstr "Запустіть сервер моделі, сумісний з OpenAI: LM Studio (<0>localhost:1234</0>), Ollama (<1>localhost:11434/v1</1>), llama.cpp або vLLM. Instruct-моделі на 7–14B достатньо."
 
+#: src/pages/agent-hub/ProposalProbes.tsx
+msgid "Run bench"
+msgstr "Запустити бенч"
+
+#: src/pages/agent-hub/ProposalProbes.tsx
+msgid "Run bench again"
+msgstr "Бенч ще раз"
+
 #: src/pages/agent-hub/RunNow.tsx
 #: src/pages/AgentHub.tsx
 msgid "run once"
@@ -4060,6 +4080,10 @@ msgstr "запустити раз"
 #: src/pages/inbox/TriageBanner.tsx
 msgid "run triage"
 msgstr "запустити сортування"
+
+#: src/pages/agent-hub/ProposalProbes.tsx
+msgid "running bench…"
+msgstr "бенч триває…"
 
 #: src/pages/Analytics.tsx
 #: src/pages/health/HealthOverview.tsx
@@ -4073,6 +4097,10 @@ msgstr "запуски"
 #: src/pages/Analytics.tsx
 msgid "Runs"
 msgstr "Запуски"
+
+#: src/pages/agent-hub/ProposalProbes.tsx
+msgid "Runs each frozen-bench task tagged for this agent as a whole session, once as the current agent and once as the proposal, and stops between tasks at the bench cap of {benchCap}. It never approves, applies or rejects."
+msgstr "Запускає кожну задачу замороженого бенча, позначену для цього агента, як цілу сесію: раз як поточний агент і раз як пропозицію; між задачами зупиняється на ліміті бенча {benchCap}. Ніколи не схвалює, не застосовує і не відхиляє."
 
 #: src/pages/agent-hub/ProposalProbes.tsx
 msgid "Runs every suite case twice through claude -p and stops at the cost cap of {cap}. It never approves, applies or rejects."
@@ -4550,6 +4578,7 @@ msgstr "система в режимі лише читання — копіюв�
 msgid "target"
 msgstr "ціль"
 
+#: src/pages/agent-hub/ProposalProbes.tsx
 #: src/pages/Retro.tsx
 msgid "task"
 msgstr "задача"

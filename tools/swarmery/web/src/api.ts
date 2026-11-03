@@ -89,6 +89,7 @@ import type {
   ProjectsHealthResponse,
   ProjectsResponse,
   ProbeJob,
+  ProbeSource,
   ProposalProbesResp,
   ProposalsResp,
   ProvisionResponse,
@@ -1101,12 +1102,14 @@ export function fetchProposalProbes(id: number): Promise<ProposalProbesResp> {
 }
 
 /**
- * POST /api/improve/proposals/{id}/probe — run the agent's promptfoo suite on
+ * POST /api/improve/proposals/{id}/probe — run the agent's promptfoo suite
+ * (source 'promptfoo') or the frozen bench (source 'bench', its own cap) on
  * base vs proposal as a background job (202). Advisory: never changes the
  * proposal. 422 unless proposed/approved; 409 a probe is already running.
  */
-export async function startProposalProbe(id: number): Promise<ProbeJob> {
-  const res = await apiFetch(`/api/improve/proposals/${String(id)}/probe`, { method: 'POST' });
+export async function startProposalProbe(id: number, source: ProbeSource = 'promptfoo'): Promise<ProbeJob> {
+  const query = source === 'promptfoo' ? '' : `?source=${source}`;
+  const res = await apiFetch(`/api/improve/proposals/${String(id)}/probe${query}`, { method: 'POST' });
   if (!res.ok) throw new Error(await errBody(res, t`probe proposal failed`));
   const body = (await res.json()) as { job: ProbeJob };
   return body.job;
