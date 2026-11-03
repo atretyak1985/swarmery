@@ -36,9 +36,12 @@ import type { PhaseDetailTab } from './plansTarget';
 import { TerminalBadge } from './TerminalBadge';
 import { reverifyAction, type Reverify } from './useReverify';
 
-/** Below `desk` the stage and the cost drop out: the note still says where it is. */
+/** Below `desk` the stage and the cost drop out: the note still says where it is.
+ * Every line is its own grid, so no column may size to its content: an `auto` action
+ * column grew on the one line with a wide pill and pushed that line's stage, cost and
+ * criteria off the header. 140px holds the widest pill, uk "позначити критерії" (137px). */
 const GRID =
-  'grid grid-cols-[18px_24px_minmax(0,1fr)_auto] gap-[10px] desk:grid-cols-[18px_24px_minmax(0,1fr)_72px_56px_48px_minmax(92px,auto)]';
+  'grid grid-cols-[18px_24px_minmax(0,1fr)_auto] gap-[10px] desk:grid-cols-[18px_24px_minmax(0,1fr)_72px_56px_48px_140px]';
 
 const PILL =
   'inline-flex items-center rounded-md border px-2 py-[3px] font-mono text-[11px] leading-[normal] whitespace-nowrap transition-colors disabled:cursor-not-allowed disabled:opacity-50';
