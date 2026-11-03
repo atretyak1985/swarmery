@@ -27,7 +27,18 @@ function stop(e: MouseEvent | KeyboardEvent): void {
   e.stopPropagation();
 }
 
-export function CacheColdBadge({ session }: { session: Session }): JSX.Element | null {
+export interface HandoffContinue {
+  /** "continue from handoff", or "writing handoff…" while the brief is written. */
+  label: string;
+  busy: boolean;
+  error: string | null;
+  hasBrief: boolean;
+  /** Open the brief, or ask the daemon to write one first. */
+  run: () => void;
+}
+
+/** The chip's action, for any host: the session detail's `⋯` menu offers it too. */
+export function useContinueFromHandoff(session: Session): HandoffContinue {
   const { t } = useLingui();
   const navigate = useNavigate();
   const sessionHref = useSessionHref();
@@ -35,19 +46,11 @@ export function CacheColdBadge({ session }: { session: Session }): JSX.Element |
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const cold = session.cacheCold;
-  if (cold == null) return null;
-
-  const k = Math.round(cold.footprint / 1000);
-  const at = fmtTime(cold.since);
-  const channel = cold.kind === 'api' ? t`API-key` : t`subscription`;
   const hasBrief = session.handoff != null;
   const openBrief = (): void => {
     navigate(`${sessionHref(session.id)}${HANDOFF_HASH}`);
   };
-
-  const onAction = (e: MouseEvent): void => {
-    e.stopPropagation();
+  const run = (): void => {
     if (hasBrief) {
       openBrief();
       return;
@@ -62,9 +65,25 @@ export function CacheColdBadge({ session }: { session: Session }): JSX.Element |
       .catch((err: unknown) => setError(err instanceof Error ? err.message : t`handoff request failed`))
       .finally(() => setPending(false));
   };
-
   const busy = !hasBrief && (pending || generating);
-  const label = busy ? t`writing handoff…` : t`continue from handoff`;
+  return { label: busy ? t`writing handoff…` : t`continue from handoff`, busy, error, hasBrief, run };
+}
+
+export function CacheColdBadge({ session }: { session: Session }): JSX.Element | null {
+  const { t } = useLingui();
+  const { label, busy, error, hasBrief, run } = useContinueFromHandoff(session);
+
+  const cold = session.cacheCold;
+  if (cold == null) return null;
+
+  const k = Math.round(cold.footprint / 1000);
+  const at = fmtTime(cold.since);
+  const channel = cold.kind === 'api' ? t`API-key` : t`subscription`;
+
+  const onAction = (e: MouseEvent): void => {
+    e.stopPropagation();
+    run();
+  };
 
   return (
     <span className="inline-flex shrink-0 items-center gap-1" onClick={stop} onKeyDown={stop}>

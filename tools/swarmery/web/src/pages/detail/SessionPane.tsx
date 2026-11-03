@@ -4,13 +4,16 @@
 // Chat · Steps · Diff with the actions for this state on the same line. Under the
 // band, the tab beside the context rail (SessionRail).
 //
-// The sentence is the only place the state is said. What the old header scattered
-// went to a fixed place (plan D-4, the report lists every move): tokens, cost,
-// context, elapsed, errors, recovered and cold restarts to the numbers strip;
-// model, branch, account and the task to the eyebrow; outcome, extract tasks, Kill,
-// the labels, the link mod's usage and remote control to the actions and `⋯`; the
-// handoff brief to the rail; the Swarm tab and the usage blocks to folds under the
-// Steps ledger, which go deeper than the rail.
+// The sentence is the only place the state is said (headerSentence.ts, artboards
+// 2b–2d), a cold prompt cache included. Everything else has a fixed place: model,
+// duration, branch, account, the task and the labels on the facts line; tokens,
+// cost, context, the plan's limit, errors, recovered and cold restarts in the
+// numbers strip, in that order, a zero column left out; this state's main action
+// and a secondary or two on the action bar (Stop turn and send prompt while it
+// works, the outcome and extract tasks once finished, allow / deny on the gate
+// card); extract tasks, continue from handoff, stop process and rename in `⋯`. The
+// handoff brief is the rail's; the Swarm tab and the usage blocks are folds under
+// the Steps ledger, which go deeper than the rail.
 //
 // The header stays put and everything under it scrolls, panelRef being the one
 // scroller; the composer sticks to its foot on the Chat tab. From `wide` up the rail is
@@ -32,7 +35,14 @@ import {
   type ReactNode,
 } from 'react';
 import { Link, useLocation, useSearchParams } from 'react-router-dom';
-import type { NeedsYouItem, PendingSession, SessionDetail, SessionOutcome, WSMessage } from '../../api/types';
+import type {
+  NeedsYouItem,
+  PendingSession,
+  PermissionRequest,
+  SessionDetail,
+  SessionOutcome,
+  WSMessage,
+} from '../../api/types';
 import {
   MOCK,
   extractSessionTasks,
@@ -42,13 +52,14 @@ import {
   renameSession,
   sendSessionMessage,
 } from '../../api';
-import { fmtCost, fmtTokens, projectLabel } from '../../lib/format';
+import { fmtCost, fmtTime, fmtTokens, projectLabel } from '../../lib/format';
 import { usePanels } from '../../lib/panels';
 import { useProjectColor } from '../../lib/projectColors';
 import { safeHref } from '../../lib/safeHref';
 import { accountLabel } from '../../lib/sessionAccount';
 import { modelShortName, sessionModelFallback } from '../../lib/sessionModelChip';
-import { compactSpan, rowState, stateSentence, type RowState } from '../../lib/sessionsView';
+import { topRateLimit } from '../../lib/sessionLink';
+import { compactSpan, FLAG_CONTEXT_TOKENS, FLAG_LIMIT_PCT, rowState, type RowState } from '../../lib/sessionsView';
 import { useNowMs } from '../../lib/sessionState';
 import { ConflictBadge } from '../../lib/swarm';
 import { useLiveUpdates } from '../../lib/ws';
@@ -57,16 +68,15 @@ import { KillButton, killSlotKind } from '../../components/KillButton';
 import { OUTCOME_GLYPH, OutcomePicker } from '../../components/OutcomePicker';
 import { DetailHeader } from '../../components/place/DetailHeader';
 import { NumbersStrip, type NumberItem } from '../../components/place/NumbersStrip';
-import { ProcBadge } from '../../components/ProcBadge';
+import { OverflowMenu, type OverflowMenuItem } from '../../components/OverflowMenu';
 import { SessionLabelChips } from '../../components/SessionLabelChips';
 import { SessionControls } from '../../components/SessionControls';
-import { SessionLinkChips } from '../../components/SessionLinkChips';
 import { StopButton } from '../../components/StopButton';
 import { TaskChip } from '../../components/TaskChip';
 import { ErrorBox, Loading } from '../../components/ui';
 import { Timeline } from './Timeline';
 import { Diffs } from './Diffs';
-import { CacheColdBadge } from '../sessions/CacheColdBadge';
+import { useContinueFromHandoff } from '../sessions/CacheColdBadge';
 import { ModelSwitchBadge } from '../sessions/ModelSwitchBadge';
 import { SwarmPanel } from '../sessions/SwarmPanel';
 import { scrollToDiffGroup } from './diffJump';
@@ -77,7 +87,8 @@ import { redirectChannel } from './redirectChannel';
 import { SummaryChips } from './SummaryChips';
 import { DetailRail } from './DetailRail';
 import { PendingRunNotice } from './PendingRunNotice';
-import { gateTier, SessionGate } from './SessionGate';
+import { gateTier, SessionGate, usePendingRequest } from './SessionGate';
+import { headerSentence } from './headerSentence';
 import { SessionRail } from './SessionRail';
 import { Chevron } from '../../components/Chevron';
 
@@ -109,10 +120,11 @@ export function parkedAtFoot(distance: number, scrollTop: number): boolean {
 
 const TERM_FOCUS_SCHEMES: readonly string[] = ['warp:'];
 
-/** Context occupancy (tokens), matching advisor R9's danger line: a fat context is
- * the fat-session cost driver. */
+/** Context occupancy (tokens), matching advisor R9's danger line (the list's row
+ * flag, FLAG_CONTEXT_TOKENS): a fat context is the fat-session cost driver. */
 const CONTEXT_WARN = 150_000;
-const CONTEXT_DANGER = 300_000;
+/** The link mod's context percentage at which the column turns red. */
+const CONTEXT_PCT_ALARM = 55;
 
 const TITLE_CLASS = 'text-[22px] leading-[1.25] font-semibold tracking-[-0.015em]';
 
@@ -132,38 +144,41 @@ const STATE_TONE: Record<RowState, { text: string; dot: string }> = {
   pending: { text: 'text-brand', dot: 'bg-amber' },
 };
 
-/** Inline-editable session title. Click it to rename; Enter/blur saves, Escape
- * cancels. A blank value reverts to the ingested title. */
+/** Inline-editable session title. Click it (or `⋯ → rename`) to rename; Enter/blur
+ * saves, Escape cancels. A blank value reverts to the ingested title. */
 function TitleEditor({
   title,
   onRename,
+  editing,
+  setEditing,
 }: {
   title: string | null;
   onRename: (raw: string) => void;
+  editing: boolean;
+  setEditing: (on: boolean) => void;
 }): JSX.Element {
   const { t } = useLingui();
-  const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState('');
+  // null: nothing typed yet, the field shows the title as it stands.
+  const [draft, setDraft] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const value = draft ?? title ?? '';
 
-  const begin = (): void => {
-    setDraft(title ?? '');
-    setEditing(true);
-  };
+  const begin = (): void => setEditing(true);
   useEffect(() => {
     if (editing) inputRef.current?.select();
+    else setDraft(null);
   }, [editing]);
 
   const commit = (): void => {
     setEditing(false);
-    if (draft.trim() !== (title ?? '')) onRename(draft);
+    if (value.trim() !== (title ?? '')) onRename(value);
   };
 
   if (editing) {
     return (
       <input
         ref={inputRef}
-        value={draft}
+        value={value}
         onChange={(e) => setDraft(e.target.value)}
         onBlur={commit}
         onKeyDown={(e) => {
@@ -258,11 +273,31 @@ function Menu({
   );
 }
 
-function MenuLine({ label, children }: { label: string; children: ReactNode }): JSX.Element {
+/** The state in one sentence: a dot, the bold lead in the state's colour, the rest
+ * grey. Ticks each second only while a request's countdown is in it. */
+function StateLine({
+  detail,
+  state,
+  gate,
+  request,
+  now,
+}: {
+  detail: SessionDetail;
+  state: RowState;
+  gate: NeedsYouItem | undefined;
+  request: PermissionRequest | null;
+  now: string | null;
+}): JSX.Element {
+  const nowMs = useNowMs(request !== null ? 1000 : 15_000);
+  const lastEvent = detail.events[detail.events.length - 1];
+  const sentence = headerSentence({ detail, state, nowMs, lastEventAt: lastEvent?.ts ?? null, now, gate, request });
+  const tone = STATE_TONE[state];
   return (
-    <div className="flex flex-col gap-1">
-      <span className="font-mono text-[10px] tracking-[0.08em] text-ink-faint uppercase">{label}</span>
-      <div className="flex flex-wrap items-center gap-1.5 empty:hidden">{children}</div>
+    <div data-testid="state-sentence" className="mt-2 flex items-start gap-2 text-[13.5px] leading-[1.5] text-ink-2">
+      <span aria-hidden="true" className={`mt-[5px] inline-block h-[9px] w-[9px] shrink-0 rounded-full ${tone.dot}`} />
+      <span>
+        <b className={`font-semibold ${tone.text}`}>{sentence.lead}</b> {sentence.rest}
+      </span>
     </div>
   );
 }
@@ -350,6 +385,61 @@ function mockPending(): PendingSend[] {
   ];
 }
 
+/** The `⋯` of the action bar: the rare actions. One that cannot run now says why. */
+function SessionMenu({
+  detail,
+  state,
+  extracting,
+  onExtract,
+  onStopProcess,
+  stopReason,
+  onRename,
+}: {
+  detail: SessionDetail;
+  state: RowState;
+  extracting: boolean;
+  onExtract: () => void;
+  onStopProcess: () => void;
+  /** Why there is no process to stop; null when there is one. */
+  stopReason: string | null;
+  onRename: () => void;
+}): JSX.Element {
+  const { t } = useLingui();
+  const handoff = useContinueFromHandoff(detail);
+  const items: OverflowMenuItem[] = [];
+  // Finished, extract tasks stands on the bar itself.
+  if (state !== 'done') {
+    items.push({
+      id: 'extract',
+      label: extracting ? t`extracting…` : t`extract tasks`,
+      onSelect: onExtract,
+      disabledReason: extracting ? t`already running` : null,
+    });
+  }
+  if (detail.cacheCold != null) {
+    items.push({
+      id: 'handoff',
+      label: handoff.label,
+      onSelect: handoff.run,
+      disabledReason: handoff.busy ? t`being written` : null,
+    });
+  }
+  items.push(
+    { id: 'stop', label: t`stop process…`, tone: 'red', onSelect: onStopProcess, disabledReason: stopReason },
+    { id: 'rename', label: t`rename`, onSelect: onRename },
+  );
+  return (
+    <span className="inline-flex items-center gap-1.5">
+      <OverflowMenu label={t`more for this session`} items={items} />
+      {handoff.error !== null && (
+        <span role="alert" className="font-mono text-[10.5px] text-red">
+          {handoff.error}
+        </span>
+      )}
+    </span>
+  );
+}
+
 export function SessionPane({
   id,
   listHref,
@@ -391,6 +481,11 @@ export function SessionPane({
     },
     [setSearchParams],
   );
+  // `⋯ → rename` and `⋯ → stop process…` open the title field and the confirm step.
+  const [renaming, setRenaming] = useState(false);
+  const [stopAsk, setStopAsk] = useState(false);
+  // Bumped on this session's session_updated: the gate's request can settle between frames.
+  const [gateRefresh, setGateRefresh] = useState(0);
   // The folds under the ledger.
   const [swarmOpen, setSwarmOpen] = useState(searchParams.get('tab') === 'swarm');
   const [usageOpen, setUsageOpen] = useState(false);
@@ -672,6 +767,7 @@ export function SessionPane({
         (msg.type === 'event_appended' && msg.payload.sessionId === detailIdRef.current) ||
         (msg.type === 'session_updated' && msg.payload.id === detailIdRef.current);
       if (forThis) scheduleLoad();
+      if (msg.type === 'session_updated' && msg.payload.id === detailIdRef.current) setGateRefresh((n) => n + 1);
     },
     [scheduleLoad, load, id],
   );
@@ -781,6 +877,13 @@ export function SessionPane({
     });
   };
 
+  // The permission request behind the gate: its expiry is the sentence's countdown.
+  const request = usePendingRequest(
+    detail === null || gate === undefined ? null : gate.requestId,
+    detail?.projectSlug ?? '',
+    gateRefresh,
+  );
+
   const facts = useMemo(() => {
     if (detail === null) return null;
     let tokens = 0;
@@ -825,9 +928,6 @@ export function SessionPane({
   }
 
   const state = rowState(detail, nowMs, gate);
-  const lastEvent = detail.events[detail.events.length - 1];
-  const sentence = stateSentence(detail, state, nowMs, lastEvent?.ts ?? null, now, gate);
-  const tone = STATE_TONE[state];
   const plan = detail.planGroup != null;
   const stepCount = detail.events.length;
   const chatCount = detail.turns.filter((turn) => turn.text !== null && turn.text !== '').length;
@@ -836,33 +936,69 @@ export function SessionPane({
   const moved = sessionModelFallback(detail);
   const account = accountLabel(detail);
   const contextPct = detail.link?.contextPct ?? null;
-  const elapsedMs = new Date(detail.endedAt ?? nowMs).getTime() - new Date(detail.startedAt).getTime();
+  const live = state === 'working' || state === 'pending';
+  const finished = state === 'done' || state === 'failed' || state === 'stopped';
+  // Duration while it runs, start → end once it is over.
+  const span =
+    finished && detail.endedAt !== null
+      ? `${fmtTime(detail.startedAt)} → ${fmtTime(detail.endedAt)}`
+      : compactSpan(nowMs - new Date(detail.startedAt).getTime());
 
-  const numbers: NumberItem[] = [
-    { label: t`tokens`, value: fmtTokens(facts.tokens) },
-    { label: t`cost`, value: fmtCost(facts.cost), tone: 'brand' },
-  ];
+  // The numbers strip, in a fixed order: tokens · cost · context · plan · errors ·
+  // recovered · cold restarts. A zero column is left out; one past its threshold
+  // is red, label included.
+  const numbers: NumberItem[] = [];
+  if (facts.tokens > 0) numbers.push({ label: t`tokens`, value: fmtTokens(facts.tokens) });
+  if (facts.cost !== null && facts.cost > 0) numbers.push({ label: t`cost`, value: fmtCost(facts.cost), tone: 'brand' });
   if (contextPct !== null) {
+    if (contextPct > 0) {
+      numbers.push({
+        label: t`context`,
+        value: `${String(Math.round(contextPct))} %`,
+        barPercent: contextPct,
+        alarm: contextPct >= CONTEXT_PCT_ALARM,
+      });
+    }
+  } else if ((detail.contextTokens ?? 0) > 0) {
+    // No link mod: the window size is unknown, so tokens, no percentage and no bar.
+    // The fat-session thresholds still warn: every turn re-reads this context.
+    const ctx = detail.contextTokens ?? 0;
     numbers.push({
       label: t`context`,
-      value: `${String(Math.round(contextPct))} %`,
-      tone: contextPct >= 55 ? 'red' : 'default',
-      barPercent: contextPct,
+      value: fmtTokens(ctx),
+      tone: ctx >= CONTEXT_WARN ? 'amber' : 'default',
+      alarm: ctx >= FLAG_CONTEXT_TOKENS,
     });
-  } else if (detail.contextTokens != null) {
-    // No link mod: the window size is unknown, so no percentage and no bar. The
-    // fat-session thresholds still warn: every turn re-reads this context.
-    const heavy = detail.contextTokens >= CONTEXT_DANGER ? 'red' : detail.contextTokens >= CONTEXT_WARN ? 'amber' : 'default';
-    numbers.push({ label: t`context`, value: fmtTokens(detail.contextTokens), tone: heavy });
   }
-  numbers.push({ label: t`elapsed`, value: compactSpan(elapsedMs) });
-  if (facts.errors > 0) numbers.push({ label: t`errors`, value: String(facts.errors), tone: 'red' });
+  // The plan's limit is known only from the link mod.
+  const limit = detail.link == null ? null : topRateLimit(detail.link.rateLimits);
+  if (limit !== null && limit.percentUsed > 0) {
+    numbers.push({
+      label: t`plan`,
+      value: `${String(Math.round(limit.percentUsed))} %`,
+      barPercent: limit.percentUsed,
+      alarm: limit.percentUsed >= FLAG_LIMIT_PCT,
+    });
+  }
+  if (facts.errors > 0) numbers.push({ label: t`errors`, value: String(facts.errors), alarm: true });
   if (detail.recovered > 0) numbers.push({ label: t`recovered`, value: String(detail.recovered), tone: 'green' });
   if ((detail.coldRestarts ?? 0) > 0) numbers.push({ label: t`cold restarts`, value: String(detail.coldRestarts) });
 
-  const live = state === 'working' || state === 'pending';
   const redirect = redirectChannel(detail);
   const killable = killSlotKind(detail);
+  // `⋯ → stop process…`: Kill for a PID that is alive, else the graceful Stop while
+  // the session still reads as live (it needs no PID).
+  const stopKind: 'kill' | 'stop' | null = killable === 'killable' ? 'kill' : live ? 'stop' : null;
+  const stopReason =
+    stopKind !== null ? null : killable === 'exited' ? t`the process already exited` : t`no process to stop`;
+  const controllable = detail.link?.controllable === true;
+  // Why Stop turn (and, with no composer either, send prompt) is off: grey, on the right.
+  const barReason =
+    !live || controllable
+      ? null
+      : detail.link == null
+        ? t`no link mod on this session`
+        : t`the link mod is not polling for commands`;
   const focusHref = safeHref(gate?.termFocusUrl ?? null, TERM_FOCUS_SCHEMES);
   const outcome = detail.outcome ?? null;
   const outcomeLabel = outcome === null ? t`outcome ▾` : t`outcome ${OUTCOME_GLYPH[outcome].glyph} ▾`;
@@ -907,7 +1043,11 @@ export function SessionPane({
         <DetailHeader flush>
           <BackLink to={listHref} />
 
-          <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 font-mono text-[10.5px] leading-[normal] text-ink-faint">
+          {/* The facts line: where it runs, on what, for how long, the task, the labels. */}
+          <div
+            data-testid="session-facts"
+            className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 font-mono text-[11px] leading-[normal] text-ink-faint"
+          >
             <span className="inline-flex items-center gap-[5px]">
               <span
                 aria-hidden="true"
@@ -933,6 +1073,8 @@ export function SessionPane({
                 )}
               </>
             )}
+            <span aria-hidden="true">·</span>
+            <span>{span}</span>
             {detail.gitBranch !== null && (
               <>
                 <span aria-hidden="true">·</span>
@@ -954,23 +1096,32 @@ export function SessionPane({
                 confidence={detail.taskConfidence}
               />
             )}
+            <SessionLabelChips uuid={detail.sessionUuid} />
           </div>
 
-          <TitleEditor title={detail.title} onRename={rename} />
+          <TitleEditor title={detail.title} onRename={rename} editing={renaming} setEditing={setRenaming} />
 
-          <div className="mt-2 flex items-start gap-2 text-[13.5px] leading-[1.5] text-ink-2">
-            <span aria-hidden="true" className={`mt-[5px] inline-block h-[9px] w-[9px] shrink-0 rounded-full ${tone.dot}`} />
-            <span>
-              <b className={`font-semibold ${tone.text}`}>{sentence.lead}</b> {sentence.rest}
-            </span>
-          </div>
+          {/* The state is said here and nowhere else in the header. */}
+          <StateLine detail={detail} state={state} gate={gate} request={request} now={now} />
 
           {/* Alarms that act: renders nothing on most sessions. */}
           <div className="mt-2 flex flex-wrap items-center gap-2 empty:hidden">
             <ConflictBadge sessionId={detail.id} />
-            <CacheColdBadge session={detail} />
             <ModelSwitchBadge session={detail} />
           </div>
+
+          {stopAsk && stopKind !== null && (
+            <div data-testid="stop-process" className="mt-2 flex flex-wrap items-center gap-2">
+              {/* Stop vs Kill is explained once, here, at the confirm step. */}
+              <ExplainPair id="kill-vs-stop">
+                {stopKind === 'kill' ? (
+                  <KillButton session={detail} confirmAtStart onCancel={() => setStopAsk(false)} />
+                ) : (
+                  <StopButton session={detail} confirmAtStart onCancel={() => setStopAsk(false)} />
+                )}
+              </ExplainPair>
+            </div>
+          )}
 
           {extractNote !== null && (
             <div
@@ -991,9 +1142,11 @@ export function SessionPane({
             </div>
           )}
 
-          <div className="mt-4">
-            <NumbersStrip items={numbers} />
-          </div>
+          {numbers.length > 0 && (
+            <div data-testid="session-numbers" className="mt-4">
+              <NumbersStrip items={numbers} />
+            </div>
+          )}
 
           {gate !== undefined && (
             <SessionGate
@@ -1005,6 +1158,7 @@ export function SessionPane({
               canCompose={redirect !== null}
               onSent={onSent}
               actions={actions}
+              request={request}
             />
           )}
 
@@ -1019,64 +1173,53 @@ export function SessionPane({
               {t`Diff`}
             </TabButton>
             <span className="min-w-2 flex-1" />
-            <div className="inline-flex gap-1.5 py-1">
-              {/* No `pause` (plan D-13): stopSession ends the process and records it
-                  as finished, so the word would lie. */}
-              {state === 'working' && redirect !== null && (
-                <button
-                  type="button"
-                  onClick={redirect === 'composer' ? openComposer : openLinkPrompt}
-                  className={BUTTON}
-                >
-                  {t`redirect`}
-                </button>
-              )}
-              {live &&
-                (killable === 'killable' ? (
-                  <KillButton session={detail} label={t`stop`} className={BUTTON_RED} />
-                ) : (
-                  <StopButton session={detail} label={t`stop`} className={BUTTON_RED} />
-                ))}
-              {state === 'done' && (
+            {/* The action bar: this state's main action, a secondary or two, then `⋯`.
+                Waiting on a permission, allow and deny are the gate card's above. */}
+            <div data-testid="session-actions" className="inline-flex flex-wrap items-center gap-1.5 py-1">
+              {live && (
                 <>
-                  <Menu label={outcomeLabel} ariaLabel={t`session outcome`}>
-                    {outcomePicker}
-                  </Menu>
-                  {extractButton}
+                  <SessionControls
+                    session={detail}
+                    only="stop"
+                    compact
+                    stopClassName={`${BUTTON_RED} disabled:cursor-not-allowed disabled:opacity-50`}
+                  />
+                  <button
+                    type="button"
+                    disabled={redirect === null}
+                    onClick={redirect === 'link' ? openLinkPrompt : openComposer}
+                    className={`${BUTTON} disabled:cursor-not-allowed disabled:opacity-50`}
+                  >
+                    {t`send prompt`}
+                  </button>
                 </>
-              )}
-              {(state === 'failed' || state === 'stopped') && (
-                <button type="button" onClick={openComposer} className={BUTTON_ACCENT}>
-                  {t`resume with a reply`}
-                </button>
               )}
               {state === 'needs' && focusHref !== null && (
                 <a href={focusHref} className={BUTTON}>
                   {t`open in terminal ↗`}
                 </a>
               )}
-              <Menu label="⋯" ariaLabel={t`more for this session`}>
-                {state !== 'done' && <MenuLine label={t`outcome`}>{outcomePicker}</MenuLine>}
-                {state !== 'done' && <MenuLine label={t`board`}>{extractButton}</MenuLine>}
-                {/* Stop vs Kill is explained once, here, next to the process. */}
-                <MenuLine label={t`process`}>
-                  <ExplainPair id="kill-vs-stop">
-                    <ProcBadge session={detail} />
-                  </ExplainPair>
-                  {!live && <KillButton session={detail} />}
-                </MenuLine>
-                <MenuLine label={t`live usage`}>
-                  <SessionLinkChips session={detail} />
-                </MenuLine>
-                <MenuLine label={t`labels`}>
-                  <SessionLabelChips uuid={detail.sessionUuid} />
-                </MenuLine>
-                {/* Link-mod remote control: always shown, disabled with the reason
-                    when no mod polls for this session. */}
-                <MenuLine label={t`remote control`}>
-                  <SessionControls session={detail} />
-                </MenuLine>
-              </Menu>
+              {(state === 'failed' || state === 'stopped') && (
+                <button type="button" onClick={openComposer} className={BUTTON_ACCENT}>
+                  {t`resume with a reply`}
+                </button>
+              )}
+              {finished && (
+                <Menu label={outcomeLabel} ariaLabel={t`session outcome`}>
+                  {outcomePicker}
+                </Menu>
+              )}
+              {state === 'done' && extractButton}
+              <SessionMenu
+                detail={detail}
+                state={state}
+                extracting={extracting}
+                onExtract={runExtract}
+                onStopProcess={() => setStopAsk(true)}
+                stopReason={stopReason}
+                onRename={() => setRenaming(true)}
+              />
+              {barReason !== null && <span className="font-mono text-[10.5px] text-ink-faint">{barReason}</span>}
             </div>
           </div>
         </DetailHeader>
