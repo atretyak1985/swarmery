@@ -198,7 +198,7 @@ func (h *Handler) phaseReviewDecisions(taskID int64) map[int64]*needsYouDecision
 // source.
 func (h *Handler) phaseOpenDecisions(taskID int64, source string) map[int64]*needsYouDecision {
 	out := map[int64]*needsYouDecision{}
-	ds, err := store.ListTaskDecisions(h.DB, taskID)
+	ds, err := store.ListTaskDecisions(h.rdb(), taskID)
 	if err != nil {
 		log.Printf("warning: epics: guard decisions unreadable (task %d): %v", taskID, err)
 		return out
