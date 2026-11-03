@@ -127,6 +127,18 @@ describe('PhaseLedger', () => {
     expect(document.body.textContent).not.toMatch(/forecast/i);
   });
 
+  it('keeps every desk column a fixed track, so each line stays under its header', () => {
+    // Each line is its own grid: an `auto` track sizes per line, and one wide pill
+    // shifted that line's stage, cost and criteria off the header.
+    mount([done, idle]);
+    const grids = [...document.querySelectorAll('div.grid')];
+    expect(grids.length).toBeGreaterThan(1);
+    for (const g of grids) {
+      const desk = g.className.match(/desk:grid-cols-\[([^\]]+)\]/)?.[1] ?? '';
+      expect(desk).not.toMatch(/auto/);
+    }
+  });
+
   it('counts ticked criteria and links them to the criteria tab without opening the story', () => {
     const manual = { ...base, id: 14, seq: 4, name: 'Store accounts', checkboxesDone: 2, checkboxesTotal: 4, manualOpen: 1 } as EpicPhase;
     const none = { ...base, id: 15, seq: 5, name: 'Empty', checkboxesTotal: 0 } as EpicPhase;
