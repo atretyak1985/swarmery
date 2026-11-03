@@ -79,6 +79,8 @@ function lesson(id: number, createdAt: string): Lesson {
     reviewType: '',
     reviewArea: '',
     findings: [],
+    confidence: 'medium',
+    confidenceReason: '',
   };
 }
 

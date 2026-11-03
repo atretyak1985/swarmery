@@ -1,14 +1,12 @@
 package store
 
-import (
-	"strings"
-	"testing"
-)
+import "testing"
 
-// TestMigrate0134ProposalOutcomeLens: the five columns land with empty
-// defaults, and the status CHECK of 0074 is untouched (a kept_base row is
-// stored as 'rejected'; an unknown status is still refused).
-func TestMigrate0134ProposalOutcomeLens(t *testing.T) {
+// TestMigrate0134LessonConfidence: surprise_lessons grows confidence (default
+// 'medium', CHECKed) and confidence_reason; lesson_generations grows
+// no_entry_reason. A row written without the new columns — every row that
+// existed before the migration — reads as 'medium'.
+func TestMigrate0134LessonConfidence(t *testing.T) {
 	db, err := Open(t.TempDir() + "/m134.db")
 	if err != nil {
 		t.Fatal(err)
@@ -18,33 +16,32 @@ func TestMigrate0134ProposalOutcomeLens(t *testing.T) {
 	if err := db.QueryRow(`SELECT name FROM schema_migrations WHERE version = 134`).Scan(&name); err != nil {
 		t.Fatalf("migration 134 not recorded: %v", err)
 	}
-	if name != "0134_proposal_outcome_lens.sql" {
+	if name != "0134_lesson_confidence.sql" {
 		t.Errorf("migration 134 name = %s", name)
 	}
-	if _, err := db.Exec(`INSERT INTO agent_change_proposals
-		(agent, agent_path, base_sha256, diff, rationale, created_at)
-		VALUES ('a', 'plugins/core/agents/a.md', 'x', '', '', '2026-11-02T00:00:00Z')`); err != nil {
+	const ins = `INSERT INTO surprise_lessons (source_phase_run, phase_id, seq, title, guidance, created_at, updated_at)
+		VALUES (?, 1, 1, 't', 'g', '2026-11-02T00:00:00Z', '2026-11-02T00:00:00Z')`
+	if _, err := db.Exec(ins, "run-old"); err != nil {
 		t.Fatal(err)
 	}
-	var outcome, lens, form, followups, warnings string
-	if err := db.QueryRow(`SELECT outcome, lens, form, suggested_followups_json, warnings_json
-		FROM agent_change_proposals WHERE agent = 'a'`).
-		Scan(&outcome, &lens, &form, &followups, &warnings); err != nil {
+	var conf, why string
+	if err := db.QueryRow(`SELECT confidence, confidence_reason FROM surprise_lessons WHERE source_phase_run = 'run-old'`).
+		Scan(&conf, &why); err != nil {
 		t.Fatal(err)
 	}
-	if outcome != "" || lens != "" || form != "" || followups != "[]" || warnings != "[]" {
-		t.Errorf("defaults: outcome=%q lens=%q form=%q followups=%q warnings=%q",
-			outcome, lens, form, followups, warnings)
+	if conf != "medium" || why != "" {
+		t.Errorf("default = (%q, %q), want (medium, \"\")", conf, why)
 	}
-
-	var ddl string
-	if err := db.QueryRow(`SELECT sql FROM sqlite_master WHERE name = 'agent_change_proposals'`).Scan(&ddl); err != nil {
-		t.Fatal(err)
+	for _, c := range []string{"high", "low"} {
+		if _, err := db.Exec(`UPDATE surprise_lessons SET confidence = ? WHERE source_phase_run = 'run-old'`, c); err != nil {
+			t.Errorf("confidence %q refused: %v", c, err)
+		}
 	}
-	if !strings.Contains(ddl, "CHECK (status IN ('proposed','approved','applied','rejected','failed','needs_target'))") {
-		t.Errorf("status CHECK changed: %s", ddl)
+	if _, err := db.Exec(`UPDATE surprise_lessons SET confidence = 'certain' WHERE source_phase_run = 'run-old'`); err == nil {
+		t.Error("confidence 'certain' accepted")
 	}
-	if _, err := db.Exec(`UPDATE agent_change_proposals SET status = 'kept_base' WHERE agent = 'a'`); err == nil {
-		t.Error("status 'kept_base' accepted — the CHECK must stay closed")
+	if _, err := db.Exec(`INSERT INTO lesson_generations (source_phase_run, phase_id, state, created_at, no_entry_reason)
+		VALUES ('run-old', 1, 'done', '2026-11-02T00:00:00Z', 'nothing transferable')`); err != nil {
+		t.Fatalf("no_entry_reason: %v", err)
 	}
 }

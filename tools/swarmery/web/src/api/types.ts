@@ -1754,7 +1754,7 @@ export interface AgentChangeProposal {
   created_at: string;
   decided_at: string | null;
   /**
-   * Harness² phase 3 (migration 0134). Optional so a payload from an older
+   * Harness² phase 3 (migration 0135). Optional so a payload from an older
    * daemon still type-checks; the current daemon always sends them.
    * `outcome: 'kept_base'` is the model's KEEP_BASE answer on a 'rejected'
    * row — not an operator rejection.
@@ -1770,13 +1770,13 @@ export interface AgentChangeProposal {
   warnings?: string[];
 }
 
-/** agent_change_proposals.outcome (migration 0134). */
+/** agent_change_proposals.outcome (migration 0135). */
 export type ProposalOutcome = '' | 'kept_base';
 
-/** agent_change_proposals.lens (migration 0134). */
+/** agent_change_proposals.lens (migration 0135). */
 export type ProposalLens = '' | 'procedure' | 'knowledge' | 'mixed';
 
-/** agent_change_proposals.form (migration 0134) — the form ladder rung, or keep_base. */
+/** agent_change_proposals.form (migration 0135) — the form ladder rung, or keep_base. */
 export type ProposalForm = '' | 'skill' | 'script' | 'subagent' | 'hook' | 'always-on' | 'keep_base';
 
 /** One follow-up the rewriter could not make itself; form '' when unrecognised. */
@@ -3088,7 +3088,8 @@ export interface SystemInsights {
   skillAuditReport?: SystemSkillAuditReport | null;
   /**
    * Active session-start cost findings — claude_md_oversized,
-   * claude_md_over_200_lines, mcp_server_unused_30d. Additive optional.
+   * claude_md_over_200_lines, mcp_server_unused_30d, always_on_budget.
+   * Additive optional.
    */
   startCost?: SystemStartCost[];
 }

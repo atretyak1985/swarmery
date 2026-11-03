@@ -19,7 +19,7 @@ package lessons
 //	              second rule is coarse on purpose — a rewritten executor changes
 //	              every phase run — and the confounder's detail says which rule
 //	              matched. The detail also carries the proposal's stored lens
-//	              (procedure | knowledge | mixed, migration 0134) so an operator
+//	              (procedure | knowledge | mixed, migration 0135) so an operator
 //	              can tell a rewritten procedure from corrected facts; rows
 //	              written before the lens existed read "lens unrecorded".
 //	model_switch  the dominant session model of the before-runs differs from the
@@ -180,7 +180,7 @@ type AppliedProposal struct {
 	TargetKind string
 	Path       string // target_path, or agent_path for an agent row (its target_path is '')
 	DecidedAt  string
-	Lens       string // procedure | knowledge | mixed; '' on rows older than migration 0134
+	Lens       string // procedure | knowledge | mixed; '' on rows older than migration 0135
 }
 
 // lensLabel renders a proposal's lens for a confounder detail.

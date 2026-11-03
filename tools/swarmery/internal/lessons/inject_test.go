@@ -237,3 +237,29 @@ func TestReviewerSectionMatchesThePhaserunGolden(t *testing.T) {
 		t.Errorf("ReviewerSection =\n%q\nwant\n%q", got, want)
 	}
 }
+
+// At an equal score, a stronger confidence ranks first, before recency; a
+// different score still wins over confidence.
+func TestRankBreaksEqualScoreTiesByConfidence(t *testing.T) {
+	hi, lo := 0.5, 0.2
+	ls := []Active{
+		{ID: 1, Confidence: ConfidenceLow, ActivatedAt: "2026-11-03"},
+		{ID: 2, Confidence: ConfidenceHigh, ActivatedAt: "2026-10-01"},
+		{ID: 3, Confidence: "", ActivatedAt: "2026-10-15"}, // ungraded ranks as medium
+		{ID: 4, Confidence: ConfidenceHigh, ActivatedAt: "2026-10-20"},
+		{ID: 5, Confidence: ConfidenceLow, Effectiveness: &lo},
+		{ID: 6, Confidence: ConfidenceLow, Effectiveness: &hi},
+		{ID: 7, Confidence: ConfidenceHigh, Effectiveness: &lo},
+	}
+	Rank(ls)
+	var got []int64
+	for _, l := range ls {
+		got = append(got, l.ID)
+	}
+	want := []int64{6, 7, 5, 4, 2, 3, 1}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("rank = %v, want %v", got, want)
+		}
+	}
+}

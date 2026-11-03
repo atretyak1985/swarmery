@@ -281,3 +281,42 @@ func TestObservedMCPTools(t *testing.T) {
 		t.Fatalf("ObservedMCPTools =\n%+v\nwant\n%+v", got, want)
 	}
 }
+
+// TestContributorsRankAndShareEstimateSizing: Contributors ranks CLAUDE.md
+// files, MCP servers (tools pooled) and skills largest first with Estimate's
+// own sizing — the per-kind sums equal Estimate's fields up to per-item
+// rounding — and the limit cuts the tail.
+func TestContributorsRankAndShareEstimateSizing(t *testing.T) {
+	root := t.TempDir()
+	claudeDir := filepath.Join(root, "claude")
+	project := filepath.Join(root, "proj")
+	writeFile(t, filepath.Join(claudeDir, "CLAUDE.md"), strings.Repeat("u", 400)) // 100 tokens
+	writeFile(t, filepath.Join(project, "CLAUDE.md"), strings.Repeat("p", 2000))  // 500 tokens
+	mcp := []MCPTool{
+		{Server: "big", Name: "mcp__big__a", Schema: []byte(strings.Repeat("s", 789))}, // (11+789)/4 = 200
+		{Name: "mcp__unclaimed__tool"}, // server recovered from the name
+	}
+	skills := []Skill{{Name: "sk", Description: strings.Repeat("d", 1194)}} // (2+1194+4)/4 = 300
+	src := Sources{ClaudeDir: claudeDir, ProjectRoot: project}
+
+	got := Contributors(src, mcp, skills, 0)
+	var order []string
+	for _, c := range got {
+		order = append(order, fmt.Sprintf("%s:%s:%d", c.Kind, filepath.Base(c.Name), c.Tokens))
+	}
+	want := []string{"claude_md:CLAUDE.md:500", "skill:sk:300", "mcp_server:big:200", "claude_md:CLAUDE.md:100", "mcp_server:unclaimed:5"}
+	if !reflect.DeepEqual(order, want) {
+		t.Fatalf("Contributors = %v\nwant           %v", order, want)
+	}
+	if top := Contributors(src, mcp, skills, 2); len(top) != 2 || top[1].Kind != "skill" {
+		t.Errorf("limit 2 = %+v", top)
+	}
+
+	b := Estimate(src, mcp, skills, 0)
+	if b.EstimatedTotal() != b.ClaudeMD+b.MCP+b.Skills || b.Other != 0 {
+		t.Errorf("EstimatedTotal = %d, parts %d+%d+%d, other %d", b.EstimatedTotal(), b.ClaudeMD, b.MCP, b.Skills, b.Other)
+	}
+	if b.ClaudeMD != 600 || b.Skills != 300 {
+		t.Errorf("Estimate claudeMd=%d skills=%d, want 600/300 (same sizing as Contributors)", b.ClaudeMD, b.Skills)
+	}
+}

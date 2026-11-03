@@ -9,6 +9,10 @@ import { apiFetch } from '../lib/dashboardSession';
 
 export type LessonStatus = 'candidate' | 'active' | 'retired' | 'dismissed' | 'merged';
 
+/** The generator's own grade of a lesson (surprise_lessons.confidence, 0134).
+ *  Accepting a `low` one needs the operator's explicit confirm. */
+export type LessonConfidence = 'high' | 'medium' | 'low';
+
 /** Who proposed the lesson: a run far from its forecast, or a review finding
  *  that repeated across phases (verify-not-trust phase 8). */
 export type LessonSource = 'surprise' | 'review';
@@ -77,6 +81,34 @@ export interface Lesson {
   reviewArea: string;
   /** The `finding:<id>` evidence resolved for links; findings whose rows are gone are omitted. */
   findings: LessonFinding[];
+  /** Ungraded rows (before 0134) read `medium`. */
+  confidence: LessonConfidence;
+  /** The generator's one-sentence why; '' when ungraded. */
+  confidenceReason: string;
+}
+
+/** One rejected (or dropped) lesson of a generation. */
+export interface GenerationRejection {
+  title: string;
+  reason: string;
+}
+
+/** One lesson_generations row: an eligible run and what its generation produced. */
+export interface LessonGeneration {
+  sourcePhaseRun: string;
+  phaseId: number;
+  phaseName: string;
+  planId: string;
+  state: 'running' | 'done' | 'failed';
+  inserted: number;
+  linked: number;
+  rejected: GenerationRejection[];
+  error: string;
+  /** The model's "nothing transferable here" answer; '' when it returned a lesson. */
+  noEntryReason: string;
+  model: string;
+  createdAt: string;
+  finishedAt: string | null;
 }
 
 /** How much of a lesson's measured drop it can be credited with (Go
@@ -227,6 +259,8 @@ const MOCK_LESSONS: Lesson[] = [
     source: 'review',
     reviewType: 'quality',
     reviewArea: 'tools/swarmery/internal/api',
+    confidence: 'medium',
+    confidenceReason: 'Two independent phases raised the same finding.',
     findings: [
       {
         id: 18,
@@ -289,6 +323,8 @@ const MOCK_LESSONS: Lesson[] = [
     source: 'surprise',
     reviewType: '',
     reviewArea: '',
+    confidence: 'low',
+    confidenceReason: 'It rests on a single run.',
     findings: [],
     matches: [
       {
@@ -334,7 +370,27 @@ const MOCK_LESSONS: Lesson[] = [
     source: 'surprise',
     reviewType: '',
     reviewArea: '',
+    confidence: 'high',
+    confidenceReason: 'Two runs hit the same unindexed column.',
     findings: [],
+  },
+];
+
+const MOCK_GENERATIONS: LessonGeneration[] = [
+  {
+    sourcePhaseRun: '6f1c9a2e-0000-4000-8000-000000000005',
+    phaseId: 44,
+    phaseName: 'Phase 3 — flaky runner',
+    planId: '2026-09-25-ci',
+    state: 'done',
+    inserted: 0,
+    linked: 0,
+    rejected: [],
+    error: '',
+    noEntryReason: 'The miss was a one-off network outage; nothing in the code would have predicted it.',
+    model: 'claude-sonnet-5',
+    createdAt: '2026-09-25T10:00:00Z',
+    finishedAt: '2026-09-25T10:01:00Z',
   },
 ];
 
@@ -388,10 +444,24 @@ async function send(method: string, path: string, body?: unknown): Promise<Lesso
   );
 }
 
-/** POST /api/lessons/{id}/accept — candidate → active (the only path to active). */
-export async function acceptLesson(id: number): Promise<Lesson> {
+/** POST /api/lessons/{id}/accept — candidate → active (the only path to active).
+ *  A `low` candidate needs `confirm` (the review queue's second click); without
+ *  it the daemon answers 409 and nothing changes. */
+export async function acceptLesson(id: number, confirm = false): Promise<Lesson> {
   if (MOCK) return mockUpdate(id, { status: 'active', activatedAt: new Date().toISOString() });
-  return send('POST', `/api/lessons/${String(id)}/accept`);
+  return send('POST', `/api/lessons/${String(id)}/accept`, confirm ? { confirm: true } : undefined);
+}
+
+/** GET /api/lessons/generations — the generation log, newest first, optionally
+ *  narrowed to one project. */
+export async function fetchLessonGenerations(project?: string): Promise<LessonGeneration[]> {
+  if (MOCK) return MOCK_GENERATIONS;
+  const q = project === undefined ? '' : `?${new URLSearchParams({ project }).toString()}`;
+  const body = await jsonOrThrow<{ generations: LessonGeneration[] }>(
+    await apiFetch(`/api/lessons/generations${q}`),
+    'GET /api/lessons/generations',
+  );
+  return body.generations;
 }
 
 /** PATCH /api/lessons/{id} — edit the words or areas; never the status. */

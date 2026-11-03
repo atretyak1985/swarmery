@@ -263,7 +263,7 @@ type proposalDTO struct {
 	PRURL            *string `json:"pr_url"`
 	CreatedAt        string  `json:"created_at"`
 	DecidedAt        *string `json:"decided_at"`
-	// Harness² phase 3 (migration 0134). Outcome 'kept_base' marks the model's
+	// Harness² phase 3 (migration 0135). Outcome 'kept_base' marks the model's
 	// KEEP_BASE answer on a 'rejected' row — not an operator rejection.
 	Outcome            string          `json:"outcome"`
 	Lens               string          `json:"lens"`

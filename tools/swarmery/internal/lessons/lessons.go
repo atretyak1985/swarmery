@@ -5,7 +5,7 @@
 // the score reaches the attention threshold AND the executor explained the gap in
 // its Completion Report ("Where reality diverged"), a cheap headless model reads
 // the forecast, the measured actuals, that paragraph and the diff stat, and may
-// return 0–2 small lessons — one imperative sentence of guidance, the area globs
+// return at most one small lesson — one imperative sentence of guidance, the area globs
 // it applies to, and evidence ids copied from its input. Every lesson is
 // validated like a retro analysis: an id that was not offered is a fabrication,
 // and the lesson is rejected.
@@ -44,9 +44,10 @@ const (
 	DefaultEffort = "low"
 )
 
-// MaxLessons caps one generation. A run that taught three things taught none
-// of them well enough to write down.
-const MaxLessons = 2
+// MaxLessons caps one generation (Harness² D6: the reflector writes at most one
+// durable lesson). A run that taught two things taught neither well enough to
+// write down; a model that still returns more has the extras dropped and logged.
+const MaxLessons = 1
 
 // Lesson statuses. StatusActive is written by exactly one function (Accept).
 const (

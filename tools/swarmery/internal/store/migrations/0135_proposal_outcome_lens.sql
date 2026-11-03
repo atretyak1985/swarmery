@@ -1,4 +1,4 @@
--- 0134: form, lens and outcome on agent_change_proposals (harness² phase 3 —
+-- 0135: form, lens and outcome on agent_change_proposals (harness² phase 3 —
 -- D7, D8).
 --
 -- The rewriter now answers in a stricter contract (internal/improve/parse.go):
@@ -30,8 +30,8 @@
 --                             (an agent .md or CLAUDE.md diff that adds more
 --                             lines than it removes). '[]' for none.
 --
--- WHY 0134: migrate.go applies unapplied files in FILENAME order;
--- 0133_lesson_effect_verdict.sql is the highest existing one.
+-- WHY 0135: migrate.go applies unapplied files in FILENAME order;
+-- 0134_lesson_confidence.sql is the highest existing one.
 --
 -- The status CHECK is deliberately untouched (widening it needs the table
 -- rebuild 0074 did); no CHECK on the new columns for the same reason — each is

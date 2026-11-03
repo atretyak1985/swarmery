@@ -123,7 +123,7 @@ func TestProposalConfounder(t *testing.T) {
 	if !strings.Contains(got[1].Detail, "implementation-agent is a role phase runs spawn") {
 		t.Fatalf("role rule detail = %q", got[1].Detail)
 	}
-	// The stored lens rides in the detail; a pre-0134 row says so.
+	// The stored lens rides in the detail; a pre-0135 row says so.
 	if !strings.Contains(got[0].Detail, "for testing (lens procedure)") {
 		t.Fatalf("lens missing from detail = %q", got[0].Detail)
 	}

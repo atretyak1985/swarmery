@@ -481,6 +481,11 @@ msgstr "{reason} — натисніть «перебудувати», щоб п�
 msgid "{redispatched} re"
 msgstr "{redispatched} повт."
 
+#. placeholder {0}: g.rejected[0]?.reason ?? ''
+#: src/pages/Lessons.tsx
+msgid "{rejected} lesson(s) rejected: {0}"
+msgstr "відхилено уроків: {rejected}: {0}"
+
 #: src/pages/Architecture.tsx
 msgid "{repoCount} repos · freshness unknown"
 msgstr "{repoCount} репозиторіїв · свіжість невідома"
@@ -739,6 +744,10 @@ msgstr "Прийняти"
 #: src/pages/inbox/TriageBanner.tsx
 msgid "accept {acceptText}"
 msgstr "прийняти {acceptText}"
+
+#: src/pages/Lessons.tsx
+msgid "accept anyway"
+msgstr "все одно прийняти"
 
 #: src/pages/inbox/InboxDetail.tsx
 msgid "accept lesson"
@@ -1386,6 +1395,7 @@ msgid "Complexity routing"
 msgstr "Маршрутизація за складністю"
 
 #: src/pages/learning/TurnForecastPanel.tsx
+#: src/pages/Lessons.tsx
 msgid "confidence"
 msgstr "упевненість"
 
@@ -1396,6 +1406,10 @@ msgstr "упевненість {range}"
 #: src/pages/learning/TurnForecastPanel.tsx
 msgid "confident and wrong"
 msgstr "впевнений, але хибний"
+
+#: src/pages/Lessons.tsx
+msgid "confirm accepting a low-confidence lesson"
+msgstr "підтвердьте прийняття уроку з низькою впевненістю"
 
 #: src/pages/lessons/EffectVerdictChip.tsx
 msgid "confounded"
@@ -1955,6 +1969,11 @@ msgstr "невдала сесія"
 msgid "failed share by agent"
 msgstr "частка збоїв за агентами"
 
+#. placeholder {0}: g.error
+#: src/pages/Lessons.tsx
+msgid "failed: {0}"
+msgstr "збій: {0}"
+
 #: src/pages/SystemHub.tsx
 msgid "file"
 msgstr "файл"
@@ -2236,6 +2255,10 @@ msgstr "допоміг"
 #: src/pages/system/ModsTab.tsx
 msgid "hide the validate report of {name}"
 msgstr "сховати звіт validate для {name}"
+
+#: src/pages/Lessons.tsx
+msgid "high confidence"
+msgstr "висока впевненість"
 
 #: src/pages/system/ModsTab.tsx
 msgid "high risk"
@@ -2714,6 +2737,10 @@ msgstr "кінець логу ({logLines})"
 msgid "loops"
 msgstr "цикли"
 
+#: src/pages/Lessons.tsx
+msgid "low confidence"
+msgstr "низька впевненість"
+
 #: src/pages/Serena.tsx
 msgid "lsp-pack is not enabled for this project — enable it in Settings"
 msgstr "lsp-pack не ввімкнено для цього проєкту — увімкніть його у Налаштуваннях"
@@ -2753,6 +2780,10 @@ msgstr "медіана"
 #: src/pages/Analytics.tsx
 msgid "Median session"
 msgstr "Медіанна сесія"
+
+#: src/pages/Lessons.tsx
+msgid "medium confidence"
+msgstr "середня впевненість"
 
 #: src/pages/knowledge/Knowledge.tsx
 msgid "memory"
@@ -3104,6 +3135,10 @@ msgstr "немає проєктів з увімкненим lsp-pack — уві�
 #: src/pages/Retro.tsx
 msgid "no proposals"
 msgstr "пропозицій немає"
+
+#: src/pages/Lessons.tsx
+msgid "no reason recorded"
+msgstr "причину не записано"
 
 #: src/pages/agent-hub/Tabs.tsx
 msgid "no recent events"
@@ -3985,6 +4020,10 @@ msgstr "Запуски"
 msgid "runs reached"
 msgstr "охоплено запусків"
 
+#: src/pages/Lessons.tsx
+msgid "Runs that produced no lesson ({count})"
+msgstr "Запуски, що не дали уроку ({count})"
+
 #: src/pages/learning/TurnForecastPanel.tsx
 msgid "said"
 msgstr "заявлено"
@@ -4578,6 +4617,10 @@ msgstr "Флот провалює запуски вдвічі частіше, н
 msgid "The friction board is unavailable right now."
 msgstr "Дошка тертя зараз недоступна."
 
+#: src/pages/Lessons.tsx
+msgid "The generator rated this lesson low confidence. Accepting it injects it into future runs."
+msgstr "Генератор оцінив цей урок як малодостовірний. Якщо прийняти його, він потраплятиме в майбутні запуски."
+
 #: src/pages/system/docsSection.ts
 msgid "the item changed after this guide was written — docs.source_sha no longer matches the body"
 msgstr "елемент змінився після написання цього гайда — docs.source_sha більше не збігається з тілом"
@@ -5063,8 +5106,8 @@ msgid "when {pick} ran: {ranCell}"
 msgstr "коли виконувала {pick}: {ranCell}"
 
 #: src/pages/Lessons.tsx
-msgid "When a phase run lands far from its forecast and its report explains why, a cheap model proposes up to two lessons, each citing evidence from that run. A candidate reaches future runs only after you accept it here. Merge it into an existing lesson when it repeats one. Active lessons are re-measured against their area's surprise; one that stops earning its place is proposed for retirement below, and retired on its own after 14 days without an answer."
-msgstr "Коли запуск фази далеко розходиться з прогнозом, а його звіт пояснює чому, дешева модель пропонує до двох уроків, кожен із доказами з того запуску. Кандидат доходить до майбутніх запусків лише після того, як ви приймете його тут. Якщо він повторює наявний урок — злийте їх. Активні уроки переміряють за несподіванкою їхньої зони; той, що перестає себе виправдовувати, пропонується списати нижче і списується сам через 14 днів без відповіді."
+msgid "When a phase run lands far from its forecast and its report explains why, a cheap model proposes at most one lesson, citing evidence from that run and rating its own confidence, or says why nothing there transfers. A candidate reaches future runs only after you accept it here; a low-confidence one asks you to confirm. Merge it into an existing lesson when it repeats one. Active lessons are re-measured against their area's surprise; one that stops earning its place is proposed for retirement below, and retired on its own after 14 days without an answer."
+msgstr "Коли запуск фази далеко розходиться з прогнозом, а його звіт пояснює чому, дешева модель пропонує щонайбільше один урок із доказами з того запуску та власною оцінкою впевненості — або пояснює, чому звідти нічого не переноситься. Кандидат доходить до майбутніх запусків лише після того, як ви приймете його тут; урок із низькою впевненістю попросить підтвердження. Якщо він повторює наявний урок — злийте їх. Активні уроки переміряють за несподіванкою їхньої зони; той, що перестає себе виправдовувати, пропонується списати нижче і списується сам через 14 днів без відповіді."
 
 #: src/pages/Lessons.tsx
 msgid "where reality diverged"

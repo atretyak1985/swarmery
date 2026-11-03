@@ -14,7 +14,7 @@ import (
 var ErrNoChange = errors.New("model returned an empty diff (no justified change)")
 
 // Form values — the FORM line (form ladder rung, or KEEP_BASE), stored
-// lowercase in agent_change_proposals.form (migration 0134).
+// lowercase in agent_change_proposals.form (migration 0135).
 const (
 	FormSkill    = "skill"
 	FormScript   = "script"
@@ -25,7 +25,7 @@ const (
 )
 
 // Lens values — every hunk carries one; a proposal's lens is the single hunk
-// lens or LensMixed (migration 0134).
+// lens or LensMixed (migration 0135).
 const (
 	LensProcedure = "procedure"
 	LensKnowledge = "knowledge"
