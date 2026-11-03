@@ -70,6 +70,7 @@ import {
   ProposalFacets,
   ProposalFormLensChips,
 } from './agent-hub/ProposalFacets';
+import { ProposalProbes } from './agent-hub/ProposalProbes';
 import { Explain } from '../components/Explain';
 import { RetroImproveCard } from '../components/RetroImproveCard';
 import { HowItWorks } from '../components/HowItWorks';
@@ -608,6 +609,8 @@ function ProposalDetail({
       )}
 
       <ProposalFacets p={p} />
+
+      <ProposalProbes p={p} />
 
       {p.diff !== '' && <DiffView diff={p.diff} />}
 

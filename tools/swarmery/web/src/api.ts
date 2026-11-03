@@ -88,6 +88,8 @@ import type {
   ProjectPluginToggleResponse,
   ProjectsHealthResponse,
   ProjectsResponse,
+  ProbeJob,
+  ProposalProbesResp,
   ProposalsResp,
   ProvisionResponse,
   Recommendation,
@@ -1091,6 +1093,23 @@ export async function patchProposal(
 export async function retryProposal(id: number): Promise<void> {
   const res = await apiFetch(`/api/retro/proposals/${String(id)}/retry`, { method: 'POST' });
   if (!res.ok) throw new Error(await errBody(res, t`retry proposal failed`));
+}
+
+/** GET /api/improve/proposals/{id}/probes — stored probe rows + this daemon's jobs. */
+export function fetchProposalProbes(id: number): Promise<ProposalProbesResp> {
+  return get(`/api/improve/proposals/${String(id)}/probes`);
+}
+
+/**
+ * POST /api/improve/proposals/{id}/probe — run the agent's promptfoo suite on
+ * base vs proposal as a background job (202). Advisory: never changes the
+ * proposal. 422 unless proposed/approved; 409 a probe is already running.
+ */
+export async function startProposalProbe(id: number): Promise<ProbeJob> {
+  const res = await apiFetch(`/api/improve/proposals/${String(id)}/probe`, { method: 'POST' });
+  if (!res.ok) throw new Error(await errBody(res, t`probe proposal failed`));
+  const body = (await res.json()) as { job: ProbeJob };
+  return body.job;
 }
 
 /** POST /api/retro/proposals/{id}/apply — manual re-run of a stuck approved row. */

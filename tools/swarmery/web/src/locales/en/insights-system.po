@@ -1142,6 +1142,10 @@ msgstr "Avg session"
 msgid "awaiting ≥{pct}% improvement"
 msgstr "awaiting ≥{pct}% improvement"
 
+#: src/pages/agent-hub/ProposalProbes.tsx
+msgid "base"
+msgstr "base"
+
 #: src/pages/health/Health.tsx
 msgid "because of you"
 msgstr "because of you"
@@ -1170,6 +1174,10 @@ msgstr "biggest miss"
 #: src/pages/Analytics.tsx
 msgid "biggest mover"
 msgstr "biggest mover"
+
+#: src/pages/agent-hub/ProposalProbes.tsx
+msgid "blind pick"
+msgstr "blind pick"
 
 #: src/pages/RoutingReport.tsx
 msgid "board cards"
@@ -1288,6 +1296,14 @@ msgstr "candidate"
 #: src/pages/Lessons.tsx
 msgid "candidates"
 msgstr "candidates"
+
+#: src/pages/agent-hub/ProposalProbes.tsx
+msgid "capped"
+msgstr "capped"
+
+#: src/pages/agent-hub/ProposalProbes.tsx
+msgid "case"
+msgstr "case"
 
 #: src/pages/Lessons.tsx
 msgid "cause:"
@@ -1479,6 +1495,7 @@ msgstr "copying writes an editable copy into this project's .claude/templates/ �
 msgid "copying…"
 msgstr "copying…"
 
+#: src/pages/agent-hub/ProposalProbes.tsx
 #: src/pages/health/PhaseRunsTab.tsx
 #: src/pages/Retro.tsx
 msgid "cost"
@@ -1951,6 +1968,7 @@ msgstr "explore {exploreShare}%"
 msgid "Export CSV"
 msgstr "Export CSV"
 
+#: src/pages/agent-hub/ProposalProbes.tsx
 #: src/pages/RoutingReport.tsx
 msgid "fail"
 msgstr "fail"
@@ -3192,6 +3210,10 @@ msgstr "No stale facts found"
 msgid "no subagent activity in this range"
 msgstr "no subagent activity in this range"
 
+#: src/pages/agent-hub/ProposalProbes.tsx
+msgid "no suite"
+msgstr "no suite"
+
 #: src/pages/Retro.tsx
 msgid "no target file — dismissing is the only transition"
 msgstr "no target file — dismissing is the only transition"
@@ -3283,6 +3305,10 @@ msgstr "not helping"
 msgid "Not injected into any run yet."
 msgstr "Not injected into any run yet."
 
+#: src/pages/agent-hub/ProposalProbes.tsx
+msgid "not judged"
+msgstr "not judged"
+
 #: src/pages/Retro.tsx
 msgid "not noise"
 msgstr "not noise"
@@ -3358,6 +3384,10 @@ msgstr "off-plan phase run"
 #: src/pages/Docs.tsx
 msgid "On this page"
 msgstr "On this page"
+
+#: src/pages/agent-hub/ProposalProbes.tsx
+msgid "One sample per case: treat a single flip as noise and a difference that repeats across runs as signal."
+msgstr "One sample per case: treat a single flip as noise and a difference that repeats across runs as signal."
 
 #: src/pages/inbox/inboxModel.ts
 msgid "open a fix task"
@@ -3442,6 +3472,10 @@ msgstr "parse error"
 #: src/pages/Memory.tsx
 msgid "partial: moved {movedCount} · backup {backup}"
 msgstr "partial: moved {movedCount} · backup {backup}"
+
+#: src/pages/agent-hub/ProposalProbes.tsx
+msgid "pass"
+msgstr "pass"
 
 #: src/pages/system/ModsTab.tsx
 msgid "passed"
@@ -3605,9 +3639,25 @@ msgstr "preview the evidence, then generate a minimal diff to THIS agent’s def
 msgid "pricing table"
 msgstr "pricing table"
 
+#: src/pages/agent-hub/ProposalProbes.tsx
+msgid "Probe"
+msgstr "Probe"
+
 #: src/pages/inbox/InboxDetail.tsx
 msgid "probe & resume"
 msgstr "probe & resume"
+
+#: src/pages/agent-hub/ProposalProbes.tsx
+msgid "Probe again"
+msgstr "Probe again"
+
+#: src/pages/agent-hub/ProposalProbes.tsx
+msgid "Probe: the agent's eval suite on the current file vs this proposal"
+msgstr "Probe: the agent's eval suite on the current file vs this proposal"
+
+#: src/pages/agent-hub/ProposalProbes.tsx
+msgid "probing…"
+msgstr "probing…"
 
 #: src/pages/agent-hub/ProposalFacets.tsx
 msgid "procedure"
@@ -3679,6 +3729,14 @@ msgstr "Proof"
 #: src/pages/learning/Learning.tsx
 msgid "proof · {word}"
 msgstr "proof · {word}"
+
+#: src/pages/agent-hub/ProposalProbes.tsx
+msgid "proposal"
+msgstr "proposal"
+
+#: src/pages/agent-hub/ProposalProbes.tsx
+msgid "proposal probe"
+msgstr "proposal probe"
 
 #: src/pages/health/HealthOverview.tsx
 msgid "propose a change"
@@ -4015,6 +4073,10 @@ msgstr "runs"
 #: src/pages/Analytics.tsx
 msgid "Runs"
 msgstr "Runs"
+
+#: src/pages/agent-hub/ProposalProbes.tsx
+msgid "Runs every suite case twice through claude -p and stops at the cost cap of {cap}. It never approves, applies or rejects."
+msgstr "Runs every suite case twice through claude -p and stops at the cost cap of {cap}. It never approves, applies or rejects."
 
 #: src/pages/Lessons.tsx
 msgid "runs reached"
@@ -4540,6 +4602,10 @@ msgstr "The area got more surprising after this lesson, and nothing else changed
 msgid "The area's surprise barely moved after this lesson."
 msgstr "The area's surprise barely moved after this lesson."
 
+#: src/pages/agent-hub/ProposalProbes.tsx
+msgid "The blind judge's pick where both sides agree on the hard checks"
+msgstr "The blind judge's pick where both sides agree on the hard checks"
+
 #: src/pages/inbox/InboxDetail.tsx
 #: src/pages/inbox/inboxModel.ts
 msgid "The candidate is closed as not useful. Nothing is added to any brief."
@@ -4736,6 +4802,10 @@ msgstr "this project already has its own copy of this template"
 msgid "This range"
 msgstr "This range"
 
+#: src/pages/agent-hub/ProposalProbes.tsx
+msgid "tie"
+msgstr "tie"
+
 #: src/pages/RoutingReport.tsx
 msgid "tier"
 msgstr "tier"
@@ -4833,9 +4903,14 @@ msgstr "top driver"
 msgid "Top error groups"
 msgstr "Top error groups"
 
+#: src/pages/agent-hub/ProposalProbes.tsx
 #: src/pages/Analytics.tsx
 msgid "total"
 msgstr "total"
+
+#: src/pages/agent-hub/ProposalProbes.tsx
+msgid "total · earlier runs not shown: {earlier}"
+msgstr "total · earlier runs not shown: {earlier}"
 
 #: src/pages/Retro.tsx
 msgid "Total wait"

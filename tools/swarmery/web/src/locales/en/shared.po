@@ -3289,6 +3289,10 @@ msgstr "probe"
 msgid "probe failed: {status}"
 msgstr "probe failed: {status}"
 
+#: src/api.ts
+msgid "probe proposal failed"
+msgstr "probe proposal failed"
+
 #: src/components/PluginConfigModal.tsx
 msgid "probe: {reason}"
 msgstr "probe: {reason}"
