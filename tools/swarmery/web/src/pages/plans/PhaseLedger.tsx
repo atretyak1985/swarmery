@@ -1,6 +1,7 @@
 // The phase ledger (handoff §6): one line per phase, in the design's grid, so a
 // plan's state reads top to bottom. A line opens the phase's own page, where its runs,
-// criteria and every action it offers live. The last column carries the one action the
+// criteria and every action it offers live. The criteria column counts ticked of all
+// acceptance criteria and links to them. The last column carries the one action the
 // line needs now (LedgerAction): run or retry, stop, answer, tick, or the green link
 // to a landed phase's report. What a run started now will use is on the plan's
 // metadata line, above the ledger.
@@ -34,7 +35,7 @@ import { TerminalBadge } from './TerminalBadge';
 
 /** Below `desk` the stage and the cost drop out: the note still says where it is. */
 const GRID =
-  'grid grid-cols-[18px_24px_minmax(0,1fr)_auto] gap-[10px] desk:grid-cols-[18px_24px_minmax(0,1fr)_72px_56px_minmax(92px,auto)]';
+  'grid grid-cols-[18px_24px_minmax(0,1fr)_auto] gap-[10px] desk:grid-cols-[18px_24px_minmax(0,1fr)_72px_56px_48px_minmax(92px,auto)]';
 
 const PILL =
   'inline-flex items-center rounded-md border px-2 py-[3px] font-mono text-[11px] leading-[normal] whitespace-nowrap transition-colors disabled:cursor-not-allowed disabled:opacity-50';
@@ -76,6 +77,38 @@ function CostCell({ cost, maxCost, band }: { cost: number | null; maxCost: numbe
         />
       </span>
     </div>
+  );
+}
+
+/** Ticked of all acceptance criteria. Green once every one is ticked, brand while a
+ * `[MANUAL]` one waits on a person. A link to the phase's criteria tab. */
+function CriteriaCell({
+  phase,
+  href,
+}: {
+  phase: EpicPhase;
+  href: string;
+}): JSX.Element {
+  const { t } = useLingui();
+  const { checkboxesDone: done, checkboxesTotal: total, manualOpen } = phase;
+  if (total === 0) {
+    return <span className="hidden font-mono text-[11px] leading-[normal] text-ink-faint desk:block">—</span>;
+  }
+  const tone = done >= total ? 'text-green' : manualOpen > 0 ? 'text-brand' : 'text-ink-dim';
+  const tip =
+    manualOpen > 0
+      ? t`${done} of ${total} criteria ticked · ${manualOpen} [MANUAL] wait on you`
+      : t`${done} of ${total} criteria ticked`;
+  return (
+    <Link
+      to={href}
+      onClick={(e) => e.stopPropagation()}
+      data-tip={tip}
+      aria-label={tip}
+      className={`hidden font-mono text-[11px] leading-[normal] whitespace-nowrap underline-offset-2 hover:underline desk:block ${tone}`}
+    >
+      {done}/{total}
+    </Link>
   );
 }
 
@@ -279,6 +312,9 @@ export function PhaseLedger({
         <span className="hidden desk:block">
           <Trans>cost</Trans>
         </span>
+        <span className="hidden desk:block">
+          <Trans>criteria</Trans>
+        </span>
         <span className="text-right">
           <Trans>action</Trans>
         </span>
@@ -329,6 +365,7 @@ export function PhaseLedger({
                 </div>
                 <StageLabel stage={phaseStage(p, status)} />
                 <CostCell cost={costs[i] ?? null} maxCost={maxCost} band={phaseCostBand(p)} />
+                <CriteriaCell phase={p} href={phaseHref(p.seq, 'criteria')} />
                 <span className="flex justify-end">
                   <LedgerAction
                     phase={p}
