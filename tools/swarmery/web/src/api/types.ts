@@ -1789,6 +1789,55 @@ export interface ProposalsResp {
   proposals: AgentChangeProposal[];
 }
 
+// --- Harness² phase 4 — proposal probes (migration 0136) ---------------------
+
+/**
+ * proposal_probes.blind_choice. base/variant/tie — the blind judge's pick on a
+ * case where both sides agree on the hard assertions; skipped — they disagree
+ * (the deterministic result decides) or the judge failed; capped — the USD cap
+ * stopped the job; no_suite — the target has no promptfoo suite.
+ */
+export type ProbeChoice = 'base' | 'variant' | 'tie' | 'skipped' | 'capped' | 'no_suite';
+
+/** One proposal_probes row — one suite case, base vs variant. */
+export interface ProposalProbe {
+  id: number;
+  proposal_id: number;
+  job_id: string;
+  source: 'promptfoo' | 'bench';
+  /** The suite case's description ('' on a no_suite row). */
+  task_id: string;
+  /** Every hard assertion passed on that side; null when it did not run. */
+  base_pass: boolean | null;
+  variant_pass: boolean | null;
+  blind_choice: ProbeChoice;
+  /** Judge reason (≤6 lines, with the A/B key) or why the case was skipped. */
+  reason: string;
+  usd: number;
+  created_at: string;
+}
+
+/** The daemon's in-memory state of one probe job (lost on restart). */
+export interface ProbeJob {
+  id: string;
+  proposal_id: number;
+  status: 'running' | 'done' | 'failed';
+  error?: string;
+  usd: number;
+  max_usd: number;
+  started_at: string;
+  finished_at?: string;
+}
+
+/** GET /api/improve/proposals/{id}/probes. */
+export interface ProposalProbesResp {
+  proposal_id: number;
+  max_usd: number;
+  jobs: ProbeJob[];
+  /** Newest job first, cases in run order. */
+  probes: ProposalProbe[];
+}
+
 // --- Phase 2 — approvals + hooks (frozen at gate 2.2) ------------------------
 
 /** permission_requests.status */

@@ -3289,6 +3289,10 @@ msgstr "перевірити"
 msgid "probe failed: {status}"
 msgstr "перевірка не вдалася: {status}"
 
+#: src/api.ts
+msgid "probe proposal failed"
+msgstr "не вдалося запустити пробу пропозиції"
+
 #: src/components/PluginConfigModal.tsx
 msgid "probe: {reason}"
 msgstr "перевірка: {reason}"

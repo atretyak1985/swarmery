@@ -1142,6 +1142,10 @@ msgstr "Сер. сесія"
 msgid "awaiting ≥{pct}% improvement"
 msgstr "чекаємо на покращення ≥{pct}%"
 
+#: src/pages/agent-hub/ProposalProbes.tsx
+msgid "base"
+msgstr "база"
+
 #: src/pages/health/Health.tsx
 msgid "because of you"
 msgstr "завдяки вам"
@@ -1170,6 +1174,10 @@ msgstr "найбільший промах"
 #: src/pages/Analytics.tsx
 msgid "biggest mover"
 msgstr "найбільший зсув"
+
+#: src/pages/agent-hub/ProposalProbes.tsx
+msgid "blind pick"
+msgstr "сліпий вибір"
 
 #: src/pages/RoutingReport.tsx
 msgid "board cards"
@@ -1288,6 +1296,14 @@ msgstr "кандидат"
 #: src/pages/Lessons.tsx
 msgid "candidates"
 msgstr "пропоновані"
+
+#: src/pages/agent-hub/ProposalProbes.tsx
+msgid "capped"
+msgstr "ліміт"
+
+#: src/pages/agent-hub/ProposalProbes.tsx
+msgid "case"
+msgstr "кейс"
 
 #: src/pages/Lessons.tsx
 msgid "cause:"
@@ -1479,6 +1495,7 @@ msgstr "копіювання записує редаговану копію в .
 msgid "copying…"
 msgstr "копіюємо…"
 
+#: src/pages/agent-hub/ProposalProbes.tsx
 #: src/pages/health/PhaseRunsTab.tsx
 #: src/pages/Retro.tsx
 msgid "cost"
@@ -1951,6 +1968,7 @@ msgstr "розвідка {exploreShare}%"
 msgid "Export CSV"
 msgstr "Експорт CSV"
 
+#: src/pages/agent-hub/ProposalProbes.tsx
 #: src/pages/RoutingReport.tsx
 msgid "fail"
 msgstr "провал"
@@ -3192,6 +3210,10 @@ msgstr "Застарілих фактів не знайдено"
 msgid "no subagent activity in this range"
 msgstr "у цьому періоді субагенти не працювали"
 
+#: src/pages/agent-hub/ProposalProbes.tsx
+msgid "no suite"
+msgstr "немає набору"
+
 #: src/pages/Retro.tsx
 msgid "no target file — dismissing is the only transition"
 msgstr "цільового файлу немає — єдиний можливий перехід — відхилити"
@@ -3283,6 +3305,10 @@ msgstr "не допомагає"
 msgid "Not injected into any run yet."
 msgstr "Ще не додано в жоден запуск."
 
+#: src/pages/agent-hub/ProposalProbes.tsx
+msgid "not judged"
+msgstr "без судді"
+
 #: src/pages/Retro.tsx
 msgid "not noise"
 msgstr "не шум"
@@ -3358,6 +3384,10 @@ msgstr "запуск фази поза планом"
 #: src/pages/Docs.tsx
 msgid "On this page"
 msgstr "На цій сторінці"
+
+#: src/pages/agent-hub/ProposalProbes.tsx
+msgid "One sample per case: treat a single flip as noise and a difference that repeats across runs as signal."
+msgstr "Одна вибірка на кейс: поодинокий перемикач — це шум, а різниця, що повторюється між прогонами, — сигнал."
 
 #: src/pages/inbox/inboxModel.ts
 msgid "open a fix task"
@@ -3442,6 +3472,10 @@ msgstr "помилка розбору"
 #: src/pages/Memory.tsx
 msgid "partial: moved {movedCount} · backup {backup}"
 msgstr "частково: перенесено {movedCount} · резервна копія {backup}"
+
+#: src/pages/agent-hub/ProposalProbes.tsx
+msgid "pass"
+msgstr "пройдено"
 
 #: src/pages/system/ModsTab.tsx
 msgid "passed"
@@ -3605,9 +3639,25 @@ msgstr "перегляньте докази, потім згенеруйте м�
 msgid "pricing table"
 msgstr "таблиця цін"
 
+#: src/pages/agent-hub/ProposalProbes.tsx
+msgid "Probe"
+msgstr "Проба"
+
 #: src/pages/inbox/InboxDetail.tsx
 msgid "probe & resume"
 msgstr "перевірити й відновити"
+
+#: src/pages/agent-hub/ProposalProbes.tsx
+msgid "Probe again"
+msgstr "Проба ще раз"
+
+#: src/pages/agent-hub/ProposalProbes.tsx
+msgid "Probe: the agent's eval suite on the current file vs this proposal"
+msgstr "Проба: eval-набір агента на поточному файлі проти цієї пропозиції"
+
+#: src/pages/agent-hub/ProposalProbes.tsx
+msgid "probing…"
+msgstr "проба триває…"
 
 #: src/pages/agent-hub/ProposalFacets.tsx
 msgid "procedure"
@@ -3679,6 +3729,14 @@ msgstr "Доказ"
 #: src/pages/learning/Learning.tsx
 msgid "proof · {word}"
 msgstr "доказ · {word}"
+
+#: src/pages/agent-hub/ProposalProbes.tsx
+msgid "proposal"
+msgstr "пропозиція"
+
+#: src/pages/agent-hub/ProposalProbes.tsx
+msgid "proposal probe"
+msgstr "проба пропозиції"
 
 #: src/pages/health/HealthOverview.tsx
 msgid "propose a change"
@@ -4015,6 +4073,10 @@ msgstr "запуски"
 #: src/pages/Analytics.tsx
 msgid "Runs"
 msgstr "Запуски"
+
+#: src/pages/agent-hub/ProposalProbes.tsx
+msgid "Runs every suite case twice through claude -p and stops at the cost cap of {cap}. It never approves, applies or rejects."
+msgstr "Запускає кожен кейс набору двічі через claude -p і зупиняється на ліміті витрат {cap}. Ніколи не схвалює, не застосовує і не відхиляє."
 
 #: src/pages/Lessons.tsx
 msgid "runs reached"
@@ -4540,6 +4602,10 @@ msgstr "Після цього уроку область стала більш н
 msgid "The area's surprise barely moved after this lesson."
 msgstr "Після цього уроку здивування в області майже не змінилося."
 
+#: src/pages/agent-hub/ProposalProbes.tsx
+msgid "The blind judge's pick where both sides agree on the hard checks"
+msgstr "Вибір сліпого судді там, де обидві сторони збігаються на жорстких перевірках"
+
 #: src/pages/inbox/InboxDetail.tsx
 #: src/pages/inbox/inboxModel.ts
 msgid "The candidate is closed as not useful. Nothing is added to any brief."
@@ -4736,6 +4802,10 @@ msgstr "у цього проєкту вже є власна копія цьог�
 msgid "This range"
 msgstr "Цей період"
 
+#: src/pages/agent-hub/ProposalProbes.tsx
+msgid "tie"
+msgstr "нічия"
+
 #: src/pages/RoutingReport.tsx
 msgid "tier"
 msgstr "рівень"
@@ -4833,9 +4903,14 @@ msgstr "головний чинник"
 msgid "Top error groups"
 msgstr "Найчастіші групи помилок"
 
+#: src/pages/agent-hub/ProposalProbes.tsx
 #: src/pages/Analytics.tsx
 msgid "total"
 msgstr "усього"
+
+#: src/pages/agent-hub/ProposalProbes.tsx
+msgid "total · earlier runs not shown: {earlier}"
+msgstr "усього · попередніх прогонів не показано: {earlier}"
 
 #: src/pages/Retro.tsx
 msgid "Total wait"
