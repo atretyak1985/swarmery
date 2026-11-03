@@ -45,6 +45,7 @@ var readOnlySites = map[string]string{
 	"internal/triage/judge.go:spawn":                    "triage judge — stdout JSON verdict only; internal/triage applies and persists it",
 	"internal/replyextract/replyextract.go:spawnClaude": "needs-you reply card — stdout JSON only, internal/replyextract validates and persists the reply_extracts row",
 	"internal/api/project_config_probe.go:runProbe":     "documented non-writing probe: it returns config suggestions and nothing else",
+	"internal/probe/judge.go:Judge":                     "proposal-probe blind judge — stdout JSON choice only; internal/probe persists the proposal_probes row",
 }
 
 // mustDetect are sites the scanner has to keep finding. Without this a heuristic
