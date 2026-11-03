@@ -194,10 +194,6 @@ msgstr "{commits, plural, one {# commit will be lost.} few {# commits will be lo
 msgid "{commits, plural, one {# commit} few {# commits} many {# commits} other {# commits}}"
 msgstr "{commits, plural, one {# commit} few {# commits} many {# commits} other {# commits}}"
 
-#: src/components/PlanRunCard.tsx
-msgid "{count, plural, one {# session} few {# sessions} many {# sessions} other {# sessions}}"
-msgstr "{count, plural, one {# session} few {# sessions} many {# sessions} other {# sessions}}"
-
 #: src/components/usage/LimitsPanel.tsx
 msgid "{count} of {total}"
 msgstr "{count} of {total}"
@@ -314,6 +310,10 @@ msgstr "{notPollingCount} selected sessions no longer have a polling link mod an
 #: src/lib/sessionsView.ts
 msgid "{nth} attempt — {tail}"
 msgstr "{nth} attempt — {tail}"
+
+#: src/lib/sessionsView.ts
+msgid "{others, plural, one {# session} few {# sessions} many {# sessions} other {# sessions}}"
+msgstr "{others, plural, one {# session} few {# sessions} many {# sessions} other {# sessions}}"
 
 #: src/workspace/task/RunConfig.tsx
 msgid "{playbookModel} (from playbook)"
@@ -492,6 +492,18 @@ msgstr "◇ Plan"
 #: src/workspace/TaskCard.tsx
 msgid "◇ Review…"
 msgstr "◇ Review…"
+
+#: src/components/SessionRow.tsx
+msgid "⚠ conflict"
+msgstr "⚠ conflict"
+
+#: src/components/SessionRow.tsx
+msgid "⚠ context"
+msgstr "⚠ context"
+
+#: src/components/SessionRow.tsx
+msgid "⚠ limit"
+msgstr "⚠ limit"
 
 #: src/lib/docFigures.tsx
 msgid "✎ Plan"
@@ -1402,6 +1414,10 @@ msgstr "Continue phase on selected sessions"
 #: src/components/BulkPromptBar.tsx
 msgid "Continue with the next phase of the plan per its phase doc; do not ask for confirmation if the criteria are clear"
 msgstr "Continue with the next phase of the plan per its phase doc; do not ask for confirmation if the criteria are clear"
+
+#: src/lib/sessionsView.ts
+msgid "controller + {sessions}"
+msgstr "controller + {sessions}"
 
 #: src/theme/palettes.ts
 msgid "cool blue, deep-sea"
@@ -3101,6 +3117,7 @@ msgid "phase"
 msgstr "phase"
 
 #: src/lib/docFigures.tsx
+#: src/lib/sessionsView.ts
 msgid "phase {n}"
 msgstr "phase {n}"
 

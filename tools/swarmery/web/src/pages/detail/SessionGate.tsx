@@ -18,7 +18,7 @@
 // first press and sends on the second: the reason goes to Claude verbatim.
 
 import { useLingui } from '@lingui/react/macro';
-import { useCallback, useEffect, useMemo, useState, type MutableRefObject } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type MutableRefObject } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { fetchApprovals, resolveApproval, sendSessionMessage, type ApprovalAction } from '../../api';
 import type { NeedsYouItem, PermissionRequest, SessionDetail } from '../../api/types';
@@ -154,14 +154,21 @@ export function SessionGate({
   };
 
   // `e` and `x` act on what the buttons show; read through a ref by the list.
+  // focusPrimary only lands on the main button (plan D-4): Enter then acts.
+  const primaryRef = useRef<HTMLButtonElement>(null);
+  const formRef = useRef<HTMLDivElement>(null);
+  const focusPrimary = (): void => {
+    const target = primaryRef.current ?? formRef.current?.querySelector<HTMLElement>('button:not(:disabled)');
+    target?.focus();
+  };
   useEffect(() => {
-    actions.current = { primary, secondary };
+    actions.current = { primary, secondary, focusPrimary };
   });
 
   const richForm = request !== null && questions !== null && single === null;
   if (richForm) {
     return (
-      <div className="mt-[18px]">
+      <div ref={formRef} className="mt-[18px]">
         <PendingCard
           request={request}
           session={null}
@@ -204,6 +211,7 @@ export function SessionGate({
         picked={options.length > 0 ? String(pick) : null}
         onPick={(picked) => setPick(Number(picked))}
         {...(denying ? { note: { value: reason, onChange: setReason, placeholder: t`why you deny, for the session` } } : {})}
+        primaryRef={primaryRef}
         primary={{
           label: asks ? t`reply` : localOnly ? t`deny` : t`allow once`,
           onClick: primary,

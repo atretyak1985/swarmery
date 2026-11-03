@@ -340,6 +340,10 @@ msgstr "{topCount, plural, one {# інструмент спричинив {topSh
 msgid "{verifiedChanges, plural, one {{count} change proved it helped.} few {{count} changes proved they helped.} many {{count} changes proved they helped.} other {{count} changes proved they helped.}}"
 msgstr "{verifiedChanges, plural, one {{count} зміна довела, що допомогла.} few {{count} зміни довели, що допомогли.} many {{count} змін довели, що допомогли.} other {{count} зміни довели, що допомогли.}}"
 
+#: src/pages/Sessions.tsx
+msgid "← list"
+msgstr "← список"
+
 #: src/pages/ProjectDetail.tsx
 msgid "← projects"
 msgstr "← проєкти"
@@ -1083,6 +1087,10 @@ msgstr "перший запит"
 msgid "first request…"
 msgstr "перший запит…"
 
+#: src/pages/Sessions.tsx
+msgid "focus action"
+msgstr "фокус на дію"
+
 #: src/pages/NeedsYou.tsx
 msgid "Focus terminal"
 msgstr "До термінала"
@@ -1551,10 +1559,6 @@ msgstr "нотатка (необов’язково)"
 msgid "Nothing blocked on you."
 msgstr "Ніщо не чекає на вас."
 
-#: src/pages/Sessions.tsx
-msgid "Nothing finished today yet."
-msgstr "Сьогодні ще нічого не завершено."
-
 #: src/pages/ProjectOverview.tsx
 msgid "nothing flagged"
 msgstr "нічого не позначено"
@@ -1562,6 +1566,10 @@ msgstr "нічого не позначено"
 #: src/pages/today/EventFeed.tsx
 msgid "Nothing happened yet. Sessions, plan runs and decisions land here."
 msgstr "Поки нічого не сталося. Сесії, запуски планів і рішення з'являються тут."
+
+#: src/pages/Sessions.tsx
+msgid "Nothing has finished yet."
+msgstr "Ще нічого не завершено."
 
 #: src/pages/Sessions.tsx
 msgid "Nothing here. Dispatch a task with + new, or widen the project scope."
@@ -1618,6 +1626,14 @@ msgstr "Ніщо не чекає на вас · працює: {liveCount}"
 #: src/pages/today/WaitingOnYou.tsx
 msgid "Nothing waits on you."
 msgstr "Ніщо не чекає на вас."
+
+#: src/pages/Sessions.tsx
+msgid "Nothing was stopped or failed."
+msgstr "Немає зупинених чи невдалих сесій."
+
+#: src/pages/Sessions.tsx
+msgid "o → open"
+msgstr "o → відкрити"
 
 #: src/pages/Approvals.tsx
 msgid "off"
@@ -1684,6 +1700,7 @@ msgid "open review"
 msgstr "відкрити рев'ю"
 
 #: src/pages/NeedsYou.tsx
+#: src/pages/Sessions.tsx
 msgid "open session"
 msgstr "відкрити сесію"
 
@@ -2334,6 +2351,10 @@ msgstr "Зупинити"
 #: src/pages/Overview.tsx
 msgid "stop asking"
 msgstr "не питати"
+
+#: src/pages/Sessions.tsx
+msgid "stopped"
+msgstr "зупинено"
 
 #: src/pages/detail/CommandInput.tsx
 msgid "Stopping…"

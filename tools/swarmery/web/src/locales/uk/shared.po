@@ -194,10 +194,6 @@ msgstr "{commits, plural, one {# коміт буде втрачено.} few {# �
 msgid "{commits, plural, one {# commit} few {# commits} many {# commits} other {# commits}}"
 msgstr "{commits, plural, one {# коміт} few {# коміти} many {# комітів} other {# коміта}}"
 
-#: src/components/PlanRunCard.tsx
-msgid "{count, plural, one {# session} few {# sessions} many {# sessions} other {# sessions}}"
-msgstr "{count, plural, one {# сесія} few {# сесії} many {# сесій} other {# сесії}}"
-
 #: src/components/usage/LimitsPanel.tsx
 msgid "{count} of {total}"
 msgstr "{count} із {total}"
@@ -314,6 +310,10 @@ msgstr "вибрані сесії, у яких мод swarmery link більше
 #: src/lib/sessionsView.ts
 msgid "{nth} attempt — {tail}"
 msgstr "{nth} спроба — {tail}"
+
+#: src/lib/sessionsView.ts
+msgid "{others, plural, one {# session} few {# sessions} many {# sessions} other {# sessions}}"
+msgstr "{others, plural, one {# сесія} few {# сесії} many {# сесій} other {# сесії}}"
 
 #: src/workspace/task/RunConfig.tsx
 msgid "{playbookModel} (from playbook)"
@@ -492,6 +492,18 @@ msgstr "◇ План"
 #: src/workspace/TaskCard.tsx
 msgid "◇ Review…"
 msgstr "◇ Рев’ю…"
+
+#: src/components/SessionRow.tsx
+msgid "⚠ conflict"
+msgstr "⚠ конфлікт"
+
+#: src/components/SessionRow.tsx
+msgid "⚠ context"
+msgstr "⚠ контекст"
+
+#: src/components/SessionRow.tsx
+msgid "⚠ limit"
+msgstr "⚠ ліміт"
 
 #: src/lib/docFigures.tsx
 msgid "✎ Plan"
@@ -1402,6 +1414,10 @@ msgstr "Продовжити фазу у вибраних сесіях"
 #: src/components/BulkPromptBar.tsx
 msgid "Continue with the next phase of the plan per its phase doc; do not ask for confirmation if the criteria are clear"
 msgstr "Продовжуй наступну фазу плану за phase-doc; не запитуй підтвердження, якщо критерії ясні"
+
+#: src/lib/sessionsView.ts
+msgid "controller + {sessions}"
+msgstr "контролер + {sessions}"
 
 #: src/theme/palettes.ts
 msgid "cool blue, deep-sea"
@@ -3101,6 +3117,7 @@ msgid "phase"
 msgstr "фаза"
 
 #: src/lib/docFigures.tsx
+#: src/lib/sessionsView.ts
 msgid "phase {n}"
 msgstr "фаза {n}"
 

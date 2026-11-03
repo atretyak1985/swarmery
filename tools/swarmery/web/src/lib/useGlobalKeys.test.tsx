@@ -46,6 +46,9 @@ describe('useGlobalKeys', () => {
     ['ArrowUp', 'onPrev'],
     ['e', 'onPrimary'],
     ['x', 'onSecondary'],
+    ['o', 'onOpen'],
+    ['ArrowRight', 'onOpen'],
+    ['ArrowLeft', 'onBack'],
     ['Escape', 'onEscape'],
     ['[', 'onPanelNav'],
     [']', 'onPanelList'],
@@ -70,6 +73,16 @@ describe('useGlobalKeys', () => {
     const field = document.body.appendChild(document.createElement(tag));
     fireEvent.keyDown(field, { key: 't' });
     expect(onTheme).not.toHaveBeenCalled();
+  });
+
+  it.each(['o', 'ArrowRight', 'ArrowLeft'])('leaves %s alone in a field, where it moves the caret', (key) => {
+    const onOpen = vi.fn();
+    const onBack = vi.fn();
+    render(<Probe handlers={{ onOpen, onBack }} />);
+    const field = document.body.appendChild(document.createElement('input'));
+    expect(fireEvent.keyDown(field, { key })).toBe(true);
+    expect(onOpen).not.toHaveBeenCalled();
+    expect(onBack).not.toHaveBeenCalled();
   });
 
   it('ignores keys typed in a contenteditable, including its children', () => {

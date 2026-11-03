@@ -19,9 +19,10 @@
 //     title tells them apart from nothing.
 
 import { i18n, type MessageDescriptor } from '@lingui/core';
-import { msg, t } from '@lingui/core/macro';
+import { msg, plural, t } from '@lingui/core/macro';
 import type { NeedsYouItem, NeedsYouKind, Session, SessionStatus } from '../api/types';
 import { fmtDate } from './format';
+import { topRateLimit } from './sessionLink';
 import { sessionState } from './sessionState';
 
 export const STATUSES: SessionStatus[] = [
@@ -365,6 +366,54 @@ export function buildGroups(
   const groups: SessionGroups = { needs: [], working: [], done: [], earlier: [] };
   for (const s of sorted) groups[groupOf(s, rowState(s, nowMs, gates.get(s.id)), nowMs)].push(s);
   return groups;
+}
+
+/* ----- the list tabs and the row flag (artboard 2a, on v4: plan D-7) ------- */
+
+/** A list tab past `all`: the row's tone decides it, never the day. */
+export type SessionTab = 'needs' | 'working' | 'done' | 'stopped';
+
+/** Which tab a row belongs to. A failed row stopped too, on an error. */
+export function tabOf(state: RowState): SessionTab {
+  if (state === 'needs') return 'needs';
+  if (state === 'working' || state === 'pending') return 'working';
+  if (state === 'failed' || state === 'stopped') return 'stopped';
+  return 'done';
+}
+
+/** The fat-session danger line (SessionPane's CONTEXT_DANGER). */
+export const FLAG_CONTEXT_TOKENS = 300_000;
+/** A subscription limit this close to exhaustion earns the row a flag. */
+export const FLAG_LIMIT_PCT = 80;
+
+/** The row's one warning, worst first: context, then a shared file, then the
+ * plan's limit. Null under every threshold: most rows carry no flag at all. */
+export type RowFlag = 'context' | 'conflict' | 'limit';
+
+export function rowFlag(s: Session, conflicted: boolean): RowFlag | null {
+  if ((s.contextTokens ?? 0) >= FLAG_CONTEXT_TOKENS) return 'context';
+  if (conflicted) return 'conflict';
+  const top = topRateLimit(s.link?.rateLimits ?? []);
+  if (top !== null && top.percentUsed >= FLAG_LIMIT_PCT) return 'limit';
+  return null;
+}
+
+/** A plan run's grey sentence: `phase 3 · controller + 4 sessions`. The phase is
+ * the newest phase row's seq; the session list knows no plan's phase total. */
+export function planRunLine(rows: readonly Session[]): string {
+  const phases = rows.filter((s) => s.planGroup?.role === 'phase');
+  const newest = [...phases].sort((a, b) => b.startedAt.localeCompare(a.startedAt))[0];
+  const seq = newest?.planGroup?.phaseSeq ?? null;
+  const hasController = rows.some((s) => s.planGroup?.role === 'controller');
+  const others = rows.length - (hasController ? 1 : 0);
+  const sessions = plural(others, { one: '# session', few: '# sessions', many: '# sessions', other: '# sessions' });
+  const parts: string[] = [];
+  if (seq !== null) {
+    const n = String(seq);
+    parts.push(t`phase ${n}`);
+  }
+  parts.push(hasController ? t`controller + ${sessions}` : sessions);
+  return parts.join(' · ');
 }
 
 /** Compact span: 40s, 12m, 3h 43m, 2d. */

@@ -21,6 +21,8 @@ export interface ListRowProps {
   title: string;
   /** Project, or "plan run": grey mono text, never a pill. */
   tag?: string | undefined;
+  /** One warning after the tag (`⚠ context`), amber mono text. Most rows have none. */
+  flag?: string | undefined;
   summary?: string | undefined;
   summaryTone?: SummaryTone;
   age?: string | undefined;
@@ -37,10 +39,19 @@ export interface ListRowProps {
   onSelect?: () => void;
 }
 
+/** The row's grid and padding, shared with anything that must stand in the list
+ * at a row's height and on its columns (the plan-run card's header). */
+export function listRowFrame(compact: boolean): string {
+  return `grid w-full cursor-pointer grid-cols-[18px_minmax(0,1fr)_auto] items-start gap-[10px] border-l-2 pr-[14px] pl-3 text-left leading-[normal] transition-colors ${
+    compact ? 'py-1.5' : 'py-[9px]'
+  }`;
+}
+
 export function ListRow({
   glyph,
   title,
   tag,
+  flag,
   summary,
   summaryTone = 'default',
   age,
@@ -53,9 +64,7 @@ export function ListRow({
   onSelect,
 }: ListRowProps): JSX.Element {
   const { compact: compactRows } = useTheme();
-  const className = `grid w-full cursor-pointer grid-cols-[18px_minmax(0,1fr)_auto] items-start gap-[10px] border-l-2 pr-[14px] pl-3 text-left leading-[normal] transition-colors ${
-    (compact ?? compactRows) ? 'py-1.5' : 'py-[9px]'
-  } ${selected ? 'border-brand bg-sel' : 'border-transparent hover:bg-surface'}`;
+  const className = `${listRowFrame(compact ?? compactRows)} ${selected ? 'border-brand bg-sel' : 'border-transparent hover:bg-surface'}`;
 
   const body = (
     <>
@@ -68,6 +77,11 @@ export function ListRow({
             {title}
           </span>
           {tag !== undefined && <span className="shrink-0 font-mono text-[10px] text-ink-faint">{tag}</span>}
+          {flag !== undefined && (
+            <span data-testid="row-flag" className="shrink-0 font-mono text-[10px] whitespace-nowrap text-amber">
+              {flag}
+            </span>
+          )}
         </span>
         {summary !== undefined && (
           <span className={`mt-0.5 block truncate text-[12px] ${SUMMARY_TONE[summaryTone]}`}>{summary}</span>
