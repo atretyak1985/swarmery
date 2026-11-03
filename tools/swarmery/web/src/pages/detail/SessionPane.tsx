@@ -4,13 +4,16 @@
 // Chat · Steps · Diff with the actions for this state on the same line. Under the
 // band, the tab beside the context rail (SessionRail).
 //
-// The sentence is the only place the state is said. What the old header scattered
-// went to a fixed place (plan D-4, the report lists every move): tokens, cost,
-// context, elapsed, errors, recovered and cold restarts to the numbers strip;
-// model, branch, account and the task to the eyebrow; outcome, extract tasks, Kill,
-// the labels, the link mod's usage and remote control to the actions and `⋯`; the
-// handoff brief to the rail; the Swarm tab and the usage blocks to folds under the
-// Steps ledger, which go deeper than the rail.
+// The sentence is the only place the state is said (headerSentence.ts, artboards
+// 2b–2d), a cold prompt cache included. Everything else has a fixed place: model,
+// duration, branch, account, the task and the labels on the facts line; tokens,
+// cost, context, the plan's limit, errors, recovered and cold restarts in the
+// numbers strip, in that order, a zero column left out; this state's main action
+// and a secondary or two on the action bar (Stop turn and send prompt while it
+// works, the outcome and extract tasks once finished, allow / deny on the gate
+// card); extract tasks, continue from handoff, stop process and rename in `⋯`. The
+// handoff brief is the rail's; the Swarm tab and the usage blocks are folds under
+// the Steps ledger, which go deeper than the rail.
 //
 // The header stays put and everything under it scrolls, panelRef being the one
 // scroller; the composer sticks to its foot on the Chat tab. From `wide` up the rail is
