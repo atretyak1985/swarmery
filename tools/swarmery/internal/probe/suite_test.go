@@ -290,6 +290,8 @@ func TestUntarSkipsEscapesAndLinks(t *testing.T) {
 	add(&tar.Header{Name: "ok/", Typeflag: tar.TypeDir, Mode: 0o755}, "")
 	add(&tar.Header{Name: "ok/a.txt", Typeflag: tar.TypeReg, Mode: 0o644}, "a")
 	add(&tar.Header{Name: "../evil.txt", Typeflag: tar.TypeReg, Mode: 0o644}, "x")
+	add(&tar.Header{Name: "ok/../../evil2.txt", Typeflag: tar.TypeReg, Mode: 0o644}, "x")
+	add(&tar.Header{Name: "/abs.txt", Typeflag: tar.TypeReg, Mode: 0o644}, "x")
 	add(&tar.Header{Name: "ok/link", Typeflag: tar.TypeSymlink, Linkname: "/etc/passwd"}, "")
 	if err := tw.Close(); err != nil {
 		t.Fatal(err)
@@ -302,8 +304,13 @@ func TestUntarSkipsEscapesAndLinks(t *testing.T) {
 	if b, _ := os.ReadFile(filepath.Join(dst, "ok", "a.txt")); string(b) != "a" {
 		t.Error("regular file missing")
 	}
-	if _, err := os.Stat(filepath.Join(parent, "evil.txt")); err == nil {
-		t.Error("path traversal escaped dst")
+	for _, escaped := range []string{"evil.txt", "evil2.txt"} {
+		if _, err := os.Stat(filepath.Join(parent, escaped)); err == nil {
+			t.Errorf("path traversal escaped dst: %s", escaped)
+		}
+	}
+	if _, err := os.Stat(filepath.Join(dst, "abs.txt")); err == nil {
+		t.Error("absolute entry extracted")
 	}
 	if _, err := os.Lstat(filepath.Join(dst, "ok", "link")); err == nil {
 		t.Error("symlink extracted")

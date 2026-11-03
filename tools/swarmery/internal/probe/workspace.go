@@ -69,11 +69,19 @@ func untar(r io.Reader, dst string) error {
 		if err != nil {
 			return fmt.Errorf("read archive: %w", err)
 		}
+		// Zip-slip guard: refuse any entry name carrying a ".." element or an
+		// absolute path, then confirm the joined path still sits under dst.
+		if strings.Contains(h.Name, "..") || path.IsAbs(h.Name) {
+			continue
+		}
 		name := path.Clean(h.Name)
-		if name == "." || strings.HasPrefix(name, "../") || name == ".." || path.IsAbs(name) {
+		if name == "." {
 			continue
 		}
 		out := filepath.Join(dst, filepath.FromSlash(name))
+		if rel, err := filepath.Rel(dst, out); err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+			continue
+		}
 		switch h.Typeflag {
 		case tar.TypeDir:
 			if err := os.MkdirAll(out, 0o755); err != nil {
