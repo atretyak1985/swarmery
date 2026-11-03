@@ -81,10 +81,13 @@ import { gateTier, SessionGate } from './SessionGate';
 import { SessionRail } from './SessionRail';
 import { Chevron } from '../../components/Chevron';
 
-/** What `e` and `x` do on the open session, read by the list's keys. */
+/** What the open session offers the list's keys. On Sessions `e` calls only
+ * `focusPrimary` (plan D-4): it moves focus onto the main action and never runs
+ * it, so one stray key cannot allow a tool call. */
 export interface PaneActions {
   primary?: () => void;
   secondary?: () => void;
+  focusPrimary?: () => void;
 }
 
 type Tab = 'steps' | 'chat' | 'diff';
@@ -630,7 +633,7 @@ export function SessionPane({
 
   // `e` with no gate is the composer; SessionGate takes both keys while it is up.
   useEffect(() => {
-    if (gate === undefined) actions.current = { primary: openComposer };
+    if (gate === undefined) actions.current = { primary: openComposer, focusPrimary: openComposer };
   }, [gate, openComposer, actions]);
 
   const onMessage = useCallback(

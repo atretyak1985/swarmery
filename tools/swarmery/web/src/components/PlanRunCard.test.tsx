@@ -76,10 +76,16 @@ function makeRun(): PlanRun {
   };
 }
 
-function renderCard(expanded: boolean, onToggle: () => void): void {
+function renderCard(expanded: boolean, onToggle: () => void, hideProject = false): void {
   render(
     <MemoryRouter>
-      <PlanRunCard run={makeRun()} expanded={expanded} onToggle={onToggle} slug={undefined} />
+      <PlanRunCard
+        run={makeRun()}
+        expanded={expanded}
+        onToggle={onToggle}
+        slug={undefined}
+        hideProject={hideProject}
+      />
     </MemoryRouter>,
   );
 }
@@ -92,10 +98,12 @@ describe('PlanRunCard', () => {
 
     const header = screen.getByRole('button', { name: /plan run Sessions page redesign/i });
     expect(header.getAttribute('aria-expanded')).toBe('false');
-    // Header identity: the plan title, the PLAN RUN pill, tallies, the link.
+    // Header identity: the plan title, the plan-run label, the sentence, the link.
     expect(screen.getByText('Sessions page redesign')).toBeTruthy();
     expect(screen.getByText('plan run')).toBeTruthy();
-    expect(screen.getByText(/2 sessions · done 2/)).toBeTruthy();
+    expect(screen.getByText('phase 5 · controller + 1 session · swarmery')).toBeTruthy();
+    // The status tallies moved into the header's tooltip.
+    expect(header.getAttribute('data-tip')).toBe('done 2');
     // Fan-out rows are NOT in the DOM until expanded.
     expect(screen.queryByText('plan controller')).toBeNull();
     expect(screen.queryByText('day-first timeline')).toBeNull();
@@ -150,5 +158,29 @@ describe('PlanRunCard', () => {
     expect(link.getAttribute('href')).toBe('/p/swarmery/plans?task=7');
     fireEvent.click(link);
     expect(onToggle).not.toHaveBeenCalled();
+  });
+
+  // Artboard 2a on v4 (plan D-7): the header stands in the list like a row.
+  it("stands on the session row's grid and padding, inside its frame", () => {
+    renderCard(false, () => undefined);
+    const header = screen.getByRole('button', { name: /plan run Sessions page redesign/i });
+    expect(header.className).toContain('grid-cols-[18px_minmax(0,1fr)_auto]');
+    expect(header.className).toContain('py-[9px]');
+    expect(header.className).toContain('pl-3');
+    expect(header.parentElement?.className).toContain('border-line');
+  });
+
+  it('says plan run in brand text, never in a pill', () => {
+    renderCard(false, () => undefined);
+    const label = screen.getByTestId('plan-run-label');
+    expect(label.className).toContain('text-brand');
+    expect(label.className).not.toContain('rounded');
+    expect(label.className).not.toContain('border');
+    expect(label.className).not.toContain('bg-');
+  });
+
+  it('drops the project from the sentence in a project list', () => {
+    renderCard(false, () => undefined, true);
+    expect(screen.getByText('phase 5 · controller + 1 session')).toBeTruthy();
   });
 });

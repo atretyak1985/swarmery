@@ -340,6 +340,10 @@ msgstr "{topCount, plural, one {# tool caused {topShare}% of it.} few {# tools c
 msgid "{verifiedChanges, plural, one {{count} change proved it helped.} few {{count} changes proved they helped.} many {{count} changes proved they helped.} other {{count} changes proved they helped.}}"
 msgstr "{verifiedChanges, plural, one {{count} change proved it helped.} few {{count} changes proved they helped.} many {{count} changes proved they helped.} other {{count} changes proved they helped.}}"
 
+#: src/pages/Sessions.tsx
+msgid "← list"
+msgstr "← list"
+
 #: src/pages/ProjectDetail.tsx
 msgid "← projects"
 msgstr "← projects"
@@ -1083,6 +1087,10 @@ msgstr "first request"
 msgid "first request…"
 msgstr "first request…"
 
+#: src/pages/Sessions.tsx
+msgid "focus action"
+msgstr "focus action"
+
 #: src/pages/NeedsYou.tsx
 msgid "Focus terminal"
 msgstr "Focus terminal"
@@ -1551,10 +1559,6 @@ msgstr "note (optional)"
 msgid "Nothing blocked on you."
 msgstr "Nothing blocked on you."
 
-#: src/pages/Sessions.tsx
-msgid "Nothing finished today yet."
-msgstr "Nothing finished today yet."
-
 #: src/pages/ProjectOverview.tsx
 msgid "nothing flagged"
 msgstr "nothing flagged"
@@ -1562,6 +1566,10 @@ msgstr "nothing flagged"
 #: src/pages/today/EventFeed.tsx
 msgid "Nothing happened yet. Sessions, plan runs and decisions land here."
 msgstr "Nothing happened yet. Sessions, plan runs and decisions land here."
+
+#: src/pages/Sessions.tsx
+msgid "Nothing has finished yet."
+msgstr "Nothing has finished yet."
 
 #: src/pages/Sessions.tsx
 msgid "Nothing here. Dispatch a task with + new, or widen the project scope."
@@ -1618,6 +1626,14 @@ msgstr "Nothing waits on you · {liveCount} running"
 #: src/pages/today/WaitingOnYou.tsx
 msgid "Nothing waits on you."
 msgstr "Nothing waits on you."
+
+#: src/pages/Sessions.tsx
+msgid "Nothing was stopped or failed."
+msgstr "Nothing was stopped or failed."
+
+#: src/pages/Sessions.tsx
+msgid "o → open"
+msgstr "o → open"
 
 #: src/pages/Approvals.tsx
 msgid "off"
@@ -1684,6 +1700,7 @@ msgid "open review"
 msgstr "open review"
 
 #: src/pages/NeedsYou.tsx
+#: src/pages/Sessions.tsx
 msgid "open session"
 msgstr "open session"
 
@@ -2334,6 +2351,10 @@ msgstr "Stop"
 #: src/pages/Overview.tsx
 msgid "stop asking"
 msgstr "stop asking"
+
+#: src/pages/Sessions.tsx
+msgid "stopped"
+msgstr "stopped"
 
 #: src/pages/detail/CommandInput.tsx
 msgid "Stopping…"

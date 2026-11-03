@@ -14,7 +14,7 @@
 import type { MessageDescriptor } from '@lingui/core';
 import { msg } from '@lingui/core/macro';
 import { useLingui } from '@lingui/react/macro';
-import type { ReactNode } from 'react';
+import type { ReactNode, Ref } from 'react';
 import { DetailHeader } from './DetailHeader';
 
 export type DecisionTier = 'destructive' | 'write' | 'question';
@@ -89,6 +89,8 @@ export interface DecisionCardProps {
   pickLimit?: number;
   note?: { value: string; onChange: (next: string) => void; placeholder: string };
   primary: DecisionAction;
+  /** The primary button, for a key that must only move focus onto it. */
+  primaryRef?: Ref<HTMLButtonElement>;
   secondary?: DecisionAction;
   /** Extra button between the two, e.g. `always allow in <project>`. */
   extra?: DecisionAction;
@@ -130,6 +132,7 @@ export function DecisionCard({
   pickLimit,
   note,
   primary,
+  primaryRef,
   secondary,
   extra,
   link,
@@ -262,6 +265,7 @@ export function DecisionCard({
 
       <div className={`flex flex-wrap items-center gap-2 ${gate ? 'mt-[14px]' : 'mt-auto pt-[22px]'}`}>
         <button
+          ref={primaryRef}
           type="button"
           onClick={primary.onClick}
           disabled={primary.disabled}
