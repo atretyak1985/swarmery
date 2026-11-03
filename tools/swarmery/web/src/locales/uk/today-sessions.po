@@ -340,6 +340,7 @@ msgstr "{topCount, plural, one {# інструмент спричинив {topSh
 msgid "{verifiedChanges, plural, one {{count} change proved it helped.} few {{count} changes proved they helped.} many {{count} changes proved they helped.} other {{count} changes proved they helped.}}"
 msgstr "{verifiedChanges, plural, one {{count} зміна довела, що допомогла.} few {{count} зміни довели, що допомогли.} many {{count} змін довели, що допомогли.} other {{count} зміни довели, що допомогли.}}"
 
+#: src/pages/NeedsYou.tsx
 #: src/pages/Sessions.tsx
 msgid "← list"
 msgstr "← список"
@@ -363,6 +364,10 @@ msgstr "→ відкат на"
 #: src/pages/Approvals.tsx
 msgid "+ add rule"
 msgstr "+ додати правило"
+
+#: src/pages/NeedsYou.tsx
+msgid "+ note"
+msgstr "+ нотатка"
 
 #. placeholder {0}: swarm.hidden
 #: src/pages/detail/SessionRail.tsx
@@ -484,8 +489,8 @@ msgid "all sessions →"
 msgstr "усі сесії →"
 
 #: src/pages/NeedsYou.tsx
-msgid "Allow (add to scope)"
-msgstr "Дозволити (додати до обсягу)"
+msgid "Allow · add to scope"
+msgstr "Дозволити · додати до обсягу"
 
 #: src/pages/detail/SessionGate.tsx
 #: src/pages/NeedsYou.tsx
@@ -493,8 +498,8 @@ msgid "allow once"
 msgstr "дозволити раз"
 
 #: src/pages/NeedsYou.tsx
-msgid "Allowing this releases: {pathList}"
-msgstr "Дозвіл відкриває: {pathList}"
+msgid "allow releases: {pathList}"
+msgstr "дозвіл відкриває: {pathList}"
 
 #: src/pages/detail/SessionGate.tsx
 #: src/pages/NeedsYou.tsx
@@ -530,6 +535,10 @@ msgstr "відповісти в терміналі →"
 #: src/pages/Overview.tsx
 msgid "answer required"
 msgstr "потрібна відповідь"
+
+#: src/pages/NeedsYou.tsx
+msgid "answer: {typed}"
+msgstr "відповісти: {typed}"
 
 #: src/pages/sessions/CacheColdBadge.tsx
 msgid "API-key"
@@ -572,7 +581,6 @@ msgid "approvals…"
 msgstr "погодження…"
 
 #: src/pages/Approvals.tsx
-#: src/pages/NeedsYou.tsx
 #: src/pages/Overview.tsx
 #: src/pages/today/WaitingOnYou.tsx
 msgid "approve"
@@ -1087,6 +1095,7 @@ msgstr "перший запит"
 msgid "first request…"
 msgstr "перший запит…"
 
+#: src/pages/NeedsYou.tsx
 #: src/pages/Sessions.tsx
 msgid "focus action"
 msgstr "фокус на дію"
@@ -1631,6 +1640,7 @@ msgstr "Ніщо не чекає на вас."
 msgid "Nothing was stopped or failed."
 msgstr "Немає зупинених чи невдалих сесій."
 
+#: src/pages/NeedsYou.tsx
 #: src/pages/Sessions.tsx
 msgid "o → open"
 msgstr "o → відкрити"
@@ -1738,6 +1748,10 @@ msgstr "результат ▾"
 #: src/pages/NeedsYou.tsx
 msgid "own answer — overrides the selection"
 msgstr "власна відповідь — замінює вибране"
+
+#: src/pages/NeedsYou.tsx
+msgid "own answer — sent instead of an option"
+msgstr "власна відповідь — замість варіанта"
 
 #: src/pages/NeedsYou.tsx
 msgid "own answer…"
@@ -2166,6 +2180,10 @@ msgstr "сесія #{sessionId}"
 msgid "session #{sessionNumber}"
 msgstr "сесія #{sessionNumber}"
 
+#: src/pages/NeedsYou.tsx
+msgid "session →"
+msgstr "сесія →"
+
 #: src/pages/detail/SessionRail.tsx
 msgid "session context"
 msgstr "контекст сесії"
@@ -2447,10 +2465,6 @@ msgstr "Демон написав бриф для нової сесії."
 #: src/pages/Overview.tsx
 msgid "The day"
 msgstr "День"
-
-#: src/pages/NeedsYou.tsx
-msgid "The executor stopped: {trigger}"
-msgstr "Виконавець зупинився: {trigger}"
 
 #: src/pages/today/LoopMap.tsx
 msgid "The loop, this week"

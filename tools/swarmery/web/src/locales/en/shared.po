@@ -283,6 +283,10 @@ msgstr "{mod} reported by Claude Code for this process (a resumed session restar
 msgid "{n, plural, one {# file is being edited by more than one live session} few {# files are being edited by more than one live session} many {# files are being edited by more than one live session} other {# files are being edited by more than one live session}}"
 msgstr "{n, plural, one {# file is being edited by more than one live session} few {# files are being edited by more than one live session} many {# files are being edited by more than one live session} other {# files are being edited by more than one live session}}"
 
+#: src/lib/needsYou.ts
+msgid "{n, plural, one {# protected path} few {# protected paths} many {# protected paths} other {# protected paths}}"
+msgstr "{n, plural, one {# protected path} few {# protected paths} many {# protected paths} other {# protected paths}}"
+
 #: src/components/BulkPromptBar.tsx
 msgid "{n} selected of {selectableCount} with a polling link mod"
 msgstr "{n} selected of {selectableCount} with a polling link mod"
@@ -978,16 +982,16 @@ msgid "auto-approve presets are configured per project — open a project's Sett
 msgstr "auto-approve presets are configured per project — open a project's Settings to set them"
 
 #: src/lib/needsYou.ts
-msgid "awaiting merge"
-msgstr "awaiting merge"
+msgid "Awaiting merge"
+msgstr "Awaiting merge"
 
 #: src/lib/sessionsView.ts
 msgid "awaiting reply"
 msgstr "awaiting reply"
 
 #: src/lib/needsYou.ts
-msgid "awaiting your reply"
-msgstr "awaiting your reply"
+msgid "Awaiting reply"
+msgstr "Awaiting reply"
 
 #: src/components/Sidebar.tsx
 #: src/workspace/WorkspaceShell.tsx
@@ -1156,6 +1160,10 @@ msgstr "changing the cost failed: {status}"
 #: src/components/ProjectPlugins.tsx
 msgid "check"
 msgstr "check"
+
+#: src/lib/needsYou.ts
+msgid "Check by hand"
+msgstr "Check by hand"
 
 #: src/components/AccountReadyBanner.tsx
 #: src/components/AccountsSection.tsx
@@ -1351,8 +1359,8 @@ msgid "confirm detach"
 msgstr "confirm detach"
 
 #: src/lib/needsYou.ts
-msgid "confirm locally"
-msgstr "confirm locally"
+msgid "Confirm in terminal"
+msgstr "Confirm in terminal"
 
 #: src/components/SessionControls.tsx
 msgid "Confirm stop"
@@ -1973,7 +1981,6 @@ msgstr "fail"
 #: src/components/ProjectPlugins.tsx
 #: src/components/RunOutcomeModal.tsx
 #: src/components/SessionControls.tsx
-#: src/lib/needsYou.ts
 msgid "failed"
 msgstr "failed"
 
@@ -2182,9 +2189,12 @@ msgid "Git writes (add, commit, checkout, worktree)"
 msgstr "Git writes (add, commit, checkout, worktree)"
 
 #: src/components/place/StateGlyph.tsx
-#: src/lib/needsYou.ts
 msgid "guard stop"
 msgstr "guard stop"
+
+#: src/lib/needsYou.ts
+msgid "Guard stopped the run"
+msgstr "Guard stopped the run"
 
 #: src/pages/docsRail.ts
 msgid "Guides"
@@ -2557,7 +2567,6 @@ msgid "managed"
 msgstr "managed"
 
 #: src/components/place/StateGlyph.tsx
-#: src/lib/needsYou.ts
 msgid "manual check"
 msgstr "manual check"
 
@@ -3096,9 +3105,12 @@ msgid "per-category overrides apply only under the unrestricted preset"
 msgstr "per-category overrides apply only under the unrestricted preset"
 
 #: src/components/place/StateGlyph.tsx
-#: src/lib/needsYou.ts
 msgid "permission"
 msgstr "permission"
+
+#: src/lib/needsYou.ts
+msgid "Permission"
+msgstr "Permission"
 
 #: src/components/PermissionPresets.tsx
 msgid "permissions"
@@ -3144,6 +3156,10 @@ msgstr "phase run failed ({status})"
 #: src/lib/sessionsView.ts
 msgid "Phase running"
 msgstr "Phase running"
+
+#: src/lib/needsYou.ts
+msgid "Phase stalled"
+msgstr "Phase stalled"
 
 #: src/lib/docFigures.tsx
 msgid "Phases with no edge between them run in parallel; each phase document carries its own copy-paste agent prompt and acceptance criteria, so it is executable standalone."
@@ -3390,9 +3406,12 @@ msgstr "put the card back in the Inbox"
 
 #: src/components/place/DecisionCard.tsx
 #: src/components/place/StateGlyph.tsx
-#: src/lib/needsYou.ts
 msgid "question"
 msgstr "question"
+
+#: src/lib/needsYou.ts
+msgid "Question"
+msgstr "Question"
 
 #: src/components/QuestionForm.tsx
 msgid "question {number}"
@@ -3927,6 +3946,10 @@ msgstr "session error"
 msgid "Session error"
 msgstr "Session error"
 
+#: src/lib/needsYou.ts
+msgid "Session failed"
+msgstr "Session failed"
+
 #: src/components/NotifySettings.tsx
 msgid "session finished"
 msgstr "session finished"
@@ -4109,10 +4132,6 @@ msgstr "Spinning and pulsing state glyphs"
 #: src/workspace/boardModel.ts
 msgid "stale"
 msgstr "stale"
-
-#: src/lib/needsYou.ts
-msgid "stalled phase"
-msgstr "stalled phase"
 
 #: src/workspace/NewTaskModal.tsx
 msgid "start immediately — the dispatcher picks it up"
@@ -4915,8 +4934,8 @@ msgid "worktree"
 msgstr "worktree"
 
 #: src/lib/needsYou.ts
-msgid "worktree cleanup"
-msgstr "worktree cleanup"
+msgid "Worktree cleanup"
+msgstr "Worktree cleanup"
 
 #: src/workspace/task/TaskActions.tsx
 msgid "worktree reclaimed — nothing to re-grade"
