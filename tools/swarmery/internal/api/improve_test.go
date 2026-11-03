@@ -53,8 +53,10 @@ func (e *repoAgentsExec) WriteFile(string, []byte) error  { return nil }
 func (e *repoAgentsExec) MkdirTemp() (string, error)      { return "", nil }
 func (e *repoAgentsExec) RemoveAll(string) error          { return nil }
 
-// improveValidOut satisfies the splitDiffRationale contract.
-const improveValidOut = "## Diff\n```diff\n--- a/x.md\n+++ b/x.md\n@@ -1 +1 @@\n-a\n+b\n```\n## Rationale\nEvidence-backed fix.\n"
+// improveValidOut satisfies the improve output contract (parseOutput): a FORM
+// line, one lensed hunk, a rationale, one follow-up.
+const improveValidOut = "## Form\nalways-on — x\n## Diff\n```diff\n--- a/x.md\n+++ b/x.md\n@@ -1 +1 @@ lens: knowledge\n-a\n+b\n```\n## Rationale\nEvidence-backed fix.\n" +
+	"## Follow-ups\n- script: a bin/ helper\n"
 
 // improveServer builds an httptest server whose improve pipeline runs INLINE
 // (improveGo seam), so a 202 means the row already landed when the request

@@ -19,6 +19,7 @@ import { safeHref } from '../../lib/safeHref';
 import { displaySlug, findProject } from '../../lib/projectSlug';
 import { useScope } from '../../lib/scope';
 import { Empty } from '../../components/ui';
+import { isKeptBase, KeptBaseChip, ProposalFacets, ProposalFormLensChips } from './ProposalFacets';
 
 /* ----- Overview ----- */
 
@@ -281,9 +282,15 @@ export function InsightsTab({ insights }: { insights: AgentInsights }): JSX.Elem
                   <span className="text-[12.5px] text-ink">
                     <Trans>Rewrite proposal</Trans>
                   </span>
-                  <span className="ml-auto font-mono text-[9.5px] text-ink-faint">{p.status}</span>
+                  <ProposalFormLensChips p={p} />
+                  <span className="ml-auto font-mono text-[9.5px] text-ink-faint">
+                    {isKeptBase(p) ? <KeptBaseChip /> : p.status}
+                  </span>
                 </div>
-                <div className="mt-1 line-clamp-2 text-[11.5px] text-ink-dim">{p.rationale}</div>
+                {!isKeptBase(p) && (
+                  <div className="mt-1 line-clamp-2 text-[11.5px] text-ink-dim">{p.rationale}</div>
+                )}
+                <ProposalFacets p={p} />
                 {p.pr_url !== null && (
                   <a
                     href={safeHref(p.pr_url) ?? undefined}

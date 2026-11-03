@@ -64,6 +64,12 @@ import { PLACES } from '../lib/nav';
 import { safeHref } from '../lib/safeHref';
 import { useScope } from '../lib/scope';
 import { triageStateOf } from './health/healthModel';
+import {
+  isKeptBase,
+  KeptBaseChip,
+  ProposalFacets,
+  ProposalFormLensChips,
+} from './agent-hub/ProposalFacets';
 import { Explain } from '../components/Explain';
 import { RetroImproveCard } from '../components/RetroImproveCard';
 import { HowItWorks } from '../components/HowItWorks';
@@ -595,11 +601,13 @@ function ProposalDetail({
         </span>
       </div>
 
-      {p.rationale !== '' && (
+      {p.rationale !== '' && !isKeptBase(p) && (
         <p className="mt-2 font-mono text-[10.5px] leading-relaxed whitespace-pre-wrap text-ink-3">
           {p.rationale}
         </p>
       )}
+
+      <ProposalFacets p={p} />
 
       {p.diff !== '' && <DiffView diff={p.diff} />}
 
@@ -706,7 +714,8 @@ function ProposalCard({
             <Trans>skill</Trans>
           </span>
         )}
-        <ProposalStatusChip status={p.status} />
+        <ProposalFormLensChips p={p} />
+        {isKeptBase(p) ? <KeptBaseChip /> : <ProposalStatusChip status={p.status} />}
         <span className="font-mono text-[10px] text-ink-faint">{fmtAgo(p.created_at)}</span>
         <button
           type="button"

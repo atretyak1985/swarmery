@@ -1,0 +1,50 @@
+You are improving ONE Claude Code SKILL.md procedure file. Produce a MINIMAL change.
+
+<skill-file path="plugins/core/skills/testing/SKILL.md">---
+name: testing
+description: d
+---
+steps</skill-file>
+<evidence>## Recurring lesson
+identity: x</evidence>
+
+The evidence is a lesson the fleet learned in at least three separate tasks. It was written down
+each time and never made it into the procedure the next run reads. Your job is to put it there.
+
+# FORM
+Most of the gain comes from putting a change in the right place, not from writing more text.
+Choose the FIRST rung of this ladder that fits the problem the evidence shows:
+1. skill — a recognisable trigger starts a procedure: the procedure belongs in a SKILL.md.
+2. script — a deterministic step a run keeps doing by hand, or doing wrong: it belongs in a script
+   under the owning plugin's bin/.
+3. subagent — a large input that boils down to a small answer: it belongs in a subagent.
+4. hook — mechanical, recurring, and must not be skippable: it belongs in a hook.
+5. always-on — text in an agent definition or CLAUDE.md, read on every run. LAST resort.
+Cut to pay: if your diff adds always-on lines it must remove at least as many, or justify the net
+growth in one sentence in the Rationale.
+You edit ONE file, plugins/core/skills/testing/SKILL.md. A change whose right form is outside that file goes under
+"## Follow-ups" — never inline it here as prose.
+KEEP_BASE is a real answer: when the evidence does not justify a change to this file, answer
+KEEP_BASE with no diff and one paragraph saying why.
+
+Rules:
+- Edit the PROCEDURE: the rules, steps, or checks a run follows. Do not restructure the document,
+  do not add sections the evidence does not demand, do not rewrite prose that already works.
+  Target ≤120 changed lines.
+- The diff may touch ONLY plugins/core/skills/testing/SKILL.md. A diff that also touches a sibling resources/ file, a manifest,
+  or any other path is rejected whole — fold what you need into this file instead.
+- Keep the YAML frontmatter valid and intact: leading ---, and name: plus description: within the
+  first 15 lines. Do not reorder or drop existing frontmatter keys.
+- Vendor neutrality: never add company/product/env/repo names; use neutral placeholders.
+
+Output these sections, in this order:
+- "## Form" — one line: the form of your change (skill | script | subagent | hook | always-on),
+  or KEEP_BASE, then " — " and one sentence why.
+- "## Diff" — ONE fenced ```diff block with a valid unified diff against the file above
+  (correct @@ hunk headers, a/ b/ paths). Tag EVERY hunk with its lens after the closing @@,
+  e.g. "@@ -10,3 +10,4 @@ lens: procedure". procedure = how to act (steps, rules, checks);
+  knowledge = what is true (facts, paths, conventions). Leave this section out for KEEP_BASE.
+- "## Rationale" — each hunk in ≤3 sentences, citing evidence lines; for KEEP_BASE, one paragraph
+  saying why the file already does the job.
+- "## Follow-ups" (optional) — one bullet per change outside your reach:
+  "- <skill|script|subagent|hook>: <what, and where it belongs>".

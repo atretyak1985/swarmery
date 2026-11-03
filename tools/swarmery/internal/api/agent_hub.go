@@ -707,9 +707,7 @@ func (h *Handler) fillAgentInsights(out *agentProfileDTO, key string, pf string,
 	// identity in the same `agent` column, so without the filter a retro sentence
 	// that happened to equal an agent key would surface on that agent's page as if
 	// it were a rewrite of its prompt.
-	prows, err := h.DB.Query(`
-		SELECT id, recommendation_id, agent, agent_path, target_kind, target_path,
-		       base_sha256, diff, rationale, status, error, pr_url, created_at, decided_at
+	prows, err := h.DB.Query(`SELECT `+proposalCols+`
 		  FROM agent_change_proposals
 		 WHERE agent = ? AND target_kind = 'agent'
 		 ORDER BY created_at DESC, id DESC`, nk)
@@ -718,11 +716,8 @@ func (h *Handler) fillAgentInsights(out *agentProfileDTO, key string, pf string,
 	}
 	defer prows.Close()
 	for prows.Next() {
-		var p proposalDTO
-		if err := prows.Scan(&p.ID, &p.RecommendationID, &p.Agent, &p.AgentPath,
-			&p.TargetKind, &p.TargetPath,
-			&p.BaseSHA256, &p.Diff, &p.Rationale, &p.Status, &p.Error, &p.PRURL,
-			&p.CreatedAt, &p.DecidedAt); err != nil {
+		p, err := scanProposal(prows)
+		if err != nil {
 			return err
 		}
 		out.Insights.Proposals = append(out.Insights.Proposals, p)

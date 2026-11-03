@@ -17,7 +17,7 @@ import (
 //
 // The full Apply pipeline needs an `origin/main` to fetch + worktree from, which
 // a throwaway repo can't cheaply provide, so these drive the security-critical
-// sequence directly: apply patch → git add -A → changedPaths → checkPathScope,
+// sequence directly: apply patch → git add -A → changedFiles → checkPathScope,
 // with the exact same commands runApply uses. If checkPathScope rejects, runApply
 // fails the row and never commits/pushes/opens a PR — asserted at the sequence
 // level here and end-to-end by the fakeExec TestApplyPathScopeGate.
@@ -63,10 +63,11 @@ func stageAndGate(t *testing.T, repo, agentRel string) error {
 	if out, err := svc.Exec.Run(ctx, repo, "git", "add", "-A"); err != nil {
 		t.Fatalf("git add -A: %v (%s)", err, out)
 	}
-	changed, total, err := svc.changedPaths(ctx, repo)
+	files, err := svc.changedFiles(ctx, repo)
 	if err != nil {
 		return err
 	}
+	changed, total := filesPathsTotal(files)
 	if err := checkPathScope(changed, agentRel); err != nil {
 		return err
 	}
@@ -178,10 +179,11 @@ func TestRealGitLargeInjectedFileRejected(t *testing.T) {
 func stagedTotal(t *testing.T, repo string) int {
 	t.Helper()
 	svc := &Service{Repo: repo, Exec: OSExec{}}
-	_, total, err := svc.changedPaths(context.Background(), repo)
+	files, err := svc.changedFiles(context.Background(), repo)
 	if err != nil {
-		t.Fatalf("changedPaths: %v", err)
+		t.Fatalf("changedFiles: %v", err)
 	}
+	_, total := filesPathsTotal(files)
 	return total
 }
 
@@ -195,5 +197,45 @@ func TestRealGitInScopeEditPasses(t *testing.T) {
 	}
 	if err := stageAndGate(t, repo, agentRel); err != nil {
 		t.Fatalf("in-scope edit must pass the gate, got: %v", err)
+	}
+}
+
+// TestRealGitLensTrailerAppliesAndWarns: the per-hunk lens rides in the hunk
+// header trailer ("@@ … @@ lens: procedure"), which real `git apply` ignores —
+// so a parsed diff applies as-is — and the staged numstat of a net-growing
+// agent edit yields the always-on growth warning (never a gate failure).
+func TestRealGitLensTrailerAppliesAndWarns(t *testing.T) {
+	repo, agentRel := initAgentRepo(t)
+	out := "## Form\nalways-on — x\n## Diff\n```diff\n" +
+		"--- a/" + agentRel + "\n+++ b/" + agentRel + "\n" +
+		"@@ -4,2 +4,4 @@ lens: procedure\n ---\n body\n+check the exit code\n+before reporting done\n" +
+		"```\n## Rationale\nwhy\n"
+	p, err := parseOutput(out)
+	if err != nil {
+		t.Fatalf("parseOutput: %v", err)
+	}
+	ex := OSExec{}
+	ctx := context.Background()
+	if err := os.WriteFile(filepath.Join(repo, ".improve.patch"), []byte(p.Diff), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if o, err := ex.Run(ctx, repo, "git", "apply", "--check", ".improve.patch"); err != nil {
+		t.Fatalf("git apply --check refused the lens trailer: %v (%s)", err, o)
+	}
+	if o, err := ex.Run(ctx, repo, "git", "apply", ".improve.patch"); err != nil {
+		t.Fatalf("git apply: %v (%s)", err, o)
+	}
+	_ = os.Remove(filepath.Join(repo, ".improve.patch"))
+	if err := stageAndGate(t, repo, agentRel); err != nil {
+		t.Fatalf("gate: %v", err)
+	}
+	svc := &Service{Repo: repo, Exec: ex}
+	files, err := svc.changedFiles(ctx, repo)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ws := alwaysOnGrowthWarnings(files)
+	if len(ws) != 1 || !strings.Contains(ws[0], "gains 2 lines net") {
+		t.Errorf("warnings = %q, want one +2 net growth warning", ws)
 	}
 }

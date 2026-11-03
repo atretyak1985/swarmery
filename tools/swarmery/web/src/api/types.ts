@@ -1753,6 +1753,36 @@ export interface AgentChangeProposal {
   pr_url: string | null;
   created_at: string;
   decided_at: string | null;
+  /**
+   * Harness² phase 3 (migration 0135). Optional so a payload from an older
+   * daemon still type-checks; the current daemon always sends them.
+   * `outcome: 'kept_base'` is the model's KEEP_BASE answer on a 'rejected'
+   * row — not an operator rejection.
+   */
+  outcome?: ProposalOutcome;
+  /** The single hunk lens, or 'mixed'; '' on KEEP_BASE and older rows. */
+  lens?: ProposalLens;
+  /** The FORM line: where on the form ladder the change belongs. */
+  form?: ProposalForm;
+  /** Changes in a form the one-file rewriter cannot make. */
+  suggested_followups?: ProposalFollowup[];
+  /** Non-blocking warnings (always-on net growth). */
+  warnings?: string[];
+}
+
+/** agent_change_proposals.outcome (migration 0135). */
+export type ProposalOutcome = '' | 'kept_base';
+
+/** agent_change_proposals.lens (migration 0135). */
+export type ProposalLens = '' | 'procedure' | 'knowledge' | 'mixed';
+
+/** agent_change_proposals.form (migration 0135) — the form ladder rung, or keep_base. */
+export type ProposalForm = '' | 'skill' | 'script' | 'subagent' | 'hook' | 'always-on' | 'keep_base';
+
+/** One follow-up the rewriter could not make itself; form '' when unrecognised. */
+export interface ProposalFollowup {
+  form: '' | 'skill' | 'script' | 'subagent' | 'hook' | 'always-on';
+  text: string;
 }
 
 export interface ProposalsResp {

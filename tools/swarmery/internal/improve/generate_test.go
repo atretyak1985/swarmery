@@ -138,7 +138,7 @@ func TestGenerateRunnerError(t *testing.T) {
 func TestGenerateNoChange(t *testing.T) {
 	db := openDB(t)
 	seedAgent(t, db, 1, "tech-lead", "local", "/x/tech-lead.md", "body")
-	svc := newService(t, db, &mockRunner{out: "## Diff\n```diff\n```\n## Rationale\nEvidence too thin.\n"})
+	svc := newService(t, db, &mockRunner{out: "## Form\nalways-on — x\n## Diff\n```diff\n```\n## Rationale\nEvidence too thin.\n"})
 
 	id, err := svc.Generate(context.Background(), GenerateReq{Agent: "tech-lead"})
 	if err != nil {

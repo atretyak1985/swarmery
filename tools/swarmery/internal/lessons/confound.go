@@ -18,7 +18,10 @@ package lessons
 //	              of the roles a phase run spawns (phaserun.SpawnedRoles). The
 //	              second rule is coarse on purpose — a rewritten executor changes
 //	              every phase run — and the confounder's detail says which rule
-//	              matched.
+//	              matched. The detail also carries the proposal's stored lens
+//	              (procedure | knowledge | mixed, migration 0135) so an operator
+//	              can tell a rewritten procedure from corrected facts; rows
+//	              written before the lens existed read "lens unrecorded".
 //	model_switch  the dominant session model of the before-runs differs from the
 //	              after-runs'. "Dominant" is a share of the runs with a known
 //	              model at or above ModelShare (0.6 by default), so complexity
@@ -177,6 +180,15 @@ type AppliedProposal struct {
 	TargetKind string
 	Path       string // target_path, or agent_path for an agent row (its target_path is '')
 	DecidedAt  string
+	Lens       string // procedure | knowledge | mixed; '' on rows older than migration 0135
+}
+
+// lensLabel renders a proposal's lens for a confounder detail.
+func lensLabel(lens string) string {
+	if lens == "" {
+		return "lens unrecorded"
+	}
+	return "lens " + lens
 }
 
 // proposalConfounders: applied proposals inside the window whose target
@@ -206,8 +218,8 @@ func proposalConfounders(self Active, ps []AppliedProposal, roles []string, w Wi
 			kind = "agent"
 		}
 		out = append(out, Confounder{Kind: ConfoundProposal, ID: strconv.FormatInt(p.ID, 10), At: at.Format(time.RFC3339),
-			Detail: fmt.Sprintf("%s proposal #%d for %s was applied inside the measured window %s: %s",
-				kind, p.ID, p.Agent, w, rule)})
+			Detail: fmt.Sprintf("%s proposal #%d for %s (%s) was applied inside the measured window %s: %s",
+				kind, p.ID, p.Agent, lensLabel(p.Lens), w, rule)})
 	}
 	return out
 }
@@ -294,14 +306,14 @@ func loadConfoundSource(db *sql.DB) (confoundSource, error) {
 		return src, err
 	}
 	rows, err = db.Query(`SELECT id, agent, target_kind, COALESCE(NULLIF(target_path, ''), agent_path, ''),
-		COALESCE(decided_at, '') FROM agent_change_proposals WHERE status = 'applied' ORDER BY id`)
+		COALESCE(decided_at, ''), lens FROM agent_change_proposals WHERE status = 'applied' ORDER BY id`)
 	if err != nil {
 		return src, err
 	}
 	defer rows.Close()
 	for rows.Next() {
 		var p AppliedProposal
-		if err := rows.Scan(&p.ID, &p.Agent, &p.TargetKind, &p.Path, &p.DecidedAt); err != nil {
+		if err := rows.Scan(&p.ID, &p.Agent, &p.TargetKind, &p.Path, &p.DecidedAt, &p.Lens); err != nil {
 			return src, err
 		}
 		src.proposals = append(src.proposals, p)
