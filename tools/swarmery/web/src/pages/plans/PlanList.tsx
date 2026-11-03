@@ -13,6 +13,7 @@ import { ListEmpty, ListTabs } from '../../components/place/ListTabs';
 import { StateGlyph } from '../../components/place/StateGlyph';
 import { compactSpan } from '../../lib/sessionsView';
 import { useNowMs } from '../../lib/sessionState';
+import { PhaseMiniBar } from './PhaseMiniBar';
 import { computeResolvedSeqs, needYouCount, planGlyph, planSummary, planUpdatedAt } from './planModel';
 import { planFilterOf, type EpicFilter } from './plansTarget';
 
@@ -123,6 +124,7 @@ export function PlanList({
               tag={e.cardExternalId !== null ? t`card` : undefined}
               summary={planSummary(e, resolved)}
               summaryTone={needYouCount(e) > 0 ? 'needs' : e.planRun?.runState === 'failed' ? 'failed' : 'default'}
+              footer={<PhaseMiniBar phases={e.phases} resolvedSeqs={resolved} />}
               age={updated === null ? undefined : compactSpan(nowMs - new Date(updated).getTime())}
               selected={e.taskId === selectedTaskId}
               to={hrefOf(e)}

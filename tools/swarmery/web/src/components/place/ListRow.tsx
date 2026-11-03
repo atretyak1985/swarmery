@@ -32,6 +32,9 @@ export interface ListRowProps {
   flag?: string | undefined;
   summary?: string | undefined;
   summaryTone?: SummaryTone;
+  /** Under the summary, inside the text column: e.g. a plan's phase bar. Must hold no
+   * interactive element — the row itself is the link. */
+  footer?: ReactNode;
   age?: string | undefined;
   pr?: string | undefined;
   /** Tailwind text class for the #PR, in its status colour. */
@@ -64,6 +67,7 @@ export function ListRow({
   flag,
   summary,
   summaryTone = 'default',
+  footer,
   age,
   pr,
   prTone = 'text-ink-faint',
@@ -106,6 +110,7 @@ export function ListRow({
         {summary !== undefined && (
           <span className={`mt-0.5 block truncate text-[12px] ${SUMMARY_TONE[summaryTone]}`}>{summary}</span>
         )}
+        {footer}
       </span>
       <span className="flex flex-col items-end gap-[3px] font-mono text-[10.5px] whitespace-nowrap text-ink-faint">
         {age !== undefined && <span>{age}</span>}

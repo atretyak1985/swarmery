@@ -133,8 +133,15 @@ export function SessionControls({
   compact = false,
   className = '',
   promptOpen: promptOpenAtStart = false,
+  only,
+  stopClassName,
 }: {
   session: Session;
+  /** `stop`: Stop turn alone, for a host that offers its own way to send a
+   * prompt (the session detail's action bar). */
+  only?: 'stop';
+  /** The resting Stop turn look, for a host with its own buttons. */
+  stopClassName?: string;
   /** Mount with the prompt box already open: `redirect` asked for it. */
   promptOpen?: boolean;
   /** Card layout: no inline reason line (the tip and the screen-reader
@@ -309,27 +316,29 @@ export function SessionControls({
             aria-describedby={describedBy}
             onClick={() => setConfirmingStop(true)}
             data-tip={disabled ? undefined : t`Abort the session's running turn through its link mod. The session stays open — unlike Stop, which ends a daemon-run process.`}
-            className={`${BTN} border-red/40 text-red hover:bg-red/10`}
+            className={stopClassName ?? `${BTN} border-red/40 text-red hover:bg-red/10`}
           >
             {t`Stop turn`}
           </button>
         )}
-        <button
-          type="button"
-          disabled={disabled || promptBusy}
-          aria-describedby={describedBy}
-          aria-expanded={promptOpen}
-          onClick={() => setPromptOpen((o) => !o)}
-          className={`${BTN} border-line-strong text-ink-dim hover:border-brand/50 hover:text-brand`}
-        >
-          {t`Send prompt`}
-        </button>
+        {only !== 'stop' && (
+          <button
+            type="button"
+            disabled={disabled || promptBusy}
+            aria-describedby={describedBy}
+            aria-expanded={promptOpen}
+            onClick={() => setPromptOpen((o) => !o)}
+            className={`${BTN} border-line-strong text-ink-dim hover:border-brand/50 hover:text-brand`}
+          >
+            {t`Send prompt`}
+          </button>
+        )}
         <span id={reasonId} className={disabled && !compact ? 'font-mono text-[10.5px] text-ink-faint' : 'sr-only'}>
           {disabled ? reason : ''}
         </span>
       </span>
 
-      {promptOpen && controllable && (
+      {only !== 'stop' && promptOpen && controllable && (
         <span className="flex max-w-[520px] flex-col gap-1.5 rounded border border-line bg-surface2 p-2">
           <textarea
             value={text}
@@ -369,7 +378,7 @@ export function SessionControls({
       )}
 
       {KINDS.map((k) => {
-        const tr = tracked[k];
+        const tr = only === 'stop' && k !== 'stop' ? undefined : tracked[k];
         return tr === undefined ? null : (
           <span
             key={k}

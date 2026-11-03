@@ -28,12 +28,40 @@ import { projectLabel } from '../../lib/format';
 import { compactSpan } from '../../lib/sessionsView';
 import { useNowMs } from '../../lib/sessionState';
 import { PendingCard } from '../Approvals';
+import { countdown } from './headerSentence';
 import type { PaneActions } from './SessionPane';
 
 /** Needs you, on this request: the always-allow rules live on its card there. */
 function needsYouHref(slug: string | undefined, requestId: number | null): string {
   const query = requestId === null ? 'tab=approvals' : `tab=approvals&request=${String(requestId)}`;
   return `${slug === undefined ? '' : `/p/${slug}`}/needs-you?${query}`;
+}
+
+/** The pending permission request behind a gate, or null until it is known (and
+ * when the gate has no request). `refresh` re-reads it: the pane bumps it on the
+ * session's session_updated frames, since a request can settle between them. */
+export function usePendingRequest(
+  requestId: number | null,
+  projectSlug: string,
+  refresh = 0,
+): PermissionRequest | null {
+  const [request, setRequest] = useState<PermissionRequest | null>(null);
+  useEffect(() => {
+    if (requestId === null) {
+      setRequest(null);
+      return undefined;
+    }
+    let live = true;
+    fetchApprovals('pending', projectSlug)
+      .then((rows) => {
+        if (live) setRequest(rows.find((r) => r.id === requestId) ?? null);
+      })
+      .catch(() => undefined); // the card falls back to the queue's preview
+    return () => {
+      live = false;
+    };
+  }, [requestId, projectSlug, refresh]);
+  return request;
 }
 
 export function gateTier(item: NeedsYouItem, request: PermissionRequest | null): DecisionTier {
@@ -50,8 +78,11 @@ export function SessionGate({
   canCompose,
   onSent,
   actions,
+  request: given,
 }: {
   item: NeedsYouItem;
+  /** The request, when the host already reads it; absent → the card reads it. */
+  request?: PermissionRequest | null;
   session: SessionDetail;
   /** The queue moved: reload it, so the card and the row settle. */
   onChanged: () => void;
@@ -66,7 +97,8 @@ export function SessionGate({
   const navigate = useNavigate();
   const { slug } = useParams<{ slug?: string }>();
   const nowMs = useNowMs(1000);
-  const [request, setRequest] = useState<PermissionRequest | null>(null);
+  const fetched = usePendingRequest(given === undefined ? item.requestId : null, session.projectSlug);
+  const request = given === undefined ? fetched : given;
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [denying, setDenying] = useState(false);
@@ -74,18 +106,6 @@ export function SessionGate({
   const [pick, setPick] = useState<number>(0);
 
   const requestId = item.requestId;
-  useEffect(() => {
-    if (requestId === null) return undefined;
-    let live = true;
-    fetchApprovals('pending', session.projectSlug)
-      .then((rows) => {
-        if (live) setRequest(rows.find((r) => r.id === requestId) ?? null);
-      })
-      .catch(() => undefined); // the card falls back to the queue's preview
-    return () => {
-      live = false;
-    };
-  }, [requestId, session.projectSlug]);
 
   const resolve = useCallback(
     (action: ApprovalAction, note?: string, answers?: AnswerMap): void => {
@@ -184,8 +204,7 @@ export function SessionGate({
   const project = projectLabel(session.projectName, session.projectSlug);
   const steps = String(session.events.length);
   const meta = asks ? t`asked at step ${steps}` : t`${tool} · asks once per scope`;
-  const left = request === null ? null : Math.max(0, Math.round((new Date(request.expiresAt).getTime() - nowMs) / 1000));
-  const clock = left === null ? null : `${String(Math.floor(left / 60))}:${String(left % 60).padStart(2, '0')}`;
+  const clock = request === null ? null : countdown(request.expiresAt, nowMs);
   const waited = compactSpan(nowMs - new Date(item.blockingSince).getTime());
   const headline = asks
     ? item.question !== ''
