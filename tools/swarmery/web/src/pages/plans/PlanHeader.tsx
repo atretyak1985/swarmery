@@ -36,23 +36,10 @@ import {
   segmentLabel,
   segmentState,
   segmentWord,
-  type SegmentState,
 } from './planModel';
 import { plansHref, type PlanDetailTab } from './plansUrl';
+import { SEGMENT_TONE } from './segmentTone';
 import { usePlanDoc } from './usePlanDoc';
-
-/** The design's bar: state by colour, in the band's own vocabulary. */
-const SEGMENT_TONE: Record<SegmentState, { fill: string; text: string }> = {
-  landed: { fill: 'bg-green', text: 'text-green' },
-  running: { fill: 'bg-blue', text: 'text-blue' },
-  guard: { fill: 'bg-red', text: 'text-red' },
-  decision: { fill: 'bg-red', text: 'text-red' },
-  failed: { fill: 'bg-red', text: 'text-red' },
-  manual: { fill: 'bg-amber', text: 'text-amber' },
-  blocked: { fill: 'bg-ink-dim', text: 'text-ink-dim' },
-  started: { fill: 'bg-ink-faint', text: 'text-ink-faint' },
-  pending: { fill: 'bg-line-strong', text: 'text-line-strong' },
-};
 
 const BTN =
   'rounded-[7px] border px-3 py-1.5 font-mono text-[11.5px] leading-[normal] whitespace-nowrap transition-colors disabled:cursor-not-allowed disabled:opacity-50';
