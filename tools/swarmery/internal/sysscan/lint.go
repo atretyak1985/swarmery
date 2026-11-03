@@ -91,6 +91,8 @@ var linterRules = []string{
 	RuleDocsDuplicate,
 	RuleDocsStale,
 	RuleDocsUnreviewed,
+	RuleSkillMissingHelper,
+	RuleAlwaysOnBudget,
 }
 
 // Threshold defaults and their env overrides (precedence: explicit Config
@@ -190,6 +192,12 @@ func (s *Scanner) Lint() (LintStats, error) {
 	}
 	if err := s.lintDocs(byRule); err != nil {
 		return st, fmt.Errorf("lint docs: %w", err)
+	}
+	if err := s.lintSkillMissingHelpers(byRule); err != nil {
+		return st, fmt.Errorf("lint skill helpers: %w", err)
+	}
+	if err := s.lintAlwaysOnBudget(byRule); err != nil {
+		return st, fmt.Errorf("lint always-on budget: %w", err)
 	}
 
 	for _, rule := range linterRules {

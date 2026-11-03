@@ -123,8 +123,9 @@ type systemInsightsDTO struct {
 	// first one) — system_skill_audit.go.
 	SkillAudit       []skillAuditFindingDTO `json:"skillAudit"`
 	SkillAuditReport *skillAuditReportDTO   `json:"skillAuditReport"`
-	// StartCost is the session-start cost findings — the CLAUDE.md size rules
-	// and unused MCP servers (sysscan/lint.go): what every session of a project
+	// StartCost is the session-start cost findings — the CLAUDE.md size rules,
+	// unused MCP servers (sysscan/lint.go) and the always-on budget
+	// (sysscan/harnesslint.go): what every session of a project
 	// loads before its first prompt. Like PluginDrift, no component row carries
 	// these targets, so this list is the only place they render.
 	StartCost []startCostDTO `json:"startCost"`
@@ -147,6 +148,7 @@ var startCostRules = []string{
 	sysscan.RuleClaudeMDOversized,
 	sysscan.RuleClaudeMDOver200Lines,
 	sysscan.RuleMCPServerUnused30d,
+	sysscan.RuleAlwaysOnBudget,
 }
 
 // pluginDriftDTO is one active plugin_* finding, resolved to the project it
