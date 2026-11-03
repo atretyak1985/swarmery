@@ -47,6 +47,8 @@ func (g GitSource) Export(ctx context.Context, dst string, paths []string) error
 	args := append([]string{"archive", "--format=tar", ref, "--"}, paths...)
 	cmd := exec.CommandContext(ctx, "git", args...)
 	cmd.Dir = g.Repo
+	// git archive only reads objects; never let it take index.lock in the repo.
+	cmd.Env = append(os.Environ(), "GIT_OPTIONAL_LOCKS=0")
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &stdout, &stderr
 	if err := cmd.Run(); err != nil {
@@ -155,7 +157,7 @@ func applyDiff(ctx context.Context, scratch, dir, diff, target string) error {
 	git := func(args ...string) (string, error) {
 		cmd := exec.CommandContext(ctx, "git", args...)
 		cmd.Dir = dir
-		cmd.Env = append(os.Environ(), "GIT_CEILING_DIRECTORIES="+filepath.Dir(dir))
+		cmd.Env = append(os.Environ(), "GIT_OPTIONAL_LOCKS=0", "GIT_CEILING_DIRECTORIES="+filepath.Dir(dir))
 		out, err := cmd.CombinedOutput()
 		return string(out), err
 	}
