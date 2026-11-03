@@ -97,8 +97,67 @@ func (t *Ticker) CheckAll(now time.Time) ([]int64, error) {
 		changed = append(changed, s.id)
 	}
 
+	settled, err := t.settleFinished(nowStr)
+	if err != nil {
+		log.Printf("procwatch: settle finished sessions: %v", err)
+	}
+	changed = append(changed, settled...)
+
 	if err := t.heuristicMatch(nowStr); err != nil {
 		log.Printf("procwatch: heuristic match: %v", err)
+	}
+	return changed, nil
+}
+
+// settleFinished re-checks sessions that already finished (any status outside the
+// live ones) but still claim a live process. A headless run reads "orphaned" while
+// it runs (no tty); when ingest marks it completed, the live pass above never sees
+// it again, so its proc_state stayed "orphaned" and the dashboard kept offering to
+// Stop a process that was long gone. Only proc_state moves here — the status is
+// ingest's (or the kill path's) and stays as it is. A process that is really still
+// alive keeps its state.
+func (t *Ticker) settleFinished(nowStr string) ([]int64, error) {
+	rows, err := t.DB.Query(`
+		SELECT id, pid, proc_started_at, proc_state
+		FROM sessions
+		WHERE status NOT IN ('active','idle','awaiting_reply')
+		  AND proc_state IN ('running','orphaned') AND pid IS NOT NULL`)
+	if err != nil {
+		return nil, err
+	}
+	type row struct {
+		id            int64
+		pid           int
+		procStartedAt sql.NullString
+		procState     string
+	}
+	var finished []row
+	for rows.Next() {
+		var r row
+		if err := rows.Scan(&r.id, &r.pid, &r.procStartedAt, &r.procState); err != nil {
+			rows.Close()
+			return nil, err
+		}
+		finished = append(finished, r)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	var changed []int64
+	for _, r := range finished {
+		newState := t.checkOne(r.pid, r.procStartedAt.String, r.procState)
+		if newState == r.procState {
+			continue
+		}
+		if _, err := t.DB.Exec(
+			`UPDATE sessions SET proc_state = ?, proc_checked_at = ? WHERE id = ?`,
+			newState, nowStr, r.id); err != nil {
+			log.Printf("procwatch: settle session %d: %v", r.id, err)
+			continue
+		}
+		changed = append(changed, r.id)
 	}
 	return changed, nil
 }
