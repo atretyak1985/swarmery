@@ -36,17 +36,20 @@ trap cleanup EXIT
 # when STUB_FAIL=1. LOG is per case.
 cat >"$tmp/stub.mk" <<'MK'
 stub:
-	@echo "start $$(date +%s) $$$$" >>"$(LOG)"
+	@echo "start $$(date +%s.%N) $$$$" >>"$(LOG)"
+	@if [ -n "$${DIAG_LOCK:-}" ]; then { echo "  [$$$$ ppid=$$PPID] lock/pid=$$(cat "$$DIAG_LOCK/pid" 2>&1)"; ps -o pid,ppid,stat,args -u "$$(id -u)" | grep -E 'make|sh -c|sleep' | grep -v grep | sed 's/^/    /'; } >>"$(LOG).diag" 2>&1; fi
 	@sleep $${STUB_SLEEP:-0}
-	@echo "end $$(date +%s) $$$$" >>"$(LOG)"
+	@echo "end $$(date +%s.%N) $$$$" >>"$(LOG)"
 	@[ "$${STUB_FAIL:-0}" != 1 ]
 MK
 
-# run_install <lock> <log> — the real recipe, the stub as its step.
+# run_install <lock> <log> — the real recipe, the stub as its step. The make
+# output goes to $OUT when set: case (e) keeps it for the failure dump, since it
+# carries the "waiting" and "taking over a stale install lock" lines.
 run_install() {
 	make -s -C "$MK_DIR" install \
 		INSTALL_LOCK="$1" LOG="$2" \
-		INSTALL_STEP="-f $tmp/stub.mk stub" >/dev/null 2>&1
+		INSTALL_STEP="-f $tmp/stub.mk stub" >>"${OUT:-/dev/null}" 2>&1
 }
 
 # --- (a) free lock ---------------------------------------------------------
@@ -112,23 +115,47 @@ else
 fi
 
 # --- (e) two concurrent installs serialize ----------------------------------
-lock="$tmp/e.lock"
-log="$tmp/e.log"
-STUB_SLEEP=2 run_install "$lock" "$log" &
-first=$!
-STUB_SLEEP=2 run_install "$lock" "$log" &
-second=$!
-wait "$first"
-rc1=$?
-wait "$second"
-rc2=$?
-# Serialized means the log alternates start/end/start/end: no second start
-# before the first end.
-order="$(awk '{print $1}' "$log" 2>/dev/null | tr '\n' ' ')"
-if [ "$rc1" -eq 0 ] && [ "$rc2" -eq 0 ] && [ "$order" = "start end start end " ] && [ ! -e "$lock" ]; then
+# DIAG (draft, diag/make-install-lock-flake): this case flakes on GitHub runners
+# (about 1 run in 4: "start start end end", the second install never waited)
+# and has not reproduced locally. Repeat it, and on an overlap dump both
+# installs' make output, the step log with timestamps and pids, and what each
+# step saw in the lock dir when it started.
+E_REPEAT="${E_REPEAT:-6}"
+e_fail=0
+for r in $(seq 1 "$E_REPEAT"); do
+	lock="$tmp/e$r.lock"
+	log="$tmp/e$r.log"
+	DIAG_LOCK="$lock" OUT="$tmp/e$r.out1" STUB_SLEEP=2 run_install "$lock" "$log" &
+	first=$!
+	DIAG_LOCK="$lock" OUT="$tmp/e$r.out2" STUB_SLEEP=2 run_install "$lock" "$log" &
+	second=$!
+	wait "$first"
+	rc1=$?
+	wait "$second"
+	rc2=$?
+	# Serialized means the log alternates start/end/start/end: no second start
+	# before the first end.
+	order="$(awk '{print $1}' "$log" 2>/dev/null | tr '\n' ' ')"
+	if [ "$rc1" -ne 0 ] || [ "$rc2" -ne 0 ] || [ "$order" != "start end start end " ] || [ -e "$lock" ]; then
+		e_fail=$((e_fail + 1))
+		left=no
+		[ -e "$lock" ] && left=yes
+		echo "  ── (e) repeat $r/$E_REPEAT: order=$order rc=$rc1/$rc2 lock-left=$left first=$first second=$second"
+		echo "  step log:"
+		sed 's/^/    /' "$log" 2>/dev/null
+		echo "  lock seen by each step:"
+		sed 's/^/  /' "$log.diag" 2>/dev/null
+		echo "  make output, first:"
+		sed 's/^/    /' "$tmp/e$r.out1" 2>/dev/null
+		echo "  make output, second:"
+		sed 's/^/    /' "$tmp/e$r.out2" 2>/dev/null
+		echo "  sh=$(readlink -f /bin/sh) make=$(make --version | head -1)"
+	fi
+done
+if [ "$e_fail" -eq 0 ]; then
 	ok_case
 else
-	fail_case "(e) concurrent installs overlapped (order: $order rc=$rc1/$rc2)"
+	fail_case "(e) concurrent installs overlapped in $e_fail of $E_REPEAT repeats"
 fi
 
 echo "make-install-lock: $pass passed, $fail failed"
