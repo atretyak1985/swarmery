@@ -47,9 +47,16 @@ MK
 # output goes to $OUT when set: case (e) keeps it for the failure dump, since it
 # carries the "waiting" and "taking over a stale install lock" lines.
 run_install() {
+	if [ -n "${OUT:-}" ]; then
+		# DIAG: trace every recipe command (sh -x) into the per-install output.
+		make -s -C "$MK_DIR" install .SHELLFLAGS=-xc \
+			INSTALL_LOCK="$1" LOG="$2" \
+			INSTALL_STEP="-f $tmp/stub.mk stub" >>"$OUT" 2>&1
+		return
+	fi
 	make -s -C "$MK_DIR" install \
 		INSTALL_LOCK="$1" LOG="$2" \
-		INSTALL_STEP="-f $tmp/stub.mk stub" >>"${OUT:-/dev/null}" 2>&1
+		INSTALL_STEP="-f $tmp/stub.mk stub" >/dev/null 2>&1
 }
 
 # --- (a) free lock ---------------------------------------------------------
@@ -150,6 +157,9 @@ for r in $(seq 1 "$E_REPEAT"); do
 		echo "  make output, second:"
 		sed 's/^/    /' "$tmp/e$r.out2" 2>/dev/null
 		echo "  sh=$(readlink -f /bin/sh) make=$(make --version | head -1)"
+		echo "  env MAKE*: $(env | grep -E '^MAKE|^MFLAGS|^GNUMAKEFLAGS' | tr '\n' ' ')"
+		echo "  mkdir: $(type -a mkdir | tr '\n' ' ')"
+		echo "  /tmp: $(df -T "$tmp" | tail -1)"
 	fi
 done
 if [ "$e_fail" -eq 0 ]; then
