@@ -52,7 +52,7 @@ run_install() {
 		# and every directory create/remove syscall (strace) into $OUT.strace.
 		local pre=()
 		command -v strace >/dev/null 2>&1 &&
-			pre=(strace -f -tt -qq -e 'trace=mkdir,mkdirat,rmdir,unlink,unlinkat,rename,renameat,renameat2' -o "$OUT.strace")
+			pre=(strace -f -tt -qq -s 200 -e 'trace=execve,clone,clone3,vfork,fork,wait4,waitid,exit_group,mkdir,mkdirat,rmdir,unlinkat' -o "$OUT.strace")
 		"${pre[@]}" make -s -C "$MK_DIR" install .SHELLFLAGS=-xc \
 			INSTALL_LOCK="$1" LOG="$2" \
 			INSTALL_STEP="-f $tmp/stub.mk stub" >>"$OUT" 2>&1
@@ -167,6 +167,16 @@ for r in $(seq 1 "$E_REPEAT"); do
 		grep -F "e$r.lock" "$tmp/e$r.out1.strace" 2>/dev/null | sed 's/^/    /'
 		echo "  strace, second (lock path only):"
 		grep -F "e$r.lock" "$tmp/e$r.out2.strace" 2>/dev/null | sed 's/^/    /'
+		for which in out1 out2; do
+			sf="$tmp/e$r.$which.strace"
+			# The process that got EEXIST, and everything it and its parent did.
+			bad=$(grep -F "e$r.lock\", 0777) = -1 EEXIST" "$sf" 2>/dev/null | awk '{print $1}' | head -1)
+			[ -z "$bad" ] && continue
+			echo "  full strace of $which around EEXIST pid $bad:"
+			par=$(grep -E "(clone|clone3|vfork|fork).*= $bad\$" "$sf" | awk '{print $1}' | head -1)
+			echo "    parent=$par"
+			grep -E "^($bad|$par) " "$sf" | grep -vE 'rt_sig|SIGCHLD.*resumed' | sed 's/^/    /' | head -60
+		done
 		echo "  clocksource: $(cat /sys/devices/system/clocksource/clocksource0/current_clocksource 2>/dev/null)"
 		echo "  sh=$(readlink -f /bin/sh) make=$(make --version | head -1)"
 		echo "  env MAKE*: $(env | grep -E '^MAKE|^MFLAGS|^GNUMAKEFLAGS' | tr '\n' ' ')"
