@@ -149,7 +149,8 @@ INSTALL_STEP := install-unlocked
 install:
 	@mkdir -p $(dir $(INSTALL_LOCK))
 	@lock='$(INSTALL_LOCK)'; \
-	while ! mkdir "$$lock" 2>/dev/null; do \
+	echo "DIAG pid=$$$$ $$(grep -E '^Sig(Ign|Blk)' /proc/$$$$/status 2>/dev/null | tr '\n' ' ')"; \
+	while ! { mkdir "$$lock" 2>/dev/null; mkrc=$$?; echo "DIAG pid=$$$$ mkrc=$$mkrc"; [ "$$mkrc" -eq 0 ]; }; do \
 		holder=$$(cat "$$lock/pid" 2>/dev/null); \
 		if [ -n "$$holder" ] && ! kill -0 "$$holder" 2>/dev/null; then \
 			echo "→ taking over a stale install lock (pid $$holder is gone)"; \
