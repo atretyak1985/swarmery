@@ -35,7 +35,7 @@ import (
 )
 
 // SourcePromptfoo is proposal_probes.source for a promptfoo-suite probe;
-// 'bench' is reserved for phase 6.
+// SourceBench (bench.go) is the frozen-bench step.
 const SourcePromptfoo = "promptfoo"
 
 // blind_choice vocabulary (migration 0136's CHECK).
@@ -61,6 +61,8 @@ var (
 	ErrProposalNotFound = errors.New("proposal not found")
 	ErrNotProbeable     = errors.New("only proposed or approved proposals can be probed")
 	ErrJobRunning       = errors.New("a probe is already running for this proposal")
+	ErrUnknownSource    = errors.New("unknown probe source (want promptfoo or bench)")
+	ErrBenchUnattached  = errors.New("bench runner is not attached")
 )
 
 // MaxUSDEnv caps one probe job's spend; DefaultMaxUSD applies when it is unset
@@ -72,11 +74,14 @@ const (
 )
 
 // MaxUSD resolves the cost cap from the environment.
-func MaxUSD() float64 {
-	if v, err := strconv.ParseFloat(strings.TrimSpace(os.Getenv(MaxUSDEnv)), 64); err == nil && v > 0 && !math.IsInf(v, 0) {
+func MaxUSD() float64 { return envUSD(MaxUSDEnv, DefaultMaxUSD) }
+
+// envUSD reads a positive, finite dollar amount from name, else def.
+func envUSD(name string, def float64) float64 {
+	if v, err := strconv.ParseFloat(strings.TrimSpace(os.Getenv(name)), 64); err == nil && v > 0 && !math.IsInf(v, 0) {
 		return v
 	}
-	return DefaultMaxUSD
+	return def
 }
 
 // Case is one test of the suite, already cut out of the suite file.
@@ -127,6 +132,7 @@ func (p Proposal) target() string {
 type Job struct {
 	ID         string  `json:"id"`
 	ProposalID int64   `json:"proposal_id"`
+	Source     string  `json:"source"`
 	Status     string  `json:"status"`
 	Error      string  `json:"error,omitempty"`
 	USD        float64 `json:"usd"`
@@ -142,8 +148,11 @@ type Service struct {
 	Source Source      // where the base tree comes from (GitSource in production)
 	Suite  SuiteRunner // promptfoo
 	Judge  Judge       // blind judge on ties
+	Bench  BenchRunner // the frozen bench (bench.go); nil refuses source=bench
 	// MaxUSD overrides the env cap when > 0 (tests).
 	MaxUSD float64
+	// BenchMaxUSD overrides the bench step's env cap when > 0 (tests).
+	BenchMaxUSD float64
 	// Go replaces `go fn()` for the background job; nil in production.
 	Go func(func())
 	// Flip decides the A/B order per case: true puts the base output at A.
@@ -164,6 +173,7 @@ func NewService(db *sql.DB, repo string) *Service {
 		Source: GitSource{Repo: repo, Ref: "origin/main"},
 		Suite:  PromptfooRunner{},
 		Judge:  ClaudeJudge{},
+		Bench:  ScriptBenchRunner{},
 	}
 }
 
@@ -179,6 +189,17 @@ func (s *Service) maxUSD() float64 {
 		return s.MaxUSD
 	}
 	return MaxUSD()
+}
+
+// CapUSD is the cost cap a job of source runs under (the API shows both).
+func (s *Service) CapUSD(source string) float64 {
+	if source == SourceBench {
+		if s.BenchMaxUSD > 0 {
+			return s.BenchMaxUSD
+		}
+		return BenchMaxUSD()
+	}
+	return s.maxUSD()
 }
 
 func (s *Service) flip() bool {
@@ -206,9 +227,29 @@ func (s *Service) LoadProposal(id int64) (Proposal, error) {
 // qualifies.
 func probeable(status string) bool { return status == "proposed" || status == "approved" }
 
-// Start validates synchronously and runs the probe in the background. It
-// returns the new job's id; the rows land in proposal_probes as cases finish.
+// Start validates synchronously and runs the promptfoo probe in the
+// background. It returns the new job's id; the rows land in proposal_probes as
+// cases finish.
 func (s *Service) Start(proposalID int64) (Job, error) {
+	return s.StartSource(proposalID, SourcePromptfoo)
+}
+
+// StartSource is Start for either step: SourcePromptfoo (the agent's suite) or
+// SourceBench (the frozen bench, bench.go). One probe runs per proposal at a
+// time, whichever its source.
+func (s *Service) StartSource(proposalID int64, source string) (Job, error) {
+	var runner func(context.Context, string, Proposal) (float64, error)
+	switch source {
+	case SourcePromptfoo:
+		runner = s.Run
+	case SourceBench:
+		if s.Bench == nil {
+			return Job{}, ErrBenchUnattached
+		}
+		runner = s.RunBench
+	default:
+		return Job{}, fmt.Errorf("%w: %q", ErrUnknownSource, source)
+	}
 	p, err := s.LoadProposal(proposalID)
 	if err != nil {
 		return Job{}, err
@@ -216,7 +257,7 @@ func (s *Service) Start(proposalID int64) (Job, error) {
 	if !probeable(p.Status) {
 		return Job{}, fmt.Errorf("%w (status %s)", ErrNotProbeable, p.Status)
 	}
-	job, err := s.register(proposalID)
+	job, err := s.register(proposalID, source)
 	if err != nil {
 		return job, err
 	}
@@ -227,7 +268,7 @@ func (s *Service) Start(proposalID int64) (Job, error) {
 				s.finish(job.ID, 0, fmt.Errorf("panic: %v", r))
 			}
 		}()
-		usd, err := s.Run(context.Background(), job.ID, p)
+		usd, err := runner(context.Background(), job.ID, p)
 		if err != nil {
 			log.Printf("error: probe: job %s (proposal %d): %v", job.ID, proposalID, err)
 		}
@@ -242,7 +283,7 @@ func (s *Service) Start(proposalID int64) (Job, error) {
 }
 
 // register single-flights jobs per proposal.
-func (s *Service) register(proposalID int64) (Job, error) {
+func (s *Service) register(proposalID int64, source string) (Job, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.jobs == nil {
@@ -258,8 +299,9 @@ func (s *Service) register(proposalID int64) (Job, error) {
 	j := &Job{
 		ID:         fmt.Sprintf("probe-%d-%s", proposalID, hex.EncodeToString(b[:])),
 		ProposalID: proposalID,
+		Source:     source,
 		Status:     JobRunning,
-		MaxUSD:     s.maxUSD(),
+		MaxUSD:     s.CapUSD(source),
 		StartedAt:  s.now().UTC().Format(time.RFC3339),
 	}
 	s.jobs[j.ID] = j
@@ -367,12 +409,17 @@ func boolArg(b *bool) any {
 	return 0
 }
 
+// insert writes one row; an empty r.Source is a promptfoo row.
 func (s *Service) insert(jobID string, proposalID int64, r Row) error {
+	source := r.Source
+	if source == "" {
+		source = SourcePromptfoo
+	}
 	_, err := s.DB.Exec(`
 		INSERT INTO proposal_probes
 		  (proposal_id, job_id, source, task_id, base_pass, variant_pass, blind_choice, reason, usd, created_at)
 		VALUES (?,?,?,?,?,?,?,?,?,?)`,
-		proposalID, jobID, SourcePromptfoo, r.TaskID, boolArg(r.BasePass), boolArg(r.VariantPass),
+		proposalID, jobID, source, r.TaskID, boolArg(r.BasePass), boolArg(r.VariantPass),
 		r.BlindChoice, r.Reason, r.USD, s.now().UTC().Format(time.RFC3339))
 	return err
 }

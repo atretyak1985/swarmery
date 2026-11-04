@@ -1167,6 +1167,10 @@ msgstr "Before proposing a new agent, extend an existing skill."
 msgid "behavior {behavior}"
 msgstr "behavior {behavior}"
 
+#: src/pages/agent-hub/ProposalProbes.tsx
+msgid "bench cap {benchCap}"
+msgstr "bench cap {benchCap}"
+
 #: src/pages/learning/TurnForecastPanel.tsx
 msgid "biggest miss"
 msgstr "biggest miss"
@@ -1878,6 +1882,10 @@ msgstr "Estimates"
 msgid "Estimation accuracy"
 msgstr "Estimation accuracy"
 
+#: src/pages/agent-hub/ProposalProbes.tsx
+msgid "eval suite"
+msgstr "eval suite"
+
 #: src/pages/Retro.tsx
 msgid "evals {evalPassed}/{evalTotal}"
 msgstr "evals {evalPassed}/{evalTotal}"
@@ -2120,6 +2128,10 @@ msgstr "from recommendation #{recId}"
 #: src/pages/system/ItemDetail.tsx
 msgid "Frontmatter"
 msgstr "Frontmatter"
+
+#: src/pages/agent-hub/ProposalProbes.tsx
+msgid "frozen bench"
+msgstr "frozen bench"
 
 #: src/pages/learning/Learning.tsx
 msgid "gathering"
@@ -4051,6 +4063,14 @@ msgstr "Run a dry run to see which closed entries can move to <0>closed/</0>. No
 msgid "Run an OpenAI-compatible model server: LM Studio (<0>localhost:1234</0>), Ollama (<1>localhost:11434/v1</1>), llama.cpp or vLLM. A 7–14B instruct model is enough."
 msgstr "Run an OpenAI-compatible model server: LM Studio (<0>localhost:1234</0>), Ollama (<1>localhost:11434/v1</1>), llama.cpp or vLLM. A 7–14B instruct model is enough."
 
+#: src/pages/agent-hub/ProposalProbes.tsx
+msgid "Run bench"
+msgstr "Run bench"
+
+#: src/pages/agent-hub/ProposalProbes.tsx
+msgid "Run bench again"
+msgstr "Run bench again"
+
 #: src/pages/agent-hub/RunNow.tsx
 #: src/pages/AgentHub.tsx
 msgid "run once"
@@ -4060,6 +4080,10 @@ msgstr "run once"
 #: src/pages/inbox/TriageBanner.tsx
 msgid "run triage"
 msgstr "run triage"
+
+#: src/pages/agent-hub/ProposalProbes.tsx
+msgid "running bench…"
+msgstr "running bench…"
 
 #: src/pages/Analytics.tsx
 #: src/pages/health/HealthOverview.tsx
@@ -4073,6 +4097,10 @@ msgstr "runs"
 #: src/pages/Analytics.tsx
 msgid "Runs"
 msgstr "Runs"
+
+#: src/pages/agent-hub/ProposalProbes.tsx
+msgid "Runs each frozen-bench task tagged for this agent as a whole session, once as the current agent and once as the proposal, and stops between tasks at the bench cap of {benchCap}. It never approves, applies or rejects."
+msgstr "Runs each frozen-bench task tagged for this agent as a whole session, once as the current agent and once as the proposal, and stops between tasks at the bench cap of {benchCap}. It never approves, applies or rejects."
 
 #: src/pages/agent-hub/ProposalProbes.tsx
 msgid "Runs every suite case twice through claude -p and stops at the cost cap of {cap}. It never approves, applies or rejects."
@@ -4550,6 +4578,7 @@ msgstr "system is in readonly mode — copy is disabled"
 msgid "target"
 msgstr "target"
 
+#: src/pages/agent-hub/ProposalProbes.tsx
 #: src/pages/Retro.tsx
 msgid "task"
 msgstr "task"

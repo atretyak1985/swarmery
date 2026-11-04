@@ -14,6 +14,10 @@
 #   timedOut:true, error:false (a timeout is the model's, not infra's)
 # - stub-error exits 1 with is_error:true -> error:true, pass:false, check skipped
 # - a missing BENCH_CLAUDE aborts run.sh before any task runs
+# - stub-args records its argv: no --plugin-dir/--agent by default; with
+#   BENCH_PLUGIN_DIR and BENCH_AGENT both are passed, the plugin's hooks are
+#   disabled, and the isolation flags stay; a BENCH_PLUGIN_DIR without a
+#   plugin manifest aborts the run
 # checks on hand-made workdirs (edge cases):
 # - b01 correct fix + an added regression test         -> pass
 # - b01 no fix, fixture test rewritten to pass         -> fail
@@ -56,6 +60,12 @@ EOF
 
 cat >"$tmp/stub-noop" <<EOF
 $stub_head
+jq -nc '{type:"result",subtype:"success",is_error:false,num_turns:1,duration_ms:5,total_cost_usd:0,result:"done"}'
+EOF
+
+cat >"$tmp/stub-args" <<EOF
+$stub_head
+printf '%s\n' "\$@" >"\$BENCH_ARGS_LOG"
 jq -nc '{type:"result",subtype:"success",is_error:false,num_turns:1,duration_ms:5,total_cost_usd:0,result:"done"}'
 EOF
 
@@ -112,6 +122,30 @@ if jq -e '.tasks | length == 1 and .[0].error == true and .[0].pass == false and
   echo "error stub:     ${all[0]} recorded as error (exit 1), not as a model fail"
 else
   bad "infra error not recorded as error: $(jq -c '.tasks' "$tmp/err.json")"
+fi
+
+BENCH_ARGS_LOG="$tmp/args-plain.txt" run_with stub-args "$tmp/args-plain.json" "${all[0]}"
+if grep -Eqx -- '--plugin-dir|--agent|--settings' "$tmp/args-plain.txt"; then
+  bad "run.sh passed --plugin-dir/--agent/--settings with BENCH_PLUGIN_DIR and BENCH_AGENT unset"
+else
+  echo "plain run:      no --plugin-dir, no --agent, no --settings"
+fi
+mkdir -p "$tmp/plugin/.claude-plugin"
+echo '{"name":"demo"}' >"$tmp/plugin/.claude-plugin/plugin.json"
+BENCH_ARGS_LOG="$tmp/args-plugin.txt" BENCH_PLUGIN_DIR="$tmp/plugin" BENCH_AGENT=demo:worker \
+  run_with stub-args "$tmp/args-plugin.json" "${all[0]}"
+if grep -A1 -x -- '--plugin-dir' "$tmp/args-plugin.txt" | grep -qx -- "$tmp/plugin" &&
+  grep -A1 -x -- '--agent' "$tmp/args-plugin.txt" | grep -qx -- 'demo:worker' &&
+  grep -A1 -x -- '--settings' "$tmp/args-plugin.txt" | grep -qx -- '{"disableAllHooks":true}' &&
+  grep -qx -- '--strict-mcp-config' "$tmp/args-plugin.txt" && grep -qx -- '--no-session-persistence' "$tmp/args-plugin.txt"; then
+  echo "plugin run:     --plugin-dir, --agent and hooks-off passed, isolation flags kept"
+else
+  bad "BENCH_PLUGIN_DIR/BENCH_AGENT not passed through: $(tr '\n' ' ' <"$tmp/args-plugin.txt")"
+fi
+if BENCH_CLAUDE="$tmp/stub-args" BENCH_PLUGIN_DIR="$tmp/no-such-plugin" bash "$here/run.sh" "$tmp/badplugin.json" m e >/dev/null 2>&1; then
+  bad "run.sh accepted a BENCH_PLUGIN_DIR without .claude-plugin/plugin.json"
+else
+  echo "bad plugin dir: run.sh aborted before any task"
 fi
 
 if BENCH_CLAUDE="$tmp/no-such-binary" bash "$here/run.sh" "$tmp/missing.json" m e >/dev/null 2>&1; then

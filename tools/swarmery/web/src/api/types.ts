@@ -1799,15 +1799,22 @@ export interface ProposalsResp {
  */
 export type ProbeChoice = 'base' | 'variant' | 'tie' | 'skipped' | 'capped' | 'no_suite';
 
-/** One proposal_probes row — one suite case, base vs variant. */
+/**
+ * Which step wrote a probe row: promptfoo — the agent's eval suite, one turn
+ * per case; bench — the frozen bench (evals/bench), a whole session per task
+ * graded by its check.sh.
+ */
+export type ProbeSource = 'promptfoo' | 'bench';
+
+/** One proposal_probes row — one suite case or bench task, base vs variant. */
 export interface ProposalProbe {
   id: number;
   proposal_id: number;
   job_id: string;
-  source: 'promptfoo' | 'bench';
-  /** The suite case's description ('' on a no_suite row). */
+  source: ProbeSource;
+  /** The suite case's description or the bench task id ('' on a no_suite row). */
   task_id: string;
-  /** Every hard assertion passed on that side; null when it did not run. */
+  /** Every hard assertion (bench: check.sh) passed on that side; null when it did not run. */
   base_pass: boolean | null;
   variant_pass: boolean | null;
   blind_choice: ProbeChoice;
@@ -1821,6 +1828,7 @@ export interface ProposalProbe {
 export interface ProbeJob {
   id: string;
   proposal_id: number;
+  source: ProbeSource;
   status: 'running' | 'done' | 'failed';
   error?: string;
   usd: number;
@@ -1832,7 +1840,10 @@ export interface ProbeJob {
 /** GET /api/improve/proposals/{id}/probes. */
 export interface ProposalProbesResp {
   proposal_id: number;
+  /** The promptfoo step's cap (SWARMERY_PROBE_MAX_USD). */
   max_usd: number;
+  /** The bench step's own cap (SWARMERY_PROBE_BENCH_MAX_USD). */
+  bench_max_usd: number;
   jobs: ProbeJob[];
   /** Newest job first, cases in run order. */
   probes: ProposalProbe[];

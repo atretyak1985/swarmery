@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 //
-// The probe table on a proposal card (harness² phase 4). The claims:
+// The probe table on a proposal card (harness² phases 4 and 6). The claims:
 //
 //   1. A probeable proposal (proposed/approved) shows the Probe button and the
 //      single-sample warning, before any run.
@@ -10,6 +10,8 @@
 //   4. A decided proposal with no rows renders nothing; with rows it shows them
 //      without a button.
 //   5. The labels and the warning are translated in uk.
+//   6. Run bench POSTs source=bench, shows its own cap, and bench rows render
+//      in their own table beside the eval-suite run.
 //
 // `npx vitest run src/pages/agent-hub/ProposalProbes.test.tsx`.
 
@@ -74,7 +76,7 @@ function row(over: Partial<ProposalProbe> = {}): ProposalProbe {
 }
 
 function resp(probes: ProposalProbe[], over: Partial<ProposalProbesResp> = {}): ProposalProbesResp {
-  return { proposal_id: 7, max_usd: 2, jobs: [], probes, ...over };
+  return { proposal_id: 7, max_usd: 2, bench_max_usd: 5, jobs: [], probes, ...over };
 }
 
 describe('ProposalProbes', () => {
@@ -102,7 +104,8 @@ describe('ProposalProbes', () => {
     await waitFor(() => expect(screen.getAllByTestId('probe-row')).toHaveLength(3));
     const choices = screen.getAllByTestId('probe-choice').map((c) => c.textContent);
     expect(choices).toEqual(['tie', 'not judged', 'capped']);
-    expect(screen.getByTestId('probe-total').textContent).toBe('$0.72');
+    expect(screen.getByTestId('probe-total-promptfoo').textContent).toBe('$0.72');
+    expect(screen.queryByTestId('probe-table-bench')).toBeNull();
     expect(screen.getByText('total · earlier runs not shown: 1')).toBeTruthy();
     expect(screen.getAllByLabelText('fail')).toHaveLength(1);
     expect(screen.getAllByLabelText('pass')).toHaveLength(3);
@@ -116,7 +119,7 @@ describe('ProposalProbes', () => {
     render(<ProposalProbes p={proposal()} />);
     const button = await screen.findByRole('button', { name: 'Probe' });
     fireEvent.click(button);
-    await waitFor(() => expect(api.startProposalProbe).toHaveBeenCalledWith(7));
+    await waitFor(() => expect(api.startProposalProbe).toHaveBeenCalledWith(7, 'promptfoo'));
     await waitFor(() => expect(api.fetchProposalProbes).toHaveBeenCalledTimes(2));
 
     api.startProposalProbe.mockRejectedValueOnce(new Error('a probe is already running for this proposal'));
@@ -126,7 +129,9 @@ describe('ProposalProbes', () => {
 
   it('shows "probing…" and a disabled button while a job runs, and the job error after', async () => {
     api.fetchProposalProbes.mockResolvedValue(
-      resp([], { jobs: [{ id: 'j', proposal_id: 7, status: 'running', usd: 0, max_usd: 2, started_at: 'x' }] }),
+      resp([], {
+        jobs: [{ id: 'j', proposal_id: 7, source: 'promptfoo', status: 'running', usd: 0, max_usd: 2, started_at: 'x' }],
+      }),
     );
     render(<ProposalProbes p={proposal()} />);
     const busy = await screen.findByRole('button', { name: 'probing…' });
@@ -135,7 +140,18 @@ describe('ProposalProbes', () => {
 
     api.fetchProposalProbes.mockResolvedValue(
       resp([], {
-        jobs: [{ id: 'j', proposal_id: 7, status: 'failed', error: 'sha256 mismatch', usd: 0, max_usd: 2, started_at: 'x' }],
+        jobs: [
+          {
+            id: 'j',
+            proposal_id: 7,
+            source: 'promptfoo',
+            status: 'failed',
+            error: 'sha256 mismatch',
+            usd: 0,
+            max_usd: 2,
+            started_at: 'x',
+          },
+        ],
       }),
     );
     render(<ProposalProbes p={proposal()} />);
@@ -155,6 +171,62 @@ describe('ProposalProbes', () => {
     expect(screen.queryByRole('button')).toBeNull();
   });
 
+  it('runs the bench with its own cap and shows bench rows in their own table', async () => {
+    api.fetchProposalProbes.mockResolvedValue(
+      resp([
+        row({ id: 9, job_id: 'probe-7-bench', source: 'bench', task_id: 'b01-bugfix', variant_pass: false, blind_choice: 'skipped', usd: 1.1 }),
+        row({ id: 10, job_id: 'probe-7-bench', source: 'bench', task_id: 'b04-stale-premise', blind_choice: 'variant', usd: 0.4 }),
+        row({ id: 3 }),
+      ]),
+    );
+    api.startProposalProbe.mockResolvedValueOnce({ id: 'probe-7-b', source: 'bench', status: 'running' });
+    render(<ProposalProbes p={proposal()} />);
+    await waitFor(() => expect(screen.getAllByTestId('probe-row')).toHaveLength(3));
+    expect(screen.getByTestId('probe-bench-cap').textContent).toBe('bench cap $5.00');
+    expect(screen.getByTestId('probe-total-bench').textContent).toBe('$1.50');
+    expect(screen.getByTestId('probe-total-promptfoo').textContent).toBe('$0.42');
+    expect(screen.getByText('frozen bench')).toBeTruthy();
+    expect(screen.getByText('task')).toBeTruthy();
+    const bench = screen.getByRole('button', { name: 'Run bench again' });
+    expect(bench.getAttribute('data-tip')).toContain('$5.00');
+    fireEvent.click(bench);
+    await waitFor(() => expect(api.startProposalProbe).toHaveBeenCalledWith(7, 'bench'));
+  });
+
+  it('marks the bench button busy while a bench job runs, and shows its error in the bench table', async () => {
+    api.fetchProposalProbes.mockResolvedValue(
+      resp([], {
+        jobs: [{ id: 'jb', proposal_id: 7, source: 'bench', status: 'running', usd: 0, max_usd: 5, started_at: 'x' }],
+      }),
+    );
+    render(<ProposalProbes p={proposal()} />);
+    const busy = await screen.findByRole('button', { name: 'running bench…' });
+    expect((busy as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole('button', { name: 'Probe' }) as HTMLButtonElement).disabled).toBe(true);
+    cleanup();
+
+    api.fetchProposalProbes.mockResolvedValue(
+      resp([], {
+        jobs: [
+          {
+            id: 'jb',
+            proposal_id: 7,
+            source: 'bench',
+            status: 'failed',
+            error: 'run.sh: jq is required',
+            usd: 0,
+            max_usd: 5,
+            started_at: 'x',
+          },
+        ],
+      }),
+    );
+    render(<ProposalProbes p={proposal()} />);
+    const table = await screen.findByTestId('probe-table-bench');
+    expect(table.textContent).toContain('run.sh: jq is required');
+    expect(screen.queryByTestId('probe-table-promptfoo')).toBeNull();
+  });
+
   it('is translated in uk', async () => {
     await act(() => activate('uk'));
     api.fetchProposalProbes.mockResolvedValue(resp([row({ blind_choice: 'no_suite', task_id: '' })]));
@@ -163,6 +235,8 @@ describe('ProposalProbes', () => {
     expect(screen.getByTestId('probe-sample-warning').textContent).toContain('Одна вибірка на кейс');
     expect(screen.getByTestId('probe-choice').textContent).toBe('немає набору');
     expect(screen.getByRole('button', { name: 'Проба ще раз' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Запустити бенч' })).toBeTruthy();
+    expect(screen.getByTestId('probe-bench-cap').textContent).toBe('ліміт бенча $5.00');
   });
 });
 
@@ -175,8 +249,11 @@ describe('helpers', () => {
     }
   });
 
-  it('latestRun keeps the first job only', () => {
+  it('latestRun keeps the first job only, of one source when given', () => {
     expect(latestRun([])).toEqual([]);
     expect(latestRun([row({ id: 2 }), row({ id: 1, job_id: 'old' })]).map((r) => r.id)).toEqual([2]);
+    const mixed = [row({ id: 5, job_id: 'b', source: 'bench' }), row({ id: 4, job_id: 'p' }), row({ id: 3, job_id: 'b0', source: 'bench' })];
+    expect(latestRun(mixed, 'bench').map((r) => r.id)).toEqual([5]);
+    expect(latestRun(mixed, 'promptfoo').map((r) => r.id)).toEqual([4]);
   });
 });

@@ -29,7 +29,13 @@ const (
 type probeTreeSource struct{}
 
 func (probeTreeSource) Export(_ context.Context, dst string, _ []string) error {
-	for rel, body := range map[string]string{probeTarget: probeBase, "evals/agents/demo.yaml": probeSuite} {
+	for rel, body := range map[string]string{
+		probeTarget: probeBase, "evals/agents/demo.yaml": probeSuite,
+		"plugins/core/.claude-plugin/plugin.json": `{"name":"core"}`,
+		"evals/bench/tasks/b01-fix/prompt.md":     "fix it",
+		"evals/bench/tasks/b01-fix/meta.json":     `{"agents":["demo"]}`,
+		"evals/bench/tasks/b02-noop/prompt.md":    "already fixed",
+	} {
 		p := filepath.Join(dst, filepath.FromSlash(rel))
 		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
 			return err
@@ -50,6 +56,15 @@ func (probeSuiteFake) RunCase(_ context.Context, tree string, c probe.Case) (pro
 	return probe.CaseRun{HardPass: pass, Task: "t", Output: filepath.Base(tree), USD: 0.01}, nil
 }
 
+// probeBenchFake: the variant fails b01-fix, both sides pass b02-noop.
+type probeBenchFake struct{ agents []string }
+
+func (f *probeBenchFake) RunTask(_ context.Context, tree string, side probe.BenchSide, t probe.BenchTask) (probe.BenchRun, error) {
+	f.agents = append(f.agents, side.Agent)
+	pass := !(filepath.Base(tree) == "variant" && t.ID == "b01-fix")
+	return probe.BenchRun{Pass: pass, USD: 0.1, Reply: "done"}, nil
+}
+
 type probeJudgeFake struct{ calls int }
 
 func (j *probeJudgeFake) Judge(context.Context, string) (string, float64, error) {
@@ -58,6 +73,12 @@ func (j *probeJudgeFake) Judge(context.Context, string) (string, float64, error)
 }
 
 func probeServer(t *testing.T) (*httptest.Server, *sql.DB, *probeJudgeFake) {
+	srv, db, judge, _ := probeServerWith(t, &probeBenchFake{})
+	return srv, db, judge
+}
+
+// probeServerWith wires bench as the bench runner (nil = not attached).
+func probeServerWith(t *testing.T, bench probe.BenchRunner) (*httptest.Server, *sql.DB, *probeJudgeFake, *probe.Service) {
 	t.Helper()
 	db, err := store.Open(filepath.Join(t.TempDir(), "probe-api.db"))
 	if err != nil {
@@ -65,15 +86,16 @@ func probeServer(t *testing.T) (*httptest.Server, *sql.DB, *probeJudgeFake) {
 	}
 	t.Cleanup(func() { db.Close() })
 	judge := &probeJudgeFake{}
-	h := &Handler{DB: db, ProposalProbe: &probe.Service{
-		DB: db, Source: probeTreeSource{}, Suite: probeSuiteFake{}, Judge: judge,
-		MaxUSD: 1, Go: func(fn func()) { fn() }, Flip: func() bool { return true },
-	}}
+	svc := &probe.Service{
+		DB: db, Source: probeTreeSource{}, Suite: probeSuiteFake{}, Judge: judge, Bench: bench,
+		MaxUSD: 1, BenchMaxUSD: 3, Go: func(fn func()) { fn() }, Flip: func() bool { return true },
+	}
+	h := &Handler{DB: db, ProposalProbe: svc}
 	mux := http.NewServeMux()
 	Routes(mux, h)
 	srv := httptest.NewServer(mux)
 	t.Cleanup(srv.Close)
-	return srv, db, judge
+	return srv, db, judge, svc
 }
 
 func seedProbeProposal(t *testing.T, db *sql.DB, agent, kind, agentPath, targetPath, status string) int64 {
@@ -206,6 +228,52 @@ func TestProposalProbeConflictWhileRunning(t *testing.T) {
 		t.Errorf("409 must name the running job: %v", body)
 	}
 	parked()
+}
+
+func TestProposalProbeBenchSource(t *testing.T) {
+	bench := &probeBenchFake{}
+	srv, db, judge, _ := probeServerWith(t, bench)
+	id := seedProbeProposal(t, db, "demo", "agent", probeTarget, "", "approved")
+	url := srv.URL + "/api/improve/proposals/" + itoa(id)
+
+	body := probePost(t, url+"/probe?source=bench", http.StatusAccepted)
+	job, _ := body["job"].(map[string]any)
+	if job == nil || job["source"] != probe.SourceBench || job["max_usd"].(float64) != 3 {
+		t.Fatalf("202 body = %v", body)
+	}
+	var out struct {
+		MaxUSD      float64     `json:"max_usd"`
+		BenchMaxUSD float64     `json:"bench_max_usd"`
+		Jobs        []probe.Job `json:"jobs"`
+		Probes      []probe.Row `json:"probes"`
+	}
+	getJSON(t, url+"/probes", &out)
+	if out.MaxUSD != 1 || out.BenchMaxUSD != 3 || len(out.Jobs) != 1 || out.Jobs[0].Source != probe.SourceBench {
+		t.Fatalf("envelope = %+v", out)
+	}
+	if len(out.Probes) != 2 {
+		t.Fatalf("one row per tagged task: %+v", out.Probes)
+	}
+	split, tie := out.Probes[0], out.Probes[1]
+	if split.Source != probe.SourceBench || split.TaskID != "b01-fix" || split.BlindChoice != probe.ChoiceSkipped ||
+		tie.TaskID != "b02-noop" || tie.BlindChoice != probe.ChoiceTie {
+		t.Errorf("rows = %+v / %+v", split, tie)
+	}
+	if judge.calls != 1 || len(bench.agents) != 4 || bench.agents[0] != "core:demo" {
+		t.Errorf("judge %d, sessions %v", judge.calls, bench.agents)
+	}
+	var status string
+	if err := db.QueryRow(`SELECT status FROM agent_change_proposals WHERE id = ?`, id).Scan(&status); err != nil {
+		t.Fatal(err)
+	}
+	if status != "approved" {
+		t.Errorf("a bench probe changed the proposal: %s", status)
+	}
+
+	probePost(t, url+"/probe?source=vibes", http.StatusBadRequest)
+	unattached, db2, _, _ := probeServerWith(t, nil)
+	id2 := seedProbeProposal(t, db2, "demo", "agent", probeTarget, "", "proposed")
+	probePost(t, unattached.URL+"/api/improve/proposals/"+itoa(id2)+"/probe?source=bench", http.StatusServiceUnavailable)
 }
 
 func TestProposalProbeUnattached(t *testing.T) {
