@@ -20,6 +20,23 @@ Two things ship from this repository on separate clocks:
 
 ### Added
 
+- **The learning loop says what it does not know (harness2 learning upgrades).**
+  Every lesson's measured effect now carries a verdict (`helped`, `hurt`,
+  `no_effect`, `confounded`, `insufficient`) with the confounders that muddied
+  it, a retirement is only proposed on `no_effect` or `hurt`, and injection
+  ranks unmeasured lessons by freshness instead of a score (#704). Lesson
+  generation returns at most one lesson with a confidence and its reason, or a
+  stated reason for none; a `low` one needs a second click (#705). Improve
+  proposals pick the cheapest form on a skill → script → subagent → hook →
+  always-on ladder, may answer KEEP_BASE, and label each hunk procedure or
+  knowledge; the parser fails a proposal that skips any of it (#706). An
+  approved proposal can be probed with its agent's promptfoo suite against the
+  base, with a blind judge only on ties and a USD cap (#709), and optionally on
+  the frozen bench through a plugin copy (#718). Two lint rules,
+  `skill_missing_helper` and `always_on_budget`, join the config linter (#707).
+  All of it is advisory: nothing activates a lesson or applies a proposal
+  without the operator.
+
 - **Criterion classes in plan docs (`core` 3.12.0).** A phase criterion that
   closes a push / PR / merge is prefixed `[LAND]`; one only a human can perform
   is `[MANUAL]`. The daemon settles a run against the executable criteria only
