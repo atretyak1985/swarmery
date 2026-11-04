@@ -48,8 +48,12 @@ MK
 # carries the "waiting" and "taking over a stale install lock" lines.
 run_install() {
 	if [ -n "${OUT:-}" ]; then
-		# DIAG: trace every recipe command (sh -x) into the per-install output.
-		make -s -C "$MK_DIR" install .SHELLFLAGS=-xc \
+		# DIAG: trace every recipe command (sh -x) into the per-install output,
+		# and every directory create/remove syscall (strace) into $OUT.strace.
+		local pre=()
+		command -v strace >/dev/null 2>&1 &&
+			pre=(strace -f -tt -qq -e 'trace=mkdir,mkdirat,rmdir,unlink,unlinkat,rename,renameat,renameat2' -o "$OUT.strace")
+		"${pre[@]}" make -s -C "$MK_DIR" install .SHELLFLAGS=-xc \
 			INSTALL_LOCK="$1" LOG="$2" \
 			INSTALL_STEP="-f $tmp/stub.mk stub" >>"$OUT" 2>&1
 		return
@@ -129,6 +133,9 @@ fi
 # step saw in the lock dir when it started.
 E_REPEAT="${E_REPEAT:-6}"
 e_fail=0
+if [ -n "${GITHUB_ACTIONS:-}" ] && ! command -v strace >/dev/null 2>&1; then
+	sudo apt-get install -y -qq strace >/dev/null 2>&1 || echo "  (strace unavailable)"
+fi
 for r in $(seq 1 "$E_REPEAT"); do
 	lock="$tmp/e$r.lock"
 	log="$tmp/e$r.log"
@@ -156,6 +163,11 @@ for r in $(seq 1 "$E_REPEAT"); do
 		sed 's/^/    /' "$tmp/e$r.out1" 2>/dev/null
 		echo "  make output, second:"
 		sed 's/^/    /' "$tmp/e$r.out2" 2>/dev/null
+		echo "  strace, first (lock path only):"
+		grep -F "e$r.lock" "$tmp/e$r.out1.strace" 2>/dev/null | sed 's/^/    /'
+		echo "  strace, second (lock path only):"
+		grep -F "e$r.lock" "$tmp/e$r.out2.strace" 2>/dev/null | sed 's/^/    /'
+		echo "  clocksource: $(cat /sys/devices/system/clocksource/clocksource0/current_clocksource 2>/dev/null)"
 		echo "  sh=$(readlink -f /bin/sh) make=$(make --version | head -1)"
 		echo "  env MAKE*: $(env | grep -E '^MAKE|^MFLAGS|^GNUMAKEFLAGS' | tr '\n' ' ')"
 		echo "  mkdir: $(type -a mkdir | tr '\n' ' ')"
