@@ -41,7 +41,7 @@ import { reverifyAction, type Reverify } from './useReverify';
  * column grew on the one line with a wide pill and pushed that line's stage, cost and
  * criteria off the header. 140px holds the widest pill, uk "позначити критерії" (137px). */
 const GRID =
-  'grid grid-cols-[18px_24px_minmax(0,1fr)_auto] gap-[10px] desk:grid-cols-[18px_24px_minmax(0,1fr)_72px_56px_48px_140px]';
+  'grid grid-cols-[18px_24px_minmax(0,1fr)_auto] gap-[10px] desk:grid-cols-[18px_24px_minmax(0,1fr)_72px_56px_64px_140px]';
 
 const PILL =
   'inline-flex items-center rounded-md border px-2 py-[3px] font-mono text-[11px] leading-[normal] whitespace-nowrap transition-colors disabled:cursor-not-allowed disabled:opacity-50';
@@ -86,8 +86,59 @@ function CostCell({ cost, maxCost, band }: { cost: number | null; maxCost: numbe
   );
 }
 
-/** Ticked of all acceptance criteria. Green once every one is ticked, brand while a
- * `[MANUAL]` one waits on a person. A link to the phase's criteria tab. */
+/** Past this many criteria one dash per criterion gets too thin to read, so the bar
+ * turns into three proportional runs in the same order. */
+const MAX_DASHES = 12;
+
+type CriterionMark = 'ticked' | 'manual' | 'open';
+
+const MARK_FILL: Record<CriterionMark, string> = {
+  ticked: 'bg-green',
+  manual: 'bg-brand',
+  open: 'bg-line',
+};
+
+/** One mark per criterion, ticked first, then the `[MANUAL]` ones that wait on a
+ * person, then the rest still open. */
+export function criterionMarks(done: number, total: number, manualOpen: number): CriterionMark[] {
+  // A phase from an older daemon may lack a count: treat it as none, never as NaN.
+  const count = (n: number | undefined): number => (Number.isFinite(n) ? Math.max(0, Math.floor(n as number)) : 0);
+  const all = count(total);
+  const ticked = Math.min(count(done), all);
+  const manual = Math.min(count(manualOpen), all - ticked);
+  return [
+    ...Array<CriterionMark>(ticked).fill('ticked'),
+    ...Array<CriterionMark>(manual).fill('manual'),
+    ...Array<CriterionMark>(all - ticked - manual).fill('open'),
+  ];
+}
+
+function CriteriaBar({ marks }: { marks: readonly CriterionMark[] }): JSX.Element {
+  if (marks.length <= MAX_DASHES) {
+    return (
+      <span data-testid="criteria-bar" aria-hidden="true" className="flex h-1 gap-[2px]">
+        {marks.map((m, i) => (
+          <span key={i} data-mark={m} className={`h-full flex-1 rounded-[1px] ${MARK_FILL[m]}`} />
+        ))}
+      </span>
+    );
+  }
+  const runs = (['ticked', 'manual', 'open'] as const)
+    .map((m) => ({ m, n: marks.filter((x) => x === m).length }))
+    .filter((r) => r.n > 0);
+  return (
+    <span data-testid="criteria-bar" aria-hidden="true" className="flex h-1 gap-[2px]">
+      {runs.map((r) => (
+        <span key={r.m} data-mark={r.m} className={`h-full rounded-[1px] ${MARK_FILL[r.m]}`} style={{ flexGrow: r.n }} />
+      ))}
+    </span>
+  );
+}
+
+/** Ticked of all acceptance criteria, over a dash per criterion: green ticked, brand
+ * for a `[MANUAL]` one that waits on a person, dim still open. The count is green once
+ * every one is ticked and brand while a `[MANUAL]` one waits. A link to the phase's
+ * criteria tab. */
 function CriteriaCell({
   phase,
   href,
@@ -111,9 +162,14 @@ function CriteriaCell({
       onClick={(e) => e.stopPropagation()}
       data-tip={tip}
       aria-label={tip}
-      className={`hidden font-mono text-[11px] leading-[normal] whitespace-nowrap underline-offset-2 hover:underline desk:block ${tone}`}
+      className="group hidden flex-col gap-[3px] desk:flex"
     >
-      {done}/{total}
+      <span
+        className={`font-mono text-[11px] leading-[normal] whitespace-nowrap underline-offset-2 group-hover:underline ${tone}`}
+      >
+        {done}/{total}
+      </span>
+      <CriteriaBar marks={criterionMarks(done, total, manualOpen)} />
     </Link>
   );
 }
