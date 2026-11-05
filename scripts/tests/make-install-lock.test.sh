@@ -9,7 +9,10 @@
 #   (b) a failing step fails the install and still releases the lock;
 #   (c) a lock held by a live pid makes install wait until it is released;
 #   (d) a lock whose pid is gone is taken over at once;
-#   (e) two concurrent installs run their steps one after the other.
+#   (e) two concurrent installs run their steps one after the other;
+#   (f) they still do when mkdir(1) reports success on EEXIST (uutils 0.10.0).
+# "Released" means the pid file is gone: the pid file is the lock, and the lock
+# directory around it is never removed.
 # Observed 2026-10-19: two sessions' installs overlapped and the second's
 # `npm ci` wiped web/node_modules under the first's vite build.
 # Run locally with `bash scripts/tests/make-install-lock.test.sh`; CI discovers
@@ -52,7 +55,7 @@ run_install() {
 # --- (a) free lock ---------------------------------------------------------
 lock="$tmp/a.lock"
 log="$tmp/a.log"
-if run_install "$lock" "$log" && grep -q '^end ' "$log" && [ ! -e "$lock" ]; then
+if run_install "$lock" "$log" && grep -q '^end ' "$log" && [ ! -e "$lock/pid" ]; then
 	ok_case
 else
 	fail_case "(a) a free lock runs the step and releases the lock"
@@ -63,7 +66,7 @@ lock="$tmp/b.lock"
 log="$tmp/b.log"
 if STUB_FAIL=1 run_install "$lock" "$log"; then
 	fail_case "(b) a failing step must fail the install"
-elif [ -e "$lock" ]; then
+elif [ -e "$lock/pid" ]; then
 	fail_case "(b) a failing step must still release the lock"
 else
 	ok_case
@@ -104,7 +107,7 @@ wait "$dead"
 mkdir "$lock"
 echo "$dead" >"$lock/pid"
 start=$(date +%s)
-if run_install "$lock" "$log" && grep -q '^end ' "$log" && [ ! -e "$lock" ] &&
+if run_install "$lock" "$log" && grep -q '^end ' "$log" && [ ! -e "$lock/pid" ] &&
 	[ $(($(date +%s) - start)) -lt 5 ]; then
 	ok_case
 else
@@ -125,10 +128,40 @@ rc2=$?
 # Serialized means the log alternates start/end/start/end: no second start
 # before the first end.
 order="$(awk '{print $1}' "$log" 2>/dev/null | tr '\n' ' ')"
-if [ "$rc1" -eq 0 ] && [ "$rc2" -eq 0 ] && [ "$order" = "start end start end " ] && [ ! -e "$lock" ]; then
+if [ "$rc1" -eq 0 ] && [ "$rc2" -eq 0 ] && [ "$order" = "start end start end " ] && [ ! -e "$lock/pid" ]; then
 	ok_case
 else
 	fail_case "(e) concurrent installs overlapped (order: $order rc=$rc1/$rc2)"
+fi
+
+# --- (f) a mkdir that always reports success cannot break the lock -----------
+# uutils coreutils 0.10.0 (Ubuntu 26.04's mkdir) exits 0 after EEXIST when two
+# processes race on one path, so (e) flaked on CI: both installs "won". The
+# shim reproduces the worst case on every OS: a mkdir that never fails. The
+# lock must not depend on it.
+shim="$tmp/shim"
+mkdir -p "$shim"
+cat >"$shim/mkdir" <<'SH'
+#!/bin/sh
+/bin/mkdir "$@" 2>/dev/null
+exit 0
+SH
+chmod +x "$shim/mkdir"
+lock="$tmp/f.lock"
+log="$tmp/f.log"
+PATH="$shim:$PATH" STUB_SLEEP=2 run_install "$lock" "$log" &
+first=$!
+PATH="$shim:$PATH" STUB_SLEEP=2 run_install "$lock" "$log" &
+second=$!
+wait "$first"
+rc1=$?
+wait "$second"
+rc2=$?
+order="$(awk '{print $1}' "$log" 2>/dev/null | tr '\n' ' ')"
+if [ "$rc1" -eq 0 ] && [ "$rc2" -eq 0 ] && [ "$order" = "start end start end " ] && [ ! -e "$lock/pid" ]; then
+	ok_case
+else
+	fail_case "(f) an always-succeeding mkdir let installs overlap (order: $order rc=$rc1/$rc2)"
 fi
 
 echo "make-install-lock: $pass passed, $fail failed"

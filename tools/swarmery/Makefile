@@ -135,11 +135,26 @@ ROUTE_INSTALL_FLAGS := $(strip \
 # per machine, not per checkout: every install replaces the same $(INSTALL_BIN)
 # and restarts the same service, and worktrees can share a lent node_modules.
 #
-# mkdir is the lock because it is atomic and macOS ships no flock. The holder's
-# pid sits in the lock dir; a lock whose pid is gone (a killed run) is taken
-# over. A lock with no pid yet is a holder between mkdir and the write, and is
-# waited on like any other. The waiter rebuilds once it gets the lock — it may
-# be on a newer commit than the run it waited for.
+# The lock is the pid file $(INSTALL_LOCK)/pid, created by the SHELL with
+# noclobber (`set -C`, an open with O_CREAT|O_EXCL in dash and bash alike):
+# exactly one racer can create it. The directory is only its container. It is
+# made with `mkdir -p` and is never removed, so no exit status of mkdir(1) is
+# trusted.
+#
+# Two reasons it is not mkdir(1) or flock. macOS ships no flock. And mkdir(1)
+# is not a lock everywhere: uutils coreutils 0.10.0, Ubuntu 26.04's default
+# mkdir, exits 0 after the mkdir syscall returned EEXIST when another process
+# created the same path at the same moment. Observed 2026-11-04 under strace on
+# the ubuntu-26.04 CI runner: `mkdir(...) = -1 EEXIST`, then `exit_group(0)`.
+# In an ubuntu:26.04 container, 104 of 300 races had both mkdirs succeed; GNU
+# mkdir had 0 of 3000. With mkdir as the lock, two installs ran at once.
+#
+# Release and takeover remove only the pid file, never the directory. A
+# `rm -rf` of the directory could delete a pid file that the next holder had
+# just created in it. A pid file whose pid is gone (a killed run) is taken over.
+# An empty one is a holder between the create and the write, and is waited on
+# like any other. The waiter rebuilds once it gets the lock — it may be on a
+# newer commit than the run it waited for.
 #
 # INSTALL_STEP is the goal run under the lock; scripts/tests/make-install-lock.test.sh
 # points it (and INSTALL_LOCK) at a cheap target to exercise the lock alone.
@@ -149,18 +164,19 @@ INSTALL_STEP := install-unlocked
 install:
 	@mkdir -p $(dir $(INSTALL_LOCK))
 	@lock='$(INSTALL_LOCK)'; \
-	while ! mkdir "$$lock" 2>/dev/null; do \
+	while :; do \
+		mkdir -p "$$lock" 2>/dev/null; \
+		if (set -C; echo $$$$ > "$$lock/pid") 2>/dev/null; then break; fi; \
 		holder=$$(cat "$$lock/pid" 2>/dev/null); \
 		if [ -n "$$holder" ] && ! kill -0 "$$holder" 2>/dev/null; then \
 			echo "→ taking over a stale install lock (pid $$holder is gone)"; \
-			rm -rf "$$lock"; \
+			rm -f "$$lock/pid"; \
 			continue; \
 		fi; \
 		echo "→ another make install holds $$lock (pid $${holder:-?}) — waiting"; \
 		sleep 5; \
 	done; \
-	echo $$$$ > "$$lock/pid"; \
-	trap 'rm -rf "$$lock"' EXIT; \
+	trap 'rm -f "$$lock/pid"' EXIT; \
 	trap 'exit 130' INT TERM; \
 	$(MAKE) --no-print-directory $(INSTALL_STEP)
 
