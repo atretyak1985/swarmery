@@ -11,7 +11,7 @@ import { MemoryRouter, useLocation } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Epic, EpicPhase, Session } from '../../api/types';
 import { cleanup, fireEvent, render, screen, within } from '../../test/render';
-import { PhaseLedger } from './PhaseLedger';
+import { PhaseLedger, criterionMarks } from './PhaseLedger';
 import { computeResolvedSeqs } from './planModel';
 
 vi.mock('../../workspace/ProjectContext', () => ({
@@ -146,12 +146,36 @@ describe('PhaseLedger', () => {
     expect(screen.getByText('criteria')).toBeTruthy();
     const full = within(line('Limiter core')).getByText('3/3');
     expect(full.className).toContain('text-green');
-    const open = within(line('Store accounts')).getByText('2/4');
-    expect(open.className).toContain('text-brand');
+    expect(within(line('Store accounts')).getByText('2/4').className).toContain('text-brand');
+    const open = within(line('Store accounts')).getByRole('link', {
+      name: '2 of 4 criteria ticked · 1 [MANUAL] wait on you',
+    });
     expect(open.getAttribute('data-tip')).toBe('2 of 4 criteria ticked · 1 [MANUAL] wait on you');
     expect(within(line('Empty')).queryByText(/\d+\/\d+/)).toBeNull();
+    expect(within(line('Empty')).queryByTestId('criteria-bar')).toBeNull();
     fireEvent.click(open);
     expect(at()).toBe('/plan/phase/4/criteria');
+  });
+
+  it('draws a dash per criterion: ticked, then [MANUAL] waiting, then still open', () => {
+    const manual = { ...base, id: 14, seq: 4, name: 'Store accounts', checkboxesDone: 2, checkboxesTotal: 4, manualOpen: 1 } as EpicPhase;
+    mount([manual]);
+    const dashes = [...within(line('Store accounts')).getByTestId('criteria-bar').children];
+    expect(dashes.map((d) => d.getAttribute('data-mark'))).toEqual(['ticked', 'ticked', 'manual', 'open']);
+    expect(dashes.map((d) => d.className.match(/bg-(green|brand|line)/)?.[1])).toEqual(['green', 'green', 'brand', 'line']);
+  });
+
+  it('folds a long criteria list into three proportional runs', () => {
+    expect(criterionMarks(13, 13, 0).every((m) => m === 'ticked')).toBe(true);
+    expect(criterionMarks(5, 3, 2)).toEqual(['ticked', 'ticked', 'ticked']);
+    const long = { ...base, id: 16, seq: 6, name: 'Long', checkboxesDone: 10, checkboxesTotal: 20, manualOpen: 4 } as EpicPhase;
+    mount([long]);
+    const runs = [...within(line('Long')).getByTestId('criteria-bar').children] as HTMLElement[];
+    expect(runs.map((r) => [r.getAttribute('data-mark'), r.style.flexGrow])).toEqual([
+      ['ticked', '10'],
+      ['manual', '4'],
+      ['open', '6'],
+    ]);
   });
 
   it('opens the phase from anywhere on its line', () => {
