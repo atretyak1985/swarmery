@@ -382,7 +382,7 @@ export function SessionRail({
       aria-label={t`session context`}
       className={
         column
-          ? `flex min-h-0 shrink-0 flex-col overflow-y-auto border-l border-line bg-bg ${collapsed ? 'w-7' : 'w-[260px]'}`
+          ? `ml-2 flex min-h-0 shrink-0 flex-col overflow-y-auto rounded-xl border border-line bg-bg ${collapsed ? 'w-7' : 'w-[260px]'}`
           : `mt-2.5 flex min-w-0 flex-[1_1_220px] flex-col self-start overflow-hidden rounded-[10px] border border-line bg-bg desk:sticky desk:top-0 ${
               collapsed ? 'desk:flex-[0_0_28px]' : ''
             }`

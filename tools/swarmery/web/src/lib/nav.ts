@@ -40,7 +40,6 @@ export type PlaceSection = 'main' | 'improve' | 'bottom';
 
 export interface Place {
   id: PlaceId;
-  glyph: string;
   /** The sidebar label in the active locale (read through i18n on every access,
    * so a locale switch shows up on the next render). */
   readonly label: string;
@@ -63,7 +62,6 @@ export function placeSegment(pathname: string): string {
 
 interface PlaceDef {
   id: PlaceId;
-  glyph: string;
   label: MessageDescriptor;
   section: PlaceSection;
   projectOnly: boolean;
@@ -76,25 +74,23 @@ interface PlaceDef {
 }
 
 const DEFS: readonly PlaceDef[] = [
-  { id: 'today', glyph: '◉', label: msg`Today`, section: 'main', projectOnly: false, path: '', segments: [''] },
+  { id: 'today', label: msg`Today`, section: 'main', projectOnly: false, path: '', segments: [''] },
   // Inbox owns /approvals too: it redirects here, and approvals/manage keeps
   // the rules + history page (phase 3).
-  { id: 'inbox', glyph: '☐', label: msg`Inbox`, section: 'main', projectOnly: false, path: 'inbox', segments: ['inbox', 'approvals'] },
-  { id: 'needs-you', glyph: '⚑', label: msg`Needs you`, section: 'main', projectOnly: false, path: 'needs-you', segments: ['needs-you'] },
-  { id: 'sessions', glyph: '❯', label: msg`Sessions`, section: 'main', projectOnly: false, path: 'sessions', segments: ['sessions'] },
+  { id: 'inbox', label: msg`Inbox`, section: 'main', projectOnly: false, path: 'inbox', segments: ['inbox', 'approvals'] },
+  { id: 'needs-you', label: msg`Needs you`, section: 'main', projectOnly: false, path: 'needs-you', segments: ['needs-you'] },
+  { id: 'sessions', label: msg`Sessions`, section: 'main', projectOnly: false, path: 'sessions', segments: ['sessions'] },
   {
     id: 'plans',
-    glyph: '❐',
     label: msg`Plans`,
     section: 'main',
     projectOnly: true,
     path: 'plans',
     segments: ['planning', 'plans', 'board', 'playbooks'],
   },
-  { id: 'health', glyph: '♡', label: msg`Health`, section: 'improve', projectOnly: false, path: 'health', segments: ['health', 'analytics', 'retro'] },
+  { id: 'health', label: msg`Health`, section: 'improve', projectOnly: false, path: 'health', segments: ['health', 'analytics', 'retro'] },
   {
     id: 'learning',
-    glyph: '✎',
     label: msg`Learning`,
     section: 'improve',
     projectOnly: false,
@@ -103,7 +99,6 @@ const DEFS: readonly PlaceDef[] = [
   },
   {
     id: 'knowledge',
-    glyph: '❖',
     label: msg`Knowledge`,
     section: 'improve',
     projectOnly: true,
@@ -115,23 +110,21 @@ const DEFS: readonly PlaceDef[] = [
   },
   // Fleet-wide docs about swarmery itself: /docs and /docs/:slug (glossary deep
   // links) exist only in the fleet shell, so the row ignores the project scope.
-  { id: 'docs', glyph: '§', label: msg`Docs`, section: 'bottom', projectOnly: false, path: 'docs', fleetOnly: true, segments: ['docs'] },
+  { id: 'docs', label: msg`Docs`, section: 'bottom', projectOnly: false, path: 'docs', fleetOnly: true, segments: ['docs'] },
   {
     id: 'system',
-    glyph: '☷',
     label: msg`System`,
     section: 'bottom',
     projectOnly: false,
     path: 'system',
     segments: ['system', 'system-hub', 'agents', 'routines'],
   },
-  { id: 'settings', glyph: '⚙', label: msg`Settings`, section: 'bottom', projectOnly: false, path: 'settings', segments: ['settings', 'projects'] },
+  { id: 'settings', label: msg`Settings`, section: 'bottom', projectOnly: false, path: 'settings', segments: ['settings', 'projects'] },
 ];
 
 function toPlace(def: PlaceDef): Place {
   return {
     id: def.id,
-    glyph: def.glyph,
     get label() {
       return i18n._(def.label);
     },

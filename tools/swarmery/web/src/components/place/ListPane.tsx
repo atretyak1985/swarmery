@@ -66,7 +66,7 @@ export function ListPane({
       aria-label={title}
       // Below `desk` the list and the detail share one scroll (D-6): shrinking here
       // would squeeze the rows away behind the detail.
-      className="flex min-h-0 min-w-0 shrink-0 flex-col bg-bg desk:shrink desk:border-r desk:border-line"
+      className="flex min-h-0 min-w-0 shrink-0 flex-col bg-bg desk:shrink desk:overflow-hidden desk:rounded-xl desk:border desk:border-line"
     >
       {collapsed && (
         <button

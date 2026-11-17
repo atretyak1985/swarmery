@@ -114,7 +114,9 @@ export function ProjectSwitcher({
             focusOption(1);
           }
         }}
-        className="flex w-full items-center gap-[7px] rounded-[7px] border border-line bg-bg px-[9px] py-1.5 text-left whitespace-nowrap transition-colors hover:border-line-strong aria-expanded:border-line-strong"
+        className={`flex w-full items-center rounded-[7px] border border-line bg-bg text-left whitespace-nowrap transition-colors hover:border-line-strong aria-expanded:border-line-strong ${
+          compact ? 'h-9 justify-center' : 'gap-[7px] px-[9px] py-1.5'
+        }`}
       >
         {/* Project swatch; All projects is the neutral grey one. */}
         <span

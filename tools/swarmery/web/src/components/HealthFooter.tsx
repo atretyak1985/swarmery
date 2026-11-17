@@ -20,7 +20,10 @@ import { LimitsPanel, limitBarClass, limitTextClass } from './usage/LimitsPanel'
 
 const POLL_MS = 60_000;
 
-const HEAD_TONE = { red: 'text-red', brand: 'text-brand', green: 'text-green', faint: 'text-ink-faint' } as const;
+// 'faint' reads text-ink-3, not text-ink-faint: this footer sits bare on the
+// sidebar's base wash (no fill of its own, D-5), and ink-faint falls short of
+// 4.5:1 there in light mode (measured 3.687:1) while ink-3 clears it (4.936:1).
+const HEAD_TONE = { red: 'text-red', brand: 'text-brand', green: 'text-green', faint: 'text-ink-3' } as const;
 
 function useTodaySpend(): number | null {
   const [cost, setCost] = useState<number | null>(null);
@@ -70,7 +73,7 @@ export function HealthFooter({ compact = false }: { compact?: boolean }): JSX.El
   );
 
   return (
-    <div className="mt-2 border-t border-line pt-1 pb-0.5 font-mono text-[10.5px] leading-[normal] text-ink-dim">
+    <div className="mt-2 border-t border-line pt-1 pb-0.5 font-mono text-[10.5px] leading-[normal] text-ink-3">
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
@@ -103,7 +106,7 @@ export function HealthFooter({ compact = false }: { compact?: boolean }): JSX.El
                   <span key={limit.name} className="grid grid-cols-[44px_minmax(0,1fr)_34px] items-center gap-2 text-[10px]">
                     <span className={`truncate ${limit.state === 'limit' ? 'text-brand' : 'text-ink-3'}`}>{limit.name}</span>
                     {bar(percent)}
-                    <span className={`text-right ${percent === null ? 'text-ink-faint' : limitTextClass(percent)}`}>
+                    <span className={`text-right ${percent === null ? 'text-ink-3' : limitTextClass(percent)}`}>
                       {percent === null ? '—' : `${String(percent)}%`}
                     </span>
                   </span>
@@ -116,7 +119,7 @@ export function HealthFooter({ compact = false }: { compact?: boolean }): JSX.El
       {/* One line, whatever the width: a wrap here lifts the whole bottom cluster.
           Health gives way, its text in the tooltip. */}
       {!compact && (
-        <div className="mt-1 flex items-center justify-end gap-2 px-2 text-ink-faint">
+        <div className="mt-1 flex items-center justify-end gap-2 px-2 text-ink-3">
         <span className="flex min-w-0 items-center justify-end gap-1">
           {MOCK ? (
             <>

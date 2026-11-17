@@ -18,10 +18,10 @@
 // palette renders OUTSIDE the <nav>: the rail is display:none below `desk`, and a
 // fixed overlay inside a hidden parent would never paint.
 //
-// Collapsed (lib/panels.ts) the rail is 52px of glyphs: every label, the language
-// and theme switches, the Improve eyebrow and the footer go. The badge moves onto
-// the glyph's corner (D-4): the design clips it there, and the Needs you count must
-// never be lost.
+// Collapsed (lib/panels.ts) the rail is 56px of icon buttons (phase 3, D-13):
+// every label, the language and theme switches, the Improve eyebrow and the
+// footer go. The badge moves onto the icon's corner (D-4): the design clips it
+// there, and the Needs you count must never be lost.
 
 import { plural } from '@lingui/core/macro';
 import { Trans, useLingui } from '@lingui/react/macro';
@@ -30,6 +30,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { fetchSessions } from '../api';
 import type { NeedsYouItem, NeedsYouKind, WSMessage } from '../api/types';
 import { ProjectSwitcher } from '../workspace/ProjectSwitcher';
+import { NavIcon } from './NavIcon';
 import { PanelIcon } from './PanelIcon';
 import { loadLastProject } from '../lib/lastProject';
 import { PLACES, placesIn, resolvePlaceHref, type Place } from '../lib/nav';
@@ -220,11 +221,13 @@ export function Sidebar({
           wider than the rail and an overflow container would clip it. */}
       <nav
         aria-label={t`primary`}
-        className={`hidden shrink-0 flex-col border-r border-line bg-surface px-[10px] py-3 transition-[width] desk:flex ${
-          collapsed ? 'w-[52px]' : 'w-[196px]'
+        className={`hidden shrink-0 flex-col pt-1.5 transition-[width] desk:flex ${
+          collapsed ? 'w-[56px] px-2' : 'w-[196px] px-0.5'
         } ${PANEL_EASE}`}
       >
-        <div className={`flex items-center px-1.5 pt-0.5 ${collapsed ? 'justify-center' : 'justify-between'}`}>
+        <div
+          className={`flex px-1.5 pt-0.5 ${collapsed ? 'flex-col items-center gap-1' : 'items-center justify-between'}`}
+        >
           <Link
             to="/"
             aria-label={slug === null ? t`swarmery home` : t`back to all projects`}
@@ -233,7 +236,7 @@ export function Sidebar({
             {/* i18n-ignore — the product's name */}
             {collapsed ? 's' : 'swarmery'}
           </Link>
-          <span className="flex items-center gap-0.5">
+          <span className={`flex items-center gap-0.5 ${collapsed ? 'flex-col' : ''}`}>
             {/* The toggle is 26px tall; the row stays the design's 22px. */}
             {!collapsed && (
               <span className="-my-0.5 mr-0.5">
@@ -245,7 +248,7 @@ export function Sidebar({
               onClick={() => togglePanel('nav')}
               aria-label={navToggleLabel}
               data-tip={navToggleLabel}
-              className="grid h-[22px] w-[22px] place-items-center rounded-[5px] text-ink-dim transition-colors hover:bg-surface2 hover:text-ink"
+              className="grid h-[22px] w-[22px] place-items-center rounded-[5px] text-ink-3 transition-colors hover:bg-surface2 hover:text-ink"
             >
               <PanelIcon side="left" />
             </button>
@@ -255,7 +258,7 @@ export function Sidebar({
                 onClick={toggleTheme}
                 aria-label={t`theme`}
                 data-tip={t`theme · t`}
-                className="h-[22px] w-[22px] rounded-[5px] text-[12px] leading-none text-ink-dim transition-colors hover:bg-surface2 hover:text-ink"
+                className="h-[22px] w-[22px] rounded-[5px] text-[12px] leading-none text-ink-3 transition-colors hover:bg-surface2 hover:text-ink"
               >
                 {theme === 'dark' ? '☾' : '☀'}
               </button>
@@ -271,18 +274,18 @@ export function Sidebar({
           />
         </div>
         <div className="mt-4 flex min-h-0 flex-1 flex-col overflow-y-auto">
-          <div className="flex flex-col gap-px">{placesIn('main').map(row)}</div>
-          <div className="mt-[18px] flex flex-col gap-px">
+          <div className={`flex flex-col ${collapsed ? 'gap-1' : 'gap-px'}`}>{placesIn('main').map(row)}</div>
+          <div className={`mt-[18px] flex flex-col ${collapsed ? 'gap-1' : 'gap-px'}`}>
             {/* Section eyebrow — the mono micro-label idiom, rail-sized. */}
             {!collapsed && (
-              <div className="px-2 pb-1.5 font-mono text-[9.5px] leading-[normal] tracking-[0.12em] text-ink-faint uppercase">
+              <div className="px-2 pb-1.5 font-mono text-[9.5px] leading-[normal] tracking-[0.12em] text-ink-3 uppercase">
                 <Trans>Improve</Trans>
               </div>
             )}
             {placesIn('improve').map(row)}
           </div>
           {!collapsed && children}
-          <div className="mt-auto flex flex-col gap-px pt-[18px]">
+          <div className={`mt-auto flex flex-col pt-[18px] ${collapsed ? 'gap-1' : 'gap-px'}`}>
             {placesIn('bottom').map(row)}
             <button
               type="button"
@@ -290,16 +293,23 @@ export function Sidebar({
               aria-haspopup="dialog"
               aria-label={collapsed ? t`Search & actions` : undefined}
               data-tip={t`jump to anything, or type a task and dispatch it`}
-              className="flex w-full items-center gap-2 rounded-[7px] px-2 py-1.5 text-[13px] leading-[normal] font-medium text-ink-dim transition-colors hover:bg-surface2/50 hover:text-ink"
+              className={`flex items-center text-[13px] leading-[normal] font-medium text-ink-3 transition-colors hover:bg-surface2/50 hover:text-ink ${
+                collapsed ? 'h-10 w-10 justify-center rounded-[10px]' : 'w-full gap-2 rounded-[7px] px-2 py-1.5'
+              }`}
             >
-              {/* i18n-ignore — the shortcut as printed on the keyboard */}
-              <span aria-hidden="true" className="w-4 shrink-0 text-center font-mono text-[11px] text-ink-faint">
-                ⌘K
+              <span aria-hidden="true" className="shrink-0">
+                <NavIcon name="search" size={collapsed ? 20 : 16} />
               </span>
               {!collapsed && (
-                <span className="flex-1 text-left">
-                  <Trans>Search &amp; actions</Trans>
-                </span>
+                <>
+                  <span className="flex-1 text-left">
+                    <Trans>Search &amp; actions</Trans>
+                  </span>
+                  {/* i18n-ignore — the shortcut as printed on the keyboard */}
+                  <span aria-hidden="true" className="shrink-0 font-mono text-[11px] text-ink-3">
+                    ⌘K
+                  </span>
+                </>
               )}
             </button>
             <HealthFooter compact={collapsed} />
@@ -337,7 +347,7 @@ function SidebarRow({
   active: boolean;
   badge: number | null;
   live: boolean;
-  /** The collapsed rail: glyph only, the badge on its corner. */
+  /** The collapsed rail: icon only, the badge on its corner. */
   compact: boolean;
 }): JSX.Element {
   const { t } = useLingui();
@@ -345,7 +355,7 @@ function SidebarRow({
   const label = place.label;
   // Amber is for what blocks: Inbox blocks nothing, so its badge stays grey.
   const urgent = place.id === 'needs-you' || place.id === 'sessions';
-  const glyphTone = active && place.section !== 'bottom' ? 'text-brand' : 'text-ink-faint';
+  const iconTone = active && place.section !== 'bottom' ? 'text-brand' : 'text-ink-3';
   const waiting =
     badge === null
       ? null
@@ -362,20 +372,22 @@ function SidebarRow({
       }
       data-tip={compact ? (hint ?? label) : undefined}
       title={compact ? undefined : hint}
-      className={`relative flex shrink-0 items-center gap-2 rounded-[7px] px-2 py-1.5 text-[13px] leading-[normal] font-medium transition-colors ${
-        active ? 'bg-surface2 text-ink' : 'text-ink-dim hover:bg-surface2/50 hover:text-ink'
-      }`}
+      className={`relative flex shrink-0 items-center text-[13px] leading-[normal] font-medium transition-colors ${
+        compact ? 'h-10 w-10 justify-center rounded-[10px]' : 'gap-2 rounded-[7px] px-2 py-1.5'
+      } ${active ? 'bg-surface2 text-ink' : 'text-ink-3 hover:bg-surface2/50 hover:text-ink'}`}
     >
-      <span aria-hidden="true" className={`w-4 shrink-0 text-center font-mono text-[12px] ${glyphTone}`}>
-        {place.glyph}
+      <span aria-hidden="true" className={`shrink-0 ${compact ? '' : 'w-4 text-center'} ${iconTone}`}>
+        <NavIcon name={place.id} size={compact ? 20 : 16} />
       </span>
       {!compact && <span className="min-w-0 flex-1 truncate">{label}</span>}
       {badge !== null && (
         <span
           aria-label={compact ? undefined : (waiting ?? undefined)}
           className={`rounded-full font-mono font-bold ${
-            compact ? 'absolute top-0 right-0 px-[3px] text-[9px] leading-3' : 'px-1.5 text-[10px] leading-4'
-          } ${urgent ? 'bg-brand-bg text-brand' : 'bg-surface2 text-ink-dim'}`}
+            compact
+              ? 'absolute -top-1 -right-1 flex h-[15px] min-w-[15px] items-center justify-center border-[1.5px] border-base px-[3px] text-[9px] leading-none'
+              : 'px-1.5 text-[10px] leading-4'
+          } ${urgent ? 'bg-brand-bg text-brand' : compact ? 'bg-line-strong text-ink' : 'bg-surface2 text-ink-dim'}`}
         >
           {badge}
         </span>
@@ -426,7 +438,9 @@ export function MobileNav({
                 active ? 'border-line-strong bg-surface2 text-brand' : 'border-transparent text-ink-dim'
               }`}
             >
-              <span aria-hidden="true">{place.glyph}</span>
+              <span aria-hidden="true">
+                <NavIcon name={place.id} size={14} />
+              </span>
               {place.label}
             </Link>
           );
@@ -450,8 +464,8 @@ export function MobileNav({
               active ? 'font-medium text-brand' : 'text-ink-faint hover:text-ink'
             }`}
           >
-            <span className="relative text-[17px] leading-none" aria-hidden="true">
-              {place.glyph}
+            <span className="relative leading-none" aria-hidden="true">
+              <NavIcon name={place.id} size={20} />
               {badgeFor(place, inboxCount, needsYouCount, 0) !== null && (
                 <span className="absolute -top-0.5 -right-1.5 h-[6px] w-[6px] rounded-full bg-amber" />
               )}

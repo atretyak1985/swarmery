@@ -258,7 +258,7 @@ describe('SessionRail', () => {
   it('as a column takes 260px, a strip 28px, and keeps its header in reach', () => {
     renderRail({}, 3, '/sessions/1', true);
     expect(rail().className).toContain('w-[260px]');
-    expect(rail().className).not.toContain('rounded');
+    expect(rail().className).toContain('rounded-xl');
     expect(screen.getByText(/what surrounds this session/).parentElement?.className).toContain('sticky');
     fireEvent.click(screen.getByRole('button', { name: 'collapse context · \\' }));
     expect(rail().className).toContain('w-7');
