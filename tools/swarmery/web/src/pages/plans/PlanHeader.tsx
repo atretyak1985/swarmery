@@ -334,7 +334,7 @@ export function PlanHeader({
   return (
     // `contents`: the band sticks against the whole plan, not this element.
     <header className="contents">
-      <DetailHeader bleed flush banner={banner}>
+      <DetailHeader flush banner={banner}>
         <div className="flex flex-wrap items-start gap-5">
           <div className="min-w-0 flex-[1_1_360px]">
             <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 font-mono text-[10.5px] leading-[normal] text-ink-faint">
