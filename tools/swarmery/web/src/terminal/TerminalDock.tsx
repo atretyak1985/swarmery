@@ -6,6 +6,7 @@
 // reload restores the workspace. The heavy xterm bundle is lazy-loaded: the
 // XTerm wrapper is only fetched when the dock first renders a tab.
 
+import { Trans } from '@lingui/react/macro';
 import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { TermStatus, XTermHandle } from './XTerm';
 
@@ -140,14 +141,8 @@ export function TerminalDock({
     : Math.min(height, Math.round(window.innerHeight * 0.75));
 
   return (
-    <div
-      className="flex shrink-0 flex-col border-t border-line bg-bg"
-      style={{ height: fullscreen ? '75vh' : effHeight }}
-      hidden={view.hidden}
-      role="region"
-      aria-label="terminal dock"
-    >
-      {/* Resize handle (hidden in fullscreen). */}
+    <div className="flex shrink-0 flex-col" hidden={view.hidden} role="region" aria-label="terminal dock">
+      {/* Resize handle: the 8px gap above the island (hidden in fullscreen). */}
       {!fullscreen && (
         <div
           onPointerDown={onHandleDown}
@@ -156,131 +151,140 @@ export function TerminalDock({
           role="separator"
           aria-orientation="horizontal"
           aria-label="resize terminal"
-          className="h-1 cursor-row-resize bg-transparent hover:bg-brand/40"
+          className="h-2 shrink-0 cursor-row-resize bg-transparent hover:bg-brand/40"
         />
       )}
 
-      {/* Tab strip + toolbar. */}
-      <div className="flex items-center gap-1 border-b border-line px-2 py-1">
-        <div className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto">
-          {state.tabs.map((tab) => {
-            const active = tab.id === state.activeId;
-            const st = statusById[tab.id];
-            return (
+      <div
+        className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-line bg-bg"
+        style={{ height: fullscreen ? '75vh' : effHeight }}
+      >
+        {/* Header: the dock's own tone, a mono "terminal" caption, then the tab
+            strip + toolbar. */}
+        <div className="flex items-center gap-1.5 border-b border-line bg-surface2 px-2 py-1">
+          <span className="shrink-0 font-mono text-[10px] text-ink-2 uppercase tracking-[0.12em]">
+            <Trans>terminal</Trans>
+          </span>
+          <div className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto">
+            {state.tabs.map((tab) => {
+              const active = tab.id === state.activeId;
+              const st = statusById[tab.id];
+              return (
+                <div
+                  key={tab.id}
+                  className={`group flex shrink-0 items-center gap-1.5 rounded-md border px-2 py-0.5 font-mono text-[10.5px] ${
+                    active ? 'border-line-strong bg-surface2 text-ink' : 'border-transparent text-ink-dim'
+                  }`}
+                >
+                  <button
+                    type="button"
+                    onClick={() => onChange({ ...state, activeId: tab.id })}
+                    className="flex items-center gap-1.5"
+                  >
+                    <span
+                      aria-hidden="true"
+                      className={`inline-block h-[6px] w-[6px] rounded-full ${
+                        st === 'open' ? 'bg-green' : st === 'closed' ? 'bg-red' : 'bg-amber'
+                      }`}
+                    />
+                    <span className="max-w-[140px] truncate">{tab.label}</span>
+                  </button>
+                  <button
+                    type="button"
+                    aria-label={`close ${tab.label}`}
+                    onClick={() => closeTab(tab.id)}
+                    className="text-ink-faint transition-colors hover:text-red"
+                  >
+                    ×
+                  </button>
+                </div>
+              );
+            })}
+            <button
+              type="button"
+              aria-label="new terminal"
+              onClick={newProjectTab}
+              className="shrink-0 rounded-md border border-line px-1.5 py-0.5 font-mono text-[11px] text-ink-dim transition-colors hover:border-line-strong hover:text-ink"
+            >
+              +
+            </button>
+          </div>
+
+          {/* Toolbar: font − / size / +, Clear, fullscreen, close-all. */}
+          <div className="flex shrink-0 items-center gap-1 font-mono text-[10.5px] text-ink-dim">
+            <button
+              type="button"
+              aria-label="decrease font size"
+              disabled={fontSize <= FONT_MIN}
+              onClick={() => setFontSize((f) => Math.max(FONT_MIN, f - 1))}
+              className="rounded border border-line px-1.5 py-0.5 transition-colors hover:text-ink disabled:opacity-40"
+            >
+              A−
+            </button>
+            <span className="w-7 text-center tabular-nums">{fontSize}px</span>
+            <button
+              type="button"
+              aria-label="increase font size"
+              disabled={fontSize >= FONT_MAX}
+              onClick={() => setFontSize((f) => Math.min(FONT_MAX, f + 1))}
+              className="rounded border border-line px-1.5 py-0.5 transition-colors hover:text-ink disabled:opacity-40"
+            >
+              A+
+            </button>
+            <button
+              type="button"
+              onClick={() => termRefs.current.get(state.activeId ?? '')?.clear()}
+              className="rounded border border-line px-2 py-0.5 transition-colors hover:text-ink"
+            >
+              Clear
+            </button>
+            <button
+              type="button"
+              aria-label={fullscreen ? 'restore terminal' : 'maximize terminal'}
+              onClick={() => setFullscreen((v) => !v)}
+              className="rounded border border-line px-1.5 py-0.5 transition-colors hover:text-ink"
+            >
+              {fullscreen ? '▽' : '△'}
+            </button>
+            <button
+              type="button"
+              aria-label="close all terminals"
+              onClick={closeAll}
+              className="rounded border border-line px-2 py-0.5 transition-colors hover:text-ink"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+
+        {/* Panes: every tab is kept mounted (its PTY stays live); only the active
+            one is visible so switching tabs doesn't kill the shell. */}
+        <div className="relative min-h-0 flex-1 bg-[#0b0d10]">
+          <Suspense
+            fallback={<div className="p-3 font-mono text-[11px] text-ink-faint">loading terminal…</div>}
+          >
+            {state.tabs.map((tab) => (
               <div
                 key={tab.id}
-                className={`group flex shrink-0 items-center gap-1.5 rounded-md border px-2 py-0.5 font-mono text-[10.5px] ${
-                  active ? 'border-line-strong bg-surface2 text-ink' : 'border-transparent text-ink-dim'
-                }`}
+                className="absolute inset-0 p-1.5"
+                style={{ visibility: tab.id === state.activeId ? 'visible' : 'hidden' }}
+                aria-hidden={tab.id !== state.activeId}
               >
-                <button
-                  type="button"
-                  onClick={() => onChange({ ...state, activeId: tab.id })}
-                  className="flex items-center gap-1.5"
-                >
-                  <span
-                    aria-hidden="true"
-                    className={`inline-block h-[6px] w-[6px] rounded-full ${
-                      st === 'open' ? 'bg-green' : st === 'closed' ? 'bg-red' : 'bg-amber'
-                    }`}
-                  />
-                  <span className="max-w-[140px] truncate">{tab.label}</span>
-                </button>
-                <button
-                  type="button"
-                  aria-label={`close ${tab.label}`}
-                  onClick={() => closeTab(tab.id)}
-                  className="text-ink-faint transition-colors hover:text-red"
-                >
-                  ×
-                </button>
+                <XTerm
+                  ref={(h) => {
+                    termRefs.current.set(tab.id, h);
+                  }}
+                  cwd={tab.cwd}
+                  fontSize={fontSize}
+                  onStatus={(s) => setStatus(tab.id, s)}
+                />
               </div>
-            );
-          })}
-          <button
-            type="button"
-            aria-label="new terminal"
-            onClick={newProjectTab}
-            className="shrink-0 rounded-md border border-line px-1.5 py-0.5 font-mono text-[11px] text-ink-dim transition-colors hover:border-line-strong hover:text-ink"
-          >
-            +
-          </button>
+            ))}
+          </Suspense>
+          {activeTab === null && (
+            <div className="p-3 font-mono text-[11px] text-ink-faint">no terminal open</div>
+          )}
         </div>
-
-        {/* Toolbar: font − / size / +, Clear, fullscreen, close-all. */}
-        <div className="flex shrink-0 items-center gap-1 font-mono text-[10.5px] text-ink-dim">
-          <button
-            type="button"
-            aria-label="decrease font size"
-            disabled={fontSize <= FONT_MIN}
-            onClick={() => setFontSize((f) => Math.max(FONT_MIN, f - 1))}
-            className="rounded border border-line px-1.5 py-0.5 transition-colors hover:text-ink disabled:opacity-40"
-          >
-            A−
-          </button>
-          <span className="w-7 text-center tabular-nums">{fontSize}px</span>
-          <button
-            type="button"
-            aria-label="increase font size"
-            disabled={fontSize >= FONT_MAX}
-            onClick={() => setFontSize((f) => Math.min(FONT_MAX, f + 1))}
-            className="rounded border border-line px-1.5 py-0.5 transition-colors hover:text-ink disabled:opacity-40"
-          >
-            A+
-          </button>
-          <button
-            type="button"
-            onClick={() => termRefs.current.get(state.activeId ?? '')?.clear()}
-            className="rounded border border-line px-2 py-0.5 transition-colors hover:text-ink"
-          >
-            Clear
-          </button>
-          <button
-            type="button"
-            aria-label={fullscreen ? 'restore terminal' : 'maximize terminal'}
-            onClick={() => setFullscreen((v) => !v)}
-            className="rounded border border-line px-1.5 py-0.5 transition-colors hover:text-ink"
-          >
-            {fullscreen ? '▽' : '△'}
-          </button>
-          <button
-            type="button"
-            aria-label="close all terminals"
-            onClick={closeAll}
-            className="rounded border border-line px-2 py-0.5 transition-colors hover:text-ink"
-          >
-            Close
-          </button>
-        </div>
-      </div>
-
-      {/* Panes: every tab is kept mounted (its PTY stays live); only the active
-          one is visible so switching tabs doesn't kill the shell. */}
-      <div className="relative min-h-0 flex-1 bg-[#0b0d10]">
-        <Suspense
-          fallback={<div className="p-3 font-mono text-[11px] text-ink-faint">loading terminal…</div>}
-        >
-          {state.tabs.map((tab) => (
-            <div
-              key={tab.id}
-              className="absolute inset-0 p-1.5"
-              style={{ visibility: tab.id === state.activeId ? 'visible' : 'hidden' }}
-              aria-hidden={tab.id !== state.activeId}
-            >
-              <XTerm
-                ref={(h) => {
-                  termRefs.current.set(tab.id, h);
-                }}
-                cwd={tab.cwd}
-                fontSize={fontSize}
-                onStatus={(s) => setStatus(tab.id, s)}
-              />
-            </div>
-          ))}
-        </Suspense>
-        {activeTab === null && (
-          <div className="p-3 font-mono text-[11px] text-ink-faint">no terminal open</div>
-        )}
       </div>
     </div>
   );

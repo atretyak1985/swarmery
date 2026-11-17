@@ -57,6 +57,7 @@ const INCLUDE: Record<CatalogName, string[]> = {
   shared: [
     '<rootDir>/src/components',
     '<rootDir>/src/workspace',
+    '<rootDir>/src/terminal',
     '<rootDir>/src/App.tsx',
     `${P}/Settings.tsx`,
     `${P}/settings`,

@@ -4285,6 +4285,10 @@ msgstr "Tasks captured from sessions and routines land here — Run, Plan or Dis
 msgid "telemetry-only"
 msgstr "telemetry-only"
 
+#: src/terminal/TerminalDock.tsx
+msgid "terminal"
+msgstr "terminal"
+
 #: src/workspace/StatusBar.tsx
 msgid "Terminal"
 msgstr "Terminal"
