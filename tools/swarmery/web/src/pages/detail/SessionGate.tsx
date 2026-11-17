@@ -251,7 +251,7 @@ export function SessionGate({
           asks
             ? canCompose
               ? t`your pick is pasted as the reply`
-              : t`running in a terminal · answer there, or stop it to reply here`
+              : t`running in a terminal without link control · answer there, turn on swarmery-link's "control" option, or stop it to reply here`
             : t`a denial stops the session · the transcript stays`
         }
       />

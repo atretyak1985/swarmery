@@ -1596,6 +1596,10 @@ msgstr "не доставлено: {reason}"
 msgid "not sent: {msg}"
 msgstr "не надіслано: {msg}"
 
+#: src/pages/detail/CommandInput.tsx
+msgid "not sent: this terminal session takes no messages from here. Turn on swarmery-link's \"control\" option (new sessions pick it up), or Stop it to take over."
+msgstr "не надіслано: ця термінальна сесія не приймає повідомлень звідси. Увімкніть опцію \"control\" у swarmery-link (діє для нових сесій) або зупиніть сесію, щоб перейняти її."
+
 #: src/pages/NeedsYou.tsx
 msgid "note — recorded with the answer in the phase doc (optional)"
 msgstr "нотатка — запишеться з відповіддю в документ фази (необов'язково)"
@@ -1792,6 +1796,10 @@ msgstr "власна відповідь — замість варіанта"
 #: src/pages/NeedsYou.tsx
 msgid "own answer…"
 msgstr "власна відповідь…"
+
+#: src/pages/NeedsYou.tsx
+msgid "own reply — overrides the selection"
+msgstr "своя відповідь — замість вибраної"
 
 #: src/pages/ProjectSettings.tsx
 msgid "path"
@@ -2106,6 +2114,10 @@ msgid "Reply to this session…  (Enter to send · Shift+Enter for a new line)"
 msgstr "Відповісти в цій сесії…  (Enter — надіслати · Shift+Enter — новий рядок)"
 
 #: src/pages/NeedsYou.tsx
+msgid "reply: {ownHead}"
+msgstr "відповідь: {ownHead}"
+
+#: src/pages/NeedsYou.tsx
 msgid "reply: {typed}"
 msgstr "відповісти: {typed}"
 
@@ -2170,8 +2182,8 @@ msgid "Running clean — nothing stopped, nothing waiting on you."
 msgstr "Працює чисто — нічого не зупинилося, ніщо на вас не чекає."
 
 #: src/pages/detail/SessionGate.tsx
-msgid "running in a terminal · answer there, or stop it to reply here"
-msgstr "працює в терміналі · дайте відповідь там або зупиніть, щоб відповісти тут"
+msgid "running in a terminal without link control · answer there, turn on swarmery-link's \"control\" option, or stop it to reply here"
+msgstr "працює в терміналі без керування через link · відповідайте там, увімкніть опцію \"control\" у swarmery-link або зупиніть, щоб відповісти тут"
 
 #: src/pages/detail/Timeline.tsx
 msgid "running…"
@@ -2253,8 +2265,8 @@ msgid "session is running in a terminal — a message is delivered when the curr
 msgstr "сесія працює в терміналі — повідомлення буде доставлено, щойно завершиться поточний хід."
 
 #: src/pages/detail/CommandInput.tsx
-msgid "session is running in a terminal — Stop it to take over and continue the conversation here."
-msgstr "сесія працює в терміналі — натисніть «Стоп», щоб перебрати її й продовжити розмову тут."
+msgid "session is running in a terminal without link control — turn on swarmery-link's \"control\" option, or Stop it to take over and continue the conversation here."
+msgstr "сесія працює в терміналі без керування через link — увімкніть опцію \"control\" у swarmery-link або зупиніть її, щоб перейняти й продовжити розмову тут."
 
 #: src/pages/detail/SessionPane.tsx
 msgid "session outcome"
@@ -2821,6 +2833,10 @@ msgstr "ви"
 #: src/pages/detail/SessionGate.tsx
 msgid "your pick is pasted as the reply"
 msgstr "ваш вибір піде як відповідь"
+
+#: src/pages/NeedsYou.tsx
+msgid "your reply to the session"
+msgstr "ваша відповідь сесії"
 
 #: src/pages/detail/CallTree.tsx
 msgid "Σ tokens"

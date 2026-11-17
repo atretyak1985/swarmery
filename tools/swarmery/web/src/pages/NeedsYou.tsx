@@ -11,9 +11,11 @@
 //                        here restarts it
 //   prod_deploy_local    the terminal: no allow and no deny, the daemon hands a
 //                        production deploy to the session's own terminal
-//   awaiting_reply       the suggested replies as a radio list, sent to the session
-//                        or copied as `[<session>] Re: <question>`; Dismiss hides
-//                        this blocking episode in this browser
+//   awaiting_reply       the suggested replies as a radio list and a field for your
+//                        own, sent to the session (the daemon resumes a stopped one
+//                        and queues it on a live one's link mod) or copied as
+//                        `[<session>] Re: <question>`; Dismiss hides this blocking
+//                        episode in this browser
 //   failed               a link to the session
 //   manual_phase         a link to the phase's Criteria tab
 //   awaiting_merge       a link to the phase's Review tab and, once open, the PR
@@ -441,7 +443,7 @@ function QuestionDecision({
   );
 }
 
-/* ----- awaiting_reply: reply, copy, dismiss ----- */
+/* ----- awaiting_reply: reply (a pick or your own words), copy, dismiss ----- */
 
 function ReplyDecision({ ctx }: { ctx: CardContext }): JSX.Element {
   const { t } = useLingui();
@@ -449,6 +451,7 @@ function ReplyDecision({ ctx }: { ctx: CardContext }): JSX.Element {
   const options = item.suggestion?.options ?? [];
   const recommended = options.indexOf(item.suggestion?.recommended ?? '');
   const [pick, setPick] = useState(Math.max(recommended, 0));
+  const [own, setOwn] = useState('');
   const [copied, setCopied] = useState<'ok' | 'failed' | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(
@@ -466,11 +469,17 @@ function ReplyDecision({ ctx }: { ctx: CardContext }): JSX.Element {
     });
   };
 
-  const picked = options[pick] ?? null;
-  const copyPick = (): void => copy(picked === null ? replyPrefix(item) : replyWithOption(item, picked));
+  // Your own words override the selection, as on a question card.
+  const typed = own.trim();
+  const picked = typed === '' ? (options[pick] ?? null) : null;
+  const answer = typed === '' ? picked : typed;
+  const ownHead = typed.length > 40 ? `${typed.slice(0, 40)}…` : typed;
+  const copyPick = (): void => copy(answer === null ? replyPrefix(item) : replyWithOption(item, answer));
+  // The daemon routes it: a resume for a stopped session, the link mod's queue
+  // for one live in a terminal; when neither can take it, its reason is the
+  // error line.
   const primary = (): void => {
-    if (picked === null) copyPick();
-    else run(() => sendSessionMessage(item.sessionId, picked));
+    if (answer !== null) run(() => sendSessionMessage(item.sessionId, answer), () => setOwn(''));
   };
   useCardKeys(ctx, ctx.dismiss);
 
@@ -488,10 +497,22 @@ function ReplyDecision({ ctx }: { ctx: CardContext }): JSX.Element {
           : { id: String(i), label },
       )}
       picked={picked === null ? null : String(pick)}
-      onPick={(id) => setPick(Number(id))}
+      onPick={(id) => {
+        setPick(Number(id));
+        setOwn('');
+      }}
+      note={{
+        value: own,
+        onChange: setOwn,
+        placeholder: options.length > 0 ? t`own reply — overrides the selection` : t`your reply to the session`,
+      }}
       primaryRef={ctx.primaryRef}
-      primary={{ label: picked === null ? t`copy reply` : t`reply`, onClick: primary, disabled: busy }}
-      {...(picked === null ? {} : { extra: { label: t`copy reply`, onClick: copyPick } })}
+      primary={{
+        label: typed === '' ? t`reply` : t`reply: ${ownHead}`,
+        onClick: primary,
+        disabled: busy || answer === null,
+      }}
+      extra={{ label: t`copy reply`, onClick: copyPick }}
       secondary={{ label: t`dismiss`, onClick: ctx.dismiss }}
       {...(copied === null
         ? { link: sessionLink(ctx, t`session →`) }

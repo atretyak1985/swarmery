@@ -16,8 +16,10 @@
 //     running turn ends. Stop aborts the running turn only (the session stays
 //     open, like Esc in the terminal) — ending the process is the header's kill.
 //   • live terminal process without a link → nothing can deliver the message
-//     while it runs. The box stays editable (draft now), Send is off, and Stop
-//     SIGTERMs the process (POST /api/sessions/{id}/kill) to take it over.
+//     while it runs. The box stays editable (draft now), Send is off, Enter
+//     keeps the draft and says why it did not go (the mod's `control` option, or
+//     Stop), and Stop SIGTERMs the process (POST /api/sessions/{id}/kill) to
+//     take it over.
 //
 // Gating on the live PROCESS (not the time-based status) means a session that
 // merely reads "active" because we just appended to it stays writable.
@@ -136,11 +138,16 @@ export function CommandInput({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [busy]);
 
+  const blockedReason = t`not sent: this terminal session takes no messages from here. Turn on swarmery-link's "control" option (new sessions pick it up), or Stop it to take over.`;
+
   const submit = (): void => {
     const trimmed = text.trim();
     if (trimmed === '' || sending) return;
     switch (mode) {
       case 'blocked':
+        // Nothing can deliver it: say so in red rather than swallow the Enter.
+        // The draft stays in the box for when the session can take it.
+        setError(blockedReason);
         return;
       case 'queue':
         setQueue((q) => [...q, trimmed]);
@@ -201,7 +208,7 @@ export function CommandInput({
 
   const hint =
     mode === 'blocked'
-      ? t`session is running in a terminal — Stop it to take over and continue the conversation here.`
+      ? t`session is running in a terminal without link control — turn on swarmery-link's "control" option, or Stop it to take over and continue the conversation here.`
       : mode === 'queue'
         ? t`a reply is being generated — messages you send now are queued and go out when it finishes.`
         : mode === 'link'
