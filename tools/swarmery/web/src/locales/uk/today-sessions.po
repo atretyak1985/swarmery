@@ -423,8 +423,8 @@ msgid "a pause is a feature, not a failure"
 msgstr "пауза — це задум, а не збій"
 
 #: src/pages/detail/CommandInput.tsx
-msgid "a reply is being generated — Stop to cancel it."
-msgstr "відповідь генерується — «Стоп», щоб скасувати."
+msgid "a reply is being generated — messages you send now are queued and go out when it finishes."
+msgstr "відповідь генерується — повідомлення, які ви надсилаєте зараз, стають у чергу й підуть, щойно вона завершиться."
 
 #: src/pages/detail/SessionRail.tsx
 msgid "account"
@@ -938,6 +938,10 @@ msgstr "Завершено сьогодні"
 #: src/pages/Projects.tsx
 msgid "down vs previous week"
 msgstr "менше, ніж минулого тижня"
+
+#: src/pages/detail/CommandInput.tsx
+msgid "draft a reply · it can be sent once the terminal session stops"
+msgstr "чернетка відповіді · її можна надіслати, щойно сесія в терміналі зупиниться"
 
 #: src/pages/detail/CallTree.tsx
 msgid "duration"
@@ -1991,9 +1995,21 @@ msgstr "Докази →"
 msgid "proven"
 msgstr "доведено"
 
+#: src/pages/detail/CommandInput.tsx
+msgid "Queue"
+msgstr "У чергу"
+
 #: src/pages/detail/SessionPane.tsx
 msgid "queue a message · delivered after this step"
 msgstr "поставити повідомлення в чергу · надійде після цього кроку"
+
+#: src/pages/detail/CommandInput.tsx
+msgid "queued"
+msgstr "у черзі"
+
+#: src/pages/detail/CommandInput.tsx
+msgid "Queued messages"
+msgstr "Повідомлення в черзі"
 
 #: src/pages/sessions/SwarmPanel.tsx
 msgid "queued, waiting for the mod to pick it up"
@@ -2052,6 +2068,10 @@ msgstr "Відхилити"
 msgid "release with no decision — the native selector renders in the terminal (E12d/E12e)"
 msgstr "відпустити без рішення — рідний селектор з’явиться в терміналі (E12d/E12e)"
 
+#: src/pages/detail/CommandInput.tsx
+msgid "Remove queued message"
+msgstr "Прибрати повідомлення з черги"
+
 #: src/pages/NeedsYou.tsx
 msgid "Remove selected"
 msgstr "Видалити вибрані"
@@ -2082,8 +2102,8 @@ msgid "reply to resume from the saved conversation"
 msgstr "відповідь відновить сесію зі збереженої розмови"
 
 #: src/pages/detail/CommandInput.tsx
-msgid "Reply to this session…  (⌘/Ctrl+Enter to send)"
-msgstr "Відповісти цій сесії…  (⌘/Ctrl+Enter — надіслати)"
+msgid "Reply to this session…  (Enter to send · Shift+Enter for a new line)"
+msgstr "Відповісти в цій сесії…  (Enter — надіслати · Shift+Enter — новий рядок)"
 
 #: src/pages/NeedsYou.tsx
 msgid "reply: {typed}"
@@ -2229,8 +2249,8 @@ msgid "Session end"
 msgstr "Кінець сесії"
 
 #: src/pages/detail/CommandInput.tsx
-msgid "session in progress…"
-msgstr "сесія триває…"
+msgid "session is running in a terminal — a message is delivered when the current turn ends."
+msgstr "сесія працює в терміналі — повідомлення буде доставлено, щойно завершиться поточний хід."
 
 #: src/pages/detail/CommandInput.tsx
 msgid "session is running in a terminal — Stop it to take over and continue the conversation here."

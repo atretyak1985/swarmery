@@ -10,9 +10,11 @@
 
 import { describe, expect, it } from 'vitest';
 import {
+  CLAUDE_COMMAND,
   type DockState,
   dockView,
   emptyDock,
+  openClaudeTerminal,
   openProjectTerminal,
   openWorktreeTerminal,
   toggleDock,
@@ -76,5 +78,31 @@ describe('dockView', () => {
     // mount MUST remain true: unmounting closes the WebSocket and kills the shell.
     expect(view.mount).toBe(true);
     expect(view.hidden).toBe(true);
+  });
+});
+
+describe('openClaudeTerminal', () => {
+  it('opens and focuses a project tab that runs claude', () => {
+    const next = openClaudeTerminal(emptyDock(), PATH);
+    expect(next.open).toBe(true);
+    expect(next.tabs).toHaveLength(1);
+    expect(next.tabs[0]).toMatchObject({ cwd: PATH, run: CLAUDE_COMMAND, label: 'Claude Code' });
+    expect(next.activeId).toBe(next.tabs[0].id);
+  });
+
+  it('opens a new tab on every click and numbers the later ones', () => {
+    const shell = openProjectTerminal(emptyDock(), PATH);
+    const first = openClaudeTerminal(shell, PATH);
+    const second = openClaudeTerminal({ ...first, tabs: first.tabs.map((t, i) => ({ ...t, id: `x${i}` })) }, PATH);
+    expect(second.tabs).toHaveLength(3);
+    expect(second.tabs[2].label).toBe('Claude Code (2)');
+    expect(second.tabs[0].run).toBeUndefined();
+  });
+
+  it('reveals a collapsed dock without dropping live tabs', () => {
+    const shell = { ...openProjectTerminal(emptyDock(), PATH), open: false };
+    const next = openClaudeTerminal(shell, PATH);
+    expect(next.open).toBe(true);
+    expect(next.tabs[0]).toBe(shell.tabs[0]);
   });
 });
