@@ -423,8 +423,8 @@ msgid "a pause is a feature, not a failure"
 msgstr "a pause is a feature, not a failure"
 
 #: src/pages/detail/CommandInput.tsx
-msgid "a reply is being generated — Stop to cancel it."
-msgstr "a reply is being generated — Stop to cancel it."
+msgid "a reply is being generated — messages you send now are queued and go out when it finishes."
+msgstr "a reply is being generated — messages you send now are queued and go out when it finishes."
 
 #: src/pages/detail/SessionRail.tsx
 msgid "account"
@@ -938,6 +938,10 @@ msgstr "Done today"
 #: src/pages/Projects.tsx
 msgid "down vs previous week"
 msgstr "down vs previous week"
+
+#: src/pages/detail/CommandInput.tsx
+msgid "draft a reply · it can be sent once the terminal session stops"
+msgstr "draft a reply · it can be sent once the terminal session stops"
 
 #: src/pages/detail/CallTree.tsx
 msgid "duration"
@@ -1991,9 +1995,21 @@ msgstr "Proof →"
 msgid "proven"
 msgstr "proven"
 
+#: src/pages/detail/CommandInput.tsx
+msgid "Queue"
+msgstr "Queue"
+
 #: src/pages/detail/SessionPane.tsx
 msgid "queue a message · delivered after this step"
 msgstr "queue a message · delivered after this step"
+
+#: src/pages/detail/CommandInput.tsx
+msgid "queued"
+msgstr "queued"
+
+#: src/pages/detail/CommandInput.tsx
+msgid "Queued messages"
+msgstr "Queued messages"
 
 #: src/pages/sessions/SwarmPanel.tsx
 msgid "queued, waiting for the mod to pick it up"
@@ -2052,6 +2068,10 @@ msgstr "Reject"
 msgid "release with no decision — the native selector renders in the terminal (E12d/E12e)"
 msgstr "release with no decision — the native selector renders in the terminal (E12d/E12e)"
 
+#: src/pages/detail/CommandInput.tsx
+msgid "Remove queued message"
+msgstr "Remove queued message"
+
 #: src/pages/NeedsYou.tsx
 msgid "Remove selected"
 msgstr "Remove selected"
@@ -2082,8 +2102,8 @@ msgid "reply to resume from the saved conversation"
 msgstr "reply to resume from the saved conversation"
 
 #: src/pages/detail/CommandInput.tsx
-msgid "Reply to this session…  (⌘/Ctrl+Enter to send)"
-msgstr "Reply to this session…  (⌘/Ctrl+Enter to send)"
+msgid "Reply to this session…  (Enter to send · Shift+Enter for a new line)"
+msgstr "Reply to this session…  (Enter to send · Shift+Enter for a new line)"
 
 #: src/pages/NeedsYou.tsx
 msgid "reply: {typed}"
@@ -2229,8 +2249,8 @@ msgid "Session end"
 msgstr "Session end"
 
 #: src/pages/detail/CommandInput.tsx
-msgid "session in progress…"
-msgstr "session in progress…"
+msgid "session is running in a terminal — a message is delivered when the current turn ends."
+msgstr "session is running in a terminal — a message is delivered when the current turn ends."
 
 #: src/pages/detail/CommandInput.tsx
 msgid "session is running in a terminal — Stop it to take over and continue the conversation here."

@@ -38,6 +38,10 @@ export interface PendingSend {
    * are the explained ones: a live process, a removed run worktree, a branch
    * that no longer exists. */
   reason?: string | undefined;
+  /** How long this bubble may wait for its turn before it reads as failed.
+   * Absent = the default 2-minute window; a prompt handed to the link mod
+   * waits for the running turn to finish, so it gets the mod's prompt TTL. */
+  staleMs?: number | undefined;
 }
 
 /* ----- one row of the transcript ----- */

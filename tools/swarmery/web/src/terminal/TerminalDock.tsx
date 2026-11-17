@@ -16,6 +16,30 @@ export interface TermTab {
   id: string;
   label: string;
   cwd: string;
+  /**
+   * A command typed into the shell once its PTY connects (e.g. `claude` for a
+   * Claude Code tab). It goes through the shell like a keystroke, so the
+   * daemon's PTY protocol is unchanged and exiting the command drops back to
+   * the shell. It replays when a reload restores the tab.
+   */
+  run?: string;
+}
+
+/** The command a "Claude Code" dock tab runs in its shell. */
+export const CLAUDE_COMMAND = 'claude';
+/** Tab label for a Claude Code tab — a product name, never translated. */
+const CLAUDE_LABEL = 'Claude Code';
+
+/** The ✳ glyph + "Claude Code" button content, shared by the dock and the StatusBar. */
+export function ClaudeCodeLabel(): JSX.Element {
+  return (
+    <>
+      <span aria-hidden="true" className="text-[#d97757]">
+        ✳
+      </span>
+      {CLAUDE_LABEL}
+    </>
+  );
 }
 
 /** Dock state the layout owns (so the TaskModal can push a worktree tab). */
@@ -107,6 +131,11 @@ export function TerminalDock({
     // TaskModal). Fall back to the first tab's cwd only if the path is unknown.
     const cwd = projectPath !== '' ? projectPath : (state.tabs[0]?.cwd ?? '');
     openTab({ id, label: `shell ${state.tabs.length + 1}`, cwd });
+  };
+  const newClaudeTab = (): void => {
+    const cwd = projectPath !== '' ? projectPath : (state.tabs[0]?.cwd ?? '');
+    if (cwd === '') return;
+    onChange(openClaudeTerminal(state, cwd));
   };
   const closeTab = (id: string): void => {
     const remaining = state.tabs.filter((t) => t.id !== id);
@@ -207,8 +236,17 @@ export function TerminalDock({
           </button>
         </div>
 
-        {/* Toolbar: font − / size / +, Clear, fullscreen, close-all. */}
+        {/* Toolbar: Claude Code, font − / size / +, Clear, fullscreen, close-all. */}
         <div className="flex shrink-0 items-center gap-1 font-mono text-[10.5px] text-ink-dim">
+          <button
+            type="button"
+            aria-label="open Claude Code in a new terminal"
+            title="Open Claude Code in a new terminal tab"
+            onClick={newClaudeTab}
+            className="flex items-center gap-1 rounded border border-line px-2 py-0.5 text-ink transition-colors hover:border-line-strong"
+          >
+            <ClaudeCodeLabel />
+          </button>
           <button
             type="button"
             aria-label="decrease font size"
@@ -272,6 +310,7 @@ export function TerminalDock({
                   termRefs.current.set(tab.id, h);
                 }}
                 cwd={tab.cwd}
+                initialInput={tab.run}
                 fontSize={fontSize}
                 onStatus={(s) => setStatus(tab.id, s)}
               />
@@ -322,6 +361,18 @@ export function openProjectTerminal(state: DockState, projectPath: string): Dock
   const id = `t-${Date.now().toString(36)}`;
   const label = `shell ${state.tabs.length + 1}`;
   return { open: true, tabs: [...state.tabs, { id, label, cwd: projectPath }], activeId: id };
+}
+
+/**
+ * Open a fresh Claude Code tab in `cwd`: a project shell that runs `claude` as
+ * soon as it connects (the WebStorm "Claude Code" terminal button). Every click
+ * opens a new tab — parallel Claude sessions are a normal workflow.
+ */
+export function openClaudeTerminal(state: DockState, cwd: string): DockState {
+  const id = `t-${Date.now().toString(36)}`;
+  const n = state.tabs.filter((t) => t.run === CLAUDE_COMMAND).length;
+  const label = n === 0 ? CLAUDE_LABEL : `${CLAUDE_LABEL} (${n + 1})`;
+  return { open: true, tabs: [...state.tabs, { id, label, cwd, run: CLAUDE_COMMAND }], activeId: id };
 }
 
 /** Open a worktree terminal for a task, deduped by cwd (focus if already open). */

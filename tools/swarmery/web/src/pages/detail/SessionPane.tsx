@@ -368,6 +368,7 @@ function BackLink({ to }: { to: string }): JSX.Element {
 /** A pending bubble is abandoned to `failed` if no matching turn arrives within
  * this window (also the spec's reconcile horizon). */
 const PENDING_STALE_MS = 120_000;
+const staleWindow = (p: PendingSend): number => p.staleMs ?? PENDING_STALE_MS;
 /** Re-poll cadence while a spawned run has not written its transcript yet. */
 const PENDING_RUN_POLL_MS = 2_000;
 
@@ -563,12 +564,12 @@ export function SessionPane({
       let changed = false;
       const next: PendingSend[] = [];
       for (const p of prev) {
-        const matched = nowAt - p.sentAt < PENDING_STALE_MS && userTexts.has(p.text.trim());
+        const matched = nowAt - p.sentAt < staleWindow(p) && userTexts.has(p.text.trim());
         if (matched) {
           changed = true; // reconciled away
           continue;
         }
-        if (p.state === 'pending' && nowAt - p.sentAt >= PENDING_STALE_MS) {
+        if (p.state === 'pending' && nowAt - p.sentAt >= staleWindow(p)) {
           changed = true;
           next.push({ ...p, state: 'failed' });
           continue;
@@ -583,17 +584,20 @@ export function SessionPane({
   // failed resume produces no WS activity), re-evaluating once a pending bubble
   // could cross the window. Cheap: only runs while something is pending.
   useEffect(() => {
-    if (!pending.some((p) => p.state === 'pending')) return;
+    const waiting = pending.filter((p) => p.state === 'pending');
+    if (waiting.length === 0) return;
+    const startedAt = Date.now();
+    const nextDue = Math.min(...waiting.map((p) => p.sentAt + staleWindow(p) - startedAt));
     const timer = setTimeout(() => {
       const nowAt = Date.now();
       setPending((prev) =>
         prev.map((p) =>
-          p.state === 'pending' && nowAt - p.sentAt >= PENDING_STALE_MS
+          p.state === 'pending' && nowAt - p.sentAt >= staleWindow(p)
             ? { ...p, state: 'failed' }
             : p,
         ),
       );
-    }, PENDING_STALE_MS + 500);
+    }, Math.max(0, nextDue) + 500);
     return () => clearTimeout(timer);
   }, [pending]);
 
@@ -773,10 +777,10 @@ export function SessionPane({
   );
   useLiveUpdates(onMessage, load);
 
-  const onSent = useCallback((text: string): void => {
+  const onSent = useCallback((text: string, staleMs?: number): void => {
     setPending((p) => [
       ...p,
-      { key: crypto.randomUUID(), text, state: 'pending', sentAt: Date.now() },
+      { key: crypto.randomUUID(), text, state: 'pending', sentAt: Date.now(), staleMs },
     ]);
   }, []);
 
@@ -1278,6 +1282,7 @@ export function SessionPane({
                   sessionId={detail.id}
                   procState={detail.procState}
                   resumeInFlight={detail.resumeInFlight ?? false}
+                  linkControllable={detail.link?.controllable === true}
                   onSent={onSent}
                   onSendFailed={onSendFailed}
                   placeholder={placeholder}
