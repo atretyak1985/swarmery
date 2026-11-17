@@ -453,4 +453,3 @@ func (s *Service) stopAnsweredSinceBlock(phaseID int64, info phaseInfo) bool {
 func answerContinuesBranch(d store.Decision) bool {
 	return phasediag.AnswerContinuesBranch(d.GuardJSON, d.Answer)
 }
-
