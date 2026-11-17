@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/mdfence"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/phasediag"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/runcore"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/store"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/wsingest"
@@ -445,25 +446,11 @@ func (s *Service) stopAnsweredSinceBlock(phaseID int64, info phaseInfo) bool {
 
 // answerContinuesBranch reports whether decided decision d's answer lets the
 // re-run build on the stopped run's branch (stopAnsweredSinceBlock).
+//
+// The rule lives in phasediag.AnswerContinuesBranch so the diagnosis modal
+// applies the same one: a guard check flagged only by refused attempts left
+// nothing protected on the branch, and then any answer continues.
 func answerContinuesBranch(d store.Decision) bool {
-	rec := decodeStopRecord(d.GuardJSON)
-	if rec.Stop == nil {
-		return strings.HasPrefix(d.Answer, guardAnswerAllow)
-	}
-	if !rec.GuardResult.Flagged() {
-		return true
-	}
-	return stopAnswerOption(d.Answer) == GuardOptionAllow
+	return phasediag.AnswerContinuesBranch(d.GuardJSON, d.Answer)
 }
 
-// stopAnswerOption is the option id a stop's recorded answer chose: `<id>` or
-// `<id> — <note>` (answerStopDecision), "" for the operator's own words
-// (`other: <text>`). Option ids are bare tokens (mdfence.ValidOptionID), so the
-// id cannot itself contain the separator.
-func stopAnswerOption(answer string) string {
-	if strings.HasPrefix(answer, mdfence.StopOptionOther+": ") {
-		return ""
-	}
-	id, _, _ := strings.Cut(answer, " — ")
-	return id
-}

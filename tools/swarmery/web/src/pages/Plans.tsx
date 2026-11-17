@@ -584,6 +584,8 @@ export function Plans(): JSX.Element {
               ? null
               : reverifyAction(outcomePhase, reverify, (id) => reverify.start(activeEpic.taskId, id), i18n)
           }
+          decision={outcomePhase?.guardDecision ?? null}
+          onChanged={reload}
           onOpenRevisions={() => {
             setOutcomeFor(null);
             go({ plan: activeEpic.externalId, detail: { kind: 'plan', tab: 'revisions' } });

@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/mdfence"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/phasediag"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/store"
 )
 
@@ -449,5 +450,38 @@ func TestStopStageIgnoresPlainBlocksAndDoneRuns(t *testing.T) {
 	s.stopStage(p1, info, "done", "done", "", GuardResult{})
 	if ds, _ := store.ListTaskDecisions(s.DB, taskID); len(ds) != 0 {
 		t.Fatalf("decisions = %+v, want none", ds)
+	}
+}
+
+// phasediag spells the guard's allow answers itself (it cannot import this
+// package); they must stay the ones this package records.
+func TestAnswerContinuesBranchConstantsParity(t *testing.T) {
+	if phasediag.GuardOptionAllowID != GuardOptionAllow || phasediag.GuardAnswerAllowPrefix != guardAnswerAllow ||
+		mdfence.StopOptionOther+": " != "other: " {
+		t.Fatalf("phasediag allow constants drifted from phaserun's")
+	}
+}
+
+// A guard check flagged ONLY by refused attempts left nothing protected on the
+// branch (the hook blocked the write), so an agent option answers the stop and
+// the re-run continues on the stopped run's commits — the live case where the
+// executor's Bash ticks of its own plan copy were refused.
+func TestStopOnRefusalsOnlyContinuesOnAnyAnswer(t *testing.T) {
+	refused := GuardResult{HasGuard: true, ProtectedPaths: []string{"scripts/tests/**/*"},
+		GuardBlocks: []GuardLogLine{{Tool: "Bash", Path: ".swarmery/plan/phase-1-frame.md", Reason: "implicit"}}}
+	if !refused.Flagged() {
+		t.Fatal("premise: refusals alone flag the run")
+	}
+	s, r, _, taskID, p1, _ := stopService(t)
+	seedBlockedStop(t, s, r, p1, mdfence.StopTriggerCriterionImpossible, refused)
+	if _, err := AnswerGuardDecision(s.DB, taskID, p1, "D-1", GuardAnswer{Option: "skip-it"}, answerAt(t)); err != nil {
+		t.Fatal(err)
+	}
+	info, err := s.loadPhase(p1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !s.stopAnsweredSinceBlock(p1, info) {
+		t.Fatal("an agent option on a refusals-only stop must let the re-run continue on its branch")
 	}
 }

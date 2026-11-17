@@ -4217,6 +4217,17 @@ export type PhaseVerifyVerdict = 'pass' | 'fail' | 'inconclusive';
 /** One reason a phase did not progress — mirrors phasediag.Blocker. */
 export interface PhaseBlocker {
   kind:
+    /** the last run stopped (an agent `kind: stop` block, or the guard check) and
+     *  waits on an answer nobody gave yet — `decisionId` / `trigger` name it
+     *  (phasediag.KindDecisionOpen). Always emitted first. */
+    | 'decision-open'
+    /** the phase's own branch holds the stopped run's commits and an open decision
+     *  is what they wait on: answering lets a retry continue on them, so deleting
+     *  is the destructive alternative, not the fix (phasediag.KindBranchAwaitsDecision). */
+    | 'branch-awaits-decision'
+    /** the blocked run's stop was answered since, and the answer lets the next run
+     *  build on the branch — a retry continues on it (phasediag.KindBranchContinues). */
+    | 'branch-continues'
     | 'dep-incomplete'
     | 'dep-unmerged'
     | 'branch-blocks-retry'
@@ -4234,6 +4245,11 @@ export interface PhaseBlocker {
      *  landed (or it was `inconclusive`) — the ABSENCE of a grade, not a grade
      *  against the work (phasediag.KindUnverified). */
     | 'unverified'
+    /** the work landed, but its record did not — an empty Completion Report
+     *  (phasediag.KindUnreported). */
+    | 'unreported'
+    /** ADVISORY: the plan has no lesson recorded; blocks nothing (phasediag.KindNoLesson). */
+    | 'no-lesson'
     | 'no-criteria'
     /** a swarm/phase-<id> branch whose id matches no phase row: work stranded under
      *  a previous id generation. A legitimate delete target, but only through the
@@ -4247,6 +4263,12 @@ export interface PhaseBlocker {
    *  client-side. Omitted on every other kind (Go `omitempty`). */
   branch?: string;
   commitsAhead?: number;
+  /** Branch kinds: the branch the counts were measured against — what the
+   *  inspect/merge commands run against. Absent from an older daemon. */
+  base?: string;
+  /** decision-open only: the open decision's `D-n` and the stop's trigger. */
+  decisionId?: string;
+  trigger?: string;
 }
 
 /** The executor's own last word — mirrors phasediag.AgentMessage. */
