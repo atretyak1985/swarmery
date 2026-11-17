@@ -187,7 +187,7 @@ describe('phase doc model chip', () => {
   // A full ID is as legal in the doc as a short name; the chip shortens it for
   // display exactly the way RunModelChip does.
   it('shortens a full model ID', async () => {
-    epics = [epic([phase({ docModel: 'claude-fable-5-1' })])];
+    epics = [epic([phase({ docModel: 'claude-fable-5-2' })])];
     await mountPlans();
     expect(docChip()?.textContent).toBe('doc: fable');
   });

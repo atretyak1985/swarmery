@@ -315,7 +315,7 @@ func TestStart_Model(t *testing.T) {
 	}{
 		{"default", "", DefaultModel},
 		{"short name", "sonnet", "claude-sonnet-5"},
-		{"full id", "claude-fable-5-1", "claude-fable-5-1"},
+		{"full id", "claude-fable-5-2", "claude-fable-5-2"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			db := testDB(t)

@@ -20,6 +20,12 @@ Two things ship from this repository on separate clocks:
 
 ### Added
 
+- **Fable 5.2 is the current fable.** The planner's and the phase-run picker's
+  `fable` now resolve to `claude-fable-5-2`, the dashboard labels say 5.2, and
+  `claude-fable-5-2` renders as `fable` (5.1 keeps rendering for history).
+  core 3.28.2: `model-tier.sh` takes the bare `fable` alias as generation 52, so
+  a session pinned to `fable` that lands on 5.1 reads as a fallback.
+
 - **The learning loop says what it does not know (harness2 learning upgrades).**
   Every lesson's measured effect now carries a verdict (`helped`, `hurt`,
   `no_effect`, `confounded`, `insufficient`) with the confounders that muddied

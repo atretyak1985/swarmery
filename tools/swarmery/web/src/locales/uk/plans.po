@@ -1149,8 +1149,8 @@ msgstr "дорого змінити"
 
 #: src/pages/PlanningMode.tsx
 #: src/pages/plans/PhaseRunPickers.tsx
-msgid "fable 5.1 — most capable, ~2.5× cost"
-msgstr "fable 5.1 — найсильніша, ~2,5× вартості"
+msgid "fable 5.2 — most capable, ~2.5× cost"
+msgstr "fable 5.2 — найсильніша, ~2,5× вартості"
 
 #: src/pages/plans/phaseChips.tsx
 #: src/pages/plans/PlanDetailPanel.tsx

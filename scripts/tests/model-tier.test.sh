@@ -85,6 +85,12 @@ upgrade   "claude-fable-5-1" "claude-opus-5-5"  no
 upgrade   "claude-opus-5-5"  "claude-fable-5-1" yes
 upgrade   "claude-opus-5-5"  "fable"            yes
 upgrade   "claude-fable-5"   "claude-fable-5-1" yes
+upgrade   "claude-fable-5-1" "claude-fable-5-2" yes
+upgrade   "claude-opus-5-5"  "claude-fable-5-2" yes
+downgrade "claude-fable-5-2" "claude-fable-5-1" yes   # same family: generation decides
+# The bare alias is the CURRENT fable (5.2), so 5.1 under it is an older generation.
+downgrade "fable"            "claude-fable-5-1" yes
+downgrade "fable"            "claude-fable-5-2" no
 upgrade   "claude-sonnet-5"  "claude-opus-5-5"  yes
 upgrade   "claude-opus-5"    "claude-opus-5-5"  yes
 # Two families on ONE tier are not ordered at all — silence both ways.

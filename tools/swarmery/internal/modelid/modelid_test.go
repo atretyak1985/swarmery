@@ -17,6 +17,7 @@ func TestFamilyAndGeneration(t *testing.T) {
 		{"claude-sonnet-4-6", "sonnet", 46},
 		{"claude-haiku-4-5-20251001", "haiku", 45},
 		{"claude-fable-5-1", "fable", 51},
+		{"claude-fable-5-2", "fable", 52},
 		{"claude-mythos-5", "mythos", 50},
 		{"anthropic/claude-opus-5-5", "opus", 55},
 		// Pre-Opus-5 word order, where the version comes BEFORE the family.
@@ -122,6 +123,9 @@ func TestIsFallbackAcrossFamilies(t *testing.T) {
 		{"claude-mythos-5", "claude-fable-5-1", false},
 		{"claude-fable-5-1", "claude-fable-5", true},
 		{"claude-fable-5", "claude-fable-5-1", false},
+		{"claude-fable-5-2", "claude-fable-5-1", true},
+		{"claude-fable-5-1", "claude-fable-5-2", false},
+		{"claude-opus-5-5", "claude-fable-5-2", false},
 	}
 	for _, tc := range cases {
 		if got := IsFallback(tc.from, tc.to); got != tc.want {
