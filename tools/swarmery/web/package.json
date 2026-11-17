@@ -18,8 +18,8 @@
     "screenshots": "node scripts/screenshot.mjs"
   },
   "dependencies": {
-    "@lingui/core": "6.11.0",
-    "@lingui/react": "6.11.0",
+    "@lingui/core": "6.12.0",
+    "@lingui/react": "6.12.0",
     "@xterm/addon-fit": "^0.11.0",
     "@xterm/xterm": "^6.0.0",
     "@xyflow/react": "^12.12.0",
@@ -32,11 +32,11 @@
   "devDependencies": {
     "@babel/core": "8.0.10",
     "@biomejs/biome": "^2.6.4",
-    "@lingui/babel-plugin-lingui-macro": "6.11.0",
-    "@lingui/cli": "6.11.0",
-    "@lingui/conf": "6.11.0",
-    "@lingui/format-po": "6.11.0",
-    "@lingui/vite-plugin": "6.11.0",
+    "@lingui/babel-plugin-lingui-macro": "6.12.0",
+    "@lingui/cli": "6.12.0",
+    "@lingui/conf": "6.12.0",
+    "@lingui/format-po": "6.12.0",
+    "@lingui/vite-plugin": "6.12.0",
     "@rolldown/plugin-babel": "0.2.4",
     "@tailwindcss/vite": "^4.3.3",
     "@testing-library/react": "^16.3.3",
