@@ -116,7 +116,7 @@ var ErrUnknownEffort = errors.New("unknown effort")
 var Models = map[string]string{
 	"opus":   DefaultModel,
 	"sonnet": "claude-sonnet-5",
-	"fable":  "claude-fable-5-1",
+	"fable":  "claude-fable-5-2",
 }
 
 // ErrUnknownModel: the requested model is neither a short name nor a full ID

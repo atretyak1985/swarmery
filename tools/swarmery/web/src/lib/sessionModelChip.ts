@@ -28,6 +28,8 @@ const MODEL_SHORT_NAMES: Record<string, string> = {
   // and a historical row must keep rendering as "opus".
   'claude-opus-5': 'opus',
   'claude-sonnet-5': 'sonnet',
+  'claude-fable-5-2': 'fable',
+  // Kept past the 5.2 cutover: sessions recorded before it still carry this id.
   'claude-fable-5-1': 'fable',
 };
 

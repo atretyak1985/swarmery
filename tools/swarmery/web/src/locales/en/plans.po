@@ -1149,8 +1149,8 @@ msgstr "expensive to change"
 
 #: src/pages/PlanningMode.tsx
 #: src/pages/plans/PhaseRunPickers.tsx
-msgid "fable 5.1 — most capable, ~2.5× cost"
-msgstr "fable 5.1 — most capable, ~2.5× cost"
+msgid "fable 5.2 — most capable, ~2.5× cost"
+msgstr "fable 5.2 — most capable, ~2.5× cost"
 
 #: src/pages/plans/phaseChips.tsx
 #: src/pages/plans/PlanDetailPanel.tsx

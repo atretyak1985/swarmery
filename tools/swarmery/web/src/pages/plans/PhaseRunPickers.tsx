@@ -49,7 +49,7 @@ const PHASE_RUN_MODELS = [
   // ~2.5x, not ~2x: fable 5 is $10/$50 per MTok against opus 5.5's $4/$20
   // (tools/swarmery/config/pricing.json). The old figure was measured against
   // opus 5, which cost $5/$25 — opus 5.5 got cheaper and the comparison moved.
-  { value: 'fable', label: msg`fable 5.1 — most capable, ~2.5× cost` },
+  { value: 'fable', label: msg`fable 5.2 — most capable, ~2.5× cost` },
 ] as const;
 export type PhaseRunModel = (typeof PHASE_RUN_MODELS)[number]['value'];
 const DEFAULT_PHASE_RUN_MODEL: PhaseRunModel = 'default';
@@ -138,6 +138,8 @@ const MODEL_SHORT_NAMES: Record<string, string> = {
   // sessions.model, and a historical row must keep rendering as "opus".
   'claude-opus-5': 'opus',
   'claude-sonnet-5': 'sonnet',
+  'claude-fable-5-2': 'fable',
+  // Kept past the 5.2 cutover: runs recorded before it still carry this id.
   'claude-fable-5-1': 'fable',
 };
 

@@ -46,7 +46,7 @@ func TestStart_DocModelUsedWhenRequestHasNone(t *testing.T) {
 func TestStart_DocModelAcceptsFullID(t *testing.T) {
 	db, _, p1, _ := fixture(t)
 	t.Setenv(modelEnv, "")
-	mustExec(t, db, `UPDATE epic_phases SET doc_model='claude-fable-5-1' WHERE id=?`, p1)
+	mustExec(t, db, `UPDATE epic_phases SET doc_model=? WHERE id=?`, planning.Models["fable"], p1)
 	r := &stubRunner{}
 	s := newTestService(db, r, &stubWt{})
 
