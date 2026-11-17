@@ -4556,6 +4556,10 @@ msgstr "Сюди потрапляють задачі, захоплені із с
 msgid "telemetry-only"
 msgstr "лише телеметрія"
 
+#: src/terminal/TerminalDock.tsx
+msgid "terminal"
+msgstr "термінал"
+
 #: src/workspace/StatusBar.tsx
 msgid "Terminal"
 msgstr "Термінал"

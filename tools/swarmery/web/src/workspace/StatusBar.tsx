@@ -86,7 +86,7 @@ export function StatusBar({
   };
 
   return (
-    <div className="flex h-9 shrink-0 items-center gap-4 border-t border-line bg-bg px-4 font-mono text-[10.5px] text-ink-dim">
+    <div className="flex h-9 shrink-0 items-center gap-4 border-t border-line bg-bg px-4 font-mono text-[10.5px] text-ink-dim desk:border-t-0 desk:bg-transparent desk:px-1.5 desk:text-ink-3">
       <span className="flex items-center gap-1.5">
         <Dot className="bg-ink-faint" />
         <Trans>Waiting {waiting}</Trans>
@@ -122,7 +122,7 @@ export function StatusBar({
             className={`flex items-center gap-1 rounded-md border px-2 py-0.5 text-[10px] transition-colors ${
               terminalOpen
                 ? 'border-line-strong bg-surface2 text-ink'
-                : 'border-line text-ink-dim hover:border-line-strong hover:text-ink'
+                : 'border-line text-ink-dim hover:border-line-strong hover:text-ink desk:text-ink-3'
             }`}
           >
             <span aria-hidden="true">❯_</span>
@@ -153,7 +153,7 @@ export function StatusBar({
                 disabled={busy}
                 onClick={togglePause}
                 aria-label={projectPaused ? t`resume this project` : t`pause this project`}
-                className="rounded-md border border-line px-2 py-0.5 text-[10px] text-ink-dim transition-colors hover:border-line-strong hover:text-ink disabled:opacity-50"
+                className="rounded-md border border-line px-2 py-0.5 text-[10px] text-ink-dim transition-colors hover:border-line-strong hover:text-ink disabled:opacity-50 desk:text-ink-3"
               >
                 {projectPaused ? t`resume` : t`pause`}
               </button>
@@ -161,7 +161,7 @@ export function StatusBar({
           </>
         )}
         {health !== null && (
-          <span className="text-ink-faint" title={versionTitle(health)}>
+          <span className="text-ink-dim desk:text-ink-3" title={versionTitle(health)}>
             {versionLabel(health)}
           </span>
         )}
