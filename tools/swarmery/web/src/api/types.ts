@@ -4269,6 +4269,11 @@ export interface PhaseBlocker {
   /** decision-open only: the open decision's `D-n` and the stop's trigger. */
   decisionId?: string;
   trigger?: string;
+  /** decision-open / branch-awaits-decision: protected files the stopped run's
+   *  branch changed. Empty or absent ⇒ any answer lets a retry continue on the
+   *  branch; non-empty ⇒ only the guard's `allow-add-to-scope` keeps the work
+   *  (phasediag.AnswerContinuesBranch). Absent from an older daemon. */
+  protectedChanged?: string[];
 }
 
 /** The executor's own last word — mirrors phasediag.AgentMessage. */

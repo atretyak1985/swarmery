@@ -124,15 +124,23 @@ const maxOrphans = 5
 // the UI can spell out exact inspect/merge commands instead of leaving "merge it"
 // to the reader. DecisionID/Trigger identify the open decision of a
 // decision-open blocker.
+//
+// ProtectedChanged (decision-open, branch-awaits-decision) lists the protected
+// files the stopped run's branch changed. It decides which answers keep the work
+// (AnswerContinuesBranch): empty ⇒ any answer lets a retry continue on the
+// branch; non-empty ⇒ only the guard's allow does, and every other answer leaves
+// the branch to be merged or deleted. The UI needs it to say so BEFORE the
+// operator answers, not after.
 type Blocker struct {
-	Kind         string `json:"kind"`
-	Summary      string `json:"summary"`
-	Detail       string `json:"detail"`
-	Branch       string `json:"branch,omitempty"`
-	CommitsAhead int    `json:"commitsAhead,omitempty"`
-	Base         string `json:"base,omitempty"`
-	DecisionID   string `json:"decisionId,omitempty"`
-	Trigger      string `json:"trigger,omitempty"`
+	Kind             string   `json:"kind"`
+	Summary          string   `json:"summary"`
+	Detail           string   `json:"detail"`
+	Branch           string   `json:"branch,omitempty"`
+	CommitsAhead     int      `json:"commitsAhead,omitempty"`
+	Base             string   `json:"base,omitempty"`
+	DecisionID       string   `json:"decisionId,omitempty"`
+	Trigger          string   `json:"trigger,omitempty"`
+	ProtectedChanged []string `json:"protectedChanged,omitempty"`
 }
 
 // AgentMessage is the executor's own last word, for the cases the daemon cannot
@@ -431,15 +439,23 @@ func Diagnose(db *sql.DB, git worktree.Git, own OwnCheckout, phaseID int64) (Dia
 			})
 		case exists && open != nil:
 			// The commits are the stopped run's partial work and the open decision
-			// is what they wait on: answering it lets a retry continue on them.
+			// is what they wait on. Whether answering keeps them depends on what the
+			// branch holds (AnswerContinuesBranch): with protected edits on it only
+			// the guard's allow does, so the summary must not promise more.
+			summary := fmt.Sprintf("Branch %s holds the stopped run's %s — answer the decision and a retry continues on it",
+				branch, plural(ahead, "commit"))
+			if len(open.ProtectedChanged) > 0 {
+				summary = fmt.Sprintf("Branch %s holds the stopped run's %s with protected edits (%s) — only %s keeps them; any other answer leaves the branch to merge or delete before a retry",
+					branch, plural(ahead, "commit"), strings.Join(open.ProtectedChanged, ", "), GuardOptionAllowID)
+			}
 			d.Blockers = append(d.Blockers, Blocker{
-				Kind: KindBranchAwaitsDecision,
-				Summary: fmt.Sprintf("Branch %s holds the stopped run's %s — answer the decision and a retry continues on it",
-					branch, plural(ahead, "commit")),
-				Detail:       strings.Join(append(subjects, againstBase(base)), "\n"),
-				Branch:       branch,
-				CommitsAhead: ahead,
-				Base:         base,
+				Kind:             KindBranchAwaitsDecision,
+				Summary:          summary,
+				Detail:           strings.Join(append(subjects, againstBase(base)), "\n"),
+				Branch:           branch,
+				CommitsAhead:     ahead,
+				Base:             base,
+				ProtectedChanged: open.ProtectedChanged,
 			})
 		case exists:
 			d.Blockers = append(d.Blockers, Blocker{
@@ -668,13 +684,15 @@ func openDecision(db *sql.DB, taskID, phaseID int64) (*Blocker, error) {
 		return nil, err
 	}
 	var rec struct {
-		Stop *struct {
+		ProtectedChanged []string `json:"protectedChanged"`
+		Stop             *struct {
 			Trigger string `json:"trigger"`
 			Reason  string `json:"reason"`
 		} `json:"stop"`
 	}
 	_ = json.Unmarshal([]byte(guardJSON), &rec)
-	b := Blocker{Kind: KindDecisionOpen, DecisionID: id, Detail: strings.TrimSpace(question)}
+	b := Blocker{Kind: KindDecisionOpen, DecisionID: id, Detail: strings.TrimSpace(question),
+		ProtectedChanged: rec.ProtectedChanged}
 	if rec.Stop == nil {
 		b.Summary = fmt.Sprintf("The run's guard check raised %s and is waiting for your answer", id)
 		return &b, nil

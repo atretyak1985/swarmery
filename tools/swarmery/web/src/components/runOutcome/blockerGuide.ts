@@ -37,6 +37,16 @@ export interface BlockerGuide {
   land: 'phase' | 'orphan' | null;
 }
 
+/** The guard's allow option id (phasediag.GuardOptionAllowID): with protected
+ *  edits on the branch, the only answer that lets a retry keep the work. */
+export const GUARD_ALLOW_OPTION = 'allow-add-to-scope';
+
+/** The protected files the stopped run's branch changed; [] when none (or an
+ *  older daemon that does not say). */
+export function protectedEdits(b: PhaseBlocker): string[] {
+  return b.protectedChanged ?? [];
+}
+
 function inspect(b: PhaseBlocker): string[] {
   const branch = b.branch ?? '';
   const base = b.base ?? '';
@@ -67,6 +77,9 @@ export function guideFor(b: PhaseBlocker, i18n: I18n, terms: ProviderTerms): Blo
   const decisionId = b.decisionId ?? '';
   const change = terms.change.toLowerCase();
   const changeShort = terms.changeShort;
+  // With protected edits on the branch, only the guard's allow keeps the work
+  // (phasediag.AnswerContinuesBranch) — the copy must not promise more.
+  const files = protectedEdits(b).join(', ');
   switch (b.kind) {
     case 'decision-open':
       return {
@@ -75,7 +88,11 @@ export function guideFor(b: PhaseBlocker, i18n: I18n, terms: ProviderTerms): Blo
         steps: [
           i18n._(msg`Read the executor's reason and pick one of its options below — or write your own answer.`),
           i18n._(msg`Your answer is recorded under ## Decisions in the phase doc and handed to the next run.`),
-          i18n._(msg`Then press Retry run: it continues on this phase's branch, so the work already done is kept.`),
+          files === ''
+            ? i18n._(msg`Then press Retry run: it continues on this phase's branch, so the work already done is kept.`)
+            : i18n._(
+                msg`The branch holds protected edits (${files}). Only "Allow (add to scope)" keeps them: a retry then continues on this branch. Any other answer leaves the branch to be merged or deleted before a retry.`,
+              ),
         ],
         commands: [],
         deletable: null,
@@ -86,7 +103,11 @@ export function guideFor(b: PhaseBlocker, i18n: I18n, terms: ProviderTerms): Blo
         tier: 'decide',
         title: i18n._(msg`The stopped run's work (${commits}) is on ${branch}`),
         steps: [
-          i18n._(msg`Keep it: answering the decision above lets the retry continue on these commits.`),
+          files === ''
+            ? i18n._(msg`Keep it: answering the decision above lets the retry continue on these commits.`)
+            : i18n._(
+                msg`To keep it, answer "Allow (add to scope)" above: it holds protected edits (${files}), and any other answer leaves the branch to be merged or deleted before a retry.`,
+              ),
           i18n._(msg`Delete the branch only to throw this work away and run the phase from scratch.`),
         ],
         commands: inspect(b),
@@ -160,21 +181,24 @@ export function guideFor(b: PhaseBlocker, i18n: I18n, terms: ProviderTerms): Blo
         title: i18n._(msg`A phase this one depends on is not finished`),
         steps: [
           i18n._(msg`Open that phase and finish it first — run it, or tick its criteria if its work is already done.`),
-          i18n._(msg`Retrying this phase before then starts it without the code it builds on.`),
+          i18n._(msg`Until then Retry run is refused: this phase builds on that work.`),
         ],
         commands: [],
         deletable: null,
         land: null,
       };
     case 'dep-unmerged':
+      // Not a refusal: the run engine stacks this phase's run on the dependency's
+      // branch (phaserun.resolveRunBase), so a retry sees that code. It refuses
+      // only when several unmerged dependency branches have diverged.
       return {
-        tier: 'blocks-retry',
+        tier: 'advisory',
         title: i18n._(msg`A dependency is ticked, but its code is still only on ${branch}`),
         steps: [
           i18n._(
-            msg`Press Open ${changeShort}: it pushes ${branch} and opens a ${change} into ${base}. This phase's run starts from ${base} and does not see that code until it is merged.`,
+            msg`Retry run starts on top of ${branch}, so it sees that code. It is refused only if several unmerged dependency branches have diverged.`,
           ),
-          i18n._(msg`Once it is merged, press Retry run.`),
+          i18n._(msg`To land it: press Open ${changeShort} — it pushes ${branch} and opens a ${change} into ${base}.`),
         ],
         commands: merge(b),
         deletable: null,
@@ -275,11 +299,16 @@ export function nextStep(tiers: ReadonlySet<BlockerTier>, outcome: string, i18n:
   );
 }
 
-/** Why Retry run must not be pressed yet, or null when it may. Mirrors the two
- *  refusals the daemon itself makes (phaserun: dirty branch, unanswered stop). */
+/** Why Retry run must not be pressed yet, or null when it may. Mirrors the
+ *  refusals the daemon itself makes (phaserun.Start: unmet dependencies, a dirty
+ *  branch, an unanswered stop) — every kind in the `blocks-retry` tier must be
+ *  one of them, or the tier heading says "blocks a retry" over an enabled button. */
 export function retryRefusal(blockers: readonly PhaseBlocker[], i18n: I18n): string | null {
   if (blockers.some((b) => b.kind === 'decision-open')) {
     return i18n._(msg`answer the executor's decision first — until then a retry is refused`);
+  }
+  if (blockers.some((b) => b.kind === 'dep-incomplete')) {
+    return i18n._(msg`finish the phase this one depends on first — until then a retry is refused`);
   }
   if (blockers.some((b) => b.kind === 'branch-dirty')) {
     return i18n._(msg`merge or delete the leftover branch first — until then a retry is refused`);
@@ -287,12 +316,44 @@ export function retryRefusal(blockers: readonly PhaseBlocker[], i18n: I18n): str
   return null;
 }
 
+/** Where the `kind: stop` block sits in `text`: the prose before it, the prose
+ *  after it, and whether the block runs to the end of the text (a truncated
+ *  message cut off inside it). null when there is no block. A fenced block ends
+ *  at its closing fence; a bare one at the first blank line. */
+function cutStopBlock(text: string): { before: string; after: string; runsToEnd: boolean } | null {
+  const m = /(?:^|\n)(```ya?ml\s*\n)?kind:\s*stop\b/.exec(text);
+  if (m === null) return null;
+  const from = m.index + m[0].length;
+  let end: number;
+  if (m[1] !== undefined) {
+    const close = text.indexOf('\n```', from);
+    end = close === -1 ? text.length : close + '\n```'.length;
+  } else {
+    const blank = text.indexOf('\n\n', from);
+    end = blank === -1 ? text.length : blank;
+  }
+  return { before: text.slice(0, m.index).trim(), after: text.slice(end).trim(), runsToEnd: end === text.length };
+}
+
 /** The executor's last message without the `kind: stop` YAML block, which the
- *  decision card already shows as options. Returns the text unchanged when no
- *  block is found or nothing would remain. */
+ *  decision card already shows as options. Prose after the block is kept.
+ *  Returns the text unchanged when no block is found or nothing would remain. */
 export function withoutStopBlock(text: string): string {
-  const m = /(?:^|\n)(?:```ya?ml\s*\n)?kind:\s*stop\b/.exec(text);
-  if (m === null) return text;
-  const before = text.slice(0, m.index).trim();
-  return before === '' ? text : before;
+  const cut = cutStopBlock(text);
+  if (cut === null) return text;
+  const kept = [cut.before, cut.after].filter((s) => s !== '').join('\n\n');
+  return kept === '' ? text : kept;
+}
+
+/** The agent message as the modal shows it. `hideStop` cuts the stop block (the
+ *  decision card shows its options). The `…` truncation marker stays whenever
+ *  the visible text runs to where the message was cut — it is dropped only when
+ *  the cut fell inside the hidden block. */
+export function agentMessageView(text: string, truncated: boolean, hideStop: boolean): string {
+  const marker = truncated ? '…' : '';
+  if (!hideStop) return `${text}${marker}`;
+  const cut = cutStopBlock(text);
+  const shown = withoutStopBlock(text);
+  if (cut === null || shown === text) return `${text}${marker}`;
+  return cut.runsToEnd ? shown : `${shown}${marker}`;
 }

@@ -881,6 +881,10 @@ msgstr "відповідь дано через процес хука swarmery"
 msgid "answering…"
 msgstr "відповідаємо…"
 
+#: src/components/RunOutcomeModal.tsx
+msgid "Any answer keeps the work: a retry continues on this phase's branch."
+msgstr "Будь-яка відповідь зберігає роботу: повторний запуск продовжить на гілці цієї фази."
+
 #: src/lib/docFigures.tsx
 msgid "API endpoints"
 msgstr "Ендпоінти API"
@@ -2165,6 +2169,10 @@ msgstr "фільтр налаштувань"
 msgid "Finish it here: open a terminal already scoped to this account and log the CLI in."
 msgstr "Завершіть тут: відкрийте термінал, уже прив’язаний до цього акаунта, і ввійдіть у CLI."
 
+#: src/components/runOutcome/blockerGuide.ts
+msgid "finish the phase this one depends on first — until then a retry is refused"
+msgstr "спершу завершіть фазу, від якої залежить ця, — до того повторний запуск буде відхилено"
+
 #: src/lib/sessionsView.ts
 #: src/pages/Settings.tsx
 msgid "Finished"
@@ -2476,6 +2484,10 @@ msgstr "залишити роботу"
 #: src/components/RunOutcomeModal.tsx
 msgid "keeps the phase from counting as done"
 msgstr "не дає зарахувати фазу як виконану"
+
+#: src/components/RunOutcomeModal.tsx
+msgid "keeps the work — a retry continues on the branch"
+msgstr "зберігає роботу — повторний запуск продовжить на гілці"
 
 #: src/workspace/boardModel.ts
 msgid "kept in step with a GitHub issue or pull request"
@@ -3085,10 +3097,6 @@ msgstr "лише підключені"
 msgid "onboarding is disabled — restart the daemon with an allow-list:"
 msgstr "підключення вимкнено — перезапустіть демон зі списком дозволених:"
 
-#: src/components/runOutcome/blockerGuide.ts
-msgid "Once it is merged, press Retry run."
-msgstr "Щойно його змерджать, натисніть «Повторити запуск»."
-
 #: src/components/BulkPromptBar.tsx
 msgid "One send reaches at most {max} sessions; select all takes the first {max}."
 msgstr "Одне надсилання охоплює щонайбільше {max} сесій; «вибрати всі» бере перші {max}."
@@ -3458,10 +3466,6 @@ msgstr "плагіни…"
 #: src/components/CreateAccountModal.tsx
 msgid "Prefer the terminal? Run this yourself — swarmery never runs it for you:"
 msgstr "Зручніше в терміналі? Виконайте це самі — swarmery ніколи не запускає це за вас:"
-
-#: src/components/runOutcome/blockerGuide.ts
-msgid "Press Open {changeShort}: it pushes {branch} and opens a {change} into {base}. This phase's run starts from {base} and does not see that code until it is merged."
-msgstr "Натисніть «Відкрити {changeShort}»: це запушить {branch} і відкриє {change} у {base}. Запуск цієї фази стартує з {base} і не бачить цього коду, доки його не змерджать."
 
 #: src/components/runOutcome/blockerGuide.ts
 msgid "Press Verify again to grade the branch as it stands."
@@ -3914,8 +3918,8 @@ msgid "Retry run continues on {branch} ({commits}) with your answer to {decision
 msgstr "«Повторити запуск» продовжить на {branch} ({commits}) з вашою відповіддю на {decisionId}"
 
 #: src/components/runOutcome/blockerGuide.ts
-msgid "Retrying this phase before then starts it without the code it builds on."
-msgstr "Повторний запуск цієї фази до того почнеться без коду, на який вона спирається."
+msgid "Retry run starts on top of {branch}, so it sees that code. It is refused only if several unmerged dependency branches have diverged."
+msgstr "«Повторити запуск» стартує поверх {branch}, тож бачить цей код. Його буде відхилено, лише якщо кілька незлитих гілок залежностей розійшлися."
 
 #: src/workspace/task/TaskActions.tsx
 msgid "review"
@@ -4589,6 +4593,18 @@ msgstr "базову гілку"
 msgid "The board's three lanes"
 msgstr "Три доріжки дошки"
 
+#: src/components/runOutcome/blockerGuide.ts
+msgid "The branch holds protected edits ({files}). Only \"Allow (add to scope)\" keeps them: a retry then continues on this branch. Any other answer leaves the branch to be merged or deleted before a retry."
+msgstr "Гілка містить зміни захищених файлів ({files}). Зберігає їх лише «Allow (add to scope)»: тоді повторний запуск продовжить на цій гілці. Після будь-якої іншої відповіді гілку доведеться злити або видалити перед повторним запуском."
+
+#: src/components/RunOutcomeModal.tsx
+msgid "The branch holds protected edits: only \"Allow (add to scope)\" keeps the work. Any other answer, your own words included, leaves the branch to be merged or deleted before a retry."
+msgstr "Гілка містить зміни захищених файлів: роботу зберігає лише «Allow (add to scope)». Після будь-якої іншої відповіді, зокрема власними словами, гілку доведеться злити або видалити перед повторним запуском."
+
+#: src/components/RunOutcomeModal.tsx
+msgid "the branch must then be merged or deleted before a retry"
+msgstr "тоді гілку доведеться злити або видалити перед повторним запуском"
+
 #: src/components/VcsSignInDialog.tsx
 msgid "The code expired before it was entered. Get a new one."
 msgstr "Код сплив, перш ніж його ввели. Отримайте новий."
@@ -4873,6 +4889,14 @@ msgstr "назва обов’язкова"
 msgid "to {0}"
 msgstr "до {0}"
 
+#: src/components/runOutcome/blockerGuide.ts
+msgid "To keep it, answer \"Allow (add to scope)\" above: it holds protected edits ({files}), and any other answer leaves the branch to be merged or deleted before a retry."
+msgstr "Щоб зберегти її, відповідайте вище «Allow (add to scope)»: вона містить зміни захищених файлів ({files}), і після будь-якої іншої відповіді гілку доведеться злити або видалити перед повторним запуском."
+
+#: src/components/runOutcome/blockerGuide.ts
+msgid "To land it: press Open {changeShort} — it pushes {branch} and opens a {change} into {base}."
+msgstr "Щоб злити її: натисніть «Відкрити {changeShort}» — це запушить {branch} і відкриє {change} у {base}."
+
 #: src/workspace/boardModel.ts
 msgid "today"
 msgstr "сьогодні"
@@ -4969,6 +4993,10 @@ msgstr "Без обмежень"
 #: src/components/AccountSelector.tsx
 msgid "unset"
 msgstr "не задано"
+
+#: src/components/runOutcome/blockerGuide.ts
+msgid "Until then Retry run is refused: this phase builds on that work."
+msgstr "До того «Повторити запуск» буде відхилено: ця фаза будується на тій роботі."
 
 #: src/api.ts
 msgid "update failed: {status}"
