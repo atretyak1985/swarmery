@@ -586,6 +586,7 @@ export function Plans(): JSX.Element {
           }
           decision={outcomePhase?.guardDecision ?? null}
           onChanged={reload}
+          terms={vcs?.terms ?? undefined}
           onOpenRevisions={() => {
             setOutcomeFor(null);
             go({ plan: activeEpic.externalId, detail: { kind: 'plan', tab: 'revisions' } });

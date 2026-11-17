@@ -14,7 +14,7 @@
 
 import type { I18n } from '@lingui/core';
 import { msg, plural } from '@lingui/core/macro';
-import type { PhaseBlocker } from '../../api/types';
+import type { PhaseBlocker, ProviderTerms } from '../../api/types';
 
 /** How a blocker stands in the operator's way, most urgent first. */
 export type BlockerTier = 'decide' | 'blocks-retry' | 'blocks-done' | 'advisory';
@@ -31,6 +31,10 @@ export interface BlockerGuide {
   commands: string[];
   /** This blocker is answered by deleting `branch` (and the delete is the fix, not a loss). */
   deletable: 'fix' | 'discard' | null;
+  /** The keep-the-work action: push `branch` and open a change request for it —
+   *  through the owning phase's land route (`phase`, the phase id is the
+   *  branch's own) or the orphan-branch route (`orphan`, no phase row). */
+  land: 'phase' | 'orphan' | null;
 }
 
 function inspect(b: PhaseBlocker): string[] {
@@ -51,7 +55,7 @@ function merge(b: PhaseBlocker): string[] {
 
 /** The guide for one blocker. Unknown kinds (a newer daemon) fall back to the
  *  server's own summary as an advisory line, never to silence. */
-export function guideFor(b: PhaseBlocker, i18n: I18n): BlockerGuide {
+export function guideFor(b: PhaseBlocker, i18n: I18n, terms: ProviderTerms): BlockerGuide {
   const branch = b.branch ?? '';
   const base = b.base ?? i18n._(msg`the base branch`);
   const commits = plural(b.commitsAhead ?? 0, {
@@ -61,6 +65,8 @@ export function guideFor(b: PhaseBlocker, i18n: I18n): BlockerGuide {
     other: '# commits',
   });
   const decisionId = b.decisionId ?? '';
+  const change = terms.change.toLowerCase();
+  const changeShort = terms.changeShort;
   switch (b.kind) {
     case 'decision-open':
       return {
@@ -73,6 +79,7 @@ export function guideFor(b: PhaseBlocker, i18n: I18n): BlockerGuide {
         ],
         commands: [],
         deletable: null,
+        land: null,
       };
     case 'branch-awaits-decision':
       return {
@@ -84,6 +91,7 @@ export function guideFor(b: PhaseBlocker, i18n: I18n): BlockerGuide {
         ],
         commands: inspect(b),
         deletable: 'discard',
+        land: null,
       };
     case 'branch-continues':
       return {
@@ -95,6 +103,7 @@ export function guideFor(b: PhaseBlocker, i18n: I18n): BlockerGuide {
         ],
         commands: inspect(b),
         deletable: 'discard',
+        land: null,
       };
     case 'branch-dirty':
       if (decisionId !== '') {
@@ -106,24 +115,26 @@ export function guideFor(b: PhaseBlocker, i18n: I18n): BlockerGuide {
             msg`Your answer to ${decisionId} did not accept the protected edits on ${branch} — a retry cannot build on it`,
           ),
           steps: [
-            i18n._(msg`See what is on it with the first command below.`),
-            i18n._(msg`Work you want: merge it into ${base}, and the retry starts on top of it.`),
+            i18n._(msg`Check what is on it: the commits are listed under the evidence line below.`),
+            i18n._(msg`Work you want: press Open ${changeShort} — it pushes the branch and opens a ${change} into ${base}. Once that is merged, press Retry run.`),
             i18n._(msg`Work you don't want: press Delete branch, and the retry recreates it from ${base}.`),
           ],
           commands: [...inspect(b), ...merge(b)],
           deletable: 'fix',
+          land: 'phase',
         };
       }
       return {
         tier: 'blocks-retry',
         title: i18n._(msg`A previous run left ${commits} on ${branch} — a retry cannot start while they are there`),
         steps: [
-          i18n._(msg`See what is on it with the first command below.`),
-          i18n._(msg`Work you want: merge it into ${base}, and the retry starts on top of it.`),
+          i18n._(msg`Check what is on it: the commits are listed under the evidence line below.`),
+          i18n._(msg`Work you want: press Open ${changeShort} — it pushes the branch and opens a ${change} into ${base}. Once that is merged, press Retry run.`),
           i18n._(msg`Work you don't want: press Delete branch, and the retry recreates it from ${base}.`),
         ],
         commands: [...inspect(b), ...merge(b)],
         deletable: 'fix',
+        land: 'phase',
       };
     case 'branch-blocks-retry':
       return {
@@ -132,6 +143,7 @@ export function guideFor(b: PhaseBlocker, i18n: I18n): BlockerGuide {
         steps: [i18n._(msg`Nothing to do — Retry run deletes it automatically.`)],
         commands: [],
         deletable: null,
+        land: null,
       };
     case 'own-worktree':
       return {
@@ -140,6 +152,7 @@ export function guideFor(b: PhaseBlocker, i18n: I18n): BlockerGuide {
         steps: [i18n._(msg`Nothing to do — Retry run picks that worktree up and continues the work.`)],
         commands: [],
         deletable: null,
+        land: null,
       };
     case 'dep-incomplete':
       return {
@@ -151,17 +164,21 @@ export function guideFor(b: PhaseBlocker, i18n: I18n): BlockerGuide {
         ],
         commands: [],
         deletable: null,
+        land: null,
       };
     case 'dep-unmerged':
       return {
         tier: 'blocks-retry',
         title: i18n._(msg`A dependency is ticked, but its code is still only on ${branch}`),
         steps: [
-          i18n._(msg`Merge ${branch} into ${base} — this phase's run starts from ${base} and does not see that code otherwise.`),
-          i18n._(msg`Then press Retry run.`),
+          i18n._(
+            msg`Press Open ${changeShort}: it pushes ${branch} and opens a ${change} into ${base}. This phase's run starts from ${base} and does not see that code until it is merged.`,
+          ),
+          i18n._(msg`Once it is merged, press Retry run.`),
         ],
         commands: merge(b),
         deletable: null,
+        land: 'phase',
       };
     case 'verify-failed':
       return {
@@ -173,6 +190,7 @@ export function guideFor(b: PhaseBlocker, i18n: I18n): BlockerGuide {
         ],
         commands: [],
         deletable: null,
+        land: null,
       };
     case 'unverified':
       return {
@@ -181,6 +199,7 @@ export function guideFor(b: PhaseBlocker, i18n: I18n): BlockerGuide {
         steps: [i18n._(msg`Press Verify again to grade the branch as it stands.`)],
         commands: [],
         deletable: null,
+        land: null,
       };
     case 'unreported':
       return {
@@ -193,6 +212,7 @@ export function guideFor(b: PhaseBlocker, i18n: I18n): BlockerGuide {
         ],
         commands: [],
         deletable: null,
+        land: null,
       };
     case 'no-criteria':
       return {
@@ -201,6 +221,7 @@ export function guideFor(b: PhaseBlocker, i18n: I18n): BlockerGuide {
         steps: [i18n._(msg`Add "- [ ]" acceptance-criteria checkboxes to the phase doc, or press Revise plan.`)],
         commands: [],
         deletable: null,
+        land: null,
       };
     case 'no-lesson':
       return {
@@ -211,23 +232,27 @@ export function guideFor(b: PhaseBlocker, i18n: I18n): BlockerGuide {
         ],
         commands: [],
         deletable: null,
+        land: null,
       };
     case 'orphan-branch':
       if (branch === '') {
-        return { tier: 'advisory', title: b.summary, steps: [], commands: [], deletable: null };
+        return { tier: 'advisory', title: b.summary, steps: [], commands: [], deletable: null, land: null };
       }
       return {
         tier: 'advisory',
         title: i18n._(msg`${branch} holds ${commits} from an older run that matches no phase now`),
         steps: [
           i18n._(msg`It does not block this phase — Retry run works without touching it.`),
-          i18n._(msg`Check what is on it: merge it into ${base} if the work is wanted, otherwise delete it.`),
+          i18n._(
+            msg`Work you want: press Open ${changeShort} to push it and open a ${change} into ${base}. Otherwise delete it.`,
+          ),
         ],
         commands: [...inspect(b), ...merge(b)],
         deletable: 'fix',
+        land: 'orphan',
       };
     default:
-      return { tier: 'advisory', title: b.summary, steps: [], commands: [], deletable: null };
+      return { tier: 'advisory', title: b.summary, steps: [], commands: [], deletable: null, land: null };
   }
 }
 

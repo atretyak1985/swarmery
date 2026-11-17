@@ -171,7 +171,8 @@ describe('RunOutcomeModal — blocker guidance', () => {
     await waitFor(() => expect(onChanged).toHaveBeenCalledTimes(1));
     const post = fetchMock.mock.calls.find(([, init]) => (init as RequestInit | undefined)?.method === 'POST');
     expect(String(post?.[0])).toContain('/api/epics/77/phases/11/decisions/D-4');
-    expect(JSON.parse(String((post?.[1] as RequestInit).body))).toEqual({
+    expect(post).toBeDefined();
+    expect(JSON.parse(String((post?.[1] as RequestInit | undefined)?.body))).toEqual({
       option: 'accept-preexisting-residual',
       note: '',
     });
@@ -219,6 +220,80 @@ describe('RunOutcomeModal — an answered stop', () => {
     diag.agentMessage = null;
     mount(null);
     expect(await screen.findByText(/Your answer to D-1 did not accept the protected edits/)).toBeTruthy();
+  });
+});
+
+describe('RunOutcomeModal — keep-the-work action', () => {
+  // POSTs answered per route: a phase land returns its landing, an orphan land
+  // its change request; anything else is the decision answer.
+  function routeFetch(landStatus = 200, landBody: unknown = null): void {
+    fetchMock.mockImplementation((url: string, init?: RequestInit) => {
+      if (init?.method === 'POST' && url.includes('/orphan-branch/land')) {
+        return Promise.resolve({
+          ok: landStatus < 400,
+          status: landStatus,
+          json: () =>
+            Promise.resolve(landBody ?? { branch: 'swarm/phase-45263', base: 'main', url: 'https://x/pull/9', number: 9 }),
+        } as Response);
+      }
+      if (init?.method === 'POST' && url.includes('/land')) {
+        return Promise.resolve({
+          ok: landStatus < 400,
+          status: landStatus,
+          json: () =>
+            Promise.resolve(
+              landBody ?? { branch: 'swarm/phase-52170', base: 'main', action: 'pr', landing: { prUrl: 'https://x/pull/5', prNumber: 5 } },
+            ),
+        } as Response);
+      }
+      return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(diag) } as Response);
+    });
+  }
+
+  it('opens a change request for a leftover branch through its phase land route', async () => {
+    diag = diagnosis([{ ...OWN_BRANCH, kind: 'branch-dirty', summary: 'x' }]);
+    diag.agentMessage = null;
+    routeFetch();
+    const onChanged = mount(null);
+    const card = (await screen.findByText(/A previous run left/)).closest('li') as HTMLElement;
+    fireEvent.click(within(card).getByRole('button', { name: 'Open CR' }));
+    const link = await within(card).findByRole('link', { name: 'CR #5' });
+    expect(link.getAttribute('href')).toBe('https://x/pull/5');
+    const post = fetchMock.mock.calls.find(([u, init]) => String(u).includes('/land') && init?.method === 'POST');
+    expect(String(post?.[0])).toContain('/api/epics/77/phases/52170/land');
+    expect(JSON.parse(String((post?.[1] as RequestInit | undefined)?.body))).toEqual({ action: 'pr' });
+    expect(onChanged).toHaveBeenCalled();
+    // The commands stay, folded under the button as the by-hand fallback.
+    expect(within(card).getByText('or do it by hand in the repo')).toBeTruthy();
+  });
+
+  it('opens a change request for an orphan through the orphan route, naming the branch', async () => {
+    routeFetch();
+    mount();
+    const card = (await screen.findByText(/swarm\/phase-45263 holds 5 commits from an older run/)).closest(
+      'li',
+    ) as HTMLElement;
+    fireEvent.click(within(card).getByRole('button', { name: 'Open CR' }));
+    expect(await within(card).findByRole('link', { name: 'CR #9' })).toBeTruthy();
+    const post = fetchMock.mock.calls.find(([u]) => String(u).includes('/orphan-branch/land'));
+    expect(String(post?.[0])).toContain('/api/epics/77/orphan-branch/land?branch=swarm%2Fphase-45263');
+  });
+
+  it("offers no change request on the stopped run's own branch — the decision comes first", async () => {
+    mount();
+    const card = (await screen.findByText(/The stopped run's work/)).closest('li') as HTMLElement;
+    expect(within(card).queryByRole('button', { name: 'Open CR' })).toBeNull();
+  });
+
+  it('shows the manual commands a refused land carries', async () => {
+    diag = diagnosis([{ ...OWN_BRANCH, kind: 'branch-dirty', summary: 'x' }]);
+    diag.agentMessage = null;
+    routeFetch(422, { error: 'not authenticated', code: 'not-authenticated', hint: 'gh auth login --hostname github.com' });
+    mount(null);
+    const card = (await screen.findByText(/A previous run left/)).closest('li') as HTMLElement;
+    fireEvent.click(within(card).getByRole('button', { name: 'Open CR' }));
+    const alert = await within(card).findByRole('alert');
+    expect(alert.textContent).toContain('gh auth login --hostname github.com');
   });
 });
 

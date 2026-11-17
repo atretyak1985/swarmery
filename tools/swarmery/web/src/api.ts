@@ -25,6 +25,7 @@ import type {
   PhaseLandErrorCode,
   PhaseLandRequest,
   PhaseLandResponse,
+  OrphanLandResponse,
   PhaseReview,
   VcsInfo,
   VcsProviderAnswer,
@@ -1437,6 +1438,32 @@ export async function landPhase(taskId: number, phaseId: number, body: PhaseLand
   });
   if (!res.ok) throw await landError(res, t`land failed`);
   return (await res.json()) as PhaseLandResponse;
+}
+
+/**
+ * POST /api/epics/{taskId}/orphan-branch/land?branch= — push an orphan
+ * swarm/phase-<id> branch (its id matches no phase row) and open a change
+ * request for it: the keep-the-work twin of deleteOrphanBranch, behind the same
+ * server-side gate. Throws LandError: 409 (`branch-refused`, `branch-live-phase`,
+ * `no-project-path`, `push-to-base-refused`, `fork-workflow-unsupported`) and 422
+ * with a manual-command `hint`.
+ */
+export async function landOrphanBranch(
+  taskId: number,
+  branch: string,
+  body: { draft?: boolean } = {},
+): Promise<OrphanLandResponse> {
+  if (MOCK) return mockApi.landOrphanBranch(taskId, branch);
+  const res = await apiFetch(
+    `/api/epics/${String(taskId)}/orphan-branch/land?branch=${encodeURIComponent(branch)}`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    },
+  );
+  if (!res.ok) throw await landError(res, t`land failed`);
+  return (await res.json()) as OrphanLandResponse;
 }
 
 /**

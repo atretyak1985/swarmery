@@ -353,9 +353,13 @@ func Diagnose(db *sql.DB, git worktree.Git, own OwnCheckout, phaseID int64) (Dia
 					Summary: fmt.Sprintf("Phase %d is ticked, but its code is on %s — %s not merged into %s",
 						dep.Seq, branch, plural(ahead, "commit"), base),
 					Detail: fmt.Sprintf("%s → %s ahead, %s", branch, plural(ahead, "commit"), againstBase(base)),
-					// Data for the merge command; no delete is offered for a
-					// dependency's branch from this phase's modal.
-					Base: base,
+					// Data for the merge command and the dependency's own land
+					// action (the modal maps the branch back to its phase). No
+					// delete is offered for a dependency's branch from this
+					// phase's modal: the guide marks this kind non-deletable.
+					Branch:       branch,
+					CommitsAhead: ahead,
+					Base:         base,
 				})
 			}
 		}

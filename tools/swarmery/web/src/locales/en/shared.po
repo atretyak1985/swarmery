@@ -191,6 +191,10 @@ msgstr "{changes, plural, one {# change} few {# changes} many {# changes} other 
 msgid "{changes} · touched {ago}"
 msgstr "{changes} · touched {ago}"
 
+#: src/components/runOutcome/LandBranchAction.tsx
+msgid "{changeShort} opened"
+msgstr "{changeShort} opened"
+
 #: src/workspace/TaskDiff.tsx
 msgid "{commitCount, plural, one {# commit} few {# commits} many {# commits} other {# commits}} · {fileCount, plural, one {# file} few {# files} many {# files} other {# files}}"
 msgstr "{commitCount, plural, one {# commit} few {# commits} many {# commits} other {# commits}} · {fileCount, plural, one {# file} few {# files} many {# files} other {# files}}"
@@ -1220,8 +1224,8 @@ msgid "check now"
 msgstr "check now"
 
 #: src/components/runOutcome/blockerGuide.ts
-msgid "Check what is on it: merge it into {base} if the work is wanted, otherwise delete it."
-msgstr "Check what is on it: merge it into {base} if the work is wanted, otherwise delete it."
+msgid "Check what is on it: the commits are listed under the evidence line below."
+msgstr "Check what is on it: the commits are listed under the evidence line below."
 
 #: src/components/AccountsSection.tsx
 msgid "checked {ago}"
@@ -2690,10 +2694,6 @@ msgid "matches you"
 msgstr "matches you"
 
 #: src/components/runOutcome/blockerGuide.ts
-msgid "Merge {branch} into {base} — this phase's run starts from {base} and does not see that code otherwise."
-msgstr "Merge {branch} into {base} — this phase's run starts from {base} and does not see that code otherwise."
-
-#: src/components/runOutcome/blockerGuide.ts
 msgid "merge or delete the leftover branch first — until then a retry is refused"
 msgstr "merge or delete the leftover branch first — until then a retry is refused"
 
@@ -3085,6 +3085,10 @@ msgstr "onboarded only"
 msgid "onboarding is disabled — restart the daemon with an allow-list:"
 msgstr "onboarding is disabled — restart the daemon with an allow-list:"
 
+#: src/components/runOutcome/blockerGuide.ts
+msgid "Once it is merged, press Retry run."
+msgstr "Once it is merged, press Retry run."
+
 #: src/components/BulkPromptBar.tsx
 msgid "One send reaches at most {max} sessions; select all takes the first {max}."
 msgstr "One send reaches at most {max} sessions; select all takes the first {max}."
@@ -3092,6 +3096,10 @@ msgstr "One send reaches at most {max} sessions; select all takes the first {max
 #: src/api.ts
 msgid "Only a human can close the open criteria of this phase. Do the [MANUAL] checks and tick them in the Criteria tab — the phase is listed in Needs you."
 msgstr "Only a human can close the open criteria of this phase. Do the [MANUAL] checks and tick them in the Criteria tab — the phase is listed in Needs you."
+
+#: src/components/runOutcome/LandBranchAction.tsx
+msgid "Open {changeShort}"
+msgstr "Open {changeShort}"
 
 #: src/workspace/TaskCard.tsx
 msgid "open {ref} on GitHub"
@@ -3156,6 +3164,10 @@ msgstr "Optional: add a \"### Lesson N\" entry under ## Lessons Learned in phase
 #: src/components/PlanBranchDirtyModal.tsx
 msgid "or discard it"
 msgstr "or discard it"
+
+#: src/components/RunOutcomeModal.tsx
+msgid "or do it by hand in the repo"
+msgstr "or do it by hand in the repo"
 
 #: src/components/TerminalPathNote.tsx
 msgid "or export it into the current shell"
@@ -3440,6 +3452,10 @@ msgid "Prefer the terminal? Run this yourself — swarmery never runs it for you
 msgstr "Prefer the terminal? Run this yourself — swarmery never runs it for you:"
 
 #: src/components/runOutcome/blockerGuide.ts
+msgid "Press Open {changeShort}: it pushes {branch} and opens a {change} into {base}. This phase's run starts from {base} and does not see that code until it is merged."
+msgstr "Press Open {changeShort}: it pushes {branch} and opens a {change} into {base}. This phase's run starts from {base} and does not see that code until it is merged."
+
+#: src/components/runOutcome/blockerGuide.ts
 msgid "Press Verify again to grade the branch as it stands."
 msgstr "Press Verify again to grade the branch as it stands."
 
@@ -3555,6 +3571,10 @@ msgstr "Protocols"
 msgid "pull request opened: {prUrl}"
 msgstr "pull request opened: {prUrl}"
 
+#: src/components/runOutcome/LandBranchAction.tsx
+msgid "push {branch} and open a {change} for it — CI and review run as usual"
+msgstr "push {branch} and open a {change} for it — CI and review run as usual"
+
 #: src/workspace/task/TaskActions.tsx
 msgid "push the branch and open a pull request"
 msgstr "push the branch and open a pull request"
@@ -3563,9 +3583,17 @@ msgstr "push the branch and open a pull request"
 msgid "Push works over SSH; opening a {change} needs a {provider} token."
 msgstr "Push works over SSH; opening a {change} needs a {provider} token."
 
+#: src/components/runOutcome/LandBranchAction.tsx
+msgid "Pushed, {change} opened:"
+msgstr "Pushed, {change} opened:"
+
 #: src/workspace/task/TaskActions.tsx
 msgid "Pushes <0>{taskBranch}</0> to <1>origin</1> and opens a pull request with <2>gh</2>, then moves the card to done. The branch is kept."
 msgstr "Pushes <0>{taskBranch}</0> to <1>origin</1> and opens a pull request with <2>gh</2>, then moves the card to done. The branch is kept."
+
+#: src/components/runOutcome/LandBranchAction.tsx
+msgid "pushing…"
+msgstr "pushing…"
 
 #: src/workspace/task/TaskActions.tsx
 msgid "put the card back in the Inbox"
@@ -4075,10 +4103,6 @@ msgstr "second"
 #: src/pages/Settings.tsx
 msgid "secondary action"
 msgstr "secondary action"
-
-#: src/components/runOutcome/blockerGuide.ts
-msgid "See what is on it with the first command below."
-msgstr "See what is on it with the first command below."
 
 #: src/components/BulkPromptBar.tsx
 msgid "select all"
@@ -4730,10 +4754,6 @@ msgstr "theme settings"
 msgid "Then press Retry run: it continues on this phase's branch, so the work already done is kept."
 msgstr "Then press Retry run: it continues on this phase's branch, so the work already done is kept."
 
-#: src/components/runOutcome/blockerGuide.ts
-msgid "Then press Retry run."
-msgstr "Then press Retry run."
-
 #: src/components/RunOutcomeModal.tsx
 msgid "then:"
 msgstr "then:"
@@ -5163,8 +5183,12 @@ msgid "Work you don't want: press Delete branch, and the retry recreates it from
 msgstr "Work you don't want: press Delete branch, and the retry recreates it from {base}."
 
 #: src/components/runOutcome/blockerGuide.ts
-msgid "Work you want: merge it into {base}, and the retry starts on top of it."
-msgstr "Work you want: merge it into {base}, and the retry starts on top of it."
+msgid "Work you want: press Open {changeShort} — it pushes the branch and opens a {change} into {base}. Once that is merged, press Retry run."
+msgstr "Work you want: press Open {changeShort} — it pushes the branch and opens a {change} into {base}. Once that is merged, press Retry run."
+
+#: src/components/runOutcome/blockerGuide.ts
+msgid "Work you want: press Open {changeShort} to push it and open a {change} into {base}. Otherwise delete it."
+msgstr "Work you want: press Open {changeShort} to push it and open a {change} into {base}. Otherwise delete it."
 
 #: src/components/place/StateGlyph.tsx
 msgid "working"

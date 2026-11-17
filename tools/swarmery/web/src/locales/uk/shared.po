@@ -191,6 +191,10 @@ msgstr "{changes, plural, one {# зміна} few {# зміни} many {# змін
 msgid "{changes} · touched {ago}"
 msgstr "{changes} · змінено {ago}"
 
+#: src/components/runOutcome/LandBranchAction.tsx
+msgid "{changeShort} opened"
+msgstr "{changeShort} відкрито"
+
 #: src/workspace/TaskDiff.tsx
 msgid "{commitCount, plural, one {# commit} few {# commits} many {# commits} other {# commits}} · {fileCount, plural, one {# file} few {# files} many {# files} other {# files}}"
 msgstr "{commitCount, plural, one {# коміт} few {# коміти} many {# комітів} other {# коміта}} · {fileCount, plural, one {# файл} few {# файли} many {# файлів} other {# файла}}"
@@ -1220,8 +1224,8 @@ msgid "check now"
 msgstr "перевірити зараз"
 
 #: src/components/runOutcome/blockerGuide.ts
-msgid "Check what is on it: merge it into {base} if the work is wanted, otherwise delete it."
-msgstr "Перегляньте, що на ній: якщо робота потрібна — злийте її в {base}, інакше видаліть."
+msgid "Check what is on it: the commits are listed under the evidence line below."
+msgstr "Перевірте, що на ній: коміти перелічено під рядком із доказами нижче."
 
 #: src/components/AccountsSection.tsx
 msgid "checked {ago}"
@@ -2690,10 +2694,6 @@ msgid "matches you"
 msgstr "збігається з вами"
 
 #: src/components/runOutcome/blockerGuide.ts
-msgid "Merge {branch} into {base} — this phase's run starts from {base} and does not see that code otherwise."
-msgstr "Злийте {branch} у {base} — запуск цієї фази стартує з {base} і інакше не побачить цього коду."
-
-#: src/components/runOutcome/blockerGuide.ts
 msgid "merge or delete the leftover branch first — until then a retry is refused"
 msgstr "спершу злийте або видаліть залишкову гілку — до того повторний запуск буде відхилено"
 
@@ -3085,6 +3085,10 @@ msgstr "лише підключені"
 msgid "onboarding is disabled — restart the daemon with an allow-list:"
 msgstr "підключення вимкнено — перезапустіть демон зі списком дозволених:"
 
+#: src/components/runOutcome/blockerGuide.ts
+msgid "Once it is merged, press Retry run."
+msgstr "Щойно його змерджать, натисніть «Повторити запуск»."
+
 #: src/components/BulkPromptBar.tsx
 msgid "One send reaches at most {max} sessions; select all takes the first {max}."
 msgstr "Одне надсилання охоплює щонайбільше {max} сесій; «вибрати всі» бере перші {max}."
@@ -3092,6 +3096,10 @@ msgstr "Одне надсилання охоплює щонайбільше {max
 #: src/api.ts
 msgid "Only a human can close the open criteria of this phase. Do the [MANUAL] checks and tick them in the Criteria tab — the phase is listed in Needs you."
 msgstr "Відкриті критерії цієї фази може закрити лише людина. Виконайте перевірки [MANUAL] і відмітьте їх у вкладці Criteria — фаза є у «Потребує вас»."
+
+#: src/components/runOutcome/LandBranchAction.tsx
+msgid "Open {changeShort}"
+msgstr "Відкрити {changeShort}"
 
 #: src/workspace/TaskCard.tsx
 msgid "open {ref} on GitHub"
@@ -3156,6 +3164,10 @@ msgstr "Необов'язково: додайте запис \"### Lesson N\" п
 #: src/components/PlanBranchDirtyModal.tsx
 msgid "or discard it"
 msgstr "або відкинути"
+
+#: src/components/RunOutcomeModal.tsx
+msgid "or do it by hand in the repo"
+msgstr "або вручну в репозиторії"
 
 #: src/components/TerminalPathNote.tsx
 msgid "or export it into the current shell"
@@ -3440,6 +3452,10 @@ msgid "Prefer the terminal? Run this yourself — swarmery never runs it for you
 msgstr "Зручніше в терміналі? Виконайте це самі — swarmery ніколи не запускає це за вас:"
 
 #: src/components/runOutcome/blockerGuide.ts
+msgid "Press Open {changeShort}: it pushes {branch} and opens a {change} into {base}. This phase's run starts from {base} and does not see that code until it is merged."
+msgstr "Натисніть «Відкрити {changeShort}»: це запушить {branch} і відкриє {change} у {base}. Запуск цієї фази стартує з {base} і не бачить цього коду, доки його не змерджать."
+
+#: src/components/runOutcome/blockerGuide.ts
 msgid "Press Verify again to grade the branch as it stands."
 msgstr "Натисніть «Перевірити ще раз», щоб оцінити гілку в поточному стані."
 
@@ -3555,6 +3571,10 @@ msgstr "Протоколи"
 msgid "pull request opened: {prUrl}"
 msgstr "пул-реквест відкрито: {prUrl}"
 
+#: src/components/runOutcome/LandBranchAction.tsx
+msgid "push {branch} and open a {change} for it — CI and review run as usual"
+msgstr "запушити {branch} і відкрити для неї {change} — CI та рев'ю пройдуть як завжди"
+
 #: src/workspace/task/TaskActions.tsx
 msgid "push the branch and open a pull request"
 msgstr "запушити гілку й відкрити пул-реквест"
@@ -3563,9 +3583,17 @@ msgstr "запушити гілку й відкрити пул-реквест"
 msgid "Push works over SSH; opening a {change} needs a {provider} token."
 msgstr "Push працює через SSH; щоб відкрити {change}, потрібен токен {provider}."
 
+#: src/components/runOutcome/LandBranchAction.tsx
+msgid "Pushed, {change} opened:"
+msgstr "Запушено, {change} відкрито:"
+
 #: src/workspace/task/TaskActions.tsx
 msgid "Pushes <0>{taskBranch}</0> to <1>origin</1> and opens a pull request with <2>gh</2>, then moves the card to done. The branch is kept."
 msgstr "Пушить <0>{taskBranch}</0> в <1>origin</1>, відкриває пул-реквест через <2>gh</2> і переносить картку в «Готово». Гілка зберігається."
+
+#: src/components/runOutcome/LandBranchAction.tsx
+msgid "pushing…"
+msgstr "пушу…"
 
 #: src/workspace/task/TaskActions.tsx
 msgid "put the card back in the Inbox"
@@ -4075,10 +4103,6 @@ msgstr "друга"
 #: src/pages/Settings.tsx
 msgid "secondary action"
 msgstr "другорядна дія"
-
-#: src/components/runOutcome/blockerGuide.ts
-msgid "See what is on it with the first command below."
-msgstr "Подивіться, що на ній, першою командою нижче."
 
 #: src/components/BulkPromptBar.tsx
 msgid "select all"
@@ -4730,10 +4754,6 @@ msgstr "налаштування теми"
 msgid "Then press Retry run: it continues on this phase's branch, so the work already done is kept."
 msgstr "Потім натисніть «Повторити запуск»: він продовжить на гілці цієї фази, тож уже зроблена робота збережеться."
 
-#: src/components/runOutcome/blockerGuide.ts
-msgid "Then press Retry run."
-msgstr "Потім натисніть «Повторити запуск»."
-
 #: src/components/RunOutcomeModal.tsx
 msgid "then:"
 msgstr "тоді:"
@@ -5163,8 +5183,12 @@ msgid "Work you don't want: press Delete branch, and the retry recreates it from
 msgstr "Робота не потрібна — натисніть «Видалити гілку», і повторний запуск створить її заново з {base}."
 
 #: src/components/runOutcome/blockerGuide.ts
-msgid "Work you want: merge it into {base}, and the retry starts on top of it."
-msgstr "Робота потрібна — злийте її в {base}, і повторний запуск почнеться поверх неї."
+msgid "Work you want: press Open {changeShort} — it pushes the branch and opens a {change} into {base}. Once that is merged, press Retry run."
+msgstr "Робота потрібна: натисніть «Відкрити {changeShort}» — це запушить гілку й відкриє {change} у {base}. Щойно його змерджать, натисніть «Повторити запуск»."
+
+#: src/components/runOutcome/blockerGuide.ts
+msgid "Work you want: press Open {changeShort} to push it and open a {change} into {base}. Otherwise delete it."
+msgstr "Робота потрібна: натисніть «Відкрити {changeShort}», щоб запушити її й відкрити {change} у {base}. Інакше видаліть її."
 
 #: src/components/place/StateGlyph.tsx
 msgid "working"

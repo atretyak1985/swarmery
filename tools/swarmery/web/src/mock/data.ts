@@ -23,6 +23,7 @@ import type {
   PhaseLanding,
   PhaseLandRequest,
   PhaseLandResponse,
+  OrphanLandResponse,
   PhaseReview,
   PhaseSurprise,
   PlanDoc,
@@ -3131,6 +3132,19 @@ export const mockApi = {
     return body.action === 'return' ? base : { ...base, terms: MOCK_TERMS };
   },
 
+  /** POST …/orphan-branch/land — pretends the stranded branch got its change request. */
+  async landOrphanBranch(_taskId: number, branch: string): Promise<OrphanLandResponse> {
+    await delay(300);
+    const number = 900 + Number(branch.replace(/^swarm\/phase-/, '').slice(-2));
+    return {
+      branch,
+      base: 'main',
+      url: `https://github.com/acme/swarmery/pull/${String(number)}`,
+      number,
+      terms: MOCK_TERMS,
+    };
+  },
+
   /** POST …/phases/{phaseId}/landing/refresh — re-reads the seeded phase's
    *  change request: the stored status with a fresh checkedAt (an open one with
    *  no status yet reads as open, CI pending, review required). */
@@ -3168,6 +3182,9 @@ export const mockApi = {
               kind: 'dep-unmerged',
               summary: 'phase 2 is ticked but its branch was never merged',
               detail: 'swarm/phase-2 · 3 commits ahead of dev',
+              branch: 'swarm/phase-2',
+              commitsAhead: 3,
+              base: 'dev',
             },
             {
               kind: 'branch-dirty',

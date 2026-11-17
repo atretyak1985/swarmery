@@ -22,6 +22,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import type {
   NeedsYouDecision,
   PhaseBlocker,
+  ProviderTerms,
   PhaseDiagnosis,
   PhaseRunOutcome,
   PhaseVerifyVerdict,
@@ -36,6 +37,8 @@ import {
 } from '../api';
 import { fmtElapsed } from '../lib/format';
 import { useProjectWorkspace } from '../workspace/ProjectContext';
+import { NEUTRAL_TERMS } from '../pages/plans/landingModel';
+import { LandBranchAction } from './runOutcome/LandBranchAction';
 import { ConfirmDialog } from './ui';
 import { useDiscardGuard } from './useDiscardGuard';
 import {
@@ -176,6 +179,7 @@ export function RunOutcomeModal({
   onOpenRevisions,
   decision = null,
   onChanged,
+  terms = NEUTRAL_TERMS,
 }: {
   taskId: number;
   phaseId: number;
@@ -196,6 +200,9 @@ export function RunOutcomeModal({
   decision?: NeedsYouDecision | null;
   /** The page's own reload, fired after an answer or a delete changed the plan. */
   onChanged?: () => void;
+  /** The project's code-host vocabulary (PR / MR …) for the Open-change action;
+   *  the neutral words until the project's vcs has loaded. */
+  terms?: ProviderTerms | undefined;
 }): JSX.Element {
   const { t, i18n } = useLingui();
   const [phase, setPhase] = useState<Phase>({ kind: 'loading' });
@@ -408,7 +415,7 @@ export function RunOutcomeModal({
 
   // Blockers grouped by what they mean for the operator, most urgent group first.
   const guided: { b: PhaseBlocker; g: BlockerGuide }[] =
-    diag?.blockers.map((b) => ({ b, g: guideFor(b, i18n) })) ?? [];
+    diag?.blockers.map((b) => ({ b, g: guideFor(b, i18n, terms) })) ?? [];
   const tiers = new Set(guided.map((x) => x.g.tier));
   const refusal = diag !== null ? retryRefusal(diag.blockers, i18n) : null;
 
@@ -560,7 +567,9 @@ export function RunOutcomeModal({
                             </ol>
                           </>
                         )}
-                        {g.commands.length > 0 && <CommandBlock commands={g.commands} />}
+                        {/* With an in-dashboard action the commands are the
+                            fallback, folded away; without one they ARE the fix. */}
+                        {g.commands.length > 0 && g.land === null && <CommandBlock commands={g.commands} />}
 
                         {b.kind === 'decision-open' && (
                           <DecisionPanel
@@ -596,8 +605,19 @@ export function RunOutcomeModal({
                           )}
                         </details>
 
-                        {(g.deletable !== null || (b.kind === 'unverified' && reverify !== null)) && (
-                          <div className="mt-2 flex flex-wrap items-center gap-2">
+                        {(g.land !== null || g.deletable !== null || (b.kind === 'unverified' && reverify !== null)) && (
+                          <div className="mt-2 flex flex-wrap items-start gap-2">
+                            {g.land !== null && (
+                              <LandBranchAction
+                                taskId={taskId}
+                                branch={b.branch ?? ''}
+                                mode={g.land}
+                                terms={terms}
+                                disabled={writesDisabled}
+                                disabledReason={writesDisabledReason}
+                                onLanded={onChanged}
+                              />
+                            )}
                             {g.deletable !== null && deleteSlot(b, g.deletable)}
                             {/* The remedy for a missing grade is a grade: re-run the
                                 read-only verifier on the branch as it stands. Closes the
@@ -618,6 +638,14 @@ export function RunOutcomeModal({
                               </button>
                             )}
                           </div>
+                        )}
+                        {g.commands.length > 0 && g.land !== null && (
+                          <details className="mt-1.5">
+                            <summary className="cursor-pointer font-mono text-[10px] text-ink-faint hover:text-ink-dim">
+                              <Trans>or do it by hand in the repo</Trans>
+                            </summary>
+                            <CommandBlock commands={g.commands} />
+                          </details>
                         )}
                       </li>
                     ))}

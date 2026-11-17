@@ -5301,7 +5301,24 @@ export type PhaseLandErrorCode =
   | 'binary-missing'
   | 'provider-unknown'
   | 'push-failed'
-  | 'change-request-failed';
+  | 'change-request-failed'
+  /** POST …/orphan-branch/land only: the orphan gate's refusals
+   *  (api.resolveOrphanBranch) — not a swarm/phase-<id> name, a live phase's
+   *  branch, or a project with no known path. */
+  | 'branch-refused'
+  | 'branch-live-phase'
+  | 'no-project-path';
+
+/** POST /api/epics/{taskId}/orphan-branch/land — mirrors api.landOrphanBranch.
+ *  Nothing is stored: the change request is the record, `url` its link. */
+export interface OrphanLandResponse {
+  branch: string;
+  base: string;
+  url: string;
+  /** null when the URL carried no number. */
+  number: number | null;
+  terms: ProviderTerms;
+}
 
 /** Mirrors api.vcsRemoteDTO: the project's `origin`, credentials stripped. */
 export interface VcsRemote {

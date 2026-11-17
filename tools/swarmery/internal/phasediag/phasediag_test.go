@@ -451,6 +451,10 @@ func TestDiagnoseDepUnmerged(t *testing.T) {
 		t.Fatalf("Diagnose: %v", err)
 	}
 	b := blockerOf(t, d, KindDepUnmerged)
+	// The modal lands the dependency's branch from this card, so it must name it.
+	if b.Branch != depBranch || b.CommitsAhead != 2 || b.Base != "dev" {
+		t.Fatalf("dep-unmerged data = %q/%d/%q, want %q/2/dev", b.Branch, b.CommitsAhead, b.Base, depBranch)
+	}
 	for _, want := range []string{"Phase 1", depBranch, "2 commits", "dev"} {
 		if !strings.Contains(b.Summary, want) {
 			t.Fatalf("summary %q must contain %q", b.Summary, want)
