@@ -1596,6 +1596,10 @@ msgstr "not delivered: {reason}"
 msgid "not sent: {msg}"
 msgstr "not sent: {msg}"
 
+#: src/pages/detail/CommandInput.tsx
+msgid "not sent: this terminal session takes no messages from here. Turn on swarmery-link's \"control\" option (new sessions pick it up), or Stop it to take over."
+msgstr "not sent: this terminal session takes no messages from here. Turn on swarmery-link's \"control\" option (new sessions pick it up), or Stop it to take over."
+
 #: src/pages/NeedsYou.tsx
 msgid "note — recorded with the answer in the phase doc (optional)"
 msgstr "note — recorded with the answer in the phase doc (optional)"
@@ -1792,6 +1796,10 @@ msgstr "own answer — sent instead of an option"
 #: src/pages/NeedsYou.tsx
 msgid "own answer…"
 msgstr "own answer…"
+
+#: src/pages/NeedsYou.tsx
+msgid "own reply — overrides the selection"
+msgstr "own reply — overrides the selection"
 
 #: src/pages/ProjectSettings.tsx
 msgid "path"
@@ -2106,6 +2114,10 @@ msgid "Reply to this session…  (Enter to send · Shift+Enter for a new line)"
 msgstr "Reply to this session…  (Enter to send · Shift+Enter for a new line)"
 
 #: src/pages/NeedsYou.tsx
+msgid "reply: {ownHead}"
+msgstr "reply: {ownHead}"
+
+#: src/pages/NeedsYou.tsx
 msgid "reply: {typed}"
 msgstr "reply: {typed}"
 
@@ -2170,8 +2182,8 @@ msgid "Running clean — nothing stopped, nothing waiting on you."
 msgstr "Running clean — nothing stopped, nothing waiting on you."
 
 #: src/pages/detail/SessionGate.tsx
-msgid "running in a terminal · answer there, or stop it to reply here"
-msgstr "running in a terminal · answer there, or stop it to reply here"
+msgid "running in a terminal without link control · answer there, turn on swarmery-link's \"control\" option, or stop it to reply here"
+msgstr "running in a terminal without link control · answer there, turn on swarmery-link's \"control\" option, or stop it to reply here"
 
 #: src/pages/detail/Timeline.tsx
 msgid "running…"
@@ -2253,8 +2265,8 @@ msgid "session is running in a terminal — a message is delivered when the curr
 msgstr "session is running in a terminal — a message is delivered when the current turn ends."
 
 #: src/pages/detail/CommandInput.tsx
-msgid "session is running in a terminal — Stop it to take over and continue the conversation here."
-msgstr "session is running in a terminal — Stop it to take over and continue the conversation here."
+msgid "session is running in a terminal without link control — turn on swarmery-link's \"control\" option, or Stop it to take over and continue the conversation here."
+msgstr "session is running in a terminal without link control — turn on swarmery-link's \"control\" option, or Stop it to take over and continue the conversation here."
 
 #: src/pages/detail/SessionPane.tsx
 msgid "session outcome"
@@ -2821,6 +2833,10 @@ msgstr "you"
 #: src/pages/detail/SessionGate.tsx
 msgid "your pick is pasted as the reply"
 msgstr "your pick is pasted as the reply"
+
+#: src/pages/NeedsYou.tsx
+msgid "your reply to the session"
+msgstr "your reply to the session"
 
 #: src/pages/detail/CallTree.tsx
 msgid "Σ tokens"

@@ -24,7 +24,8 @@ vi.mock('../../api', () => ({
   sendSessionMessage: vi.fn(async () => undefined),
 }));
 
-const BLOCKED = 'running in a terminal · answer there, or stop it to reply here';
+const BLOCKED =
+  'running in a terminal without link control · answer there, turn on swarmery-link\'s "control" option, or stop it to reply here';
 
 const ITEM = {
   kind: 'awaiting_reply',

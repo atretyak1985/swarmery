@@ -10,6 +10,8 @@
 //      'prod-deploy' request.
 //   4. Copy reply writes `[<session>] Re: <question>\n\n` to the clipboard; a
 //      picked suggestion appends the option, and the main button repeats the pick.
+//      Your own reply overrides the pick and is sent; with nothing to send, reply
+//      is off.
 //   5. Dismiss hides the row, survives a remount, and a new blocking episode
 //      of the same session re-surfaces.
 //   6. A WS permission_resolved frame refetches GET /api/needs-you.
@@ -374,6 +376,36 @@ describe('NeedsYou page', () => {
     await waitFor(() => expect(writeText).toHaveBeenLastCalledWith('[api cleanup] Re: Keep the old endpoint?\n\nkeep'));
     fireEvent.click(within(card).getByRole('button', { name: /^reply: keep/ }));
     await waitFor(() => expect(api.sendSessionMessage).toHaveBeenCalledWith(6, 'keep'));
+  });
+
+  it('sends your own reply, which overrides a picked suggestion', async () => {
+    serve([
+      AWAITING,
+      item({
+        sessionId: 6,
+        sessionName: 'api cleanup',
+        suggestion: { question: 'Keep the old endpoint?', options: ['keep', 'remove'], recommended: 'remove' },
+      }),
+    ]);
+    await renderPage();
+
+    // No suggestion: reply waits for words, copy stays available.
+    const plain = rowOf('orders refactor');
+    const send = within(plain).getByRole('button', { name: /^reply/ }) as HTMLButtonElement;
+    expect(send.disabled).toBe(true);
+    fireEvent.change(within(plain).getByRole('textbox', { name: 'your reply to the session' }), {
+      target: { value: 'remove it' },
+    });
+    fireEvent.click(within(plain).getByRole('button', { name: /^reply: remove it/ }));
+    await waitFor(() => expect(api.sendSessionMessage).toHaveBeenCalledWith(1, 'remove it'));
+
+    const card = rowOf('api cleanup');
+    fireEvent.change(within(card).getByRole('textbox', { name: 'own reply — overrides the selection' }), {
+      target: { value: 'neither, deprecate it' },
+    });
+    expect((within(card).getByRole('radio', { name: /remove/ }) as HTMLInputElement).checked).toBe(false);
+    fireEvent.click(within(card).getByRole('button', { name: /^reply: neither, deprecate it/ }));
+    await waitFor(() => expect(api.sendSessionMessage).toHaveBeenCalledWith(6, 'neither, deprecate it'));
   });
 
   it('dismisses a row across a remount, and re-surfaces a new blocking episode', async () => {

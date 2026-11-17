@@ -10,7 +10,8 @@
 //   4. A queued message can be removed before it goes.
 //   5. A live terminal with a link mod: Send goes to the mod as the user's
 //      prompt with the long wait window; Stop aborts the turn, not the process.
-//   6. A live terminal without a link: the box is editable but has no Send.
+//   6. A live terminal without a link: the box is editable but has no Send, and
+//      Enter keeps the draft and says why nothing went.
 //   7. Enter sends; Shift+Enter and an IME composition do not.
 //
 // Runs with the rest of the web suite: `npm test`.
@@ -149,5 +150,15 @@ describe('CommandInput', () => {
     expect(screen.queryByRole('button', { name: 'Send' })).toBeNull();
     fireEvent.click(button('Stop'));
     expect(api.killSession).toHaveBeenCalledWith(7);
+  });
+
+  it('says why Enter sent nothing for a live terminal without a link, and keeps the draft', () => {
+    setup({ procState: 'running' });
+    type('yes, go on');
+    fireEvent.keyDown(box(), { key: 'Enter' });
+    expect(api.sendSessionMessage).not.toHaveBeenCalled();
+    expect(api.sendLinkPrompt).not.toHaveBeenCalled();
+    expect(screen.getByText(/^not sent: .*"control" option/)).toBeTruthy();
+    expect(box().value).toBe('yes, go on');
   });
 });
