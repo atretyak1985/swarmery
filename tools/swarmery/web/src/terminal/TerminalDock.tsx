@@ -142,7 +142,10 @@ export function TerminalDock({
 
   return (
     <div className="flex shrink-0 flex-col" hidden={view.hidden} role="region" aria-label="terminal dock">
-      {/* Resize handle: the 8px gap above the island (hidden in fullscreen). */}
+      {/* Resize handle: the 8px gap above the island at desk (hidden in
+          fullscreen). Below desk (D-9/D-10/D-11 gate at --breakpoint-desk,
+          index.css:592) the dock isn't an island yet, so this stays the
+          thin h-1 strip main always had. */}
       {!fullscreen && (
         <div
           onPointerDown={onHandleDown}
@@ -151,18 +154,19 @@ export function TerminalDock({
           role="separator"
           aria-orientation="horizontal"
           aria-label="resize terminal"
-          className="h-2 shrink-0 cursor-row-resize bg-transparent hover:bg-brand/40"
+          className="h-1 shrink-0 cursor-row-resize bg-transparent hover:bg-brand/40 desk:h-2"
         />
       )}
 
       <div
-        className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-line bg-bg"
+        className="flex min-h-0 flex-1 flex-col overflow-hidden border-t border-line bg-bg desk:rounded-xl desk:border"
         style={{ height: fullscreen ? '75vh' : effHeight }}
       >
         {/* Header: the dock's own tone, a mono "terminal" caption, then the tab
-            strip + toolbar. */}
-        <div className="flex items-center gap-1.5 border-b border-line bg-surface2 px-2 py-1">
-          <span className="shrink-0 font-mono text-[10px] text-ink-2 uppercase tracking-[0.12em]">
+            strip + toolbar. Below desk this matches main's plain header
+            (no surface2 fill, no caption) per the review's R1-1 finding. */}
+        <div className="flex items-center gap-1 border-b border-line px-2 py-1 desk:gap-1.5 desk:bg-surface2">
+          <span className="hidden shrink-0 font-mono text-[10px] text-ink-2 uppercase tracking-[0.12em] desk:inline-flex">
             <Trans>terminal</Trans>
           </span>
           <div className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto">
