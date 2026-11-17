@@ -59,7 +59,7 @@ function AppShell(): JSX.Element {
     {/* overflow-hidden: this shell IS the viewport, so the document itself must
         never scroll — the scroller is <main> below (or the page, on fill routes).
         Same guard as workspace/WorkspaceShell.tsx. */}
-    <div className="app-shell flex h-dvh flex-col overflow-hidden">
+    <div className="app-shell flex h-dvh flex-col overflow-hidden desk:p-2 desk:pb-0">
       {/* Below `desk` only: wordmark, switches, usage, status. On desktop they
           live on the sidebar. */}
       <header className="header-hairline relative z-20 flex h-14 shrink-0 items-center gap-4 bg-bg px-4 desk:hidden">
@@ -107,7 +107,7 @@ function AppShell(): JSX.Element {
       <DashboardLockedBanner />
       <AccountReadyBanner />
 
-      <div className="flex min-h-0 flex-1">
+      <div className="flex min-h-0 flex-1 desk:gap-2">
         {/* Desktop sidebar (196px, desk and up) in its All-projects state. */}
         <Sidebar
           slug={null}

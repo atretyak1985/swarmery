@@ -220,7 +220,7 @@ export function Sidebar({
           wider than the rail and an overflow container would clip it. */}
       <nav
         aria-label={t`primary`}
-        className={`hidden shrink-0 flex-col border-r border-line bg-surface px-[10px] py-3 transition-[width] desk:flex ${
+        className={`hidden shrink-0 flex-col px-0.5 pt-1.5 transition-[width] desk:flex ${
           collapsed ? 'w-[52px]' : 'w-[196px]'
         } ${PANEL_EASE}`}
       >
@@ -245,7 +245,7 @@ export function Sidebar({
               onClick={() => togglePanel('nav')}
               aria-label={navToggleLabel}
               data-tip={navToggleLabel}
-              className="grid h-[22px] w-[22px] place-items-center rounded-[5px] text-ink-dim transition-colors hover:bg-surface2 hover:text-ink"
+              className="grid h-[22px] w-[22px] place-items-center rounded-[5px] text-ink-3 transition-colors hover:bg-surface2 hover:text-ink"
             >
               <PanelIcon side="left" />
             </button>
@@ -255,7 +255,7 @@ export function Sidebar({
                 onClick={toggleTheme}
                 aria-label={t`theme`}
                 data-tip={t`theme · t`}
-                className="h-[22px] w-[22px] rounded-[5px] text-[12px] leading-none text-ink-dim transition-colors hover:bg-surface2 hover:text-ink"
+                className="h-[22px] w-[22px] rounded-[5px] text-[12px] leading-none text-ink-3 transition-colors hover:bg-surface2 hover:text-ink"
               >
                 {theme === 'dark' ? '☾' : '☀'}
               </button>
@@ -275,7 +275,7 @@ export function Sidebar({
           <div className="mt-[18px] flex flex-col gap-px">
             {/* Section eyebrow — the mono micro-label idiom, rail-sized. */}
             {!collapsed && (
-              <div className="px-2 pb-1.5 font-mono text-[9.5px] leading-[normal] tracking-[0.12em] text-ink-faint uppercase">
+              <div className="px-2 pb-1.5 font-mono text-[9.5px] leading-[normal] tracking-[0.12em] text-ink-3 uppercase">
                 <Trans>Improve</Trans>
               </div>
             )}
@@ -290,10 +290,10 @@ export function Sidebar({
               aria-haspopup="dialog"
               aria-label={collapsed ? t`Search & actions` : undefined}
               data-tip={t`jump to anything, or type a task and dispatch it`}
-              className="flex w-full items-center gap-2 rounded-[7px] px-2 py-1.5 text-[13px] leading-[normal] font-medium text-ink-dim transition-colors hover:bg-surface2/50 hover:text-ink"
+              className="flex w-full items-center gap-2 rounded-[7px] px-2 py-1.5 text-[13px] leading-[normal] font-medium text-ink-3 transition-colors hover:bg-surface2/50 hover:text-ink"
             >
               {/* i18n-ignore — the shortcut as printed on the keyboard */}
-              <span aria-hidden="true" className="w-4 shrink-0 text-center font-mono text-[11px] text-ink-faint">
+              <span aria-hidden="true" className="w-4 shrink-0 text-center font-mono text-[11px] text-ink-3">
                 ⌘K
               </span>
               {!collapsed && (
@@ -345,7 +345,7 @@ function SidebarRow({
   const label = place.label;
   // Amber is for what blocks: Inbox blocks nothing, so its badge stays grey.
   const urgent = place.id === 'needs-you' || place.id === 'sessions';
-  const glyphTone = active && place.section !== 'bottom' ? 'text-brand' : 'text-ink-faint';
+  const glyphTone = active && place.section !== 'bottom' ? 'text-brand' : 'text-ink-3';
   const waiting =
     badge === null
       ? null
@@ -363,7 +363,7 @@ function SidebarRow({
       data-tip={compact ? (hint ?? label) : undefined}
       title={compact ? undefined : hint}
       className={`relative flex shrink-0 items-center gap-2 rounded-[7px] px-2 py-1.5 text-[13px] leading-[normal] font-medium transition-colors ${
-        active ? 'bg-surface2 text-ink' : 'text-ink-dim hover:bg-surface2/50 hover:text-ink'
+        active ? 'bg-surface2 text-ink' : 'text-ink-3 hover:bg-surface2/50 hover:text-ink'
       }`}
     >
       <span aria-hidden="true" className={`w-4 shrink-0 text-center font-mono text-[12px] ${glyphTone}`}>

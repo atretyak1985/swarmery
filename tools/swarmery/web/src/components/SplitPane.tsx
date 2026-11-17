@@ -90,8 +90,8 @@ export function SplitPane<T>({
   }, []);
 
   return (
-    <div className="grid h-full min-h-0 grid-cols-[380px_minmax(0,1fr)]">
-      <div className="flex min-h-0 flex-col border-r border-line">
+    <div className="grid h-full min-h-0 grid-cols-[380px_minmax(0,1fr)] gap-2">
+      <div className="flex min-h-0 flex-col overflow-hidden rounded-xl border border-line">
         <div role="listbox" aria-label={ariaLabel} className="min-h-0 flex-1 overflow-y-auto">
           {items.map((item) => {
             const id = getId(item);
@@ -133,7 +133,7 @@ export function SplitPane<T>({
           ))}
         </div>
       </div>
-      <div className="min-h-0 min-w-0 overflow-y-auto">
+      <div className="min-h-0 min-w-0 overflow-y-auto rounded-xl border border-line">
         {selected !== undefined && renderDetail(selected)}
       </div>
     </div>

@@ -13,6 +13,12 @@ export type Mode = 'light' | 'dark' | 'system';
 export type ResolvedMode = 'light' | 'dark';
 export type PaletteId = 'swarm' | 'ocean' | 'forest' | 'sunset' | 'zen' | 'ember';
 
+// Every id below has a `--color-base` token in BOTH modes of its index.css
+// block (frame phase 1, D-1..D-8) — one step darker than that palette's own
+// `bg`, the wash the sidebar and the gaps between the list/detail/rail
+// islands sit on. Not duplicated here: this module carries only the 4
+// preview swatches below, never a palette's full token set.
+
 export interface Palette {
   id: PaletteId;
   /** Display name — a message descriptor; the picker renders it with i18n._(). */

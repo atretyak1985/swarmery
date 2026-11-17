@@ -113,7 +113,7 @@ function WorkspaceInner(): JSX.Element {
     <WorkspaceTerminalContext.Provider value={openWorktree}>
       {/* The sidebar runs the full height (Swarmery v4); the dock and the status
           bar sit under the page, beside it. */}
-      <div className="flex min-h-0 flex-1">
+      <div className="app-shell flex min-h-0 flex-1 desk:gap-2 desk:p-2 desk:pb-0">
         <Sidebar
           slug={slug}
           subPath={subPath}

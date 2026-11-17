@@ -23,6 +23,9 @@
   --color-field: #15171c; /* inputs, idle nav pill, bare buttons */
   --color-surface2: #1a1c22; /* raised / hover fill, active nav, prompt bubbles, code chips */
   --color-sel: var(--color-surface2); /* the selected list row (design --sel) */
+  --color-base: #08090b; /* the wash under the whole shell — one step darker than
+    --color-bg, so the sidebar (which has no fill of its own, D-4) and the gaps
+    between the list/detail/rail islands read as a distinct layer beneath them */
 
   /* ---- hairlines ---- */
   --color-line: #23262e; /* default graphite border */
@@ -144,6 +147,7 @@
   --color-surface: #ffffff; /* cards, panels, sheets — brightest surface */
   --color-field: #f0ebe1; /* inputs, idle nav pill, bare buttons */
   --color-surface2: #f1eee6; /* raised / hover fill, active nav, prompt bubbles, code chips */
+  --color-base: #e8e3d8; /* the wash under the whole shell — darker than --color-bg */
 
   /* ---- hairlines ---- */
   --color-line: #e3ded1; /* default hairline */
@@ -211,6 +215,7 @@
   --color-surface: #101720;
   --color-field: #121a24;
   --color-surface2: #18222e;
+  --color-base: #07090c;
   --color-line: #1f2b38;
   --color-line-strong: #2a3946;
   --color-line-soft: #16202a;
@@ -237,6 +242,7 @@
   --color-surface: #ffffff;
   --color-field: #e6eef4;
   --color-surface2: #dce8f0;
+  --color-base: #dbe0e3;
   --color-line: #c8d8e2;
   --color-line-strong: #aec4d2;
   --color-line-soft: #d8e4ec;
@@ -270,6 +276,7 @@
   --color-surface: #101a16;
   --color-field: #121e18;
   --color-surface2: #182820;
+  --color-base: #070b09;
   --color-line: #1e2c24;
   --color-line-strong: #293a30;
   --color-line-soft: #16221c;
@@ -297,6 +304,7 @@
   --color-surface: #ffffff;
   --color-field: #e6efe6;
   --color-surface2: #dce9dc;
+  --color-base: #dbe0db;
   --color-line: #c8dcc8;
   --color-line-strong: #aec8ae;
   --color-line-soft: #d8e6d8;
@@ -330,6 +338,7 @@
   --color-surface: #1c1314;
   --color-field: #201618;
   --color-surface2: #2a1e20;
+  --color-base: #0c0808;
   --color-line: #2e2224;
   --color-line-strong: #3a2c2e;
   --color-line-soft: #241a1c;
@@ -357,6 +366,7 @@
   --color-surface: #ffffff;
   --color-field: #f4e8e1;
   --color-surface2: #f0ded4;
+  --color-base: #e3dcd7;
   --color-line: #e4cabd;
   --color-line-strong: #d2b0a0;
   --color-line-soft: #ecd8cc;
@@ -390,6 +400,7 @@
   --color-surface: #16191c;
   --color-field: #181c1f;
   --color-surface2: #20252a;
+  --color-base: #0a0b0c;
   --color-line: #262c31;
   --color-line-strong: #333a41;
   --color-line-soft: #1c2126;
@@ -421,6 +432,7 @@
   --color-surface: #ffffff;
   --color-field: #eceef0;
   --color-surface2: #e2e5e8;
+  --color-base: #e0e1e2;
   --color-line: #d4d8dc;
   --color-line-strong: #bcc2c8;
   --color-line-soft: #e0e3e6;
@@ -454,6 +466,7 @@
   --color-surface: #1a1512;
   --color-field: #1e1815;
   --color-surface2: #28201c;
+  --color-base: #0b0807;
   --color-line: #2c2420;
   --color-line-strong: #3a2e28;
   --color-line-soft: #221c18;
@@ -481,6 +494,7 @@
   --color-surface: #ffffff;
   --color-field: #f1e9e2;
   --color-surface2: #ecdfd6;
+  --color-base: #e2ded9;
   --color-line: #e0cebf;
   --color-line-strong: #ccb4a2;
   --color-line-soft: #e8dccf;
@@ -557,9 +571,35 @@
       1;
   }
 
-  /* App shell base: the flat page fill, set once on the outermost shell. */
+  /* App shell base: the darker wash under the whole app, set once on the
+     outermost shell. The sidebar (no border/fill of its own, D-4) and the
+     8px gaps around the list/detail/rail islands sit directly on this. */
   .app-shell {
-    background-color: var(--color-bg);
+    background-color: var(--color-base);
+  }
+
+  /* Page island (D-3): a route outside PlaceLayout gets the same bordered,
+     rounded-12px treatment as the list/detail/rail panes, so every page reads
+     as an island on the base wash without that page changing a line of its
+     own. Keyed off [data-shell-scroller] — the one marker both shells (App.tsx,
+     workspace/ProjectWorkspaceLayout.tsx) already put on their scroll-handoff
+     node — rather than a utility class, so one rule covers both. A PlaceLayout
+     route already draws its own list/detail islands; the :has() clause cancels
+     this wrapper when PlaceLayout (components/place/PlaceLayout.tsx, marked
+     with data-place-layout) is its direct child, so there is never an island
+     inside an island. 900px mirrors --breakpoint-desk — a media query cannot
+     read a custom property, so keep this in sync with that token by hand. */
+  @media (min-width: 900px) {
+    [data-shell-scroller] {
+      border-radius: 12px;
+      border: 1px solid var(--color-line);
+      background-color: var(--color-bg);
+    }
+    [data-shell-scroller]:has(> [data-place-layout]) {
+      border: 0;
+      border-radius: 0;
+      background-color: transparent;
+    }
   }
 }
 

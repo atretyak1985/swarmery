@@ -35,11 +35,12 @@ export function PlaceLayout({
     : 'desk:grid-cols-[clamp(280px,28vw,360px)_minmax(0,1fr)]';
   return (
     <div
-      className={`flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-y-auto transition-[grid-template-columns] desk:grid desk:grid-rows-[minmax(0,1fr)] desk:overflow-hidden ${columns} ${PANEL_EASE}`}
+      data-place-layout=""
+      className={`flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-y-auto transition-[grid-template-columns] desk:grid desk:grid-rows-[minmax(0,1fr)] desk:gap-2 desk:overflow-hidden ${columns} ${PANEL_EASE}`}
     >
       <div className={narrow === 'detail' ? 'hidden desk:contents' : 'contents'}>{list}</div>
       <div
-        className={`min-h-0 min-w-0 bg-surface desk:block desk:overflow-y-auto ${
+        className={`min-h-0 min-w-0 bg-surface desk:block desk:overflow-y-auto desk:rounded-xl desk:border desk:border-line ${
           narrow === 'list' ? 'hidden' : narrow === 'detail' ? 'flex-1' : ''
         }`}
       >
