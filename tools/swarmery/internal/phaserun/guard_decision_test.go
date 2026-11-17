@@ -118,6 +118,55 @@ func TestGuardDecisionNotRaisedForACleanRun(t *testing.T) {
 	}
 }
 
+// A run whose only guard findings are refusals on the daemon's own .swarmery
+// files (the executor's Bash edits of its lent plan-doc copy) raises nothing:
+// no `allow:` entry can release .swarmery, so a decision would offer an allow
+// that changes nothing — the live D-5 card ("The run touched protected paths:
+// (the guard refused 2 attempts; see guard.log)").
+func TestGuardDecisionNotRaisedForDaemonOwnRefusalsOnly(t *testing.T) {
+	db, taskID, p1, _ := fixture(t)
+	var docPath string
+	_ = db.QueryRow(`SELECT doc_path FROM epic_phases WHERE id=?`, p1).Scan(&docPath)
+	_ = os.WriteFile(docPath, []byte(guardedDoc), 0o644)
+	wt, base := gitRepo(t)
+	r := &stubRunner{runFn: func(spec RunSpec) (*Run, error) {
+		_ = os.WriteFile(filepath.Join(wt, GuardLogRel), []byte(
+			"2026-11-17T19:53:47Z\tBash\t.swarmery/plan\timplicit \".swarmery/plan\"\n"+
+				"2026-11-17T20:07:51Z\tBash\t.swarmery/plan/phase-1-schema.md\timplicit \".swarmery/plan/**\"\n"), 0o644)
+		return &Run{SessionUUID: spec.SessionUUID, ExitCode: 0}, nil
+	}}
+	s := newTestService(db, r, &stubWt{pathOverride: wt, startPoint: base})
+	s.Git = worktree.ExecGit{}
+	if _, err := s.Start(p1, "", ""); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, func() bool { return !s.InFlight(p1) })
+	if ds, _ := store.ListTaskDecisions(db, taskID); len(ds) != 0 {
+		t.Fatalf("a .swarmery-only refusal raised %+v", ds)
+	}
+}
+
+func TestGuardResultActionable(t *testing.T) {
+	own := GuardLogLine{Tool: "Bash", Path: ".swarmery/plan/phase-1.md", Reason: "implicit"}
+	for _, c := range []struct {
+		name string
+		r    GuardResult
+		want bool
+	}{
+		{"clean", GuardResult{}, false},
+		{"daemon own only", GuardResult{GuardBlocks: []GuardLogLine{own, {Path: ".swarmery"}}}, false},
+		{"protected file changed", GuardResult{ProtectedChanged: []string{"a_test.go"}, GuardBlocks: []GuardLogLine{own}}, true},
+		{"refused protected file", GuardResult{GuardBlocks: []GuardLogLine{own, {Path: "a_test.go"}}}, true},
+		{"refusal without a path", GuardResult{GuardBlocks: []GuardLogLine{{Path: "-"}}}, true},
+		{"malformed line", GuardResult{GuardBlocks: []GuardLogLine{{Malformed: true}}}, true},
+		{"look-alike dir", GuardResult{GuardBlocks: []GuardLogLine{{Path: ".swarmery-notes/x.md"}}}, true},
+	} {
+		if got := c.r.Actionable(); got != c.want {
+			t.Errorf("%s: Actionable = %v, want %v", c.name, got, c.want)
+		}
+	}
+}
+
 func TestAnswerGuardDecisionAllowWidensTheGuard(t *testing.T) {
 	s, taskID, p1, docPath, _ := guardedRun(t)
 	before := readFileT(t, docPath)

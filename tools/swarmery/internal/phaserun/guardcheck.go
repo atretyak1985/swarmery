@@ -26,6 +26,7 @@ import (
 	"path"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -96,6 +97,27 @@ type GuardResult struct {
 // the condition that raises a phase_decision.
 func (r GuardResult) Flagged() bool {
 	return len(r.ProtectedChanged) > 0 || len(r.GuardBlocks) > 0
+}
+
+// Actionable reports whether the operator has anything to decide: a protected
+// file changed, or the hook refused something other than the daemon's own
+// .swarmery files. A refusal on .swarmery (the lent plan-doc copy, guard.log) is
+// the implicit boundary doing its job — no `allow:` entry can release it
+// (vetAllowPaths drops it) — so alone it raises no decision and adds no
+// allow/reject options to an agent's stop; the Review tab still shows it.
+func (r GuardResult) Actionable() bool {
+	if len(r.ProtectedChanged) > 0 {
+		return true
+	}
+	return slices.ContainsFunc(r.GuardBlocks, func(l GuardLogLine) bool {
+		return l.Malformed || !isDaemonOwnPath(l.Path)
+	})
+}
+
+// isDaemonOwnPath: a path under the worktree's .swarmery directory.
+func isDaemonOwnPath(p string) bool {
+	p = strings.TrimPrefix(strings.TrimSpace(p), "./")
+	return p == ".swarmery" || strings.HasPrefix(p, ".swarmery/")
 }
 
 // HasFindings reports whether the Review tab shows a guard badge at all.
@@ -206,7 +228,7 @@ func worktreeDirProbe(g worktree.Git, wt string) func(string) bool {
 func (r GuardResult) refusedPaths() []string {
 	var out []string
 	for _, l := range r.GuardBlocks {
-		if !l.Malformed && !strings.HasPrefix(l.Path, ".swarmery") {
+		if !l.Malformed && !isDaemonOwnPath(l.Path) {
 			out = append(out, l.Path)
 		}
 	}

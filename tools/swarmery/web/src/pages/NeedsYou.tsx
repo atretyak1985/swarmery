@@ -613,6 +613,16 @@ function PhaseDecision({ ctx }: { ctx: CardContext }): JSX.Element | null {
   const options = decision.options;
   // A guard decision is allow-or-reject: two buttons, nothing to pick from.
   const twoWay = isTwoWayGuardDecision(decision);
+  // An allow that would release nothing: no protected file changed and no path
+  // survived vetting — the guard only refused files no `allow:` can open (the
+  // plan-doc copy under .swarmery). One button dismisses it; "allow" would lie.
+  const nothingToAllow =
+    twoWay && (decision.paths ?? []).length === 0 && (decision.guard?.protectedChanged ?? []).length === 0;
+  const refused = [
+    ...new Set(
+      (decision.guard?.guardBlocks ?? []).map((b) => b.path.trim()).filter((p) => p !== '' && p !== '-'),
+    ),
+  ].join(', ');
   const owning = field === 'own' && typed !== '';
   const picked = owning ? undefined : options[pick];
   const note = field === 'note' ? typed : '';
@@ -622,6 +632,7 @@ function PhaseDecision({ ctx }: { ctx: CardContext }): JSX.Element | null {
   };
   const primary = (): void => {
     if (owning) answer('other', typed);
+    else if (nothingToAllow) answer('reject', note);
     else if (twoWay) answer(ALLOW_OPTION, note);
     else if (picked !== undefined) answer(picked.id, note);
   };
@@ -639,6 +650,7 @@ function PhaseDecision({ ctx }: { ctx: CardContext }): JSX.Element | null {
     ...(found === '' ? [] : [{ key: 'guard', text: found }]),
     ...(flagList === '' ? [] : [{ key: 'flags', text: t`contract broken: ${flagList}`, testId: 'stop-flags' }]),
     ...(pathList === '' ? [] : [{ key: 'paths', text: t`allow releases: ${pathList}`, testId: 'stop-paths' }]),
+    ...(refused === '' ? [] : [{ key: 'refused', text: t`refused: ${refused}`, testId: 'guard-refused' }]),
   ];
   const linkClass = `${INLINE} aria-expanded:text-brand`;
 
@@ -648,6 +660,11 @@ function PhaseDecision({ ctx }: { ctx: CardContext }): JSX.Element | null {
       kindTone="red"
       meta={ctx.meta}
       title={guardDecisionTitle(decision)}
+      {...(nothingToAllow
+        ? {
+            body: t`Nothing here can be added to the scope: the guard only refused files no allow entry can open — the run's copy of its own plan doc and guard.log under .swarmery. The hook already kept them safe. Dismiss records the answer in the phase doc; then re-run the phase.`,
+          }
+        : {})}
       {...(facts.length === 0 ? {} : { facts: <FactsLine facts={facts} /> })}
       {...(twoWay
         ? {}
@@ -686,11 +703,17 @@ function PhaseDecision({ ctx }: { ctx: CardContext }): JSX.Element | null {
           })}
       primaryRef={ctx.primaryRef}
       primary={{
-        label: twoWay ? t`Allow · add to scope` : owning ? t`answer: ${typed}` : t`answer`,
+        label: nothingToAllow
+          ? t`Dismiss · nothing to allow`
+          : twoWay
+            ? t`Allow · add to scope`
+            : owning
+              ? t`answer: ${typed}`
+              : t`answer`,
         onClick: primary,
         disabled: busy || (!twoWay && !owning && picked === undefined),
       }}
-      {...(twoWay
+      {...(twoWay && !nothingToAllow
         ? { secondary: { label: t`Reject`, onClick: () => answer('reject', note), disabled: busy }, secondaryKey: false }
         : {})}
       {...(reviewTo === null ? {} : { link: { label: t`phase review →`, onClick: () => ctx.go(reviewTo) } })}
@@ -1234,8 +1257,12 @@ export function NeedsYou(): JSX.Element {
             </div>
           )}
           {actionError !== null && (
-            <div role="alert" className="py-3 font-mono text-[11px] text-red">
-              {actionError}
+            <div
+              role="alert"
+              data-testid="needs-you-action-error"
+              className="mt-3 rounded-[8px] border border-red px-3 py-2 text-[13px] leading-[1.5] text-red"
+            >
+              <span className="font-semibold">{t`The answer did not go through:`}</span> {actionError}
             </div>
           )}
           {selected !== undefined ? (

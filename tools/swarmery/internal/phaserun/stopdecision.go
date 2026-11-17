@@ -173,7 +173,7 @@ func stopOptions(agent []mdfence.StopOption, guard GuardResult) []mdfence.StopOp
 		}
 		out = append(out, o)
 	}
-	if !guard.Flagged() {
+	if !guard.Actionable() {
 		return out
 	}
 	for _, o := range []mdfence.StopOption{stopGuardAllowOption, stopGuardRejectOption} {

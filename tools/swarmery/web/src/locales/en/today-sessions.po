@@ -907,6 +907,10 @@ msgstr "diff →"
 msgid "dismiss"
 msgstr "dismiss"
 
+#: src/pages/NeedsYou.tsx
+msgid "Dismiss · nothing to allow"
+msgstr "Dismiss · nothing to allow"
+
 #: src/pages/detail/PendingRunNotice.tsx
 msgid "dispatched task"
 msgstr "dispatched task"
@@ -1606,6 +1610,10 @@ msgstr "Nothing happened yet. Sessions, plan runs and decisions land here."
 msgid "Nothing has finished yet."
 msgstr "Nothing has finished yet."
 
+#: src/pages/NeedsYou.tsx
+msgid "Nothing here can be added to the scope: the guard only refused files no allow entry can open — the run's copy of its own plan doc and guard.log under .swarmery. The hook already kept them safe. Dismiss records the answer in the phase doc; then re-run the phase."
+msgstr "Nothing here can be added to the scope: the guard only refused files no allow entry can open — the run's copy of its own plan doc and guard.log under .swarmery. The hook already kept them safe. Dismiss records the answer in the phase doc; then re-run the phase."
+
 #: src/pages/Sessions.tsx
 msgid "Nothing here. Dispatch a task with + new, or widen the project scope."
 msgstr "Nothing here. Dispatch a task with + new, or widen the project scope."
@@ -2049,6 +2057,10 @@ msgstr "Recipient"
 #: src/pages/detail/SessionPane.tsx
 msgid "recovered"
 msgstr "recovered"
+
+#: src/pages/NeedsYou.tsx
+msgid "refused: {refused}"
+msgstr "refused: {refused}"
 
 #: src/pages/NeedsYou.tsx
 msgid "Reject"
@@ -2511,6 +2523,10 @@ msgstr "the {kind} “{label}” ended without writing a transcript — the sess
 #: src/pages/detail/PendingRunNotice.tsx
 msgid "the {kind} “{label}” ended without writing a transcript ({started}) — the session never started or its transcript is gone"
 msgstr "the {kind} “{label}” ended without writing a transcript ({started}) — the session never started or its transcript is gone"
+
+#: src/pages/NeedsYou.tsx
+msgid "The answer did not go through:"
+msgstr "The answer did not go through:"
 
 #: src/pages/detail/HandoffCard.tsx
 msgid "The daemon wrote a brief for a fresh session."

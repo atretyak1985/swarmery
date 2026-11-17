@@ -53,7 +53,10 @@ func guardQuestion(r GuardResult) string {
 	case raw > 0:
 		list = "(" + plural(raw, "path") + ", none of which can be allowed — not a literal file under a protected glob; see the Review tab)"
 	default:
-		list = "(the guard refused " + plural(r.GuardBlocksTotal, "attempt") + "; see guard.log)"
+		// Only a refusal without a usable path (a "-" or a malformed guard.log
+		// line) gets here: a .swarmery-only result raises no decision (Actionable).
+		list = "(the guard refused " + plural(r.GuardBlocksTotal, "attempt") +
+			" without naming a protected file — nothing an allow could release; see guard.log on the Review tab)"
 	}
 	return "The run touched protected paths: " + list + ". Allow (add to scope) or reject?"
 }
@@ -94,7 +97,7 @@ func (s *Service) guardStage(phaseID int64, info phaseInfo, base string, worktre
 		log.Printf("warning: phaserun: phase=%d guard check: changed=%v blocks=%d docCopyMismatch=%v parseError=%v",
 			phaseID, res.ProtectedChanged, res.GuardBlocksTotal, res.DocCopyMismatch, res.ParseError)
 	}
-	if res.Flagged() {
+	if res.Actionable() {
 		s.raiseGuardDecision(phaseID, info, res)
 	}
 	return res
