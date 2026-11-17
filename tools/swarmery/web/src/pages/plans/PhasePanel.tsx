@@ -1,10 +1,14 @@
-// A phase's own page, in the plan's main column in place of the plan: one band with
-// the blocker banner over it when one waits on the operator, then a breadcrumb back
-// to the plan with ↑/↓, the name, one sentence of state, the numbers, and six tabs
-// with the phase's actions on the same line. The shell only: the body and every
+// A phase's own page, the one true header of its own island (D-15, D-17): one band
+// with the blocker banner over it when one waits on the operator, a breadcrumb back
+// to the plan with ↑/↓, the name, the state sentence and the numbers (D-16), and six
+// tabs with the phase's actions closing the band. The shell only: the body and every
 // handler stay in PhaseDetailPanel, which owns the doc, the checkbox writes and the
 // runs. The way back is the breadcrumb and Escape. Edit is an action, not a tab: its
 // URL stays, so an old link still opens the editor.
+//
+// This band is `sticky top-0` of its OWN scrolling island, not chained to a plan
+// band above it (the plan, open at the same time, is the condensed PlanBar in a
+// separate, non-scrolling island) — so it needs no `--detail-parent-band-h`.
 
 import type { MessageDescriptor } from '@lingui/core';
 import { msg, plural, t } from '@lingui/core/macro';
@@ -13,8 +17,24 @@ import { useEffect, useId, useLayoutEffect, useRef, type KeyboardEvent, type Rea
 import { Link } from 'react-router-dom';
 import type { Epic, EpicPhase } from '../../api/types';
 import { DetailHeader } from '../../components/place/DetailHeader';
+import { NumbersStrip, type NumberItem } from '../../components/place/NumbersStrip';
+import type { GlyphState } from '../../components/place/StateGlyph';
 import { nextTabIndex } from '../../components/Tabs';
 import { modelShortName } from '../../lib/sessionModelChip';
+
+/** The state sentence's dot and lead, in the state's colour (handoff §4). */
+const STATE_DOT: Partial<Record<GlyphState, string>> = {
+  needs: 'animate-blink-dot bg-amber',
+  working: 'animate-pulse bg-green',
+  done: 'bg-ink-dim',
+  failed: 'bg-red',
+};
+const STATE_TEXT: Partial<Record<GlyphState, string>> = {
+  needs: 'text-amber',
+  working: 'text-green',
+  done: 'text-ink-dim',
+  failed: 'text-red',
+};
 
 export type PhaseTab = 'story' | 'plain' | 'criteria' | 'runs' | 'review' | 'report' | 'edit';
 
@@ -74,6 +94,12 @@ export interface PhasePanelProps {
   hrefFor?: ((tab: PhaseTab) => string) | undefined;
   /** The BlockerBanner, above the band's content. */
   banner?: ReactNode;
+  /** The state sentence (D-16): a dot, a lead word, and the ledger's own note —
+   * `phaseLedgerModel.phaseStateLine`. Between the name and the numbers. */
+  stateLine?: { state: GlyphState; lead: string; rest: string } | undefined;
+  /** The numbers line (D-16): spent, forecast band, runs, criteria, duration —
+   * whatever the caller has. Between the state sentence and the tabs. */
+  stats?: readonly NumberItem[] | undefined;
   /** The small number beside a tab's label. */
   tabCounts?: Partial<Record<PhaseTab, string>> | undefined;
   /** On the tabs' line, at its right edge. */
@@ -95,6 +121,8 @@ export function PhasePanel({
   stage,
   hrefFor,
   banner,
+  stateLine,
+  stats,
   tabCounts = {},
   actions,
   children,
@@ -161,7 +189,7 @@ export function PhasePanel({
 
   return (
     <section ref={panelRef} aria-labelledby={titleId} tabIndex={-1} className="outline-none">
-      <DetailHeader bleed flush banner={banner} stack="child">
+      <DetailHeader bleed flush banner={banner}>
         <div className="flex min-w-0 items-center gap-2 font-mono text-[10.5px] leading-[normal] text-ink-faint">
           {onBack !== undefined && (
             <>
@@ -215,6 +243,23 @@ export function PhasePanel({
         <h3 id={titleId} className="mt-2 text-[18px] leading-[1.3] font-semibold tracking-[-0.01em] text-balance text-ink">
           {phase.name}
         </h3>
+        {stateLine !== undefined && (
+          <div className="mt-2 flex items-start gap-2 text-[13.5px] leading-normal text-ink-2">
+            <span
+              aria-hidden="true"
+              className={`mt-[5px] size-[9px] shrink-0 rounded-full ${STATE_DOT[stateLine.state] ?? 'bg-ink-faint'}`}
+            />
+            <span>
+              <b className={`font-semibold ${STATE_TEXT[stateLine.state] ?? 'text-ink-faint'}`}>{stateLine.lead}</b> ·{' '}
+              {stateLine.rest}
+            </span>
+          </div>
+        )}
+        {stats !== undefined && stats.length > 0 && (
+          <div className="mt-3">
+            <NumbersStrip items={stats} />
+          </div>
+        )}
         <div className="mt-[18px] flex flex-wrap items-center gap-0.5">
           <div
             role="tablist"

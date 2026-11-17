@@ -12,15 +12,18 @@
 import { plural } from '@lingui/core/macro';
 import { Trans, useLingui } from '@lingui/react/macro';
 import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Link, useLocation } from 'react-router-dom';
 import type { Epic, PlanRunMode, TerminalSession } from '../../api/types';
 import type { EpicLifecycleAction } from '../../api';
 import { CopyIdBadge } from '../../components/CopyIdBadge';
 import { BlockerBanner, DetailHeader, NoticeBand } from '../../components/place/DetailHeader';
+import { useAnchoredLayer } from '../../components/useAnchoredLayer';
 import { projectLabel } from '../../lib/format';
 import { useProjectColor } from '../../lib/projectColors';
 import { compactSpan } from '../../lib/sessionsView';
 import { useProjectWorkspace } from '../../workspace/ProjectContext';
+import { PlanBar } from './PlanBar';
 import { phaseRunEffortLine, phaseRunModelLine, type PhaseRunEffort, type PhaseRunModel } from './PhaseRunPickers';
 import { PlanRunDialog, PlanRunLive } from './PlanRunControls';
 import { TerminalBadge } from './TerminalBadge';
@@ -36,23 +39,10 @@ import {
   segmentLabel,
   segmentState,
   segmentWord,
-  type SegmentState,
+  SEGMENT_TONE,
 } from './planModel';
 import { plansHref, type PlanDetailTab } from './plansUrl';
 import { usePlanDoc } from './usePlanDoc';
-
-/** The design's bar: state by colour, in the band's own vocabulary. */
-const SEGMENT_TONE: Record<SegmentState, { fill: string; text: string }> = {
-  landed: { fill: 'bg-green', text: 'text-green' },
-  running: { fill: 'bg-blue', text: 'text-blue' },
-  guard: { fill: 'bg-red', text: 'text-red' },
-  decision: { fill: 'bg-red', text: 'text-red' },
-  failed: { fill: 'bg-red', text: 'text-red' },
-  manual: { fill: 'bg-amber', text: 'text-amber' },
-  blocked: { fill: 'bg-ink-dim', text: 'text-ink-dim' },
-  started: { fill: 'bg-ink-faint', text: 'text-ink-faint' },
-  pending: { fill: 'bg-line-strong', text: 'text-line-strong' },
-};
 
 const BTN =
   'rounded-[7px] border px-3 py-1.5 font-mono text-[11.5px] leading-[normal] whitespace-nowrap transition-colors disabled:cursor-not-allowed disabled:opacity-50';
@@ -68,20 +58,29 @@ interface MenuItem {
   onSelect: () => void;
 }
 
+/** `⋯` on a `rounded-xl` + `overflow-hidden` island (D-17) can no longer afford an
+ * absolutely-positioned dropdown — the island clips it. `useAnchoredLayer`
+ * measures the button and portals the panel to `document.body`, fixed, same as
+ * `Explain`'s popover — so the island's own clipping never reaches it. */
 function PlanMenu({ items }: { items: readonly MenuItem[] }): JSX.Element {
   const { t } = useLingui();
-  const [open, setOpen] = useState(false);
-  const root = useRef<HTMLSpanElement>(null);
+  const btnRef = useRef<HTMLButtonElement | null>(null);
+  const { anchor, layerRef, openAt, close } = useAnchoredLayer('below');
+  const open = anchor !== null;
   useEffect(() => {
     if (!open) return;
     const onDown = (e: MouseEvent): void => {
-      if (!(e.target instanceof Node) || root.current?.contains(e.target) !== true) setOpen(false);
+      const target = e.target;
+      if (!(target instanceof Node)) return;
+      if (btnRef.current?.contains(target) === true) return;
+      if (layerRef.current?.contains(target) === true) return;
+      close();
     };
     // In capture, ahead of Esc backing out of the plan's open details.
     const onKey = (e: KeyboardEvent): void => {
       if (e.key !== 'Escape') return;
       e.stopPropagation();
-      setOpen(false);
+      close();
     };
     document.addEventListener('mousedown', onDown);
     window.addEventListener('keydown', onKey, true);
@@ -89,24 +88,15 @@ function PlanMenu({ items }: { items: readonly MenuItem[] }): JSX.Element {
       document.removeEventListener('mousedown', onDown);
       window.removeEventListener('keydown', onKey, true);
     };
-  }, [open]);
-  return (
-    <span ref={root} className="relative inline-flex">
-      <button
-        type="button"
-        aria-haspopup="menu"
-        aria-expanded={open}
-        aria-label={t`plan actions`}
-        onClick={() => setOpen((v) => !v)}
-        className={`${BTN} border-line-strong bg-transparent !px-[10px] text-ink-2 hover:border-ink-faint hover:text-ink`}
-      >
-        ⋯
-      </button>
-      {open && (
+  }, [open, close, layerRef]);
+  const menu = !open
+    ? null
+    : createPortal(
         <div
+          ref={layerRef}
           role="menu"
           aria-label={t`plan actions`}
-          className="absolute top-[calc(100%+6px)] right-0 z-30 flex min-w-[220px] flex-col rounded-[9px] border border-line-strong bg-surface p-1 shadow-[0_12px_30px_rgba(0,0,0,0.35)]"
+          className="fixed z-30 flex min-w-[220px] flex-col rounded-[9px] border border-line-strong bg-surface p-1 opacity-0 shadow-[0_12px_30px_rgba(0,0,0,0.35)] transition-opacity duration-100"
         >
           {items.map((item) => (
             <button
@@ -116,7 +106,7 @@ function PlanMenu({ items }: { items: readonly MenuItem[] }): JSX.Element {
               aria-label={item.label}
               disabled={item.disabled === true}
               onClick={() => {
-                setOpen(false);
+                close();
                 item.onSelect();
               }}
               className="cursor-pointer rounded-[6px] border-none bg-transparent px-[10px] py-[7px] text-left text-[12.5px] leading-[normal] text-ink hover:bg-surface2 disabled:cursor-not-allowed disabled:opacity-50"
@@ -125,8 +115,23 @@ function PlanMenu({ items }: { items: readonly MenuItem[] }): JSX.Element {
               <div className="text-[11px] text-ink-dim">{item.hint}</div>
             </button>
           ))}
-        </div>
-      )}
+        </div>,
+        document.body,
+      );
+  return (
+    <span className="relative inline-flex">
+      <button
+        ref={btnRef}
+        type="button"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-label={t`plan actions`}
+        onClick={(e) => (open ? close() : openAt(e.currentTarget.getBoundingClientRect()))}
+        className={`${BTN} border-line-strong bg-transparent !px-[10px] text-ink-2 hover:border-ink-faint hover:text-ink`}
+      >
+        ⋯
+      </button>
+      {menu}
     </span>
   );
 }
@@ -152,8 +157,11 @@ export interface PlanHeaderProps {
   /** What a phase run started now uses, as the ledger's pickers hold it. */
   phaseRunModel: PhaseRunModel;
   phaseRunEffort: PhaseRunEffort;
-  /** A phase is open under this header: it keeps to what frames the phase. */
+  /** A phase is open under this header: it renders as the condensed PlanBar
+   * instead (D-14), and `onBack` is then the bar's title's only job. */
   nested?: boolean;
+  /** Nested only: the bar's title leads back to the phase list. */
+  onBack?: () => void;
 }
 
 export function PlanHeader({
@@ -175,6 +183,7 @@ export function PlanHeader({
   phaseRunModel,
   phaseRunEffort,
   nested = false,
+  onBack,
 }: PlanHeaderProps): JSX.Element {
   const { t } = useLingui();
   const { project, slug } = useProjectWorkspace();
@@ -264,10 +273,68 @@ export function PlanHeader({
     </>
   );
 
+  if (nested) {
+    const action = epic.status === 'archived' ? (
+      <button type="button" disabled className={BTN_PLAIN}>
+        {t`archived`}
+      </button>
+    ) : epic.status === 'paused' ? (
+      <button type="button" disabled={busyLifecycle} onClick={lifecycle('resume')} className={BTN_MAIN}>
+        {busyLifecycle ? '…' : t`▶ resume`}
+      </button>
+    ) : running ? (
+      <button
+        type="button"
+        disabled={busyLifecycle}
+        onClick={lifecycle('pause')}
+        data-tip={t`stops new runs from starting; the run in flight keeps going`}
+        className={BTN_STOPS}
+      >
+        {busyLifecycle ? '…' : t`❚❚ pause`}
+      </button>
+    ) : (
+      !complete && (
+        <button
+          type="button"
+          disabled={planRunBusy || epic.status !== 'active'}
+          aria-expanded={dialogOpen}
+          data-tip={
+            epic.status !== 'active'
+              ? t`plan is not active`
+              : t`hand the whole plan to one agent, headlessly, in an isolated worktree`
+          }
+          onClick={() => setDialogOpen((v) => !v)}
+          className={BTN_MAIN}
+        >
+          {planRunBusy ? '…' : runFailed ? t`▶ retry` : t`▶ run`}
+        </button>
+      )
+    );
+    return (
+      <header className="contents">
+        {banner}
+        <PlanBar epic={epic} resolvedSeqs={resolvedSeqs} spent={spent} onBack={onBack ?? (() => undefined)} action={action} />
+        {dialogOpen && (
+          <div className="border-b border-line bg-surface2 px-4 pb-3 desk:px-7">
+            <PlanRunDialog
+              initialAgent={run?.agent ?? ''}
+              initialMode={run?.mode ?? 'auto'}
+              onCancel={() => setDialogOpen(false)}
+              onRun={(agent, mode) => {
+                setDialogOpen(false);
+                onRunPlan(agent, mode);
+              }}
+            />
+          </div>
+        )}
+      </header>
+    );
+  }
+
   return (
     // `contents`: the band sticks against the whole plan, not this element.
     <header className="contents">
-      <DetailHeader bleed flush banner={banner} stack={nested ? 'parent' : undefined}>
+      <DetailHeader bleed flush banner={banner}>
         <div className="flex flex-wrap items-start gap-5">
           <div className="min-w-0 flex-[1_1_360px]">
             <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 font-mono text-[10.5px] leading-[normal] text-ink-faint">
@@ -317,7 +384,7 @@ export function PlanHeader({
                 {epic.title}
               </button>
             </h2>
-            {!nested && goal !== null && <p className="mt-1.5 max-w-[72ch] text-[13px] leading-[1.55] text-ink-dim">{goal}</p>}
+            {goal !== null && <p className="mt-1.5 max-w-[72ch] text-[13px] leading-[1.55] text-ink-dim">{goal}</p>}
           </div>
 
           <div className="flex flex-wrap items-center gap-1.5 pt-0.5">

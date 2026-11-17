@@ -215,17 +215,16 @@ describe('Verify again — phase row', () => {
   });
 
   // D5 + D7: the fail verdict is `complete` to the gate, so the pill reads done —
-  // and the row's done branch must still offer the re-grade.
+  // and the phase's done branch must still offer the re-grade, not Run/Retry.
   it('is offered on a fail-verdict phase that reads done', async () => {
     epics = [
       epic([phase({ verifyVerdict: 'fail', completionState: 'complete', completionBlockers: [], canReverify: true })]),
     ];
     render(<PlansAt path={LIST} />);
-    // The row's done branch (✓ summary) is what renders — not Run/Retry.
     await openRow();
-    await screen.findAllByRole('button', { name: '✓ summary' });
+    const btn = await screen.findByRole('button', { name: 'Verify again' });
     expect(screen.queryByRole('button', { name: /run this phase now|Run phase|Retry run/ })).toBeNull();
-    expect(screen.getByRole('button', { name: 'Verify again' })).toBeTruthy();
+    expect(btn).toBeTruthy();
   });
 
   it('reads verifying… and is disabled while the server reports verifyRunning', async () => {

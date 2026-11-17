@@ -9,21 +9,25 @@ import { togglePlanCheckbox } from '../../api';
 import type { DecisionHoldRef, Epic, EpicPhase, PlanRevision, ProviderTerms, Session } from '../../api/types';
 import { BlockerBanner } from '../../components/place/DetailHeader';
 import { actionClass } from '../../components/place/PageDetail';
+import type { NumberItem } from '../../components/place/NumbersStrip';
 import { Loading } from '../../components/ui';
-import { fmtAgo } from '../../lib/format';
+import { fmtAgo, fmtElapsed } from '../../lib/format';
 import { Markdown } from '../../lib/markdown';
 import { safeHref } from '../../lib/safeHref';
 import { useSessionHref } from '../../lib/sessionHref';
 import { useProjectWorkspace } from '../../workspace/ProjectContext';
 import { CriterionLint } from './CriterionLint';
 import { ForecastStory } from './ForecastStory';
-import { ForecastSection, RailSection, SurpriseChip } from './ForecastVsActual';
+import { ForecastSection, forecastsOf, RailSection, SurpriseChip } from './ForecastVsActual';
 import { LandCriterionAction } from './LandCriterionAction';
 import { hasReviewTab, showsReviewTab } from './landingModel';
-import { RunRow, STAGE_TONE } from './PhaseLedger';
+import { RunRow, runSpan, STAGE_TONE } from './PhaseLedger';
 import {
+  phaseCost,
+  phaseNote,
   phaseRuns,
   phaseStage,
+  phaseStateLine,
   heldByDecision,
   stageLabel,
 } from './phaseLedgerModel';
@@ -42,7 +46,7 @@ import {
 } from './PhaseRunPickers';
 import { PlainSummary } from './PlainSummary';
 import { type Check, DocEditor, extractChecks } from './planDetailShell';
-import { computeResolvedSeqs, extractSection, phaseGoal, phaseNeedsYou, phaseStatus } from './planModel';
+import { computeResolvedSeqs, extractSection, fmtSpent, phaseGoal, phaseNeedsYou, phaseStatus } from './planModel';
 import type { PhaseDetailTab } from './plansTarget';
 import { ReviewFindings } from './ReviewFindings';
 import { RunsReviewBlock } from './RunsReviewBlock';
@@ -306,6 +310,24 @@ export function PhaseDetailPanel({
   const done = phase.checkboxesDone;
   const total = phase.checkboxesTotal;
 
+  // The header's own state sentence and numbers (D-16) — the same facts the
+  // Runs tab's chips and the ledger row already carry, surfaced where every tab
+  // can see them without switching to Runs.
+  const cost = phaseCost(runs);
+  const forecast = forecastsOf(phase).at(-1);
+  const forecastBand =
+    forecast === undefined ? '' : [forecast.sizeBand, forecast.durationBand].filter((b) => b !== '').join(' · ');
+  const stats: NumberItem[] = [
+    { label: t`spent`, value: cost === null ? '—' : fmtSpent(cost), tone: 'brand' },
+    ...(forecastBand === '' ? [] : [{ label: t`forecast`, value: forecastBand, tone: 'faint' as const }]),
+    { label: t`runs`, value: String(runs.length) },
+    { label: t`criteria`, value: `${String(done)}/${String(total)}`, tone: total > 0 && done === total ? 'green' : 'default' },
+    { label: t`duration`, value: runs.length === 0 ? '—' : runs.map((r) => runSpan(r, now)).join(' + ') },
+  ];
+  const elapsed = phase.runStartedAt === null ? '' : fmtElapsed(phase.runStartedAt, now);
+  const note = phaseNote(phase, status, depsUnmet, elapsed, terms?.changeShort ?? null);
+  const stateLine = phaseStateLine(phase, status, depsUnmet, note);
+
   const stage = phaseStage(phase, status);
   const needsYou = phaseNeedsYou(phase);
   const held = heldByDecision(phase);
@@ -400,6 +422,8 @@ export function PhaseDetailPanel({
       stage={{ label: stageLabel(stage), tone: STAGE_TONE[stage] }}
       hrefFor={tabHref}
       banner={blocker !== null ? <BlockerBanner to={needsHref} lead={blocker} /> : undefined}
+      stateLine={stateLine}
+      stats={stats}
       tabCounts={tabCounts}
       actions={actions}
     >

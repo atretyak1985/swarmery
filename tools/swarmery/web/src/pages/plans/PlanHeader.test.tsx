@@ -75,11 +75,13 @@ function mount(e: Epic, over: Partial<PlanHeaderProps> = {}): {
   onOpenPlan: ReturnType<typeof vi.fn>;
   onRevise: ReturnType<typeof vi.fn>;
   onRunPlan: ReturnType<typeof vi.fn>;
+  onBack: ReturnType<typeof vi.fn>;
 } {
   const onLifecycle = vi.fn();
   const onOpenPlan = vi.fn();
   const onRevise = vi.fn();
   const onRunPlan = vi.fn();
+  const onBack = vi.fn();
   render(
     <MemoryRouter>
       <PlanHeader
@@ -100,11 +102,12 @@ function mount(e: Epic, over: Partial<PlanHeaderProps> = {}): {
         onRevise={onRevise}
         phaseRunModel="default"
         phaseRunEffort="default"
+        onBack={onBack}
         {...over}
       />
     </MemoryRouter>,
   );
-  return { onLifecycle, onOpenPlan, onRevise, onRunPlan };
+  return { onLifecycle, onOpenPlan, onRevise, onRunPlan, onBack };
 }
 
 function openMenu(): HTMLElement {
@@ -127,12 +130,22 @@ describe('PlanHeader', () => {
     expect(document.body.textContent).not.toMatch(/forecast/i);
   });
 
-  it('keeps to what frames the phase when one is open under it', async () => {
-    mount(epic({ linkedSessions: [{ costUsd: 86 } as Epic['linkedSessions'][number]] }), { nested: true });
+  it('collapses to the condensed plan bar when a phase is open under it', async () => {
+    const { onBack } = mount(epic({ linkedSessions: [{ costUsd: 86 } as Epic['linkedSessions'][number]] }), {
+      nested: true,
+    });
     await new Promise((resolve) => setTimeout(resolve));
+    // The full header's own identity, goal and metadata are gone.
     expect(screen.queryByText('Protect the API.')).toBeNull();
-    expect(screen.getByText('$86').parentElement?.className).toContain('whitespace-nowrap');
-    expect(screen.getByText('2/6 criteria')).toBeTruthy();
+    expect(screen.queryByRole('heading')).toBeNull();
+    expect(screen.queryByText('2/6 criteria')).toBeNull();
+    // What is left: the plan label, the title (back to the list), the mini bar,
+    // what was spent, and the run/pause action.
+    expect(screen.getByText('plan')).toBeTruthy();
+    expect(screen.getByText('$86').parentElement?.textContent).toBe('$86 spent');
+    fireEvent.click(screen.getByRole('button', { name: 'Rate limiter for public API' }));
+    expect(onBack).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole('button', { name: '▶ run' })).toBeTruthy();
   });
 
   it('leaves `spent` out while no session is priced', () => {
