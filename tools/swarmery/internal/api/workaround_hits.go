@@ -31,7 +31,7 @@ func (h *Handler) listWorkaroundHits(w http.ResponseWriter, r *http.Request) {
 // plan, after the phases cursor is closed. Like phaseReopens it degrades to an
 // empty map — the list decorates the Plans page and must never take it down.
 func (h *Handler) phaseWorkaroundHits(taskID int64) map[int64]workaround.PhaseHits {
-	out, err := workaround.ForTask(h.DB, taskID)
+	out, err := workaround.ForTask(h.rdb(), taskID)
 	if err != nil {
 		return map[int64]workaround.PhaseHits{}
 	}

@@ -340,7 +340,9 @@ func TestGenerateAgentPromptUnchanged(t *testing.T) {
 			t.Errorf("agent prompt missing %q", want)
 		}
 	}
-	if strings.Contains(prompt, "SKILL.md") {
+	// The shared FORM ladder names SKILL.md as a rung on purpose; what must not
+	// leak is the skill TARGET wording.
+	if strings.Contains(prompt, "<skill-file") || strings.Contains(prompt, "SKILL.md procedure file") {
 		t.Error("the agent prompt leaked skill wording")
 	}
 }

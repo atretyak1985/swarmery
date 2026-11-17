@@ -15,7 +15,10 @@ import {
   planRowNotes,
   planRowTag,
   planRowTitle,
+  planRunLine,
+  rowFlag,
   runsOnly,
+  tabOf,
   type DayBucket,
   type DayItem,
 } from './sessionsView';
@@ -312,5 +315,61 @@ describe('linkSelection', () => {
     expect(runs.selectable).toEqual([]);
     expect(runs.visible).toEqual([]);
     expect(runs.hidden).toBe(1);
+  });
+});
+
+/* ----- artboard 2a on v4 (plan D-7) ---------------------------------------- */
+
+describe('rowFlag — one flag, worst first', () => {
+  const limit = (percentUsed: number): Session['link'] =>
+    ({ rateLimits: [{ kind: 'five_hour', percentUsed, resetsAt: null }] }) as unknown as Session['link'];
+
+  it('is null under every threshold', () => {
+    expect(rowFlag(makeSession({ contextTokens: 299_999, link: limit(79) }), false)).toBeNull();
+    expect(rowFlag(makeSession(), false)).toBeNull();
+  });
+
+  it('orders context, then conflict, then limit', () => {
+    const all = makeSession({ contextTokens: 300_000, link: limit(99) });
+    expect(rowFlag(all, true)).toBe('context');
+    const noContext = makeSession({ contextTokens: 10_000, link: limit(99) });
+    expect(rowFlag(noContext, true)).toBe('conflict');
+    expect(rowFlag(noContext, false)).toBe('limit');
+  });
+
+  it('reads the limit nearest exhaustion', () => {
+    const two = {
+      rateLimits: [
+        { kind: 'seven_day', percentUsed: 40, resetsAt: null },
+        { kind: 'five_hour', percentUsed: 80, resetsAt: null },
+      ],
+    } as unknown as Session['link'];
+    expect(rowFlag(makeSession({ link: two }), false)).toBe('limit');
+  });
+});
+
+describe('tabOf — the tab is the row state', () => {
+  it('maps every state to one of the four groups', () => {
+    expect(tabOf('needs')).toBe('needs');
+    expect(tabOf('working')).toBe('working');
+    expect(tabOf('pending')).toBe('working');
+    expect(tabOf('done')).toBe('done');
+    expect(tabOf('failed')).toBe('stopped');
+    expect(tabOf('stopped')).toBe('stopped');
+  });
+});
+
+describe('planRunLine', () => {
+  it('says the newest phase, the controller and the other sessions', () => {
+    const rows = [
+      makeSession({ planGroup: plan({ role: 'controller', phaseSeq: null, phaseId: null }) }),
+      makeSession({ planGroup: plan({ phaseSeq: 2 }), startedAt: '2026-08-02T10:00:00Z' }),
+      makeSession({ planGroup: plan({ phaseSeq: 3 }), startedAt: '2026-08-02T11:00:00Z' }),
+    ];
+    expect(planRunLine(rows)).toBe('phase 3 · controller + 2 sessions');
+  });
+
+  it('drops the controller and the phase when the run has neither', () => {
+    expect(planRunLine([makeSession({ planGroup: plan({ phaseSeq: null }) })])).toBe('1 session');
   });
 });

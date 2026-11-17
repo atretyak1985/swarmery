@@ -111,6 +111,11 @@ msgstr "[ ] \\ панелі"
 msgid "{0, plural, one {# change} few {# changes} many {# changes} other {# changes}}"
 msgstr "{0, plural, one {# зміна} few {# зміни} many {# змін} other {# зміни}}"
 
+#. placeholder {0}: b.commitsAhead ?? 0
+#: src/components/runOutcome/blockerGuide.ts
+msgid "{0, plural, one {# commit} few {# commits} many {# commits} other {# commits}}"
+msgstr "{0, plural, one {# коміт} few {# коміти} many {# комітів} other {# коміту}}"
+
 #. placeholder {0}: wt.dirtyFiles
 #: src/pages/settings/WorktreesPanel.tsx
 msgid "{0, plural, one {# dirty} few {# dirty} many {# dirty} other {# dirty}}"
@@ -170,6 +175,10 @@ msgstr "{branch} · база {base}"
 msgid "{branch} deleted — Run plan again to start a fresh run."
 msgstr "{branch} видалено — натисніть «Запустити план» ще раз, щоб почати запуск з нуля."
 
+#: src/components/runOutcome/blockerGuide.ts
+msgid "{branch} holds {commits} from an older run that matches no phase now"
+msgstr "{branch} містить {commits} від старішого запуску, якому зараз не відповідає жодна фаза"
+
 #: src/workspace/task/RunConfig.tsx
 msgid "{cardModel} (card override)"
 msgstr "{cardModel} (задано на картці)"
@@ -182,6 +191,10 @@ msgstr "{changes, plural, one {# зміна} few {# зміни} many {# змін
 msgid "{changes} · touched {ago}"
 msgstr "{changes} · змінено {ago}"
 
+#: src/components/runOutcome/LandBranchAction.tsx
+msgid "{changeShort} opened"
+msgstr "{changeShort} відкрито"
+
 #: src/workspace/TaskDiff.tsx
 msgid "{commitCount, plural, one {# commit} few {# commits} many {# commits} other {# commits}} · {fileCount, plural, one {# file} few {# files} many {# files} other {# files}}"
 msgstr "{commitCount, plural, one {# коміт} few {# коміти} many {# комітів} other {# коміта}} · {fileCount, plural, one {# файл} few {# файли} many {# файлів} other {# файла}}"
@@ -193,10 +206,6 @@ msgstr "{commits, plural, one {# коміт буде втрачено.} few {# �
 #: src/components/PlanBranchDirtyModal.tsx
 msgid "{commits, plural, one {# commit} few {# commits} many {# commits} other {# commits}}"
 msgstr "{commits, plural, one {# коміт} few {# коміти} many {# комітів} other {# коміта}}"
-
-#: src/components/PlanRunCard.tsx
-msgid "{count, plural, one {# session} few {# sessions} many {# sessions} other {# sessions}}"
-msgstr "{count, plural, one {# сесія} few {# сесії} many {# сесій} other {# сесії}}"
 
 #: src/components/usage/LimitsPanel.tsx
 msgid "{count} of {total}"
@@ -287,6 +296,10 @@ msgstr "{mod} — за даними Claude Code для цього процесу
 msgid "{n, plural, one {# file is being edited by more than one live session} few {# files are being edited by more than one live session} many {# files are being edited by more than one live session} other {# files are being edited by more than one live session}}"
 msgstr "{n, plural, one {# файл редагує більше однієї живої сесії} few {# файли редагує більше однієї живої сесії} many {# файлів редагує більше однієї живої сесії} other {# файла редагує більше однієї живої сесії}}"
 
+#: src/lib/needsYou.ts
+msgid "{n, plural, one {# protected path} few {# protected paths} many {# protected paths} other {# protected paths}}"
+msgstr "{n, plural, one {# захищений шлях} few {# захищені шляхи} many {# захищених шляхів} other {# захищеного шляху}}"
+
 #: src/components/BulkPromptBar.tsx
 msgid "{n} selected of {selectableCount} with a polling link mod"
 msgstr "вибрано {n} з {selectableCount} з активним модом swarmery link"
@@ -314,6 +327,10 @@ msgstr "вибрані сесії, у яких мод swarmery link більше
 #: src/lib/sessionsView.ts
 msgid "{nth} attempt — {tail}"
 msgstr "{nth} спроба — {tail}"
+
+#: src/lib/sessionsView.ts
+msgid "{others, plural, one {# session} few {# sessions} many {# sessions} other {# sessions}}"
+msgstr "{others, plural, one {# сесія} few {# сесії} many {# сесій} other {# сесії}}"
 
 #: src/workspace/task/RunConfig.tsx
 msgid "{playbookModel} (from playbook)"
@@ -493,6 +510,18 @@ msgstr "◇ План"
 msgid "◇ Review…"
 msgstr "◇ Рев’ю…"
 
+#: src/components/SessionRow.tsx
+msgid "⚠ conflict"
+msgstr "⚠ конфлікт"
+
+#: src/components/SessionRow.tsx
+msgid "⚠ context"
+msgstr "⚠ контекст"
+
+#: src/components/SessionRow.tsx
+msgid "⚠ limit"
+msgstr "⚠ ліміт"
+
 #: src/lib/docFigures.tsx
 msgid "✎ Plan"
 msgstr "✎ План"
@@ -547,9 +576,17 @@ msgstr "9 гейтів"
 msgid "A card's life: capture → queue → run → review → land"
 msgstr "Життя картки: фіксація → черга → запуск → рев’ю → влиття"
 
+#: src/components/runOutcome/blockerGuide.ts
+msgid "A dependency is ticked, but its code is still only on {branch}"
+msgstr "Залежність відмічена, але її код досі лише на {branch}"
+
 #: src/lib/docFigures.tsx
 msgid "A pause on this specific project"
 msgstr "Пауза саме для цього проєкту"
+
+#: src/components/runOutcome/blockerGuide.ts
+msgid "A phase this one depends on is not finished"
+msgstr "Фаза, від якої залежить ця, не завершена"
 
 #: src/lib/docFigures.tsx
 msgid "A plan is a README plus a phase DAG"
@@ -558,6 +595,10 @@ msgstr "План — це README плюс DAG фаз"
 #: src/api.ts
 msgid "a planning run is already active for this project"
 msgstr "для цього проєкту вже триває запуск планування"
+
+#: src/components/runOutcome/blockerGuide.ts
+msgid "A previous run left {commits} on {branch} — a retry cannot start while they are there"
+msgstr "Попередній запуск залишив {commits} на {branch} — поки вони там, повторний запуск не стартує"
 
 #: src/components/RunOutcomeModal.tsx
 msgid "a read-only verifier confirmed this phase’s acceptance criteria"
@@ -657,6 +698,10 @@ msgstr "активно"
 #: src/components/ui.tsx
 msgid "active · {span}"
 msgstr "активно · {span}"
+
+#: src/components/runOutcome/blockerGuide.ts
+msgid "Add \"- [ ]\" acceptance-criteria checkboxes to the phase doc, or press Revise plan."
+msgstr "Додайте до документа фази чекбокси критеріїв приймання \"- [ ]\" або натисніть «Ревізія плану»."
 
 #: src/workspace/NewTaskModal.tsx
 msgid "add a label + Enter"
@@ -776,6 +821,10 @@ msgstr "активна сесія завершилась"
 msgid "An active session ended"
 msgstr "Активна сесія завершилась"
 
+#: src/components/runOutcome/blockerGuide.ts
+msgid "An empty leftover branch {branch} is still there"
+msgstr "Порожня залишкова гілка {branch} досі існує"
+
 #: src/components/NotifySettings.tsx
 msgid "an error event appeared"
 msgstr "з’явилася подія помилки"
@@ -800,9 +849,25 @@ msgstr "Аналітика"
 msgid "Another session holds a claim on the same file: {list}"
 msgstr "Інша сесія тримає ті самі файли: {list}"
 
+#: src/components/RunOutcomeModal.tsx
+msgid "Answer"
+msgstr "Відповісти"
+
+#: src/components/RunOutcomeModal.tsx
+msgid "Answer in my own words"
+msgstr "Відповісти своїми словами"
+
 #: src/api.ts
 msgid "answer planning failed: {status}"
 msgstr "відповідь плануванню не вдалася: {status}"
+
+#: src/components/runOutcome/blockerGuide.ts
+msgid "Answer the executor's decision below, then press Retry run."
+msgstr "Дайте відповідь на рішення виконавця нижче, потім натисніть «Повторити запуск»."
+
+#: src/components/runOutcome/blockerGuide.ts
+msgid "answer the executor's decision first — until then a retry is refused"
+msgstr "спершу дайте відповідь на рішення виконавця — до того повторний запуск буде відхилено"
 
 #: src/components/ChannelBadge.tsx
 msgid "answered inside the session by the swarmery-link mod — no hook process"
@@ -811,6 +876,14 @@ msgstr "відповідь дано всередині сесії модом swa
 #: src/components/ChannelBadge.tsx
 msgid "answered through the swarmery hook process"
 msgstr "відповідь дано через процес хука swarmery"
+
+#: src/components/RunOutcomeModal.tsx
+msgid "answering…"
+msgstr "відповідаємо…"
+
+#: src/components/RunOutcomeModal.tsx
+msgid "Any answer keeps the work: a retry continues on this phase's branch."
+msgstr "Будь-яка відповідь зберігає роботу: повторний запуск продовжить на гілці цієї фази."
 
 #: src/lib/docFigures.tsx
 msgid "API endpoints"
@@ -966,16 +1039,16 @@ msgid "auto-approve presets are configured per project — open a project's Sett
 msgstr "пресети автопогодження задаються для кожного проєкту окремо — відкрийте Налаштування проєкту, щоб їх налаштувати"
 
 #: src/lib/needsYou.ts
-msgid "awaiting merge"
-msgstr "чекає на злиття"
+msgid "Awaiting merge"
+msgstr "Чекає на злиття"
 
 #: src/lib/sessionsView.ts
 msgid "awaiting reply"
 msgstr "чекає відповіді"
 
 #: src/lib/needsYou.ts
-msgid "awaiting your reply"
-msgstr "чекає на вашу відповідь"
+msgid "Awaiting reply"
+msgstr "Чекає відповіді"
 
 #: src/components/Sidebar.tsx
 #: src/workspace/WorkspaceShell.tsx
@@ -1016,8 +1089,8 @@ msgid "Blocker: {summary}"
 msgstr "Блокер: {summary}"
 
 #: src/components/RunOutcomeModal.tsx
-msgid "blockers"
-msgstr "блокери"
+msgid "blocks a retry"
+msgstr "блокує повторний запуск"
 
 #: src/components/CommandPalette.tsx
 msgid "Board"
@@ -1145,10 +1218,18 @@ msgstr "не вдалося змінити вартість: {status}"
 msgid "check"
 msgstr "перевірити"
 
+#: src/lib/needsYou.ts
+msgid "Check by hand"
+msgstr "Перевірити вручну"
+
 #: src/components/AccountReadyBanner.tsx
 #: src/components/AccountsSection.tsx
 msgid "check now"
 msgstr "перевірити зараз"
+
+#: src/components/runOutcome/blockerGuide.ts
+msgid "Check what is on it: the commits are listed under the evidence line below."
+msgstr "Перевірте, що на ній: коміти перелічено під рядком із доказами нижче."
 
 #: src/components/AccountsSection.tsx
 msgid "checked {ago}"
@@ -1179,6 +1260,10 @@ msgstr "виберіть проєкт для планування"
 #: src/components/RetroImproveCard.tsx
 msgid "choose a project…"
 msgstr "виберіть проєкт…"
+
+#: src/components/RunOutcomeModal.tsx
+msgid "choose an answer"
+msgstr "оберіть відповідь"
 
 #: src/pages/Settings.tsx
 msgid "claude accounts"
@@ -1339,8 +1424,8 @@ msgid "confirm detach"
 msgstr "підтвердити відключення"
 
 #: src/lib/needsYou.ts
-msgid "confirm locally"
-msgstr "підтвердити локально"
+msgid "Confirm in terminal"
+msgstr "Підтвердити в терміналі"
 
 #: src/components/SessionControls.tsx
 msgid "Confirm stop"
@@ -1403,6 +1488,10 @@ msgstr "Продовжити фазу у вибраних сесіях"
 msgid "Continue with the next phase of the plan per its phase doc; do not ask for confirmation if the criteria are clear"
 msgstr "Продовжуй наступну фазу плану за phase-doc; не запитуй підтвердження, якщо критерії ясні"
 
+#: src/lib/sessionsView.ts
+msgid "controller + {sessions}"
+msgstr "контролер + {sessions}"
+
 #: src/theme/palettes.ts
 msgid "cool blue, deep-sea"
 msgstr "холодний синій, морська глибина"
@@ -1410,6 +1499,7 @@ msgstr "холодний синій, морська глибина"
 #: src/components/CopyIdBadge.tsx
 #: src/components/CreateAccountModal.tsx
 #: src/components/PlanBranchDirtyModal.tsx
+#: src/components/RunOutcomeModal.tsx
 #: src/components/usage/UsageSetupHint.tsx
 msgid "copied"
 msgstr "скопійовано"
@@ -1420,6 +1510,7 @@ msgstr "Скопійовано"
 
 #: src/components/CreateAccountModal.tsx
 #: src/components/PlanBranchDirtyModal.tsx
+#: src/components/RunOutcomeModal.tsx
 #: src/components/usage/UsageSetupHint.tsx
 msgid "copy"
 msgstr "копіювати"
@@ -1589,6 +1680,10 @@ msgid "Delete"
 msgstr "Видалити"
 
 #: src/components/RunOutcomeModal.tsx
+msgid "delete {branch} so a retry can recreate it"
+msgstr "видалити {branch}, щоб повторний запуск створив її заново"
+
+#: src/components/RunOutcomeModal.tsx
 msgid "Delete {branch}?"
 msgstr "Видалити {branch}?"
 
@@ -1625,13 +1720,13 @@ msgstr "видалити правило не вдалося: {status}"
 msgid "delete task failed: {status}"
 msgstr "видалити задачу не вдалося: {status}"
 
+#: src/components/runOutcome/blockerGuide.ts
+msgid "Delete the branch only to throw this work away and run the phase from scratch."
+msgstr "Видаляйте гілку, лише якщо хочете викинути цю роботу й запустити фазу з нуля."
+
 #: src/components/PlanBranchDirtyModal.tsx
 msgid "delete the run branch and the commits on it"
 msgstr "видалити гілку запуску й коміти на ній"
-
-#: src/components/RunOutcomeModal.tsx
-msgid "delete the run branch so a retry can recreate it"
-msgstr "видалити гілку запуску, щоб повтор створив її знову"
 
 #: src/workspace/task/TaskActions.tsx
 msgid "Deletes the branch <0>{taskBranch}</0> and every commit on it, reclaims the worktree, and archives the card. The work is not recoverable."
@@ -1760,6 +1855,10 @@ msgstr "Відкинути нову задачу?"
 #: src/components/RunOutcomeModal.tsx
 msgid "Discard revise reason?"
 msgstr "Відкинути причину перегляду?"
+
+#: src/components/RunOutcomeModal.tsx
+msgid "Discard this work"
+msgstr "Викинути цю роботу"
 
 #: src/workspace/TaskModal.tsx
 msgid "Discard unsaved edit?"
@@ -1909,6 +2008,10 @@ msgstr "частка помилок"
 msgid "errors"
 msgstr "помилки"
 
+#: src/components/runOutcome/blockerGuide.ts
+msgid "Every criterion is ticked, but nobody has graded the work yet"
+msgstr "Усі критерії відмічені, але роботу ще ніхто не оцінив"
+
 #: src/components/PermissionPresets.tsx
 msgid "Every tool call waits for you. The safe default — nothing runs unattended."
 msgstr "Кожен виклик інструмента чекає на вас. Безпечний типовий режим — нічого не виконується без нагляду."
@@ -1924,6 +2027,10 @@ msgstr "докази"
 #: src/components/RunOutcomeModal.tsx
 msgid "Executor said: {said}"
 msgstr "Виконавець сказав: {said}"
+
+#: src/components/RunOutcomeModal.tsx
+msgid "executor's reason:"
+msgstr "причина виконавця:"
 
 #: src/components/KillButton.tsx
 msgid "exited"
@@ -1957,7 +2064,6 @@ msgstr "провал"
 #: src/components/ProjectPlugins.tsx
 #: src/components/RunOutcomeModal.tsx
 #: src/components/SessionControls.tsx
-#: src/lib/needsYou.ts
 msgid "failed"
 msgstr "збій"
 
@@ -2006,6 +2112,10 @@ msgstr "Файли"
 #: src/components/PluginConfigModal.tsx
 msgid "fill in {needs} first"
 msgstr "спершу заповніть {needs}"
+
+#: src/components/runOutcome/blockerGuide.ts
+msgid "Fill the ## Completion Report section of the phase doc: what shipped, files and commits, verification output, deviations."
+msgstr "Заповніть розділ ## Completion Report у документі фази: що зроблено, файли й коміти, вивід перевірок, відхилення."
 
 #: src/components/PluginConfigModal.tsx
 msgid "filled by probe"
@@ -2059,6 +2169,10 @@ msgstr "фільтр налаштувань"
 msgid "Finish it here: open a terminal already scoped to this account and log the CLI in."
 msgstr "Завершіть тут: відкрийте термінал, уже прив’язаний до цього акаунта, і ввійдіть у CLI."
 
+#: src/components/runOutcome/blockerGuide.ts
+msgid "finish the phase this one depends on first — until then a retry is refused"
+msgstr "спершу завершіть фазу, від якої залежить ця, — до того повторний запуск буде відхилено"
+
 #: src/lib/sessionsView.ts
 #: src/pages/Settings.tsx
 msgid "Finished"
@@ -2100,6 +2214,10 @@ msgstr "{quiet} · у транскрипті тихо, сесія могла н�
 #: src/lib/sessionsView.ts
 msgid "for {waited} · the session does nothing until you decide."
 msgstr "{waited} · сесія нічого не робить, доки ви не вирішите."
+
+#: src/components/RunOutcomeModal.tsx
+msgid "for information — does not block this phase"
+msgstr "до відома — не блокує цю фазу"
 
 #: src/components/KillButton.tsx
 msgid "Force kill"
@@ -2166,9 +2284,12 @@ msgid "Git writes (add, commit, checkout, worktree)"
 msgstr "Записи git (add, commit, checkout, worktree)"
 
 #: src/components/place/StateGlyph.tsx
-#: src/lib/needsYou.ts
 msgid "guard stop"
 msgstr "зупинка guard"
+
+#: src/lib/needsYou.ts
+msgid "Guard stopped the run"
+msgstr "Guard зупинив запуск"
 
 #: src/pages/docsRail.ts
 msgid "Guides"
@@ -2228,6 +2349,10 @@ msgstr "наскільки чесні прогнози"
 msgid "how it's used"
 msgstr "як це використовується"
 
+#: src/components/RunOutcomeModal.tsx
+msgid "how to resolve"
+msgstr "як розв'язати"
+
 #: src/components/PermissionPresets.tsx
 msgid "I understand — apply"
 msgstr "Розумію — застосувати"
@@ -2247,6 +2372,10 @@ msgstr "простій 9 д · TTL 14 д"
 #: src/components/PlanBranchDirtyModal.tsx
 msgid "If the run produced nothing worth keeping, delete the branch. This runs <0>git branch -D</0>: the {commitsText} go, and nothing else holds them."
 msgstr "Якщо запуск не дав нічого вартого збереження, видаліть гілку. Виконується <0>git branch -D</0>: {commitsText} зникнуть, і більше ніде їх немає."
+
+#: src/components/runOutcome/blockerGuide.ts
+msgid "If the work is wrong: Retry run. If the criteria are wrong: Revise plan."
+msgstr "Якщо хибна робота — «Повторити запуск». Якщо хибні критерії — «Ревізія плану»."
 
 #: src/components/AccountsSection.tsx
 msgid "ignored bindings ({count}) — counted under no account"
@@ -2308,6 +2437,10 @@ msgstr "мова інтерфейсу"
 msgid "invalid config"
 msgstr "недійсний конфіг"
 
+#: src/components/runOutcome/blockerGuide.ts
+msgid "It does not block this phase — Retry run works without touching it."
+msgstr "Вона не блокує цю фазу — «Повторити запуск» працює, не чіпаючи її."
+
 #: src/components/AccountSelector.tsx
 msgid "its CLI login is missing"
 msgstr "немає його входу в CLI"
@@ -2340,9 +2473,21 @@ msgstr "перейдіть куди завгодно або введіть за�
 msgid "kebab-case only ([a-z0-9-])"
 msgstr "лише kebab-case ([a-z0-9-])"
 
+#: src/components/runOutcome/blockerGuide.ts
+msgid "Keep it: answering the decision above lets the retry continue on these commits."
+msgstr "Залиште її: відповідь на рішення вище дозволить повторному запуску продовжити на цих комітах."
+
 #: src/components/PlanBranchDirtyModal.tsx
 msgid "keep the work"
 msgstr "залишити роботу"
+
+#: src/components/RunOutcomeModal.tsx
+msgid "keeps the phase from counting as done"
+msgstr "не дає зарахувати фазу як виконану"
+
+#: src/components/RunOutcomeModal.tsx
+msgid "keeps the work — a retry continues on the branch"
+msgstr "зберігає роботу — повторний запуск продовжить на гілці"
 
 #: src/workspace/boardModel.ts
 msgid "kept in step with a GitHub issue or pull request"
@@ -2541,7 +2686,6 @@ msgid "managed"
 msgstr "керований"
 
 #: src/components/place/StateGlyph.tsx
-#: src/lib/needsYou.ts
 msgid "manual check"
 msgstr "ручна перевірка"
 
@@ -2560,6 +2704,10 @@ msgstr "маркетплейс v{marketplaceVersion} · ремонти й пер
 #: src/lib/glossary.ts
 msgid "matches you"
 msgstr "збігається з вами"
+
+#: src/components/runOutcome/blockerGuide.ts
+msgid "merge or delete the leftover branch first — until then a retry is refused"
+msgstr "спершу злийте або видаліть залишкову гілку — до того повторний запуск буде відхилено"
 
 #: src/components/AttachModal.tsx
 msgid "Merges the swarmery entries back into <0>.claude/settings.json</0> (your other settings are never overwritten), restores <1>project.json</1> from its backup, and reinstalls the hooks. Plugins install on the next fresh Claude Code session in the project."
@@ -2656,6 +2804,10 @@ msgstr "Потребує вас"
 msgid "Needs you →"
 msgstr "Потребує вас →"
 
+#: src/components/RunOutcomeModal.tsx
+msgid "needs your decision"
+msgstr "потрібне ваше рішення"
+
 #: src/pages/Settings.tsx
 msgid "needs-you · finished · failed"
 msgstr "потрібні ви · завершено · невдало"
@@ -2683,6 +2835,10 @@ msgstr "Новий проєкт"
 #: src/workspace/NewTaskModal.tsx
 msgid "New task"
 msgstr "Нова задача"
+
+#: src/components/RunOutcomeModal.tsx
+msgid "next step"
+msgstr "наступний крок"
 
 #. placeholder {0}: done.path
 #: src/components/NewProjectButton.tsx
@@ -2821,6 +2977,18 @@ msgid "Note"
 msgstr "Примітка"
 
 #: src/components/RunOutcomeModal.tsx
+msgid "note — recorded with the answer in the phase doc (optional)"
+msgstr "нотатка — запишеться з відповіддю в документ фази (необов'язково)"
+
+#: src/components/RunOutcomeModal.tsx
+msgid "note for the answer"
+msgstr "нотатка до відповіді"
+
+#: src/components/RunOutcomeModal.tsx
+msgid "note, or your own answer instead of the options — recorded in the phase doc"
+msgstr "нотатка або ваша власна відповідь замість варіантів — записується в документ фази"
+
+#: src/components/RunOutcomeModal.tsx
 msgid "Note: {runError}"
 msgstr "Примітка: {runError}"
 
@@ -2828,17 +2996,37 @@ msgstr "Примітка: {runError}"
 msgid "Note: {runNote}"
 msgstr "Примітка: {runNote}"
 
+#: src/components/runOutcome/blockerGuide.ts
+msgid "Nothing blocks this phase."
+msgstr "Ніщо не блокує цю фазу."
+
 #: src/workspace/boardModel.ts
 msgid "Nothing in {laneTitle} matches “{filterLabel}”."
 msgstr "У доріжці {laneTitle} нічого не відповідає «{filterLabel}»."
+
+#: src/components/runOutcome/blockerGuide.ts
+msgid "Nothing in the repo stops a retry. Read what the executor said, then press Retry run or Revise plan."
+msgstr "У репозиторії ніщо не заважає повторному запуску. Прочитайте, що сказав виконавець, потім натисніть «Повторити запуск» або «Ревізія плану»."
 
 #: src/components/place/PageDetail.tsx
 msgid "Nothing matches."
 msgstr "Нічого не знайдено."
 
+#: src/components/runOutcome/blockerGuide.ts
+msgid "Nothing to do — Retry run deletes it automatically."
+msgstr "Нічого робити не треба — «Повторити запуск» видалить її автоматично."
+
+#: src/components/runOutcome/blockerGuide.ts
+msgid "Nothing to do — Retry run picks that worktree up and continues the work."
+msgstr "Нічого робити не треба — «Повторити запуск» підхопить цей worktree і продовжить роботу."
+
 #: src/components/DetachModal.tsx
 msgid "nothing to remove"
 msgstr "нічого видаляти"
+
+#: src/components/runOutcome/blockerGuide.ts
+msgid "Nothing to resolve — press Retry run; the work already done is kept."
+msgstr "Розв'язувати нічого — натисніть «Повторити запуск»; уже зроблена робота збережеться."
 
 #: src/components/AttachModal.tsx
 msgid "nothing to restore"
@@ -2917,6 +3105,10 @@ msgstr "Одне надсилання охоплює щонайбільше {max
 msgid "Only a human can close the open criteria of this phase. Do the [MANUAL] checks and tick them in the Criteria tab — the phase is listed in Needs you."
 msgstr "Відкриті критерії цієї фази може закрити лише людина. Виконайте перевірки [MANUAL] і відмітьте їх у вкладці Criteria — фаза є у «Потребує вас»."
 
+#: src/components/runOutcome/LandBranchAction.tsx
+msgid "Open {changeShort}"
+msgstr "Відкрити {changeShort}"
+
 #: src/workspace/TaskCard.tsx
 msgid "open {ref} on GitHub"
 msgstr "відкрити {ref} на GitHub"
@@ -2929,9 +3121,21 @@ msgstr "Відкрити {verificationUri}"
 msgid "open a terminal in this card's worktree"
 msgstr "відкрити термінал у worktree цієї картки"
 
+#: src/workspace/StatusBar.tsx
+msgid "open Claude Code in a new terminal"
+msgstr "відкрити Claude Code у новому терміналі"
+
+#: src/workspace/StatusBar.tsx
+msgid "Open Claude Code in a new terminal tab"
+msgstr "Відкрити Claude Code у новій вкладці терміналу"
+
 #: src/components/usage/UsageConnect.tsx
 msgid "open login terminal"
 msgstr "відкрити термінал входу"
+
+#: src/components/RunOutcomeModal.tsx
+msgid "open Needs you →"
+msgstr "відкрити «Потребує вас» →"
 
 #: src/components/PlanRunCard.tsx
 msgid "open plan →"
@@ -2949,6 +3153,10 @@ msgstr "відкрити сесію"
 msgid "Open terminal in worktree"
 msgstr "Відкрити термінал"
 
+#: src/components/runOutcome/blockerGuide.ts
+msgid "Open that phase and finish it first — run it, or tick its criteria if its work is already done."
+msgstr "Спершу відкрийте ту фазу й завершіть її — запустіть або відмітьте її критерії, якщо робота вже зроблена."
+
 #: src/components/RetroImproveCard.tsx
 msgid "open the active session →"
 msgstr "відкрити активну сесію →"
@@ -2965,9 +3173,17 @@ msgstr "відкрити сесію планування →"
 msgid "open usage"
 msgstr "відкрити використання"
 
+#: src/components/runOutcome/blockerGuide.ts
+msgid "Optional: add a \"### Lesson N\" entry under ## Lessons Learned in phases/09-retrospective.md."
+msgstr "Необов'язково: додайте запис \"### Lesson N\" під ## Lessons Learned у phases/09-retrospective.md."
+
 #: src/components/PlanBranchDirtyModal.tsx
 msgid "or discard it"
 msgstr "або відкинути"
+
+#: src/components/RunOutcomeModal.tsx
+msgid "or do it by hand in the repo"
+msgstr "або вручну в репозиторії"
 
 #: src/components/TerminalPathNote.tsx
 msgid "or export it into the current shell"
@@ -3080,9 +3296,12 @@ msgid "per-category overrides apply only under the unrestricted preset"
 msgstr "перевизначення за категоріями діють лише в пресеті «без обмежень»"
 
 #: src/components/place/StateGlyph.tsx
-#: src/lib/needsYou.ts
 msgid "permission"
 msgstr "дозвіл"
+
+#: src/lib/needsYou.ts
+msgid "Permission"
+msgstr "Дозвіл"
 
 #: src/components/PermissionPresets.tsx
 msgid "permissions"
@@ -3101,6 +3320,7 @@ msgid "phase"
 msgstr "фаза"
 
 #: src/lib/docFigures.tsx
+#: src/lib/sessionsView.ts
 msgid "phase {n}"
 msgstr "фаза {n}"
 
@@ -3127,6 +3347,10 @@ msgstr "запуск фази не вдався ({status})"
 #: src/lib/sessionsView.ts
 msgid "Phase running"
 msgstr "Фаза виконується"
+
+#: src/lib/needsYou.ts
+msgid "Phase stalled"
+msgstr "Фаза застрягла"
 
 #: src/lib/docFigures.tsx
 msgid "Phases with no edge between them run in parallel; each phase document carries its own copy-paste agent prompt and acceptance criteria, so it is executable standalone."
@@ -3243,6 +3467,10 @@ msgstr "плагіни…"
 msgid "Prefer the terminal? Run this yourself — swarmery never runs it for you:"
 msgstr "Зручніше в терміналі? Виконайте це самі — swarmery ніколи не запускає це за вас:"
 
+#: src/components/runOutcome/blockerGuide.ts
+msgid "Press Verify again to grade the branch as it stands."
+msgstr "Натисніть «Перевірити ще раз», щоб оцінити гілку в поточному стані."
+
 #: src/components/Sidebar.tsx
 msgid "primary"
 msgstr "основна навігація"
@@ -3271,6 +3499,10 @@ msgstr "перевірити"
 #: src/api.ts
 msgid "probe failed: {status}"
 msgstr "перевірка не вдалася: {status}"
+
+#: src/api.ts
+msgid "probe proposal failed"
+msgstr "не вдалося запустити пробу пропозиції"
 
 #: src/components/PluginConfigModal.tsx
 msgid "probe: {reason}"
@@ -3351,6 +3583,10 @@ msgstr "Протоколи"
 msgid "pull request opened: {prUrl}"
 msgstr "пул-реквест відкрито: {prUrl}"
 
+#: src/components/runOutcome/LandBranchAction.tsx
+msgid "push {branch} and open a {change} for it — CI and review run as usual"
+msgstr "запушити {branch} і відкрити для неї {change} — CI та рев'ю пройдуть як завжди"
+
 #: src/workspace/task/TaskActions.tsx
 msgid "push the branch and open a pull request"
 msgstr "запушити гілку й відкрити пул-реквест"
@@ -3359,9 +3595,17 @@ msgstr "запушити гілку й відкрити пул-реквест"
 msgid "Push works over SSH; opening a {change} needs a {provider} token."
 msgstr "Push працює через SSH; щоб відкрити {change}, потрібен токен {provider}."
 
+#: src/components/runOutcome/LandBranchAction.tsx
+msgid "Pushed, {change} opened:"
+msgstr "Запушено, {change} відкрито:"
+
 #: src/workspace/task/TaskActions.tsx
 msgid "Pushes <0>{taskBranch}</0> to <1>origin</1> and opens a pull request with <2>gh</2>, then moves the card to done. The branch is kept."
 msgstr "Пушить <0>{taskBranch}</0> в <1>origin</1>, відкриває пул-реквест через <2>gh</2> і переносить картку в «Готово». Гілка зберігається."
+
+#: src/components/runOutcome/LandBranchAction.tsx
+msgid "pushing…"
+msgstr "пушу…"
 
 #: src/workspace/task/TaskActions.tsx
 msgid "put the card back in the Inbox"
@@ -3369,9 +3613,12 @@ msgstr "повернути картку у Вхідних"
 
 #: src/components/place/DecisionCard.tsx
 #: src/components/place/StateGlyph.tsx
-#: src/lib/needsYou.ts
 msgid "question"
 msgstr "питання"
+
+#: src/lib/needsYou.ts
+msgid "Question"
+msgstr "Питання"
 
 #: src/components/QuestionForm.tsx
 msgid "question {number}"
@@ -3445,6 +3692,14 @@ msgstr "Перевірити знову"
 #: src/components/Explain.tsx
 msgid "Read more →"
 msgstr "Докладніше →"
+
+#: src/components/runOutcome/blockerGuide.ts
+msgid "Read the executor's reason and pick one of its options below — or write your own answer."
+msgstr "Прочитайте причину виконавця й оберіть один із варіантів нижче — або напишіть власну відповідь."
+
+#: src/components/runOutcome/blockerGuide.ts
+msgid "Read the verifier's reasons in the evidence below."
+msgstr "Прочитайте причини перевіряльника в доказах нижче."
 
 #: src/components/ProjectPlugins.tsx
 msgid "read-only — daemon started without SWARMERY_ONBOARD_ROOTS"
@@ -3610,6 +3865,10 @@ msgstr "скидання через {totalMin} хв"
 msgid "resets now"
 msgstr "скидається зараз"
 
+#: src/components/runOutcome/blockerGuide.ts
+msgid "Resolve what blocks a retry (below), then press Retry run."
+msgstr "Усуньте те, що блокує повторний запуск (нижче), потім натисніть «Повторити запуск»."
+
 #: src/components/ProjectActions.tsx
 msgid "restore"
 msgstr "відновити"
@@ -3653,6 +3912,14 @@ msgstr "повтор пропозиції не вдався"
 #: src/components/RunOutcomeModal.tsx
 msgid "Retry run"
 msgstr "Повторити запуск"
+
+#: src/components/runOutcome/blockerGuide.ts
+msgid "Retry run continues on {branch} ({commits}) with your answer to {decisionId}"
+msgstr "«Повторити запуск» продовжить на {branch} ({commits}) з вашою відповіддю на {decisionId}"
+
+#: src/components/runOutcome/blockerGuide.ts
+msgid "Retry run starts on top of {branch}, so it sees that code. It is refused only if several unmerged dependency branches have diverged."
+msgstr "«Повторити запуск» стартує поверх {branch}, тож бачить цей код. Його буде відхилено, лише якщо кілька незлитих гілок залежностей розійшлися."
 
 #: src/workspace/task/TaskActions.tsx
 msgid "review"
@@ -3743,6 +4010,10 @@ msgstr "тривалість запуску"
 #: src/components/RunOutcomeModal.tsx
 msgid "Run error: {runError}"
 msgstr "Помилка запуску: {runError}"
+
+#: src/components/RunOutcomeModal.tsx
+msgid "run in the project's repo"
+msgstr "виконати в репозиторії проєкту"
 
 #: src/workspace/TaskModal.tsx
 msgid "run log"
@@ -3905,6 +4176,10 @@ msgstr "помилка сесії"
 #: src/lib/notifications.ts
 msgid "Session error"
 msgstr "Помилка сесії"
+
+#: src/lib/needsYou.ts
+msgid "Session failed"
+msgstr "Сесія впала"
 
 #: src/components/NotifySettings.tsx
 msgid "session finished"
@@ -4088,10 +4363,6 @@ msgstr "Гліфи стану обертаються й пульсують"
 #: src/workspace/boardModel.ts
 msgid "stale"
 msgstr "застаріло"
-
-#: src/lib/needsYou.ts
-msgid "stalled phase"
-msgstr "фаза застрягла"
 
 #: src/workspace/NewTaskModal.tsx
 msgid "start immediately — the dispatcher picks it up"
@@ -4318,9 +4589,25 @@ msgstr "Радник помітив…"
 msgid "the analysis failed without a recorded reason"
 msgstr "аналіз впав без записаної причини"
 
+#: src/components/runOutcome/blockerGuide.ts
+msgid "the base branch"
+msgstr "базову гілку"
+
 #: src/lib/docFigures.tsx
 msgid "The board's three lanes"
 msgstr "Три доріжки дошки"
+
+#: src/components/runOutcome/blockerGuide.ts
+msgid "The branch holds protected edits ({files}). Only \"Allow (add to scope)\" keeps them: a retry then continues on this branch. Any other answer leaves the branch to be merged or deleted before a retry."
+msgstr "Гілка містить зміни захищених файлів ({files}). Зберігає їх лише «Allow (add to scope)»: тоді повторний запуск продовжить на цій гілці. Після будь-якої іншої відповіді гілку доведеться злити або видалити перед повторним запуском."
+
+#: src/components/RunOutcomeModal.tsx
+msgid "The branch holds protected edits: only \"Allow (add to scope)\" keeps the work. Any other answer, your own words included, leaves the branch to be merged or deleted before a retry."
+msgstr "Гілка містить зміни захищених файлів: роботу зберігає лише «Allow (add to scope)». Після будь-якої іншої відповіді, зокрема власними словами, гілку доведеться злити або видалити перед повторним запуском."
+
+#: src/components/RunOutcomeModal.tsx
+msgid "the branch must then be merged or deleted before a retry"
+msgstr "тоді гілку доведеться злити або видалити перед повторним запуском"
 
 #: src/components/VcsSignInDialog.tsx
 msgid "The code expired before it was entered. Get a new one."
@@ -4333,6 +4620,10 @@ msgstr "Ліміт паралельних запусків (за умовчан�
 #: src/workspace/boardModel.ts
 msgid "The dispatcher picks cards up from here in priority order."
 msgstr "Звідси диспетчер бере картки за пріоритетом."
+
+#: src/components/runOutcome/blockerGuide.ts
+msgid "The executor stopped and is waiting for your decision {decisionId}"
+msgstr "Виконавець зупинився й чекає на ваше рішення {decisionId}"
 
 #: src/workspace/NewTaskModal.tsx
 msgid "the full request (empty = use the title)"
@@ -4362,6 +4653,18 @@ msgstr "прибиральник вимкнено через SWARMERY_WTJANITOR 
 msgid "The nine dispatcher admission gates in order"
 msgstr "Дев’ять вхідних гейтів диспетчера по порядку"
 
+#: src/components/RunOutcomeModal.tsx
+msgid "The options of this decision are on the Needs you page."
+msgstr "Варіанти цього рішення — на сторінці «Потребує вас»."
+
+#: src/components/runOutcome/blockerGuide.ts
+msgid "The phase doc has no acceptance criteria, so no run can prove progress"
+msgstr "У документі фази немає критеріїв приймання, тож жоден запуск не доведе прогресу"
+
+#: src/components/runOutcome/blockerGuide.ts
+msgid "The plan has no recorded lesson"
+msgstr "У плані немає записаного уроку"
+
 #: src/workspace/task/RunConfig.tsx
 msgid "The playbook sets the stages and the permission mode the run spawns under. <0>model</0> overrides the model the playbook would use. <1>agent</1> is orthogonal to both: it prefixes every stage's prompt with that persona, it does not replace the stages."
 msgstr "Плейбук задає етапи й режим дозволів, з яким стартує запуск. <0>model</0> перевизначає модель, яку взяв би плейбук. <1>agent</1> незалежний від обох: він додає цю персону на початок промпта кожного етапу, а не замінює етапи."
@@ -4374,6 +4677,10 @@ msgstr "попередній запуск завершився: {prevStatus}"
 msgid "the previous run exited with an error"
 msgstr "попередній запуск завершився з помилкою"
 
+#: src/components/runOutcome/blockerGuide.ts
+msgid "The previous run's worktree is still checked out on its branch"
+msgstr "Worktree попереднього запуску досі відкритий на його гілці"
+
 #: src/api.ts
 msgid "the probe needs more fields filled in first"
 msgstr "спершу заповніть більше полів для перевірки"
@@ -4381,10 +4688,6 @@ msgstr "спершу заповніть більше полів для пере�
 #: src/components/RunOutcomeModal.tsx
 msgid "The reason you wrote for revising this plan will be lost."
 msgstr "Причина ревізії плану, яку ви написали, буде втрачена."
-
-#: src/components/RunOutcomeModal.tsx
-msgid "the run branch"
-msgstr "гілка запуску"
 
 #: src/components/DiffView.tsx
 msgid "the run branch carries no commits ahead of its start point — the agent changed nothing"
@@ -4401,6 +4704,10 @@ msgstr "запуск впав"
 #: src/components/RunOutcomeModal.tsx
 msgid "the run finished but ticked no acceptance criteria"
 msgstr "запуск завершився, але не відмітив жодного критерію приймання"
+
+#: src/components/runOutcome/blockerGuide.ts
+msgid "The run itself can go on; resolve what keeps the phase from counting as done."
+msgstr "Запуск може йти далі; усуньте те, що не дає зарахувати фазу як виконану."
 
 #: src/components/RunOutcomeModal.tsx
 msgid "the run ticked every acceptance criterion"
@@ -4422,6 +4729,10 @@ msgstr "Вхід відхилено."
 msgid "The slug, path, workspace root, and pack selections you've entered will be lost."
 msgstr "Введені slug, шлях, корінь робочого простору й вибір пакетів буде втрачено."
 
+#: src/components/runOutcome/blockerGuide.ts
+msgid "The stopped run's work ({commits}) is on {branch}"
+msgstr "Робота зупиненого запуску ({commits}) — на {branch}"
+
 #: src/workspace/NewTaskModal.tsx
 msgid "The title, prompt, and any advanced settings you've entered will be lost."
 msgstr "Назву, промпт і розширені налаштування, які ви ввели, буде втрачено."
@@ -4429,6 +4740,14 @@ msgstr "Назву, промпт і розширені налаштування,
 #: src/components/RunOutcomeModal.tsx
 msgid "the verifier could not conclude (env or timeout) — this is not a failing grade"
 msgstr "перевіряльник не дійшов висновку (середовище або тайм-аут) — це не провальна оцінка"
+
+#: src/components/runOutcome/blockerGuide.ts
+msgid "The verifier could not confirm the criteria this run ticked"
+msgstr "Перевіряльник не зміг підтвердити критерії, які відмітив цей запуск"
+
+#: src/components/runOutcome/blockerGuide.ts
+msgid "The work is done, but the phase doc has no Completion Report"
+msgstr "Роботу зроблено, але в документі фази немає Completion Report"
 
 #: src/lib/docFigures.tsx
 msgid "The worktree limit (default 4)"
@@ -4458,6 +4777,14 @@ msgstr "тема · t"
 #: src/theme/ThemePicker.tsx
 msgid "theme settings"
 msgstr "налаштування теми"
+
+#: src/components/runOutcome/blockerGuide.ts
+msgid "Then press Retry run: it continues on this phase's branch, so the work already done is kept."
+msgstr "Потім натисніть «Повторити запуск»: він продовжить на гілці цієї фази, тож уже зроблена робота збережеться."
+
+#: src/components/RunOutcomeModal.tsx
+msgid "then:"
+msgstr "тоді:"
 
 #: src/lib/sessionsView.ts
 msgid "third"
@@ -4536,6 +4863,10 @@ msgstr "Цей термінал працює з config-текою акаунта
 msgid "This view failed to render."
 msgstr "Не вдалося відобразити цей екран."
 
+#: src/components/RunOutcomeModal.tsx
+msgid "throw this work away and start the phase from scratch"
+msgstr "викинути цю роботу й почати фазу з нуля"
+
 #: src/pages/Settings.tsx
 msgid "Tighter rows in every list"
 msgstr "Щільніші рядки в усіх списках"
@@ -4561,6 +4892,14 @@ msgstr "назва обов’язкова"
 #: src/components/usage/LimitsPanel.tsx
 msgid "to {0}"
 msgstr "до {0}"
+
+#: src/components/runOutcome/blockerGuide.ts
+msgid "To keep it, answer \"Allow (add to scope)\" above: it holds protected edits ({files}), and any other answer leaves the branch to be merged or deleted before a retry."
+msgstr "Щоб зберегти її, відповідайте вище «Allow (add to scope)»: вона містить зміни захищених файлів ({files}), і після будь-якої іншої відповіді гілку доведеться злити або видалити перед повторним запуском."
+
+#: src/components/runOutcome/blockerGuide.ts
+msgid "To land it: press Open {changeShort} — it pushes {branch} and opens a {change} into {base}."
+msgstr "Щоб злити її: натисніть «Відкрити {changeShort}» — це запушить {branch} і відкриє {change} у {base}."
 
 #: src/workspace/boardModel.ts
 msgid "today"
@@ -4658,6 +4997,10 @@ msgstr "Без обмежень"
 #: src/components/AccountSelector.tsx
 msgid "unset"
 msgstr "не задано"
+
+#: src/components/runOutcome/blockerGuide.ts
+msgid "Until then Retry run is refused: this phase builds on that work."
+msgstr "До того «Повторити запуск» буде відхилено: ця фаза будується на тій роботі."
 
 #: src/api.ts
 msgid "update failed: {status}"
@@ -4875,6 +5218,18 @@ msgstr "буде видалено"
 msgid "will restore"
 msgstr "буде відновлено"
 
+#: src/components/runOutcome/blockerGuide.ts
+msgid "Work you don't want: press Delete branch, and the retry recreates it from {base}."
+msgstr "Робота не потрібна — натисніть «Видалити гілку», і повторний запуск створить її заново з {base}."
+
+#: src/components/runOutcome/blockerGuide.ts
+msgid "Work you want: press Open {changeShort} — it pushes the branch and opens a {change} into {base}. Once that is merged, press Retry run."
+msgstr "Робота потрібна: натисніть «Відкрити {changeShort}» — це запушить гілку й відкриє {change} у {base}. Щойно його змерджать, натисніть «Повторити запуск»."
+
+#: src/components/runOutcome/blockerGuide.ts
+msgid "Work you want: press Open {changeShort} to push it and open a {change} into {base}. Otherwise delete it."
+msgstr "Робота потрібна: натисніть «Відкрити {changeShort}», щоб запушити її й відкрити {change} у {base}. Інакше видаліть її."
+
 #: src/components/place/StateGlyph.tsx
 msgid "working"
 msgstr "працює"
@@ -4898,8 +5253,8 @@ msgid "worktree"
 msgstr "worktree"
 
 #: src/lib/needsYou.ts
-msgid "worktree cleanup"
-msgstr "прибирання worktree"
+msgid "Worktree cleanup"
+msgstr "Прибирання worktree"
 
 #: src/workspace/task/TaskActions.tsx
 msgid "worktree reclaimed — nothing to re-grade"
@@ -4928,6 +5283,14 @@ msgstr "Записує конфігурацію <0>.claude/</0> і виділя�
 #: src/components/usage/UsageDisconnect.tsx
 msgid "yes, disconnect"
 msgstr "так, від’єднати"
+
+#: src/components/runOutcome/blockerGuide.ts
+msgid "Your answer is recorded under ## Decisions in the phase doc and handed to the next run."
+msgstr "Вашу відповідь буде записано в ## Decisions документа фази й передано наступному запуску."
+
+#: src/components/runOutcome/blockerGuide.ts
+msgid "Your answer to {decisionId} did not accept the protected edits on {branch} — a retry cannot build on it"
+msgstr "Ваша відповідь на {decisionId} не прийняла захищені правки на {branch} — повторний запуск не може на ній будуватися"
 
 #: src/components/PluginConfigModal.tsx
 msgid "Your edits to this plugin's configuration will be lost."

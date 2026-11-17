@@ -219,7 +219,7 @@ func (h *Handler) ackReview(w http.ResponseWriter, r *http.Request) {
 // error yields an empty map and the phases render without a review.
 func (h *Handler) phaseReviews(taskID int64) map[int64][]reviewDTO {
 	out := map[int64][]reviewDTO{}
-	rows, err := h.DB.Query(reviewSelect+`
+	rows, err := h.rdb().Query(reviewSelect+`
 		 WHERE r.scope = 'phase' AND r.workspace_task_id = ?
 		 ORDER BY r.id DESC LIMIT ?`, strconv.FormatInt(taskID, 10), reviewListMax)
 	if err != nil {

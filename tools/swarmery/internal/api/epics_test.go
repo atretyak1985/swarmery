@@ -2,6 +2,7 @@ package api
 
 import (
 	"bytes"
+	"context"
 	"database/sql"
 	"encoding/json"
 	"net/http"
@@ -10,6 +11,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"testing"
+	"time"
 
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/store"
 )
@@ -810,5 +812,60 @@ func TestListEpics_ClosureGate(t *testing.T) {
 	}
 	if epics[0].Status != "done" {
 		t.Errorf("plan status = %q, want done", epics[0].Status)
+	}
+}
+
+// The Plans list must answer while the single writer connection is held (an
+// ingest batch, a labeler pass): ~15 queries per plan used to queue behind it,
+// and the page waited seconds. Unlike TestHotGetsServeWhileWriterHeld this runs
+// on a real plan, so every per-phase helper is on the path — one that still
+// reads h.DB blocks here until the client gives up.
+func TestEpicsServeWhileWriterHeld(t *testing.T) {
+	_, db, taskID, _ := epicFixture(t)
+	var path string
+	if err := db.QueryRow(`SELECT file FROM pragma_database_list WHERE name = 'main'`).Scan(&path); err != nil {
+		t.Fatal(err)
+	}
+	ro, err := store.OpenReader(path)
+	if err != nil {
+		t.Fatalf("open reader: %v", err)
+	}
+	t.Cleanup(func() { ro.Close() })
+	AttachReader(ro)
+	t.Cleanup(func() { AttachReader(nil) })
+	h, err := NewServer(db, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	srv := httptest.NewServer(h)
+	t.Cleanup(srv.Close)
+
+	ctx := context.Background()
+	conn, err := db.Conn(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := conn.ExecContext(ctx, `BEGIN IMMEDIATE`); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		conn.ExecContext(ctx, `ROLLBACK`)
+		conn.Close()
+	})
+
+	client := &http.Client{Timeout: 2 * time.Second}
+	for _, p := range []string{"/api/epics", "/api/epics?projectId=1"} {
+		resp, err := client.Get(srv.URL + p)
+		if err != nil {
+			t.Fatalf("GET %s while the writer is held: %v — something on its path still reads the writer", p, err)
+		}
+		var epics []epicDTO
+		if err := json.NewDecoder(resp.Body).Decode(&epics); err != nil {
+			t.Fatal(err)
+		}
+		resp.Body.Close()
+		if len(epics) != 1 || epics[0].TaskID != taskID || len(epics[0].Phases) != 2 {
+			t.Fatalf("GET %s: want the fixture plan with 2 phases, got %+v", p, epics)
+		}
 	}
 }

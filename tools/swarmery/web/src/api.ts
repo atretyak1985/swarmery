@@ -25,6 +25,7 @@ import type {
   PhaseLandErrorCode,
   PhaseLandRequest,
   PhaseLandResponse,
+  OrphanLandResponse,
   PhaseReview,
   VcsInfo,
   VcsProviderAnswer,
@@ -88,6 +89,9 @@ import type {
   ProjectPluginToggleResponse,
   ProjectsHealthResponse,
   ProjectsResponse,
+  ProbeJob,
+  ProbeSource,
+  ProposalProbesResp,
   ProposalsResp,
   ProvisionResponse,
   Recommendation,
@@ -1093,6 +1097,25 @@ export async function retryProposal(id: number): Promise<void> {
   if (!res.ok) throw new Error(await errBody(res, t`retry proposal failed`));
 }
 
+/** GET /api/improve/proposals/{id}/probes — stored probe rows + this daemon's jobs. */
+export function fetchProposalProbes(id: number): Promise<ProposalProbesResp> {
+  return get(`/api/improve/proposals/${String(id)}/probes`);
+}
+
+/**
+ * POST /api/improve/proposals/{id}/probe — run the agent's promptfoo suite
+ * (source 'promptfoo') or the frozen bench (source 'bench', its own cap) on
+ * base vs proposal as a background job (202). Advisory: never changes the
+ * proposal. 422 unless proposed/approved; 409 a probe is already running.
+ */
+export async function startProposalProbe(id: number, source: ProbeSource = 'promptfoo'): Promise<ProbeJob> {
+  const query = source === 'promptfoo' ? '' : `?source=${source}`;
+  const res = await apiFetch(`/api/improve/proposals/${String(id)}/probe${query}`, { method: 'POST' });
+  if (!res.ok) throw new Error(await errBody(res, t`probe proposal failed`));
+  const body = (await res.json()) as { job: ProbeJob };
+  return body.job;
+}
+
 /** POST /api/retro/proposals/{id}/apply — manual re-run of a stuck approved row. */
 export async function applyProposal(id: number): Promise<void> {
   const res = await apiFetch(`/api/retro/proposals/${String(id)}/apply`, { method: 'POST' });
@@ -1415,6 +1438,32 @@ export async function landPhase(taskId: number, phaseId: number, body: PhaseLand
   });
   if (!res.ok) throw await landError(res, t`land failed`);
   return (await res.json()) as PhaseLandResponse;
+}
+
+/**
+ * POST /api/epics/{taskId}/orphan-branch/land?branch= — push an orphan
+ * swarm/phase-<id> branch (its id matches no phase row) and open a change
+ * request for it: the keep-the-work twin of deleteOrphanBranch, behind the same
+ * server-side gate. Throws LandError: 409 (`branch-refused`, `branch-live-phase`,
+ * `no-project-path`, `push-to-base-refused`, `fork-workflow-unsupported`) and 422
+ * with a manual-command `hint`.
+ */
+export async function landOrphanBranch(
+  taskId: number,
+  branch: string,
+  body: { draft?: boolean } = {},
+): Promise<OrphanLandResponse> {
+  if (MOCK) return mockApi.landOrphanBranch(taskId, branch);
+  const res = await apiFetch(
+    `/api/epics/${String(taskId)}/orphan-branch/land?branch=${encodeURIComponent(branch)}`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    },
+  );
+  if (!res.ok) throw await landError(res, t`land failed`);
+  return (await res.json()) as OrphanLandResponse;
 }
 
 /**

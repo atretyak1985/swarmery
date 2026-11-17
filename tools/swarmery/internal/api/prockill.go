@@ -121,6 +121,21 @@ func (h *Handler) hookSessionStart(w http.ResponseWriter, r *http.Request) {
 	}
 
 	now := time.Now().UTC().Format(time.RFC3339)
+	// A resume revives a killed session. 'killed' is terminal for ingest and
+	// procwatch so a dead process's final JSONL flush cannot resurrect it —
+	// but SessionStart is fired only by a process that is starting, so a
+	// verified claude process that is NOT the one we killed (different pid or
+	// start time) is the operator resuming it (`claude --resume`). Without
+	// this the row keeps its "killed" badge for the rest of its life while the
+	// transcript grows. Must run before the UPDATE below overwrites pid.
+	var revivedID int64
+	if err := h.DB.QueryRow(`UPDATE sessions SET status = 'active'
+		WHERE session_uuid = ? AND status = 'killed'
+		  AND (pid IS NULL OR pid <> ? OR COALESCE(proc_started_at, '') <> ?)
+		RETURNING id`,
+		body.SessionID, body.PID, info.StartTime).Scan(&revivedID); err != nil && !errors.Is(err, sql.ErrNoRows) {
+		log.Printf("prockill: revive killed session %s on resume: %v", body.SessionID, err)
+	}
 	res, err := h.DB.Exec(`UPDATE sessions SET pid = ?, pid_source = 'hook',
 		proc_started_at = ?, proc_state = 'running', proc_checked_at = ?,
 		term_program = ?, term_focus_url = ?, term_bundle_id = ?, term_tty = ?,
@@ -130,6 +145,9 @@ func (h *Handler) hookSessionStart(w http.ResponseWriter, r *http.Request) {
 		nullStr(body.Terminal.Program), nullStr(body.Terminal.FocusURL), nullStr(body.Terminal.BundleID), nullStr(info.TTY),
 		body.LaunchAccount, body.LaunchAccount,
 		body.SessionID)
+	if revivedID != 0 {
+		publishSessionUpdated(revivedID)
+	}
 	if err != nil {
 		log.Printf("prockill: bind pid for session %s: %v", body.SessionID, err)
 	} else if n, _ := res.RowsAffected(); n == 0 {

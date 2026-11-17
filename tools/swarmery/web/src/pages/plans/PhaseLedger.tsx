@@ -1,8 +1,11 @@
 // The phase ledger (handoff §6): one line per phase, in the design's grid, so a
 // plan's state reads top to bottom. A line opens the phase's own page, where its runs,
-// criteria and every action it offers live. The last column carries the one action the
-// line needs now (LedgerAction): run or retry, stop, answer, tick, or the green link
-// to a landed phase's report. What a run started now will use is on the plan's
+// criteria and every action it offers live. The criteria column counts ticked of all
+// acceptance criteria and links to them. The last column carries the one action the
+// line needs now (LedgerAction): run or retry, stop, answer, tick, verify again, write
+// the report, or the green link to a landed phase's report. A phase whose criteria are
+// all ticked never offers a run: what it lacks is a verdict or a report, not work. What
+// a run started now will use is on the plan's
 // metadata line, above the ledger.
 
 import { Trans, useLingui } from '@lingui/react/macro';
@@ -31,10 +34,14 @@ import {
 import { fmtSpent, phaseNeedsYou, phasesLanded, phaseStatus, type PhaseStatus } from './planModel';
 import type { PhaseDetailTab } from './plansTarget';
 import { TerminalBadge } from './TerminalBadge';
+import { reverifyAction, type Reverify } from './useReverify';
 
-/** Below `desk` the stage and the cost drop out: the note still says where it is. */
+/** Below `desk` the stage and the cost drop out: the note still says where it is.
+ * Every line is its own grid, so no column may size to its content: an `auto` action
+ * column grew on the one line with a wide pill and pushed that line's stage, cost and
+ * criteria off the header. 140px holds the widest pill, uk "позначити критерії" (137px). */
 const GRID =
-  'grid grid-cols-[18px_24px_minmax(0,1fr)_auto] gap-[10px] desk:grid-cols-[18px_24px_minmax(0,1fr)_72px_56px_minmax(92px,auto)]';
+  'grid grid-cols-[18px_24px_minmax(0,1fr)_auto] gap-[10px] desk:grid-cols-[18px_24px_minmax(0,1fr)_72px_56px_64px_140px]';
 
 const PILL =
   'inline-flex items-center rounded-md border px-2 py-[3px] font-mono text-[11px] leading-[normal] whitespace-nowrap transition-colors disabled:cursor-not-allowed disabled:opacity-50';
@@ -79,6 +86,94 @@ function CostCell({ cost, maxCost, band }: { cost: number | null; maxCost: numbe
   );
 }
 
+/** Past this many criteria one dash per criterion gets too thin to read, so the bar
+ * turns into three proportional runs in the same order. */
+const MAX_DASHES = 12;
+
+type CriterionMark = 'ticked' | 'manual' | 'open';
+
+const MARK_FILL: Record<CriterionMark, string> = {
+  ticked: 'bg-green',
+  manual: 'bg-brand',
+  open: 'bg-line',
+};
+
+/** One mark per criterion, ticked first, then the `[MANUAL]` ones that wait on a
+ * person, then the rest still open. */
+export function criterionMarks(done: number, total: number, manualOpen: number): CriterionMark[] {
+  // A phase from an older daemon may lack a count: treat it as none, never as NaN.
+  const count = (n: number | undefined): number => (Number.isFinite(n) ? Math.max(0, Math.floor(n as number)) : 0);
+  const all = count(total);
+  const ticked = Math.min(count(done), all);
+  const manual = Math.min(count(manualOpen), all - ticked);
+  return [
+    ...Array<CriterionMark>(ticked).fill('ticked'),
+    ...Array<CriterionMark>(manual).fill('manual'),
+    ...Array<CriterionMark>(all - ticked - manual).fill('open'),
+  ];
+}
+
+function CriteriaBar({ marks }: { marks: readonly CriterionMark[] }): JSX.Element {
+  if (marks.length <= MAX_DASHES) {
+    return (
+      <span data-testid="criteria-bar" aria-hidden="true" className="flex h-1 gap-[2px]">
+        {marks.map((m, i) => (
+          <span key={i} data-mark={m} className={`h-full flex-1 rounded-[1px] ${MARK_FILL[m]}`} />
+        ))}
+      </span>
+    );
+  }
+  const runs = (['ticked', 'manual', 'open'] as const)
+    .map((m) => ({ m, n: marks.filter((x) => x === m).length }))
+    .filter((r) => r.n > 0);
+  return (
+    <span data-testid="criteria-bar" aria-hidden="true" className="flex h-1 gap-[2px]">
+      {runs.map((r) => (
+        <span key={r.m} data-mark={r.m} className={`h-full rounded-[1px] ${MARK_FILL[r.m]}`} style={{ flexGrow: r.n }} />
+      ))}
+    </span>
+  );
+}
+
+/** Ticked of all acceptance criteria, over a dash per criterion: green ticked, brand
+ * for a `[MANUAL]` one that waits on a person, dim still open. The count is green once
+ * every one is ticked and brand while a `[MANUAL]` one waits. A link to the phase's
+ * criteria tab. */
+function CriteriaCell({
+  phase,
+  href,
+}: {
+  phase: EpicPhase;
+  href: string;
+}): JSX.Element {
+  const { t } = useLingui();
+  const { checkboxesDone: done, checkboxesTotal: total, manualOpen } = phase;
+  if (total === 0) {
+    return <span className="hidden font-mono text-[11px] leading-[normal] text-ink-faint desk:block">—</span>;
+  }
+  const tone = done >= total ? 'text-green' : manualOpen > 0 ? 'text-brand' : 'text-ink-dim';
+  const tip =
+    manualOpen > 0
+      ? t`${done} of ${total} criteria ticked · ${manualOpen} [MANUAL] wait on you`
+      : t`${done} of ${total} criteria ticked`;
+  return (
+    <Link
+      to={href}
+      onClick={(e) => e.stopPropagation()}
+      data-tip={tip}
+      aria-label={tip}
+      className="group hidden flex-col gap-[3px] desk:flex"
+    >
+      <span
+        className={`font-mono text-[11px] leading-[normal] whitespace-nowrap underline-offset-2 group-hover:underline ${tone}`}
+      >
+        {done}/{total}
+      </span>
+      <CriteriaBar marks={criterionMarks(done, total, manualOpen)} />
+    </Link>
+  );
+}
+
 export interface LedgerRunControls {
   /** The phase a run request is in flight for, or null. */
   runBusy: number | null;
@@ -86,6 +181,9 @@ export interface LedgerRunControls {
   planRunning: boolean;
   onRun: (phaseId: number) => void;
   onCancelRun: (phaseId: number) => void;
+  /** Re-grade a finished phase with the read-only verifier (no executor runs). */
+  reverify: Reverify;
+  onReverify: (phaseId: number) => void;
 }
 
 /** The one action a line needs now, or nothing when the phase can only wait. */
@@ -106,8 +204,8 @@ function LedgerAction({
   phaseHref: (seq: number, tab: PhaseDetailTab) => string;
   needsHref: string;
 }): JSX.Element | null {
-  const { t } = useLingui();
-  const { runBusy, planRunning, onRun, onCancelRun } = controls;
+  const { t, i18n } = useLingui();
+  const { runBusy, planRunning, onRun, onCancelRun, reverify, onReverify } = controls;
   const stop = (e: { stopPropagation: () => void }): void => e.stopPropagation();
   if (phaseNeedsYou(phase)) {
     return heldByDecision(phase) || phase.guardDecision != null ? (
@@ -148,6 +246,39 @@ function LedgerAction({
         className="font-mono text-[11px] leading-[normal] whitespace-nowrap text-green underline-offset-2 hover:underline"
       >
         <Trans>✓ report</Trans>
+      </Link>
+    );
+  }
+  // The criteria are all ticked: a run would redo finished work and tick nothing.
+  // An unconfirmed phase needs the verifier again; an unreported one needs its
+  // Completion Report written.
+  if (status === 'unverified') {
+    const again = reverifyAction(phase, reverify, onReverify, i18n);
+    if (again === null) return null;
+    return (
+      <button
+        type="button"
+        disabled={again.disabled}
+        data-tip={again.tip}
+        onClick={(e) => {
+          stop(e);
+          again.onClick();
+        }}
+        className={`${PILL} border-brand/60 text-brand hover:bg-brand-bg`}
+      >
+        {again.label}
+      </button>
+    );
+  }
+  if (status === 'unreported') {
+    return (
+      <Link
+        to={phaseHref(phase.seq, 'report')}
+        onClick={stop}
+        data-tip={t`the work is confirmed; the phase doc's Completion Report is empty`}
+        className={`${PILL} border-brand/60 text-brand hover:bg-brand-bg`}
+      >
+        <Trans>write report</Trans>
       </Link>
     );
   }
@@ -279,6 +410,9 @@ export function PhaseLedger({
         <span className="hidden desk:block">
           <Trans>cost</Trans>
         </span>
+        <span className="hidden desk:block">
+          <Trans>criteria</Trans>
+        </span>
         <span className="text-right">
           <Trans>action</Trans>
         </span>
@@ -329,6 +463,7 @@ export function PhaseLedger({
                 </div>
                 <StageLabel stage={phaseStage(p, status)} />
                 <CostCell cost={costs[i] ?? null} maxCost={maxCost} band={phaseCostBand(p)} />
+                <CriteriaCell phase={p} href={phaseHref(p.seq, 'criteria')} />
                 <span className="flex justify-end">
                   <LedgerAction
                     phase={p}

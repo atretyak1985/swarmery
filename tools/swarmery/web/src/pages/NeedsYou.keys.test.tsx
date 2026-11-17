@@ -1,7 +1,12 @@
 // @vitest-environment jsdom
 //
-// `e` and `x` act on the open card and nothing else. The claim that matters: once
-// the last request is answered and the card is gone, `e` must not answer it again.
+// The page's keys (artboard 3b on v4, plan D-4/D-9). The claims:
+//
+//   1. `e` only moves focus onto the open card's main action; it never answers.
+//   2. `x` acts on the open card and nothing else: once the answered card is gone,
+//      or while the refetch after an answer is still pending, it is dead.
+//   3. `o` / → go into the decision pane, ← back to its row in the list.
+//   4. The footer names `e` as focusing, and drops `x` where it does nothing.
 
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -65,6 +70,14 @@ async function renderPage(): Promise<void> {
   await screen.findAllByRole('button', { name: /^(allow once|deny)/ });
 }
 
+async function press(...keys: string[]): Promise<void> {
+  for (const key of keys) {
+    await act(async () => {
+      fireEvent.keyDown(window, { key });
+    });
+  }
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(api.fetchApprovals).mockResolvedValue([REQUEST]);
@@ -72,22 +85,28 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('NeedsYou keys', () => {
-  it('does nothing on e once the card is gone', async () => {
+  it('moves focus onto the main action on e, and never answers with it', async () => {
+    serve([ITEM]);
+    await renderPage();
+    const allow = await screen.findByRole('button', { name: /^allow once/ });
+    await press('e');
+    expect(document.activeElement).toBe(allow);
+    expect(api.resolveApproval).not.toHaveBeenCalled();
+    fireEvent.click(allow);
+    await waitFor(() => expect(api.resolveApproval).toHaveBeenCalledWith(11, 'approve', undefined, undefined));
+  });
+
+  it('does nothing on x once the card is gone', async () => {
     serve([ITEM]);
     await renderPage();
     serve([]);
-    await act(async () => {
-      fireEvent.keyDown(window, { key: 'e' });
-    });
-    expect(api.resolveApproval).toHaveBeenCalledTimes(1);
+    fireEvent.click(await screen.findByRole('button', { name: /^allow once/ }));
     await screen.findByText('Nothing blocked on you.');
-    await act(async () => {
-      fireEvent.keyDown(window, { key: 'e' });
-    });
+    await press('x', 'x', 'e');
     expect(api.resolveApproval).toHaveBeenCalledTimes(1);
   });
 
-  it('does nothing on e while the queue refetch after an answer is still pending', async () => {
+  it('does nothing on x while the queue refetch after an answer is still pending', async () => {
     serve([ITEM]);
     await renderPage();
     let release: () => void = () => undefined;
@@ -97,24 +116,35 @@ describe('NeedsYou keys', () => {
           release = () => resolve({ items: [], generatedAt: new Date(NOW).toISOString() });
         }),
     );
-    await act(async () => {
-      fireEvent.keyDown(window, { key: 'e' });
-    });
-    // The answered card is still on screen; its keys must stay dead.
-    await act(async () => {
-      fireEvent.keyDown(window, { key: 'e' });
-    });
+    fireEvent.click(await screen.findByRole('button', { name: /^allow once/ }));
+    // The answered card is still on screen; its key must stay dead.
+    await press('x', 'x');
     expect(api.resolveApproval).toHaveBeenCalledTimes(1);
     await act(async () => release());
     await screen.findByText('Nothing blocked on you.');
     expect(api.resolveApproval).toHaveBeenCalledTimes(1);
   });
 
-  it('names what e does on a prod-deploy request: it denies', async () => {
+  it('goes into the pane on o and →, and back to the row on ←', async () => {
+    serve([ITEM]);
+    await renderPage();
+    const detail = screen.getByTestId('needs-you-detail');
+    const row = screen.getByRole('button', { current: true });
+    for (const key of ['o', 'ArrowRight']) {
+      row.focus();
+      await press(key);
+      expect(document.activeElement, key).toBe(detail);
+    }
+    await press('ArrowLeft');
+    expect(document.activeElement).toBe(row);
+  });
+
+  it('names e as focusing, and hides x on a production deploy request', async () => {
     vi.mocked(api.fetchApprovals).mockResolvedValue([{ ...REQUEST, riskClass: 'prod-deploy' }]);
     serve([ITEM]);
     await renderPage();
-    await waitFor(() => expect(screen.getByText('e deny')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('e focus action')).toBeTruthy());
     expect(screen.queryByText('x deny')).toBeNull();
+    expect(screen.getByText('o → open')).toBeTruthy();
   });
 });

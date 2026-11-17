@@ -417,6 +417,10 @@ msgstr "{missingCount, plural, one {бракує #} few {бракує #} many {�
 msgid "{n, plural, one {# turn with a confidence} few {# turns with a confidence} many {# turns with a confidence} other {# turns with a confidence}}"
 msgstr "{n, plural, one {# хід з упевненістю} few {# ходи з упевненістю} many {# ходів з упевненістю} other {# ходу з упевненістю}}"
 
+#: src/pages/Lessons.tsx
+msgid "{n} of {of} measured lessons are confounded ({pct}%): their drop cannot be credited to the lesson alone, so they rank like unmeasured lessons and are never proposed as ineffective."
+msgstr "{n} з {of} виміряних уроків змішані з іншими змінами ({pct}%): їхнє зниження не можна приписати лише уроку, тож вони ранжуються як невиміряні й ніколи не пропонуються як неефективні."
+
 #: src/pages/inbox/TriageBanner.tsx
 msgid "{nAccept, plural, one {# suggestion} few {# suggestions} many {# suggestions} other {# suggestions}}"
 msgstr "{nAccept, plural, one {# пропозиція} few {# пропозиції} many {# пропозицій} other {# пропозиції}}"
@@ -476,6 +480,11 @@ msgstr "{reason} — натисніть «перебудувати», щоб п�
 #: src/pages/Retro.tsx
 msgid "{redispatched} re"
 msgstr "{redispatched} повт."
+
+#. placeholder {0}: g.rejected[0]?.reason ?? ''
+#: src/pages/Lessons.tsx
+msgid "{rejected} lesson(s) rejected: {0}"
+msgstr "відхилено уроків: {rejected}: {0}"
 
 #: src/pages/Architecture.tsx
 msgid "{repoCount} repos · freshness unknown"
@@ -736,6 +745,10 @@ msgstr "Прийняти"
 msgid "accept {acceptText}"
 msgstr "прийняти {acceptText}"
 
+#: src/pages/Lessons.tsx
+msgid "accept anyway"
+msgstr "все одно прийняти"
+
 #: src/pages/inbox/InboxDetail.tsx
 msgid "accept lesson"
 msgstr "прийняти урок"
@@ -942,6 +955,10 @@ msgstr "уже актуальна"
 msgid "always allow {tool}"
 msgstr "завжди дозволяти {tool}"
 
+#: src/pages/agent-hub/ProposalFacets.tsx
+msgid "always-on text"
+msgstr "постійний текст"
+
 #: src/pages/inbox/inboxModel.ts
 msgid "An agent drafts a change to its instructions. Nothing is applied: the draft comes back to this Inbox for your approval."
 msgstr "Агент готує чернетку зміни своїх інструкцій. Нічого не застосовується: чернетка повертається в цей Вхідні на ваше погодження."
@@ -970,6 +987,10 @@ msgstr "аналізуємо…"
 msgid "and"
 msgstr "і"
 
+#: src/pages/lessons/EffectVerdictChip.tsx
+msgid "another lesson"
+msgstr "інший урок"
+
 #: src/pages/learning/classifierModel.ts
 msgid "answer"
 msgstr "відповідь"
@@ -981,6 +1002,10 @@ msgstr "відповідає — за останню годину жодна п�
 #: src/pages/learning/Classifier.tsx
 msgid "Answers above the question's confidence bar (60 % unless set otherwise) are used — as labels on sessions, and in D1 to decide what happens after a run."
 msgstr "Відповіді вище порога впевненості питання (60 %, якщо не задано інше) використовуються — як мітки на сесіях і в D1, щоб вирішити, що буде після запуску."
+
+#: src/pages/lessons/EffectVerdictChip.tsx
+msgid "applied agent change"
+msgstr "застосована зміна агента"
 
 #: src/pages/Memory.tsx
 msgid "apply"
@@ -1117,6 +1142,10 @@ msgstr "Сер. сесія"
 msgid "awaiting ≥{pct}% improvement"
 msgstr "чекаємо на покращення ≥{pct}%"
 
+#: src/pages/agent-hub/ProposalProbes.tsx
+msgid "base"
+msgstr "база"
+
 #: src/pages/health/Health.tsx
 msgid "because of you"
 msgstr "завдяки вам"
@@ -1138,6 +1167,10 @@ msgstr "Перш ніж пропонувати нового агента, роз
 msgid "behavior {behavior}"
 msgstr "поведінка {behavior}"
 
+#: src/pages/agent-hub/ProposalProbes.tsx
+msgid "bench cap {benchCap}"
+msgstr "ліміт бенча {benchCap}"
+
 #: src/pages/learning/TurnForecastPanel.tsx
 msgid "biggest miss"
 msgstr "найбільший промах"
@@ -1145,6 +1178,10 @@ msgstr "найбільший промах"
 #: src/pages/Analytics.tsx
 msgid "biggest mover"
 msgstr "найбільший зсув"
+
+#: src/pages/agent-hub/ProposalProbes.tsx
+msgid "blind pick"
+msgstr "сліпий вибір"
 
 #: src/pages/RoutingReport.tsx
 msgid "board cards"
@@ -1264,6 +1301,14 @@ msgstr "кандидат"
 msgid "candidates"
 msgstr "пропоновані"
 
+#: src/pages/agent-hub/ProposalProbes.tsx
+msgid "capped"
+msgstr "ліміт"
+
+#: src/pages/agent-hub/ProposalProbes.tsx
+msgid "case"
+msgstr "кейс"
+
 #: src/pages/Lessons.tsx
 msgid "cause:"
 msgstr "причина:"
@@ -1370,6 +1415,7 @@ msgid "Complexity routing"
 msgstr "Маршрутизація за складністю"
 
 #: src/pages/learning/TurnForecastPanel.tsx
+#: src/pages/Lessons.tsx
 msgid "confidence"
 msgstr "упевненість"
 
@@ -1380,6 +1426,22 @@ msgstr "упевненість {range}"
 #: src/pages/learning/TurnForecastPanel.tsx
 msgid "confident and wrong"
 msgstr "впевнений, але хибний"
+
+#: src/pages/Lessons.tsx
+msgid "confirm accepting a low-confidence lesson"
+msgstr "підтвердьте прийняття уроку з низькою впевненістю"
+
+#: src/pages/lessons/EffectVerdictChip.tsx
+msgid "confounded"
+msgstr "змішаний"
+
+#: src/pages/lessons/EffectVerdictChip.tsx
+msgid "confounded by:"
+msgstr "змішаний з:"
+
+#: src/pages/lessons/EffectVerdictChip.tsx
+msgid "confounders"
+msgstr "змішувальні чинники"
 
 #: src/pages/knowledge/Knowledge.tsx
 msgid "consolidate · lines that went stale"
@@ -1437,6 +1499,7 @@ msgstr "копіювання записує редаговану копію в .
 msgid "copying…"
 msgstr "копіюємо…"
 
+#: src/pages/agent-hub/ProposalProbes.tsx
 #: src/pages/health/PhaseRunsTab.tsx
 #: src/pages/Retro.tsx
 msgid "cost"
@@ -1819,6 +1882,10 @@ msgstr "Оцінки"
 msgid "Estimation accuracy"
 msgstr "Точність оцінок"
 
+#: src/pages/agent-hub/ProposalProbes.tsx
+msgid "eval suite"
+msgstr "eval-набір"
+
 #: src/pages/Retro.tsx
 msgid "evals {evalPassed}/{evalTotal}"
 msgstr "евали {evalPassed}/{evalTotal}"
@@ -1909,6 +1976,7 @@ msgstr "розвідка {exploreShare}%"
 msgid "Export CSV"
 msgstr "Експорт CSV"
 
+#: src/pages/agent-hub/ProposalProbes.tsx
 #: src/pages/RoutingReport.tsx
 msgid "fail"
 msgstr "провал"
@@ -1926,6 +1994,11 @@ msgstr "невдала сесія"
 #: src/pages/health/HealthOverview.tsx
 msgid "failed share by agent"
 msgstr "частка збоїв за агентами"
+
+#. placeholder {0}: g.error
+#: src/pages/Lessons.tsx
+msgid "failed: {0}"
+msgstr "збій: {0}"
 
 #: src/pages/SystemHub.tsx
 msgid "file"
@@ -1997,6 +2070,14 @@ msgstr "тека"
 msgid "folder path"
 msgstr "шлях до теки"
 
+#: src/pages/agent-hub/ProposalFacets.tsx
+msgid "follow-ups"
+msgstr "подальші кроки"
+
+#: src/pages/agent-hub/ProposalFacets.tsx
+msgid "Follow-ups the rewriter could not make itself"
+msgstr "Подальші кроки, яких переписувач не може зробити сам"
+
 #: src/pages/LessonsCalibration.tsx
 msgid "forecast calibration"
 msgstr "калібрування прогнозів"
@@ -2047,6 +2128,10 @@ msgstr "з рекомендації #{recId}"
 #: src/pages/system/ItemDetail.tsx
 msgid "Frontmatter"
 msgstr "Frontmatter"
+
+#: src/pages/agent-hub/ProposalProbes.tsx
+msgid "frozen bench"
+msgstr "заморожений бенч"
 
 #: src/pages/learning/Learning.tsx
 msgid "gathering"
@@ -2193,9 +2278,17 @@ msgstr "справдилась"
 msgid "held back"
 msgstr "притримано"
 
+#: src/pages/lessons/EffectVerdictChip.tsx
+msgid "helped"
+msgstr "допоміг"
+
 #: src/pages/system/ModsTab.tsx
 msgid "hide the validate report of {name}"
 msgstr "сховати звіт validate для {name}"
+
+#: src/pages/Lessons.tsx
+msgid "high confidence"
+msgstr "висока впевненість"
 
 #: src/pages/system/ModsTab.tsx
 msgid "high risk"
@@ -2213,6 +2306,7 @@ msgstr "Частка влучань"
 msgid "hit rate per confidence bin"
 msgstr "частка влучань за інтервалом упевненості"
 
+#: src/pages/agent-hub/ProposalFacets.tsx
 #: src/pages/system/ModsTab.tsx
 msgid "hook"
 msgstr "хук"
@@ -2285,6 +2379,10 @@ msgstr "Як працюють режими"
 #: src/pages/Analytics.tsx
 msgid "Human-hours saved is an estimate: {formula}"
 msgstr "Заощаджені людино-години — оцінка: {formula}"
+
+#: src/pages/lessons/EffectVerdictChip.tsx
+msgid "hurt"
+msgstr "зашкодив"
 
 #: src/pages/system/InsightsTab.tsx
 msgid "identical"
@@ -2480,6 +2578,10 @@ msgstr "лише kebab-case: малі літери, цифри, одинарні
 msgid "keep"
 msgstr "залишити"
 
+#: src/pages/agent-hub/ProposalFacets.tsx
+msgid "keep as is"
+msgstr "залишити як є"
+
 #: src/pages/inbox/inboxModel.ts
 msgid "keep it"
 msgstr "залишити"
@@ -2487,6 +2589,14 @@ msgstr "залишити"
 #: src/pages/system/ModsTab.tsx
 msgid "keeps a store"
 msgstr "зберігає дані"
+
+#: src/pages/agent-hub/ProposalFacets.tsx
+msgid "kept as is"
+msgstr "залишено як є"
+
+#: src/pages/agent-hub/ProposalFacets.tsx
+msgid "knowledge"
+msgstr "знання"
 
 #: src/pages/knowledge/Knowledge.tsx
 msgid "Knowledge"
@@ -2657,6 +2767,10 @@ msgstr "кінець логу ({logLines})"
 msgid "loops"
 msgstr "цикли"
 
+#: src/pages/Lessons.tsx
+msgid "low confidence"
+msgstr "низька впевненість"
+
 #: src/pages/Serena.tsx
 msgid "lsp-pack is not enabled for this project — enable it in Settings"
 msgstr "lsp-pack не ввімкнено для цього проєкту — увімкніть його у Налаштуваннях"
@@ -2696,6 +2810,10 @@ msgstr "медіана"
 #: src/pages/Analytics.tsx
 msgid "Median session"
 msgstr "Медіанна сесія"
+
+#: src/pages/Lessons.tsx
+msgid "medium confidence"
+msgstr "середня впевненість"
 
 #: src/pages/knowledge/Knowledge.tsx
 msgid "memory"
@@ -2772,6 +2890,10 @@ msgstr "модель / зусилля"
 #: src/pages/system/CreateAgentForm.tsx
 msgid "model <0>(optional)</0>"
 msgstr "модель <0>(необов’язково)</0>"
+
+#: src/pages/lessons/EffectVerdictChip.tsx
+msgid "model switch"
+msgstr "зміна моделі"
 
 #: src/pages/system/ModsTab.tsx
 msgid "moderate risk"
@@ -2932,6 +3054,7 @@ msgid "no docs published by the daemon"
 msgstr "демон не опублікував документації"
 
 #: src/pages/learning/Learning.tsx
+#: src/pages/lessons/EffectVerdictChip.tsx
 msgid "no effect"
 msgstr "без ефекту"
 
@@ -3043,6 +3166,10 @@ msgstr "немає проєктів з увімкненим lsp-pack — уві�
 msgid "no proposals"
 msgstr "пропозицій немає"
 
+#: src/pages/Lessons.tsx
+msgid "no reason recorded"
+msgstr "причину не записано"
+
 #: src/pages/agent-hub/Tabs.tsx
 msgid "no recent events"
 msgstr "нещодавніх подій немає"
@@ -3094,6 +3221,10 @@ msgstr "Застарілих фактів не знайдено"
 #: src/pages/Retro.tsx
 msgid "no subagent activity in this range"
 msgstr "у цьому періоді субагенти не працювали"
+
+#: src/pages/agent-hub/ProposalProbes.tsx
+msgid "no suite"
+msgstr "немає набору"
 
 #: src/pages/Retro.tsx
 msgid "no target file — dismissing is the only transition"
@@ -3157,6 +3288,7 @@ msgstr "немає"
 msgid "Not asked. Nothing logged."
 msgstr "Не ставиться. Нічого не записується."
 
+#: src/pages/lessons/EffectVerdictChip.tsx
 #: src/pages/system-hub/Profiles.tsx
 msgid "not enough data"
 msgstr "недостатньо даних"
@@ -3184,6 +3316,10 @@ msgstr "не допомагає"
 #: src/pages/Lessons.tsx
 msgid "Not injected into any run yet."
 msgstr "Ще не додано в жоден запуск."
+
+#: src/pages/agent-hub/ProposalProbes.tsx
+msgid "not judged"
+msgstr "без судді"
 
 #: src/pages/Retro.tsx
 msgid "not noise"
@@ -3260,6 +3396,10 @@ msgstr "запуск фази поза планом"
 #: src/pages/Docs.tsx
 msgid "On this page"
 msgstr "На цій сторінці"
+
+#: src/pages/agent-hub/ProposalProbes.tsx
+msgid "One sample per case: treat a single flip as noise and a difference that repeats across runs as signal."
+msgstr "Одна вибірка на кейс: поодинокий перемикач — це шум, а різниця, що повторюється між прогонами, — сигнал."
 
 #: src/pages/inbox/inboxModel.ts
 msgid "open a fix task"
@@ -3344,6 +3484,10 @@ msgstr "помилка розбору"
 #: src/pages/Memory.tsx
 msgid "partial: moved {movedCount} · backup {backup}"
 msgstr "частково: перенесено {movedCount} · резервна копія {backup}"
+
+#: src/pages/agent-hub/ProposalProbes.tsx
+msgid "pass"
+msgstr "пройдено"
 
 #: src/pages/system/ModsTab.tsx
 msgid "passed"
@@ -3507,9 +3651,33 @@ msgstr "перегляньте докази, потім згенеруйте м�
 msgid "pricing table"
 msgstr "таблиця цін"
 
+#: src/pages/agent-hub/ProposalProbes.tsx
+msgid "Probe"
+msgstr "Проба"
+
 #: src/pages/inbox/InboxDetail.tsx
 msgid "probe & resume"
 msgstr "перевірити й відновити"
+
+#: src/pages/agent-hub/ProposalProbes.tsx
+msgid "Probe again"
+msgstr "Проба ще раз"
+
+#: src/pages/agent-hub/ProposalProbes.tsx
+msgid "Probe: the agent's eval suite on the current file vs this proposal"
+msgstr "Проба: eval-набір агента на поточному файлі проти цієї пропозиції"
+
+#: src/pages/agent-hub/ProposalProbes.tsx
+msgid "probing…"
+msgstr "проба триває…"
+
+#: src/pages/agent-hub/ProposalFacets.tsx
+msgid "procedure"
+msgstr "процедура"
+
+#: src/pages/agent-hub/ProposalFacets.tsx
+msgid "procedure + knowledge"
+msgstr "процедура + знання"
 
 #: src/pages/Analytics.tsx
 msgid "Productivity"
@@ -3573,6 +3741,14 @@ msgstr "Доказ"
 #: src/pages/learning/Learning.tsx
 msgid "proof · {word}"
 msgstr "доказ · {word}"
+
+#: src/pages/agent-hub/ProposalProbes.tsx
+msgid "proposal"
+msgstr "пропозиція"
+
+#: src/pages/agent-hub/ProposalProbes.tsx
+msgid "proposal probe"
+msgstr "проба пропозиції"
 
 #: src/pages/health/HealthOverview.tsx
 msgid "propose a change"
@@ -3887,6 +4063,14 @@ msgstr "Зробіть пробний прогін, щоб побачити, я�
 msgid "Run an OpenAI-compatible model server: LM Studio (<0>localhost:1234</0>), Ollama (<1>localhost:11434/v1</1>), llama.cpp or vLLM. A 7–14B instruct model is enough."
 msgstr "Запустіть сервер моделі, сумісний з OpenAI: LM Studio (<0>localhost:1234</0>), Ollama (<1>localhost:11434/v1</1>), llama.cpp або vLLM. Instruct-моделі на 7–14B достатньо."
 
+#: src/pages/agent-hub/ProposalProbes.tsx
+msgid "Run bench"
+msgstr "Запустити бенч"
+
+#: src/pages/agent-hub/ProposalProbes.tsx
+msgid "Run bench again"
+msgstr "Бенч ще раз"
+
 #: src/pages/agent-hub/RunNow.tsx
 #: src/pages/AgentHub.tsx
 msgid "run once"
@@ -3896,6 +4080,10 @@ msgstr "запустити раз"
 #: src/pages/inbox/TriageBanner.tsx
 msgid "run triage"
 msgstr "запустити сортування"
+
+#: src/pages/agent-hub/ProposalProbes.tsx
+msgid "running bench…"
+msgstr "бенч триває…"
 
 #: src/pages/Analytics.tsx
 #: src/pages/health/HealthOverview.tsx
@@ -3910,9 +4098,21 @@ msgstr "запуски"
 msgid "Runs"
 msgstr "Запуски"
 
+#: src/pages/agent-hub/ProposalProbes.tsx
+msgid "Runs each frozen-bench task tagged for this agent as a whole session, once as the current agent and once as the proposal, and stops between tasks at the bench cap of {benchCap}. It never approves, applies or rejects."
+msgstr "Запускає кожну задачу замороженого бенча, позначену для цього агента, як цілу сесію: раз як поточний агент і раз як пропозицію; між задачами зупиняється на ліміті бенча {benchCap}. Ніколи не схвалює, не застосовує і не відхиляє."
+
+#: src/pages/agent-hub/ProposalProbes.tsx
+msgid "Runs every suite case twice through claude -p and stops at the cost cap of {cap}. It never approves, applies or rejects."
+msgstr "Запускає кожен кейс набору двічі через claude -p і зупиняється на ліміті витрат {cap}. Ніколи не схвалює, не застосовує і не відхиляє."
+
 #: src/pages/Lessons.tsx
 msgid "runs reached"
 msgstr "охоплено запусків"
+
+#: src/pages/Lessons.tsx
+msgid "Runs that produced no lesson ({count})"
+msgstr "Запуски, що не дали уроку ({count})"
 
 #: src/pages/learning/TurnForecastPanel.tsx
 msgid "said"
@@ -3977,6 +4177,10 @@ msgstr "картки оцінок · оцінені сесії"
 #: src/pages/learning/classifierModel.ts
 msgid "scored phase run"
 msgstr "оцінений запуск фази"
+
+#: src/pages/agent-hub/ProposalFacets.tsx
+msgid "script"
+msgstr "скрипт"
 
 #: src/pages/Analytics.tsx
 msgid "SDLC funnel"
@@ -4113,6 +4317,7 @@ msgstr "схожі описи скілів і скіли, завантажені
 msgid "similar skills"
 msgstr "схожі скіли"
 
+#: src/pages/agent-hub/ProposalFacets.tsx
 #: src/pages/Analytics.tsx
 #: src/pages/Retro.tsx
 msgid "skill"
@@ -4163,6 +4368,14 @@ msgstr "скіли…"
 #: src/pages/inbox/InboxDetail.tsx
 msgid "skip"
 msgstr "пропустити"
+
+#: src/pages/agent-hub/ProposalFacets.tsx
+msgid "Some hunks change how to act, others change what is true."
+msgstr "Одні фрагменти змінюють те, як діяти, інші — те, що є правдою."
+
+#: src/pages/lessons/EffectVerdictChip.tsx
+msgid "Something else changed in the measured window, so the drop cannot be credited to this lesson alone. It ranks like an unmeasured lesson and is never proposed as ineffective."
+msgstr "У виміряному вікні змінилося щось іще, тож зниження не можна приписати лише цьому уроку. Він ранжується як невиміряний і ніколи не пропонується як неефективний."
 
 #: src/pages/system/shared.tsx
 msgid "sort by"
@@ -4268,6 +4481,10 @@ msgstr "перестати застосовувати урок?"
 msgid "stop using it"
 msgstr "перестати застосовувати"
 
+#: src/pages/agent-hub/ProposalFacets.tsx
+msgid "subagent"
+msgstr "субагент"
+
 #: src/pages/Retro.tsx
 msgid "success"
 msgstr "успіх"
@@ -4361,6 +4578,7 @@ msgstr "система в режимі лише читання — копіюв�
 msgid "target"
 msgstr "ціль"
 
+#: src/pages/agent-hub/ProposalProbes.tsx
 #: src/pages/Retro.tsx
 msgid "task"
 msgstr "задача"
@@ -4401,10 +4619,34 @@ msgstr "Акаунт перевіряється по-справжньому: с�
 msgid "The agent has not closed anything in the last 7 days."
 msgstr "За останні 7 днів агент нічого не закрив."
 
+#: src/pages/lessons/EffectVerdictChip.tsx
+msgid "The area got less surprising after this lesson, and nothing else changed there in the measured window."
+msgstr "Після цього уроку область стала менш несподіваною, і нічого іншого там у виміряному вікні не змінилося."
+
+#: src/pages/lessons/EffectVerdictChip.tsx
+msgid "The area got more surprising after this lesson, and nothing else changed there in the measured window."
+msgstr "Після цього уроку область стала більш несподіваною, і нічого іншого там у виміряному вікні не змінилося."
+
+#: src/pages/lessons/EffectVerdictChip.tsx
+msgid "The area's surprise barely moved after this lesson."
+msgstr "Після цього уроку здивування в області майже не змінилося."
+
+#: src/pages/agent-hub/ProposalProbes.tsx
+msgid "The blind judge's pick where both sides agree on the hard checks"
+msgstr "Вибір сліпого судді там, де обидві сторони збігаються на жорстких перевірках"
+
 #: src/pages/inbox/InboxDetail.tsx
 #: src/pages/inbox/inboxModel.ts
 msgid "The candidate is closed as not useful. Nothing is added to any brief."
 msgstr "Кандидата закрито як некорисного. У жоден бриф нічого не додається."
+
+#: src/pages/agent-hub/ProposalFacets.tsx
+msgid "The change is about how to act: steps, rules, checks."
+msgstr "Зміна про те, як діяти: кроки, правила, перевірки."
+
+#: src/pages/agent-hub/ProposalFacets.tsx
+msgid "The change is about what is true: facts, paths, conventions."
+msgstr "Зміна про те, що є правдою: факти, шляхи, домовленості."
 
 #: src/pages/system/HooksTab.tsx
 msgid "The command will <0>stop executing in Claude Code</0> — {event} no longer triggers it. The entry stays in the settings file (parked under <1>_swarmery_disabled_hooks</1>) and can be re-enabled here."
@@ -4470,6 +4712,10 @@ msgstr "Флот провалює запуски вдвічі частіше, н
 msgid "The friction board is unavailable right now."
 msgstr "Дошка тертя зараз недоступна."
 
+#: src/pages/Lessons.tsx
+msgid "The generator rated this lesson low confidence. Accepting it injects it into future runs."
+msgstr "Генератор оцінив цей урок як малодостовірний. Якщо прийняти його, він потраплятиме в майбутні запуски."
+
 #: src/pages/system/docsSection.ts
 msgid "the item changed after this guide was written — docs.source_sha no longer matches the body"
 msgstr "елемент змінився після написання цього гайда — docs.source_sha більше не збігається з тілом"
@@ -4532,6 +4778,10 @@ msgstr "Рев’ю зникає з Вхідні. Воно лишається в
 msgid "The reviewer left no findings text."
 msgstr "Рев’юер не лишив тексту знахідок."
 
+#: src/pages/agent-hub/ProposalFacets.tsx
+msgid "The rewriter found the file already does the job and proposed no change. Nobody rejected it."
+msgstr "Переписувач з'ясував, що файл уже робить свою справу, і не запропонував змін. Ніхто цього не відхиляв."
+
 #: src/pages/inbox/InboxDetail.tsx
 msgid "the task"
 msgstr "задача"
@@ -4581,6 +4831,10 @@ msgstr "у цього проєкту вже є власна копія цьог�
 msgid "This range"
 msgstr "Цей період"
 
+#: src/pages/agent-hub/ProposalProbes.tsx
+msgid "tie"
+msgstr "нічия"
+
 #: src/pages/RoutingReport.tsx
 msgid "tier"
 msgstr "рівень"
@@ -4620,6 +4874,10 @@ msgstr "До роботи"
 #: src/pages/Analytics.tsx
 msgid "Tokens"
 msgstr "Токени"
+
+#: src/pages/lessons/EffectVerdictChip.tsx
+msgid "Too few scored runs on one side of the activation to judge yet."
+msgstr "Замало оцінених запусків з одного боку від активації, щоб судити."
 
 #: src/pages/Analytics.tsx
 #: src/pages/Retro.tsx
@@ -4674,9 +4932,14 @@ msgstr "головний чинник"
 msgid "Top error groups"
 msgstr "Найчастіші групи помилок"
 
+#: src/pages/agent-hub/ProposalProbes.tsx
 #: src/pages/Analytics.tsx
 msgid "total"
 msgstr "усього"
+
+#: src/pages/agent-hub/ProposalProbes.tsx
+msgid "total · earlier runs not shown: {earlier}"
+msgstr "усього · попередніх прогонів не показано: {earlier}"
 
 #: src/pages/Retro.tsx
 msgid "Total wait"
@@ -4889,6 +5152,7 @@ msgstr "проти попер. {prevRunsCount}"
 msgid "waiting on you"
 msgstr "чекає на вас"
 
+#: src/pages/agent-hub/ProposalFacets.tsx
 #: src/pages/system/ModsTab.tsx
 msgid "warnings"
 msgstr "попередження"
@@ -4946,8 +5210,8 @@ msgid "when {pick} ran: {ranCell}"
 msgstr "коли виконувала {pick}: {ranCell}"
 
 #: src/pages/Lessons.tsx
-msgid "When a phase run lands far from its forecast and its report explains why, a cheap model proposes up to two lessons, each citing evidence from that run. A candidate reaches future runs only after you accept it here. Merge it into an existing lesson when it repeats one. Active lessons are re-measured against their area's surprise; one that stops earning its place is proposed for retirement below, and retired on its own after 14 days without an answer."
-msgstr "Коли запуск фази далеко розходиться з прогнозом, а його звіт пояснює чому, дешева модель пропонує до двох уроків, кожен із доказами з того запуску. Кандидат доходить до майбутніх запусків лише після того, як ви приймете його тут. Якщо він повторює наявний урок — злийте їх. Активні уроки переміряють за несподіванкою їхньої зони; той, що перестає себе виправдовувати, пропонується списати нижче і списується сам через 14 днів без відповіді."
+msgid "When a phase run lands far from its forecast and its report explains why, a cheap model proposes at most one lesson, citing evidence from that run and rating its own confidence, or says why nothing there transfers. A candidate reaches future runs only after you accept it here; a low-confidence one asks you to confirm. Merge it into an existing lesson when it repeats one. Active lessons are re-measured against their area's surprise; one that stops earning its place is proposed for retirement below, and retired on its own after 14 days without an answer."
+msgstr "Коли запуск фази далеко розходиться з прогнозом, а його звіт пояснює чому, дешева модель пропонує щонайбільше один урок із доказами з того запуску та власною оцінкою впевненості — або пояснює, чому звідти нічого не переноситься. Кандидат доходить до майбутніх запусків лише після того, як ви приймете його тут; урок із низькою впевненістю попросить підтвердження. Якщо він повторює наявний урок — злийте їх. Активні уроки переміряють за несподіванкою їхньої зони; той, що перестає себе виправдовувати, пропонується списати нижче і списується сам через 14 днів без відповіді."
 
 #: src/pages/Lessons.tsx
 msgid "where reality diverged"
@@ -4961,6 +5225,10 @@ msgstr "Куди пішли гроші й токени."
 msgid "Where the pick differed"
 msgstr "Де вибір відрізнявся"
 
+#: src/pages/agent-hub/ProposalFacets.tsx
+msgid "Where the rewriter put this change on the form ladder (skill, script, subagent, hook, always-on text last)."
+msgstr "Де на драбині форм переписувач розмістив цю зміну (скіл, скрипт, субагент, хук, постійний текст — в останню чергу)."
+
 #: src/pages/SystemShell.tsx
 msgid "which packs a project enables"
 msgstr "які паки вмикає проєкт"
@@ -4972,6 +5240,10 @@ msgstr "Чому він провалився?"
 #: src/pages/learning/classifierModel.ts
 msgid "Why did the run leave the plan?"
 msgstr "Чому запуск зійшов із плану?"
+
+#: src/pages/agent-hub/ProposalFacets.tsx
+msgid "Why the file stays as it is"
+msgstr "Чому файл залишається як є"
 
 #: src/pages/learning/TurnForecastPanel.tsx
 msgid "window"

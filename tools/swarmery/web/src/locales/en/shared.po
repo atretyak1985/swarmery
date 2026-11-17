@@ -111,6 +111,11 @@ msgstr "[ ] \\ panels"
 msgid "{0, plural, one {# change} few {# changes} many {# changes} other {# changes}}"
 msgstr "{0, plural, one {# change} few {# changes} many {# changes} other {# changes}}"
 
+#. placeholder {0}: b.commitsAhead ?? 0
+#: src/components/runOutcome/blockerGuide.ts
+msgid "{0, plural, one {# commit} few {# commits} many {# commits} other {# commits}}"
+msgstr "{0, plural, one {# commit} few {# commits} many {# commits} other {# commits}}"
+
 #. placeholder {0}: wt.dirtyFiles
 #: src/pages/settings/WorktreesPanel.tsx
 msgid "{0, plural, one {# dirty} few {# dirty} many {# dirty} other {# dirty}}"
@@ -170,6 +175,10 @@ msgstr "{branch} · base {base}"
 msgid "{branch} deleted — Run plan again to start a fresh run."
 msgstr "{branch} deleted — Run plan again to start a fresh run."
 
+#: src/components/runOutcome/blockerGuide.ts
+msgid "{branch} holds {commits} from an older run that matches no phase now"
+msgstr "{branch} holds {commits} from an older run that matches no phase now"
+
 #: src/workspace/task/RunConfig.tsx
 msgid "{cardModel} (card override)"
 msgstr "{cardModel} (card override)"
@@ -182,6 +191,10 @@ msgstr "{changes, plural, one {# change} few {# changes} many {# changes} other 
 msgid "{changes} · touched {ago}"
 msgstr "{changes} · touched {ago}"
 
+#: src/components/runOutcome/LandBranchAction.tsx
+msgid "{changeShort} opened"
+msgstr "{changeShort} opened"
+
 #: src/workspace/TaskDiff.tsx
 msgid "{commitCount, plural, one {# commit} few {# commits} many {# commits} other {# commits}} · {fileCount, plural, one {# file} few {# files} many {# files} other {# files}}"
 msgstr "{commitCount, plural, one {# commit} few {# commits} many {# commits} other {# commits}} · {fileCount, plural, one {# file} few {# files} many {# files} other {# files}}"
@@ -193,10 +206,6 @@ msgstr "{commits, plural, one {# commit will be lost.} few {# commits will be lo
 #: src/components/PlanBranchDirtyModal.tsx
 msgid "{commits, plural, one {# commit} few {# commits} many {# commits} other {# commits}}"
 msgstr "{commits, plural, one {# commit} few {# commits} many {# commits} other {# commits}}"
-
-#: src/components/PlanRunCard.tsx
-msgid "{count, plural, one {# session} few {# sessions} many {# sessions} other {# sessions}}"
-msgstr "{count, plural, one {# session} few {# sessions} many {# sessions} other {# sessions}}"
 
 #: src/components/usage/LimitsPanel.tsx
 msgid "{count} of {total}"
@@ -287,6 +296,10 @@ msgstr "{mod} reported by Claude Code for this process (a resumed session restar
 msgid "{n, plural, one {# file is being edited by more than one live session} few {# files are being edited by more than one live session} many {# files are being edited by more than one live session} other {# files are being edited by more than one live session}}"
 msgstr "{n, plural, one {# file is being edited by more than one live session} few {# files are being edited by more than one live session} many {# files are being edited by more than one live session} other {# files are being edited by more than one live session}}"
 
+#: src/lib/needsYou.ts
+msgid "{n, plural, one {# protected path} few {# protected paths} many {# protected paths} other {# protected paths}}"
+msgstr "{n, plural, one {# protected path} few {# protected paths} many {# protected paths} other {# protected paths}}"
+
 #: src/components/BulkPromptBar.tsx
 msgid "{n} selected of {selectableCount} with a polling link mod"
 msgstr "{n} selected of {selectableCount} with a polling link mod"
@@ -314,6 +327,10 @@ msgstr "{notPollingCount} selected sessions no longer have a polling link mod an
 #: src/lib/sessionsView.ts
 msgid "{nth} attempt — {tail}"
 msgstr "{nth} attempt — {tail}"
+
+#: src/lib/sessionsView.ts
+msgid "{others, plural, one {# session} few {# sessions} many {# sessions} other {# sessions}}"
+msgstr "{others, plural, one {# session} few {# sessions} many {# sessions} other {# sessions}}"
 
 #: src/workspace/task/RunConfig.tsx
 msgid "{playbookModel} (from playbook)"
@@ -493,6 +510,18 @@ msgstr "◇ Plan"
 msgid "◇ Review…"
 msgstr "◇ Review…"
 
+#: src/components/SessionRow.tsx
+msgid "⚠ conflict"
+msgstr "⚠ conflict"
+
+#: src/components/SessionRow.tsx
+msgid "⚠ context"
+msgstr "⚠ context"
+
+#: src/components/SessionRow.tsx
+msgid "⚠ limit"
+msgstr "⚠ limit"
+
 #: src/lib/docFigures.tsx
 msgid "✎ Plan"
 msgstr "✎ Plan"
@@ -547,9 +576,17 @@ msgstr "9 gates"
 msgid "A card's life: capture → queue → run → review → land"
 msgstr "A card's life: capture → queue → run → review → land"
 
+#: src/components/runOutcome/blockerGuide.ts
+msgid "A dependency is ticked, but its code is still only on {branch}"
+msgstr "A dependency is ticked, but its code is still only on {branch}"
+
 #: src/lib/docFigures.tsx
 msgid "A pause on this specific project"
 msgstr "A pause on this specific project"
+
+#: src/components/runOutcome/blockerGuide.ts
+msgid "A phase this one depends on is not finished"
+msgstr "A phase this one depends on is not finished"
 
 #: src/lib/docFigures.tsx
 msgid "A plan is a README plus a phase DAG"
@@ -558,6 +595,10 @@ msgstr "A plan is a README plus a phase DAG"
 #: src/api.ts
 msgid "a planning run is already active for this project"
 msgstr "a planning run is already active for this project"
+
+#: src/components/runOutcome/blockerGuide.ts
+msgid "A previous run left {commits} on {branch} — a retry cannot start while they are there"
+msgstr "A previous run left {commits} on {branch} — a retry cannot start while they are there"
 
 #: src/components/RunOutcomeModal.tsx
 msgid "a read-only verifier confirmed this phase’s acceptance criteria"
@@ -657,6 +698,10 @@ msgstr "active"
 #: src/components/ui.tsx
 msgid "active · {span}"
 msgstr "active · {span}"
+
+#: src/components/runOutcome/blockerGuide.ts
+msgid "Add \"- [ ]\" acceptance-criteria checkboxes to the phase doc, or press Revise plan."
+msgstr "Add \"- [ ]\" acceptance-criteria checkboxes to the phase doc, or press Revise plan."
 
 #: src/workspace/NewTaskModal.tsx
 msgid "add a label + Enter"
@@ -776,6 +821,10 @@ msgstr "an active session ended"
 msgid "An active session ended"
 msgstr "An active session ended"
 
+#: src/components/runOutcome/blockerGuide.ts
+msgid "An empty leftover branch {branch} is still there"
+msgstr "An empty leftover branch {branch} is still there"
+
 #: src/components/NotifySettings.tsx
 msgid "an error event appeared"
 msgstr "an error event appeared"
@@ -800,9 +849,25 @@ msgstr "Analytics"
 msgid "Another session holds a claim on the same file: {list}"
 msgstr "Another session holds a claim on the same file: {list}"
 
+#: src/components/RunOutcomeModal.tsx
+msgid "Answer"
+msgstr "Answer"
+
+#: src/components/RunOutcomeModal.tsx
+msgid "Answer in my own words"
+msgstr "Answer in my own words"
+
 #: src/api.ts
 msgid "answer planning failed: {status}"
 msgstr "answer planning failed: {status}"
+
+#: src/components/runOutcome/blockerGuide.ts
+msgid "Answer the executor's decision below, then press Retry run."
+msgstr "Answer the executor's decision below, then press Retry run."
+
+#: src/components/runOutcome/blockerGuide.ts
+msgid "answer the executor's decision first — until then a retry is refused"
+msgstr "answer the executor's decision first — until then a retry is refused"
 
 #: src/components/ChannelBadge.tsx
 msgid "answered inside the session by the swarmery-link mod — no hook process"
@@ -811,6 +876,14 @@ msgstr "answered inside the session by the swarmery-link mod — no hook process
 #: src/components/ChannelBadge.tsx
 msgid "answered through the swarmery hook process"
 msgstr "answered through the swarmery hook process"
+
+#: src/components/RunOutcomeModal.tsx
+msgid "answering…"
+msgstr "answering…"
+
+#: src/components/RunOutcomeModal.tsx
+msgid "Any answer keeps the work: a retry continues on this phase's branch."
+msgstr "Any answer keeps the work: a retry continues on this phase's branch."
 
 #: src/lib/docFigures.tsx
 msgid "API endpoints"
@@ -966,16 +1039,16 @@ msgid "auto-approve presets are configured per project — open a project's Sett
 msgstr "auto-approve presets are configured per project — open a project's Settings to set them"
 
 #: src/lib/needsYou.ts
-msgid "awaiting merge"
-msgstr "awaiting merge"
+msgid "Awaiting merge"
+msgstr "Awaiting merge"
 
 #: src/lib/sessionsView.ts
 msgid "awaiting reply"
 msgstr "awaiting reply"
 
 #: src/lib/needsYou.ts
-msgid "awaiting your reply"
-msgstr "awaiting your reply"
+msgid "Awaiting reply"
+msgstr "Awaiting reply"
 
 #: src/components/Sidebar.tsx
 #: src/workspace/WorkspaceShell.tsx
@@ -1016,8 +1089,8 @@ msgid "Blocker: {summary}"
 msgstr "Blocker: {summary}"
 
 #: src/components/RunOutcomeModal.tsx
-msgid "blockers"
-msgstr "blockers"
+msgid "blocks a retry"
+msgstr "blocks a retry"
 
 #: src/components/CommandPalette.tsx
 msgid "Board"
@@ -1145,10 +1218,18 @@ msgstr "changing the cost failed: {status}"
 msgid "check"
 msgstr "check"
 
+#: src/lib/needsYou.ts
+msgid "Check by hand"
+msgstr "Check by hand"
+
 #: src/components/AccountReadyBanner.tsx
 #: src/components/AccountsSection.tsx
 msgid "check now"
 msgstr "check now"
+
+#: src/components/runOutcome/blockerGuide.ts
+msgid "Check what is on it: the commits are listed under the evidence line below."
+msgstr "Check what is on it: the commits are listed under the evidence line below."
 
 #: src/components/AccountsSection.tsx
 msgid "checked {ago}"
@@ -1179,6 +1260,10 @@ msgstr "choose a project to plan in"
 #: src/components/RetroImproveCard.tsx
 msgid "choose a project…"
 msgstr "choose a project…"
+
+#: src/components/RunOutcomeModal.tsx
+msgid "choose an answer"
+msgstr "choose an answer"
 
 #: src/pages/Settings.tsx
 msgid "claude accounts"
@@ -1339,8 +1424,8 @@ msgid "confirm detach"
 msgstr "confirm detach"
 
 #: src/lib/needsYou.ts
-msgid "confirm locally"
-msgstr "confirm locally"
+msgid "Confirm in terminal"
+msgstr "Confirm in terminal"
 
 #: src/components/SessionControls.tsx
 msgid "Confirm stop"
@@ -1403,6 +1488,10 @@ msgstr "Continue phase on selected sessions"
 msgid "Continue with the next phase of the plan per its phase doc; do not ask for confirmation if the criteria are clear"
 msgstr "Continue with the next phase of the plan per its phase doc; do not ask for confirmation if the criteria are clear"
 
+#: src/lib/sessionsView.ts
+msgid "controller + {sessions}"
+msgstr "controller + {sessions}"
+
 #: src/theme/palettes.ts
 msgid "cool blue, deep-sea"
 msgstr "cool blue, deep-sea"
@@ -1410,6 +1499,7 @@ msgstr "cool blue, deep-sea"
 #: src/components/CopyIdBadge.tsx
 #: src/components/CreateAccountModal.tsx
 #: src/components/PlanBranchDirtyModal.tsx
+#: src/components/RunOutcomeModal.tsx
 #: src/components/usage/UsageSetupHint.tsx
 msgid "copied"
 msgstr "copied"
@@ -1420,6 +1510,7 @@ msgstr "Copied"
 
 #: src/components/CreateAccountModal.tsx
 #: src/components/PlanBranchDirtyModal.tsx
+#: src/components/RunOutcomeModal.tsx
 #: src/components/usage/UsageSetupHint.tsx
 msgid "copy"
 msgstr "copy"
@@ -1589,6 +1680,10 @@ msgid "Delete"
 msgstr "Delete"
 
 #: src/components/RunOutcomeModal.tsx
+msgid "delete {branch} so a retry can recreate it"
+msgstr "delete {branch} so a retry can recreate it"
+
+#: src/components/RunOutcomeModal.tsx
 msgid "Delete {branch}?"
 msgstr "Delete {branch}?"
 
@@ -1625,13 +1720,13 @@ msgstr "delete rule failed: {status}"
 msgid "delete task failed: {status}"
 msgstr "delete task failed: {status}"
 
+#: src/components/runOutcome/blockerGuide.ts
+msgid "Delete the branch only to throw this work away and run the phase from scratch."
+msgstr "Delete the branch only to throw this work away and run the phase from scratch."
+
 #: src/components/PlanBranchDirtyModal.tsx
 msgid "delete the run branch and the commits on it"
 msgstr "delete the run branch and the commits on it"
-
-#: src/components/RunOutcomeModal.tsx
-msgid "delete the run branch so a retry can recreate it"
-msgstr "delete the run branch so a retry can recreate it"
 
 #: src/workspace/task/TaskActions.tsx
 msgid "Deletes the branch <0>{taskBranch}</0> and every commit on it, reclaims the worktree, and archives the card. The work is not recoverable."
@@ -1760,6 +1855,10 @@ msgstr "Discard new task?"
 #: src/components/RunOutcomeModal.tsx
 msgid "Discard revise reason?"
 msgstr "Discard revise reason?"
+
+#: src/components/RunOutcomeModal.tsx
+msgid "Discard this work"
+msgstr "Discard this work"
 
 #: src/workspace/TaskModal.tsx
 msgid "Discard unsaved edit?"
@@ -1909,6 +2008,10 @@ msgstr "error rate"
 msgid "errors"
 msgstr "errors"
 
+#: src/components/runOutcome/blockerGuide.ts
+msgid "Every criterion is ticked, but nobody has graded the work yet"
+msgstr "Every criterion is ticked, but nobody has graded the work yet"
+
 #: src/components/PermissionPresets.tsx
 msgid "Every tool call waits for you. The safe default — nothing runs unattended."
 msgstr "Every tool call waits for you. The safe default — nothing runs unattended."
@@ -1924,6 +2027,10 @@ msgstr "evidence"
 #: src/components/RunOutcomeModal.tsx
 msgid "Executor said: {said}"
 msgstr "Executor said: {said}"
+
+#: src/components/RunOutcomeModal.tsx
+msgid "executor's reason:"
+msgstr "executor's reason:"
 
 #: src/components/KillButton.tsx
 msgid "exited"
@@ -1957,7 +2064,6 @@ msgstr "fail"
 #: src/components/ProjectPlugins.tsx
 #: src/components/RunOutcomeModal.tsx
 #: src/components/SessionControls.tsx
-#: src/lib/needsYou.ts
 msgid "failed"
 msgstr "failed"
 
@@ -2006,6 +2112,10 @@ msgstr "Files"
 #: src/components/PluginConfigModal.tsx
 msgid "fill in {needs} first"
 msgstr "fill in {needs} first"
+
+#: src/components/runOutcome/blockerGuide.ts
+msgid "Fill the ## Completion Report section of the phase doc: what shipped, files and commits, verification output, deviations."
+msgstr "Fill the ## Completion Report section of the phase doc: what shipped, files and commits, verification output, deviations."
 
 #: src/components/PluginConfigModal.tsx
 msgid "filled by probe"
@@ -2059,6 +2169,10 @@ msgstr "filter settings"
 msgid "Finish it here: open a terminal already scoped to this account and log the CLI in."
 msgstr "Finish it here: open a terminal already scoped to this account and log the CLI in."
 
+#: src/components/runOutcome/blockerGuide.ts
+msgid "finish the phase this one depends on first — until then a retry is refused"
+msgstr "finish the phase this one depends on first — until then a retry is refused"
+
 #: src/lib/sessionsView.ts
 #: src/pages/Settings.tsx
 msgid "Finished"
@@ -2100,6 +2214,10 @@ msgstr "for {quiet} · no transcript activity, it may have died silently."
 #: src/lib/sessionsView.ts
 msgid "for {waited} · the session does nothing until you decide."
 msgstr "for {waited} · the session does nothing until you decide."
+
+#: src/components/RunOutcomeModal.tsx
+msgid "for information — does not block this phase"
+msgstr "for information — does not block this phase"
 
 #: src/components/KillButton.tsx
 msgid "Force kill"
@@ -2166,9 +2284,12 @@ msgid "Git writes (add, commit, checkout, worktree)"
 msgstr "Git writes (add, commit, checkout, worktree)"
 
 #: src/components/place/StateGlyph.tsx
-#: src/lib/needsYou.ts
 msgid "guard stop"
 msgstr "guard stop"
+
+#: src/lib/needsYou.ts
+msgid "Guard stopped the run"
+msgstr "Guard stopped the run"
 
 #: src/pages/docsRail.ts
 msgid "Guides"
@@ -2228,6 +2349,10 @@ msgstr "how honest forecasts are"
 msgid "how it's used"
 msgstr "how it's used"
 
+#: src/components/RunOutcomeModal.tsx
+msgid "how to resolve"
+msgstr "how to resolve"
+
 #: src/components/PermissionPresets.tsx
 msgid "I understand — apply"
 msgstr "I understand — apply"
@@ -2247,6 +2372,10 @@ msgstr "idle 9d · TTL 14d"
 #: src/components/PlanBranchDirtyModal.tsx
 msgid "If the run produced nothing worth keeping, delete the branch. This runs <0>git branch -D</0>: the {commitsText} go, and nothing else holds them."
 msgstr "If the run produced nothing worth keeping, delete the branch. This runs <0>git branch -D</0>: the {commitsText} go, and nothing else holds them."
+
+#: src/components/runOutcome/blockerGuide.ts
+msgid "If the work is wrong: Retry run. If the criteria are wrong: Revise plan."
+msgstr "If the work is wrong: Retry run. If the criteria are wrong: Revise plan."
 
 #: src/components/AccountsSection.tsx
 msgid "ignored bindings ({count}) — counted under no account"
@@ -2308,6 +2437,10 @@ msgstr "interface language"
 msgid "invalid config"
 msgstr "invalid config"
 
+#: src/components/runOutcome/blockerGuide.ts
+msgid "It does not block this phase — Retry run works without touching it."
+msgstr "It does not block this phase — Retry run works without touching it."
+
 #: src/components/AccountSelector.tsx
 msgid "its CLI login is missing"
 msgstr "its CLI login is missing"
@@ -2340,9 +2473,21 @@ msgstr "jump to anything, or type a task and dispatch it"
 msgid "kebab-case only ([a-z0-9-])"
 msgstr "kebab-case only ([a-z0-9-])"
 
+#: src/components/runOutcome/blockerGuide.ts
+msgid "Keep it: answering the decision above lets the retry continue on these commits."
+msgstr "Keep it: answering the decision above lets the retry continue on these commits."
+
 #: src/components/PlanBranchDirtyModal.tsx
 msgid "keep the work"
 msgstr "keep the work"
+
+#: src/components/RunOutcomeModal.tsx
+msgid "keeps the phase from counting as done"
+msgstr "keeps the phase from counting as done"
+
+#: src/components/RunOutcomeModal.tsx
+msgid "keeps the work — a retry continues on the branch"
+msgstr "keeps the work — a retry continues on the branch"
 
 #: src/workspace/boardModel.ts
 msgid "kept in step with a GitHub issue or pull request"
@@ -2541,7 +2686,6 @@ msgid "managed"
 msgstr "managed"
 
 #: src/components/place/StateGlyph.tsx
-#: src/lib/needsYou.ts
 msgid "manual check"
 msgstr "manual check"
 
@@ -2560,6 +2704,10 @@ msgstr "marketplace v{marketplaceVersion} · repairs and toggles take effect in 
 #: src/lib/glossary.ts
 msgid "matches you"
 msgstr "matches you"
+
+#: src/components/runOutcome/blockerGuide.ts
+msgid "merge or delete the leftover branch first — until then a retry is refused"
+msgstr "merge or delete the leftover branch first — until then a retry is refused"
 
 #: src/components/AttachModal.tsx
 msgid "Merges the swarmery entries back into <0>.claude/settings.json</0> (your other settings are never overwritten), restores <1>project.json</1> from its backup, and reinstalls the hooks. Plugins install on the next fresh Claude Code session in the project."
@@ -2656,6 +2804,10 @@ msgstr "Needs you"
 msgid "Needs you →"
 msgstr "Needs you →"
 
+#: src/components/RunOutcomeModal.tsx
+msgid "needs your decision"
+msgstr "needs your decision"
+
 #: src/pages/Settings.tsx
 msgid "needs-you · finished · failed"
 msgstr "needs-you · finished · failed"
@@ -2683,6 +2835,10 @@ msgstr "New project"
 #: src/workspace/NewTaskModal.tsx
 msgid "New task"
 msgstr "New task"
+
+#: src/components/RunOutcomeModal.tsx
+msgid "next step"
+msgstr "next step"
 
 #. placeholder {0}: done.path
 #: src/components/NewProjectButton.tsx
@@ -2821,6 +2977,18 @@ msgid "Note"
 msgstr "Note"
 
 #: src/components/RunOutcomeModal.tsx
+msgid "note — recorded with the answer in the phase doc (optional)"
+msgstr "note — recorded with the answer in the phase doc (optional)"
+
+#: src/components/RunOutcomeModal.tsx
+msgid "note for the answer"
+msgstr "note for the answer"
+
+#: src/components/RunOutcomeModal.tsx
+msgid "note, or your own answer instead of the options — recorded in the phase doc"
+msgstr "note, or your own answer instead of the options — recorded in the phase doc"
+
+#: src/components/RunOutcomeModal.tsx
 msgid "Note: {runError}"
 msgstr "Note: {runError}"
 
@@ -2828,17 +2996,37 @@ msgstr "Note: {runError}"
 msgid "Note: {runNote}"
 msgstr "Note: {runNote}"
 
+#: src/components/runOutcome/blockerGuide.ts
+msgid "Nothing blocks this phase."
+msgstr "Nothing blocks this phase."
+
 #: src/workspace/boardModel.ts
 msgid "Nothing in {laneTitle} matches “{filterLabel}”."
 msgstr "Nothing in {laneTitle} matches “{filterLabel}”."
+
+#: src/components/runOutcome/blockerGuide.ts
+msgid "Nothing in the repo stops a retry. Read what the executor said, then press Retry run or Revise plan."
+msgstr "Nothing in the repo stops a retry. Read what the executor said, then press Retry run or Revise plan."
 
 #: src/components/place/PageDetail.tsx
 msgid "Nothing matches."
 msgstr "Nothing matches."
 
+#: src/components/runOutcome/blockerGuide.ts
+msgid "Nothing to do — Retry run deletes it automatically."
+msgstr "Nothing to do — Retry run deletes it automatically."
+
+#: src/components/runOutcome/blockerGuide.ts
+msgid "Nothing to do — Retry run picks that worktree up and continues the work."
+msgstr "Nothing to do — Retry run picks that worktree up and continues the work."
+
 #: src/components/DetachModal.tsx
 msgid "nothing to remove"
 msgstr "nothing to remove"
+
+#: src/components/runOutcome/blockerGuide.ts
+msgid "Nothing to resolve — press Retry run; the work already done is kept."
+msgstr "Nothing to resolve — press Retry run; the work already done is kept."
 
 #: src/components/AttachModal.tsx
 msgid "nothing to restore"
@@ -2917,6 +3105,10 @@ msgstr "One send reaches at most {max} sessions; select all takes the first {max
 msgid "Only a human can close the open criteria of this phase. Do the [MANUAL] checks and tick them in the Criteria tab — the phase is listed in Needs you."
 msgstr "Only a human can close the open criteria of this phase. Do the [MANUAL] checks and tick them in the Criteria tab — the phase is listed in Needs you."
 
+#: src/components/runOutcome/LandBranchAction.tsx
+msgid "Open {changeShort}"
+msgstr "Open {changeShort}"
+
 #: src/workspace/TaskCard.tsx
 msgid "open {ref} on GitHub"
 msgstr "open {ref} on GitHub"
@@ -2929,9 +3121,21 @@ msgstr "Open {verificationUri}"
 msgid "open a terminal in this card's worktree"
 msgstr "open a terminal in this card's worktree"
 
+#: src/workspace/StatusBar.tsx
+msgid "open Claude Code in a new terminal"
+msgstr "open Claude Code in a new terminal"
+
+#: src/workspace/StatusBar.tsx
+msgid "Open Claude Code in a new terminal tab"
+msgstr "Open Claude Code in a new terminal tab"
+
 #: src/components/usage/UsageConnect.tsx
 msgid "open login terminal"
 msgstr "open login terminal"
+
+#: src/components/RunOutcomeModal.tsx
+msgid "open Needs you →"
+msgstr "open Needs you →"
 
 #: src/components/PlanRunCard.tsx
 msgid "open plan →"
@@ -2949,6 +3153,10 @@ msgstr "open session"
 msgid "Open terminal in worktree"
 msgstr "Open terminal in worktree"
 
+#: src/components/runOutcome/blockerGuide.ts
+msgid "Open that phase and finish it first — run it, or tick its criteria if its work is already done."
+msgstr "Open that phase and finish it first — run it, or tick its criteria if its work is already done."
+
 #: src/components/RetroImproveCard.tsx
 msgid "open the active session →"
 msgstr "open the active session →"
@@ -2965,9 +3173,17 @@ msgstr "open the planning session →"
 msgid "open usage"
 msgstr "open usage"
 
+#: src/components/runOutcome/blockerGuide.ts
+msgid "Optional: add a \"### Lesson N\" entry under ## Lessons Learned in phases/09-retrospective.md."
+msgstr "Optional: add a \"### Lesson N\" entry under ## Lessons Learned in phases/09-retrospective.md."
+
 #: src/components/PlanBranchDirtyModal.tsx
 msgid "or discard it"
 msgstr "or discard it"
+
+#: src/components/RunOutcomeModal.tsx
+msgid "or do it by hand in the repo"
+msgstr "or do it by hand in the repo"
 
 #: src/components/TerminalPathNote.tsx
 msgid "or export it into the current shell"
@@ -3080,9 +3296,12 @@ msgid "per-category overrides apply only under the unrestricted preset"
 msgstr "per-category overrides apply only under the unrestricted preset"
 
 #: src/components/place/StateGlyph.tsx
-#: src/lib/needsYou.ts
 msgid "permission"
 msgstr "permission"
+
+#: src/lib/needsYou.ts
+msgid "Permission"
+msgstr "Permission"
 
 #: src/components/PermissionPresets.tsx
 msgid "permissions"
@@ -3101,6 +3320,7 @@ msgid "phase"
 msgstr "phase"
 
 #: src/lib/docFigures.tsx
+#: src/lib/sessionsView.ts
 msgid "phase {n}"
 msgstr "phase {n}"
 
@@ -3127,6 +3347,10 @@ msgstr "phase run failed ({status})"
 #: src/lib/sessionsView.ts
 msgid "Phase running"
 msgstr "Phase running"
+
+#: src/lib/needsYou.ts
+msgid "Phase stalled"
+msgstr "Phase stalled"
 
 #: src/lib/docFigures.tsx
 msgid "Phases with no edge between them run in parallel; each phase document carries its own copy-paste agent prompt and acceptance criteria, so it is executable standalone."
@@ -3243,6 +3467,10 @@ msgstr "plugins…"
 msgid "Prefer the terminal? Run this yourself — swarmery never runs it for you:"
 msgstr "Prefer the terminal? Run this yourself — swarmery never runs it for you:"
 
+#: src/components/runOutcome/blockerGuide.ts
+msgid "Press Verify again to grade the branch as it stands."
+msgstr "Press Verify again to grade the branch as it stands."
+
 #: src/components/Sidebar.tsx
 msgid "primary"
 msgstr "primary"
@@ -3271,6 +3499,10 @@ msgstr "probe"
 #: src/api.ts
 msgid "probe failed: {status}"
 msgstr "probe failed: {status}"
+
+#: src/api.ts
+msgid "probe proposal failed"
+msgstr "probe proposal failed"
 
 #: src/components/PluginConfigModal.tsx
 msgid "probe: {reason}"
@@ -3351,6 +3583,10 @@ msgstr "Protocols"
 msgid "pull request opened: {prUrl}"
 msgstr "pull request opened: {prUrl}"
 
+#: src/components/runOutcome/LandBranchAction.tsx
+msgid "push {branch} and open a {change} for it — CI and review run as usual"
+msgstr "push {branch} and open a {change} for it — CI and review run as usual"
+
 #: src/workspace/task/TaskActions.tsx
 msgid "push the branch and open a pull request"
 msgstr "push the branch and open a pull request"
@@ -3359,9 +3595,17 @@ msgstr "push the branch and open a pull request"
 msgid "Push works over SSH; opening a {change} needs a {provider} token."
 msgstr "Push works over SSH; opening a {change} needs a {provider} token."
 
+#: src/components/runOutcome/LandBranchAction.tsx
+msgid "Pushed, {change} opened:"
+msgstr "Pushed, {change} opened:"
+
 #: src/workspace/task/TaskActions.tsx
 msgid "Pushes <0>{taskBranch}</0> to <1>origin</1> and opens a pull request with <2>gh</2>, then moves the card to done. The branch is kept."
 msgstr "Pushes <0>{taskBranch}</0> to <1>origin</1> and opens a pull request with <2>gh</2>, then moves the card to done. The branch is kept."
+
+#: src/components/runOutcome/LandBranchAction.tsx
+msgid "pushing…"
+msgstr "pushing…"
 
 #: src/workspace/task/TaskActions.tsx
 msgid "put the card back in the Inbox"
@@ -3369,9 +3613,12 @@ msgstr "put the card back in the Inbox"
 
 #: src/components/place/DecisionCard.tsx
 #: src/components/place/StateGlyph.tsx
-#: src/lib/needsYou.ts
 msgid "question"
 msgstr "question"
+
+#: src/lib/needsYou.ts
+msgid "Question"
+msgstr "Question"
 
 #: src/components/QuestionForm.tsx
 msgid "question {number}"
@@ -3445,6 +3692,14 @@ msgstr "Re-verify"
 #: src/components/Explain.tsx
 msgid "Read more →"
 msgstr "Read more →"
+
+#: src/components/runOutcome/blockerGuide.ts
+msgid "Read the executor's reason and pick one of its options below — or write your own answer."
+msgstr "Read the executor's reason and pick one of its options below — or write your own answer."
+
+#: src/components/runOutcome/blockerGuide.ts
+msgid "Read the verifier's reasons in the evidence below."
+msgstr "Read the verifier's reasons in the evidence below."
 
 #: src/components/ProjectPlugins.tsx
 msgid "read-only — daemon started without SWARMERY_ONBOARD_ROOTS"
@@ -3610,6 +3865,10 @@ msgstr "resets in {totalMin}m"
 msgid "resets now"
 msgstr "resets now"
 
+#: src/components/runOutcome/blockerGuide.ts
+msgid "Resolve what blocks a retry (below), then press Retry run."
+msgstr "Resolve what blocks a retry (below), then press Retry run."
+
 #: src/components/ProjectActions.tsx
 msgid "restore"
 msgstr "restore"
@@ -3653,6 +3912,14 @@ msgstr "retry proposal failed"
 #: src/components/RunOutcomeModal.tsx
 msgid "Retry run"
 msgstr "Retry run"
+
+#: src/components/runOutcome/blockerGuide.ts
+msgid "Retry run continues on {branch} ({commits}) with your answer to {decisionId}"
+msgstr "Retry run continues on {branch} ({commits}) with your answer to {decisionId}"
+
+#: src/components/runOutcome/blockerGuide.ts
+msgid "Retry run starts on top of {branch}, so it sees that code. It is refused only if several unmerged dependency branches have diverged."
+msgstr "Retry run starts on top of {branch}, so it sees that code. It is refused only if several unmerged dependency branches have diverged."
 
 #: src/workspace/task/TaskActions.tsx
 msgid "review"
@@ -3743,6 +4010,10 @@ msgstr "run duration"
 #: src/components/RunOutcomeModal.tsx
 msgid "Run error: {runError}"
 msgstr "Run error: {runError}"
+
+#: src/components/RunOutcomeModal.tsx
+msgid "run in the project's repo"
+msgstr "run in the project's repo"
 
 #: src/workspace/TaskModal.tsx
 msgid "run log"
@@ -3905,6 +4176,10 @@ msgstr "session error"
 #: src/lib/notifications.ts
 msgid "Session error"
 msgstr "Session error"
+
+#: src/lib/needsYou.ts
+msgid "Session failed"
+msgstr "Session failed"
 
 #: src/components/NotifySettings.tsx
 msgid "session finished"
@@ -4088,10 +4363,6 @@ msgstr "Spinning and pulsing state glyphs"
 #: src/workspace/boardModel.ts
 msgid "stale"
 msgstr "stale"
-
-#: src/lib/needsYou.ts
-msgid "stalled phase"
-msgstr "stalled phase"
 
 #: src/workspace/NewTaskModal.tsx
 msgid "start immediately — the dispatcher picks it up"
@@ -4318,9 +4589,25 @@ msgstr "the Advisor noticed…"
 msgid "the analysis failed without a recorded reason"
 msgstr "the analysis failed without a recorded reason"
 
+#: src/components/runOutcome/blockerGuide.ts
+msgid "the base branch"
+msgstr "the base branch"
+
 #: src/lib/docFigures.tsx
 msgid "The board's three lanes"
 msgstr "The board's three lanes"
+
+#: src/components/runOutcome/blockerGuide.ts
+msgid "The branch holds protected edits ({files}). Only \"Allow (add to scope)\" keeps them: a retry then continues on this branch. Any other answer leaves the branch to be merged or deleted before a retry."
+msgstr "The branch holds protected edits ({files}). Only \"Allow (add to scope)\" keeps them: a retry then continues on this branch. Any other answer leaves the branch to be merged or deleted before a retry."
+
+#: src/components/RunOutcomeModal.tsx
+msgid "The branch holds protected edits: only \"Allow (add to scope)\" keeps the work. Any other answer, your own words included, leaves the branch to be merged or deleted before a retry."
+msgstr "The branch holds protected edits: only \"Allow (add to scope)\" keeps the work. Any other answer, your own words included, leaves the branch to be merged or deleted before a retry."
+
+#: src/components/RunOutcomeModal.tsx
+msgid "the branch must then be merged or deleted before a retry"
+msgstr "the branch must then be merged or deleted before a retry"
 
 #: src/components/VcsSignInDialog.tsx
 msgid "The code expired before it was entered. Get a new one."
@@ -4333,6 +4620,10 @@ msgstr "The concurrent-run limit (default 2)"
 #: src/workspace/boardModel.ts
 msgid "The dispatcher picks cards up from here in priority order."
 msgstr "The dispatcher picks cards up from here in priority order."
+
+#: src/components/runOutcome/blockerGuide.ts
+msgid "The executor stopped and is waiting for your decision {decisionId}"
+msgstr "The executor stopped and is waiting for your decision {decisionId}"
 
 #: src/workspace/NewTaskModal.tsx
 msgid "the full request (empty = use the title)"
@@ -4362,6 +4653,18 @@ msgstr "the janitor is disabled by SWARMERY_WTJANITOR — the history below is h
 msgid "The nine dispatcher admission gates in order"
 msgstr "The nine dispatcher admission gates in order"
 
+#: src/components/RunOutcomeModal.tsx
+msgid "The options of this decision are on the Needs you page."
+msgstr "The options of this decision are on the Needs you page."
+
+#: src/components/runOutcome/blockerGuide.ts
+msgid "The phase doc has no acceptance criteria, so no run can prove progress"
+msgstr "The phase doc has no acceptance criteria, so no run can prove progress"
+
+#: src/components/runOutcome/blockerGuide.ts
+msgid "The plan has no recorded lesson"
+msgstr "The plan has no recorded lesson"
+
 #: src/workspace/task/RunConfig.tsx
 msgid "The playbook sets the stages and the permission mode the run spawns under. <0>model</0> overrides the model the playbook would use. <1>agent</1> is orthogonal to both: it prefixes every stage's prompt with that persona, it does not replace the stages."
 msgstr "The playbook sets the stages and the permission mode the run spawns under. <0>model</0> overrides the model the playbook would use. <1>agent</1> is orthogonal to both: it prefixes every stage's prompt with that persona, it does not replace the stages."
@@ -4374,6 +4677,10 @@ msgstr "the previous run ended {prevStatus}"
 msgid "the previous run exited with an error"
 msgstr "the previous run exited with an error"
 
+#: src/components/runOutcome/blockerGuide.ts
+msgid "The previous run's worktree is still checked out on its branch"
+msgstr "The previous run's worktree is still checked out on its branch"
+
 #: src/api.ts
 msgid "the probe needs more fields filled in first"
 msgstr "the probe needs more fields filled in first"
@@ -4381,10 +4688,6 @@ msgstr "the probe needs more fields filled in first"
 #: src/components/RunOutcomeModal.tsx
 msgid "The reason you wrote for revising this plan will be lost."
 msgstr "The reason you wrote for revising this plan will be lost."
-
-#: src/components/RunOutcomeModal.tsx
-msgid "the run branch"
-msgstr "the run branch"
 
 #: src/components/DiffView.tsx
 msgid "the run branch carries no commits ahead of its start point — the agent changed nothing"
@@ -4401,6 +4704,10 @@ msgstr "the run failed"
 #: src/components/RunOutcomeModal.tsx
 msgid "the run finished but ticked no acceptance criteria"
 msgstr "the run finished but ticked no acceptance criteria"
+
+#: src/components/runOutcome/blockerGuide.ts
+msgid "The run itself can go on; resolve what keeps the phase from counting as done."
+msgstr "The run itself can go on; resolve what keeps the phase from counting as done."
 
 #: src/components/RunOutcomeModal.tsx
 msgid "the run ticked every acceptance criterion"
@@ -4422,6 +4729,10 @@ msgstr "The sign-in was declined."
 msgid "The slug, path, workspace root, and pack selections you've entered will be lost."
 msgstr "The slug, path, workspace root, and pack selections you've entered will be lost."
 
+#: src/components/runOutcome/blockerGuide.ts
+msgid "The stopped run's work ({commits}) is on {branch}"
+msgstr "The stopped run's work ({commits}) is on {branch}"
+
 #: src/workspace/NewTaskModal.tsx
 msgid "The title, prompt, and any advanced settings you've entered will be lost."
 msgstr "The title, prompt, and any advanced settings you've entered will be lost."
@@ -4429,6 +4740,14 @@ msgstr "The title, prompt, and any advanced settings you've entered will be lost
 #: src/components/RunOutcomeModal.tsx
 msgid "the verifier could not conclude (env or timeout) — this is not a failing grade"
 msgstr "the verifier could not conclude (env or timeout) — this is not a failing grade"
+
+#: src/components/runOutcome/blockerGuide.ts
+msgid "The verifier could not confirm the criteria this run ticked"
+msgstr "The verifier could not confirm the criteria this run ticked"
+
+#: src/components/runOutcome/blockerGuide.ts
+msgid "The work is done, but the phase doc has no Completion Report"
+msgstr "The work is done, but the phase doc has no Completion Report"
 
 #: src/lib/docFigures.tsx
 msgid "The worktree limit (default 4)"
@@ -4458,6 +4777,14 @@ msgstr "theme · t"
 #: src/theme/ThemePicker.tsx
 msgid "theme settings"
 msgstr "theme settings"
+
+#: src/components/runOutcome/blockerGuide.ts
+msgid "Then press Retry run: it continues on this phase's branch, so the work already done is kept."
+msgstr "Then press Retry run: it continues on this phase's branch, so the work already done is kept."
+
+#: src/components/RunOutcomeModal.tsx
+msgid "then:"
+msgstr "then:"
 
 #: src/lib/sessionsView.ts
 msgid "third"
@@ -4536,6 +4863,10 @@ msgstr "This terminal runs under <0>{account}</0>'s config dir. Run <1>claude</1
 msgid "This view failed to render."
 msgstr "This view failed to render."
 
+#: src/components/RunOutcomeModal.tsx
+msgid "throw this work away and start the phase from scratch"
+msgstr "throw this work away and start the phase from scratch"
+
 #: src/pages/Settings.tsx
 msgid "Tighter rows in every list"
 msgstr "Tighter rows in every list"
@@ -4561,6 +4892,14 @@ msgstr "title is required"
 #: src/components/usage/LimitsPanel.tsx
 msgid "to {0}"
 msgstr "to {0}"
+
+#: src/components/runOutcome/blockerGuide.ts
+msgid "To keep it, answer \"Allow (add to scope)\" above: it holds protected edits ({files}), and any other answer leaves the branch to be merged or deleted before a retry."
+msgstr "To keep it, answer \"Allow (add to scope)\" above: it holds protected edits ({files}), and any other answer leaves the branch to be merged or deleted before a retry."
+
+#: src/components/runOutcome/blockerGuide.ts
+msgid "To land it: press Open {changeShort} — it pushes {branch} and opens a {change} into {base}."
+msgstr "To land it: press Open {changeShort} — it pushes {branch} and opens a {change} into {base}."
 
 #: src/workspace/boardModel.ts
 msgid "today"
@@ -4658,6 +4997,10 @@ msgstr "Unrestricted"
 #: src/components/AccountSelector.tsx
 msgid "unset"
 msgstr "unset"
+
+#: src/components/runOutcome/blockerGuide.ts
+msgid "Until then Retry run is refused: this phase builds on that work."
+msgstr "Until then Retry run is refused: this phase builds on that work."
 
 #: src/api.ts
 msgid "update failed: {status}"
@@ -4875,6 +5218,18 @@ msgstr "will remove"
 msgid "will restore"
 msgstr "will restore"
 
+#: src/components/runOutcome/blockerGuide.ts
+msgid "Work you don't want: press Delete branch, and the retry recreates it from {base}."
+msgstr "Work you don't want: press Delete branch, and the retry recreates it from {base}."
+
+#: src/components/runOutcome/blockerGuide.ts
+msgid "Work you want: press Open {changeShort} — it pushes the branch and opens a {change} into {base}. Once that is merged, press Retry run."
+msgstr "Work you want: press Open {changeShort} — it pushes the branch and opens a {change} into {base}. Once that is merged, press Retry run."
+
+#: src/components/runOutcome/blockerGuide.ts
+msgid "Work you want: press Open {changeShort} to push it and open a {change} into {base}. Otherwise delete it."
+msgstr "Work you want: press Open {changeShort} to push it and open a {change} into {base}. Otherwise delete it."
+
 #: src/components/place/StateGlyph.tsx
 msgid "working"
 msgstr "working"
@@ -4898,8 +5253,8 @@ msgid "worktree"
 msgstr "worktree"
 
 #: src/lib/needsYou.ts
-msgid "worktree cleanup"
-msgstr "worktree cleanup"
+msgid "Worktree cleanup"
+msgstr "Worktree cleanup"
 
 #: src/workspace/task/TaskActions.tsx
 msgid "worktree reclaimed — nothing to re-grade"
@@ -4928,6 +5283,14 @@ msgstr "Writes <0>.claude/</0> config and carves the workspace namespace. Idempo
 #: src/components/usage/UsageDisconnect.tsx
 msgid "yes, disconnect"
 msgstr "yes, disconnect"
+
+#: src/components/runOutcome/blockerGuide.ts
+msgid "Your answer is recorded under ## Decisions in the phase doc and handed to the next run."
+msgstr "Your answer is recorded under ## Decisions in the phase doc and handed to the next run."
+
+#: src/components/runOutcome/blockerGuide.ts
+msgid "Your answer to {decisionId} did not accept the protected edits on {branch} — a retry cannot build on it"
+msgstr "Your answer to {decisionId} did not accept the protected edits on {branch} — a retry cannot build on it"
 
 #: src/components/PluginConfigModal.tsx
 msgid "Your edits to this plugin's configuration will be lost."

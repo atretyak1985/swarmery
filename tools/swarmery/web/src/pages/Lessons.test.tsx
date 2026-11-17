@@ -6,6 +6,9 @@
 //      badge; a surprise lesson does not.
 //   2. Its `finding:<id>` evidence links to each finding's phase Review tab;
 //      an id the API could not resolve, and non-finding evidence, stay text.
+//   3. Every lesson shows its confidence badge; Accept on a low one takes a
+//      second click (the confirm step) and only then sends the confirm flag.
+//   4. A run that produced no lesson shows its no_entry_reason.
 //
 // Runs with the rest of the web suite: `npm test`. On its own:
 // `npx vitest run src/pages/Lessons.test.tsx`.
@@ -18,7 +21,13 @@ import { findingHref, Lessons } from './Lessons';
 
 vi.mock('../api/lessons', async (importOriginal) => {
   const real = await importOriginal<typeof import('../api/lessons')>();
-  return { ...real, fetchLessons: vi.fn(), fetchRetirements: vi.fn() };
+  return {
+    ...real,
+    fetchLessons: vi.fn(),
+    fetchRetirements: vi.fn(),
+    fetchLessonGenerations: vi.fn(),
+    acceptLesson: vi.fn(),
+  };
 });
 
 const base: lessons.Lesson = {
@@ -53,6 +62,8 @@ const base: lessons.Lesson = {
   reviewType: '',
   reviewArea: '',
   findings: [],
+  confidence: 'medium',
+  confidenceReason: '',
 };
 
 const finding18: lessons.LessonFinding = {
@@ -94,6 +105,10 @@ const surpriseLesson: lessons.Lesson = {
 beforeEach(() => {
   vi.mocked(lessons.fetchLessons).mockResolvedValue([reviewLesson, surpriseLesson]);
   vi.mocked(lessons.fetchRetirements).mockResolvedValue([]);
+  vi.mocked(lessons.fetchLessonGenerations).mockResolvedValue([]);
+  vi.mocked(lessons.acceptLesson).mockImplementation((id) =>
+    Promise.resolve({ ...base, id, status: 'active' }),
+  );
 });
 
 afterEach(() => {
@@ -135,5 +150,84 @@ describe('Lessons — review-sourced candidates', () => {
     expect(findingHref({ ...finding18, phaseSeq: 0 })).toBe('/p/swarmery/plans?task=900');
     expect(findingHref({ ...finding18, planId: '' })).toBe('/p/swarmery/plans?task=900');
     expect(findingHref({ ...finding18, projectSlug: '' })).toBeNull();
+  });
+});
+
+const lowLesson: lessons.Lesson = {
+  ...base,
+  id: 7,
+  title: 'A lesson from one run',
+  confidence: 'low',
+  confidenceReason: 'It rests on a single run.',
+};
+const highLesson: lessons.Lesson = { ...base, id: 8, title: 'A well-supported lesson', confidence: 'high' };
+
+describe('Lessons — confidence', () => {
+  function renderQueue(): void {
+    render(
+      <MemoryRouter>
+        <Lessons embedded />
+      </MemoryRouter>,
+    );
+  }
+
+  it('badges every confidence', async () => {
+    vi.mocked(lessons.fetchLessons).mockResolvedValue([lowLesson, highLesson, surpriseLesson]);
+    renderQueue();
+    await screen.findByText(lowLesson.title);
+    expect(within(card(lowLesson.title)).getByTestId('confidence-badge').textContent).toBe('low confidence');
+    expect(within(card(lowLesson.title)).getByTestId('confidence-badge').getAttribute('title')).toBe(
+      'It rests on a single run.',
+    );
+    expect(within(card(highLesson.title)).getByTestId('confidence-badge').textContent).toBe('high confidence');
+    expect(within(card(surpriseLesson.title)).getByTestId('confidence-badge').textContent).toBe('medium confidence');
+  });
+
+  it('asks for a second click before accepting a low lesson', async () => {
+    vi.mocked(lessons.fetchLessons).mockResolvedValue([lowLesson]);
+    renderQueue();
+    await screen.findByText(lowLesson.title);
+    within(card(lowLesson.title)).getByRole('button', { name: 'accept' }).click();
+    const confirm = await screen.findByRole('group', { name: 'confirm accepting a low-confidence lesson' });
+    expect(lessons.acceptLesson).not.toHaveBeenCalled();
+    within(confirm).getByRole('button', { name: 'cancel' }).click();
+    await screen.findByRole('button', { name: 'accept' });
+    expect(lessons.acceptLesson).not.toHaveBeenCalled();
+
+    screen.getByRole('button', { name: 'accept' }).click();
+    (await screen.findByRole('button', { name: 'accept anyway' })).click();
+    await vi.waitFor(() => expect(lessons.acceptLesson).toHaveBeenCalledWith(lowLesson.id, true));
+  });
+
+  it('accepts a medium or high lesson in one click, without the flag', async () => {
+    vi.mocked(lessons.fetchLessons).mockResolvedValue([highLesson]);
+    renderQueue();
+    await screen.findByText(highLesson.title);
+    within(card(highLesson.title)).getByRole('button', { name: 'accept' }).click();
+    await vi.waitFor(() => expect(lessons.acceptLesson).toHaveBeenCalledWith(highLesson.id));
+    expect(screen.queryByRole('button', { name: 'accept anyway' })).toBeNull();
+  });
+
+  it('shows why a run produced no lesson', async () => {
+    vi.mocked(lessons.fetchLessonGenerations).mockResolvedValue([
+      {
+        sourcePhaseRun: 'run-1',
+        phaseId: 1,
+        phaseName: 'Phase 1',
+        planId: 'plan-a',
+        state: 'done',
+        inserted: 0,
+        linked: 0,
+        rejected: [],
+        error: '',
+        noEntryReason: 'A one-off network outage.',
+        model: 'm',
+        createdAt: '2026-11-02T00:00:00Z',
+        finishedAt: null,
+      },
+    ]);
+    renderQueue();
+    const log = await screen.findByTestId('generation-log');
+    expect(within(log).getByText('A one-off network outage.')).toBeTruthy();
   });
 });

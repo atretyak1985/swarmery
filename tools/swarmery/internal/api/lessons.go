@@ -5,10 +5,14 @@ package api
 //	GET   /api/lessons?status=candidate|active|retired|dismissed|merged → {lessons:[Lesson]}
 //	      &area=<repo-relative dir or file> keeps only lessons whose area globs
 //	      overlap it (the injection matcher, phase 15; read by core's area-lessons skill)
+//	GET   /api/lessons/generations?project=<slug> → {generations:[Generation]} — the generation
+//	      log, newest first: each eligible run's outcome, including the model's no_entry_reason
 //	POST  /api/lessons/{id}/promote   {area?} → Lesson   (active only; writes the
 //	      lesson into <repo>/<area>/CLAUDE.md on a NEW branch, phase 15.4)
 //	PATCH /api/lessons/{id}           {title?, guidance?, areaGlobs?} → Lesson
-//	POST  /api/lessons/{id}/accept    → Lesson   (candidate → active; the ONLY path to active)
+//	POST  /api/lessons/{id}/accept    {confirm?} → Lesson   (candidate → active; the ONLY path to
+//	      active). A low-confidence candidate needs {"confirm": true} — the UI's second
+//	      click; without it the answer is 409 and nothing changes.
 //	POST  /api/lessons/{id}/merge     {lessonId? | normTitle?} → Lesson
 //	POST  /api/lessons/{id}/dismiss   {reason?} → Lesson
 //	POST  /api/lessons/{id}/retire    {reason?} → Lesson
@@ -57,6 +61,11 @@ func (h *Handler) listLessons(w http.ResponseWriter, r *http.Request) {
 		ls = filterLessonsByArea(ls, area)
 	}
 	writeJSON(w, map[string]any{"lessons": ls}, err)
+}
+
+func (h *Handler) listLessonGenerations(w http.ResponseWriter, r *http.Request) {
+	gs, err := lessons.ListGenerations(h.DB, r.URL.Query().Get("project"), 50)
+	writeJSON(w, map[string]any{"generations": gs}, err)
 }
 
 // filterLessonsByArea keeps the lessons a run working in area would be handed
@@ -124,7 +133,13 @@ func (h *Handler) acceptLesson(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	l, err := lessons.Accept(h.DB, id, time.Now())
+	var body struct {
+		Confirm bool `json:"confirm"`
+	}
+	if !decodeLessonBody(w, r, &body) {
+		return
+	}
+	l, err := lessons.Accept(h.DB, id, body.Confirm, time.Now())
 	writeLesson(w, l, err)
 }
 

@@ -25,6 +25,10 @@ msgstr "? питання"
 msgid "… (truncated)"
 msgstr "… (обрізано)"
 
+#: src/pages/detail/headerSentence.ts
+msgid "· last action {ago} ago — {now}."
+msgstr "· остання дія {ago} тому — {now}."
+
 #: src/pages/detail/Chat.tsx
 #: src/pages/detail/Timeline.tsx
 msgid "(empty prompt)"
@@ -119,6 +123,10 @@ msgstr "{classifierCalls, plural, one {Класифікатор позначив
 #: src/pages/detail/Chat.tsx
 msgid "{commands, plural, one {ran {count} command} few {ran {count} commands} many {ran {count} commands} other {ran {count} commands}}"
 msgstr "{commands, plural, one {виконано {count} команду} few {виконано {count} команди} many {виконано {count} команд} other {виконано {count} команди}}"
+
+#: src/pages/detail/headerSentence.ts
+msgid "{count, plural, one {# file changed} few {# files changed} many {# files changed} other {# files changed}}"
+msgstr "{count, plural, one {# файл змінено} few {# файли змінено} many {# файлів змінено} other {# файлу змінено}}"
 
 #: src/pages/sessions/ModelSwitchBadge.tsx
 msgid "{count, plural, one {# model} few {# models} many {# models} other {# models}}"
@@ -340,6 +348,11 @@ msgstr "{topCount, plural, one {# інструмент спричинив {topSh
 msgid "{verifiedChanges, plural, one {{count} change proved it helped.} few {{count} changes proved they helped.} many {{count} changes proved they helped.} other {{count} changes proved they helped.}}"
 msgstr "{verifiedChanges, plural, one {{count} зміна довела, що допомогла.} few {{count} зміни довели, що допомогли.} many {{count} змін довели, що допомогли.} other {{count} зміни довели, що допомогли.}}"
 
+#: src/pages/NeedsYou.tsx
+#: src/pages/Sessions.tsx
+msgid "← list"
+msgstr "← список"
+
 #: src/pages/ProjectDetail.tsx
 msgid "← projects"
 msgstr "← проєкти"
@@ -359,6 +372,10 @@ msgstr "→ відкат на"
 #: src/pages/Approvals.tsx
 msgid "+ add rule"
 msgstr "+ додати правило"
+
+#: src/pages/NeedsYou.tsx
+msgid "+ note"
+msgstr "+ нотатка"
 
 #. placeholder {0}: swarm.hidden
 #: src/pages/detail/SessionRail.tsx
@@ -406,8 +423,8 @@ msgid "a pause is a feature, not a failure"
 msgstr "пауза — це задум, а не збій"
 
 #: src/pages/detail/CommandInput.tsx
-msgid "a reply is being generated — Stop to cancel it."
-msgstr "відповідь генерується — «Стоп», щоб скасувати."
+msgid "a reply is being generated — messages you send now are queued and go out when it finishes."
+msgstr "відповідь генерується — повідомлення, які ви надсилаєте зараз, стають у чергу й підуть, щойно вона завершиться."
 
 #: src/pages/detail/SessionRail.tsx
 msgid "account"
@@ -480,8 +497,8 @@ msgid "all sessions →"
 msgstr "усі сесії →"
 
 #: src/pages/NeedsYou.tsx
-msgid "Allow (add to scope)"
-msgstr "Дозволити (додати до обсягу)"
+msgid "Allow · add to scope"
+msgstr "Дозволити · додати до обсягу"
 
 #: src/pages/detail/SessionGate.tsx
 #: src/pages/NeedsYou.tsx
@@ -489,8 +506,12 @@ msgid "allow once"
 msgstr "дозволити раз"
 
 #: src/pages/NeedsYou.tsx
-msgid "Allowing this releases: {pathList}"
-msgstr "Дозвіл відкриває: {pathList}"
+msgid "allow releases: {pathList}"
+msgstr "дозвіл відкриває: {pathList}"
+
+#: src/pages/detail/SessionPane.tsx
+msgid "already running"
+msgstr "вже виконується"
 
 #: src/pages/detail/SessionGate.tsx
 #: src/pages/NeedsYou.tsx
@@ -526,6 +547,10 @@ msgstr "відповісти в терміналі →"
 #: src/pages/Overview.tsx
 msgid "answer required"
 msgstr "потрібна відповідь"
+
+#: src/pages/NeedsYou.tsx
+msgid "answer: {typed}"
+msgstr "відповісти: {typed}"
 
 #: src/pages/sessions/CacheColdBadge.tsx
 msgid "API-key"
@@ -568,7 +593,6 @@ msgid "approvals…"
 msgstr "погодження…"
 
 #: src/pages/Approvals.tsx
-#: src/pages/NeedsYou.tsx
 #: src/pages/Overview.tsx
 #: src/pages/today/WaitingOnYou.tsx
 msgid "approve"
@@ -633,6 +657,10 @@ msgstr "чекає погодження · {since} — дайте відпові
 msgid "Bash patterns match the command PREFIX — `Bash(git *)` also matches `git status && rm -rf /`. Keep rules narrow; auto-approvals stay in History (via rule)."
 msgstr "Шаблони Bash збігаються з ПРЕФІКСОМ команди — `Bash(git *)` збігається і з `git status && rm -rf /`. Тримайте правила вузькими; автопогодження лишаються в Історії (через правило)."
 
+#: src/pages/detail/SessionPane.tsx
+msgid "being written"
+msgstr "пишеться"
+
 #: src/pages/NeedsYou.tsx
 msgid "blocked {age}"
 msgstr "заблоковано {age}"
@@ -640,10 +668,6 @@ msgstr "заблоковано {age}"
 #: src/pages/Overview.tsx
 msgid "Blocked on you · {count}"
 msgstr "Чекають на вас · {count}"
-
-#: src/pages/detail/SessionPane.tsx
-msgid "board"
-msgstr "дошка"
 
 #: src/pages/NeedsYou.tsx
 msgid "Branch"
@@ -915,6 +939,10 @@ msgstr "Завершено сьогодні"
 msgid "down vs previous week"
 msgstr "менше, ніж минулого тижня"
 
+#: src/pages/detail/CommandInput.tsx
+msgid "draft a reply · it can be sent once the terminal session stops"
+msgstr "чернетка відповіді · її можна надіслати, щойно сесія в терміналі зупиниться"
+
 #: src/pages/detail/CallTree.tsx
 msgid "duration"
 msgstr "тривалість"
@@ -926,10 +954,6 @@ msgstr "Раніше"
 #: src/pages/detail/SessionRail.tsx
 msgid "edits"
 msgstr "правки"
-
-#: src/pages/detail/SessionPane.tsx
-msgid "elapsed"
-msgstr "минуло"
 
 #: src/pages/Approvals.tsx
 msgid "elsewhere"
@@ -1009,6 +1033,10 @@ msgstr "минає {expires}"
 msgid "expires in {clock}"
 msgstr "спливає за {clock}"
 
+#: src/pages/detail/headerSentence.ts
+msgid "Expires in {clock}."
+msgstr "Минає за {clock}."
+
 #: src/pages/Approvals.tsx
 msgid "expiring…"
 msgstr "минає…"
@@ -1084,8 +1112,25 @@ msgid "first request…"
 msgstr "перший запит…"
 
 #: src/pages/NeedsYou.tsx
+#: src/pages/Sessions.tsx
+msgid "focus action"
+msgstr "фокус на дію"
+
+#: src/pages/NeedsYou.tsx
 msgid "Focus terminal"
 msgstr "До термінала"
+
+#: src/pages/detail/headerSentence.ts
+msgid "for {waited}"
+msgstr "вже {waited}"
+
+#: src/pages/detail/headerSentence.ts
+msgid "for {waited} · {tool}"
+msgstr "вже {waited} · {tool}"
+
+#: src/pages/detail/headerSentence.ts
+msgid "for {waited} · {tool}: {command}"
+msgstr "вже {waited} · {tool}: {command}"
 
 #: src/pages/ProjectOverview.tsx
 msgid "generate insights"
@@ -1164,6 +1209,14 @@ msgstr "простій"
 msgid "idle {age}"
 msgstr "простій {age}"
 
+#: src/pages/detail/headerSentence.ts
+msgid "in {elapsed} · {files}, marked {result}."
+msgstr "за {elapsed} · {files}, позначено «{result}»."
+
+#: src/pages/detail/headerSentence.ts
+msgid "in {elapsed} · {files}."
+msgstr "за {elapsed} · {files}."
+
 #: src/pages/ProjectOverview.tsx
 msgid "in progress"
 msgstr "у роботі"
@@ -1199,10 +1252,6 @@ msgstr "журнал прибирання →"
 #: src/pages/detail/SessionPane.tsx
 msgid "Jump to latest"
 msgstr "До останнього"
-
-#: src/pages/detail/SessionPane.tsx
-msgid "labels"
-msgstr "мітки"
 
 #: src/pages/ProjectDetail.tsx
 #: src/pages/Projects.tsx
@@ -1261,10 +1310,6 @@ msgstr "наживо · тихо працює"
 #: src/pages/today/LiveNow.tsx
 msgid "Live now"
 msgstr "Зараз наживо"
-
-#: src/pages/detail/SessionPane.tsx
-msgid "live usage"
-msgstr "поточне використання"
 
 #: src/pages/Sessions.tsx
 msgid "loading more…"
@@ -1406,6 +1451,10 @@ msgstr "у цій сесії ще немає подій"
 msgid "No files are claimed right now."
 msgstr "Зараз жоден файл не зайнято."
 
+#: src/pages/detail/headerSentence.ts
+msgid "no files changed"
+msgstr "файли не змінено"
+
 #: src/pages/detail/Diffs.tsx
 msgid "No files changed yet."
 msgstr "Файли ще не змінено."
@@ -1417,6 +1466,10 @@ msgstr "немає фінального повідомлення (stop_reason={n
 #: src/pages/Projects.tsx
 msgid "no health data yet"
 msgstr "даних здоров’я ще немає"
+
+#: src/pages/detail/SessionPane.tsx
+msgid "no link mod on this session"
+msgstr "у цій сесії немає мода swarmery link"
 
 #: src/pages/sessions/SwarmPanel.tsx
 msgid "No messages between this project's sessions yet."
@@ -1445,6 +1498,10 @@ msgstr "Жодна фаза ще не має прогнозу — додайте
 #: src/pages/detail/SessionRail.tsx
 msgid "no plan · ad-hoc session"
 msgstr "без плану · сесія поза планом"
+
+#: src/pages/detail/SessionPane.tsx
+msgid "no process to stop"
+msgstr "немає процесу, щоб зупинити"
 
 #: src/pages/Projects.tsx
 msgid "no projects match the current filter — try a different search or clear it"
@@ -1539,6 +1596,10 @@ msgstr "не доставлено: {reason}"
 msgid "not sent: {msg}"
 msgstr "не надіслано: {msg}"
 
+#: src/pages/detail/CommandInput.tsx
+msgid "not sent: this terminal session takes no messages from here. Turn on swarmery-link's \"control\" option (new sessions pick it up), or Stop it to take over."
+msgstr "не надіслано: ця термінальна сесія не приймає повідомлень звідси. Увімкніть опцію \"control\" у swarmery-link (діє для нових сесій) або зупиніть сесію, щоб перейняти її."
+
 #: src/pages/NeedsYou.tsx
 msgid "note — recorded with the answer in the phase doc (optional)"
 msgstr "нотатка — запишеться з відповіддю в документ фази (необов'язково)"
@@ -1551,10 +1612,6 @@ msgstr "нотатка (необов’язково)"
 msgid "Nothing blocked on you."
 msgstr "Ніщо не чекає на вас."
 
-#: src/pages/Sessions.tsx
-msgid "Nothing finished today yet."
-msgstr "Сьогодні ще нічого не завершено."
-
 #: src/pages/ProjectOverview.tsx
 msgid "nothing flagged"
 msgstr "нічого не позначено"
@@ -1562,6 +1619,10 @@ msgstr "нічого не позначено"
 #: src/pages/today/EventFeed.tsx
 msgid "Nothing happened yet. Sessions, plan runs and decisions land here."
 msgstr "Поки нічого не сталося. Сесії, запуски планів і рішення з'являються тут."
+
+#: src/pages/Sessions.tsx
+msgid "Nothing has finished yet."
+msgstr "Ще нічого не завершено."
 
 #: src/pages/Sessions.tsx
 msgid "Nothing here. Dispatch a task with + new, or widen the project scope."
@@ -1618,6 +1679,15 @@ msgstr "Ніщо не чекає на вас · працює: {liveCount}"
 #: src/pages/today/WaitingOnYou.tsx
 msgid "Nothing waits on you."
 msgstr "Ніщо не чекає на вас."
+
+#: src/pages/Sessions.tsx
+msgid "Nothing was stopped or failed."
+msgstr "Немає зупинених чи невдалих сесій."
+
+#: src/pages/NeedsYou.tsx
+#: src/pages/Sessions.tsx
+msgid "o → open"
+msgstr "o → відкрити"
 
 #: src/pages/Approvals.tsx
 msgid "off"
@@ -1684,6 +1754,7 @@ msgid "open review"
 msgstr "відкрити рев'ю"
 
 #: src/pages/NeedsYou.tsx
+#: src/pages/Sessions.tsx
 msgid "open session"
 msgstr "відкрити сесію"
 
@@ -1705,10 +1776,6 @@ msgstr "решта"
 msgid "out of scope"
 msgstr "поза межами"
 
-#: src/pages/detail/SessionPane.tsx
-msgid "outcome"
-msgstr "результат"
-
 #. placeholder {0}: OUTCOME_GLYPH[outcome].glyph
 #: src/pages/detail/SessionPane.tsx
 msgid "outcome {0} ▾"
@@ -1723,8 +1790,16 @@ msgid "own answer — overrides the selection"
 msgstr "власна відповідь — замінює вибране"
 
 #: src/pages/NeedsYou.tsx
+msgid "own answer — sent instead of an option"
+msgstr "власна відповідь — замість варіанта"
+
+#: src/pages/NeedsYou.tsx
 msgid "own answer…"
 msgstr "власна відповідь…"
+
+#: src/pages/NeedsYou.tsx
+msgid "own reply — overrides the selection"
+msgstr "своя відповідь — замість вибраної"
 
 #: src/pages/ProjectSettings.tsx
 msgid "path"
@@ -1832,6 +1907,10 @@ msgstr "закріпити зверху"
 msgid "pinned"
 msgstr "закріплено"
 
+#: src/pages/detail/SessionPane.tsx
+msgid "plan"
+msgstr "план"
+
 #: src/pages/today/loopModel.ts
 msgid "Plan"
 msgstr "План"
@@ -1881,10 +1960,6 @@ msgstr "заповнити правило автопогодження за ци
 msgid "prev 7d"
 msgstr "попер. 7д"
 
-#: src/pages/detail/SessionPane.tsx
-msgid "process"
-msgstr "процес"
-
 #: src/pages/Approvals.tsx
 #: src/pages/NeedsYou.tsx
 msgid "Production deploy — confirm in the session's terminal"
@@ -1912,6 +1987,10 @@ msgstr "Проєкти"
 msgid "projects…"
 msgstr "проєкти…"
 
+#: src/pages/detail/headerSentence.ts
+msgid "Prompt cache cold since {at}."
+msgstr "Кеш промптів холодний з {at}."
+
 #: src/pages/NeedsYou.tsx
 msgid "Proof"
 msgstr "Доказ"
@@ -1924,9 +2003,21 @@ msgstr "Докази →"
 msgid "proven"
 msgstr "доведено"
 
+#: src/pages/detail/CommandInput.tsx
+msgid "Queue"
+msgstr "У чергу"
+
 #: src/pages/detail/SessionPane.tsx
 msgid "queue a message · delivered after this step"
 msgstr "поставити повідомлення в чергу · надійде після цього кроку"
+
+#: src/pages/detail/CommandInput.tsx
+msgid "queued"
+msgstr "у черзі"
+
+#: src/pages/detail/CommandInput.tsx
+msgid "Queued messages"
+msgstr "Повідомлення в черзі"
 
 #: src/pages/sessions/SwarmPanel.tsx
 msgid "queued, waiting for the mod to pick it up"
@@ -1977,10 +2068,6 @@ msgstr "Отримувач"
 msgid "recovered"
 msgstr "відновлено"
 
-#: src/pages/detail/SessionPane.tsx
-msgid "redirect"
-msgstr "скерувати"
-
 #: src/pages/NeedsYou.tsx
 msgid "Reject"
 msgstr "Відхилити"
@@ -1989,9 +2076,9 @@ msgstr "Відхилити"
 msgid "release with no decision — the native selector renders in the terminal (E12d/E12e)"
 msgstr "відпустити без рішення — рідний селектор з’явиться в терміналі (E12d/E12e)"
 
-#: src/pages/detail/SessionPane.tsx
-msgid "remote control"
-msgstr "віддалене керування"
+#: src/pages/detail/CommandInput.tsx
+msgid "Remove queued message"
+msgstr "Прибрати повідомлення з черги"
 
 #: src/pages/NeedsYou.tsx
 msgid "Remove selected"
@@ -2000,6 +2087,10 @@ msgstr "Видалити вибрані"
 #: src/pages/NeedsYou.tsx
 msgid "Removing…"
 msgstr "Видалення…"
+
+#: src/pages/detail/SessionPane.tsx
+msgid "rename"
+msgstr "перейменувати"
 
 #: src/pages/detail/SessionPane.tsx
 msgid "rename session"
@@ -2019,8 +2110,12 @@ msgid "reply to resume from the saved conversation"
 msgstr "відповідь відновить сесію зі збереженої розмови"
 
 #: src/pages/detail/CommandInput.tsx
-msgid "Reply to this session…  (⌘/Ctrl+Enter to send)"
-msgstr "Відповісти цій сесії…  (⌘/Ctrl+Enter — надіслати)"
+msgid "Reply to this session…  (Enter to send · Shift+Enter for a new line)"
+msgstr "Відповісти в цій сесії…  (Enter — надіслати · Shift+Enter — новий рядок)"
+
+#: src/pages/NeedsYou.tsx
+msgid "reply: {ownHead}"
+msgstr "відповідь: {ownHead}"
 
 #: src/pages/NeedsYou.tsx
 msgid "reply: {typed}"
@@ -2087,8 +2182,8 @@ msgid "Running clean — nothing stopped, nothing waiting on you."
 msgstr "Працює чисто — нічого не зупинилося, ніщо на вас не чекає."
 
 #: src/pages/detail/SessionGate.tsx
-msgid "running in a terminal · answer there, or stop it to reply here"
-msgstr "працює в терміналі · дайте відповідь там або зупиніть, щоб відповісти тут"
+msgid "running in a terminal without link control · answer there, turn on swarmery-link's \"control\" option, or stop it to reply here"
+msgstr "працює в терміналі без керування через link · відповідайте там, увімкніть опцію \"control\" у swarmery-link або зупиніть, щоб відповісти тут"
 
 #: src/pages/detail/Timeline.tsx
 msgid "running…"
@@ -2120,6 +2215,10 @@ msgstr "Надіслати"
 msgid "Send a message from this session"
 msgstr "Надіслати повідомлення від цієї сесії"
 
+#: src/pages/detail/SessionPane.tsx
+msgid "send prompt"
+msgstr "надіслати промпт"
+
 #: src/pages/detail/Chat.tsx
 #: src/pages/sessions/SwarmPanel.tsx
 msgid "sending…"
@@ -2149,6 +2248,10 @@ msgstr "сесія #{sessionId}"
 msgid "session #{sessionNumber}"
 msgstr "сесія #{sessionNumber}"
 
+#: src/pages/NeedsYou.tsx
+msgid "session →"
+msgstr "сесія →"
+
 #: src/pages/detail/SessionRail.tsx
 msgid "session context"
 msgstr "контекст сесії"
@@ -2158,12 +2261,12 @@ msgid "Session end"
 msgstr "Кінець сесії"
 
 #: src/pages/detail/CommandInput.tsx
-msgid "session in progress…"
-msgstr "сесія триває…"
+msgid "session is running in a terminal — a message is delivered when the current turn ends."
+msgstr "сесія працює в терміналі — повідомлення буде доставлено, щойно завершиться поточний хід."
 
 #: src/pages/detail/CommandInput.tsx
-msgid "session is running in a terminal — Stop it to take over and continue the conversation here."
-msgstr "сесія працює в терміналі — натисніть «Стоп», щоб перебрати її й продовжити розмову тут."
+msgid "session is running in a terminal without link control — turn on swarmery-link's \"control\" option, or Stop it to take over and continue the conversation here."
+msgstr "сесія працює в терміналі без керування через link — увімкніть опцію \"control\" у swarmery-link або зупиніть її, щоб перейняти й продовжити розмову тут."
 
 #: src/pages/detail/SessionPane.tsx
 msgid "session outcome"
@@ -2323,10 +2426,6 @@ msgstr "кроки →"
 msgid "still blocked"
 msgstr "досі чекають"
 
-#: src/pages/detail/SessionPane.tsx
-msgid "stop"
-msgstr "зупинити"
-
 #: src/pages/detail/CommandInput.tsx
 msgid "Stop"
 msgstr "Зупинити"
@@ -2334,6 +2433,14 @@ msgstr "Зупинити"
 #: src/pages/Overview.tsx
 msgid "stop asking"
 msgstr "не питати"
+
+#: src/pages/detail/SessionPane.tsx
+msgid "stop process…"
+msgstr "зупинити процес…"
+
+#: src/pages/Sessions.tsx
+msgid "stopped"
+msgstr "зупинено"
 
 #: src/pages/detail/CommandInput.tsx
 msgid "Stopping…"
@@ -2359,6 +2466,10 @@ msgstr "надіслати відповіді"
 #: src/pages/sessions/CacheColdBadge.tsx
 msgid "subscription"
 msgstr "підписка"
+
+#: src/pages/detail/headerSentence.ts
+msgid "success"
+msgstr "успіх"
 
 #: src/pages/NeedsYou.tsx
 msgid "suggested"
@@ -2427,9 +2538,9 @@ msgstr "Демон написав бриф для нової сесії."
 msgid "The day"
 msgstr "День"
 
-#: src/pages/NeedsYou.tsx
-msgid "The executor stopped: {trigger}"
-msgstr "Виконавець зупинився: {trigger}"
+#: src/pages/detail/SessionPane.tsx
+msgid "the link mod is not polling for commands"
+msgstr "мод swarmery link не опитує команди"
 
 #: src/pages/today/LoopMap.tsx
 msgid "The loop, this week"
@@ -2438,6 +2549,10 @@ msgstr "Цикл цього тижня"
 #: src/pages/detail/LiveActivity.tsx
 msgid "the OS process is alive (procwatch, 30s resolution); nothing written to the transcript during this stretch — typical for long builds/tests"
 msgstr "процес ОС живий (procwatch, крок 30 с); за цей час у транскрипт нічого не записано — типово для довгих збірок і тестів"
+
+#: src/pages/detail/SessionPane.tsx
+msgid "the process already exited"
+msgstr "процес уже завершився"
 
 #: src/pages/detail/Chat.tsx
 msgid "The prompt cache expired during the pause before this turn, so it re-wrote the whole context instead of reading it from cache."
@@ -2718,6 +2833,10 @@ msgstr "ви"
 #: src/pages/detail/SessionGate.tsx
 msgid "your pick is pasted as the reply"
 msgstr "ваш вибір піде як відповідь"
+
+#: src/pages/NeedsYou.tsx
+msgid "your reply to the session"
+msgstr "ваша відповідь сесії"
 
 #: src/pages/detail/CallTree.tsx
 msgid "Σ tokens"

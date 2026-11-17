@@ -269,6 +269,8 @@ type ReviewProposal struct {
 	// DraftErr says why a draft was attempted and not stored ("" otherwise).
 	DraftErr string
 	Rejected []Rejection
+	// NoEntryReason is the model's "nothing these findings share" answer.
+	NoEntryReason string
 }
 
 // ReviewProposer turns repeated review findings into lesson candidates.
@@ -389,18 +391,20 @@ func (p *ReviewProposer) muted(g Group, now time.Time) (bool, error) {
 }
 
 // draft asks the model for the group's lesson.
-func (p *ReviewProposer) draft(ctx context.Context, g Group) (c Candidate, ok bool, rejected []Rejection, why string) {
+// why is "" on success, noLessonReason when the model returned no valid lesson
+// (d.NoEntryReason then carries its own reason, when it gave one), else the error.
+func (p *ReviewProposer) draft(ctx context.Context, g Group) (d ReviewDraft, why string) {
 	if p.Runner == nil {
-		return c, false, nil, "no runner configured"
+		return d, "no runner configured"
 	}
-	c, ok, rejected, err := DraftReview(ctx, p.Runner, NewReviewInput(g))
+	d, err := DraftReview(ctx, p.Runner, NewReviewInput(g))
 	switch {
 	case err != nil:
-		return c, false, rejected, err.Error()
-	case !ok:
-		return c, false, rejected, noLessonReason
+		return d, err.Error()
+	case !d.OK:
+		return d, noLessonReason
 	}
-	return c, true, rejected, ""
+	return d, ""
 }
 
 // ProposeFromReview writes the group's candidate, or folds the group's new
@@ -435,15 +439,24 @@ func (p *ReviewProposer) insert(ctx context.Context, g Group, now time.Time) (Re
 	title := capRunes(fmt.Sprintf("Repeated %s findings in %s", g.Type, g.Area), maxTitleRunes)
 	guidance, model := DraftPendingGuidance, ""
 	cause := fmt.Sprintf("Reviewers raised %s findings in %s in %d phases.", g.Type, g.Area, g.Phases())
-	c, ok, rejected, why := p.draft(ctx, g)
-	out.Rejected, out.DraftErr = rejected, why
+	d, why := p.draft(ctx, g)
+	out.Rejected, out.DraftErr, out.NoEntryReason = d.Rejected, why, d.NoEntryReason
+	confidence, confReason := ConfidenceMedium, ""
 	switch {
-	case ok:
+	case d.OK:
+		c := d.Candidate
 		title, guidance, cause, model, out.Drafted = c.Title, c.Guidance, c.Cause, p.Model, true
-	case why == noLessonReason && len(rejected) == 0:
+		confidence, confReason = c.Confidence, c.ConfidenceReason
+	case why == noLessonReason && len(d.Rejected) == 0:
 		// The model looked and declined: say so, so the operator knows the
-		// placeholder is a judgement, not a pending job.
-		cause += " The draft found no thread they share: read the findings and write the guidance, or dismiss to mute this area for 30 days."
+		// placeholder is a judgement, not a pending job. The review path has no
+		// generation row, so the model's no_entry_reason is stored here, on the
+		// candidate's cause, and on the tick's log line.
+		found := "The draft found no thread they share"
+		if d.NoEntryReason != "" {
+			found += " (" + strings.TrimRight(d.NoEntryReason, ".") + ")"
+		}
+		cause += " " + found + ": read the findings and write the guidance, or dismiss to mute this area for 30 days."
 	}
 	norm := wsingest.NormalizeLessonTitle(title)
 	key := "review:" + g.Type + ":" + g.Area
@@ -456,10 +469,11 @@ func (p *ReviewProposer) insert(ctx context.Context, g Group, now time.Time) (Re
 	}
 	res, err := p.DB.Exec(`INSERT INTO surprise_lessons
 		(source_phase_run, phase_id, seq, title, norm_title, guidance, area_globs, evidence_json, cause,
-		 status, recurrences, model, created_at, updated_at, source, review_type, review_area)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'candidate', ?, ?, ?, ?, 'review', ?, ?)`,
+		 status, recurrences, model, created_at, updated_at, source, review_type, review_area,
+		 confidence, confidence_reason)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'candidate', ?, ?, ?, ?, 'review', ?, ?, ?, ?)`,
 		key, g.newestPhaseID(), seq, title, norm, guidance, strings.Join(g.AreaGlobs(), ","), string(ev), cause,
-		g.Phases(), model, ts, ts, g.Type, g.Area)
+		g.Phases(), model, ts, ts, g.Type, g.Area, orMedium(confidence), confReason)
 	if err != nil {
 		return out, err
 	}
@@ -495,15 +509,17 @@ func (p *ReviewProposer) extend(ctx context.Context, g Group, id int64, now time
 	if !grew || status != StatusCandidate || guidance != DraftPendingGuidance {
 		return out, nil
 	}
-	c, ok, rejected, why := p.draft(ctx, g)
-	out.Rejected, out.DraftErr = rejected, why
-	if !ok {
+	d, why := p.draft(ctx, g)
+	out.Rejected, out.DraftErr, out.NoEntryReason = d.Rejected, why, d.NoEntryReason
+	if !d.OK {
 		return out, nil
 	}
+	c := d.Candidate
 	norm := wsingest.NormalizeLessonTitle(c.Title)
 	if _, err := p.DB.Exec(`UPDATE surprise_lessons SET title = ?, norm_title = ?, guidance = ?, cause = ?, model = ?,
-		updated_at = ? WHERE id = ? AND status = 'candidate' AND guidance = ?`,
-		c.Title, norm, c.Guidance, c.Cause, p.Model, ts, id, DraftPendingGuidance); err != nil {
+		confidence = ?, confidence_reason = ?, updated_at = ? WHERE id = ? AND status = 'candidate' AND guidance = ?`,
+		c.Title, norm, c.Guidance, c.Cause, p.Model, orMedium(c.Confidence), c.ConfidenceReason, ts, id,
+		DraftPendingGuidance); err != nil {
 		return out, err
 	}
 	out.Drafted = true
@@ -550,8 +566,9 @@ func (p *ReviewProposer) Tick(ctx context.Context) (TickOutcome, error) {
 			out.Drafted++
 		}
 		if pr.DraftErr != "" {
-			log.Printf("lessons: review group %s in %s: lesson %d kept %q: %s (%d rejected)",
-				g.Type, g.Area, pr.LessonID, DraftPendingGuidance, pr.DraftErr, len(pr.Rejected))
+			log.Printf("lessons: review group %s in %s: lesson %d kept %q: %s (%d rejected)%s",
+				g.Type, g.Area, pr.LessonID, DraftPendingGuidance, pr.DraftErr, len(pr.Rejected),
+				noEntrySuffix(pr.NoEntryReason))
 		}
 	}
 	return out, nil

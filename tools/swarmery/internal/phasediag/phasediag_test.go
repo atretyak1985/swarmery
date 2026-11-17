@@ -451,6 +451,10 @@ func TestDiagnoseDepUnmerged(t *testing.T) {
 		t.Fatalf("Diagnose: %v", err)
 	}
 	b := blockerOf(t, d, KindDepUnmerged)
+	// The modal lands the dependency's branch from this card, so it must name it.
+	if b.Branch != depBranch || b.CommitsAhead != 2 || b.Base != "dev" {
+		t.Fatalf("dep-unmerged data = %q/%d/%q, want %q/2/dev", b.Branch, b.CommitsAhead, b.Base, depBranch)
+	}
 	for _, want := range []string{"Phase 1", depBranch, "2 commits", "dev"} {
 		if !strings.Contains(b.Summary, want) {
 			t.Fatalf("summary %q must contain %q", b.Summary, want)
@@ -1214,5 +1218,149 @@ func TestDiagnoseEmptyOwnLeftoverStaysBlocksRetry(t *testing.T) {
 	}
 	if _ = blockerOf(t, d, KindBranchBlocksRetry); own.calls != 0 {
 		t.Errorf("ownership probed %d times for an empty branch, want 0", own.calls)
+	}
+}
+
+// An open stop decision is the first thing the operator must act on, and the
+// phase's own branch that waits on it must not be reported as "merge or delete":
+// deleting throws away the work the answer would let the next run finish.
+func TestDiagnoseOpenStopDecisionLeadsAndReframesOwnBranch(t *testing.T) {
+	f := newFixture(t)
+	id := f.addPhase(t, 1, "Phase 1", "[]", 10, 9)
+	branch := fmt.Sprintf("swarm/phase-%d", id)
+	guard := `{"stop":{"trigger":"criterion-impossible","reason":"screenshots fail on unmodified main",` +
+		`"options":[{"id":"fix-it","label":"fix it"},{"id":"accept","label":"accept"}]}}`
+	if _, _, err := store.UpsertStopDecision(f.db, f.taskID, id, "screenshots fail on unmodified main",
+		[]string{"fix-it", "accept"}, guard, "2026-07-28T10:21:00Z"); err != nil {
+		t.Fatalf("UpsertStopDecision: %v", err)
+	}
+
+	git := newGit("main").branchExists("main", branch, 1, "feat: islands")
+	d, err := Diagnose(f.db, git, nil, id)
+	if err != nil {
+		t.Fatalf("Diagnose: %v", err)
+	}
+	if got := kinds(d.Blockers); !slices.Equal(got, []string{KindDecisionOpen, KindBranchAwaitsDecision}) {
+		t.Fatalf("kinds = %v, want [%s %s]", got, KindDecisionOpen, KindBranchAwaitsDecision)
+	}
+	dec := blockerOf(t, d, KindDecisionOpen)
+	if dec.DecisionID == "" || dec.Trigger != "criterion-impossible" {
+		t.Fatalf("decision blocker = %+v, want a decision id and the trigger", dec)
+	}
+	if dec.Detail != "screenshots fail on unmodified main" {
+		t.Fatalf("detail %q must carry the agent's reason", dec.Detail)
+	}
+	br := blockerOf(t, d, KindBranchAwaitsDecision)
+	if br.Branch != branch || br.CommitsAhead != 1 || br.Base != "main" {
+		t.Fatalf("branch blocker = %+v, want %s/1 against main", br, branch)
+	}
+
+	// Once answered, the decision is gone and the branch is an ordinary leftover.
+	mustExec(t, f.db, `UPDATE phase_decisions SET status='decided', answer='accept'`)
+	d, err = Diagnose(f.db, newGit("main").branchExists("main", branch, 1, "feat: islands"), nil, id)
+	if err != nil {
+		t.Fatalf("Diagnose: %v", err)
+	}
+	if got := kinds(d.Blockers); !slices.Equal(got, []string{KindBranchDirty}) {
+		t.Fatalf("kinds after answer = %v, want [%s]", got, KindBranchDirty)
+	}
+	if b := blockerOf(t, d, KindBranchDirty); b.Base != "main" {
+		t.Fatalf("branch-dirty base = %q, want main", b.Base)
+	}
+}
+
+// A stop-source decision raised by the guard check alone carries no `stop` key.
+func TestDiagnoseOpenGuardDecisionWithoutStopBlock(t *testing.T) {
+	f := newFixture(t)
+	id := f.addPhase(t, 1, "Phase 1", "[]", 3, 0)
+	if _, _, err := store.UpsertStopDecision(f.db, f.taskID, id, "The run changed protected paths",
+		[]string{"allow-add-to-scope", "reject"}, `{"protectedChanged":["a.go"]}`, "2026-07-28T10:21:00Z"); err != nil {
+		t.Fatalf("UpsertStopDecision: %v", err)
+	}
+	d, err := Diagnose(f.db, nil, nil, id)
+	if err != nil {
+		t.Fatalf("Diagnose: %v", err)
+	}
+	b := blockerOf(t, d, KindDecisionOpen)
+	if b.Trigger != "" || b.Detail != "The run changed protected paths" || !strings.Contains(b.Summary, b.DecisionID) {
+		t.Fatalf("guard decision blocker = %+v", b)
+	}
+	if !slices.Equal(b.ProtectedChanged, []string{"a.go"}) {
+		t.Fatalf("decision blocker protectedChanged = %v, want [a.go]", b.ProtectedChanged)
+	}
+}
+
+// With protected edits on the stopped run's branch, an answer does NOT keep the
+// work unless it is the guard's allow (AnswerContinuesBranch). The diagnosis must
+// carry the edited files on both the decision and the branch, and the branch's
+// summary must not promise that any answer lets a retry continue on it.
+func TestDiagnoseOpenStopWithProtectedEditsQualifiesTheBranch(t *testing.T) {
+	f := newFixture(t)
+	id := f.addPhase(t, 1, "Phase 1", "[]", 10, 9)
+	branch := fmt.Sprintf("swarm/phase-%d", id)
+	guard := `{"protectedChanged":["scripts/tests/a.sh"],"stop":{"trigger":"criterion-impossible","reason":"r"}}`
+	if _, _, err := store.UpsertStopDecision(f.db, f.taskID, id, "q",
+		[]string{"fix-it", GuardOptionAllowID}, guard, "2026-07-28T10:21:00Z"); err != nil {
+		t.Fatalf("UpsertStopDecision: %v", err)
+	}
+	d, err := Diagnose(f.db, newGit("main").branchExists("main", branch, 1, "feat: islands"), nil, id)
+	if err != nil {
+		t.Fatalf("Diagnose: %v", err)
+	}
+	want := []string{"scripts/tests/a.sh"}
+	if dec := blockerOf(t, d, KindDecisionOpen); !slices.Equal(dec.ProtectedChanged, want) {
+		t.Fatalf("decision protectedChanged = %v, want %v", dec.ProtectedChanged, want)
+	}
+	br := blockerOf(t, d, KindBranchAwaitsDecision)
+	if !slices.Equal(br.ProtectedChanged, want) {
+		t.Fatalf("branch protectedChanged = %v, want %v", br.ProtectedChanged, want)
+	}
+	if strings.Contains(br.Summary, "answer the decision and a retry continues") ||
+		!strings.Contains(br.Summary, GuardOptionAllowID) || !strings.Contains(br.Summary, "scripts/tests/a.sh") {
+		t.Fatalf("branch summary %q must name the edits and the one answer that keeps them", br.Summary)
+	}
+}
+
+// After the operator answered a blocked run's stop, the diagnosis tells the
+// branch apart the way the run engine will: refusals only (nothing protected on
+// the branch) ⇒ a retry continues on it; protected edits the answer did not
+// accept ⇒ branch-dirty, naming the files and the decision.
+func TestDiagnoseAnsweredStopDecidesTheBranchReading(t *testing.T) {
+	for _, c := range []struct {
+		name, guard, answer string
+		want                string
+	}{
+		{"refusals only, agent option", `{"guardBlocks":[{"tool":"Bash","path":".swarmery/plan"}],"stop":{"trigger":"criterion-impossible"}}`,
+			"fix-mobile-docs-scroll", KindBranchContinues},
+		{"protected edit, agent option", `{"protectedChanged":["scripts/tests/a.sh"],"stop":{"trigger":"criterion-impossible"}}`,
+			"fix-mobile-docs-scroll", KindBranchDirty},
+		{"protected edit, allow", `{"protectedChanged":["scripts/tests/a.sh"],"stop":{"trigger":"criterion-impossible"}}`,
+			GuardOptionAllowID, KindBranchContinues},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			f := newFixture(t)
+			id := f.addPhase(t, 1, "Phase 1", "[]", 10, 9)
+			f.setRun(t, id, "blocked", "", 0)
+			branch := fmt.Sprintf("swarm/phase-%d", id)
+			if _, _, err := store.UpsertStopDecision(f.db, f.taskID, id, "q", []string{"a"}, c.guard,
+				"2026-07-28T10:20:00Z"); err != nil {
+				t.Fatal(err)
+			}
+			mustExec(t, f.db, `UPDATE phase_decisions SET status='decided', answer=?, decided_at='2026-07-28T10:30:00Z'`, c.answer)
+			d, err := Diagnose(f.db, newGit("main").branchExists("main", branch, 1, "feat: islands"), nil, id)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := kinds(d.Blockers); !slices.Equal(got, []string{c.want}) {
+				t.Fatalf("kinds = %v, want [%s]", got, c.want)
+			}
+			b := d.Blockers[0]
+			if b.DecisionID == "" || b.Branch != branch {
+				t.Fatalf("blocker = %+v, want the decision and the branch as data", b)
+			}
+			if c.want == KindBranchDirty && !strings.Contains(b.Summary, "scripts/tests/a.sh") {
+				t.Fatalf("summary %q must name the unaccepted protected edit", b.Summary)
+			}
+		})
 	}
 }

@@ -9,8 +9,10 @@ export function hasLiveProcess(procState: ProcState | null | undefined): boolean
 
 export type RedirectChannel = 'composer' | 'link' | null;
 
-/** The composer while it accepts text, else a link mod that polls for commands. */
+/** The composer while no terminal process holds the session (a headless reply
+ * in flight still takes text: the composer queues it), else a link mod that
+ * polls for commands. */
 export function redirectChannel(session: Pick<Session, 'procState' | 'resumeInFlight' | 'link'>): RedirectChannel {
-  if (!hasLiveProcess(session.procState) && session.resumeInFlight !== true) return 'composer';
+  if (!hasLiveProcess(session.procState)) return 'composer';
   return session.link?.controllable === true ? 'link' : null;
 }

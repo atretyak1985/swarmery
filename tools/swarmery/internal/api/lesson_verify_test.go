@@ -102,3 +102,48 @@ func TestRetirementQueueEndpoints(t *testing.T) {
 		t.Fatalf("history = %+v", got.Proposals)
 	}
 }
+
+// Honest learning phase 1: the lesson list and the retirement queue carry the
+// stored effect verdict and its confounders.
+func TestLessonsExposeEffectVerdictAndConfounders(t *testing.T) {
+	srv, db := testServerWithDB(t)
+	res, err := db.Exec(`INSERT INTO surprise_lessons (source_phase_run, phase_id, seq, title, norm_title, guidance,
+		area_globs, status, created_at, updated_at, activated_at)
+		VALUES ('r', 1, 1, 'T', 't', 'Do it.', 'internal/**', 'active', 'now', 'now', '2026-01-01T00:00:00Z')`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	id, _ := res.LastInsertId()
+	cell := lessons.MarshalConfounders([]lessons.Confounder{{Kind: lessons.ConfoundLesson, ID: "L-9",
+		At: "2026-01-02T00:00:00Z", Detail: `L-9 "Other" was activated in the same area`}})
+	if _, err := db.Exec(`INSERT INTO lesson_effectiveness (lesson_id, window_n, min_runs, before_n, after_n,
+		median_before, median_after, median_drop, computed_at, verdict, confounders_json)
+		VALUES (?, 10, 5, 5, 5, 0.8, 0.2, 0.6, 'now', 'confounded', ?)`, id, cell); err != nil {
+		t.Fatal(err)
+	}
+	var got struct {
+		Lessons []struct {
+			Effectiveness *struct {
+				Verdict     string               `json:"verdict"`
+				Confounders []lessons.Confounder `json:"confounders"`
+			} `json:"effectiveness"`
+		} `json:"lessons"`
+	}
+	getJSON(t, srv.URL+"/api/lessons?status=active", &got)
+	if len(got.Lessons) != 1 || got.Lessons[0].Effectiveness == nil {
+		t.Fatalf("lessons = %+v", got)
+	}
+	e := got.Lessons[0].Effectiveness
+	if e.Verdict != "confounded" || len(e.Confounders) != 1 || e.Confounders[0].ID != "L-9" ||
+		e.Confounders[0].Kind != "lesson" {
+		t.Fatalf("effectiveness = %+v", e)
+	}
+	if _, err := db.Exec(`INSERT INTO lesson_effectiveness (lesson_id, window_n, min_runs, computed_at)
+		VALUES (4242, 10, 5, 'now')`); err != nil {
+		t.Fatal(err)
+	}
+	rows, err := lessons.LoadEffectiveness(db, []int64{4242})
+	if err != nil || rows[4242].Verdict != lessons.EffectInsufficient || rows[4242].Confounders == nil {
+		t.Fatalf("a pre-verdict row must read insufficient with [] confounders: %+v %v", rows[4242], err)
+	}
+}

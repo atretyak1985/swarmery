@@ -217,3 +217,58 @@ func TestCheckAll_SteadyDeadReconcilesLiveStatus(t *testing.T) {
 		t.Errorf("expected proc_state=dead, got %q", state)
 	}
 }
+
+// A session that finished while its process still looked alive (a headless run
+// reads "orphaned": no tty) used to keep that proc_state forever — the live pass
+// never revisits a finished row — so the dashboard offered to Stop a process that
+// was long gone. The ticker re-checks such rows and corrects proc_state only.
+func TestCheckAll_FinishedSessionWithDeadProcBecomesDead(t *testing.T) {
+	db := openTestDB(t)
+	insertProject(t, db)
+	completed := insertSession(t, db, 4242, "orphaned", "/tmp/proj")
+	killed := insertSession(t, db, 4343, "running", "/tmp/proj")
+	db.Exec(`UPDATE sessions SET status = 'completed' WHERE id = ?`, completed)
+	db.Exec(`UPDATE sessions SET status = 'killed' WHERE id = ?`, killed)
+
+	ticker := &procwatch.Ticker{DB: db, Provider: &procwatch.FakeProvider{}} // both pids gone
+	changed, err := ticker.CheckAll(time.Now())
+	if err != nil {
+		t.Fatalf("CheckAll: %v", err)
+	}
+	if len(changed) != 2 {
+		t.Fatalf("expected both sessions changed, got %v", changed)
+	}
+	for id, wantStatus := range map[int64]string{completed: "completed", killed: "killed"} {
+		var status, state string
+		db.QueryRow(`SELECT status, proc_state FROM sessions WHERE id = ?`, id).Scan(&status, &state)
+		if state != "dead" {
+			t.Errorf("session %d: expected proc_state=dead, got %q", id, state)
+		}
+		if status != wantStatus {
+			t.Errorf("session %d: status must stay %q, got %q", id, wantStatus, status)
+		}
+	}
+}
+
+func TestCheckAll_FinishedSessionWithLiveProcIsLeftAlone(t *testing.T) {
+	db := openTestDB(t)
+	insertProject(t, db)
+	id := insertSession(t, db, 5151, "running", "/tmp/proj")
+	db.Exec(`UPDATE sessions SET status = 'completed' WHERE id = ?`, id)
+
+	fake := &procwatch.FakeProvider{Procs: []procwatch.FakeProcess{
+		{PID: 5151, StartTime: "Mon Jan  1 00:00:00 2024", Command: "claude"},
+	}}
+	changed, err := (&procwatch.Ticker{DB: db, Provider: fake}).CheckAll(time.Now())
+	if err != nil {
+		t.Fatalf("CheckAll: %v", err)
+	}
+	if len(changed) != 0 {
+		t.Fatalf("expected no change, got %v", changed)
+	}
+	var status, state string
+	db.QueryRow(`SELECT status, proc_state FROM sessions WHERE id = ?`, id).Scan(&status, &state)
+	if status != "completed" || state != "running" {
+		t.Errorf("expected completed/running untouched, got %s/%s", status, state)
+	}
+}

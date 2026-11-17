@@ -472,6 +472,12 @@ func planStatus(archived bool, taskStatus string, done, total int, allPhasesComp
 
 // listEpics returns every workspace task that has ≥1 epic_phase, optionally
 // scoped by projectId, newest first, each with its phases and checkbox rollup.
+//
+// It and every helper below it read through h.rdb(), like the other hot GETs:
+// the listing is ~15 queries per plan, and on the single writer connection each
+// one queued behind ingest, so the Plans page waited seconds (minutes under a
+// busy fleet) for what takes ~0.3 s on an idle connection. Nothing on this path
+// writes; TestEpicsServeWhileWriterHeld holds the writer to keep it that way.
 func (h *Handler) listEpics(w http.ResponseWriter, r *http.Request) {
 	q := `
 		SELECT t.id, COALESCE(t.external_id,''), t.project_id, p.slug, t.title,
@@ -488,7 +494,7 @@ func (h *Handler) listEpics(w http.ResponseWriter, r *http.Request) {
 	}
 	q += ` ORDER BY t.started_at DESC, t.id DESC`
 
-	rows, err := h.DB.Query(q, args...)
+	rows, err := h.rdb().Query(q, args...)
 	if err != nil {
 		writeErr(w, err)
 		return
@@ -556,7 +562,7 @@ func (h *Handler) listEpics(w http.ResponseWriter, r *http.Request) {
 		out[i].Phases = phases
 		out[i].Rollup = rollup
 		out[i].Spec = buildEpicSpec(specCriteria[out[i].TaskID], covers)
-		if out[i].Evidence, err = wsingest.LoadDecisionTable(h.DB, out[i].TaskID); err != nil {
+		if out[i].Evidence, err = wsingest.LoadDecisionTable(h.rdb(), out[i].TaskID); err != nil {
 			writeErr(w, err)
 			return
 		}
@@ -591,7 +597,7 @@ func (h *Handler) listEpics(w http.ResponseWriter, r *http.Request) {
 // holds the dir, which is the durable identity: a workspace task row is re-derived
 // from the tree, so an id cached at mint time would go stale on the first rename.
 func (h *Handler) microPlanCardsByTask() (map[int64]string, error) {
-	rows, err := h.DB.Query(`
+	rows, err := h.rdb().Query(`
 		SELECT ta.task_id, c.external_id
 		  FROM tasks c
 		  JOIN task_artifacts ta ON ta.kind = 'plan' AND ta.path = c.workspace_dir || '/plan'
@@ -626,7 +632,7 @@ func (h *Handler) microPlanCardsByTask() (map[int64]string, error) {
 // the same expression the sessions list uses, so a session's cost reads identically
 // in both places.
 func (h *Handler) linkedSessionsByTask() (map[int64][]linkedSessionDTO, error) {
-	rows, err := h.DB.Query(`
+	rows, err := h.rdb().Query(`
 		SELECT ts.task_id, se.session_uuid, ts.link_source, ts.confidence,
 		       (SELECT SUM(t.cost_usd) FROM turns t WHERE t.session_id = se.id),
 		       se.started_at, se.ended_at
@@ -670,7 +676,7 @@ func (h *Handler) linkedSessionsByTask() (map[int64][]linkedSessionDTO, error) {
 // runs are rare (one row per plan that has ever been run), so the whole table is
 // cheaper to fetch once than to look up per epic.
 func (h *Handler) planRunsByTask() (map[int64]*planRunDTO, error) {
-	rows, err := h.DB.Query(`
+	rows, err := h.rdb().Query(`
 		SELECT workspace_task_id, agent, mode, run_state, run_session_uuid, run_started_at, run_error
 		  FROM plan_runs`)
 	if err != nil {
@@ -708,7 +714,7 @@ func (h *Handler) planRunsByTask() (map[int64]*planRunDTO, error) {
 	// single-connection deadlock this ordering avoids.
 	rows.Close()
 	for taskID, dto := range out {
-		dto.RunEvents = runEventsOrEmpty(runcore.RunEvents(h.DB, planrun.Engine, taskID))
+		dto.RunEvents = runEventsOrEmpty(runcore.RunEvents(h.rdb(), planrun.Engine, taskID))
 	}
 	return out, nil
 }
@@ -717,7 +723,7 @@ func (h *Handler) planRunsByTask() (map[int64]*planRunDTO, error) {
 // in spec.md order. Plans with a spec are rare enough that one whole-table
 // fetch is cheaper (and pool-safer) than a per-epic lookup.
 func (h *Handler) specCriteriaByTask() (map[int64][]specCriterionDTO, error) {
-	rows, err := h.DB.Query(`
+	rows, err := h.rdb().Query(`
 		SELECT workspace_task_id, cid, text, done
 		  FROM spec_criteria
 		 ORDER BY workspace_task_id, pos`)
@@ -797,7 +803,7 @@ func (h *Handler) epicPhases(taskID int64, planDir string) ([]epicPhaseDTO, epic
 	// condition was removed from the gate — see phasegate.Check.)
 	closureRequired := phasegate.ClosureGateEnabled()
 
-	rows, err := h.DB.Query(`
+	rows, err := h.rdb().Query(`
 		SELECT e.id, e.seq, e.name, e.doc_path, e.depends_on, e.covers,
 		       e.checkboxes_total, e.checkboxes_done, e.doc_status, e.doc_updated_at,
 		       e.criteria_land_open, e.criteria_manual_open, e.legacy_review,
@@ -1022,7 +1028,7 @@ func (h *Handler) epicPhases(taskID int64, planDir string) ([]epicPhaseDTO, epic
 	for i := range phases {
 		phases[i].Stalled = stalls[phases[i].ID]
 		phases[i].VerifyRunning = verifying[phases[i].ID]
-		phases[i].RunEvents = runEventsOrEmpty(runcore.RunEvents(h.DB, phaserun.Engine, phases[i].ID))
+		phases[i].RunEvents = runEventsOrEmpty(runcore.RunEvents(h.rdb(), phaserun.Engine, phases[i].ID))
 		used := usage[phases[i].ID]
 		if used == nil {
 			used = []phaseModelUseDTO{} // [] not null: the UI maps over it
@@ -1125,7 +1131,7 @@ func nonNilStrs(v []string) []string {
 // never be able to take the Plans page down.
 func (h *Handler) phaseForecasts(taskID int64) map[int64][]storedForecast {
 	out := map[int64][]storedForecast{}
-	rows, err := h.DB.Query(`
+	rows, err := h.rdb().Query(`
 		SELECT f.phase_id, f.kind, f.written_at, f.areas_json, f.files_json,
 		       f.size_band, f.duration_band, f.outcome, f.risks_json,
 		       f.confidence, f.post_hoc, f.doc_hash, f.post_hoc_reason
@@ -1184,7 +1190,7 @@ type phaseModelUseDTO struct {
 // this is a decoration on a page that must still render.
 func (h *Handler) phaseRunModels(taskID int64) map[int64][]phaseModelUseDTO {
 	out := map[int64][]phaseModelUseDTO{}
-	rows, err := h.DB.Query(`
+	rows, err := h.rdb().Query(`
 		SELECT e.id, tr.model, COUNT(*) AS turns, MIN(tr.seq) AS first_seq
 		  FROM epic_phases e
 		  JOIN sessions se ON se.session_uuid = e.run_session_uuid
@@ -1703,7 +1709,7 @@ func (h *Handler) attachDecisionHolds(taskID int64, phases []epicPhaseDTO, deps 
 	if !declared {
 		return
 	}
-	ds, err := store.ListTaskDecisions(h.DB, taskID)
+	ds, err := store.ListTaskDecisions(h.rdb(), taskID)
 	if err != nil {
 		log.Printf("warn: api: decisions for task %d: %v", taskID, err)
 		return
@@ -1723,7 +1729,7 @@ func (h *Handler) attachDecisionHolds(taskID int64, phases []epicPhaseDTO, deps 
 		}
 		if !slugRead { // one read, and only for a plan that has a hold at all
 			slugRead = true
-			_ = h.DB.QueryRow(`SELECT COALESCE(p.slug, '') FROM tasks t LEFT JOIN projects p ON p.id = t.project_id
+			_ = h.rdb().QueryRow(`SELECT COALESCE(p.slug, '') FROM tasks t LEFT JOIN projects p ON p.id = t.project_id
 				WHERE t.id = ?`, taskID).Scan(&slug)
 		}
 		dto := &decisionHoldDTO{Detail: hold.Detail, Decisions: []decisionHoldRefDTO{}}

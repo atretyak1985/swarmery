@@ -194,6 +194,14 @@ msgstr "{docCount, plural, one {# plan doc will change on disk: {docs}. This is 
 msgid "{done} of {total} checkboxes done"
 msgstr "{done} of {total} checkboxes done"
 
+#: src/pages/plans/PhaseLedger.tsx
+msgid "{done} of {total} criteria ticked"
+msgstr "{done} of {total} criteria ticked"
+
+#: src/pages/plans/PhaseLedger.tsx
+msgid "{done} of {total} criteria ticked · {manualOpen} [MANUAL] wait on you"
+msgstr "{done} of {total} criteria ticked · {manualOpen} [MANUAL] wait on you"
+
 #: src/pages/plans/PhaseDetailPanel.tsx
 msgid "{done}/{total} acceptance criteria met · full list on the Criteria tab"
 msgstr "{done}/{total} acceptance criteria met · full list on the Criteria tab"
@@ -815,6 +823,10 @@ msgstr "Create"
 #: src/pages/plans/PlanDetailPanel.tsx
 msgid "created {created}"
 msgstr "created {created}"
+
+#: src/pages/plans/PhaseLedger.tsx
+msgid "criteria"
+msgstr "criteria"
 
 #: src/pages/plans/PhasePanel.tsx
 msgid "Criteria"
@@ -3184,6 +3196,10 @@ msgstr "the whole plan is running{agentPart} (mode: {mode})"
 msgid "the wizard finished; its staged diff is being picked up by the daemon…"
 msgstr "the wizard finished; its staged diff is being picked up by the daemon…"
 
+#: src/pages/plans/PhaseLedger.tsx
+msgid "the work is confirmed; the phase doc's Completion Report is empty"
+msgstr "the work is confirmed; the phase doc's Completion Report is empty"
+
 #: src/pages/plans/PhaseDetailPanel.tsx
 msgid "this doc was changed by an applied revision {revisedAgo} — <0>see Revisions</0>"
 msgstr "this doc was changed by an applied revision {revisedAgo} — <0>see Revisions</0>"
@@ -3300,6 +3316,10 @@ msgstr "unverified"
 #: src/pages/plans/PlanHeader.tsx
 msgid "updated {ago} ago"
 msgstr "updated {ago} ago"
+
+#: src/pages/plans/phaseLedgerModel.ts
+msgid "verification could not conclude"
+msgstr "verification could not conclude"
 
 #: src/pages/plans/VerifyVerdictChip.tsx
 msgid "verified"
@@ -3432,6 +3452,10 @@ msgstr "workspace…"
 #: src/pages/plans/PlanHeader.tsx
 msgid "worktree per phase"
 msgstr "worktree per phase"
+
+#: src/pages/plans/PhaseLedger.tsx
+msgid "write report"
+msgstr "write report"
 
 #: src/pages/planning/RevisionReview.tsx
 msgid "write the staged changes into the plan docs"

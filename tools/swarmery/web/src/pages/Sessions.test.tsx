@@ -237,7 +237,7 @@ describe('the detail', () => {
   });
 
   it.each([
-    ['working', '/sessions/2', ['redirect', 'stop']],
+    ['working', '/sessions/2', ['Stop turn', 'send prompt']],
     ['done', '/sessions/3', ['session outcome', 'extract tasks']],
     ['failed', '/sessions/4', ['resume with a reply']],
   ])('offers the %s actions beside the tabs', async (_state, path, names) => {
@@ -249,19 +249,24 @@ describe('the detail', () => {
   // Plan D-13: stopSession ends the process, so nothing calls it a pause.
   it('offers no pause on a working session', async () => {
     open('/sessions/2');
-    await screen.findByRole('button', { name: 'redirect' });
+    await screen.findByRole('button', { name: 'send prompt' });
     expect(screen.queryByRole('button', { name: /pause/i })).toBeNull();
   });
 
-  it('keeps Kill, the outcome, extract tasks and the remote controls in ⋯', async () => {
+  it('keeps extract tasks, stop process and rename in ⋯, the outcome on the bar', async () => {
     vi.mocked(api.fetchSession).mockResolvedValue(detailOf({ ...FAILED, procPid: 42, procState: 'dead' }));
     open('/sessions/4');
-    fireEvent.click(await screen.findByRole('button', { name: 'more for this session' }));
-    const menu = screen.getByRole('group', { name: 'more for this session' });
-    expect(within(menu).getByRole('group', { name: 'session outcome' })).toBeTruthy();
-    expect(within(menu).getByRole('button', { name: 'extract tasks' })).toBeTruthy();
-    expect(within(menu).getByText('exited')).toBeTruthy();
-    expect(within(menu).getByRole('button', { name: /Stop turn/ })).toBeTruthy();
+    expect(await screen.findByRole('button', { name: 'session outcome' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'more for this session' }));
+    const menu = screen.getByRole('menu', { name: 'more for this session' });
+    expect(within(menu).getAllByRole('menuitem').map((item) => item.firstChild?.textContent)).toEqual([
+      'extract tasks',
+      'stop process…',
+      'rename',
+    ]);
+    const stop = within(menu).getByRole('menuitem', { name: /stop process/ });
+    expect(stop.getAttribute('aria-disabled')).toBe('true');
+    expect(stop.textContent).toContain('the process already exited');
   });
 
   it('moves the old tab names onto the new tabs, with Chat the default', () => {
@@ -477,5 +482,201 @@ describe('the detail', () => {
     open('/sessions/3?tab=swarm');
     await paneTitle('session 3');
     expect(screen.getByRole('button', { name: 'swarm' }).getAttribute('aria-expanded')).toBe('true');
+  });
+});
+
+/* ----- artboard 2a on v4 (plan D-7): details stay in the side pane --------- */
+
+const where = (): string | null => screen.getByRole('status', { name: 'where' }).textContent;
+
+describe('the tabs', () => {
+  const tab = (name: RegExp): HTMLElement => screen.getByRole('tab', { name });
+
+  it('splits the list into four groups by row state, and counts sessions', async () => {
+    open('/sessions/2');
+    await paneTitle('session 2');
+    const strip = within(screen.getByRole('region', { name: 'Sessions' })).getByRole('tablist');
+    expect(within(strip).getAllByRole('tab').map((el) => el.textContent)).toEqual([
+      'all5',
+      'needs you1',
+      'working1',
+      'done2',
+      'stopped1',
+    ]);
+    fireEvent.click(tab(/^stopped/));
+    const list = screen.getByRole('region', { name: 'Sessions' });
+    await waitFor(() => expect(within(list).queryByRole('link', { name: /session 3/ })).toBeNull());
+    expect(within(list).getByRole('link', { name: /session 4/ })).toBeTruthy();
+    // Done holds every finished day, not just today's.
+    fireEvent.click(tab(/^done/));
+    expect(within(list).getByRole('link', { name: /session 3/ })).toBeTruthy();
+    expect(within(list).getByRole('link', { name: /session 5/ })).toBeTruthy();
+    expect(within(list).queryByRole('link', { name: /session 4/ })).toBeNull();
+  });
+
+  it('keeps a plan run whole: one matching row brings the entire card', async () => {
+    const group = { taskId: 9, title: 'orders rollout', phaseId: null, phaseName: null };
+    const ctl = makeSession(20, 'active', { planGroup: { ...group, role: 'controller', phaseSeq: null } });
+    const phase = makeSession(21, 'completed', {
+      endedAt: ago(3),
+      planGroup: { ...group, role: 'phase', phaseId: 3, phaseSeq: 1, phaseName: 'schema' },
+    });
+    vi.mocked(api.fetchSessions).mockResolvedValue({ sessions: [...ALL, ctl, phase], nextCursor: null });
+    open('/sessions/2');
+    await paneTitle('session 2');
+    fireEvent.click(tab(/^working/));
+    const list = screen.getByRole('region', { name: 'Sessions' });
+    fireEvent.click(within(list).getByRole('button', { name: /Plan runs/ }));
+    fireEvent.click(within(list).getByRole('button', { name: /plan run orders rollout/ }));
+    // The finished phase rides along with its working controller.
+    expect(within(list).getByText('schema')).toBeTruthy();
+    expect(within(list).getByText('plan controller')).toBeTruthy();
+    // No run has a row in Stopped, so that tab shows no card.
+    fireEvent.click(tab(/^stopped/));
+    expect(within(list).queryByRole('button', { name: /Plan runs/ })).toBeNull();
+  });
+});
+
+describe('the keys', () => {
+  it('e only focuses the gate\'s main action and never resolves it', async () => {
+    open('/sessions/1');
+    const allow = await screen.findByRole('button', { name: /allow once/ });
+    fireEvent.keyDown(window, { key: 'e' });
+    expect(document.activeElement).toBe(allow);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(api.resolveApproval).not.toHaveBeenCalled();
+  });
+
+  it('e with no gate focuses the composer', async () => {
+    open('/sessions/3');
+    const composer = await screen.findByRole('textbox', { name: /reply|message/i });
+    fireEvent.keyDown(window, { key: 'e' });
+    await waitFor(() => expect(document.activeElement).toBe(composer));
+  });
+
+  it.each(['o', 'ArrowRight'])('%s opens the selected row and moves into its pane', async (key) => {
+    open('/sessions');
+    await paneTitle('session 1');
+    fireEvent.keyDown(window, { key });
+    await waitFor(() => expect(where()).toBe('/sessions/1'));
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByLabelText('open session')));
+  });
+
+  it('← goes back to the list and keeps the selection', async () => {
+    open('/sessions/2');
+    await paneTitle('session 2');
+    fireEvent.keyDown(window, { key: 'ArrowLeft' });
+    await waitFor(() => expect(where()).toBe('/sessions'));
+    const row = screen.getByRole('link', { name: /session 2/ });
+    await waitFor(() => expect(row.getAttribute('aria-current')).toBe('true'));
+    expect(document.activeElement).toBe(row);
+  });
+
+  it('leaves every key to the search field while the operator types', async () => {
+    open('/sessions/2');
+    await paneTitle('session 2');
+    const field = screen.getByRole('searchbox');
+    field.focus();
+    for (const key of ['j', 'k', 'o', 'e', 'ArrowLeft', 'ArrowRight']) fireEvent.keyDown(field, { key });
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(where()).toBe('/sessions/2');
+    expect(document.activeElement).toBe(field);
+  });
+
+  it('lists the keys in the strip under the list', async () => {
+    open('/sessions/2');
+    await paneTitle('session 2');
+    const list = screen.getByRole('region', { name: 'Sessions' });
+    for (const hint of ['j/k select', 'e focus action', 'o → open', '← list']) {
+      expect(within(list).getByText(hint)).toBeTruthy();
+    }
+  });
+});
+
+describe('the pane keeps every datum of the old chips', () => {
+  it('shows context, cost, task, handoff, account, model change, cache cold, process, conflict and plan limit', async () => {
+    const fat = makeSession(6, 'completed', {
+      endedAt: ago(2),
+      contextTokens: 420_000,
+      taskExternalId: '2026-11-03-line-items',
+      taskLinkSource: 'explicit',
+      account: 'work',
+      model: 'claude-opus-5-5',
+      modelLast: 'claude-sonnet-5-5',
+      modelChanged: true,
+      modelFellBack: true,
+      cacheCold: { since: ago(70), kind: 'subscription', footprint: 420_000 },
+      handoff: { path: '/h.md', createdAt: ago(4), contextTokens: 420_000 },
+      procPid: 42,
+      procState: 'dead',
+      link: {
+        status: null,
+        seenAt: null,
+        live: false,
+        contextPct: null,
+        rateLimits: [{ kind: 'five_hour', percentUsed: 91, resetsAt: null }],
+        costUsd: null,
+      } as unknown as Session['link'],
+    });
+    vi.mocked(api.fetchSessions).mockResolvedValue({ sessions: [...ALL, fat], nextCursor: null });
+    vi.mocked(api.fetchSwarmClaims).mockResolvedValue({
+      claims: [],
+      conflicts: [
+        {
+          path: 'src/orders.ts',
+          sessions: [
+            { sessionId: 6, sessionUuid: 'uuid-6' },
+            { sessionId: 2, sessionUuid: 'uuid-2' },
+          ],
+        },
+      ],
+    } as unknown as Awaited<ReturnType<typeof api.fetchSwarmClaims>>);
+    vi.mocked(api.fetchSession).mockResolvedValue(
+      detailOf(fat, {
+        turns: [
+          {
+            id: 1,
+            seq: 1,
+            role: 'assistant',
+            messageId: null,
+            model: 'claude-sonnet-5-5',
+            startedAt: ago(3),
+            endedAt: ago(2),
+            tokensIn: 1000,
+            tokensOut: 200,
+            tokensCacheRead: null,
+            tokensCacheWrite: null,
+            costUsd: 1.25,
+            text: null,
+          } as unknown as SessionDetail['turns'][number],
+        ],
+      }),
+    );
+    open('/sessions/6');
+    const detail = await screen.findByTestId('session-detail');
+    await within(detail).findByText('session 6');
+    const text = (): string => detail.textContent ?? '';
+    // Numbers strip: context and cost.
+    expect(text()).toContain('context');
+    expect(text()).toContain('420');
+    expect(text()).toContain('$1.25');
+    // Meta line: task, account, both ends of the model change.
+    expect(text()).toContain('2026-11-03-line-items');
+    expect(text()).toContain('work');
+    expect(text()).toContain('fell back to');
+    // The plan's limit, in the numbers strip and past its threshold.
+    const numbers = within(detail).getByTestId('session-numbers');
+    expect(numbers.textContent).toContain('91 %');
+    // The conflict alarm, and cache cold said in the sentence.
+    await waitFor(() => expect(within(detail).getByTestId('swarm-conflict')).toBeTruthy());
+    expect(within(detail).getByTestId('state-sentence').textContent).toContain('Prompt cache cold since');
+    // Rail: the handoff brief.
+    const rail = screen.getByRole('complementary', { name: 'session context' });
+    expect(within(rail).getByRole('button', { name: 'copy resume command' })).toBeTruthy();
+    // ⋯: continue from the handoff, and the process that already exited.
+    fireEvent.click(screen.getByRole('button', { name: 'more for this session' }));
+    const menu = screen.getByRole('menu', { name: 'more for this session' });
+    expect(within(menu).getByRole('menuitem', { name: /continue from handoff/ })).toBeTruthy();
+    expect(within(menu).getByRole('menuitem', { name: /stop process/ }).textContent).toContain('exited');
   });
 });

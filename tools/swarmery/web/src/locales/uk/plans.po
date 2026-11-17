@@ -194,6 +194,14 @@ msgstr "{docCount, plural, one {# документ плану зміниться
 msgid "{done} of {total} checkboxes done"
 msgstr "{done} з {total} чекбоксів відмічено"
 
+#: src/pages/plans/PhaseLedger.tsx
+msgid "{done} of {total} criteria ticked"
+msgstr "{done} з {total} критеріїв відмічено"
+
+#: src/pages/plans/PhaseLedger.tsx
+msgid "{done} of {total} criteria ticked · {manualOpen} [MANUAL] wait on you"
+msgstr "{done} з {total} критеріїв відмічено · [MANUAL] чекають на вас: {manualOpen}"
+
 #: src/pages/plans/PhaseDetailPanel.tsx
 msgid "{done}/{total} acceptance criteria met · full list on the Criteria tab"
 msgstr "{done}/{total} критеріїв приймання виконано · повний список на вкладці «Критерії»"
@@ -815,6 +823,10 @@ msgstr "Створити"
 #: src/pages/plans/PlanDetailPanel.tsx
 msgid "created {created}"
 msgstr "створено {created}"
+
+#: src/pages/plans/PhaseLedger.tsx
+msgid "criteria"
+msgstr "критерії"
 
 #: src/pages/plans/PhasePanel.tsx
 msgid "Criteria"
@@ -3184,6 +3196,10 @@ msgstr "виконується весь план{agentPart} (режим: {mode})
 msgid "the wizard finished; its staged diff is being picked up by the daemon…"
 msgstr "майстер завершив роботу; демон підхоплює підготовлений дифф…"
 
+#: src/pages/plans/PhaseLedger.tsx
+msgid "the work is confirmed; the phase doc's Completion Report is empty"
+msgstr "робота підтверджена; розділ Completion Report у документі фази порожній"
+
 #: src/pages/plans/PhaseDetailPanel.tsx
 msgid "this doc was changed by an applied revision {revisedAgo} — <0>see Revisions</0>"
 msgstr "цей документ змінила застосована ревізія {revisedAgo} — <0>див. Ревізії</0>"
@@ -3300,6 +3316,10 @@ msgstr "неперевірено"
 #: src/pages/plans/PlanHeader.tsx
 msgid "updated {ago} ago"
 msgstr "оновлено {ago} тому"
+
+#: src/pages/plans/phaseLedgerModel.ts
+msgid "verification could not conclude"
+msgstr "верифікація не дійшла висновку"
 
 #: src/pages/plans/VerifyVerdictChip.tsx
 msgid "verified"
@@ -3432,6 +3452,10 @@ msgstr "робочий простір…"
 #: src/pages/plans/PlanHeader.tsx
 msgid "worktree per phase"
 msgstr "окремий worktree на фазу"
+
+#: src/pages/plans/PhaseLedger.tsx
+msgid "write report"
+msgstr "дописати звіт"
 
 #: src/pages/planning/RevisionReview.tsx
 msgid "write the staged changes into the plan docs"

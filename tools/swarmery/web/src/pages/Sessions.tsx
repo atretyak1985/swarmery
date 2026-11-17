@@ -6,15 +6,22 @@
 // With no :id the first row is open, as the design opens it, and the URL stays.
 // An id may be a row id or a session uuid: the notch app opens /sessions/<uuid>.
 //
-// Structure. Tabs under the header: all, needs you, working, done. In `all` the
-// groups are Needs you, Working, Done today, then Earlier (the design has no older
-// sessions, the product does, and the infinite scroll stays there) and a closed
-// Plan runs group, which keeps the fan-out audit view; any other tab is its one
-// group without a head. FileContentionBanner
+// Structure. Tabs under the header: all, needs you, working, done, stopped
+// (artboard 2a on v4, plan D-7). In `all` the groups are Needs you, Working, Done
+// today, then Earlier (the design has no older sessions, the product does, and the
+// infinite scroll stays there) and a closed Plan runs group, which keeps the
+// fan-out audit view. Any other tab holds the rows whose state it names (tabOf),
+// every day at once, without a head, and under them the plan runs with ANY row
+// in it, each as one whole card. Every count counts sessions. FileContentionBanner
 // stays at the top of the list: it renders null unless two live sessions share a
 // file. The filter chips went into the field (`n:name s:state o:result`); the
 // controls with no place in the field (accounts, bulk continue-phase, a leftover
 // project scope) keep a row under it that appears only when one of them applies.
+//
+// Keys (ListPane): j/k move the selection; o and → open it (pin it in the URL,
+// which below `desk` shows the detail, and move focus into the pane); ← goes back
+// to the list and keeps the selection; `e` only FOCUSES the open session's main
+// action (plan D-4), never runs it; x stays the pane's secondary action.
 //
 // Data flow (unchanged). Only the project scope goes to the API (?project=);
 // filtering is client-side. WS keeps the window live; a request generation drops
@@ -40,7 +47,10 @@ import {
   parseListQuery,
   rowState,
   runsOnly,
+  tabOf,
+  type RowState,
   type SessionGroup,
+  type SessionTab as StateTab,
 } from '../lib/sessionsView';
 import { useNowMs } from '../lib/sessionState';
 import { SwarmConflictProvider } from '../lib/swarm';
@@ -61,7 +71,7 @@ import { SessionPane, type PaneActions } from './detail/SessionPane';
 
 const PAGE_LIMIT = 100;
 
-type SessionTab = 'all' | 'needs' | 'working' | 'done';
+type SessionTab = 'all' | StateTab;
 
 /** `+ new` is the palette's dispatch (plan D-5), and the Sidebar owns the palette. */
 function openPalette(): void {
@@ -128,6 +138,9 @@ function SessionsPlace(): JSX.Element {
   const loadingMoreRef = useRef(false);
   const sentinelRef = useRef<HTMLDivElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
+  const detailRef = useRef<HTMLDivElement>(null);
+  // Where focus goes once the route a key moved to has rendered.
+  const focusAfter = useRef<'detail' | 'list' | null>(null);
   // What `e` and `x` do on the open session: its gate's actions, or the composer.
   const paneActions = useRef<PaneActions>({});
   // Request generation: bumped whenever the scope resets the list so stale
@@ -248,10 +261,17 @@ function SessionsPlace(): JSX.Element {
     .sort((a, b) => b.startedAt.localeCompare(a.startedAt));
   const groups = buildGroups(sorted, nowMs, gates);
   const everyRow = [...groups.needs, ...groups.working, ...groups.done, ...groups.earlier];
-  const ordered = listTab === 'all' ? everyRow : groups[listTab];
+  const stateOf = (s: Session): RowState => rowState(s, nowMs, gates.get(s.id));
+  const tabCount: Record<StateTab, number> = { needs: 0, working: 0, done: 0, stopped: 0 };
+  for (const s of everyRow) tabCount[tabOf(stateOf(s))] += 1;
+  const inTab = (s: Session): boolean => listTab === 'all' || tabOf(stateOf(s)) === listTab;
+  const ordered = listTab === 'all' ? everyRow : everyRow.filter(inTab);
   const rowKeys = ordered.map((s) => String(s.id));
   const days = buildDays(sorted);
-  const runs = runsOnly(days).flatMap((d) => d.items.flatMap((it) => (it.kind === 'run' ? [it.group] : [])));
+  // A run is kept whole: any row in the tab brings the entire card.
+  const runs = runsOnly(days)
+    .flatMap((d) => d.items.flatMap((it) => (it.kind === 'run' ? [it.group] : [])))
+    .filter((run) => run.rows.some(inTab));
 
   // No :id opens the first row, and keeps it open while the list re-sorts under
   // it: a WS frame must not switch the session the operator is reading.
@@ -273,6 +293,32 @@ function SessionsPlace(): JSX.Element {
     const next = stepKey(rowKeys, openKey, dir);
     if (next !== undefined && next !== openKey) navigate(sessionHref(next));
   };
+
+  const listHref = slug !== undefined ? `/p/${slug}/sessions` : '/sessions';
+  // o and →: pin the selected row and go into its pane.
+  const openSelected = (): void => {
+    if (openKey === null) return;
+    focusAfter.current = 'detail';
+    if (id === openKey) detailRef.current?.focus();
+    else navigate(sessionHref(openKey));
+  };
+  // ←: back to the list, the same row still selected.
+  const backToList = (): void => {
+    focusAfter.current = 'list';
+    if (id === undefined) {
+      listRef.current?.querySelector<HTMLElement>('[aria-current="true"]')?.focus();
+      return;
+    }
+    setAutoId(openKey);
+    navigate(listHref);
+  };
+  useEffect(() => {
+    const target = focusAfter.current;
+    if (target === null) return;
+    focusAfter.current = null;
+    if (target === 'detail') detailRef.current?.focus();
+    else listRef.current?.querySelector<HTMLElement>('[aria-current="true"]')?.focus();
+  }, [id]);
 
   // Bulk "continue phase" (link control channel): offered while any loaded session
   // has a link mod; only rows whose mod polls for commands get a checkbox. A
@@ -328,8 +374,27 @@ function SessionsPlace(): JSX.Element {
 
   const group = (key: SessionGroup, label: string, tone: GroupTone): JSX.Element | null =>
     groups[key].length === 0 ? null : (
-      <ListGroup key={key} label={label} count={groups[key].length} tone={tone} hideHead={listTab !== 'all'}>
+      <ListGroup key={key} label={label} count={groups[key].length} tone={tone}>
         {groups[key].map(row)}
+      </ListGroup>
+    );
+
+  const planRuns =
+    runs.length === 0 ? null : (
+      <ListGroup label={t`Plan runs`} count={runs.length} open={runsOpen} onToggle={() => setRunsOpen((on) => !on)}>
+        <div className="px-[14px] pt-1">
+          {runs.map((run) => (
+            <PlanRunCard
+              key={run.taskId}
+              run={run}
+              expanded={expanded.has(run.taskId)}
+              onToggle={() => toggleRun(run.taskId)}
+              slug={slug}
+              hideProject={effectiveScope !== null}
+              nowById={nowById}
+            />
+          ))}
+        </div>
       </ListGroup>
     );
 
@@ -353,8 +418,10 @@ function SessionsPlace(): JSX.Element {
           <Trans>Nothing needs you.</Trans>
         ) : listTab === 'working' ? (
           <Trans>Nothing is running.</Trans>
+        ) : listTab === 'done' ? (
+          <Trans>Nothing has finished yet.</Trans>
         ) : (
-          <Trans>Nothing finished today yet.</Trans>
+          <Trans>Nothing was stopped or failed.</Trans>
         )}
       </ListEmpty>
     ) : ordered.length === 0 ? (
@@ -407,9 +474,10 @@ function SessionsPlace(): JSX.Element {
         <ListTabs
           tabs={[
             { id: 'all', label: t`all`, count: everyRow.length },
-            { id: 'needs', label: t`needs you`, count: groups.needs.length, needs: true },
-            { id: 'working', label: t`working`, count: groups.working.length },
-            { id: 'done', label: t`done`, count: groups.done.length },
+            { id: 'needs', label: t`needs you`, count: tabCount.needs, needs: true },
+            { id: 'working', label: t`working`, count: tabCount.working },
+            { id: 'done', label: t`done`, count: tabCount.done },
+            { id: 'stopped', label: t`stopped`, count: tabCount.stopped },
           ]}
           value={listTab}
           onChange={setListTab}
@@ -420,9 +488,13 @@ function SessionsPlace(): JSX.Element {
       keys={{
         onNext: () => step(1),
         onPrev: () => step(-1),
-        onPrimary: () => paneActions.current.primary?.(),
+        onPrimary: () => paneActions.current.focusPrimary?.(),
         onSecondary: () => paneActions.current.secondary?.(),
+        onOpen: openSelected,
+        onBack: backToList,
       }}
+      primaryHint={t`focus action`}
+      extraHints={[t`o → open`, t`← list`]}
     >
       <div ref={listRef}>
         <div className="px-[14px] empty:hidden">
@@ -442,32 +514,22 @@ function SessionsPlace(): JSX.Element {
             />
           </div>
         )}
-        {(listTab === 'all' || listTab === 'needs') && group('needs', t`Needs you`, 'amber')}
-        {(listTab === 'all' || listTab === 'working') && group('working', t`Working`, 'green')}
-        {(listTab === 'all' || listTab === 'done') && group('done', t`Done today`, 'default')}
-        {listTab === 'all' && runs.length > 0 && (
-          <ListGroup
-            label={t`Plan runs`}
-            count={runs.length}
-            open={runsOpen}
-            onToggle={() => setRunsOpen((on) => !on)}
-          >
-            <div className="px-[14px] pt-1">
-              {runs.map((run) => (
-                <PlanRunCard
-                  key={run.taskId}
-                  run={run}
-                  expanded={expanded.has(run.taskId)}
-                  onToggle={() => toggleRun(run.taskId)}
-                  slug={slug}
-                  hideProject={effectiveScope !== null}
-                  nowById={nowById}
-                />
-              ))}
-            </div>
-          </ListGroup>
+        {listTab === 'all' ? (
+          <>
+            {group('needs', t`Needs you`, 'amber')}
+            {group('working', t`Working`, 'green')}
+            {group('done', t`Done today`, 'default')}
+            {planRuns}
+            {group('earlier', t`Earlier`, 'default')}
+          </>
+        ) : (
+          <>
+            <ListGroup label={listTab} count={ordered.length} hideHead>
+              {ordered.map(row)}
+            </ListGroup>
+            {planRuns}
+          </>
         )}
-        {listTab === 'all' && group('earlier', t`Earlier`, 'default')}
         {nextCursor !== null && (
           <div ref={sentinelRef} className="py-6 text-center font-mono text-[11px] text-ink-faint">
             <Trans>loading more…</Trans>
@@ -489,15 +551,17 @@ function SessionsPlace(): JSX.Element {
             </Empty>
           )
         ) : (
+          <div ref={detailRef} tabIndex={-1} aria-label={t`open session`} className="h-full outline-none">
           <SessionPane
             key={openId}
             id={openId}
-            listHref={slug !== undefined ? `/p/${slug}/sessions` : '/sessions'}
+            listHref={listHref}
             gate={openGate}
             onGateChanged={needsYou.reload}
             actions={paneActions}
             now={openRow === undefined ? null : (nowById[openRow.id] ?? null)}
           />
+          </div>
         )
       }
     />

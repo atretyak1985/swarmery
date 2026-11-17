@@ -13,7 +13,10 @@ import { togglePanel, useListBadge, usePanels } from '../../lib/panels';
 import { useGlobalKeys, type GlobalKeyHandlers } from '../../lib/useGlobalKeys';
 import { PanelIcon } from '../PanelIcon';
 
-export type ListKeys = Pick<GlobalKeyHandlers, 'onNext' | 'onPrev' | 'onPrimary' | 'onSecondary' | 'onEscape'>;
+export type ListKeys = Pick<
+  GlobalKeyHandlers,
+  'onNext' | 'onPrev' | 'onPrimary' | 'onSecondary' | 'onOpen' | 'onBack' | 'onEscape'
+>;
 
 export function ListPane({
   title,
@@ -28,6 +31,7 @@ export function ListPane({
   keys = {},
   primaryHint,
   secondaryHint,
+  extraHints = [],
   children,
 }: {
   title: string;
@@ -49,6 +53,8 @@ export function ListPane({
   primaryHint?: string;
   /** What `x` does here; the hint is hidden when `x` does nothing. */
   secondaryHint?: string;
+  /** Hints for the keys only this place binds (`o open`), after `x`. */
+  extraHints?: readonly string[];
   children?: ReactNode;
 }): JSX.Element {
   const { t } = useLingui();
@@ -128,6 +134,9 @@ export function ListPane({
           {/* A msgid of its own: bare "open" is taken by the status, "відкрито". */}
           <span>{primaryHint === undefined ? t`e open` : `e ${primaryHint}`}</span>
           {secondaryHint !== undefined && <span>{`x ${secondaryHint}`}</span>}
+          {extraHints.map((hint) => (
+            <span key={hint}>{hint}</span>
+          ))}
           <span>{t`1–5 places`}</span>
           <span>{t`[ ] \\ panels`}</span>
         </div>

@@ -82,7 +82,21 @@ type Outcome struct {
 	Skipped  string      // non-empty ⇒ nothing was claimed or spent, and why
 	Inserted int         // new candidate rows
 	Linked   int         // lessons folded into an existing identity (14.5)
-	Rejected []Rejection // lessons that failed validation
+	Rejected []Rejection // lessons that failed validation, or were dropped past MaxLessons
+	// NoEntryReason is the model's "nothing transferable here" answer, stored on
+	// the lesson_generations row (0134).
+	NoEntryReason string
+}
+
+// droppedReason is the Rejection reason of a lesson past MaxLessons.
+const droppedReason = "dropped: one lesson per generation, the first one was kept"
+
+func droppedRejections(titles []string) []Rejection {
+	var out []Rejection
+	for _, t := range titles {
+		out = append(out, Rejection{Title: t, Reason: droppedReason})
+	}
+	return out
 }
 
 // AfterScore is the hook internal/surprise calls after it stores a run's
@@ -106,8 +120,8 @@ func (g *Generator) AfterScore(st *surprise.Stored, source string) {
 		case err != nil:
 			log.Printf("warning: lessons: phase=%d uuid=%s: %v", phaseID, uuid, err)
 		case out.Skipped == "":
-			log.Printf("lessons: phase=%d uuid=%s: %d new candidate(s), %d linked, %d rejected",
-				phaseID, uuid, out.Inserted, out.Linked, len(out.Rejected))
+			log.Printf("lessons: phase=%d uuid=%s: %d new candidate(s), %d linked, %d rejected%s",
+				phaseID, uuid, out.Inserted, out.Linked, len(out.Rejected), noEntrySuffix(out.NoEntryReason))
 		}
 	}
 	if g.Go != nil {
@@ -165,17 +179,34 @@ func (g *Generator) Generate(ctx context.Context, phaseID int64, uuid string) (O
 	return out, nil
 }
 
-// runParsed runs one generation prompt and decodes the model's lessons. Shared
+// noEntrySuffix renders a no-entry reason for a log line; "" when there is none.
+func noEntrySuffix(reason string) string {
+	if reason == "" {
+		return ""
+	}
+	return fmt.Sprintf("; no entry: %q", reason)
+}
+
+// runParsed runs one generation prompt and decodes the model's answer. Shared
 // by the surprise path and the review path, so both read the model the same way.
-func runParsed(ctx context.Context, r Runner, prompt string) ([]Candidate, error) {
+func runParsed(ctx context.Context, r Runner, prompt string) (Parsed, error) {
 	if r == nil {
-		return nil, fmt.Errorf("no runner configured")
+		return Parsed{}, fmt.Errorf("no runner configured")
 	}
 	raw, err := r.Run(ctx, prompt)
 	if err != nil {
-		return nil, fmt.Errorf("generation run: %w", err)
+		return Parsed{}, fmt.Errorf("generation run: %w", err)
 	}
 	return ParseOutput(raw)
+}
+
+// ReviewDraft is one DraftReview answer.
+type ReviewDraft struct {
+	Candidate Candidate
+	OK        bool        // a valid lesson was drafted
+	Rejected  []Rejection // lessons that failed validation, or were dropped past MaxLessons
+	// NoEntryReason is the model's "nothing these findings share" answer.
+	NoEntryReason string
 }
 
 // DraftReview drafts the lesson of one repeated-finding group (verify-not-trust
@@ -183,20 +214,22 @@ func runParsed(ctx context.Context, r Runner, prompt string) ([]Candidate, error
 // lesson — above all the fabrication check, so a lesson citing a finding id the
 // input never offered is rejected. The group's own area globs replace whatever
 // the model returned: a review lesson applies where its findings are, no wider.
-// ok=false (no error) when the model returned no valid lesson; rejected says why.
-func DraftReview(ctx context.Context, r Runner, in ReviewInput) (c Candidate, ok bool, rejected []Rejection, err error) {
+// OK=false (no error) when the model returned no valid lesson; Rejected and
+// NoEntryReason say why.
+func DraftReview(ctx context.Context, r Runner, in ReviewInput) (ReviewDraft, error) {
 	parsed, err := runParsed(ctx, r, BuildReviewPrompt(in))
 	if err != nil {
-		return c, false, nil, err
+		return ReviewDraft{}, err
 	}
-	for i := range parsed {
-		parsed[i].AreaGlobs = in.AreaGlobs
+	for i := range parsed.Lessons {
+		parsed.Lessons[i].AreaGlobs = in.AreaGlobs
 	}
-	valid, rejected := Validate(parsed, in.Allowed)
-	if len(valid) == 0 {
-		return c, false, rejected, nil
+	valid, rejected := Validate(parsed.Lessons, in.Allowed)
+	d := ReviewDraft{Rejected: append(rejected, droppedRejections(parsed.Dropped)...), NoEntryReason: parsed.NoEntryReason}
+	if len(valid) > 0 {
+		d.Candidate, d.OK = valid[0], true
 	}
-	return valid[0], true, rejected, nil
+	return d, nil
 }
 
 func (g *Generator) generate(ctx context.Context, in Input) (Outcome, error) {
@@ -205,8 +238,9 @@ func (g *Generator) generate(ctx context.Context, in Input) (Outcome, error) {
 	if err != nil {
 		return out, err
 	}
-	valid, rejected := Validate(parsed, in.Allowed)
-	out.Rejected = rejected
+	valid, rejected := Validate(parsed.Lessons, in.Allowed)
+	out.Rejected = append(rejected, droppedRejections(parsed.Dropped)...)
+	out.NoEntryReason = parsed.NoEntryReason
 	for i, c := range valid {
 		linked, err := g.persist(in, i+1, c)
 		switch {
@@ -275,11 +309,12 @@ func (g *Generator) persist(in Input, seq int, c Candidate) (linked bool, err er
 	_, err = g.DB.Exec(`INSERT INTO surprise_lessons
 		(source_phase_run, phase_id, seq, title, norm_title, guidance, area_globs, evidence_json, cause,
 		 source_paragraph, surprise_index, status, linked_norm_title, recurrences, recurrence_runs_json,
-		 model, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'candidate', ?, 1, ?, ?, ?, ?)
+		 model, created_at, updated_at, confidence, confidence_reason)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'candidate', ?, 1, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(source_phase_run, seq) DO NOTHING`,
 		in.SessionUUID, in.PhaseID, seq, c.Title, norm, c.Guidance, strings.Join(c.AreaGlobs, ","),
-		string(ev), c.Cause, in.Divergence, in.Surprise.Index, retroNorm, string(runs), g.Cfg.Model, now, now)
+		string(ev), c.Cause, in.Divergence, in.Surprise.Index, retroNorm, string(runs), g.Cfg.Model, now, now,
+		orMedium(c.Confidence), c.ConfidenceReason)
 	return retroNorm != "", err
 }
 
@@ -331,8 +366,18 @@ func (g *Generator) finish(uuid string, out Outcome, genErr error) {
 	}
 	rb, _ := json.Marshal(rej)
 	if _, err := g.DB.Exec(`UPDATE lesson_generations SET state = ?, inserted = ?, linked = ?,
-		rejected_json = ?, error = ?, finished_at = ? WHERE source_phase_run = ?`,
-		state, out.Inserted, out.Linked, string(rb), msg, g.now().UTC().Format(time.RFC3339), uuid); err != nil {
+		rejected_json = ?, error = ?, no_entry_reason = ?, finished_at = ? WHERE source_phase_run = ?`,
+		state, out.Inserted, out.Linked, string(rb), msg, out.NoEntryReason,
+		g.now().UTC().Format(time.RFC3339), uuid); err != nil {
 		log.Printf("warning: lessons: record generation %s: %v", uuid, err)
 	}
+}
+
+// orMedium is a confidence for storage: a lesson that reached persist passed
+// validation, so "" only comes from a caller that never graded it.
+func orMedium(c string) string {
+	if confidenceRank[c] == 0 {
+		return ConfidenceMedium
+	}
+	return c
 }

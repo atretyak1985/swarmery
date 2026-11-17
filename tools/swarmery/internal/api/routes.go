@@ -163,6 +163,7 @@ func Routes(root *http.ServeMux, h *Handler) {
 	// lessons from surprise (phase 14): the operator's review queue. Accept is the
 	// only path by which a lesson becomes active.
 	mux.HandleFunc("GET /api/lessons", h.listLessons)
+	mux.HandleFunc("GET /api/lessons/generations", h.listLessonGenerations)
 	mux.HandleFunc("PATCH /api/lessons/{id}", requireLocalOrigin(h.editLesson))
 	mux.HandleFunc("POST /api/lessons/{id}/accept", requireLocalOrigin(h.acceptLesson))
 	mux.HandleFunc("POST /api/lessons/{id}/merge", requireLocalOrigin(h.mergeLesson))
@@ -226,6 +227,10 @@ func Routes(root *http.ServeMux, h *Handler) {
 	// stuck-approved proposal after a gh outage. Same D4 origin hardening.
 	mux.HandleFunc("PATCH /api/retro/proposals/{id}", requireLocalOrigin(h.patchProposal))
 	mux.HandleFunc("POST /api/retro/proposals/{id}/apply", requireLocalOrigin(h.applyProposal))
+	// harness² phase 4: advisory probe of a proposal against its promptfoo
+	// suite (improve_probe.go) — a background job; never changes the proposal.
+	mux.HandleFunc("POST /api/improve/proposals/{id}/probe", requireLocalOrigin(h.startProposalProbe))
+	mux.HandleFunc("GET /api/improve/proposals/{id}/probes", h.listProposalProbes)
 
 	// phase 3.5: workspaces
 	mux.HandleFunc("GET /api/tasks", h.listTasks)
@@ -541,6 +546,9 @@ func Routes(root *http.ServeMux, h *Handler) {
 	// generation, which the phase-scoped route above structurally cannot name. Kept a
 	// SIBLING route so that route stays incapable of naming an arbitrary branch.
 	mux.HandleFunc("DELETE /api/epics/{taskId}/orphan-branch", requireLocalOrigin(h.deleteOrphanBranch))
+	// Its keep-the-work twin (orphan_land.go): push the same branch and open a
+	// change request, through the same resolveOrphanBranch gate.
+	mux.HandleFunc("POST /api/epics/{taskId}/orphan-branch/land", requireLocalOrigin(h.landOrphanBranch))
 	// Plan runs: hand the WHOLE plan to one agent (one headless session driving
 	// core's run-plan skill), state on plan_runs. 503 until AttachPlanRun wires
 	// the service.

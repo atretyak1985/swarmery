@@ -18,7 +18,7 @@
 // first press and sends on the second: the reason goes to Claude verbatim.
 
 import { useLingui } from '@lingui/react/macro';
-import { useCallback, useEffect, useMemo, useState, type MutableRefObject } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type MutableRefObject } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { fetchApprovals, resolveApproval, sendSessionMessage, type ApprovalAction } from '../../api';
 import type { NeedsYouItem, PermissionRequest, SessionDetail } from '../../api/types';
@@ -28,12 +28,40 @@ import { projectLabel } from '../../lib/format';
 import { compactSpan } from '../../lib/sessionsView';
 import { useNowMs } from '../../lib/sessionState';
 import { PendingCard } from '../Approvals';
+import { countdown } from './headerSentence';
 import type { PaneActions } from './SessionPane';
 
 /** Needs you, on this request: the always-allow rules live on its card there. */
 function needsYouHref(slug: string | undefined, requestId: number | null): string {
   const query = requestId === null ? 'tab=approvals' : `tab=approvals&request=${String(requestId)}`;
   return `${slug === undefined ? '' : `/p/${slug}`}/needs-you?${query}`;
+}
+
+/** The pending permission request behind a gate, or null until it is known (and
+ * when the gate has no request). `refresh` re-reads it: the pane bumps it on the
+ * session's session_updated frames, since a request can settle between them. */
+export function usePendingRequest(
+  requestId: number | null,
+  projectSlug: string,
+  refresh = 0,
+): PermissionRequest | null {
+  const [request, setRequest] = useState<PermissionRequest | null>(null);
+  useEffect(() => {
+    if (requestId === null) {
+      setRequest(null);
+      return undefined;
+    }
+    let live = true;
+    fetchApprovals('pending', projectSlug)
+      .then((rows) => {
+        if (live) setRequest(rows.find((r) => r.id === requestId) ?? null);
+      })
+      .catch(() => undefined); // the card falls back to the queue's preview
+    return () => {
+      live = false;
+    };
+  }, [requestId, projectSlug, refresh]);
+  return request;
 }
 
 export function gateTier(item: NeedsYouItem, request: PermissionRequest | null): DecisionTier {
@@ -50,8 +78,11 @@ export function SessionGate({
   canCompose,
   onSent,
   actions,
+  request: given,
 }: {
   item: NeedsYouItem;
+  /** The request, when the host already reads it; absent → the card reads it. */
+  request?: PermissionRequest | null;
   session: SessionDetail;
   /** The queue moved: reload it, so the card and the row settle. */
   onChanged: () => void;
@@ -66,7 +97,8 @@ export function SessionGate({
   const navigate = useNavigate();
   const { slug } = useParams<{ slug?: string }>();
   const nowMs = useNowMs(1000);
-  const [request, setRequest] = useState<PermissionRequest | null>(null);
+  const fetched = usePendingRequest(given === undefined ? item.requestId : null, session.projectSlug);
+  const request = given === undefined ? fetched : given;
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [denying, setDenying] = useState(false);
@@ -74,18 +106,6 @@ export function SessionGate({
   const [pick, setPick] = useState<number>(0);
 
   const requestId = item.requestId;
-  useEffect(() => {
-    if (requestId === null) return undefined;
-    let live = true;
-    fetchApprovals('pending', session.projectSlug)
-      .then((rows) => {
-        if (live) setRequest(rows.find((r) => r.id === requestId) ?? null);
-      })
-      .catch(() => undefined); // the card falls back to the queue's preview
-    return () => {
-      live = false;
-    };
-  }, [requestId, session.projectSlug]);
 
   const resolve = useCallback(
     (action: ApprovalAction, note?: string, answers?: AnswerMap): void => {
@@ -154,14 +174,21 @@ export function SessionGate({
   };
 
   // `e` and `x` act on what the buttons show; read through a ref by the list.
+  // focusPrimary only lands on the main button (plan D-4): Enter then acts.
+  const primaryRef = useRef<HTMLButtonElement>(null);
+  const formRef = useRef<HTMLDivElement>(null);
+  const focusPrimary = (): void => {
+    const target = primaryRef.current ?? formRef.current?.querySelector<HTMLElement>('button:not(:disabled)');
+    target?.focus();
+  };
   useEffect(() => {
-    actions.current = { primary, secondary };
+    actions.current = { primary, secondary, focusPrimary };
   });
 
   const richForm = request !== null && questions !== null && single === null;
   if (richForm) {
     return (
-      <div className="mt-[18px]">
+      <div ref={formRef} className="mt-[18px]">
         <PendingCard
           request={request}
           session={null}
@@ -177,8 +204,7 @@ export function SessionGate({
   const project = projectLabel(session.projectName, session.projectSlug);
   const steps = String(session.events.length);
   const meta = asks ? t`asked at step ${steps}` : t`${tool} · asks once per scope`;
-  const left = request === null ? null : Math.max(0, Math.round((new Date(request.expiresAt).getTime() - nowMs) / 1000));
-  const clock = left === null ? null : `${String(Math.floor(left / 60))}:${String(left % 60).padStart(2, '0')}`;
+  const clock = request === null ? null : countdown(request.expiresAt, nowMs);
   const waited = compactSpan(nowMs - new Date(item.blockingSince).getTime());
   const headline = asks
     ? item.question !== ''
@@ -204,6 +230,7 @@ export function SessionGate({
         picked={options.length > 0 ? String(pick) : null}
         onPick={(picked) => setPick(Number(picked))}
         {...(denying ? { note: { value: reason, onChange: setReason, placeholder: t`why you deny, for the session` } } : {})}
+        primaryRef={primaryRef}
         primary={{
           label: asks ? t`reply` : localOnly ? t`deny` : t`allow once`,
           onClick: primary,
@@ -224,7 +251,7 @@ export function SessionGate({
           asks
             ? canCompose
               ? t`your pick is pasted as the reply`
-              : t`running in a terminal · answer there, or stop it to reply here`
+              : t`running in a terminal without link control · answer there, turn on swarmery-link's "control" option, or stop it to reply here`
             : t`a denial stops the session · the transcript stays`
         }
       />

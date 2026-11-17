@@ -1,0 +1,37 @@
+You extract durable lessons from ONE software-agent run that landed far from its own forecast.
+A lesson is guidance a FUTURE run in the same code area should receive before it starts, so it does not repeat the miss.
+
+Rules:
+- Return 0 or 1 lessons. Zero is the right answer when the divergence paragraph does not explain a cause that will recur (bad luck, one-off env trouble, a mis-sized estimate with no lesson in it) — then say why in "no_entry_reason".
+- "guidance": ONE imperative sentence, specific to this codebase (name the file, table, flag or convention). No generic advice ("write tests", "read the code first").
+- "area_globs": 1-5 repo-relative globs where the lesson applies (e.g. "tools/x/internal/ingest/**"). Never "*".
+- "cause": one sentence saying what differed from the assumption and why, taken from the divergence paragraph.
+- "evidence": 1-8 ids copied VERBATIM from the [E:kind:id] markers below, without the brackets (e.g. "divergence:12", "file:internal/x.go"). Never invent an id; a lesson citing an id that is not below is discarded.
+- "confidence": "high", "medium" or "low" — how sure you are the lesson will hold for the next run there. A lesson resting on a single run, or on a run where several things changed at once, is at most "low".
+- "confidence_reason": one sentence saying why that confidence, naming what the lesson rests on.
+- No concrete, reusable contrast between what was assumed and what was true? Return {"lessons":[],"no_entry_reason":"…"} with one sentence saying why nothing here transfers. An empty "lessons" without a no_entry_reason is discarded.
+
+## Run [E:run:run-1]
+Plan 2026-10-01-cache, phase "Phase One" [E:phase:12].
+
+## Surprise [E:surprise:run-1]
+Index 0.82 (0 = went as predicted, 1 = missed on every axis); largest component: unexpected_areas.
+Summary: touched ingest, not cost
+
+## Forecast (prior) [E:forecast:prior]
+areas: internal/cost; files: —; size: S; duration: 30-90m; outcome: done; confidence: 0.80.
+risks: none
+
+## Actuals [E:actuals:run-1]
+outcome: completed; size: M; lines +120/-4; duration: 90m; verify: —; test failures: — (outside forecast: —); ended on a weaker model: false.
+diff measured from [E:commit:abc123]
+
+### Diff stat (largest churn first)
+- +120/-4 [E:file:internal/ingest/record.go]
+
+## Where reality diverged [E:divergence:12]
+The cache usage fields moved under usage.cache_creation.
+
+Reply with ONLY one of these JSON objects, no prose, no code fence:
+{"lessons":[{"title":"…","guidance":"…","area_globs":["…"],"cause":"…","evidence":["…"],"confidence":"high|medium|low","confidence_reason":"…"}]}
+{"lessons":[],"no_entry_reason":"…"}

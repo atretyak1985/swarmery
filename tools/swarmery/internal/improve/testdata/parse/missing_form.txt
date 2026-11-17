@@ -1,0 +1,10 @@
+## Diff
+```diff
+--- a/plugins/core/agents/tech-lead.md
++++ b/plugins/core/agents/tech-lead.md
+@@ -10,3 +10,4 @@ lens: procedure
+ existing line
++new guardrail line
+```
+## Rationale
+Adds a guardrail.

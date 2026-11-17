@@ -698,9 +698,13 @@ func (h *Handler) writeLandFailure(w http.ResponseWriter, t landingTarget, det r
 	}
 	switch {
 	case errors.Is(err, repoprovider.ErrNotAuthenticated):
-		if _, dbErr := h.DB.Exec(`UPDATE epic_phases SET landing_error = ? WHERE id = ?`,
-			codeNotAuthenticated+": "+detail, t.PhaseID); dbErr == nil {
-			publishPlanUpdated(t.TaskID)
+		// PhaseID 0 is an orphan branch's land (orphan_land.go): no phase row
+		// carries a landing lifecycle, so there is nothing to stamp.
+		if t.PhaseID > 0 {
+			if _, dbErr := h.DB.Exec(`UPDATE epic_phases SET landing_error = ? WHERE id = ?`,
+				codeNotAuthenticated+": "+detail, t.PhaseID); dbErr == nil {
+				publishPlanUpdated(t.TaskID)
+			}
 		}
 		writeLandingUnprocessable(w, codeNotAuthenticated, "not authenticated",
 			stage+"the code host ("+host+") rejected the credentials. Log in, then land again:\n"+

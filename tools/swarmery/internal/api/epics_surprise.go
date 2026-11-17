@@ -23,7 +23,7 @@ import (
 // degrade to an empty map: a score is a decoration on a page that must render.
 func (h *Handler) phaseSurprises(taskID int64) map[int64]*surprise.Stored {
 	out := map[int64]*surprise.Stored{}
-	rows, err := h.DB.Query(surprise.SelectStored+` s
+	rows, err := h.rdb().Query(surprise.SelectStored+` s
 		 WHERE EXISTS (SELECT 1 FROM epic_phases e
 		                WHERE e.id = s.phase_id AND e.run_session_uuid = s.session_uuid
 		                  AND e.workspace_task_id = ?)`, taskID)

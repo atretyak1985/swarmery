@@ -16,6 +16,7 @@ import (
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/improve"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/ingest"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/plainsum"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/probe"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/projectscan"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/provision"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/retroanalysis"
@@ -50,6 +51,10 @@ type Handler struct {
 	// Improve is the agent-rewriter service behind the /api/retro/proposals
 	// endpoints (self-improvement phase 3).
 	Improve *improve.Service
+	// ProposalProbe runs a proposal's promptfoo suite on base vs variant
+	// (harness² phase 4) behind /api/improve/proposals/{id}/probe. Advisory;
+	// nil answers the POST with 503.
+	ProposalProbe *probe.Service
 	// RetroAnalysis owns the page-level "analyse the whole system" runs behind
 	// /api/retro/analysis. Attached in NewServer next to Improve; nil disables
 	// the endpoints with a 503 rather than a panic.

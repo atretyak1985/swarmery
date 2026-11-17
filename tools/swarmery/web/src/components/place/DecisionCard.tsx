@@ -14,7 +14,7 @@
 import type { MessageDescriptor } from '@lingui/core';
 import { msg } from '@lingui/core/macro';
 import { useLingui } from '@lingui/react/macro';
-import type { ReactNode } from 'react';
+import type { ReactNode, Ref } from 'react';
 import { DetailHeader } from './DetailHeader';
 
 export type DecisionTier = 'destructive' | 'write' | 'question';
@@ -80,16 +80,22 @@ export interface DecisionCardProps {
   code?: string;
   body?: ReactNode;
   /** The mono facts line: `touched 2 protected files · contract broken: …`. */
-  facts?: string;
+  facts?: ReactNode;
   options?: readonly DecisionOption[];
   /** The picked option id. */
   picked?: string | null;
   onPick?: (id: string) => void;
   /** Long options: the main button repeats the pick's head, up to this many characters. */
   pickLimit?: number;
+  /** Inline links under the options that open a field: `+ note`, `own answer…`. */
+  tools?: ReactNode;
   note?: { value: string; onChange: (next: string) => void; placeholder: string };
   primary: DecisionAction;
+  /** The primary button, for a key that must only move focus onto it. */
+  primaryRef?: Ref<HTMLButtonElement>;
   secondary?: DecisionAction;
+  /** Whether `x` runs the secondary button, so it carries the key's hint. Default true. */
+  secondaryKey?: boolean;
   /** Extra button between the two, e.g. `always allow in <project>`. */
   extra?: DecisionAction;
   /** Right edge of the actions: `phase review →`. */
@@ -128,9 +134,12 @@ export function DecisionCard({
   picked = null,
   onPick,
   pickLimit,
+  tools,
   note,
   primary,
+  primaryRef,
   secondary,
+  secondaryKey = true,
   extra,
   link,
   foot,
@@ -250,6 +259,12 @@ export function DecisionCard({
         </div>
       )}
 
+      {tools !== undefined && (
+        <div className="mt-[10px] flex flex-wrap items-baseline gap-x-3 gap-y-1 font-mono text-[10.5px] leading-[normal]">
+          {tools}
+        </div>
+      )}
+
       {note !== undefined && (
         <input
           value={note.value}
@@ -262,6 +277,7 @@ export function DecisionCard({
 
       <div className={`flex flex-wrap items-center gap-2 ${gate ? 'mt-[14px]' : 'mt-auto pt-[22px]'}`}>
         <button
+          ref={primaryRef}
           type="button"
           onClick={primary.onClick}
           disabled={primary.disabled}
@@ -278,7 +294,8 @@ export function DecisionCard({
         )}
         {secondary !== undefined && (
           <button type="button" onClick={secondary.onClick} disabled={secondary.disabled} className={quietButton(gate)}>
-            {secondary.label} <span className="opacity-55">x</span>
+            {secondary.label}
+            {secondaryKey && <span className="opacity-55"> x</span>}
           </button>
         )}
         {link !== undefined && (

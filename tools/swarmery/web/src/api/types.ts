@@ -1753,10 +1753,100 @@ export interface AgentChangeProposal {
   pr_url: string | null;
   created_at: string;
   decided_at: string | null;
+  /**
+   * Harness² phase 3 (migration 0135). Optional so a payload from an older
+   * daemon still type-checks; the current daemon always sends them.
+   * `outcome: 'kept_base'` is the model's KEEP_BASE answer on a 'rejected'
+   * row — not an operator rejection.
+   */
+  outcome?: ProposalOutcome;
+  /** The single hunk lens, or 'mixed'; '' on KEEP_BASE and older rows. */
+  lens?: ProposalLens;
+  /** The FORM line: where on the form ladder the change belongs. */
+  form?: ProposalForm;
+  /** Changes in a form the one-file rewriter cannot make. */
+  suggested_followups?: ProposalFollowup[];
+  /** Non-blocking warnings (always-on net growth). */
+  warnings?: string[];
+}
+
+/** agent_change_proposals.outcome (migration 0135). */
+export type ProposalOutcome = '' | 'kept_base';
+
+/** agent_change_proposals.lens (migration 0135). */
+export type ProposalLens = '' | 'procedure' | 'knowledge' | 'mixed';
+
+/** agent_change_proposals.form (migration 0135) — the form ladder rung, or keep_base. */
+export type ProposalForm = '' | 'skill' | 'script' | 'subagent' | 'hook' | 'always-on' | 'keep_base';
+
+/** One follow-up the rewriter could not make itself; form '' when unrecognised. */
+export interface ProposalFollowup {
+  form: '' | 'skill' | 'script' | 'subagent' | 'hook' | 'always-on';
+  text: string;
 }
 
 export interface ProposalsResp {
   proposals: AgentChangeProposal[];
+}
+
+// --- Harness² phase 4 — proposal probes (migration 0136) ---------------------
+
+/**
+ * proposal_probes.blind_choice. base/variant/tie — the blind judge's pick on a
+ * case where both sides agree on the hard assertions; skipped — they disagree
+ * (the deterministic result decides) or the judge failed; capped — the USD cap
+ * stopped the job; no_suite — the target has no promptfoo suite.
+ */
+export type ProbeChoice = 'base' | 'variant' | 'tie' | 'skipped' | 'capped' | 'no_suite';
+
+/**
+ * Which step wrote a probe row: promptfoo — the agent's eval suite, one turn
+ * per case; bench — the frozen bench (evals/bench), a whole session per task
+ * graded by its check.sh.
+ */
+export type ProbeSource = 'promptfoo' | 'bench';
+
+/** One proposal_probes row — one suite case or bench task, base vs variant. */
+export interface ProposalProbe {
+  id: number;
+  proposal_id: number;
+  job_id: string;
+  source: ProbeSource;
+  /** The suite case's description or the bench task id ('' on a no_suite row). */
+  task_id: string;
+  /** Every hard assertion (bench: check.sh) passed on that side; null when it did not run. */
+  base_pass: boolean | null;
+  variant_pass: boolean | null;
+  blind_choice: ProbeChoice;
+  /** Judge reason (≤6 lines, with the A/B key) or why the case was skipped. */
+  reason: string;
+  usd: number;
+  created_at: string;
+}
+
+/** The daemon's in-memory state of one probe job (lost on restart). */
+export interface ProbeJob {
+  id: string;
+  proposal_id: number;
+  source: ProbeSource;
+  status: 'running' | 'done' | 'failed';
+  error?: string;
+  usd: number;
+  max_usd: number;
+  started_at: string;
+  finished_at?: string;
+}
+
+/** GET /api/improve/proposals/{id}/probes. */
+export interface ProposalProbesResp {
+  proposal_id: number;
+  /** The promptfoo step's cap (SWARMERY_PROBE_MAX_USD). */
+  max_usd: number;
+  /** The bench step's own cap (SWARMERY_PROBE_BENCH_MAX_USD). */
+  bench_max_usd: number;
+  jobs: ProbeJob[];
+  /** Newest job first, cases in run order. */
+  probes: ProposalProbe[];
 }
 
 // --- Phase 2 — approvals + hooks (frozen at gate 2.2) ------------------------
@@ -3058,7 +3148,8 @@ export interface SystemInsights {
   skillAuditReport?: SystemSkillAuditReport | null;
   /**
    * Active session-start cost findings — claude_md_oversized,
-   * claude_md_over_200_lines, mcp_server_unused_30d. Additive optional.
+   * claude_md_over_200_lines, mcp_server_unused_30d, always_on_budget.
+   * Additive optional.
    */
   startCost?: SystemStartCost[];
 }
@@ -4126,6 +4217,17 @@ export type PhaseVerifyVerdict = 'pass' | 'fail' | 'inconclusive';
 /** One reason a phase did not progress — mirrors phasediag.Blocker. */
 export interface PhaseBlocker {
   kind:
+    /** the last run stopped (an agent `kind: stop` block, or the guard check) and
+     *  waits on an answer nobody gave yet — `decisionId` / `trigger` name it
+     *  (phasediag.KindDecisionOpen). Always emitted first. */
+    | 'decision-open'
+    /** the phase's own branch holds the stopped run's commits and an open decision
+     *  is what they wait on: answering lets a retry continue on them, so deleting
+     *  is the destructive alternative, not the fix (phasediag.KindBranchAwaitsDecision). */
+    | 'branch-awaits-decision'
+    /** the blocked run's stop was answered since, and the answer lets the next run
+     *  build on the branch — a retry continues on it (phasediag.KindBranchContinues). */
+    | 'branch-continues'
     | 'dep-incomplete'
     | 'dep-unmerged'
     | 'branch-blocks-retry'
@@ -4143,6 +4245,11 @@ export interface PhaseBlocker {
      *  landed (or it was `inconclusive`) — the ABSENCE of a grade, not a grade
      *  against the work (phasediag.KindUnverified). */
     | 'unverified'
+    /** the work landed, but its record did not — an empty Completion Report
+     *  (phasediag.KindUnreported). */
+    | 'unreported'
+    /** ADVISORY: the plan has no lesson recorded; blocks nothing (phasediag.KindNoLesson). */
+    | 'no-lesson'
     | 'no-criteria'
     /** a swarm/phase-<id> branch whose id matches no phase row: work stranded under
      *  a previous id generation. A legitimate delete target, but only through the
@@ -4156,6 +4263,17 @@ export interface PhaseBlocker {
    *  client-side. Omitted on every other kind (Go `omitempty`). */
   branch?: string;
   commitsAhead?: number;
+  /** Branch kinds: the branch the counts were measured against — what the
+   *  inspect/merge commands run against. Absent from an older daemon. */
+  base?: string;
+  /** decision-open only: the open decision's `D-n` and the stop's trigger. */
+  decisionId?: string;
+  trigger?: string;
+  /** decision-open / branch-awaits-decision: protected files the stopped run's
+   *  branch changed. Empty or absent ⇒ any answer lets a retry continue on the
+   *  branch; non-empty ⇒ only the guard's `allow-add-to-scope` keeps the work
+   *  (phasediag.AnswerContinuesBranch). Absent from an older daemon. */
+  protectedChanged?: string[];
 }
 
 /** The executor's own last word — mirrors phasediag.AgentMessage. */
@@ -5188,7 +5306,24 @@ export type PhaseLandErrorCode =
   | 'binary-missing'
   | 'provider-unknown'
   | 'push-failed'
-  | 'change-request-failed';
+  | 'change-request-failed'
+  /** POST …/orphan-branch/land only: the orphan gate's refusals
+   *  (api.resolveOrphanBranch) — not a swarm/phase-<id> name, a live phase's
+   *  branch, or a project with no known path. */
+  | 'branch-refused'
+  | 'branch-live-phase'
+  | 'no-project-path';
+
+/** POST /api/epics/{taskId}/orphan-branch/land — mirrors api.landOrphanBranch.
+ *  Nothing is stored: the change request is the record, `url` its link. */
+export interface OrphanLandResponse {
+  branch: string;
+  base: string;
+  url: string;
+  /** null when the URL carried no number. */
+  number: number | null;
+  terms: ProviderTerms;
+}
 
 /** Mirrors api.vcsRemoteDTO: the project's `origin`, credentials stripped. */
 export interface VcsRemote {
