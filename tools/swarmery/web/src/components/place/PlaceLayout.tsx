@@ -13,6 +13,14 @@
 //
 // A collapsed list (lib/panels.ts) leaves a 34px strip, only from `desk` up: below
 // it there is one column and nothing to collapse (D-3).
+//
+// This component's own root is `[data-place-layout]`, main's (or the workspace
+// shell's) direct child on a fill route — so the mobile scroll cannot live on
+// that root itself (scripts/screenshot.mjs's assertNoNestedVerticalScroll bans a
+// scrolling direct child of the shell scroller). The `overflow-y-auto` instead
+// sits on an inner wrapper, one level deeper, that collapses to `desk:contents`
+// so the grid at `desk` still sees `list`'s and `detail`'s wrappers as its direct
+// items, unchanged from before this wrapper existed.
 
 import type { ReactNode } from 'react';
 import { PANEL_EASE, usePanels } from '../../lib/panels';
@@ -36,15 +44,17 @@ export function PlaceLayout({
   return (
     <div
       data-place-layout=""
-      className={`flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-y-auto transition-[grid-template-columns] desk:grid desk:grid-rows-[minmax(0,1fr)] desk:gap-2 desk:overflow-hidden ${columns} ${PANEL_EASE}`}
+      className={`flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden transition-[grid-template-columns] desk:grid desk:grid-rows-[minmax(0,1fr)] desk:gap-2 ${columns} ${PANEL_EASE}`}
     >
-      <div className={narrow === 'detail' ? 'hidden desk:contents' : 'contents'}>{list}</div>
-      <div
-        className={`min-h-0 min-w-0 bg-surface desk:block desk:overflow-y-auto desk:rounded-xl desk:border desk:border-line ${
-          narrow === 'list' ? 'hidden' : narrow === 'detail' ? 'flex-1' : ''
-        }`}
-      >
-        {detail}
+      <div className="min-h-0 min-w-0 flex-1 overflow-y-auto desk:contents">
+        <div className={narrow === 'detail' ? 'hidden desk:contents' : 'contents'}>{list}</div>
+        <div
+          className={`min-h-0 min-w-0 bg-surface desk:block desk:overflow-y-auto desk:rounded-xl desk:border desk:border-line ${
+            narrow === 'list' ? 'hidden' : narrow === 'detail' ? 'flex-1' : ''
+          }`}
+        >
+          {detail}
+        </div>
       </div>
     </div>
   );
