@@ -18,6 +18,27 @@ import (
 
 // Blocker kinds, in the order Diagnose emits them (most actionable first).
 const (
+	// KindDecisionOpen: the phase's last run stopped on a `kind: stop` block (or
+	// its guard check raised a decision) and nobody has answered it yet. Emitted
+	// FIRST: until it is answered nothing else moves — a retry is refused as a
+	// dirty branch, and the answer itself is what lets the next run continue on
+	// the stopped run's branch (phaserun.stopAnsweredSinceBlock). DecisionID and
+	// Trigger travel as data so the UI can answer it in place.
+	KindDecisionOpen = "decision-open"
+
+	// KindBranchAwaitsDecision: the phase's own branch holds commits AND an open
+	// decision of this phase is what those commits are waiting on. It replaces
+	// KindBranchDirty in that state, because branch-dirty advises "merge or
+	// delete" — and deleting here throws away the stopped run's partial work,
+	// which answering the decision would have let the next run finish.
+	KindBranchAwaitsDecision = "branch-awaits-decision"
+
+	// KindBranchContinues: the phase's blocked run was answered since (a decided
+	// stop decision) and the answer lets the next run build on the branch
+	// (AnswerContinuesBranch). ADVISORY: a retry continues on these commits, so
+	// the branch is the work in progress, not a leftover to merge or delete.
+	KindBranchContinues = "branch-continues"
+
 	KindDepIncomplete     = "dep-incomplete"
 	KindDepUnmerged       = "dep-unmerged"
 	KindBranchBlocksRetry = "branch-blocks-retry"
@@ -98,12 +119,20 @@ const maxOrphans = 5
 // parsing Summary, and not by rebuilding "swarm/phase-<id>" client-side, which would
 // go on naming a branch after the server's naming rule moved. Empty/0 on every other
 // kind.
+//
+// Base is the branch every branch-derived count was measured against, as data, so
+// the UI can spell out exact inspect/merge commands instead of leaving "merge it"
+// to the reader. DecisionID/Trigger identify the open decision of a
+// decision-open blocker.
 type Blocker struct {
 	Kind         string `json:"kind"`
 	Summary      string `json:"summary"`
 	Detail       string `json:"detail"`
 	Branch       string `json:"branch,omitempty"`
 	CommitsAhead int    `json:"commitsAhead,omitempty"`
+	Base         string `json:"base,omitempty"`
+	DecisionID   string `json:"decisionId,omitempty"`
+	Trigger      string `json:"trigger,omitempty"`
 }
 
 // AgentMessage is the executor's own last word, for the cases the daemon cannot
@@ -277,6 +306,16 @@ func Diagnose(db *sql.DB, git worktree.Git, own OwnCheckout, phaseID int64) (Dia
 		return Diagnosis{}, err
 	}
 
+	// 0. decision-open — the run is waiting on the operator, and nothing below
+	// can be resolved in a way that helps until it is answered.
+	open, err := openDecision(db, taskID, phaseID)
+	if err != nil {
+		return Diagnosis{}, err
+	}
+	if open != nil {
+		d.Blockers = append(d.Blockers, *open)
+	}
+
 	// 1. dep-incomplete — a dependency cannot prove it is done. A dependency with
 	// NO criteria is equally unprovable (same rule as phaserun.depSatisfied), but
 	// "is only 0/0 complete" implies a count that came up short; the truth is that
@@ -314,8 +353,23 @@ func Diagnose(db *sql.DB, git worktree.Git, own OwnCheckout, phaseID int64) (Dia
 					Summary: fmt.Sprintf("Phase %d is ticked, but its code is on %s — %s not merged into %s",
 						dep.Seq, branch, plural(ahead, "commit"), base),
 					Detail: fmt.Sprintf("%s → %s ahead, %s", branch, plural(ahead, "commit"), againstBase(base)),
+					// Data for the merge command and the dependency's own land
+					// action (the modal maps the branch back to its phase). No
+					// delete is offered for a dependency's branch from this
+					// phase's modal: the guide marks this kind non-deletable.
+					Branch:       branch,
+					CommitsAhead: ahead,
+					Base:         base,
 				})
 			}
+		}
+	}
+
+	// What an answer given since the run blocked says about its branch.
+	var answered *answeredStop
+	if open == nil && runState == "blocked" && endedAt.Valid {
+		if answered, err = answeredSinceBlock(db, taskID, phaseID, endedAt.String); err != nil {
+			return Diagnosis{}, err
 		}
 	}
 
@@ -350,6 +404,43 @@ func Diagnose(db *sql.DB, git worktree.Git, own OwnCheckout, phaseID int64) (Dia
 				Detail: fmt.Sprintf("%s → %s ahead, checked out at %s, %s",
 					branch, plural(ahead, "commit"), ownPath, againstBase(base)),
 			})
+		case exists && answered != nil && answered.continues:
+			d.Blockers = append(d.Blockers, Blocker{
+				Kind: KindBranchContinues,
+				Summary: fmt.Sprintf("Retry continues on %s (%s) with your answer to %s: %s",
+					branch, plural(ahead, "commit"), answered.id, answered.answer),
+				Detail:       strings.Join(append(subjects, againstBase(base)), "\n"),
+				Branch:       branch,
+				CommitsAhead: ahead,
+				Base:         base,
+				DecisionID:   answered.id,
+			})
+		case exists && answered != nil:
+			// Answered, but the answer did not accept the protected edits the
+			// branch holds — the run engine refuses to build on them, so this is
+			// branch-dirty, with the reason spelled out instead of left implicit.
+			d.Blockers = append(d.Blockers, Blocker{
+				Kind: KindBranchDirty,
+				Summary: fmt.Sprintf("Branch %s holds %s with protected edits (%s) your answer to %s did not accept — merge or delete it before retrying",
+					branch, plural(ahead, "commit"), strings.Join(answered.protected, ", "), answered.id),
+				Detail:       strings.Join(append(subjects, againstBase(base)), "\n"),
+				Branch:       branch,
+				CommitsAhead: ahead,
+				Base:         base,
+				DecisionID:   answered.id,
+			})
+		case exists && open != nil:
+			// The commits are the stopped run's partial work and the open decision
+			// is what they wait on: answering it lets a retry continue on them.
+			d.Blockers = append(d.Blockers, Blocker{
+				Kind: KindBranchAwaitsDecision,
+				Summary: fmt.Sprintf("Branch %s holds the stopped run's %s — answer the decision and a retry continues on it",
+					branch, plural(ahead, "commit")),
+				Detail:       strings.Join(append(subjects, againstBase(base)), "\n"),
+				Branch:       branch,
+				CommitsAhead: ahead,
+				Base:         base,
+			})
 		case exists:
 			d.Blockers = append(d.Blockers, Blocker{
 				Kind: KindBranchDirty,
@@ -361,6 +452,7 @@ func Diagnose(db *sql.DB, git worktree.Git, own OwnCheckout, phaseID int64) (Dia
 				// The same two facts as data, for the delete confirmation.
 				Branch:       branch,
 				CommitsAhead: ahead,
+				Base:         base,
 			})
 		}
 	}
@@ -536,6 +628,7 @@ func orphanBranches(db *sql.DB, git worktree.Git, repoRoot, base string) ([]Bloc
 			// matches no row, so there is no phase to derive it from.
 			Branch:       branch,
 			CommitsAhead: ahead,
+			Base:         base,
 		})
 	}
 	if overflow > 0 {
@@ -553,6 +646,101 @@ func orphanBranches(db *sql.DB, git worktree.Git, repoRoot, base string) ([]Bloc
 		})
 	}
 	return blockers, nil
+}
+
+// openDecision returns the decision-open blocker for the phase's newest
+// undecided stop-source decision (an agent-declared stop, or a guard check that
+// flagged protected paths — both are source 'stop'), nil when there is none.
+// The agent's trigger and reason are read from guard_json's `stop` key, the
+// shape phaserun.stopRecord writes; this package reads the column rather than
+// importing phaserun, which itself depends on phasediag.
+func openDecision(db *sql.DB, taskID, phaseID int64) (*Blocker, error) {
+	var id, question, guardJSON string
+	err := db.QueryRow(`
+		SELECT decision_id, question, COALESCE(guard_json, '')
+		  FROM phase_decisions
+		 WHERE workspace_task_id = ? AND phase_id = ? AND source = 'stop' AND status = 'undecided'
+		 ORDER BY id DESC LIMIT 1`, taskID, phaseID).Scan(&id, &question, &guardJSON)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	var rec struct {
+		Stop *struct {
+			Trigger string `json:"trigger"`
+			Reason  string `json:"reason"`
+		} `json:"stop"`
+	}
+	_ = json.Unmarshal([]byte(guardJSON), &rec)
+	b := Blocker{Kind: KindDecisionOpen, DecisionID: id, Detail: strings.TrimSpace(question)}
+	if rec.Stop == nil {
+		b.Summary = fmt.Sprintf("The run's guard check raised %s and is waiting for your answer", id)
+		return &b, nil
+	}
+	b.Trigger = rec.Stop.Trigger
+	if r := strings.TrimSpace(rec.Stop.Reason); r != "" {
+		b.Detail = r
+	}
+	trigger := b.Trigger
+	if trigger == "" {
+		trigger = "no trigger"
+	}
+	b.Summary = fmt.Sprintf("The run stopped (%s) and is waiting for your answer to %s", trigger, id)
+	return &b, nil
+}
+
+// answeredStop is the newest stop-source decision of a blocked phase that was
+// decided at or after the run ended.
+type answeredStop struct {
+	id, answer string
+	continues  bool
+	protected  []string
+}
+
+// answeredSinceBlock mirrors phaserun.stopAnsweredSinceBlock's choice of
+// decision, judged by the same AnswerContinuesBranch rule. A continuing answer
+// wins over a refusing one — the run engine continues when ANY answer since the
+// block lets it.
+func answeredSinceBlock(db *sql.DB, taskID, phaseID int64, runEndedAt string) (*answeredStop, error) {
+	ended, err := parseStamp(runEndedAt)
+	if err != nil {
+		return nil, nil
+	}
+	rows, err := db.Query(`
+		SELECT decision_id, COALESCE(answer, ''), COALESCE(guard_json, ''), COALESCE(decided_at, '')
+		  FROM phase_decisions
+		 WHERE workspace_task_id = ? AND phase_id = ? AND source = 'stop' AND status = 'decided'
+		 ORDER BY id DESC`, taskID, phaseID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var refusing *answeredStop
+	for rows.Next() {
+		var id, answer, guardJSON, decidedAt string
+		if err := rows.Scan(&id, &answer, &guardJSON, &decidedAt); err != nil {
+			return nil, err
+		}
+		at, perr := parseStamp(decidedAt)
+		if perr != nil || at.Before(ended) {
+			continue
+		}
+		a := &answeredStop{id: id, answer: answer, continues: AnswerContinuesBranch(guardJSON, answer)}
+		if a.continues {
+			return a, rows.Err()
+		}
+		if refusing == nil {
+			var g struct {
+				ProtectedChanged []string `json:"protectedChanged"`
+			}
+			_ = json.Unmarshal([]byte(guardJSON), &g)
+			a.protected = g.ProtectedChanged
+			refusing = a
+		}
+	}
+	return refusing, rows.Err()
 }
 
 // loadDeps resolves depends_on (JSON seq numbers) to sibling phase rows, ascending

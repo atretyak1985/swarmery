@@ -19,7 +19,15 @@ import { msg } from '@lingui/core/macro';
 import { Plural, Trans, useLingui } from '@lingui/react/macro';
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import type { PhaseDiagnosis, PhaseRunOutcome, PhaseVerifyVerdict } from '../api/types';
+import type {
+  NeedsYouDecision,
+  PhaseBlocker,
+  ProviderTerms,
+  PhaseDiagnosis,
+  PhaseRunOutcome,
+  PhaseVerifyVerdict,
+} from '../api/types';
+import { answerPhaseDecision } from '../api/guard';
 import {
   deleteOrphanBranch,
   deletePhaseRunBranch,
@@ -29,8 +37,27 @@ import {
 } from '../api';
 import { fmtElapsed } from '../lib/format';
 import { useProjectWorkspace } from '../workspace/ProjectContext';
+import { NEUTRAL_TERMS } from '../pages/plans/landingModel';
+import { LandBranchAction } from './runOutcome/LandBranchAction';
 import { ConfirmDialog } from './ui';
 import { useDiscardGuard } from './useDiscardGuard';
+import {
+  type BlockerGuide,
+  type BlockerTier,
+  guideFor,
+  nextStep,
+  retryRefusal,
+  TIER_ORDER,
+  withoutStopBlock,
+} from './runOutcome/blockerGuide';
+
+/** Section heading + frame per tier: what the group of blockers MEANS. */
+const TIER_COPY: Record<BlockerTier, { heading: MessageDescriptor; frame: string }> = {
+  decide: { heading: msg`needs your decision`, frame: 'border-amber/40 bg-amber/5' },
+  'blocks-retry': { heading: msg`blocks a retry`, frame: 'border-red/30 bg-red/5' },
+  'blocks-done': { heading: msg`keeps the phase from counting as done`, frame: 'border-amber/30 bg-bg/40' },
+  advisory: { heading: msg`for information — does not block this phase`, frame: 'border-line bg-bg/40' },
+};
 
 /** The detail a `done` run carries when only classed criteria are left
  * (phaserun settle: "N [LAND] criteria left for landing[; N [MANUAL] criteria
@@ -150,6 +177,9 @@ export function RunOutcomeModal({
   onRetry,
   reverify = null,
   onOpenRevisions,
+  decision = null,
+  onChanged,
+  terms = NEUTRAL_TERMS,
 }: {
   taskId: number;
   phaseId: number;
@@ -165,11 +195,25 @@ export function RunOutcomeModal({
   reverify?: { label: string; onClick: () => void; disabled?: boolean; tip?: string } | null;
   /** Jump to the plan's Revisions tab (the "revision already open" 409 path). */
   onOpenRevisions: () => void;
+  /** The phase's open stop/guard decision (EpicPhase.guardDecision), answered in
+   *  place on the decision-open blocker; null/absent ⇒ the blocker links out. */
+  decision?: NeedsYouDecision | null;
+  /** The page's own reload, fired after an answer or a delete changed the plan. */
+  onChanged?: () => void;
+  /** The project's code-host vocabulary (PR / MR …) for the Open-change action;
+   *  the neutral words until the project's vcs has loaded. */
+  terms?: ProviderTerms | undefined;
 }): JSX.Element {
   const { t, i18n } = useLingui();
   const [phase, setPhase] = useState<Phase>({ kind: 'loading' });
   const [busy, setBusy] = useState(false);
-  const [confirmingDelete, setConfirmingDelete] = useState(false);
+  // The branch whose delete is armed — per blocker, because several branch
+  // blockers can be listed at once and each needs its own unambiguous button.
+  const [confirmingBranch, setConfirmingBranch] = useState<string | null>(null);
+  const confirmingDelete = confirmingBranch !== null;
+  const setConfirmingDelete = (on: boolean): void => {
+    if (!on) setConfirmingBranch(null);
+  };
   const [actionErr, setActionErr] = useState<string | null>(null);
 
   // Revise-plan flow (plan-revision phase 4): the diagnosis is exactly the
@@ -276,10 +320,6 @@ export function RunOutcomeModal({
   // only the explicit orphan-cleanup route can reach. own-worktree is deliberately
   // NOT here: a delete 409s for that state, so offering one would advise the single
   // action that cannot work.
-  const dirty =
-    diag?.blockers.find((b) => b.kind === 'branch-dirty') ??
-    diag?.blockers.find((b) => b.kind === 'orphan-branch' && (b.branch ?? '') !== '') ??
-    null;
 
   const endedMs =
     diag !== null && diag.runEndedAt !== null ? Date.parse(diag.runEndedAt) : Number.NaN;
@@ -288,19 +328,22 @@ export function RunOutcomeModal({
       ? fmtElapsed(diag.runStartedAt, endedMs)
       : null;
 
-  function deleteBranch(): void {
+  function deleteBranch(target: PhaseBlocker): void {
     setBusy(true);
-    setConfirmingDelete(false);
+    setConfirmingBranch(null);
     setActionErr(null);
     // Routed by the blocker's kind, and the branch the SERVER named is what gets
     // deleted — never "swarm/phase-<this phase's id>" rebuilt client-side, which
     // for an orphan would name a branch that has nothing to do with the work.
     const req =
-      dirty?.kind === 'orphan-branch'
-        ? deleteOrphanBranch(taskId, dirty.branch ?? '')
+      target.kind === 'orphan-branch'
+        ? deleteOrphanBranch(taskId, target.branch ?? '')
         : deletePhaseRunBranch(taskId, phaseId);
     req
-      .then(() => load())
+      .then(() => {
+        onChanged?.();
+        return load();
+      })
       .catch((e: unknown) => setActionErr(e instanceof Error ? e.message : String(e)))
       .finally(() => setBusy(false));
   }
@@ -310,27 +353,32 @@ export function RunOutcomeModal({
   // extension-driven flows this repo uses), and the armed step names the branch and
   // the exact number of commits it is about to destroy. Same shape as KillButton's
   // confirm: an armed line + Confirm/Cancel replacing the trigger in place.
-  const deleteSlot = ((): JSX.Element | null => {
-    if (dirty === null) return null;
-    const commits = dirty.commitsAhead ?? 0;
-    const branch = dirty.branch ?? t`the run branch`;
-    if (!confirmingDelete) {
+  const deleteSlot = (target: PhaseBlocker, mode: 'fix' | 'discard'): JSX.Element | null => {
+    const branchName = target.branch ?? '';
+    if (branchName === '') return null;
+    const commits = target.commitsAhead ?? 0;
+    const branch = branchName;
+    if (confirmingBranch !== branchName) {
       return (
         <button
           type="button"
           disabled={busy || writesDisabled}
           data-tip={
-            writesDisabled ? writesDisabledReason : t`delete the run branch so a retry can recreate it`
+            writesDisabled
+              ? writesDisabledReason
+              : mode === 'discard'
+                ? t`throw this work away and start the phase from scratch`
+                : t`delete ${branch} so a retry can recreate it`
           }
-          onClick={() => setConfirmingDelete(true)}
-          className="rounded-lg border border-red/40 bg-red/5 px-3.5 py-1.5 font-mono text-[11.5px] text-red transition-colors hover:bg-red/10 disabled:cursor-not-allowed disabled:opacity-50"
+          onClick={() => setConfirmingBranch(branchName)}
+          className="rounded-lg border border-red/40 bg-red/5 px-3 py-1 font-mono text-[11px] text-red transition-colors hover:bg-red/10 disabled:cursor-not-allowed disabled:opacity-50"
         >
-          {busy ? t`deleting…` : t`Delete branch`}
+          {busy ? t`deleting…` : mode === 'discard' ? t`Discard this work` : t`Delete branch`}
         </button>
       );
     }
     return (
-      <span className="flex flex-wrap items-center justify-end gap-2">
+      <span className="flex flex-wrap items-center gap-2">
         <span className="font-mono text-[10.5px] text-ink-dim">
           <Trans>Delete {branch}?</Trans>{' '}
           {commits > 0 ? (
@@ -348,22 +396,28 @@ export function RunOutcomeModal({
         <button
           type="button"
           disabled={busy || writesDisabled}
-          onClick={deleteBranch}
-          className="rounded-lg border border-red/40 bg-red/10 px-3.5 py-1.5 font-mono text-[11.5px] font-semibold text-red transition-colors hover:bg-red/20 disabled:cursor-not-allowed disabled:opacity-50"
+          onClick={() => deleteBranch(target)}
+          className="rounded-lg border border-red/40 bg-red/10 px-3 py-1 font-mono text-[11px] font-semibold text-red transition-colors hover:bg-red/20 disabled:cursor-not-allowed disabled:opacity-50"
         >
           {busy ? t`deleting…` : t`Delete permanently`}
         </button>
         <button
           type="button"
           disabled={busy}
-          onClick={() => setConfirmingDelete(false)}
-          className="font-mono text-[11.5px] text-ink-dim transition-colors hover:text-ink disabled:opacity-50"
+          onClick={() => setConfirmingBranch(null)}
+          className="font-mono text-[11px] text-ink-dim transition-colors hover:text-ink disabled:opacity-50"
         >
           <Trans>Cancel</Trans>
         </button>
       </span>
     );
-  })();
+  };
+
+  // Blockers grouped by what they mean for the operator, most urgent group first.
+  const guided: { b: PhaseBlocker; g: BlockerGuide }[] =
+    diag?.blockers.map((b) => ({ b, g: guideFor(b, i18n, terms) })) ?? [];
+  const tiers = new Set(guided.map((x) => x.g.tier));
+  const refusal = diag !== null ? retryRefusal(diag.blockers, i18n) : null;
 
   const seqLabel = diag !== null ? String(diag.seq) : '—';
   const criteriaAfter = diag?.criteriaAfter ?? 0;
@@ -380,7 +434,7 @@ export function RunOutcomeModal({
       onClick={busy ? undefined : requestClose}
     >
       <div
-        className="flex max-h-[85vh] w-full max-w-lg flex-col rounded-xl border border-line bg-surface px-4 py-4"
+        className="flex max-h-[85vh] w-full max-w-2xl flex-col rounded-xl border border-line bg-surface px-4 py-4"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-start justify-between gap-3">
@@ -463,59 +517,141 @@ export function RunOutcomeModal({
                 </div>
               ))}
 
-            <div>
-              <div className="mb-1.5 font-mono text-[10px] tracking-[0.16em] text-ink-faint uppercase">
-                <Trans>blockers</Trans>
-              </div>
-              {diag.blockers.length === 0 ? (
-                <div className="font-mono text-[11px] text-ink-faint">
-                  <Trans>
-                    No blockers detected — the executor exited without ticking criteria; open the
-                    session to see why.
-                  </Trans>
-                </div>
-              ) : (
-                <ul className="space-y-2">
-                  {diag.blockers.map((b, i) => (
-                    <li
-                      key={`${b.kind}-${String(i)}`}
-                      className={`rounded-lg border px-2.5 py-2 ${
-                        // verify-failed is the one blocker that reports a GRADE of the
-                        // work rather than a state of the repo, and it is the actionable
-                        // one on an otherwise-green phase — so it reads red like the
-                        // verdict chip above instead of blending into the neutral rows.
-                        b.kind === 'verify-failed'
-                          ? 'border-red/25 bg-red/5'
-                          : 'border-line bg-bg/40'
-                      }`}
-                    >
-                      <div className="text-[11.5px] text-ink">{b.summary}</div>
-                      <div className="mt-1 font-mono text-[10px] whitespace-pre-line text-ink-faint">
-                        {b.detail}
-                      </div>
-                      {/* The remedy for a missing grade is a grade: re-run the
-                          read-only verifier on the branch as it stands. Closes the
-                          modal like Retry does — busy state and any refusal show
-                          on the page, where the action lives. */}
-                      {b.kind === 'unverified' && reverify !== null && (
-                        <button
-                          type="button"
-                          disabled={reverify.disabled}
-                          data-tip={reverify.tip}
-                          onClick={() => {
-                            reverify.onClick();
-                            onClose();
-                          }}
-                          className="mt-2 rounded-lg border border-brand/40 bg-brand/5 px-3 py-1 font-mono text-[11px] text-brand transition-colors hover:bg-brand/10 disabled:cursor-not-allowed disabled:opacity-50"
-                        >
-                          {reverify.label}
-                        </button>
-                      )}
-                    </li>
-                  ))}
-                </ul>
-              )}
+            {/* The one thing to do first — derived from the most urgent tier, so the
+                operator never has to work out the order from the list. */}
+            <div
+              data-testid="next-step"
+              className="rounded-lg border border-brand/30 bg-brand/5 px-2.5 py-2 text-[12px] text-ink"
+            >
+              <span className="mr-1.5 font-mono text-[10px] tracking-[0.16em] text-brand uppercase">
+                <Trans>next step</Trans>
+              </span>
+              {nextStep(tiers, diag.runOutcome, i18n)}
             </div>
+
+            {guided.length === 0 && (
+              <div className="font-mono text-[11px] text-ink-faint">
+                <Trans>
+                  No blockers detected — the executor exited without ticking criteria; open the
+                  session to see why.
+                </Trans>
+              </div>
+            )}
+
+            {TIER_ORDER.filter((tier) => tiers.has(tier)).map((tier) => (
+              <div key={tier}>
+                <div className="mb-1.5 font-mono text-[10px] tracking-[0.16em] text-ink-faint uppercase">
+                  {i18n._(TIER_COPY[tier].heading)}
+                </div>
+                <ul className="space-y-2">
+                  {guided
+                    .filter((x) => x.g.tier === tier)
+                    .map(({ b, g }, i) => (
+                      <li
+                        key={`${b.kind}-${b.branch ?? ''}-${String(i)}`}
+                        data-kind={b.kind}
+                        className={`rounded-lg border px-2.5 py-2 ${
+                          b.kind === 'verify-failed' ? 'border-red/25 bg-red/5' : TIER_COPY[tier].frame
+                        }`}
+                      >
+                        <div className="text-[12px] font-semibold text-ink">{g.title}</div>
+                        {g.steps.length > 0 && (
+                          <>
+                            <div className="mt-1.5 font-mono text-[9.5px] tracking-[0.14em] text-ink-faint uppercase">
+                              <Trans>how to resolve</Trans>
+                            </div>
+                            <ol className="mt-0.5 list-decimal space-y-0.5 pl-4 text-[11.5px] leading-relaxed text-ink-2">
+                              {g.steps.map((step) => (
+                                <li key={step}>{step}</li>
+                              ))}
+                            </ol>
+                          </>
+                        )}
+                        {/* With an in-dashboard action the commands are the
+                            fallback, folded away; without one they ARE the fix. */}
+                        {g.commands.length > 0 && g.land === null && <CommandBlock commands={g.commands} />}
+
+                        {b.kind === 'decision-open' && (
+                          <DecisionPanel
+                            blocker={b}
+                            decision={decision}
+                            disabled={writesDisabled}
+                            disabledReason={writesDisabledReason}
+                            onAnswer={(option, note) => {
+                              if (decision === null) return Promise.resolve();
+                              return answerPhaseDecision(
+                                decision.taskId,
+                                decision.phaseId,
+                                decision.decisionId,
+                                option,
+                                note,
+                              ).then(() => {
+                                onChanged?.();
+                                return load();
+                              });
+                            }}
+                          />
+                        )}
+
+                        {/* The server's own evidence: what it measured, verbatim. */}
+                        <details className="mt-1.5">
+                          <summary className="cursor-pointer font-mono text-[10px] text-ink-faint hover:text-ink-dim">
+                            {b.summary}
+                          </summary>
+                          {b.detail !== '' && (
+                            <div className="mt-1 font-mono text-[10px] whitespace-pre-line text-ink-faint">
+                              {b.detail}
+                            </div>
+                          )}
+                        </details>
+
+                        {(g.land !== null || g.deletable !== null || (b.kind === 'unverified' && reverify !== null)) && (
+                          <div className="mt-2 flex flex-wrap items-start gap-2">
+                            {g.land !== null && (
+                              <LandBranchAction
+                                taskId={taskId}
+                                branch={b.branch ?? ''}
+                                mode={g.land}
+                                terms={terms}
+                                disabled={writesDisabled}
+                                disabledReason={writesDisabledReason}
+                                onLanded={onChanged}
+                              />
+                            )}
+                            {g.deletable !== null && deleteSlot(b, g.deletable)}
+                            {/* The remedy for a missing grade is a grade: re-run the
+                                read-only verifier on the branch as it stands. Closes the
+                                modal like Retry does — busy state and any refusal show
+                                on the page, where the action lives. */}
+                            {b.kind === 'unverified' && reverify !== null && (
+                              <button
+                                type="button"
+                                disabled={reverify.disabled}
+                                data-tip={reverify.tip}
+                                onClick={() => {
+                                  reverify.onClick();
+                                  onClose();
+                                }}
+                                className="rounded-lg border border-brand/40 bg-brand/5 px-3 py-1 font-mono text-[11px] text-brand transition-colors hover:bg-brand/10 disabled:cursor-not-allowed disabled:opacity-50"
+                              >
+                                {reverify.label}
+                              </button>
+                            )}
+                          </div>
+                        )}
+                        {g.commands.length > 0 && g.land !== null && (
+                          <details className="mt-1.5">
+                            <summary className="cursor-pointer font-mono text-[10px] text-ink-faint hover:text-ink-dim">
+                              <Trans>or do it by hand in the repo</Trans>
+                            </summary>
+                            <CommandBlock commands={g.commands} />
+                          </details>
+                        )}
+                      </li>
+                    ))}
+                </ul>
+              </div>
+            ))}
 
             {diag.agentMessage !== null && (
               <div>
@@ -523,8 +659,12 @@ export function RunOutcomeModal({
                   <Trans>agent said</Trans>
                 </div>
                 <div className="rounded-lg border border-line bg-bg/40 px-2.5 py-2 font-mono text-[10.5px] leading-relaxed whitespace-pre-wrap text-ink-2">
-                  {diag.agentMessage.text}
-                  {diag.agentMessage.truncated ? '…' : ''}
+                  {/* With a decision-open blocker, the stop block's options are
+                      already on the decision card — repeating its YAML here (cut
+                      off mid-option) is noise. */}
+                  {tiers.has('decide')
+                    ? withoutStopBlock(diag.agentMessage.text)
+                    : `${diag.agentMessage.text}${diag.agentMessage.truncated ? '…' : ''}`}
                 </div>
                 <Link
                   to={`/sessions/${diag.agentMessage.sessionUuid}`}
@@ -596,7 +736,6 @@ export function RunOutcomeModal({
         )}
 
         <div className="mt-4 flex flex-wrap items-center justify-end gap-2">
-          {deleteSlot}
           {/* The plan-change escape hatch, offered exactly where "this didn't
               work" is being read. Only for runs that ended without completing
               the phase — a completed phase needs no plan surgery. */}
@@ -626,8 +765,8 @@ export function RunOutcomeModal({
             )}
           <button
             type="button"
-            disabled={busy || writesDisabled}
-            data-tip={writesDisabled ? writesDisabledReason : t`run this phase again`}
+            disabled={busy || writesDisabled || refusal !== null}
+            data-tip={writesDisabled ? writesDisabledReason : (refusal ?? t`run this phase again`)}
             onClick={() => {
               onRetry();
               onClose();
@@ -655,6 +794,157 @@ export function RunOutcomeModal({
       >
         <Trans>The reason you wrote for revising this plan will be lost.</Trans>
       </ConfirmDialog>
+    </div>
+  );
+}
+
+/** Copyable git commands for a fix that happens outside the dashboard. */
+function CommandBlock({ commands }: { commands: string[] }): JSX.Element {
+  const { t } = useLingui();
+  const [copied, setCopied] = useState(false);
+  const text = commands.join('\n');
+  return (
+    <div className="mt-1.5 flex items-start gap-2 rounded-md border border-line bg-bg/60 px-2 py-1.5">
+      <pre className="min-w-0 flex-1 overflow-x-auto font-mono text-[10.5px] leading-relaxed text-ink-2">{text}</pre>
+      <button
+        type="button"
+        onClick={() => {
+          void navigator.clipboard
+            ?.writeText(text)
+            .then(() => setCopied(true))
+            .catch(() => setCopied(false));
+        }}
+        className="shrink-0 font-mono text-[10px] text-ink-dim transition-colors hover:text-brand"
+        data-tip={t`run in the project's repo`}
+      >
+        {copied ? t`copied` : t`copy`}
+      </button>
+    </div>
+  );
+}
+
+/** Answers the phase's open stop/guard decision in place: the option list with
+ *  each option's consequence, an optional note, and the operator's own answer
+ *  when the stop allows it. Same endpoint as the Needs-you card. */
+function DecisionPanel({
+  blocker,
+  decision,
+  disabled,
+  disabledReason,
+  onAnswer,
+}: {
+  blocker: PhaseBlocker;
+  decision: NeedsYouDecision | null;
+  disabled: boolean;
+  disabledReason: string;
+  onAnswer: (option: string, note: string) => Promise<void>;
+}): JSX.Element {
+  const { t } = useLingui();
+  const [pick, setPick] = useState<string | null>(null);
+  const [note, setNote] = useState('');
+  const [sending, setSending] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  // Two sources say who is waiting — the diagnosis (fresh) and the page's phase
+  // DTO (which carries the options). Answer only when they name the same one.
+  if (decision === null || decision.decisionId !== (blocker.decisionId ?? '')) {
+    return (
+      <div className="mt-2 font-mono text-[10.5px] text-ink-dim">
+        <Trans>The options of this decision are on the Needs you page.</Trans>{' '}
+        <Link to="/needs-you" className="text-brand underline-offset-2 hover:underline">
+          <Trans>open Needs you →</Trans>
+        </Link>
+      </div>
+    );
+  }
+  const reason = decision.reason !== undefined && decision.reason !== '' ? decision.reason : decision.question;
+  const own = note.trim();
+  const send = (option: string): void => {
+    setSending(true);
+    setErr(null);
+    onAnswer(option, own)
+      .catch((e: unknown) => setErr(e instanceof Error ? e.message : String(e)))
+      .finally(() => setSending(false));
+  };
+  const off = disabled || sending;
+
+  return (
+    <div className="mt-2 rounded-md border border-amber/30 bg-surface px-2.5 py-2">
+      <div className="text-[11.5px] leading-relaxed text-ink-2">
+        <span className="font-mono text-[10px] text-ink-faint">
+          <Trans>executor's reason:</Trans>
+        </span>{' '}
+        {reason}
+      </div>
+      <fieldset className="mt-2 space-y-1.5" disabled={off}>
+        <legend className="sr-only">{t`choose an answer`}</legend>
+        {decision.options.map((o) => (
+          <label
+            key={o.id}
+            className={`flex cursor-pointer gap-2 rounded-md border px-2 py-1.5 transition-colors ${
+              pick === o.id ? 'border-brand/50 bg-brand/5' : 'border-line hover:bg-surface2'
+            }`}
+          >
+            <input
+              type="radio"
+              name={`decision-${decision.decisionId}`}
+              value={o.id}
+              checked={pick === o.id}
+              onChange={() => setPick(o.id)}
+              className="mt-0.5"
+            />
+            <span className="min-w-0">
+              <span className="block text-[11.5px] text-ink">{o.label}</span>
+              {o.consequence !== undefined && o.consequence !== '' && (
+                <span className="block text-[10.5px] leading-relaxed text-ink-dim">
+                  <Trans>then:</Trans> {o.consequence}
+                </span>
+              )}
+            </span>
+          </label>
+        ))}
+      </fieldset>
+      <textarea
+        value={note}
+        onChange={(e) => setNote(e.target.value)}
+        rows={2}
+        disabled={off}
+        aria-label={t`note for the answer`}
+        placeholder={
+          decision.freeText === true
+            ? t`note, or your own answer instead of the options — recorded in the phase doc`
+            : t`note — recorded with the answer in the phase doc (optional)`
+        }
+        className="mt-2 w-full resize-y rounded-md border border-line bg-field px-2 py-1.5 text-[11.5px] text-ink outline-none placeholder:text-ink-faint focus:border-brand/50 disabled:opacity-50"
+      />
+      {err !== null && (
+        <div role="alert" className="mt-1.5 font-mono text-[10.5px] text-red">
+          {err}
+        </div>
+      )}
+      <div className="mt-1.5 flex flex-wrap justify-end gap-2">
+        {decision.freeText === true && (
+          <button
+            type="button"
+            disabled={off || own === ''}
+            onClick={() => send('other')}
+            className="rounded-lg border border-line px-3 py-1 font-mono text-[11px] text-ink-2 transition-colors hover:bg-surface2 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <Trans>Answer in my own words</Trans>
+          </button>
+        )}
+        <button
+          type="button"
+          disabled={off || pick === null}
+          data-tip={disabled ? disabledReason : undefined}
+          onClick={() => {
+            if (pick !== null) send(pick);
+          }}
+          className="rounded-lg border border-brand/45 bg-brand/12 px-3 py-1 font-mono text-[11px] font-semibold text-brand transition-colors hover:bg-brand/20 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {sending ? t`answering…` : t`Answer`}
+        </button>
+      </div>
     </div>
   );
 }

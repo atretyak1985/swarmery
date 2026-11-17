@@ -546,6 +546,9 @@ func Routes(root *http.ServeMux, h *Handler) {
 	// generation, which the phase-scoped route above structurally cannot name. Kept a
 	// SIBLING route so that route stays incapable of naming an arbitrary branch.
 	mux.HandleFunc("DELETE /api/epics/{taskId}/orphan-branch", requireLocalOrigin(h.deleteOrphanBranch))
+	// Its keep-the-work twin (orphan_land.go): push the same branch and open a
+	// change request, through the same resolveOrphanBranch gate.
+	mux.HandleFunc("POST /api/epics/{taskId}/orphan-branch/land", requireLocalOrigin(h.landOrphanBranch))
 	// Plan runs: hand the WHOLE plan to one agent (one headless session driving
 	// core's run-plan skill), state on plan_runs. 503 until AttachPlanRun wires
 	// the service.
