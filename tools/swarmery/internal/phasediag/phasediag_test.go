@@ -1285,6 +1285,40 @@ func TestDiagnoseOpenGuardDecisionWithoutStopBlock(t *testing.T) {
 	if b.Trigger != "" || b.Detail != "The run changed protected paths" || !strings.Contains(b.Summary, b.DecisionID) {
 		t.Fatalf("guard decision blocker = %+v", b)
 	}
+	if !slices.Equal(b.ProtectedChanged, []string{"a.go"}) {
+		t.Fatalf("decision blocker protectedChanged = %v, want [a.go]", b.ProtectedChanged)
+	}
+}
+
+// With protected edits on the stopped run's branch, an answer does NOT keep the
+// work unless it is the guard's allow (AnswerContinuesBranch). The diagnosis must
+// carry the edited files on both the decision and the branch, and the branch's
+// summary must not promise that any answer lets a retry continue on it.
+func TestDiagnoseOpenStopWithProtectedEditsQualifiesTheBranch(t *testing.T) {
+	f := newFixture(t)
+	id := f.addPhase(t, 1, "Phase 1", "[]", 10, 9)
+	branch := fmt.Sprintf("swarm/phase-%d", id)
+	guard := `{"protectedChanged":["scripts/tests/a.sh"],"stop":{"trigger":"criterion-impossible","reason":"r"}}`
+	if _, _, err := store.UpsertStopDecision(f.db, f.taskID, id, "q",
+		[]string{"fix-it", GuardOptionAllowID}, guard, "2026-07-28T10:21:00Z"); err != nil {
+		t.Fatalf("UpsertStopDecision: %v", err)
+	}
+	d, err := Diagnose(f.db, newGit("main").branchExists("main", branch, 1, "feat: islands"), nil, id)
+	if err != nil {
+		t.Fatalf("Diagnose: %v", err)
+	}
+	want := []string{"scripts/tests/a.sh"}
+	if dec := blockerOf(t, d, KindDecisionOpen); !slices.Equal(dec.ProtectedChanged, want) {
+		t.Fatalf("decision protectedChanged = %v, want %v", dec.ProtectedChanged, want)
+	}
+	br := blockerOf(t, d, KindBranchAwaitsDecision)
+	if !slices.Equal(br.ProtectedChanged, want) {
+		t.Fatalf("branch protectedChanged = %v, want %v", br.ProtectedChanged, want)
+	}
+	if strings.Contains(br.Summary, "answer the decision and a retry continues") ||
+		!strings.Contains(br.Summary, GuardOptionAllowID) || !strings.Contains(br.Summary, "scripts/tests/a.sh") {
+		t.Fatalf("branch summary %q must name the edits and the one answer that keeps them", br.Summary)
+	}
 }
 
 // After the operator answered a blocked run's stop, the diagnosis tells the

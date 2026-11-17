@@ -14,7 +14,7 @@ import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { NeedsYouDecision, PhaseBlocker, PhaseDiagnosis } from '../api/types';
 import { RunOutcomeModal } from './RunOutcomeModal';
-import { withoutStopBlock } from './runOutcome/blockerGuide';
+import { agentMessageView, withoutStopBlock } from './runOutcome/blockerGuide';
 
 vi.mock('../workspace/ProjectContext', () => ({
   useProjectWorkspace: () => ({
@@ -223,6 +223,91 @@ describe('RunOutcomeModal — an answered stop', () => {
   });
 });
 
+describe('RunOutcomeModal — a stop whose branch holds protected edits', () => {
+  // Only the guard's allow keeps protected edits (phasediag.AnswerContinuesBranch);
+  // the modal must say so before the operator answers, not after.
+  const PROTECTED = ['scripts/tests/a.sh'];
+  const GUARDED: NeedsYouDecision = {
+    ...DECISION,
+    options: [
+      { id: 'fix-mobile-docs-scroll', label: 'fold the bug into this phase' },
+      { id: 'allow-add-to-scope', label: 'Allow (add to scope)' },
+    ],
+  };
+
+  beforeEach(() => {
+    diag = diagnosis([
+      { ...DECISION_OPEN, protectedChanged: PROTECTED },
+      { ...OWN_BRANCH, protectedChanged: PROTECTED },
+    ]);
+  });
+
+  it('does not promise that any answer keeps the work', async () => {
+    mount(GUARDED);
+    const decisionCard = (await screen.findByText(/waiting for your decision D-4/)).closest('li') as HTMLElement;
+    expect(decisionCard.textContent).not.toContain('so the work already done is kept');
+    expect(decisionCard.textContent).toContain('protected edits (scripts/tests/a.sh)');
+    const branchCard = screen.getByText(/The stopped run's work/).closest('li') as HTMLElement;
+    expect(branchCard.textContent).not.toContain('answering the decision above lets the retry continue');
+    expect(branchCard.textContent).toContain('answer "Allow (add to scope)" above');
+  });
+
+  it('marks which option keeps the work and which leaves the branch to clean up', async () => {
+    mount(GUARDED);
+    expect((await screen.findByTestId('answer-keeps-work')).textContent).toContain('only "Allow (add to scope)" keeps the work');
+    expect(screen.getByTestId('option-effect-allow-add-to-scope').textContent).toContain('keeps the work');
+    expect(screen.getByTestId('option-effect-fix-mobile-docs-scroll').textContent).toContain('merged or deleted');
+  });
+
+  it('says every answer keeps the work when nothing protected is on the branch', async () => {
+    diag = diagnosis([DECISION_OPEN, OWN_BRANCH]);
+    mount();
+    expect((await screen.findByTestId('answer-keeps-work')).textContent).toContain('Any answer keeps the work');
+    expect(screen.queryByTestId('option-effect-accept-preexisting-residual')).toBeNull();
+  });
+});
+
+describe('RunOutcomeModal — dependencies', () => {
+  it('refuses Retry while a dependency is unfinished, as the daemon does', async () => {
+    diag = diagnosis([{ kind: 'dep-incomplete', summary: 'Phase 1 is only 2/5 complete', detail: 'phase 1' }]);
+    diag.agentMessage = null;
+    mount(null);
+    await screen.findByText('blocks a retry');
+    const retry = screen.getByRole('button', { name: 'Retry run' }) as HTMLButtonElement;
+    expect(retry.disabled).toBe(true);
+    expect(retry.getAttribute('data-tip')).toContain('finish the phase this one depends on first');
+  });
+
+  it('files an unmerged dependency as advisory: a retry stacks on its branch', async () => {
+    diag = diagnosis([
+      {
+        kind: 'dep-unmerged',
+        summary: 'Phase 1 is ticked, but its code is on swarm/phase-9',
+        detail: 'swarm/phase-9 → 2 commits ahead',
+        branch: 'swarm/phase-9',
+        commitsAhead: 2,
+        base: 'main',
+      },
+    ]);
+    diag.agentMessage = null;
+    mount(null);
+    await screen.findByText('for information — does not block this phase');
+    expect(screen.queryByText('blocks a retry')).toBeNull();
+    const card = screen.getByText(/A dependency is ticked/).closest('li') as HTMLElement;
+    expect(card.textContent).toContain('Retry run starts on top of swarm/phase-9');
+    expect((screen.getByRole('button', { name: 'Retry run' }) as HTMLButtonElement).disabled).toBe(false);
+  });
+});
+
+describe('RunOutcomeModal — the agent message beside a decision', () => {
+  it('keeps the truncation marker when there is no stop block to hide', async () => {
+    diag = diagnosis([{ ...DECISION_OPEN, trigger: undefined }]);
+    diag.agentMessage = { sessionUuid: 's-1', text: 'The guard flagged a protected path and I', truncated: true };
+    mount();
+    expect(await screen.findByText('The guard flagged a protected path and I…')).toBeTruthy();
+  });
+});
+
 describe('RunOutcomeModal — keep-the-work action', () => {
   // POSTs answered per route: a phase land returns its landing, an orphan land
   // its change request; anything else is the decision answer.
@@ -303,5 +388,22 @@ describe('withoutStopBlock', () => {
     expect(withoutStopBlock('done.\nkind: stop\ntrigger: x')).toBe('done.');
     expect(withoutStopBlock('kind: stop\ntrigger: x')).toBe('kind: stop\ntrigger: x');
     expect(withoutStopBlock('no block here')).toBe('no block here');
+  });
+
+  it('keeps the prose after a closed fence or a blank line', () => {
+    expect(withoutStopBlock('a\n```yaml\nkind: stop\ntrigger: x\n```\nfollow-up note')).toBe('a\n\nfollow-up note');
+    expect(withoutStopBlock('a\nkind: stop\ntrigger: x\n\nfollow-up note')).toBe('a\n\nfollow-up note');
+  });
+});
+
+describe('agentMessageView', () => {
+  it('keeps the marker unless the cut fell inside the hidden block', () => {
+    // Cut off mid-block: the hidden YAML is where the text ended.
+    expect(agentMessageView(STOP_TEXT, true, true)).toBe("Committed clean. I'm stopping here.");
+    // Prose after a closed block is visible and is where the text ended.
+    expect(agentMessageView('a\n```yaml\nkind: stop\n```\nand then I', true, true)).toBe('a\n\nand then I…');
+    // No block at all, or not hiding: the marker always stays.
+    expect(agentMessageView('no block', true, true)).toBe('no block…');
+    expect(agentMessageView(STOP_TEXT, true, false)).toBe(`${STOP_TEXT}…`);
   });
 });

@@ -42,13 +42,15 @@ import { LandBranchAction } from './runOutcome/LandBranchAction';
 import { ConfirmDialog } from './ui';
 import { useDiscardGuard } from './useDiscardGuard';
 import {
+  agentMessageView,
   type BlockerGuide,
   type BlockerTier,
+  GUARD_ALLOW_OPTION,
   guideFor,
   nextStep,
+  protectedEdits,
   retryRefusal,
   TIER_ORDER,
-  withoutStopBlock,
 } from './runOutcome/blockerGuide';
 
 /** Section heading + frame per tier: what the group of blockers MEANS. */
@@ -662,9 +664,7 @@ export function RunOutcomeModal({
                   {/* With a decision-open blocker, the stop block's options are
                       already on the decision card — repeating its YAML here (cut
                       off mid-option) is noise. */}
-                  {tiers.has('decide')
-                    ? withoutStopBlock(diag.agentMessage.text)
-                    : `${diag.agentMessage.text}${diag.agentMessage.truncated ? '…' : ''}`}
+                  {agentMessageView(diag.agentMessage.text, diag.agentMessage.truncated, tiers.has('decide'))}
                 </div>
                 <Link
                   to={`/sessions/${diag.agentMessage.sessionUuid}`}
@@ -867,6 +867,9 @@ function DecisionPanel({
       .finally(() => setSending(false));
   };
   const off = disabled || sending;
+  // Which answers keep the stopped run's work (phasediag.AnswerContinuesBranch):
+  // none protected ⇒ every answer; protected edits ⇒ only the guard's allow.
+  const guarded = protectedEdits(blocker).length > 0;
 
   return (
     <div className="mt-2 rounded-md border border-amber/30 bg-surface px-2.5 py-2">
@@ -875,6 +878,16 @@ function DecisionPanel({
           <Trans>executor's reason:</Trans>
         </span>{' '}
         {reason}
+      </div>
+      <div data-testid="answer-keeps-work" className="mt-1.5 text-[10.5px] leading-relaxed text-ink-dim">
+        {guarded ? (
+          <Trans>
+            The branch holds protected edits: only "Allow (add to scope)" keeps the work. Any other answer,
+            your own words included, leaves the branch to be merged or deleted before a retry.
+          </Trans>
+        ) : (
+          <Trans>Any answer keeps the work: a retry continues on this phase's branch.</Trans>
+        )}
       </div>
       <fieldset className="mt-2 space-y-1.5" disabled={off}>
         <legend className="sr-only">{t`choose an answer`}</legend>
@@ -898,6 +911,18 @@ function DecisionPanel({
               {o.consequence !== undefined && o.consequence !== '' && (
                 <span className="block text-[10.5px] leading-relaxed text-ink-dim">
                   <Trans>then:</Trans> {o.consequence}
+                </span>
+              )}
+              {guarded && (
+                <span
+                  data-testid={`option-effect-${o.id}`}
+                  className={`block font-mono text-[10px] ${o.id === GUARD_ALLOW_OPTION ? 'text-green' : 'text-red'}`}
+                >
+                  {o.id === GUARD_ALLOW_OPTION ? (
+                    <Trans>keeps the work — a retry continues on the branch</Trans>
+                  ) : (
+                    <Trans>the branch must then be merged or deleted before a retry</Trans>
+                  )}
                 </span>
               )}
             </span>

@@ -881,6 +881,10 @@ msgstr "answered through the swarmery hook process"
 msgid "answering…"
 msgstr "answering…"
 
+#: src/components/RunOutcomeModal.tsx
+msgid "Any answer keeps the work: a retry continues on this phase's branch."
+msgstr "Any answer keeps the work: a retry continues on this phase's branch."
+
 #: src/lib/docFigures.tsx
 msgid "API endpoints"
 msgstr "API endpoints"
@@ -2165,6 +2169,10 @@ msgstr "filter settings"
 msgid "Finish it here: open a terminal already scoped to this account and log the CLI in."
 msgstr "Finish it here: open a terminal already scoped to this account and log the CLI in."
 
+#: src/components/runOutcome/blockerGuide.ts
+msgid "finish the phase this one depends on first — until then a retry is refused"
+msgstr "finish the phase this one depends on first — until then a retry is refused"
+
 #: src/lib/sessionsView.ts
 #: src/pages/Settings.tsx
 msgid "Finished"
@@ -2476,6 +2484,10 @@ msgstr "keep the work"
 #: src/components/RunOutcomeModal.tsx
 msgid "keeps the phase from counting as done"
 msgstr "keeps the phase from counting as done"
+
+#: src/components/RunOutcomeModal.tsx
+msgid "keeps the work — a retry continues on the branch"
+msgstr "keeps the work — a retry continues on the branch"
 
 #: src/workspace/boardModel.ts
 msgid "kept in step with a GitHub issue or pull request"
@@ -3085,10 +3097,6 @@ msgstr "onboarded only"
 msgid "onboarding is disabled — restart the daemon with an allow-list:"
 msgstr "onboarding is disabled — restart the daemon with an allow-list:"
 
-#: src/components/runOutcome/blockerGuide.ts
-msgid "Once it is merged, press Retry run."
-msgstr "Once it is merged, press Retry run."
-
 #: src/components/BulkPromptBar.tsx
 msgid "One send reaches at most {max} sessions; select all takes the first {max}."
 msgstr "One send reaches at most {max} sessions; select all takes the first {max}."
@@ -3458,10 +3466,6 @@ msgstr "plugins…"
 #: src/components/CreateAccountModal.tsx
 msgid "Prefer the terminal? Run this yourself — swarmery never runs it for you:"
 msgstr "Prefer the terminal? Run this yourself — swarmery never runs it for you:"
-
-#: src/components/runOutcome/blockerGuide.ts
-msgid "Press Open {changeShort}: it pushes {branch} and opens a {change} into {base}. This phase's run starts from {base} and does not see that code until it is merged."
-msgstr "Press Open {changeShort}: it pushes {branch} and opens a {change} into {base}. This phase's run starts from {base} and does not see that code until it is merged."
 
 #: src/components/runOutcome/blockerGuide.ts
 msgid "Press Verify again to grade the branch as it stands."
@@ -3914,8 +3918,8 @@ msgid "Retry run continues on {branch} ({commits}) with your answer to {decision
 msgstr "Retry run continues on {branch} ({commits}) with your answer to {decisionId}"
 
 #: src/components/runOutcome/blockerGuide.ts
-msgid "Retrying this phase before then starts it without the code it builds on."
-msgstr "Retrying this phase before then starts it without the code it builds on."
+msgid "Retry run starts on top of {branch}, so it sees that code. It is refused only if several unmerged dependency branches have diverged."
+msgstr "Retry run starts on top of {branch}, so it sees that code. It is refused only if several unmerged dependency branches have diverged."
 
 #: src/workspace/task/TaskActions.tsx
 msgid "review"
@@ -4589,6 +4593,18 @@ msgstr "the base branch"
 msgid "The board's three lanes"
 msgstr "The board's three lanes"
 
+#: src/components/runOutcome/blockerGuide.ts
+msgid "The branch holds protected edits ({files}). Only \"Allow (add to scope)\" keeps them: a retry then continues on this branch. Any other answer leaves the branch to be merged or deleted before a retry."
+msgstr "The branch holds protected edits ({files}). Only \"Allow (add to scope)\" keeps them: a retry then continues on this branch. Any other answer leaves the branch to be merged or deleted before a retry."
+
+#: src/components/RunOutcomeModal.tsx
+msgid "The branch holds protected edits: only \"Allow (add to scope)\" keeps the work. Any other answer, your own words included, leaves the branch to be merged or deleted before a retry."
+msgstr "The branch holds protected edits: only \"Allow (add to scope)\" keeps the work. Any other answer, your own words included, leaves the branch to be merged or deleted before a retry."
+
+#: src/components/RunOutcomeModal.tsx
+msgid "the branch must then be merged or deleted before a retry"
+msgstr "the branch must then be merged or deleted before a retry"
+
 #: src/components/VcsSignInDialog.tsx
 msgid "The code expired before it was entered. Get a new one."
 msgstr "The code expired before it was entered. Get a new one."
@@ -4873,6 +4889,14 @@ msgstr "title is required"
 msgid "to {0}"
 msgstr "to {0}"
 
+#: src/components/runOutcome/blockerGuide.ts
+msgid "To keep it, answer \"Allow (add to scope)\" above: it holds protected edits ({files}), and any other answer leaves the branch to be merged or deleted before a retry."
+msgstr "To keep it, answer \"Allow (add to scope)\" above: it holds protected edits ({files}), and any other answer leaves the branch to be merged or deleted before a retry."
+
+#: src/components/runOutcome/blockerGuide.ts
+msgid "To land it: press Open {changeShort} — it pushes {branch} and opens a {change} into {base}."
+msgstr "To land it: press Open {changeShort} — it pushes {branch} and opens a {change} into {base}."
+
 #: src/workspace/boardModel.ts
 msgid "today"
 msgstr "today"
@@ -4969,6 +4993,10 @@ msgstr "Unrestricted"
 #: src/components/AccountSelector.tsx
 msgid "unset"
 msgstr "unset"
+
+#: src/components/runOutcome/blockerGuide.ts
+msgid "Until then Retry run is refused: this phase builds on that work."
+msgstr "Until then Retry run is refused: this phase builds on that work."
 
 #: src/api.ts
 msgid "update failed: {status}"

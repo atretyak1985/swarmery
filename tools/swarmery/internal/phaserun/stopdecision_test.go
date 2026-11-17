@@ -456,9 +456,42 @@ func TestStopStageIgnoresPlainBlocksAndDoneRuns(t *testing.T) {
 // phasediag spells the guard's allow answers itself (it cannot import this
 // package); they must stay the ones this package records.
 func TestAnswerContinuesBranchConstantsParity(t *testing.T) {
-	if phasediag.GuardOptionAllowID != GuardOptionAllow || phasediag.GuardAnswerAllowPrefix != guardAnswerAllow ||
-		mdfence.StopOptionOther+": " != "other: " {
-		t.Fatalf("phasediag allow constants drifted from phaserun's")
+	if phasediag.GuardOptionAllowID != GuardOptionAllow {
+		t.Errorf("phasediag.GuardOptionAllowID = %q, phaserun records %q", phasediag.GuardOptionAllowID, GuardOptionAllow)
+	}
+	if phasediag.GuardAnswerAllowPrefix != guardAnswerAllow {
+		t.Errorf("phasediag.GuardAnswerAllowPrefix = %q, phaserun records %q", phasediag.GuardAnswerAllowPrefix, guardAnswerAllow)
+	}
+	if want := mdfence.StopOptionOther + ": "; phasediag.StopOptionOtherPrefix != want {
+		t.Errorf("phasediag.StopOptionOtherPrefix = %q, an own-words answer is recorded as %q", phasediag.StopOptionOtherPrefix, want)
+	}
+}
+
+// A stop whose run left protected edits on the branch, answered through the
+// real serialised guard_json: only the guard's allow lets the re-run build on
+// the branch; an agent option leaves the edits unaccepted. The diagnosis reads
+// the same record (phasediag), so this pins the key both sides depend on.
+func TestStopWithProtectedEditsContinuesOnlyOnAllow(t *testing.T) {
+	for _, c := range []struct {
+		option string
+		want   bool
+	}{{"skip-it", false}, {GuardOptionAllow, true}} {
+		t.Run(c.option, func(t *testing.T) {
+			edited := GuardResult{HasGuard: true, ProtectedPaths: []string{"scripts/tests/**/*"},
+				ProtectedChanged: []string{"scripts/tests/a.sh"}}
+			s, r, _, taskID, p1, _ := stopService(t)
+			seedBlockedStop(t, s, r, p1, mdfence.StopTriggerCriterionImpossible, edited)
+			if _, err := AnswerGuardDecision(s.DB, taskID, p1, "D-1", GuardAnswer{Option: c.option}, answerAt(t)); err != nil {
+				t.Fatal(err)
+			}
+			info, err := s.loadPhase(p1)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := s.stopAnsweredSinceBlock(p1, info); got != c.want {
+				t.Fatalf("stopAnsweredSinceBlock after %s on protected edits = %v, want %v", c.option, got, c.want)
+			}
+		})
 	}
 }
 
