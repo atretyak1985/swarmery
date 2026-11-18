@@ -907,6 +907,10 @@ msgstr "зміни →"
 msgid "dismiss"
 msgstr "прибрати"
 
+#: src/pages/NeedsYou.tsx
+msgid "Dismiss · nothing to allow"
+msgstr "Закрити · дозволяти нічого"
+
 #: src/pages/detail/PendingRunNotice.tsx
 msgid "dispatched task"
 msgstr "відправлена задача"
@@ -1606,6 +1610,10 @@ msgstr "Поки нічого не сталося. Сесії, запуски п
 msgid "Nothing has finished yet."
 msgstr "Ще нічого не завершено."
 
+#: src/pages/NeedsYou.tsx
+msgid "Nothing here can be added to the scope: the guard only refused files no allow entry can open — the run's copy of its own plan doc and guard.log under .swarmery. The hook already kept them safe. Dismiss records the answer in the phase doc; then re-run the phase."
+msgstr "Тут нічого не можна додати до обсягу: guard відмовив лише на файлах, які жоден запис allow не відкриває, — копії власного доку фази й guard.log у .swarmery. Хук їх уже вберіг. «Закрити» запише відповідь у док фази; далі перезапустіть фазу."
+
 #: src/pages/Sessions.tsx
 msgid "Nothing here. Dispatch a task with + new, or widen the project scope."
 msgstr "Тут порожньо. Запустіть завдання через + new або розширте вибір проєкту."
@@ -2049,6 +2057,10 @@ msgstr "Отримувач"
 #: src/pages/detail/SessionPane.tsx
 msgid "recovered"
 msgstr "відновлено"
+
+#: src/pages/NeedsYou.tsx
+msgid "refused: {refused}"
+msgstr "відмовлено: {refused}"
 
 #: src/pages/NeedsYou.tsx
 msgid "Reject"
@@ -2511,6 +2523,10 @@ msgstr "{kind} «{label}» завершено без запису транскр
 #: src/pages/detail/PendingRunNotice.tsx
 msgid "the {kind} “{label}” ended without writing a transcript ({started}) — the session never started or its transcript is gone"
 msgstr "{kind} «{label}» завершено без запису транскрипту ({started}) — сесія так і не стартувала або її транскрипт зник"
+
+#: src/pages/NeedsYou.tsx
+msgid "The answer did not go through:"
+msgstr "Відповідь не пройшла:"
 
 #: src/pages/detail/HandoffCard.tsx
 msgid "The daemon wrote a brief for a fresh session."

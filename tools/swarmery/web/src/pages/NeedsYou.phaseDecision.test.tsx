@@ -10,6 +10,9 @@
 //   2. Allow-or-reject is two buttons, no radio list; `+ note` opens the note,
 //      and Allow POSTs it with the answer, then the list is refetched.
 //   3. A refused answer (409) is shown inline and nothing is refetched.
+//   4. A decision with nothing to allow (only .swarmery refusals, no vetted
+//      path) offers one Dismiss button that answers reject, never an Allow that
+//      would release nothing, and names the refused paths.
 //
 // `npx vitest run src/pages/NeedsYou.phaseDecision.test.tsx`.
 
@@ -136,7 +139,33 @@ describe('NeedsYou phase_decision', () => {
     vi.mocked(guardApi.answerGuardDecision).mockRejectedValueOnce(new Error('the decision is already answered'));
     fireEvent.click(within(row).getByRole('button', { name: 'Reject' }));
     expect(await within(row).findByRole('alert')).toBeTruthy();
-    expect(within(row).getByRole('alert').textContent).toBe('the decision is already answered');
+    expect(within(row).getByRole('alert').textContent).toContain('the decision is already answered');
     expect(guardApi.answerGuardDecision).toHaveBeenCalledWith(7, 31, 'D-4', 'reject', '');
+  });
+
+  it('offers one Dismiss when there is nothing to allow', async () => {
+    const q = 'The run touched protected paths: (the guard refused 2 attempts; see guard.log). Allow (add to scope) or reject?';
+    const blocks = [
+      { at: '2026-11-17T19:53:47Z', tool: 'Bash', path: '.swarmery/plan', reason: 'implicit ".swarmery/plan"' },
+      { at: '2026-11-17T20:07:51Z', tool: 'Bash', path: '.swarmery/plan/phase-3.md', reason: 'implicit ".swarmery/plan/**"' },
+    ];
+    serve([
+      {
+        ...DECISION,
+        question: q,
+        decision: {
+          ...(DECISION.decision as NonNullable<NeedsYouItem['decision']>),
+          question: q,
+          guard: { protectedChanged: [], guardBlocks: blocks, guardBlocksTotal: 2, releasablePaths: [] },
+        },
+      },
+    ]);
+    const row = await renderPage();
+    expect(within(row).queryByRole('button', { name: /^Allow · add to scope/ })).toBeNull();
+    expect(within(row).queryByRole('button', { name: 'Reject' })).toBeNull();
+    expect(within(row).getByTestId('guard-refused').textContent).toBe('refused: .swarmery/plan, .swarmery/plan/phase-3.md');
+    expect(within(row).getByText(/Nothing here can be added to the scope/)).toBeTruthy();
+    fireEvent.click(within(row).getByRole('button', { name: /^Dismiss · nothing to allow/ }));
+    await waitFor(() => expect(guardApi.answerGuardDecision).toHaveBeenCalledWith(7, 31, 'D-4', 'reject', ''));
   });
 });
