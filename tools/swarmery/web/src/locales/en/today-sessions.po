@@ -1579,8 +1579,8 @@ msgid "not sent: {msg}"
 msgstr "not sent: {msg}"
 
 #: src/pages/detail/CommandInput.tsx
-msgid "not sent: this terminal session takes no messages from here. Turn on swarmery-link's \"control\" option (new sessions pick it up), or Stop it to take over."
-msgstr "not sent: this terminal session takes no messages from here. Turn on swarmery-link's \"control\" option (new sessions pick it up), or Stop it to take over."
+msgid "not sent: this terminal session takes no messages from here. Turn on swarmery-link's \"control\" option (new sessions pick it up), or stop the process from the ⋯ menu above to take over."
+msgstr "not sent: this terminal session takes no messages from here. Turn on swarmery-link's \"control\" option (new sessions pick it up), or stop the process from the ⋯ menu above to take over."
 
 #: src/pages/NeedsYou.tsx
 msgid "note — recorded with the answer in the phase doc (optional)"
@@ -2247,8 +2247,8 @@ msgid "session is running in a terminal — a message is delivered when the curr
 msgstr "session is running in a terminal — a message is delivered when the current turn ends."
 
 #: src/pages/detail/CommandInput.tsx
-msgid "session is running in a terminal without link control — turn on swarmery-link's \"control\" option, or Stop it to take over and continue the conversation here."
-msgstr "session is running in a terminal without link control — turn on swarmery-link's \"control\" option, or Stop it to take over and continue the conversation here."
+msgid "session is running in a terminal without link control — turn on swarmery-link's \"control\" option, or stop the process from the ⋯ menu above to take over and continue the conversation here."
+msgstr "session is running in a terminal without link control — turn on swarmery-link's \"control\" option, or stop the process from the ⋯ menu above to take over and continue the conversation here."
 
 #: src/pages/detail/SessionPane.tsx
 msgid "session outcome"

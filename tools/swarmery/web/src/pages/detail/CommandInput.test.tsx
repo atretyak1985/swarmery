@@ -9,9 +9,11 @@
 //      instead of sending it.
 //   4. A queued message can be removed before it goes.
 //   5. A live terminal with a link mod: Send goes to the mod as the user's
-//      prompt with the long wait window; Stop aborts the turn, not the process.
-//   6. A live terminal without a link: the box is editable but has no Send, and
-//      Enter keeps the draft and says why nothing went.
+//      prompt with the long wait window. Stop is not offered: the header's
+//      "Stop turn" does that.
+//   6. A live terminal without a link: the box is editable but has no Send and
+//      no Stop (the header's ⋯ menu stops the process), and Enter keeps the
+//      draft and says why nothing went.
 //   7. Enter sends; Shift+Enter and an IME composition do not.
 //
 // Runs with the rest of the web suite: `npm test`.
@@ -25,9 +27,7 @@ import { CommandInput, LINK_PROMPT_STALE_MS } from './CommandInput';
 vi.mock('../../api', () => ({
   sendSessionMessage: vi.fn(async () => undefined),
   cancelSessionMessage: vi.fn(async () => undefined),
-  killSession: vi.fn(async () => undefined),
   sendLinkPrompt: vi.fn(async () => ({ commandId: 1 })),
-  stopLinkTurn: vi.fn(async () => ({ commandId: 2 })),
 }));
 
 interface Props {
@@ -117,19 +117,13 @@ describe('CommandInput', () => {
     expect(api.sendSessionMessage).not.toHaveBeenCalled();
   });
 
-  it('routes a live linked session through the mod and stops only the turn', async () => {
+  it('routes a live linked session through the mod and leaves stopping to the header', () => {
     const { onSent } = setup({ procState: 'running', linkControllable: true });
     type('also check the logs');
     fireEvent.click(button('Send'));
     expect(api.sendLinkPrompt).toHaveBeenCalledWith(7, 'also check the logs', true);
     expect(onSent).toHaveBeenCalledWith('also check the logs', LINK_PROMPT_STALE_MS);
-
-    await act(async () => {
-      fireEvent.click(button('Stop'));
-    });
-    expect(api.stopLinkTurn).toHaveBeenCalledWith(7);
-    expect(api.killSession).not.toHaveBeenCalled();
-    expect(button('Stop').disabled).toBe(false);
+    expect(screen.queryByRole('button', { name: 'Stop' })).toBeNull();
   });
 
   it('sends on Enter and leaves Shift+Enter and IME composition to the textarea', () => {
@@ -148,8 +142,7 @@ describe('CommandInput', () => {
     setup({ procState: 'running' });
     expect(box().disabled).toBe(false);
     expect(screen.queryByRole('button', { name: 'Send' })).toBeNull();
-    fireEvent.click(button('Stop'));
-    expect(api.killSession).toHaveBeenCalledWith(7);
+    expect(screen.queryByRole('button', { name: 'Stop' })).toBeNull();
   });
 
   it('says why Enter sent nothing for a live terminal without a link, and keeps the draft', () => {

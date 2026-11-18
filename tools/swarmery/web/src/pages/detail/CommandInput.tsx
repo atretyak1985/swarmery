@@ -13,13 +13,16 @@
 //     to the box for editing instead of sending it.
 //   • live terminal process with a controllable link mod → Send goes to the
 //     mod's command queue as the user's own prompt; the mod submits it once the
-//     running turn ends. Stop aborts the running turn only (the session stays
-//     open, like Esc in the terminal) — ending the process is the header's kill.
+//     running turn ends. Aborting the turn is the header's "Stop turn".
 //   • live terminal process without a link → nothing can deliver the message
-//     while it runs. The box stays editable (draft now), Send is off, Enter
+//     while it runs. The box stays editable (draft now), Send is off, and Enter
 //     keeps the draft and says why it did not go (the mod's `control` option, or
-//     Stop), and Stop SIGTERMs the process (POST /api/sessions/{id}/kill) to
-//     take it over.
+//     stopping the process from the header's ⋯ menu).
+//
+// The composer offers Stop only for our own headless reply: there it also
+// hands the queue back, which no header action does. For a live terminal
+// process the header already has both stops, so a second one here would only
+// duplicate them.
 //
 // Gating on the live PROCESS (not the time-based status) means a session that
 // merely reads "active" because we just appended to it stays writable.
@@ -35,7 +38,7 @@
 import { useLingui } from '@lingui/react/macro';
 import { useEffect, useRef, useState, type RefObject } from 'react';
 import type { ProcState } from '../../api/types';
-import { cancelSessionMessage, killSession, sendLinkPrompt, sendSessionMessage, stopLinkTurn } from '../../api';
+import { cancelSessionMessage, sendLinkPrompt, sendSessionMessage } from '../../api';
 import { hasLiveProcess } from './redirectChannel';
 
 /** internal/link/commands.go PromptTTL: an undelivered link prompt expires
@@ -138,7 +141,7 @@ export function CommandInput({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [busy]);
 
-  const blockedReason = t`not sent: this terminal session takes no messages from here. Turn on swarmery-link's "control" option (new sessions pick it up), or Stop it to take over.`;
+  const blockedReason = t`not sent: this terminal session takes no messages from here. Turn on swarmery-link's "control" option (new sessions pick it up), or stop the process from the ⋯ menu above to take over.`;
 
   const submit = (): void => {
     const trimmed = text.trim();
@@ -178,24 +181,13 @@ export function CommandInput({
     if (stopping) return;
     setStopping(true);
     setError(null);
-    const fail = (e: unknown): void => {
+    // Queued text returns to the box on the busy → idle edge this causes.
+    stoppedRef.current = true;
+    cancelSessionMessage(sessionId).catch((e: unknown) => {
       setError(e instanceof Error ? e.message : String(e));
       stoppedRef.current = false;
       setStopping(false);
-    };
-    if (mode === 'link') {
-      // The process outlives a turn abort, so busy never drops to release the
-      // button: release it once the mod has the command.
-      stopLinkTurn(sessionId)
-        .then(() => setStopping(false))
-        .catch(fail);
-      return;
-    }
-    // Queued text returns to the box on the busy → idle edge this causes.
-    stoppedRef.current = true;
-    // A live terminal process is killed; otherwise it's our own resume run.
-    const action = live ? killSession(sessionId) : cancelSessionMessage(sessionId);
-    action.catch(fail);
+    });
   };
 
   const onKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>): void => {
@@ -208,7 +200,7 @@ export function CommandInput({
 
   const hint =
     mode === 'blocked'
-      ? t`session is running in a terminal without link control — turn on swarmery-link's "control" option, or Stop it to take over and continue the conversation here.`
+      ? t`session is running in a terminal without link control — turn on swarmery-link's "control" option, or stop the process from the ⋯ menu above to take over and continue the conversation here.`
       : mode === 'queue'
         ? t`a reply is being generated — messages you send now are queued and go out when it finishes.`
         : mode === 'link'
@@ -263,7 +255,7 @@ export function CommandInput({
           aria-label={t`Message this session`}
           className="max-h-40 min-h-[38px] flex-1 resize-y rounded-[8px] border border-line bg-bg px-3 py-[9px] text-[13px] leading-[normal] text-ink placeholder:text-ink-faint focus-visible:border-line-strong focus-visible:outline-none"
         />
-        {busy && (
+        {mode === 'queue' && (
           <button
             type="button"
             onClick={stop}
