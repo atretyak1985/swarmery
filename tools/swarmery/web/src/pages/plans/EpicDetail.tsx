@@ -376,6 +376,7 @@ export function EpicDetail({
               <PhaseReopens
                 taskId={epic.taskId}
                 phaseId={detail.phase.id}
+                reopens={detail.phase.reopens ?? []}
                 canReopen={
                   phaseStatus(detail.phase, resolvedSeqs) === 'done' && detail.phase.runState !== 'running'
                 }

@@ -887,6 +887,14 @@ msgstr "Catch-up"
 msgid "caught by"
 msgstr "caught by"
 
+#: src/pages/plans/PhaseReopens.tsx
+msgid "caught by {gate}"
+msgstr "caught by {gate}"
+
+#: src/pages/plans/PhaseReopens.tsx
+msgid "caught by nobody"
+msgstr "caught by nobody"
+
 #: src/pages/plans/PhaseReview.tsx
 msgid "change request"
 msgstr "change request"
@@ -1419,6 +1427,10 @@ msgstr "finishing the work"
 #: src/pages/plans/forecastStoryModel.ts
 msgid "finishing with some concerns"
 msgstr "finishing with some concerns"
+
+#: src/pages/plans/PhaseReopens.tsx
+msgid "fix →"
+msgstr "fix →"
 
 #: src/pages/plans/PhaseReopens.tsx
 msgid "fix URL (optional)"
@@ -2750,6 +2762,14 @@ msgstr "Reopen…"
 #: src/pages/plans/PhaseReopens.tsx
 msgid "Reopen… is offered once this phase is Done and no run is live."
 msgstr "Reopen… is offered once this phase is Done and no run is live."
+
+#: src/pages/plans/PhaseReopens.tsx
+msgid "Reopened"
+msgstr "Reopened"
+
+#: src/pages/plans/PhaseReopens.tsx
+msgid "Reopened · {count}"
+msgstr "Reopened · {count}"
 
 #: src/pages/plans/PhaseReopens.tsx
 msgid "reopening…"
