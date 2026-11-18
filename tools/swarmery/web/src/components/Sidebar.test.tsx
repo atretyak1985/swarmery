@@ -13,7 +13,7 @@
 //   6. useSidebarSignals feeds Inbox = the non-blocking part of the Inbox's items,
 //      Needs you = the queue's undismissed count, Sessions = the distinct sessions
 //      held up in that queue.
-//   7. The button and `[` collapse the rail to 52px of glyphs: the Needs you badge
+//   7. The button and `[` collapse the rail to 56px of icon buttons: the Needs you badge
 //      stays, every row keeps a name, and what has no room goes. `]` and `\` reach
 //      the other two panels from here, and the active place's badge is published
 //      for the collapsed list.
@@ -151,16 +151,16 @@ describe('Sidebar', () => {
     const numeric = within(rail())
       .getAllByRole('link')
       .filter((a) => /\d/.test(a.textContent ?? ''));
-    expect(numeric.map((a) => a.textContent)).toEqual(['☐Inbox9', '⚑Needs you4']);
+    expect(numeric.map((a) => a.textContent)).toEqual(['Inbox9', 'Needs you4']);
     expect(within(row('Needs you')).getByLabelText('4 waiting')).toBeTruthy();
     cleanup();
     renderSidebar({ slug: null, needsYouCount: 0 });
-    expect(row('Needs you').textContent).toBe('⚑Needs you');
+    expect(row('Needs you').textContent).toBe('Needs you');
   });
 
   it('hides the Inbox badge at zero', () => {
     renderSidebar({ slug: null, inboxCount: 0 });
-    expect(row('Inbox').textContent).toBe('☐Inbox');
+    expect(row('Inbox').textContent).toBe('Inbox');
   });
 
   it('keeps amber for what blocks: Needs you and Sessions, never Inbox', () => {
@@ -172,7 +172,7 @@ describe('Sidebar', () => {
 
   it('never badges System', () => {
     renderSidebar({ slug: null, inboxCount: 5, needsYouCount: 7, sessionsNeedCount: 2 });
-    expect(row('System').textContent).toBe('☷System');
+    expect(row('System').textContent).toBe('System');
   });
 
   it('is the 196px rail', () => {
@@ -300,10 +300,10 @@ describe('collapsing the rail', () => {
     fireEvent.click(screen.getByRole('button', { name: 'collapse sidebar · [' }));
   }
 
-  it('collapses to 52px on the button and comes back on `[`', () => {
+  it('collapses to 56px on the button and comes back on `[`', () => {
     renderSidebar({ slug: null });
     collapse();
-    expect(rail().className).toContain('w-[52px]');
+    expect(rail().className).toContain('w-[56px]');
     expect(within(rail()).getByRole('link', { name: 'swarmery home' }).textContent).toBe('s');
     fireEvent.keyDown(window, { key: '[' });
     expect(rail().className).toContain('w-[196px]');

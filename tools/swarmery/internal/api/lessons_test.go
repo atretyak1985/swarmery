@@ -80,6 +80,67 @@ func TestLessonsReviewQueueEndpoints(t *testing.T) {
 	}
 }
 
+// TestAcceptOfALowLessonNeedsTheConfirmFlag: a low-confidence candidate is
+// refused (409, still a candidate) until the body carries {"confirm": true} —
+// the dashboard's second click; a medium one needs no flag.
+func TestAcceptOfALowLessonNeedsTheConfirmFlag(t *testing.T) {
+	srv, db := testServerWithDB(t)
+	ins := func(uuid, confidence string) int64 {
+		res, err := db.Exec(`INSERT INTO surprise_lessons (source_phase_run, phase_id, seq, title, norm_title,
+			guidance, area_globs, evidence_json, status, confidence, created_at, updated_at)
+			VALUES (?, 1, 1, ?, ?, 'Do it.', 'internal/**', '["divergence:1"]', 'candidate', ?, 'now', 'now')`,
+			uuid, "T "+uuid, "t "+uuid, confidence)
+		if err != nil {
+			t.Fatal(err)
+		}
+		id, _ := res.LastInsertId()
+		return id
+	}
+	low, med := ins("low", "low"), ins("med", "medium")
+	accept := func(id int64) string { return srv.URL + "/api/lessons/" + itoa64(id) + "/accept" }
+	status := func(id int64) string {
+		var s string
+		if err := db.QueryRow(`SELECT status FROM surprise_lessons WHERE id = ?`, id).Scan(&s); err != nil {
+			t.Fatal(err)
+		}
+		return s
+	}
+	for _, body := range []string{"", `{}`, `{"confirm":false}`} {
+		if r := decisionReq(t, http.MethodPost, accept(low), body); r.StatusCode != http.StatusConflict {
+			t.Errorf("accept low with %q = %d, want 409", body, r.StatusCode)
+		}
+	}
+	if s := status(low); s != lessons.StatusCandidate {
+		t.Fatalf("an unconfirmed low lesson became %s", s)
+	}
+	if r := decisionReq(t, http.MethodPost, accept(low), `{"confirm":true}`); r.StatusCode != http.StatusOK {
+		t.Fatalf("confirmed accept = %d", r.StatusCode)
+	}
+	if s := status(low); s != lessons.StatusActive {
+		t.Fatalf("confirmed low lesson is %s", s)
+	}
+	if r := decisionReq(t, http.MethodPost, accept(med), ""); r.StatusCode != http.StatusOK {
+		t.Fatalf("medium accept without confirm = %d", r.StatusCode)
+	}
+}
+
+// TestLessonGenerationsEndpoint: the generation log carries the model's
+// no_entry_reason.
+func TestLessonGenerationsEndpoint(t *testing.T) {
+	srv, db := testServerWithDB(t)
+	if _, err := db.Exec(`INSERT INTO lesson_generations (source_phase_run, phase_id, state, created_at, no_entry_reason)
+		VALUES ('run-1', 1, 'done', '2026-11-02T00:00:00Z', 'Nothing here transfers.')`); err != nil {
+		t.Fatal(err)
+	}
+	var got struct {
+		Generations []lessons.Generation `json:"generations"`
+	}
+	getJSON(t, srv.URL+"/api/lessons/generations", &got)
+	if len(got.Generations) != 1 || got.Generations[0].NoEntryReason != "Nothing here transfers." {
+		t.Fatalf("generations = %+v", got.Generations)
+	}
+}
+
 // TestLessonsAreaFilterAndPromoteErrors: ?area= keeps only lessons whose globs
 // overlap the directory (the injection matcher), and promote maps its refusals.
 // The branch-writing path itself is covered in internal/lessons with a fixture repo.

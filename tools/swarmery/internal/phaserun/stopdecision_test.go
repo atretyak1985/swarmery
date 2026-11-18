@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/mdfence"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/phasediag"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/store"
 )
 
@@ -449,5 +450,71 @@ func TestStopStageIgnoresPlainBlocksAndDoneRuns(t *testing.T) {
 	s.stopStage(p1, info, "done", "done", "", GuardResult{})
 	if ds, _ := store.ListTaskDecisions(s.DB, taskID); len(ds) != 0 {
 		t.Fatalf("decisions = %+v, want none", ds)
+	}
+}
+
+// phasediag spells the guard's allow answers itself (it cannot import this
+// package); they must stay the ones this package records.
+func TestAnswerContinuesBranchConstantsParity(t *testing.T) {
+	if phasediag.GuardOptionAllowID != GuardOptionAllow {
+		t.Errorf("phasediag.GuardOptionAllowID = %q, phaserun records %q", phasediag.GuardOptionAllowID, GuardOptionAllow)
+	}
+	if phasediag.GuardAnswerAllowPrefix != guardAnswerAllow {
+		t.Errorf("phasediag.GuardAnswerAllowPrefix = %q, phaserun records %q", phasediag.GuardAnswerAllowPrefix, guardAnswerAllow)
+	}
+	if want := mdfence.StopOptionOther + ": "; phasediag.StopOptionOtherPrefix != want {
+		t.Errorf("phasediag.StopOptionOtherPrefix = %q, an own-words answer is recorded as %q", phasediag.StopOptionOtherPrefix, want)
+	}
+}
+
+// A stop whose run left protected edits on the branch, answered through the
+// real serialised guard_json: only the guard's allow lets the re-run build on
+// the branch; an agent option leaves the edits unaccepted. The diagnosis reads
+// the same record (phasediag), so this pins the key both sides depend on.
+func TestStopWithProtectedEditsContinuesOnlyOnAllow(t *testing.T) {
+	for _, c := range []struct {
+		option string
+		want   bool
+	}{{"skip-it", false}, {GuardOptionAllow, true}} {
+		t.Run(c.option, func(t *testing.T) {
+			edited := GuardResult{HasGuard: true, ProtectedPaths: []string{"scripts/tests/**/*"},
+				ProtectedChanged: []string{"scripts/tests/a.sh"}}
+			s, r, _, taskID, p1, _ := stopService(t)
+			seedBlockedStop(t, s, r, p1, mdfence.StopTriggerCriterionImpossible, edited)
+			if _, err := AnswerGuardDecision(s.DB, taskID, p1, "D-1", GuardAnswer{Option: c.option}, answerAt(t)); err != nil {
+				t.Fatal(err)
+			}
+			info, err := s.loadPhase(p1)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := s.stopAnsweredSinceBlock(p1, info); got != c.want {
+				t.Fatalf("stopAnsweredSinceBlock after %s on protected edits = %v, want %v", c.option, got, c.want)
+			}
+		})
+	}
+}
+
+// A guard check flagged ONLY by refused attempts left nothing protected on the
+// branch (the hook blocked the write), so an agent option answers the stop and
+// the re-run continues on the stopped run's commits — the live case where the
+// executor's Bash ticks of its own plan copy were refused.
+func TestStopOnRefusalsOnlyContinuesOnAnyAnswer(t *testing.T) {
+	refused := GuardResult{HasGuard: true, ProtectedPaths: []string{"scripts/tests/**/*"},
+		GuardBlocks: []GuardLogLine{{Tool: "Bash", Path: ".swarmery/plan/phase-1-frame.md", Reason: "implicit"}}}
+	if !refused.Flagged() {
+		t.Fatal("premise: refusals alone flag the run")
+	}
+	s, r, _, taskID, p1, _ := stopService(t)
+	seedBlockedStop(t, s, r, p1, mdfence.StopTriggerCriterionImpossible, refused)
+	if _, err := AnswerGuardDecision(s.DB, taskID, p1, "D-1", GuardAnswer{Option: "skip-it"}, answerAt(t)); err != nil {
+		t.Fatal(err)
+	}
+	info, err := s.loadPhase(p1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !s.stopAnsweredSinceBlock(p1, info) {
+		t.Fatal("an agent option on a refusals-only stop must let the re-run continue on its branch")
 	}
 }

@@ -1,9 +1,12 @@
 package lessons
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"errors"
+	"log"
+	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -94,7 +97,7 @@ func newGen(db *sql.DB, r Runner) *Generator {
 	return g
 }
 
-const goodLesson = `{"title":"Cache usage lives under usage.cache_creation","guidance":"In internal/ingest, read cache usage from usage.cache_creation; the flat total is legacy.","area_globs":["internal/ingest/**"],"cause":"The forecast assumed the flat total was current.","evidence":["divergence:%d","file:internal/ingest/record.go"]}`
+const goodLesson = `{"title":"Cache usage lives under usage.cache_creation","guidance":"In internal/ingest, read cache usage from usage.cache_creation; the flat total is legacy.","area_globs":["internal/ingest/**"],"cause":"The forecast assumed the flat total was current.","evidence":["divergence:%d","file:internal/ingest/record.go"],"confidence":"medium","confidence_reason":"The diff shows the field directly."}`
 
 func lessonJSON(phaseID int64, extra ...string) string {
 	items := []string{strings.Replace(goodLesson, "%d", itoa(phaseID), 1)}
@@ -154,14 +157,15 @@ func TestParseOutputSchema(t *testing.T) {
 		want int
 		fail string
 	}{
-		"empty list":      {raw: `{"lessons":[]}`, want: 0},
-		"fenced":          {raw: "```json\n{\"lessons\":[{\"title\":\"t\"}]}\n```", want: 1},
-		"no json":         {raw: "I found nothing", fail: "no JSON"},
-		"missing lessons": {raw: `{"items":[]}`, fail: "schema"},
-		"null lessons":    {raw: `{"lessons":null}`, fail: `no "lessons"`},
-		"unknown field":   {raw: `{"lessons":[{"title":"t","why":"x"}]}`, fail: "schema"},
-		"too many":        {raw: `{"lessons":[{},{},{}]}`, fail: "at most 2"},
-		"wrong type":      {raw: `{"lessons":"none"}`, fail: "schema"},
+		"empty with reason":    {raw: `{"lessons":[],"no_entry_reason":"A one-off flaky runner."}`, want: 0},
+		"empty without reason": {raw: `{"lessons":[]}`, fail: "must say why"},
+		"empty blank reason":   {raw: `{"lessons":[],"no_entry_reason":"  "}`, fail: "must say why"},
+		"fenced":               {raw: "```json\n{\"lessons\":[{\"title\":\"t\"}]}\n```", want: 1},
+		"no json":              {raw: "I found nothing", fail: "no JSON"},
+		"missing lessons":      {raw: `{"items":[]}`, fail: "schema"},
+		"null lessons":         {raw: `{"lessons":null}`, fail: `no "lessons"`},
+		"unknown field":        {raw: `{"lessons":[{"title":"t","why":"x"}]}`, fail: "schema"},
+		"wrong type":           {raw: `{"lessons":"none"}`, fail: "schema"},
 	} {
 		t.Run(name, func(t *testing.T) {
 			got, err := ParseOutput(tc.raw)
@@ -171,10 +175,84 @@ func TestParseOutputSchema(t *testing.T) {
 				}
 				return
 			}
-			if err != nil || len(got) != tc.want {
-				t.Fatalf("got %d, %v", len(got), err)
+			if err != nil || len(got.Lessons) != tc.want {
+				t.Fatalf("got %+v, %v", got, err)
 			}
 		})
+	}
+}
+
+// A model that still returns two lessons keeps the first; the second is dropped
+// and named (and logged), never stored.
+func TestParseOutputTruncatesToOneLesson(t *testing.T) {
+	var logs bytes.Buffer
+	log.SetOutput(&logs)
+	t.Cleanup(func() { log.SetOutput(os.Stderr) })
+	got, err := ParseOutput(`{"lessons":[{"title":"First"},{"title":"Second one"},{"title":"Third"}]}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got.Lessons) != 1 || got.Lessons[0].Title != "First" {
+		t.Fatalf("kept = %+v", got.Lessons)
+	}
+	if len(got.Dropped) != 2 || got.Dropped[0] != "Second one" {
+		t.Fatalf("dropped = %v", got.Dropped)
+	}
+	if !strings.Contains(logs.String(), `dropped "Second one"`) {
+		t.Errorf("log = %q", logs.String())
+	}
+}
+
+func TestGenerateKeepsTheFirstOfTwoLessons(t *testing.T) {
+	db := openDB(t)
+	phaseID := seedRun(t, db, runUUID, 0.8, report)
+	second := strings.Replace(strings.Replace(goodLesson, "%d", itoa(phaseID), 1),
+		"Cache usage lives under usage.cache_creation", "A second lesson", 1)
+	g := newGen(db, &fakeRunner{out: lessonJSON(phaseID, second)})
+	out, err := g.Generate(context.Background(), phaseID, runUUID)
+	if err != nil || out.Inserted != 1 || len(out.Rejected) != 1 || out.Rejected[0].Title != "A second lesson" ||
+		!strings.Contains(out.Rejected[0].Reason, "dropped") {
+		t.Fatalf("outcome = %+v, %v", out, err)
+	}
+	var n int
+	db.QueryRow(`SELECT COUNT(*) FROM surprise_lessons`).Scan(&n)
+	if n != 1 {
+		t.Fatalf("%d rows, want only the first lesson", n)
+	}
+}
+
+// "Nothing transferable here" is a valid answer, and its reason is stored on the
+// generation row.
+func TestGenerateStoresTheNoEntryReason(t *testing.T) {
+	db := openDB(t)
+	phaseID := seedRun(t, db, runUUID, 0.8, report)
+	g := newGen(db, &fakeRunner{out: `{"lessons":[],"no_entry_reason":"The miss was a one-off network outage."}`})
+	out, err := g.Generate(context.Background(), phaseID, runUUID)
+	if err != nil || out.Inserted != 0 || out.NoEntryReason == "" {
+		t.Fatalf("outcome = %+v, %v", out, err)
+	}
+	var state, reason string
+	if err := db.QueryRow(`SELECT state, no_entry_reason FROM lesson_generations WHERE source_phase_run = ?`, runUUID).
+		Scan(&state, &reason); err != nil || state != "done" || reason != "The miss was a one-off network outage." {
+		t.Fatalf("row = %s %q %v", state, reason, err)
+	}
+	gens, err := ListGenerations(db, "", 10)
+	if err != nil || len(gens) != 1 || gens[0].NoEntryReason != reason || gens[0].PhaseName != "Phase One" {
+		t.Fatalf("ListGenerations = %+v, %v", gens, err)
+	}
+}
+
+func TestGeneratePersistsConfidence(t *testing.T) {
+	db := openDB(t)
+	phaseID := seedRun(t, db, runUUID, 0.8, report)
+	low := strings.Replace(lessonJSON(phaseID), `"confidence":"medium"`, `"confidence":"LOW"`, 1)
+	g := newGen(db, &fakeRunner{out: low})
+	if out, err := g.Generate(context.Background(), phaseID, runUUID); err != nil || out.Inserted != 1 {
+		t.Fatalf("outcome = %+v, %v", out, err)
+	}
+	ls, _ := List(db, StatusCandidate)
+	if len(ls) != 1 || ls[0].Confidence != ConfidenceLow || ls[0].ConfidenceReason != "The diff shows the field directly." {
+		t.Fatalf("lesson = %+v", ls)
 	}
 }
 
@@ -183,12 +261,13 @@ func TestParseOutputSchema(t *testing.T) {
 func TestValidateCandidateCitations(t *testing.T) {
 	allowed := map[string]bool{"divergence:7": true, "file:a.go": true}
 	base := Candidate{Title: "T", Guidance: "Do the thing in a.go.", AreaGlobs: []string{"internal/**"},
-		Cause: "It differed.", Evidence: []string{"[E:divergence:7]", "file:a.go", "file:a.go"}}
+		Cause: "It differed.", Evidence: []string{"[E:divergence:7]", "file:a.go", "file:a.go"},
+		Confidence: " High ", ConfidenceReason: "Three runs show it."}
 	got, err := ValidateCandidate(base, allowed)
 	if err != nil {
 		t.Fatalf("valid lesson rejected: %v", err)
 	}
-	if len(got.Evidence) != 2 || got.Evidence[0] != "divergence:7" {
+	if len(got.Evidence) != 2 || got.Evidence[0] != "divergence:7" || got.Confidence != ConfidenceHigh {
 		t.Fatalf("normalized evidence = %v", got.Evidence)
 	}
 
@@ -207,6 +286,9 @@ func TestValidateCandidateCitations(t *testing.T) {
 		"foreign id":      {mut(func(c *Candidate) { c.Evidence = []string{"divergence:7", "file:invented.go"} }), allowed, "not in its input"},
 		"nothing offered": {base, nil, "no evidence was offered"},
 		"no cause":        {mut(func(c *Candidate) { c.Cause = " " }), allowed, "no cited cause"},
+		"no confidence":   {mut(func(c *Candidate) { c.Confidence = "" }), allowed, "every lesson must grade itself"},
+		"bad confidence":  {mut(func(c *Candidate) { c.Confidence = "certain" }), allowed, "not high, medium or low"},
+		"no conf reason":  {mut(func(c *Candidate) { c.ConfidenceReason = " " }), allowed, "no confidence_reason"},
 		"no title":        {mut(func(c *Candidate) { c.Title = "" }), allowed, "empty title"},
 		"two lines":       {mut(func(c *Candidate) { c.Guidance = "One.\nTwo." }), allowed, "one sentence"},
 		"no area":         {mut(func(c *Candidate) { c.AreaGlobs = []string{" "} }), allowed, "no area"},
@@ -265,8 +347,17 @@ func TestGenerateInsertsOnlyCitedCandidates(t *testing.T) {
 	}
 	var state, rejected string
 	if err := db.QueryRow(`SELECT state, rejected_json FROM lesson_generations WHERE source_phase_run = ?`, runUUID).
-		Scan(&state, &rejected); err != nil || state != "done" || !strings.Contains(rejected, "not/in/the/diff.go") {
+		Scan(&state, &rejected); err != nil || state != "done" || !strings.Contains(rejected, "Invented") {
 		t.Fatalf("generation row = %s %s %v", state, rejected, err)
+	}
+	// The second lesson was dropped past MaxLessons; a lone fabricated one is
+	// rejected on its citation.
+	other := seedRun(t, db, "run-foreign", 0.8, report)
+	fg := newGen(db, &fakeRunner{out: `{"lessons":[` + strings.Replace(foreign, `"evidence"`,
+		`"confidence":"low","confidence_reason":"one run","evidence"`, 1) + `]}`})
+	if fo, err := fg.Generate(context.Background(), other, "run-foreign"); err != nil || fo.Inserted != 0 ||
+		len(fo.Rejected) != 1 || !strings.Contains(fo.Rejected[0].Reason, "not/in/the/diff.go") {
+		t.Fatalf("foreign = %+v, %v", fo, err)
 	}
 
 	// Idempotent per run: the settled pass must not spend tokens again.
@@ -280,7 +371,7 @@ func TestGenerateSkipsWithoutSurpriseOrParagraph(t *testing.T) {
 	db := openDB(t)
 	low := seedRun(t, db, "low", 0.3, report)
 	quiet := seedRun(t, db, "quiet", 0.9, "Shipped. Nothing diverged in a notable way.")
-	r := &fakeRunner{out: `{"lessons":[]}`}
+	r := &fakeRunner{out: `{"lessons":[],"no_entry_reason":"n/a"}`}
 	g := newGen(db, r)
 	for _, tc := range []struct {
 		phase int64
@@ -438,15 +529,26 @@ func TestReviewLifecycle(t *testing.T) {
 		}
 	}
 
-	got, err := Accept(db, a, fixedNow)
+	got, err := Accept(db, a, false, fixedNow)
 	if err != nil || got.Status != StatusActive || got.ActivatedAt == nil {
 		t.Fatalf("accept = %+v %v", got, err)
 	}
-	if _, err := Accept(db, a, fixedNow); !errors.Is(err, ErrState) {
+	if _, err := Accept(db, a, false, fixedNow); !errors.Is(err, ErrState) {
 		t.Fatalf("re-accept = %v, want ErrState", err)
 	}
-	if _, err := Accept(db, 9999, fixedNow); !errors.Is(err, ErrNotFound) {
+	if _, err := Accept(db, 9999, false, fixedNow); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("accept unknown = %v", err)
+	}
+	// A low-confidence candidate needs the confirm; without it nothing changes.
+	mustExec(t, db, `UPDATE surprise_lessons SET status = 'candidate', confidence = 'low' WHERE id = ?`, a)
+	if _, err := Accept(db, a, false, fixedNow); !errors.Is(err, ErrNeedsConfirm) || !errors.Is(err, ErrState) {
+		t.Fatalf("unconfirmed low accept = %v, want ErrNeedsConfirm", err)
+	}
+	if l, _ := Get(db, a); l.Status != StatusCandidate {
+		t.Fatalf("unconfirmed low accept wrote %s", l.Status)
+	}
+	if l, err := Accept(db, a, true, fixedNow); err != nil || l.Status != StatusActive {
+		t.Fatalf("confirmed low accept = %+v, %v", l, err)
 	}
 
 	title, bad := "Read the schema first", "one\ntwo"

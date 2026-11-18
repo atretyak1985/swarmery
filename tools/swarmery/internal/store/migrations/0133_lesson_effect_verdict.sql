@@ -1,0 +1,36 @@
+-- 0133: an attributable verdict on every lesson_effectiveness row (honest
+-- learning, phase 1 — D2–D5).
+--
+-- A before/after median drop alone credits a lesson with every change that
+-- landed in the same window: another lesson activated in the same area, an
+-- applied agent/skill rewrite, a switch of the model the runs ran on. The
+-- verification pass (internal/lessons/effectiveness.go + confound.go) now
+-- records WHY it trusts — or does not trust — the drop:
+--
+--   verdict           'helped' | 'hurt' | 'no_effect' | 'confounded' |
+--                     'insufficient'. Precedence: insufficient (fewer than
+--                     min_runs on either side, i.e. median_drop IS NULL) >
+--                     confounded (≥ 1 confounder) > helped (drop ≥ +epsilon) /
+--                     hurt (drop ≤ −epsilon) / no_effect. DEFAULT 'insufficient'
+--                     so every row written before this migration reads as
+--                     "cannot tell yet" until the next pass re-measures it —
+--                     never as a verdict nobody computed.
+--   confounders_json  a JSON array of {"kind":"lesson|proposal|model_switch",
+--                     "id","at","detail"} sorted by at then kind; '[]' for none.
+--
+-- Only helped/hurt score in injection ranking and only no_effect/hurt may
+-- propose an 'ineffective' retirement; confounded and insufficient do neither.
+--
+-- WHY 0133: migrate.go applies unapplied files in FILENAME order;
+-- 0132_decision_evidence.sql is the highest existing one.
+--
+-- NO FOREIGN KEYS and no CHECK on verdict: the column is written by one Go
+-- function from a closed set of constants, and SQLite cannot widen a CHECK
+-- without a table rebuild (see 0074). Confounder ids point at surprise_lessons,
+-- agent_change_proposals and session models by value, not by reference, for the
+-- reasons 0073/0082/0086 give.
+--
+-- Rollback: ALTER TABLE lesson_effectiveness DROP COLUMN confounders_json;
+--           ALTER TABLE lesson_effectiveness DROP COLUMN verdict;
+ALTER TABLE lesson_effectiveness ADD COLUMN verdict TEXT NOT NULL DEFAULT 'insufficient';
+ALTER TABLE lesson_effectiveness ADD COLUMN confounders_json TEXT NOT NULL DEFAULT '[]';

@@ -12,14 +12,20 @@ export function StopButton({
   session,
   label,
   className,
+  confirmAtStart = false,
+  onCancel,
 }: {
   session: Session;
   /** The resting label and look, for a host with its own buttons. */
   label?: string;
   className?: string;
+  /** Mount on the confirm step: a menu item already asked for it. */
+  confirmAtStart?: boolean;
+  /** Cancel on the confirm step, for a host that hides the control then. */
+  onCancel?: () => void;
 }): JSX.Element {
   const { t } = useLingui();
-  const [confirming, setConfirming] = useState(false);
+  const [confirming, setConfirming] = useState(confirmAtStart);
   const [stopping, setStopping] = useState(false);
 
   const halt = (e: MouseEvent): void => { e.stopPropagation(); };
@@ -53,7 +59,7 @@ export function StopButton({
         </button>
         <button
           type="button"
-          onClick={(e) => { halt(e); setConfirming(false); }}
+          onClick={(e) => { halt(e); setConfirming(false); onCancel?.(); }}
           className="font-mono text-[10.5px] text-ink-dim hover:text-ink"
         >
           <Trans>Cancel</Trans>

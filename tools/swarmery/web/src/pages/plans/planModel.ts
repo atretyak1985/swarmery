@@ -130,21 +130,6 @@ export interface LegendEntry {
   count: number;
 }
 
-/** The design's bar: state by colour, in the band's own vocabulary. Shared by the
- * full header's bar+legend and the condensed plan bar's PhaseMiniBar, so the two
- * can never disagree about what a state looks like. */
-export const SEGMENT_TONE: Record<SegmentState, { fill: string; text: string }> = {
-  landed: { fill: 'bg-green', text: 'text-green' },
-  running: { fill: 'bg-blue', text: 'text-blue' },
-  guard: { fill: 'bg-red', text: 'text-red' },
-  decision: { fill: 'bg-red', text: 'text-red' },
-  failed: { fill: 'bg-red', text: 'text-red' },
-  manual: { fill: 'bg-amber', text: 'text-amber' },
-  blocked: { fill: 'bg-ink-dim', text: 'text-ink-dim' },
-  started: { fill: 'bg-ink-faint', text: 'text-ink-faint' },
-  pending: { fill: 'bg-line-strong', text: 'text-line-strong' },
-};
-
 /** How many phases stand in each state, leaving out the states nobody is in. */
 export function planLegend(states: readonly SegmentState[]): LegendEntry[] {
   return SEGMENT_ORDER.flatMap((state) => {

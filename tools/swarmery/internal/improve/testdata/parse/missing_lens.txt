@@ -1,0 +1,15 @@
+## Form
+always-on — a rule is missing.
+## Diff
+```diff
+--- a/plugins/core/agents/tech-lead.md
++++ b/plugins/core/agents/tech-lead.md
+@@ -10,3 +10,4 @@ lens: procedure
+ existing line
++new guardrail line
+@@ -40,2 +41,3 @@
+ context
++another line
+```
+## Rationale
+Two hunks, the second without a lens.

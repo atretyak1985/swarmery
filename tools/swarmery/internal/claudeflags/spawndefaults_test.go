@@ -13,6 +13,7 @@ import (
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/phaserun"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/planning"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/planrun"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/probe"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/provision"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/retroanalysis"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/routines"
@@ -73,6 +74,7 @@ func TestEverySpawnSiteDeclaresAModelAndAnEffort(t *testing.T) {
 		{"lessons", lessons.DefaultEffort, lessons.DefaultModel},
 		{"triage", triage.DefaultEffort, triage.DefaultModel},
 		{"probe", api.ProbeEffort, api.ProbeModel},
+		{"proposal-probe judge", probe.DefaultJudgeEffort, probe.DefaultJudgeModel},
 	} {
 		t.Run(tc.site, func(t *testing.T) {
 			if tc.effort == "" {
@@ -109,6 +111,7 @@ func TestPinnedDefaultsAreTheAgreedValues(t *testing.T) {
 		want string
 	}{
 		{"probe", api.ProbeEffort, "low"},
+		{"proposal-probe judge", probe.DefaultJudgeEffort, "low"},
 		{"handoff", handoff.DefaultEffort, "low"},
 		{"trajjudge", trajjudge.DefaultEffort, "low"},
 		{"lessons", lessons.DefaultEffort, "low"},

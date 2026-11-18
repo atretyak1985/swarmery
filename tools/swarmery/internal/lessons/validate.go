@@ -14,6 +14,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"path"
 	"regexp"
 	"strings"
@@ -27,6 +28,35 @@ type Candidate struct {
 	AreaGlobs []string `json:"area_globs"`
 	Cause     string   `json:"cause"`
 	Evidence  []string `json:"evidence"`
+	// Confidence is the generator's own grade: ConfidenceHigh, ConfidenceMedium
+	// or ConfidenceLow; ConfidenceReason is its one-sentence why. Both required.
+	Confidence       string `json:"confidence"`
+	ConfidenceReason string `json:"confidence_reason"`
+}
+
+// Lesson confidences (surprise_lessons.confidence, 0134). A lesson resting on a
+// single run, or on a run where several things changed at once, is at most low;
+// Accepting a low one needs the operator's explicit confirm (review.go).
+const (
+	ConfidenceHigh   = "high"
+	ConfidenceMedium = "medium"
+	ConfidenceLow    = "low"
+)
+
+// confidenceRank orders the confidences, higher is stronger; 0 is not one.
+var confidenceRank = map[string]int{ConfidenceHigh: 3, ConfidenceMedium: 2, ConfidenceLow: 1}
+
+// maxNoEntryRunes bounds the stored no_entry_reason.
+const maxNoEntryRunes = 400
+
+// Parsed is one decoded generation answer: at most MaxLessons lessons, or none
+// with the model's reason why nothing here transfers.
+type Parsed struct {
+	Lessons       []Candidate
+	NoEntryReason string
+	// Dropped are the titles of lessons past MaxLessons — the model was told to
+	// return one; the first is kept, the rest are logged and named here.
+	Dropped []string
 }
 
 // Rejection is one lesson that failed validation, kept for the generation row.
@@ -48,29 +78,44 @@ const (
 var ErrInvalid = errors.New("invalid lesson")
 
 // ParseOutput decodes the model's stdout under the strict schema
-// {"lessons": [Candidate, …]} — unknown keys fail, a missing "lessons" fails,
-// more than MaxLessons fails. A fenced or prose-wrapped object is accepted: the
-// object is taken from the first '{' to the last '}'.
-func ParseOutput(raw string) ([]Candidate, error) {
+// {"lessons": [Candidate, …], "no_entry_reason": "…"} — unknown keys fail, a
+// missing "lessons" fails, and an EMPTY "lessons" without a no_entry_reason
+// fails: "nothing transferable here" is a valid answer only when it says why.
+// More than MaxLessons lessons keeps the first and drops (and logs) the rest. A
+// fenced or prose-wrapped object is accepted: the object is taken from the
+// first '{' to the last '}'.
+func ParseOutput(raw string) (Parsed, error) {
+	var p Parsed
 	start, end := strings.IndexByte(raw, '{'), strings.LastIndexByte(raw, '}')
 	if start < 0 || end <= start {
-		return nil, fmt.Errorf("the output carries no JSON object")
+		return p, fmt.Errorf("the output carries no JSON object")
 	}
 	var out struct {
-		Lessons *[]Candidate `json:"lessons"`
+		Lessons       *[]Candidate `json:"lessons"`
+		NoEntryReason string       `json:"no_entry_reason"`
 	}
 	dec := json.NewDecoder(bytes.NewReader([]byte(raw[start : end+1])))
 	dec.DisallowUnknownFields()
 	if err := dec.Decode(&out); err != nil {
-		return nil, fmt.Errorf("the output does not match the lesson schema: %w", err)
+		return p, fmt.Errorf("the output does not match the lesson schema: %w", err)
 	}
 	if out.Lessons == nil {
-		return nil, fmt.Errorf(`the output has no "lessons" array`)
+		return p, fmt.Errorf(`the output has no "lessons" array`)
 	}
-	if n := len(*out.Lessons); n > MaxLessons {
-		return nil, fmt.Errorf("the output returned %d lessons; at most %d are allowed", n, MaxLessons)
+	p.Lessons = *out.Lessons
+	p.NoEntryReason = capRunes(strings.Join(strings.Fields(out.NoEntryReason), " "), maxNoEntryRunes)
+	if len(p.Lessons) == 0 && p.NoEntryReason == "" {
+		return p, fmt.Errorf(`the output returned no lesson and no "no_entry_reason" — an empty answer must say why`)
 	}
-	return *out.Lessons, nil
+	if len(p.Lessons) > MaxLessons {
+		for _, c := range p.Lessons[MaxLessons:] {
+			t := capRunes(strings.TrimSpace(c.Title), maxTitleRunes)
+			p.Dropped = append(p.Dropped, t)
+			log.Printf("lessons: the model returned %d lessons; kept the first, dropped %q", len(p.Lessons), t)
+		}
+		p.Lessons = p.Lessons[:MaxLessons]
+	}
+	return p, nil
 }
 
 // Validate splits candidates into the valid ones (normalized: trimmed fields,
@@ -104,6 +149,17 @@ func ValidateCandidate(c Candidate, allowed map[string]bool) (Candidate, error) 
 	}
 	if utf8.RuneCountInString(n.Cause) > maxCauseRunes {
 		return n, fmt.Errorf("%w: cause is over %d characters", ErrInvalid, maxCauseRunes)
+	}
+	n.Confidence = strings.ToLower(strings.TrimSpace(c.Confidence))
+	if confidenceRank[n.Confidence] == 0 {
+		return n, fmt.Errorf("%w: confidence %q is not high, medium or low — every lesson must grade itself", ErrInvalid, c.Confidence)
+	}
+	n.ConfidenceReason = strings.TrimSpace(c.ConfidenceReason)
+	if n.ConfidenceReason == "" {
+		return n, fmt.Errorf("%w: no confidence_reason — a lesson must say why it is %s", ErrInvalid, n.Confidence)
+	}
+	if utf8.RuneCountInString(n.ConfidenceReason) > maxCauseRunes {
+		return n, fmt.Errorf("%w: confidence_reason is over %d characters", ErrInvalid, maxCauseRunes)
 	}
 	globs, err := NormalizeGlobs(c.AreaGlobs)
 	if err != nil {

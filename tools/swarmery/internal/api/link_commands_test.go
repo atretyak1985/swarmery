@@ -498,3 +498,39 @@ func TestSessionLinkControllable(t *testing.T) {
 		t.Fatalf("queue detached: detail=%t list=%t, want false", d, l)
 	}
 }
+
+// A live terminal session whose mod polls the queue takes a /message as the
+// user's own prompt instead of the 409 a headless resume would hit.
+func TestPostSessionMessageLiveLinkedQueuesPrompt(t *testing.T) {
+	e := newCmdTestEnv(t)
+	uuid := "a0000000-0000-4000-8000-0000000000a1"
+	sid := e.session(t, uuid)
+	if _, err := e.db.Exec(`UPDATE sessions SET proc_state = 'running' WHERE id = ?`, sid); err != nil {
+		t.Fatal(err)
+	}
+	e.poll(t, uuid, 0)
+	code, body := e.spa(t, fmt.Sprintf("/api/sessions/%d/message", sid), "", `{"text":"  yes, go on  "}`)
+	if code != http.StatusAccepted || !strings.Contains(body, `"via":"link"`) {
+		t.Fatalf("message: %d %s", code, body)
+	}
+	id := decodeCommandID(t, body)
+	code, body = e.poll(t, uuid, 0)
+	if code != http.StatusOK || !strings.Contains(body, fmt.Sprintf(`"id":%d`, id)) ||
+		!strings.Contains(body, `"payload":{"text":"yes, go on","asUser":true}`) {
+		t.Fatalf("poll: %d %s", code, body)
+	}
+}
+
+// Without a polling mod the refusal names both ways in: the control option and
+// stopping the session.
+func TestPostSessionMessageLiveUnlinkedExplains(t *testing.T) {
+	e := newCmdTestEnv(t)
+	sid := e.session(t, "a0000000-0000-4000-8000-0000000000a2")
+	if _, err := e.db.Exec(`UPDATE sessions SET proc_state = 'running' WHERE id = ?`, sid); err != nil {
+		t.Fatal(err)
+	}
+	code, body := e.spa(t, fmt.Sprintf("/api/sessions/%d/message", sid), "", `{"text":"hi"}`)
+	if code != http.StatusConflict || !strings.Contains(body, `\"control\"`) || !strings.Contains(body, "stop the session") {
+		t.Fatalf("message: %d %s", code, body)
+	}
+}

@@ -1,0 +1,24 @@
+Here is my change.
+
+## Form
+always-on — the evidence shows a rule the agent keeps breaking on every run.
+## Diff
+```diff
+--- a/plugins/core/agents/tech-lead.md
++++ b/plugins/core/agents/tech-lead.md
+@@ -10,3 +10,3 @@ lens: procedure
+ existing line
+-old vague rule
++check the exit code before reporting done
+@@ -40,2 +40,2 @@ lens: knowledge
+ context
+-tests live in test/
++tests live in internal/*/…_test.go
+```
+## Rationale
+Hunk 1 replaces a vague rule with the check the evidence shows was skipped.
+Hunk 2 corrects a stale path.
+## Follow-ups
+- script: a bin/ helper that runs the exit-code check deterministically
+- hook: block "done" while the last command failed
+- keep an eye on it

@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/claudebin"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/link"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/procwatch"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/worktree"
 )
@@ -30,7 +31,10 @@ import (
 // session (anthropics/claude-code#27441). A genuinely live session
 // (status active | waiting_approval) is therefore rejected — two processes
 // writing the same JSONL would race — and the feature targets resuming an
-// idle/completed/killed conversation.
+// idle/completed/killed conversation. The one exception is a live session whose
+// swarmery-link mod takes commands: there the text goes to the mod's queue as a
+// user prompt (sendToLiveSession), which is input into the live TUI by the
+// engine's own API, not a second writer.
 const (
 	sessionMessageTimeout = 15 * time.Minute
 	maxSessionMessageLen  = 16000
@@ -146,7 +150,7 @@ func (h *Handler) PostSessionMessage(w http.ResponseWriter, r *http.Request) {
 	// "active" purely because we just appended to it stays writable (no false
 	// lockout after each send).
 	if procState.String == procwatch.StateRunning || procState.String == procwatch.StateOrphaned {
-		http.Error(w, `{"error":"session has a live process — stop it before sending"}`, http.StatusConflict)
+		h.sendToLiveSession(w, r, id, text)
 		return
 	}
 	if !cwd.Valid || strings.TrimSpace(cwd.String) == "" {
@@ -182,6 +186,37 @@ func (h *Handler) PostSessionMessage(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusAccepted)
 	_ = json.NewEncoder(w).Encode(map[string]string{"status": "started"})
+}
+
+// errNoLiveChannel is the 409 for a live terminal process nothing can reach: the
+// operator is told the two ways in, not just "stop it".
+const errNoLiveChannel = "session is running in a terminal and its swarmery-link mod is not taking commands — " +
+	`turn on the mod's "control" option (new sessions pick it up), or stop the session to reply here`
+
+// sendToLiveSession delivers a message to a session whose terminal process is
+// live. A headless resume would race that process on the transcript, but when
+// the session's link mod polls the command queue the message can go in as the
+// user's own prompt: the mod submits it once the running turn ends (an idle
+// session takes it at once). Any caller of /message — the Needs you card, the
+// gate's suggested reply — so reaches a terminal session the same way the
+// composer does. 202 {"status":"queued","via":"link","commandId":n}.
+func (h *Handler) sendToLiveSession(w http.ResponseWriter, r *http.Request, id int64, text string) {
+	c := linkCommands
+	if c == nil {
+		writeClientErr(w, http.StatusConflict, errNoLiveChannel)
+		return
+	}
+	cmdID, err := c.Enqueue(r.Context(), id, link.CmdPrompt, link.PromptPayload{Text: text, AsUser: true})
+	switch {
+	case errors.Is(err, link.ErrNotControllable):
+		writeClientErr(w, http.StatusConflict, errNoLiveChannel)
+	case errors.Is(err, link.ErrSessionNotFound):
+		writeClientErr(w, http.StatusNotFound, "session not found")
+	case err != nil:
+		writeErr(w, err)
+	default:
+		writeJSONStatus(w, http.StatusAccepted, map[string]any{"status": "queued", "via": "link", "commandId": cmdID})
+	}
 }
 
 // CancelSessionMessage implements POST /api/sessions/{id}/message/cancel — abort

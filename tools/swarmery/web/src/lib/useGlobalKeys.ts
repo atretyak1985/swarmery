@@ -1,6 +1,7 @@
 // The global keyboard (handoff §10): 1–5 places, t theme, j/k or ↑/↓ list rows,
-// e the selected row's main action, x its secondary one, Esc close, and [ ] \ the
-// panels: sidebar, list, session rail. ⌘K is not here: the Sidebar owns it, and it
+// e the selected row's main action, x its secondary one, o or → open the selected
+// row, ← back to the list, Esc close, and [ ] \ the panels: sidebar, list,
+// session rail. ⌘K is not here: the Sidebar owns it, and it
 // must fire from inside a field.
 //
 // Several consumers run at once (the shell owns places and theme, a ListPane the
@@ -19,6 +20,10 @@ export interface GlobalKeyHandlers {
   onPrev?: () => void;
   onPrimary?: () => void;
   onSecondary?: () => void;
+  /** `o` and →: open the selected row. */
+  onOpen?: () => void;
+  /** ←: back from the open row to the list. */
+  onBack?: () => void;
   onEscape?: () => void;
   onPanelNav?: () => void;
   onPanelList?: () => void;
@@ -49,6 +54,11 @@ function keyHandler(key: string, h: GlobalKeyHandlers): (() => void) | undefined
       return h.onPrimary;
     case 'x':
       return h.onSecondary;
+    case 'o':
+    case 'ArrowRight':
+      return h.onOpen;
+    case 'ArrowLeft':
+      return h.onBack;
     case 'Escape':
       return h.onEscape;
     case '[':

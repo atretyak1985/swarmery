@@ -173,7 +173,7 @@ func Estimate(src Sources, mcp []MCPTool, skills []Skill, measured int64) Breakd
 
 	var mcpBytes int64
 	for _, tool := range mcp {
-		mcpBytes += int64(len(tool.Name) + len(tool.Schema))
+		mcpBytes += mcpToolBytes(tool)
 		if len(tool.Schema) > 0 {
 			b.MCPSchemas++
 		}
@@ -183,8 +183,7 @@ func Estimate(src Sources, mcp []MCPTool, skills []Skill, measured int64) Breakd
 
 	var skillBytes int64
 	for _, s := range skills {
-		// Listed as "- <name>: <description>\n".
-		skillBytes += int64(len(s.Name) + len(s.Description) + 4)
+		skillBytes += skillBytesOf(s)
 	}
 	b.SkillCount = len(skills)
 	b.Skills = skillBytes / bytesPerToken
@@ -192,6 +191,78 @@ func Estimate(src Sources, mcp []MCPTool, skills []Skill, measured int64) Breakd
 	b.Other = max(0, measured-(b.ClaudeMD+b.MCP+b.Skills))
 	b.Note = note(b)
 	return b
+}
+
+// mcpToolBytes is one MCP tool's estimated footprint: its name plus its schema
+// when known. Shared by Estimate and Contributors so both size alike.
+func mcpToolBytes(t MCPTool) int64 { return int64(len(t.Name) + len(t.Schema)) }
+
+// skillBytesOf is one skill's listing footprint — "- <name>: <description>\n".
+func skillBytesOf(s Skill) int64 { return int64(len(s.Name) + len(s.Description) + 4) }
+
+// EstimatedTotal is the sum of the estimated parts (CLAUDE.md + MCP + skills),
+// Other excluded: the always-on size when there is no measurement to split.
+func (b Breakdown) EstimatedTotal() int64 { return b.ClaudeMD + b.MCP + b.Skills }
+
+// Contributor is one item riding along with every first request, sized like
+// Estimate sizes it (~bytes/4).
+type Contributor struct {
+	Kind   string `json:"kind"` // claude_md | mcp_server | skill
+	Name   string `json:"name"` // the file path, server name or skill name
+	Tokens int64  `json:"tokens"`
+}
+
+// Contributors ranks what Estimate sums, largest first: each CLAUDE.md file,
+// each MCP server (its tools pooled — one tool name alone is a handful of
+// tokens) and each skill listing. limit <= 0 returns them all. Ties break by
+// kind then name, so the order is stable across runs.
+func Contributors(src Sources, mcp []MCPTool, skills []Skill, limit int) []Contributor {
+	out := []Contributor{}
+	for _, path := range ClaudeMDFiles(src) {
+		if fi, err := os.Stat(path); err == nil {
+			out = append(out, Contributor{Kind: "claude_md", Name: path, Tokens: fi.Size() / bytesPerToken})
+		}
+	}
+	byServer := map[string]int64{}
+	for _, t := range mcp {
+		server := t.Server
+		if server == "" {
+			server = mcpServerOf(t.Name)
+		}
+		byServer[server] += mcpToolBytes(t)
+	}
+	for server, n := range byServer {
+		out = append(out, Contributor{Kind: "mcp_server", Name: server, Tokens: n / bytesPerToken})
+	}
+	for _, s := range skills {
+		out = append(out, Contributor{Kind: "skill", Name: s.Name, Tokens: skillBytesOf(s) / bytesPerToken})
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].Tokens != out[j].Tokens {
+			return out[i].Tokens > out[j].Tokens
+		}
+		if out[i].Kind != out[j].Kind {
+			return out[i].Kind < out[j].Kind
+		}
+		return out[i].Name < out[j].Name
+	})
+	if limit > 0 && len(out) > limit {
+		out = out[:limit]
+	}
+	return out
+}
+
+// mcpServerOf recovers the server segment of an mcp__<server>__<tool> name
+// when no configured server claimed it.
+func mcpServerOf(tool string) string {
+	rest, ok := strings.CutPrefix(tool, "mcp__")
+	if !ok {
+		return tool
+	}
+	if server, _, ok := strings.Cut(rest, "__"); ok {
+		return server
+	}
+	return rest
 }
 
 func note(b Breakdown) string {

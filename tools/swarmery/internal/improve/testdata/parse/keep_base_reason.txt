@@ -1,0 +1,7 @@
+## Form
+KEEP_BASE — the file already states the rule the evidence asks for.
+## Rationale
+The evidence shows exit-code failures, but line 12 already requires checking the exit code; the
+failures come from a script that swallows it, which is a follow-up, not an agent edit.
+## Follow-ups
+- script: make the runner propagate a non-zero exit code

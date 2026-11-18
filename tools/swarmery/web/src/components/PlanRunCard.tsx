@@ -4,17 +4,21 @@
 // A plan run fans out into a controller session plus one session per phase, and
 // every one of them opens with the same boilerplate prompt ("You are the
 // controller for an ENTIRE approved implementation plan…"). So the run collapses
-// to a single card: caret · plan title · plan run · project · tallies · "open
-// plan →". Expanding fans the rows out identified by role (`ctl` / `#5`), never
-// by their boilerplate title. A category gets no colour (handoff §4): the tag is
-// grey text.
+// to a single card. Its header stands in the list like a session row (artboard
+// 2a on v4, plan D-7): the same grid and padding (listRowFrame) inside the card's
+// frame, a chevron where a row has its glyph, the plan title with `plan run` in
+// brand text (never a pill), one grey sentence `phase N · controller + K
+// sessions · project`, and `open plan →` where a row has its age. The status
+// tallies moved into the header's tooltip. Expanding fans the rows out
+// identified by role (`ctl` / `#5`), never by their boilerplate title.
 
-import { plural } from '@lingui/core/macro';
 import { Trans, useLingui } from '@lingui/react/macro';
 import { Link } from 'react-router-dom';
 import { projectLabel } from '../lib/format';
+import { useTheme } from '../lib/theme';
 import { plansTaskHref } from '../pages/plans/plansUrl';
-import { planRowNotes, planRowTag, planRowTitle, statusSummary, type PlanRun } from '../lib/sessionsView';
+import { planRowNotes, planRowTag, planRowTitle, planRunLine, statusSummary, type PlanRun } from '../lib/sessionsView';
+import { listRowFrame } from './place/ListRow';
 import { SessionRow } from './SessionRow';
 import { Chevron } from './Chevron';
 
@@ -41,10 +45,9 @@ export function PlanRunCard({
   // permanent ?task= resolver, which replaces to the canonical plan path.
   const plansHref = plansTaskHref(slug ?? run.projectSlug, run.taskId);
   const notes = planRowNotes(run.rows);
-  const count = run.rows.length;
-  const sessions = plural(count, { one: '# session', few: '# sessions', many: '# sessions', other: '# sessions' });
-  const summary = statusSummary(run.rows);
-  const meta = `${sessions} · ${summary}`;
+  const { compact } = useTheme();
+  const line = planRunLine(run.rows);
+  const sentence = hideProject ? line : `${line} · ${projectLabel(run.projectName, run.projectSlug)}`;
   const runTitle = run.title;
 
   return (
@@ -58,6 +61,7 @@ export function PlanRunCard({
         tabIndex={0}
         aria-expanded={expanded}
         aria-label={t`plan run ${runTitle}`}
+        data-tip={statusSummary(run.rows)}
         onClick={onToggle}
         onKeyDown={(e) => {
           if (e.key === 'Enter' || e.key === ' ') {
@@ -65,29 +69,27 @@ export function PlanRunCard({
             onToggle();
           }
         }}
-        className="cursor-pointer px-3 py-2 transition-colors hover:bg-surface2 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-brand"
+        className={`${listRowFrame(compact)} border-transparent hover:bg-surface2 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-brand`}
       >
-        <div className="flex min-w-0 items-baseline gap-1.5">
-          <span aria-hidden="true" className="w-2 shrink-0 font-mono text-[10.5px] text-ink-faint">
-            <Chevron open={expanded} />
+        <span aria-hidden="true" className="mt-px font-mono text-[10.5px] text-ink-faint">
+          <Chevron open={expanded} />
+        </span>
+        <span className="block min-w-0">
+          <span className="flex min-w-0 items-baseline gap-1.5">
+            <span className="min-w-0 truncate text-[13px] font-medium text-ink">{run.title}</span>
+            <span data-testid="plan-run-label" className="shrink-0 font-mono text-[10px] text-brand">
+              <Trans>plan run</Trans>
+            </span>
           </span>
-          <span className="min-w-0 truncate text-[13px] font-medium text-ink">{run.title}</span>
-          <span className="shrink-0 font-mono text-[10px] text-ink-faint">
-            <Trans>plan run</Trans>
-          </span>
-        </div>
-        <div className="mt-0.5 flex min-w-0 items-baseline justify-between gap-2 pl-[14px] font-mono text-[10.5px] text-ink-dim">
-          <span className="min-w-0 truncate">
-            {hideProject ? meta : `${projectLabel(run.projectName, run.projectSlug)} · ${meta}`}
-          </span>
-          <Link
-            to={plansHref}
-            onClick={(e) => e.stopPropagation()}
-            className="shrink-0 whitespace-nowrap transition-colors hover:text-brand focus-visible:outline-2 focus-visible:outline-brand"
-          >
-            <Trans>open plan →</Trans>
-          </Link>
-        </div>
+          <span className="mt-0.5 block truncate text-[12px] text-ink-dim">{sentence}</span>
+        </span>
+        <Link
+          to={plansHref}
+          onClick={(e) => e.stopPropagation()}
+          className="font-mono text-[10.5px] whitespace-nowrap text-ink-faint transition-colors hover:text-brand focus-visible:outline-2 focus-visible:outline-brand"
+        >
+          <Trans>open plan →</Trans>
+        </Link>
       </div>
       {expanded && (
         <div className="border-t border-line-soft">

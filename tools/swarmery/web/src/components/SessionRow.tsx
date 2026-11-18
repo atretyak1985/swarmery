@@ -1,14 +1,17 @@
 // One session in the list: the shared ListRow fed from the session (handoff §1).
 // A glyph, the title, a project or `plan run` tag, one sentence, and the age. The
 // chips the old card carried (model, context, cost, handoff, proc) moved to the
-// detail's numbers strip, tabs and ⋯; the row keeps only state.
+// detail's numbers strip, tabs and ⋯; the row keeps only state, plus at most ONE
+// warning flag past a threshold (artboard 2a on v4, plan D-7): context, then a
+// shared file, then the plan's limit (rowFlag).
 
 import { useLingui } from '@lingui/react/macro';
 import type { NeedsYouItem, Session } from '../api/types';
 import { projectLabel } from '../lib/format';
 import { useSessionHref } from '../lib/sessionHref';
-import { planRowLabel, rowAge, rowState, rowSummary } from '../lib/sessionsView';
+import { planRowLabel, rowAge, rowFlag, rowState, rowSummary, type RowFlag } from '../lib/sessionsView';
 import { useNowMs } from '../lib/sessionState';
+import { useSessionConflicts } from '../lib/swarm';
 import { ListRow, type SummaryTone } from './place/ListRow';
 import { StateGlyph } from './place/StateGlyph';
 
@@ -49,12 +52,16 @@ export function SessionRow({
     : rowSummary(session, state, nowMs, now, gate);
   const tone: SummaryTone = state === 'needs' ? 'needs' : state === 'failed' ? 'failed' : 'default';
   const place = hideProject ? undefined : projectLabel(session.projectName, session.projectSlug);
+  const conflicts = useSessionConflicts(session.id);
+  const flag = rowFlag(session, conflicts.length > 0);
+  const flagText: Record<RowFlag, string> = { context: t`⚠ context`, conflict: t`⚠ conflict`, limit: t`⚠ limit` };
   return (
     <ListRow
       glyph={<StateGlyph state={state} />}
       title={heading ?? t`(untitled session)`}
       untitled={heading == null}
       tag={tag ?? (plan ? t`plan run` : place)}
+      flag={flag === null ? undefined : flagText[flag]}
       summary={summary ?? undefined}
       summaryTone={tone}
       age={rowAge(session, state, nowMs, gate)}

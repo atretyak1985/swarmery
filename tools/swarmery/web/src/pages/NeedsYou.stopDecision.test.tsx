@@ -1,17 +1,18 @@
 // @vitest-environment jsdom
 //
 // The needs-you phase_decision row for an agent-declared stop (verify-not-trust
-// phase 10): the executor hit one of its phase's stop triggers and stopped. The
-// claims:
+// phase 10; artboard 3b on v4, plan D-9): the executor hit one of its phase's stop
+// triggers and stopped. The claims:
 //
-//   1. The row shows the trigger chip, the reason, each option's label as a
-//      button with its consequence beside it, and — next to allow-add-to-scope —
-//      the files that answer releases.
-//   2. Clicking an option POSTs its id with the typed note.
-//   3. "Send my own answer" is disabled until there is text, then POSTs
-//      `other` with that text.
+//   1. The pane titles the stop with its reason; the facts line carries the
+//      trigger (stop-trigger) and the files allowing releases (stop-paths); the
+//      options are a radio group with each consequence under its name, and the
+//      first option is picked.
+//   2. One button repeats the pick; `+ note` opens the note, sent with the answer.
+//   3. `own answer…` opens a field; once typed, the radio is cleared and the one
+//      button sends `other` with that text.
 //   4. The stop block's contract flags (stop_options_count, stop_paths_rejected,
-//      …) are shown as a visible warning; a clean block shows none.
+//      …) are on the facts line (stop-flags); a clean block shows none.
 //
 // `npx vitest run src/pages/NeedsYou.stopDecision.test.tsx`.
 
@@ -95,27 +96,38 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('NeedsYou agent stop decision', () => {
-  it('shows the trigger, the reason, both options with consequences and the released files', async () => {
+  it('shows the reason, the trigger, both options with consequences and the released files', async () => {
     serve([STOP]);
     const row = await renderPage();
-    expect(within(row).getByText('guard stop · D-6')).toBeTruthy();
-    expect(within(row).getByRole('heading', { name: 'The executor stopped: protected-path' })).toBeTruthy();
-    expect(within(row).getByText(REASON)).toBeTruthy();
+    expect(within(row).getByText('Guard stopped the run · D-6')).toBeTruthy();
+    expect(within(row).getByRole('heading', { name: REASON })).toBeTruthy();
+    expect(within(row).getByTestId('stop-trigger').textContent).toBe('protected-path');
+    expect(within(row).getByTestId('stop-paths').textContent).toBe('allow releases: pkg/orders/line_items_test.go');
     expect(within(row).getByRole('radiogroup')).toBeTruthy();
-    expect(within(row).getByRole('radio', { name: /Let me edit the test/ })).toBeTruthy();
+    const first = within(row).getByRole('radio', { name: /Let me edit the test/ }) as HTMLInputElement;
+    expect(first.checked).toBe(true);
     expect(within(row).getByRole('radio', { name: /Leave the test alone/ })).toBeTruthy();
-    expect(
-      within(row).getByText(
-        'the test changes with the code it covers · Allowing this releases: pkg/orders/line_items_test.go',
-      ),
-    ).toBeTruthy();
+    expect(within(row).getByText('the test changes with the code it covers')).toBeTruthy();
     expect(within(row).getByText('the retry criterion stays open')).toBeTruthy();
-    expect(within(row).queryByText(/contract broken/)).toBeNull();
+    expect(within(row).queryByTestId('stop-flags')).toBeNull();
+    expect(within(row).queryByRole('textbox')).toBeNull();
   });
 
-  it('answers with the clicked option and the note', async () => {
+  it('has one button that repeats the pick', async () => {
     serve([STOP]);
     const row = await renderPage();
+    const answers = (): HTMLElement[] => within(row).getAllByRole('button', { name: /^answer/ });
+    expect(answers()).toHaveLength(1);
+    expect(answers()[0].textContent).toMatch(/^answer: Let me edit the test/);
+    fireEvent.click(within(row).getByRole('radio', { name: /Leave the test alone/ }));
+    expect(answers()).toHaveLength(1);
+    expect(answers()[0].textContent).toMatch(/^answer: Leave the test alone/);
+  });
+
+  it('answers with the picked option and the note', async () => {
+    serve([STOP]);
+    const row = await renderPage();
+    fireEvent.click(within(row).getByRole('button', { name: '+ note' }));
     fireEvent.change(within(row).getByRole('textbox'), { target: { value: ' keep it small ' } });
     serve([]);
     fireEvent.click(within(row).getByRole('radio', { name: /Leave the test alone/ }));
@@ -125,20 +137,20 @@ describe('NeedsYou agent stop decision', () => {
     );
   });
 
-  it('sends free text as other, only once there is text', async () => {
+  it('sends own words as other, once there is text, through the same button', async () => {
     serve([STOP]);
     const row = await renderPage();
-    const own = within(row).getByRole('button', { name: /^own answer/ }) as HTMLButtonElement;
-    expect(own.disabled).toBe(true);
+    fireEvent.click(within(row).getByRole('button', { name: 'own answer…' }));
     fireEvent.change(within(row).getByRole('textbox'), { target: { value: 'split the test file first' } });
-    expect(own.disabled).toBe(false);
-    fireEvent.click(own);
+    const radios = within(row).getAllByRole('radio') as HTMLInputElement[];
+    expect(radios.some((r) => r.checked)).toBe(false);
+    fireEvent.click(within(row).getByRole('button', { name: /^answer: split the test file first/ }));
     await waitFor(() =>
       expect(guardApi.answerGuardDecision).toHaveBeenCalledWith(9, 41, 'D-6', 'other', 'split the test file first'),
     );
   });
 
-  it('shows the block contract flags as a warning', async () => {
+  it('shows the block contract flags on the facts line', async () => {
     const flagged: NeedsYouItem = {
       ...STOP,
       decision: {
@@ -149,6 +161,8 @@ describe('NeedsYou agent stop decision', () => {
     };
     serve([flagged]);
     const row = await renderPage();
-    expect(within(row).getByText('contract broken: stop_options_count, stop_paths_rejected')).toBeTruthy();
+    expect(within(row).getByTestId('stop-flags').textContent).toBe(
+      'contract broken: stop_options_count, stop_paths_rejected',
+    );
   });
 });

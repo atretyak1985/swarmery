@@ -74,4 +74,10 @@ describe('modelShortName', () => {
     expect(modelShortName('claude-opus-5-5[1m]')).toBe('opus');
     expect(modelShortName('claude-opus-4-1')).toBe('claude-opus-4-1');
   });
+
+  it('knows the current fable and keeps the previous one for history', () => {
+    expect(modelShortName('claude-fable-5-2')).toBe('fable');
+    expect(modelShortName('claude-fable-5-2[1m]')).toBe('fable');
+    expect(modelShortName('claude-fable-5-1')).toBe('fable');
+  });
 });

@@ -71,6 +71,10 @@ type Config struct {
 	MaxClaudeMDTokens   int // claude_md_oversized: max estimated tokens, len/4 (default 2500; env SWARMERY_LINT_MAX_CLAUDE_MD_TOKENS)
 	MinDocsSection      int // docs_incomplete: min runes of body per REQUIRED guide subsection (default 40; env SWARMERY_LINT_MIN_DOCS_SECTION)
 
+	// always_on_budget thresholds, whole-first-prompt tokens (harnesslint.go).
+	AlwaysOnInfoTokens int // info above this (default 50000; env SWARMERY_ALWAYS_ON_INFO_TOKENS)
+	AlwaysOnWarnTokens int // warn above this (default 80000; env SWARMERY_ALWAYS_ON_WARN_TOKENS)
+
 	// Skill-audit thresholds (skillaudit.go). Zero = read guards.json
 	// (guards.Load) on each lint pass; set them only to pin a test.
 	SkillSimilarityThreshold float64 // skill_desc_similar: token Jaccard at or above which two skills are flagged
@@ -94,6 +98,15 @@ func (c Config) withDefaults() Config {
 	}
 	if c.MaxClaudeMDTokens <= 0 {
 		c.MaxClaudeMDTokens = envInt(EnvMaxClaudeMDTokens, DefaultMaxClaudeMDTokens)
+	}
+	if c.AlwaysOnInfoTokens <= 0 {
+		c.AlwaysOnInfoTokens = envInt(EnvAlwaysOnInfoTokens, DefaultAlwaysOnInfoTokens)
+	}
+	if c.AlwaysOnWarnTokens <= 0 {
+		c.AlwaysOnWarnTokens = envInt(EnvAlwaysOnWarnTokens, DefaultAlwaysOnWarnTokens)
+	}
+	if c.AlwaysOnWarnTokens < c.AlwaysOnInfoTokens {
+		c.AlwaysOnWarnTokens = c.AlwaysOnInfoTokens
 	}
 	if c.MinDocsSection <= 0 {
 		// Same resolution the API's docs surface uses (MinDocsSection, docs.go),

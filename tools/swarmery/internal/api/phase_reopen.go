@@ -242,7 +242,7 @@ func (h *Handler) phaseReopens(taskID int64, docs map[int64]string) map[int64][]
 	for id, doc := range docs {
 		byDoc[doc] = id
 	}
-	rows, err := h.DB.Query(`
+	rows, err := h.rdb().Query(`
 		SELECT id, phase_id, doc_path, reason, fix_url, caught_by, criteria_json, created_at
 		  FROM phase_reopens WHERE workspace_task_id = ? ORDER BY id`, taskID)
 	if err != nil {

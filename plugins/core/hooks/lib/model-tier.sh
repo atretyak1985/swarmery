@@ -53,7 +53,7 @@ model_tier_current_gen() {
   done
   case "$family" in
     opus)   printf '55' ;;
-    fable)  printf '50' ;;
+    fable)  printf '52' ;;
     mythos) printf '50' ;;
     sonnet) printf '50' ;;
     haiku)  printf '45' ;;

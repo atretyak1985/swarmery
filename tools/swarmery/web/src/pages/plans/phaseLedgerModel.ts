@@ -106,9 +106,12 @@ export function phaseNote(
     });
     return `${landed} · ${again}`;
   }
-  if (isUnresolvedOutcome(p.runOutcome)) return outcomeChipLabel(p, p.runOutcome);
-  if (status === 'unverified') return t`the verification never landed`;
+  // Before the run outcome: with every criterion ticked, a run that ticked nothing
+  // is not "no progress" — what is missing is the verdict or the report.
+  if (status === 'unverified')
+    return p.verifyVerdict === 'inconclusive' ? t`verification could not conclude` : t`the verification never landed`;
   if (status === 'unreported') return t`no completion report`;
+  if (isUnresolvedOutcome(p.runOutcome)) return outcomeChipLabel(p, p.runOutcome);
   if (depsUnmet.length > 0) {
     const deps = depsUnmet.join(', ');
     return t`starts when ${deps} lands`;

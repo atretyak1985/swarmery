@@ -47,7 +47,8 @@ function makeDetail(id: number): SessionDetail {
     title: `session ${String(id)}`,
     source: 'both',
     costUsd: 1,
-    turns: [],
+    // A turn with tokens: the numbers strip leaves a zero column out.
+    turns: [{ id: 1, seq: 1, role: 'assistant', tokensIn: 1200, tokensOut: 300, costUsd: 0.5, text: null }] as unknown as SessionDetail['turns'],
     events: [],
     fileChanges: [],
     recovered: 0,

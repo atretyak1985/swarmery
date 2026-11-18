@@ -1,45 +1,31 @@
-// The plan bar's own phase bar (D-14): a 140px-wide strip of segments, one per
-// phase, in the same state and colour as the full header's bar (planModel's
-// SEGMENT_TONE) so the condensed and the full view never disagree. No legend —
-// there is no room for one in a 7px-tall bar — the tooltip and aria-label carry
-// the same "seq · name · state" the full bar's segment does.
+// The list row's thin bar of a plan's phases: one segment per phase, coloured by the
+// same state the plan header's bar shows. Decorative — the row's summary already says
+// "N of M phases landed" — so it is hidden from assistive tech and holds no links.
 
-import { useLingui } from '@lingui/react/macro';
-import { Link, useLocation } from 'react-router-dom';
-import type { Epic } from '../../api/types';
-import { useProjectWorkspace } from '../../workspace/ProjectContext';
-import { SEGMENT_TONE, segmentState, segmentWord } from './planModel';
-import { plansHref } from './plansUrl';
+import type { EpicPhase } from '../../api/types';
+import { segmentState } from './planModel';
+import { SEGMENT_TONE } from './segmentTone';
 
 export function PhaseMiniBar({
-  epic,
+  phases,
   resolvedSeqs,
 }: {
-  epic: Epic;
+  phases: EpicPhase[];
   resolvedSeqs: Set<number>;
 }): JSX.Element | null {
-  const { t } = useLingui();
-  const { slug } = useProjectWorkspace();
-  const { search } = useLocation();
-  const segments = epic.phases.map((phase) => ({ phase, state: segmentState(phase, resolvedSeqs) }));
-  if (segments.length === 0) return null;
+  if (phases.length === 0) return null;
   return (
-    <div className="flex h-1.5 w-[140px] shrink-0 gap-px" role="img" aria-label={t`phase progress`}>
-      {segments.map(({ phase, state }) => {
-        const seq = String(phase.seq);
-        const name = phase.name;
-        const word = segmentWord(state);
+    <span aria-hidden="true" data-phase-bar="" className="mt-[7px] flex h-[3px] gap-[3px]">
+      {phases.map((phase) => {
+        const state = segmentState(phase, resolvedSeqs);
         return (
-          <Link
+          <span
             key={phase.seq}
-            to={plansHref(slug, { plan: epic.externalId, detail: { kind: 'phase', seq: phase.seq, tab: 'story' } }, search)}
-            aria-label={t`phase ${seq} · ${name} · ${word}`}
-            data-tip={t`${seq} · ${name} · ${word}`}
             data-state={state}
-            className={`flex-1 rounded-[1px] ${SEGMENT_TONE[state].fill}`}
+            className={`max-w-[56px] flex-1 rounded-full ${SEGMENT_TONE[state].fill}`}
           />
         );
       })}
-    </div>
+    </span>
   );
 }

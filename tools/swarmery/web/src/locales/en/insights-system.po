@@ -417,6 +417,10 @@ msgstr "{missingCount, plural, one {# missing} few {# missing} many {# missing} 
 msgid "{n, plural, one {# turn with a confidence} few {# turns with a confidence} many {# turns with a confidence} other {# turns with a confidence}}"
 msgstr "{n, plural, one {# turn with a confidence} few {# turns with a confidence} many {# turns with a confidence} other {# turns with a confidence}}"
 
+#: src/pages/Lessons.tsx
+msgid "{n} of {of} measured lessons are confounded ({pct}%): their drop cannot be credited to the lesson alone, so they rank like unmeasured lessons and are never proposed as ineffective."
+msgstr "{n} of {of} measured lessons are confounded ({pct}%): their drop cannot be credited to the lesson alone, so they rank like unmeasured lessons and are never proposed as ineffective."
+
 #: src/pages/inbox/TriageBanner.tsx
 msgid "{nAccept, plural, one {# suggestion} few {# suggestions} many {# suggestions} other {# suggestions}}"
 msgstr "{nAccept, plural, one {# suggestion} few {# suggestions} many {# suggestions} other {# suggestions}}"
@@ -476,6 +480,11 @@ msgstr "{reason} — press rebuild to retry, or run /architecture-map manually"
 #: src/pages/Retro.tsx
 msgid "{redispatched} re"
 msgstr "{redispatched} re"
+
+#. placeholder {0}: g.rejected[0]?.reason ?? ''
+#: src/pages/Lessons.tsx
+msgid "{rejected} lesson(s) rejected: {0}"
+msgstr "{rejected} lesson(s) rejected: {0}"
 
 #: src/pages/Architecture.tsx
 msgid "{repoCount} repos · freshness unknown"
@@ -736,6 +745,10 @@ msgstr "Accept"
 msgid "accept {acceptText}"
 msgstr "accept {acceptText}"
 
+#: src/pages/Lessons.tsx
+msgid "accept anyway"
+msgstr "accept anyway"
+
 #: src/pages/inbox/InboxDetail.tsx
 msgid "accept lesson"
 msgstr "accept lesson"
@@ -942,6 +955,10 @@ msgstr "already current"
 msgid "always allow {tool}"
 msgstr "always allow {tool}"
 
+#: src/pages/agent-hub/ProposalFacets.tsx
+msgid "always-on text"
+msgstr "always-on text"
+
 #: src/pages/inbox/inboxModel.ts
 msgid "An agent drafts a change to its instructions. Nothing is applied: the draft comes back to this Inbox for your approval."
 msgstr "An agent drafts a change to its instructions. Nothing is applied: the draft comes back to this Inbox for your approval."
@@ -970,6 +987,10 @@ msgstr "analyzing…"
 msgid "and"
 msgstr "and"
 
+#: src/pages/lessons/EffectVerdictChip.tsx
+msgid "another lesson"
+msgstr "another lesson"
+
 #: src/pages/learning/classifierModel.ts
 msgid "answer"
 msgstr "answer"
@@ -981,6 +1002,10 @@ msgstr "answering — no check went without a verdict in the last hour"
 #: src/pages/learning/Classifier.tsx
 msgid "Answers above the question's confidence bar (60 % unless set otherwise) are used — as labels on sessions, and in D1 to decide what happens after a run."
 msgstr "Answers above the question's confidence bar (60 % unless set otherwise) are used — as labels on sessions, and in D1 to decide what happens after a run."
+
+#: src/pages/lessons/EffectVerdictChip.tsx
+msgid "applied agent change"
+msgstr "applied agent change"
 
 #: src/pages/Memory.tsx
 msgid "apply"
@@ -1117,6 +1142,10 @@ msgstr "Avg session"
 msgid "awaiting ≥{pct}% improvement"
 msgstr "awaiting ≥{pct}% improvement"
 
+#: src/pages/agent-hub/ProposalProbes.tsx
+msgid "base"
+msgstr "base"
+
 #: src/pages/health/Health.tsx
 msgid "because of you"
 msgstr "because of you"
@@ -1138,6 +1167,10 @@ msgstr "Before proposing a new agent, extend an existing skill."
 msgid "behavior {behavior}"
 msgstr "behavior {behavior}"
 
+#: src/pages/agent-hub/ProposalProbes.tsx
+msgid "bench cap {benchCap}"
+msgstr "bench cap {benchCap}"
+
 #: src/pages/learning/TurnForecastPanel.tsx
 msgid "biggest miss"
 msgstr "biggest miss"
@@ -1145,6 +1178,10 @@ msgstr "biggest miss"
 #: src/pages/Analytics.tsx
 msgid "biggest mover"
 msgstr "biggest mover"
+
+#: src/pages/agent-hub/ProposalProbes.tsx
+msgid "blind pick"
+msgstr "blind pick"
 
 #: src/pages/RoutingReport.tsx
 msgid "board cards"
@@ -1264,6 +1301,14 @@ msgstr "candidate"
 msgid "candidates"
 msgstr "candidates"
 
+#: src/pages/agent-hub/ProposalProbes.tsx
+msgid "capped"
+msgstr "capped"
+
+#: src/pages/agent-hub/ProposalProbes.tsx
+msgid "case"
+msgstr "case"
+
 #: src/pages/Lessons.tsx
 msgid "cause:"
 msgstr "cause:"
@@ -1370,6 +1415,7 @@ msgid "Complexity routing"
 msgstr "Complexity routing"
 
 #: src/pages/learning/TurnForecastPanel.tsx
+#: src/pages/Lessons.tsx
 msgid "confidence"
 msgstr "confidence"
 
@@ -1380,6 +1426,22 @@ msgstr "confidence {range}"
 #: src/pages/learning/TurnForecastPanel.tsx
 msgid "confident and wrong"
 msgstr "confident and wrong"
+
+#: src/pages/Lessons.tsx
+msgid "confirm accepting a low-confidence lesson"
+msgstr "confirm accepting a low-confidence lesson"
+
+#: src/pages/lessons/EffectVerdictChip.tsx
+msgid "confounded"
+msgstr "confounded"
+
+#: src/pages/lessons/EffectVerdictChip.tsx
+msgid "confounded by:"
+msgstr "confounded by:"
+
+#: src/pages/lessons/EffectVerdictChip.tsx
+msgid "confounders"
+msgstr "confounders"
 
 #: src/pages/knowledge/Knowledge.tsx
 msgid "consolidate · lines that went stale"
@@ -1437,6 +1499,7 @@ msgstr "copying writes an editable copy into this project's .claude/templates/ �
 msgid "copying…"
 msgstr "copying…"
 
+#: src/pages/agent-hub/ProposalProbes.tsx
 #: src/pages/health/PhaseRunsTab.tsx
 #: src/pages/Retro.tsx
 msgid "cost"
@@ -1819,6 +1882,10 @@ msgstr "Estimates"
 msgid "Estimation accuracy"
 msgstr "Estimation accuracy"
 
+#: src/pages/agent-hub/ProposalProbes.tsx
+msgid "eval suite"
+msgstr "eval suite"
+
 #: src/pages/Retro.tsx
 msgid "evals {evalPassed}/{evalTotal}"
 msgstr "evals {evalPassed}/{evalTotal}"
@@ -1909,6 +1976,7 @@ msgstr "explore {exploreShare}%"
 msgid "Export CSV"
 msgstr "Export CSV"
 
+#: src/pages/agent-hub/ProposalProbes.tsx
 #: src/pages/RoutingReport.tsx
 msgid "fail"
 msgstr "fail"
@@ -1926,6 +1994,11 @@ msgstr "failed session"
 #: src/pages/health/HealthOverview.tsx
 msgid "failed share by agent"
 msgstr "failed share by agent"
+
+#. placeholder {0}: g.error
+#: src/pages/Lessons.tsx
+msgid "failed: {0}"
+msgstr "failed: {0}"
 
 #: src/pages/SystemHub.tsx
 msgid "file"
@@ -1997,6 +2070,14 @@ msgstr "folder"
 msgid "folder path"
 msgstr "folder path"
 
+#: src/pages/agent-hub/ProposalFacets.tsx
+msgid "follow-ups"
+msgstr "follow-ups"
+
+#: src/pages/agent-hub/ProposalFacets.tsx
+msgid "Follow-ups the rewriter could not make itself"
+msgstr "Follow-ups the rewriter could not make itself"
+
 #: src/pages/LessonsCalibration.tsx
 msgid "forecast calibration"
 msgstr "forecast calibration"
@@ -2047,6 +2128,10 @@ msgstr "from recommendation #{recId}"
 #: src/pages/system/ItemDetail.tsx
 msgid "Frontmatter"
 msgstr "Frontmatter"
+
+#: src/pages/agent-hub/ProposalProbes.tsx
+msgid "frozen bench"
+msgstr "frozen bench"
 
 #: src/pages/learning/Learning.tsx
 msgid "gathering"
@@ -2193,9 +2278,17 @@ msgstr "held"
 msgid "held back"
 msgstr "held back"
 
+#: src/pages/lessons/EffectVerdictChip.tsx
+msgid "helped"
+msgstr "helped"
+
 #: src/pages/system/ModsTab.tsx
 msgid "hide the validate report of {name}"
 msgstr "hide the validate report of {name}"
+
+#: src/pages/Lessons.tsx
+msgid "high confidence"
+msgstr "high confidence"
 
 #: src/pages/system/ModsTab.tsx
 msgid "high risk"
@@ -2213,6 +2306,7 @@ msgstr "Hit rate"
 msgid "hit rate per confidence bin"
 msgstr "hit rate per confidence bin"
 
+#: src/pages/agent-hub/ProposalFacets.tsx
 #: src/pages/system/ModsTab.tsx
 msgid "hook"
 msgstr "hook"
@@ -2285,6 +2379,10 @@ msgstr "How the modes work"
 #: src/pages/Analytics.tsx
 msgid "Human-hours saved is an estimate: {formula}"
 msgstr "Human-hours saved is an estimate: {formula}"
+
+#: src/pages/lessons/EffectVerdictChip.tsx
+msgid "hurt"
+msgstr "hurt"
 
 #: src/pages/system/InsightsTab.tsx
 msgid "identical"
@@ -2480,6 +2578,10 @@ msgstr "kebab-case only: lowercase letters, digits, single dashes (my-agent)"
 msgid "keep"
 msgstr "keep"
 
+#: src/pages/agent-hub/ProposalFacets.tsx
+msgid "keep as is"
+msgstr "keep as is"
+
 #: src/pages/inbox/inboxModel.ts
 msgid "keep it"
 msgstr "keep it"
@@ -2487,6 +2589,14 @@ msgstr "keep it"
 #: src/pages/system/ModsTab.tsx
 msgid "keeps a store"
 msgstr "keeps a store"
+
+#: src/pages/agent-hub/ProposalFacets.tsx
+msgid "kept as is"
+msgstr "kept as is"
+
+#: src/pages/agent-hub/ProposalFacets.tsx
+msgid "knowledge"
+msgstr "knowledge"
 
 #: src/pages/knowledge/Knowledge.tsx
 msgid "Knowledge"
@@ -2657,6 +2767,10 @@ msgstr "log tail ({logLines})"
 msgid "loops"
 msgstr "loops"
 
+#: src/pages/Lessons.tsx
+msgid "low confidence"
+msgstr "low confidence"
+
 #: src/pages/Serena.tsx
 msgid "lsp-pack is not enabled for this project — enable it in Settings"
 msgstr "lsp-pack is not enabled for this project — enable it in Settings"
@@ -2696,6 +2810,10 @@ msgstr "median"
 #: src/pages/Analytics.tsx
 msgid "Median session"
 msgstr "Median session"
+
+#: src/pages/Lessons.tsx
+msgid "medium confidence"
+msgstr "medium confidence"
 
 #: src/pages/knowledge/Knowledge.tsx
 msgid "memory"
@@ -2772,6 +2890,10 @@ msgstr "model / effort"
 #: src/pages/system/CreateAgentForm.tsx
 msgid "model <0>(optional)</0>"
 msgstr "model <0>(optional)</0>"
+
+#: src/pages/lessons/EffectVerdictChip.tsx
+msgid "model switch"
+msgstr "model switch"
 
 #: src/pages/system/ModsTab.tsx
 msgid "moderate risk"
@@ -2932,6 +3054,7 @@ msgid "no docs published by the daemon"
 msgstr "no docs published by the daemon"
 
 #: src/pages/learning/Learning.tsx
+#: src/pages/lessons/EffectVerdictChip.tsx
 msgid "no effect"
 msgstr "no effect"
 
@@ -3043,6 +3166,10 @@ msgstr "no projects with lsp-pack enabled — enable it in a project’s plugins
 msgid "no proposals"
 msgstr "no proposals"
 
+#: src/pages/Lessons.tsx
+msgid "no reason recorded"
+msgstr "no reason recorded"
+
 #: src/pages/agent-hub/Tabs.tsx
 msgid "no recent events"
 msgstr "no recent events"
@@ -3094,6 +3221,10 @@ msgstr "No stale facts found"
 #: src/pages/Retro.tsx
 msgid "no subagent activity in this range"
 msgstr "no subagent activity in this range"
+
+#: src/pages/agent-hub/ProposalProbes.tsx
+msgid "no suite"
+msgstr "no suite"
 
 #: src/pages/Retro.tsx
 msgid "no target file — dismissing is the only transition"
@@ -3157,6 +3288,7 @@ msgstr "none"
 msgid "Not asked. Nothing logged."
 msgstr "Not asked. Nothing logged."
 
+#: src/pages/lessons/EffectVerdictChip.tsx
 #: src/pages/system-hub/Profiles.tsx
 msgid "not enough data"
 msgstr "not enough data"
@@ -3184,6 +3316,10 @@ msgstr "not helping"
 #: src/pages/Lessons.tsx
 msgid "Not injected into any run yet."
 msgstr "Not injected into any run yet."
+
+#: src/pages/agent-hub/ProposalProbes.tsx
+msgid "not judged"
+msgstr "not judged"
 
 #: src/pages/Retro.tsx
 msgid "not noise"
@@ -3260,6 +3396,10 @@ msgstr "off-plan phase run"
 #: src/pages/Docs.tsx
 msgid "On this page"
 msgstr "On this page"
+
+#: src/pages/agent-hub/ProposalProbes.tsx
+msgid "One sample per case: treat a single flip as noise and a difference that repeats across runs as signal."
+msgstr "One sample per case: treat a single flip as noise and a difference that repeats across runs as signal."
 
 #: src/pages/inbox/inboxModel.ts
 msgid "open a fix task"
@@ -3344,6 +3484,10 @@ msgstr "parse error"
 #: src/pages/Memory.tsx
 msgid "partial: moved {movedCount} · backup {backup}"
 msgstr "partial: moved {movedCount} · backup {backup}"
+
+#: src/pages/agent-hub/ProposalProbes.tsx
+msgid "pass"
+msgstr "pass"
 
 #: src/pages/system/ModsTab.tsx
 msgid "passed"
@@ -3507,9 +3651,33 @@ msgstr "preview the evidence, then generate a minimal diff to THIS agent’s def
 msgid "pricing table"
 msgstr "pricing table"
 
+#: src/pages/agent-hub/ProposalProbes.tsx
+msgid "Probe"
+msgstr "Probe"
+
 #: src/pages/inbox/InboxDetail.tsx
 msgid "probe & resume"
 msgstr "probe & resume"
+
+#: src/pages/agent-hub/ProposalProbes.tsx
+msgid "Probe again"
+msgstr "Probe again"
+
+#: src/pages/agent-hub/ProposalProbes.tsx
+msgid "Probe: the agent's eval suite on the current file vs this proposal"
+msgstr "Probe: the agent's eval suite on the current file vs this proposal"
+
+#: src/pages/agent-hub/ProposalProbes.tsx
+msgid "probing…"
+msgstr "probing…"
+
+#: src/pages/agent-hub/ProposalFacets.tsx
+msgid "procedure"
+msgstr "procedure"
+
+#: src/pages/agent-hub/ProposalFacets.tsx
+msgid "procedure + knowledge"
+msgstr "procedure + knowledge"
 
 #: src/pages/Analytics.tsx
 msgid "Productivity"
@@ -3573,6 +3741,14 @@ msgstr "Proof"
 #: src/pages/learning/Learning.tsx
 msgid "proof · {word}"
 msgstr "proof · {word}"
+
+#: src/pages/agent-hub/ProposalProbes.tsx
+msgid "proposal"
+msgstr "proposal"
+
+#: src/pages/agent-hub/ProposalProbes.tsx
+msgid "proposal probe"
+msgstr "proposal probe"
 
 #: src/pages/health/HealthOverview.tsx
 msgid "propose a change"
@@ -3887,6 +4063,14 @@ msgstr "Run a dry run to see which closed entries can move to <0>closed/</0>. No
 msgid "Run an OpenAI-compatible model server: LM Studio (<0>localhost:1234</0>), Ollama (<1>localhost:11434/v1</1>), llama.cpp or vLLM. A 7–14B instruct model is enough."
 msgstr "Run an OpenAI-compatible model server: LM Studio (<0>localhost:1234</0>), Ollama (<1>localhost:11434/v1</1>), llama.cpp or vLLM. A 7–14B instruct model is enough."
 
+#: src/pages/agent-hub/ProposalProbes.tsx
+msgid "Run bench"
+msgstr "Run bench"
+
+#: src/pages/agent-hub/ProposalProbes.tsx
+msgid "Run bench again"
+msgstr "Run bench again"
+
 #: src/pages/agent-hub/RunNow.tsx
 #: src/pages/AgentHub.tsx
 msgid "run once"
@@ -3896,6 +4080,10 @@ msgstr "run once"
 #: src/pages/inbox/TriageBanner.tsx
 msgid "run triage"
 msgstr "run triage"
+
+#: src/pages/agent-hub/ProposalProbes.tsx
+msgid "running bench…"
+msgstr "running bench…"
 
 #: src/pages/Analytics.tsx
 #: src/pages/health/HealthOverview.tsx
@@ -3910,9 +4098,21 @@ msgstr "runs"
 msgid "Runs"
 msgstr "Runs"
 
+#: src/pages/agent-hub/ProposalProbes.tsx
+msgid "Runs each frozen-bench task tagged for this agent as a whole session, once as the current agent and once as the proposal, and stops between tasks at the bench cap of {benchCap}. It never approves, applies or rejects."
+msgstr "Runs each frozen-bench task tagged for this agent as a whole session, once as the current agent and once as the proposal, and stops between tasks at the bench cap of {benchCap}. It never approves, applies or rejects."
+
+#: src/pages/agent-hub/ProposalProbes.tsx
+msgid "Runs every suite case twice through claude -p and stops at the cost cap of {cap}. It never approves, applies or rejects."
+msgstr "Runs every suite case twice through claude -p and stops at the cost cap of {cap}. It never approves, applies or rejects."
+
 #: src/pages/Lessons.tsx
 msgid "runs reached"
 msgstr "runs reached"
+
+#: src/pages/Lessons.tsx
+msgid "Runs that produced no lesson ({count})"
+msgstr "Runs that produced no lesson ({count})"
 
 #: src/pages/learning/TurnForecastPanel.tsx
 msgid "said"
@@ -3977,6 +4177,10 @@ msgstr "scorecards · judged sessions"
 #: src/pages/learning/classifierModel.ts
 msgid "scored phase run"
 msgstr "scored phase run"
+
+#: src/pages/agent-hub/ProposalFacets.tsx
+msgid "script"
+msgstr "script"
 
 #: src/pages/Analytics.tsx
 msgid "SDLC funnel"
@@ -4113,6 +4317,7 @@ msgstr "similar skill descriptions and skills loaded per session — extend a sk
 msgid "similar skills"
 msgstr "similar skills"
 
+#: src/pages/agent-hub/ProposalFacets.tsx
 #: src/pages/Analytics.tsx
 #: src/pages/Retro.tsx
 msgid "skill"
@@ -4163,6 +4368,14 @@ msgstr "skills…"
 #: src/pages/inbox/InboxDetail.tsx
 msgid "skip"
 msgstr "skip"
+
+#: src/pages/agent-hub/ProposalFacets.tsx
+msgid "Some hunks change how to act, others change what is true."
+msgstr "Some hunks change how to act, others change what is true."
+
+#: src/pages/lessons/EffectVerdictChip.tsx
+msgid "Something else changed in the measured window, so the drop cannot be credited to this lesson alone. It ranks like an unmeasured lesson and is never proposed as ineffective."
+msgstr "Something else changed in the measured window, so the drop cannot be credited to this lesson alone. It ranks like an unmeasured lesson and is never proposed as ineffective."
 
 #: src/pages/system/shared.tsx
 msgid "sort by"
@@ -4268,6 +4481,10 @@ msgstr "stop using a lesson?"
 msgid "stop using it"
 msgstr "stop using it"
 
+#: src/pages/agent-hub/ProposalFacets.tsx
+msgid "subagent"
+msgstr "subagent"
+
 #: src/pages/Retro.tsx
 msgid "success"
 msgstr "success"
@@ -4361,6 +4578,7 @@ msgstr "system is in readonly mode — copy is disabled"
 msgid "target"
 msgstr "target"
 
+#: src/pages/agent-hub/ProposalProbes.tsx
 #: src/pages/Retro.tsx
 msgid "task"
 msgstr "task"
@@ -4401,10 +4619,34 @@ msgstr "The account is checked for real — its sign-in, then one short model ca
 msgid "The agent has not closed anything in the last 7 days."
 msgstr "The agent has not closed anything in the last 7 days."
 
+#: src/pages/lessons/EffectVerdictChip.tsx
+msgid "The area got less surprising after this lesson, and nothing else changed there in the measured window."
+msgstr "The area got less surprising after this lesson, and nothing else changed there in the measured window."
+
+#: src/pages/lessons/EffectVerdictChip.tsx
+msgid "The area got more surprising after this lesson, and nothing else changed there in the measured window."
+msgstr "The area got more surprising after this lesson, and nothing else changed there in the measured window."
+
+#: src/pages/lessons/EffectVerdictChip.tsx
+msgid "The area's surprise barely moved after this lesson."
+msgstr "The area's surprise barely moved after this lesson."
+
+#: src/pages/agent-hub/ProposalProbes.tsx
+msgid "The blind judge's pick where both sides agree on the hard checks"
+msgstr "The blind judge's pick where both sides agree on the hard checks"
+
 #: src/pages/inbox/InboxDetail.tsx
 #: src/pages/inbox/inboxModel.ts
 msgid "The candidate is closed as not useful. Nothing is added to any brief."
 msgstr "The candidate is closed as not useful. Nothing is added to any brief."
+
+#: src/pages/agent-hub/ProposalFacets.tsx
+msgid "The change is about how to act: steps, rules, checks."
+msgstr "The change is about how to act: steps, rules, checks."
+
+#: src/pages/agent-hub/ProposalFacets.tsx
+msgid "The change is about what is true: facts, paths, conventions."
+msgstr "The change is about what is true: facts, paths, conventions."
 
 #: src/pages/system/HooksTab.tsx
 msgid "The command will <0>stop executing in Claude Code</0> — {event} no longer triggers it. The entry stays in the settings file (parked under <1>_swarmery_disabled_hooks</1>) and can be re-enabled here."
@@ -4470,6 +4712,10 @@ msgstr "The fleet is failing twice as often as {window}"
 msgid "The friction board is unavailable right now."
 msgstr "The friction board is unavailable right now."
 
+#: src/pages/Lessons.tsx
+msgid "The generator rated this lesson low confidence. Accepting it injects it into future runs."
+msgstr "The generator rated this lesson low confidence. Accepting it injects it into future runs."
+
 #: src/pages/system/docsSection.ts
 msgid "the item changed after this guide was written — docs.source_sha no longer matches the body"
 msgstr "the item changed after this guide was written — docs.source_sha no longer matches the body"
@@ -4532,6 +4778,10 @@ msgstr "The review leaves the Inbox. It stays on record; nothing else changes."
 msgid "The reviewer left no findings text."
 msgstr "The reviewer left no findings text."
 
+#: src/pages/agent-hub/ProposalFacets.tsx
+msgid "The rewriter found the file already does the job and proposed no change. Nobody rejected it."
+msgstr "The rewriter found the file already does the job and proposed no change. Nobody rejected it."
+
 #: src/pages/inbox/InboxDetail.tsx
 msgid "the task"
 msgstr "the task"
@@ -4581,6 +4831,10 @@ msgstr "this project already has its own copy of this template"
 msgid "This range"
 msgstr "This range"
 
+#: src/pages/agent-hub/ProposalProbes.tsx
+msgid "tie"
+msgstr "tie"
+
 #: src/pages/RoutingReport.tsx
 msgid "tier"
 msgstr "tier"
@@ -4620,6 +4874,10 @@ msgstr "To do"
 #: src/pages/Analytics.tsx
 msgid "Tokens"
 msgstr "Tokens"
+
+#: src/pages/lessons/EffectVerdictChip.tsx
+msgid "Too few scored runs on one side of the activation to judge yet."
+msgstr "Too few scored runs on one side of the activation to judge yet."
 
 #: src/pages/Analytics.tsx
 #: src/pages/Retro.tsx
@@ -4674,9 +4932,14 @@ msgstr "top driver"
 msgid "Top error groups"
 msgstr "Top error groups"
 
+#: src/pages/agent-hub/ProposalProbes.tsx
 #: src/pages/Analytics.tsx
 msgid "total"
 msgstr "total"
+
+#: src/pages/agent-hub/ProposalProbes.tsx
+msgid "total · earlier runs not shown: {earlier}"
+msgstr "total · earlier runs not shown: {earlier}"
 
 #: src/pages/Retro.tsx
 msgid "Total wait"
@@ -4889,6 +5152,7 @@ msgstr "vs prev {prevRunsCount}"
 msgid "waiting on you"
 msgstr "waiting on you"
 
+#: src/pages/agent-hub/ProposalFacets.tsx
 #: src/pages/system/ModsTab.tsx
 msgid "warnings"
 msgstr "warnings"
@@ -4946,8 +5210,8 @@ msgid "when {pick} ran: {ranCell}"
 msgstr "when {pick} ran: {ranCell}"
 
 #: src/pages/Lessons.tsx
-msgid "When a phase run lands far from its forecast and its report explains why, a cheap model proposes up to two lessons, each citing evidence from that run. A candidate reaches future runs only after you accept it here. Merge it into an existing lesson when it repeats one. Active lessons are re-measured against their area's surprise; one that stops earning its place is proposed for retirement below, and retired on its own after 14 days without an answer."
-msgstr "When a phase run lands far from its forecast and its report explains why, a cheap model proposes up to two lessons, each citing evidence from that run. A candidate reaches future runs only after you accept it here. Merge it into an existing lesson when it repeats one. Active lessons are re-measured against their area's surprise; one that stops earning its place is proposed for retirement below, and retired on its own after 14 days without an answer."
+msgid "When a phase run lands far from its forecast and its report explains why, a cheap model proposes at most one lesson, citing evidence from that run and rating its own confidence, or says why nothing there transfers. A candidate reaches future runs only after you accept it here; a low-confidence one asks you to confirm. Merge it into an existing lesson when it repeats one. Active lessons are re-measured against their area's surprise; one that stops earning its place is proposed for retirement below, and retired on its own after 14 days without an answer."
+msgstr "When a phase run lands far from its forecast and its report explains why, a cheap model proposes at most one lesson, citing evidence from that run and rating its own confidence, or says why nothing there transfers. A candidate reaches future runs only after you accept it here; a low-confidence one asks you to confirm. Merge it into an existing lesson when it repeats one. Active lessons are re-measured against their area's surprise; one that stops earning its place is proposed for retirement below, and retired on its own after 14 days without an answer."
 
 #: src/pages/Lessons.tsx
 msgid "where reality diverged"
@@ -4961,6 +5225,10 @@ msgstr "Where the money and tokens went."
 msgid "Where the pick differed"
 msgstr "Where the pick differed"
 
+#: src/pages/agent-hub/ProposalFacets.tsx
+msgid "Where the rewriter put this change on the form ladder (skill, script, subagent, hook, always-on text last)."
+msgstr "Where the rewriter put this change on the form ladder (skill, script, subagent, hook, always-on text last)."
+
 #: src/pages/SystemShell.tsx
 msgid "which packs a project enables"
 msgstr "which packs a project enables"
@@ -4972,6 +5240,10 @@ msgstr "Why did it fail?"
 #: src/pages/learning/classifierModel.ts
 msgid "Why did the run leave the plan?"
 msgstr "Why did the run leave the plan?"
+
+#: src/pages/agent-hub/ProposalFacets.tsx
+msgid "Why the file stays as it is"
+msgstr "Why the file stays as it is"
 
 #: src/pages/learning/TurnForecastPanel.tsx
 msgid "window"

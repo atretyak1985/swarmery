@@ -36,6 +36,7 @@ const INCLUDE: Record<CatalogName, string[]> = {
     `${P}/learning`,
     `${P}/health`,
     `${P}/Lessons.tsx`,
+    `${P}/lessons`,
     `${P}/LessonsCalibration.tsx`,
     `${P}/Retro.tsx`,
     `${P}/Analytics.tsx`,
@@ -57,6 +58,7 @@ const INCLUDE: Record<CatalogName, string[]> = {
   shared: [
     '<rootDir>/src/components',
     '<rootDir>/src/workspace',
+    '<rootDir>/src/terminal',
     '<rootDir>/src/App.tsx',
     `${P}/Settings.tsx`,
     `${P}/settings`,

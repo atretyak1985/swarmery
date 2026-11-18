@@ -12,6 +12,11 @@
 #   BENCH_TIMEOUT  wall-clock seconds per task (default 900); on expiry the task
 #                  is recorded as pass:false, timedOut:true
 #   BENCH_KEEP=1   keep each task's workdir and print its path
+#   BENCH_PLUGIN_DIR  a plugin directory to load for the session (--plugin-dir);
+#                  the isolation flags stay, so it is the only non-builtin plugin,
+#                  and its hooks are disabled (--settings disableAllHooks)
+#   BENCH_AGENT    run the session as this agent (--agent <plugin>:<name>),
+#                  normally an agent of the plugin BENCH_PLUGIN_DIR loads
 # Exported to the binary: BENCH_TASK_DIR (absolute path of the task being run).
 # Exported to check.sh:   BENCH_FIXTURE_SHA (the workdir's fixture commit).
 #
@@ -37,6 +42,21 @@ claude_bin=${BENCH_CLAUDE:-claude}
 limit=${BENCH_TIMEOUT:-900}
 case "$limit" in '' | *[!0-9]*) echo "BENCH_TIMEOUT must be whole seconds" >&2; exit 2 ;; esac
 allowed='Read,Edit,Write,Glob,Grep,Bash(go test:*),Bash(go build:*),Bash(bash:*),Bash(git status:*),Bash(git diff:*)'
+# Optional session flags: a plugin to load and an agent to run as. Both unset
+# is the frozen bench exactly as before.
+extra=()
+if [ -n "${BENCH_PLUGIN_DIR:-}" ]; then
+  [ -f "$BENCH_PLUGIN_DIR/.claude-plugin/plugin.json" ] || {
+    echo "run.sh: BENCH_PLUGIN_DIR=$BENCH_PLUGIN_DIR has no .claude-plugin/plugin.json" >&2
+    exit 2
+  }
+  # The plugin's hooks stay off: they read the operator's live state into the
+  # prompt (SessionStart) and write session logs into the fixture repo
+  # (SessionEnd), which breaks a check like b04's clean-tree rule. What the
+  # bench measures is the plugin's agents, the same on every machine.
+  extra+=(--plugin-dir "$BENCH_PLUGIN_DIR" --settings '{"disableAllHooks":true}')
+fi
+if [ -n "${BENCH_AGENT:-}" ]; then extra+=(--agent "$BENCH_AGENT"); fi
 
 for tool in jq git; do
   command -v "$tool" >/dev/null || { echo "run.sh: $tool is required" >&2; exit 2; }
@@ -99,7 +119,7 @@ run_limited() {
     exec "$claude_bin" -p "$prompt" --model "$model" --effort "$effort" \
       --output-format json --permission-mode acceptEdits --allowedTools "$allowed" \
       --setting-sources project,local --strict-mcp-config --no-session-persistence \
-      </dev/null >"$stdout" 2>"$stderr"
+      ${extra[@]+"${extra[@]}"} </dev/null >"$stdout" 2>"$stderr"
   ) &
   pid=$!
   set +m

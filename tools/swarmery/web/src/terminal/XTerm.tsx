@@ -46,11 +46,13 @@ export const XTerm = forwardRef<
     cwd?: string;
     /** Account key for an ACCOUNT-scoped PTY (the connect flow's login fallback). */
     account?: string;
+    /** A command typed into the shell (followed by Enter) once the PTY connects. */
+    initialInput?: string | undefined;
     fontSize: number;
     onStatus?: (s: TermStatus) => void;
   }
 >(
-  function XTerm({ cwd, account, fontSize, onStatus }, ref): JSX.Element {
+  function XTerm({ cwd, account, initialInput, fontSize, onStatus }, ref): JSX.Element {
     const hostRef = useRef<HTMLDivElement>(null);
     const termRef = useRef<Terminal | null>(null);
     const fitRef = useRef<FitAddon | null>(null);
@@ -59,6 +61,9 @@ export const XTerm = forwardRef<
     // re-running the mount effect (which would recreate the PTY).
     const statusRef = useRef(onStatus);
     statusRef.current = onStatus;
+    // Read once at connect time; a later prop change must not recreate the PTY.
+    const initialInputRef = useRef(initialInput);
+    initialInputRef.current = initialInput;
 
     useImperativeHandle(ref, () => ({
       clear: () => termRef.current?.clear(),
@@ -111,6 +116,12 @@ export const XTerm = forwardRef<
         opened = true;
         statusRef.current?.('open');
         sendResize(); // tell the PTY our initial window size
+        // The PTY buffers the bytes until the shell finishes its rc files and
+        // reads stdin, so the command runs as if typed at the first prompt.
+        const run = initialInputRef.current;
+        if (run !== undefined && run !== '') {
+          ws.send(new TextEncoder().encode(`${run}\r`));
+        }
         term.focus();
       };
       ws.onmessage = (ev: MessageEvent<ArrayBuffer | string>) => {

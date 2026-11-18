@@ -66,7 +66,7 @@ const STATUS_POLL_MS = 4_000;
 const PLANNING_MODELS = [
   { value: 'opus', label: msg`opus 5.5 — default`, id: 'claude-opus-5-5' },
   { value: 'sonnet', label: msg`sonnet 5 — faster, cheaper`, id: 'claude-sonnet-5' },
-  { value: 'fable', label: msg`fable 5.1 — most capable, ~2.5× cost`, id: 'claude-fable-5-1' },
+  { value: 'fable', label: msg`fable 5.2 — most capable, ~2.5× cost`, id: 'claude-fable-5-2' },
 ] as const;
 type PlanningModel = (typeof PLANNING_MODELS)[number]['value'];
 const DEFAULT_PLANNING_MODEL: PlanningModel = 'opus';

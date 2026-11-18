@@ -84,6 +84,7 @@ var censusRawArgv = []string{
 	"internal/improve/runner.go",
 	"internal/lessons/runner.go",
 	"internal/plainsum/runner.go",
+	"internal/probe/judge.go",
 	"internal/replyextract/replyextract.go",
 	"internal/retroanalysis/runner.go",
 	"internal/routines/runner.go",
@@ -160,8 +161,8 @@ func TestSettingSourceSeamCensus(t *testing.T) {
 	all = append(all, censusMentionOnly...)
 	censusAssert(t, "of files mentioning "+censusFlag+" at all", mentions, all)
 
-	if n := len(censusRawArgv) + len(censusSpecField); n != 15 {
-		t.Fatalf("G7 is fifteen seams (twelve, plus replyextract, the triage judge and plainsum); the census lists %d", n)
+	if n := len(censusRawArgv) + len(censusSpecField); n != 16 {
+		t.Fatalf("G7 is sixteen seams (twelve, plus replyextract, the triage judge, plainsum and the proposal-probe judge); the census lists %d", n)
 	}
 }
 

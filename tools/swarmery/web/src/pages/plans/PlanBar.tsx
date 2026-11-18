@@ -9,7 +9,7 @@ import { useLingui } from '@lingui/react/macro';
 import type { ReactNode } from 'react';
 import type { Epic } from '../../api/types';
 import { fmtSpent } from './planModel';
-import { PhaseMiniBar } from './PhaseMiniBar';
+import { PlanBarPhases } from './PlanBarPhases';
 
 export function PlanBar({
   epic,
@@ -40,7 +40,7 @@ export function PlanBar({
       >
         {epic.title}
       </button>
-      <PhaseMiniBar epic={epic} resolvedSeqs={resolvedSeqs} />
+      <PlanBarPhases epic={epic} resolvedSeqs={resolvedSeqs} />
       {spent !== null && (
         <span className="shrink-0 whitespace-nowrap">
           <span className="text-brand">{fmtSpent(spent)}</span> {t`spent`}

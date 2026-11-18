@@ -194,6 +194,14 @@ msgstr "{docCount, plural, one {# plan doc will change on disk: {docs}. This is 
 msgid "{done} of {total} checkboxes done"
 msgstr "{done} of {total} checkboxes done"
 
+#: src/pages/plans/PhaseLedger.tsx
+msgid "{done} of {total} criteria ticked"
+msgstr "{done} of {total} criteria ticked"
+
+#: src/pages/plans/PhaseLedger.tsx
+msgid "{done} of {total} criteria ticked · {manualOpen} [MANUAL] wait on you"
+msgstr "{done} of {total} criteria ticked · {manualOpen} [MANUAL] wait on you"
+
 #: src/pages/plans/PhaseDetailPanel.tsx
 msgid "{done}/{total} acceptance criteria met · full list on the Criteria tab"
 msgstr "{done}/{total} acceptance criteria met · full list on the Criteria tab"
@@ -270,7 +278,7 @@ msgstr "{prior} vs {posterior}"
 msgid "{s, plural, one {# second} few {# seconds} many {# seconds} other {# seconds}}"
 msgstr "{s, plural, one {# second} few {# seconds} many {# seconds} other {# seconds}}"
 
-#: src/pages/plans/PhaseMiniBar.tsx
+#: src/pages/plans/PlanBarPhases.tsx
 #: src/pages/plans/PlanHeader.tsx
 msgid "{seq} · {name} · {word}"
 msgstr "{seq} · {name} · {word}"
@@ -839,6 +847,7 @@ msgid "created {created}"
 msgstr "created {created}"
 
 #: src/pages/plans/PhaseDetailPanel.tsx
+#: src/pages/plans/PhaseLedger.tsx
 msgid "criteria"
 msgstr "criteria"
 
@@ -1172,8 +1181,8 @@ msgstr "expensive to change"
 
 #: src/pages/PlanningMode.tsx
 #: src/pages/plans/PhaseRunPickers.tsx
-msgid "fable 5.1 — most capable, ~2.5× cost"
-msgstr "fable 5.1 — most capable, ~2.5× cost"
+msgid "fable 5.2 — most capable, ~2.5× cost"
+msgstr "fable 5.2 — most capable, ~2.5× cost"
 
 #: src/pages/plans/phaseChips.tsx
 #: src/pages/plans/PlanDetailPanel.tsx
@@ -2078,7 +2087,7 @@ msgstr "phase {seq}"
 msgid "Phase {seq}"
 msgstr "Phase {seq}"
 
-#: src/pages/plans/PhaseMiniBar.tsx
+#: src/pages/plans/PlanBarPhases.tsx
 #: src/pages/plans/PlanHeader.tsx
 msgid "phase {seq} · {name} · {word}"
 msgstr "phase {seq} · {name} · {word}"
@@ -2091,7 +2100,7 @@ msgstr "Phase {seq} not found in {planTitle}"
 msgid "phase details tabs"
 msgstr "phase details tabs"
 
-#: src/pages/plans/PhaseMiniBar.tsx
+#: src/pages/plans/PlanBarPhases.tsx
 msgid "phase progress"
 msgstr "phase progress"
 
@@ -3263,6 +3272,10 @@ msgstr "the whole plan is running{agentPart} (mode: {mode})"
 msgid "the wizard finished; its staged diff is being picked up by the daemon…"
 msgstr "the wizard finished; its staged diff is being picked up by the daemon…"
 
+#: src/pages/plans/PhaseLedger.tsx
+msgid "the work is confirmed; the phase doc's Completion Report is empty"
+msgstr "the work is confirmed; the phase doc's Completion Report is empty"
+
 #: src/pages/plans/PhaseDetailPanel.tsx
 msgid "this doc was changed by an applied revision {revisedAgo} — <0>see Revisions</0>"
 msgstr "this doc was changed by an applied revision {revisedAgo} — <0>see Revisions</0>"
@@ -3379,6 +3392,10 @@ msgstr "unverified"
 #: src/pages/plans/PlanHeader.tsx
 msgid "updated {ago} ago"
 msgstr "updated {ago} ago"
+
+#: src/pages/plans/phaseLedgerModel.ts
+msgid "verification could not conclude"
+msgstr "verification could not conclude"
 
 #: src/pages/plans/VerifyVerdictChip.tsx
 msgid "verified"
@@ -3519,6 +3536,10 @@ msgstr "workspace…"
 #: src/pages/plans/PlanHeader.tsx
 msgid "worktree per phase"
 msgstr "worktree per phase"
+
+#: src/pages/plans/PhaseLedger.tsx
+msgid "write report"
+msgstr "write report"
 
 #: src/pages/planning/RevisionReview.tsx
 msgid "write the staged changes into the plan docs"

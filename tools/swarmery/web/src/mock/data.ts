@@ -16,12 +16,14 @@ import type {
   ForecastLint,
   HealthResponse,
   PermissionRequest,
+  GuardSummary,
   PhaseBlocker,
   PhaseDiagnosis,
   PhaseForecast,
   PhaseLanding,
   PhaseLandRequest,
   PhaseLandResponse,
+  OrphanLandResponse,
   PhaseReview,
   PhaseSurprise,
   PlanDoc,
@@ -1708,6 +1710,7 @@ const mockEpicPhase = (
       | 'landing'
       | 'reopens'
       | 'reviews'
+      | 'guardDecision'
     >
   >,
 ): EpicPhase => ({
@@ -1868,6 +1871,31 @@ const mockEpics: Epic[] = [
         runError: 'exit 1: npm run build failed — TS2339 in Board.tsx',
         runOutcome: 'failed',
         runCheckboxesBefore: 2,
+        // The run stopped on a `kind: stop` block: the diagnosis leads with the
+        // decision, and the modal answers it in place from this DTO.
+        guardDecision: {
+          taskId: 0,
+          phaseId: 3,
+          decisionId: 'D-4',
+          source: 'stop',
+          trigger: 'criterion-impossible',
+          question: 'npm run screenshots has one failing assertion that is pre-existing on unmodified main',
+          reason: 'npm run screenshots has one failing assertion that is pre-existing on unmodified main',
+          freeText: true,
+          guard: {} as GuardSummary,
+          options: [
+            {
+              id: 'fix-mobile-docs-scroll',
+              label: 'fold the pre-existing /docs mobile scroll bug into this phase and fix it now',
+              consequence: 'PlaceLayout.tsx gets an unplanned change outside this phase’s scope',
+            },
+            {
+              id: 'accept-preexisting-residual',
+              label: 'land the phase as scoped, leave this one criterion unticked',
+              consequence: 'npm run screenshots stays red on that one assertion until a follow-up fixes it',
+            },
+          ],
+        },
       }),
       // A `runState: 'done'` process that ticked NOTHING — the exact shape the
       // green "Run done" chip used to lie about. Renders `ran · no progress`.
@@ -3104,6 +3132,19 @@ export const mockApi = {
     return body.action === 'return' ? base : { ...base, terms: MOCK_TERMS };
   },
 
+  /** POST …/orphan-branch/land — pretends the stranded branch got its change request. */
+  async landOrphanBranch(_taskId: number, branch: string): Promise<OrphanLandResponse> {
+    await delay(300);
+    const number = 900 + Number(branch.replace(/^swarm\/phase-/, '').slice(-2));
+    return {
+      branch,
+      base: 'main',
+      url: `https://github.com/acme/swarmery/pull/${String(number)}`,
+      number,
+      terms: MOCK_TERMS,
+    };
+  },
+
   /** POST …/phases/{phaseId}/landing/refresh — re-reads the seeded phase's
    *  change request: the stored status with a fresh checkedAt (an open one with
    *  no status yet reads as open, CI pending, review required). */
@@ -3141,6 +3182,9 @@ export const mockApi = {
               kind: 'dep-unmerged',
               summary: 'phase 2 is ticked but its branch was never merged',
               detail: 'swarm/phase-2 · 3 commits ahead of dev',
+              branch: 'swarm/phase-2',
+              commitsAhead: 3,
+              base: 'dev',
             },
             {
               kind: 'branch-dirty',
@@ -3149,9 +3193,36 @@ export const mockApi = {
                 'swarm/phase-4 · 2 commits ahead\n  feat: scaffold rollup query\n  wip: graph edges',
               branch: 'swarm/phase-4',
               commitsAhead: 2,
+              base: 'dev',
             },
           ]
-        : [];
+        : phase.guardDecision != null
+          ? [
+              {
+                kind: 'decision-open',
+                summary: `The run stopped (criterion-impossible) and is waiting for your answer to ${phase.guardDecision.decisionId}`,
+                detail: phase.guardDecision.reason ?? phase.guardDecision.question,
+                decisionId: phase.guardDecision.decisionId,
+                trigger: 'criterion-impossible',
+              },
+              {
+                kind: 'branch-awaits-decision',
+                summary: `Branch swarm/phase-${String(phase.id)} holds the stopped run's 1 commit — answer the decision and a retry continues on it`,
+                detail: 'feat(swarmery): base wash, 8px gaps, and list/detail/rail islands\nmeasured against the currently checked-out branch dev',
+                branch: `swarm/phase-${String(phase.id)}`,
+                commitsAhead: 1,
+                base: 'dev',
+              },
+              {
+                kind: 'orphan-branch',
+                summary: 'swarm/phase-45263 holds 5 commits but matches no phase in this plan',
+                detail: 'swarm/phase-45263 → 5 commits ahead, measured against the currently checked-out branch dev',
+                branch: 'swarm/phase-45263',
+                commitsAhead: 5,
+                base: 'dev',
+              },
+            ]
+          : [];
     return {
       phaseId: phase.id,
       seq: phase.seq,

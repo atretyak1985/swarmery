@@ -39,9 +39,9 @@ import {
   segmentLabel,
   segmentState,
   segmentWord,
-  SEGMENT_TONE,
 } from './planModel';
 import { plansHref, type PlanDetailTab } from './plansUrl';
+import { SEGMENT_TONE } from './segmentTone';
 import { usePlanDoc } from './usePlanDoc';
 
 const BTN =

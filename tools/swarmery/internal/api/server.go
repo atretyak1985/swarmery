@@ -13,6 +13,7 @@ import (
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/docsfs"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/improve"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/plainsum"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/probe"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/provision"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/retroanalysis"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/taskcap"
@@ -116,6 +117,9 @@ func NewServer(db *sql.DB, watching bool) (http.Handler, error) {
 			Repo: improveRepoRoot,
 			Exec: improve.OSExec{},
 		}}
+	// The proposal probe exports from the same marketplace clone generation
+	// reads (git archive of origin/main — read-only, no worktree).
+	h.ProposalProbe = probe.NewService(db, improveRepoRoot)
 	// The page-level improver: one system analysis at a time, gated by a human
 	// before anything downstream runs. Heal rows a previous daemon left
 	// 'running' — the process that owned them is gone, so they can never
