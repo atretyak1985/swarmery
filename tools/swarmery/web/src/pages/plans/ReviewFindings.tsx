@@ -164,30 +164,50 @@ function location(f: ReviewFinding): string {
   return f.line !== null ? `${f.file}:${String(f.line)}` : f.file;
 }
 
+/** D22: one finding as a row, not a table cell — id, a meta line (type ·
+ *  location · criterion · whether a test caught it), the evidence clamped to
+ *  three lines with an expander once it runs longer, and the resolution. */
 function FindingRow({ f }: { f: ReviewFinding }): JSX.Element {
   const { t } = useLingui();
+  const [expanded, setExpanded] = useState(false);
   const resolvedBy = f.resolvedBy;
+  const evidence = f.evidence === '' ? '—' : f.evidence;
+  const long = evidence.length > 160 || f.note.length > 160 || evidence.includes('\n') || f.note.includes('\n');
   return (
-    <tr className="border-t border-line/60 align-top">
-      <td className="py-1 pr-2 font-mono text-[10.5px] text-ink-2">{f.id}</td>
-      <td className="py-1 pr-2 font-mono text-[10.5px] text-ink-dim">{f.type === '' ? '—' : f.type}</td>
-      <td className="py-1 pr-2 font-mono text-[10.5px] break-all text-ink-2">{location(f)}</td>
-      <td className="py-1 pr-2 text-[11px] text-ink-2">{f.criterion === '' ? '—' : f.criterion}</td>
-      <td className="py-1 pr-2 font-mono text-[10.5px]">
-        {f.testCaught ? <span className="text-green">{t`yes`}</span> : <span className="text-ink-faint">{t`no`}</span>}
-      </td>
-      <td className="py-1 pr-2 text-[11px] break-words text-ink-2">
-        {f.evidence === '' ? '—' : f.evidence}
-        {f.note !== '' && <div className="mt-0.5 text-[10.5px] whitespace-pre-wrap text-ink-faint">{f.note}</div>}
-      </td>
-      <td className="py-1 font-mono text-[10.5px]">
+    <div
+      data-testid="finding-row"
+      className="grid grid-cols-[44px_minmax(0,1fr)_auto] items-start gap-3 border-t border-line/60 py-1.5"
+    >
+      <span className="font-mono text-[11px] font-bold text-ink-2">{f.id}</span>
+      <div className="min-w-0">
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 font-mono text-[10px] text-ink-faint">
+          <span>{f.type === '' ? '—' : f.type}</span>
+          <span className="break-all">{location(f)}</span>
+          {f.criterion !== '' && <span className="text-ink-2">{f.criterion}</span>}
+          {f.testCaught ? <span className="text-green">{t`test caught`}</span> : <span>{t`no test caught`}</span>}
+        </div>
+        <div className={`mt-0.5 text-[11px] break-words whitespace-pre-wrap text-ink-2 ${expanded ? '' : 'line-clamp-3'}`}>
+          {evidence}
+          {f.note !== '' && <span className="text-ink-faint"> — {f.note}</span>}
+        </div>
+        {long && (
+          <button
+            type="button"
+            onClick={() => setExpanded((v) => !v)}
+            className="mt-0.5 font-mono text-[10px] text-ink-faint transition-colors hover:text-brand"
+          >
+            {expanded ? t`show less` : t`show more`}
+          </button>
+        )}
+      </div>
+      <span className="font-mono text-[10.5px]">
         {resolvedBy !== null ? (
           <span className="text-green">{resolvedBy === 'plan' ? t`resolved in the plan round` : t`resolved in round ${resolvedBy}`}</span>
         ) : (
           <span className="text-amber">{t`open`}</span>
         )}
-      </td>
-    </tr>
+      </span>
+    </div>
   );
 }
 
@@ -226,29 +246,11 @@ function Round({ block }: { block: ReviewBlock }): JSX.Element {
           <Trans>No findings.</Trans>
         </p>
       ) : (
-        <table className="mt-1.5 w-full border-collapse text-left">
-          <caption className="sr-only">
-            <Trans>
-              {title}: {count} findings
-            </Trans>
-          </caption>
-          <thead>
-            <tr className="font-mono text-[9px] tracking-[0.1em] text-ink-faint uppercase">
-              <th className="pr-2 font-normal">{t`id`}</th>
-              <th className="pr-2 font-normal">{t`type`}</th>
-              <th className="pr-2 font-normal">{t`where`}</th>
-              <th className="pr-2 font-normal">{t`criterion`}</th>
-              <th className="pr-2 font-normal">{t`test caught`}</th>
-              <th className="pr-2 font-normal">{t`evidence`}</th>
-              <th className="font-normal">{t`status`}</th>
-            </tr>
-          </thead>
-          <tbody>
-            {block.findings.map((f) => (
-              <FindingRow key={f.id} f={f} />
-            ))}
-          </tbody>
-        </table>
+        <div aria-label={t`${title}: ${count} findings`} className="mt-1.5">
+          {block.findings.map((f) => (
+            <FindingRow key={f.id} f={f} />
+          ))}
+        </div>
       )}
     </section>
   );

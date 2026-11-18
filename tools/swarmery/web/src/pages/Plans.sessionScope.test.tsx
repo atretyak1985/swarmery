@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 //
-// The plan-sessions column's phase slice (plan-sessions phase filter, phase 2).
+// The plan-sessions column's phase slice (plan-sessions phase filter, phase 2;
+// re-pointed at the Runs tab's card list, plan D-27…D-31 phase 6).
 //
 // These are claims about the RENDERED column, not about `scopePlanSessions` —
 // that function has its own unit suite next door. What only a mounted page can
@@ -8,6 +9,13 @@
 // feeds `activePhaseId` through, that the operator's pick is keyed to the PLAN
 // and therefore survives moving between phases, and that closing the details
 // widens the column again without anything resetting the pick by hand.
+//
+// A card never shows `s.title` (the start of its boilerplate service prompt) —
+// these fixtures give every session a distinct, recognisable title precisely
+// so a regression that leaked one back onto the card would be visible here.
+// What the column shows instead is the role ("executor" for every phase-scoped
+// session, "plan run" for the controller, "inferred session"/"linked session"
+// for a `linked` row) — see runsModel.ts / PlanSessions.tsx.
 //
 // The fence worth having is SC-6, the negative one: the plan-run controller and
 // the task_sessions rows (`linked` / `inferred`) have no phase coordinate in the
@@ -189,20 +197,23 @@ function session(id: number, title: string, planGroup: SessionPlanGroup, started
     status: 'completed',
     startedAt,
     endedAt: null,
-    title,
+    // The service-prompt-shaped title a card must never show.
+    title: `You are ${title} for an approved implementation plan…`,
     source: 'jsonl',
     planGroup,
   };
 }
 
-// Phase #1 has a run AND a subagent under it, phase #2 has one run, phase #3 has
-// none — so "the pick survived" (SC-4) is distinguishable from "the automatic
-// rule would have done the same thing anyway" when we move from #1 to #2.
+// Phase #1 has a run AND a subagent under it (both read as their own attempt
+// group, since the data carries no explicit attempt number — runsModel.ts's
+// documented approximation), phase #2 has one run, phase #3 has none — so "the
+// pick survived" (SC-4) is distinguishable from "the automatic rule would have
+// done the same thing anyway" when we move from #1 to #2.
 const SESSIONS: Session[] = [
-  session(1, 'controller run', group({ role: 'controller', phaseId: null, phaseSeq: null }), '2026-09-20T09:00:00Z'),
-  session(2, 'phase 1 run', group(), '2026-09-20T09:05:00Z'),
-  session(3, 'phase 1 subagent', group(), '2026-09-20T09:09:00Z'),
-  session(4, 'phase 2 run', group({ phaseId: PHASE_2, phaseSeq: 2, phaseName: 'UI wiring' }), '2026-09-20T09:20:00Z'),
+  session(1, 'the controller', group({ role: 'controller', phaseId: null, phaseSeq: null }), '2026-09-20T09:00:00Z'),
+  session(2, 'the executor', group(), '2026-09-20T09:05:00Z'),
+  session(3, 'a subagent', group(), '2026-09-20T09:09:00Z'),
+  session(4, 'the executor', group({ phaseId: PHASE_2, phaseSeq: 2, phaseName: 'UI wiring' }), '2026-09-20T09:20:00Z'),
 ];
 
 /** 4 grouped sessions + 1 linked-only row. */
@@ -212,7 +223,7 @@ const TOTAL = SESSIONS.length + 1;
 const OTHER_SESSIONS: Session[] = [
   session(
     5,
-    'other plan run',
+    'the executor',
     group({ taskId: OTHER_TASK_ID, title: 'some other plan', phaseId: OTHER_PHASE, phaseSeq: 1, phaseName: 'Other work' }),
     '2026-09-20T11:00:00Z',
   ),
@@ -251,22 +262,29 @@ function column(): HTMLElement {
   return screen.getByLabelText('plan sessions');
 }
 
-/** Titles of the session rows currently rendered, in DOM order. */
-function rowTitles(): string[] {
-  return within(column())
-    .queryAllByRole('listitem')
-    .map((li) => li.textContent ?? '');
+/** The cards currently rendered, in DOM order — never a prompt title. */
+function cards(): HTMLElement[] {
+  return within(column()).queryAllByRole('listitem');
+}
+
+function cardTexts(): string[] {
+  return cards().map((li) => li.textContent ?? '');
+}
+
+/** No card ever shows the start of a service prompt. */
+function expectNoPromptLeak(): void {
+  for (const text of cardTexts()) {
+    expect(text).not.toContain('You are');
+  }
 }
 
 /** Mount the page and wait for the column to have loaded its sessions. */
 async function mountPlans(): Promise<void> {
-  render(
-    <PlansAtRoute />,
-  );
+  render(<PlansAtRoute />);
   // Folded under the ledger until the operator opens it.
   fireEvent.click(await screen.findByRole('button', { name: 'sessions' }));
   await waitFor(() => {
-    expect(rowTitles().some((t) => t.includes('controller run'))).toBe(true);
+    expect(cardTexts().some((t) => t.includes('plan run'))).toBe(true);
   });
 }
 
@@ -311,26 +329,29 @@ afterEach(() => {
 describe('plan sessions column — no phase open', () => {
   it('shows every row of the plan and a bare count, with no scope toggle', async () => {
     await mountPlans();
-    const titles = rowTitles();
-    expect(titles).toHaveLength(TOTAL);
-    expect(titles[0]).toContain('controller run');
-    expect(titles.some((t) => t.includes('operator'))).toBe(true);
+    const texts = cardTexts();
+    expect(texts).toHaveLength(TOTAL);
+    expect(texts[0]).toContain('plan run');
+    expect(texts.some((t) => t.includes('inferred session'))).toBe(true);
+    expectNoPromptLeak();
     expect(queryScopeToggle()).toBeNull();
     expect(within(column()).getByText(String(TOTAL))).toBeTruthy();
   });
 });
 
 describe('plan sessions column — a phase with sessions of its own', () => {
-  it('narrows to exactly that phase and labels both sides of the toggle (SC-1, SC-3, SC-7)', async () => {
+  it('narrows to exactly that phase, as attempt groups, and labels both sides of the toggle (SC-1, SC-3, SC-7)', async () => {
     await mountPlans();
     openPhase(1, 'Scope model');
 
     await waitFor(() => {
-      expect(rowTitles()).toHaveLength(2);
+      expect(cardTexts()).toHaveLength(2);
     });
-    const titles = rowTitles();
-    expect(titles[0]).toContain('phase 1 run');
-    expect(titles[1]).toContain('phase 1 subagent');
+    const texts = cardTexts();
+    expect(texts.every((t) => t.includes('executor'))).toBe(true);
+    expectNoPromptLeak();
+    expect(screen.getByText('Attempt 1')).toBeTruthy();
+    expect(screen.getByText('Attempt 2')).toBeTruthy();
 
     const toggle = scopeToggle();
     expect(toggle.textContent).toContain('#1 (2)');
@@ -342,25 +363,24 @@ describe('plan sessions column — a phase with sessions of its own', () => {
     openPhase(1, 'Scope model');
 
     await waitFor(() => {
-      expect(rowTitles()).toHaveLength(2);
+      expect(cardTexts()).toHaveLength(2);
     });
-    const titles = rowTitles().join('|');
-    expect(titles).not.toContain('controller run');
-    expect(titles).not.toContain('operator');
-    expect(titles).not.toContain('phase 2 run');
+    const texts = cardTexts().join('|');
+    expect(texts).not.toContain('plan run');
+    expect(texts).not.toContain('inferred session');
   });
 
   it('the toggle widens the column back to the whole plan (SC-3)', async () => {
     await mountPlans();
     openPhase(1, 'Scope model');
     await waitFor(() => {
-      expect(rowTitles()).toHaveLength(2);
+      expect(cardTexts()).toHaveLength(2);
     });
 
     fireEvent.click(scopeToggle());
 
     await waitFor(() => {
-      expect(rowTitles()).toHaveLength(TOTAL);
+      expect(cardTexts()).toHaveLength(TOTAL);
     });
     // Both numbers are still on screen — a widened column still says what the
     // phase slice would hold.
@@ -373,11 +393,11 @@ describe('plan sessions column — the pick belongs to the plan, not the phase',
     await mountPlans();
     openPhase(1, 'Scope model');
     await waitFor(() => {
-      expect(rowTitles()).toHaveLength(2);
+      expect(cardTexts()).toHaveLength(2);
     });
     fireEvent.click(scopeToggle());
     await waitFor(() => {
-      expect(rowTitles()).toHaveLength(TOTAL);
+      expect(cardTexts()).toHaveLength(TOTAL);
     });
 
     backToPhases();
@@ -388,20 +408,20 @@ describe('plan sessions column — the pick belongs to the plan, not the phase',
     await waitFor(() => {
       expect(scopeToggle().textContent).toContain('#2 (1)');
     });
-    expect(rowTitles()).toHaveLength(TOTAL);
+    expect(cardTexts()).toHaveLength(TOTAL);
   });
 
   it('closing the details widens the column again (SC-5)', async () => {
     await mountPlans();
     openPhase(1, 'Scope model');
     await waitFor(() => {
-      expect(rowTitles()).toHaveLength(2);
+      expect(cardTexts()).toHaveLength(2);
     });
 
     backToPhases();
 
     await waitFor(() => {
-      expect(rowTitles()).toHaveLength(TOTAL);
+      expect(cardTexts()).toHaveLength(TOTAL);
     });
     expect(queryScopeToggle()).toBeNull();
   });
@@ -415,7 +435,7 @@ describe('plan sessions column — a phase with no sessions of its own', () => {
     await waitFor(() => {
       expect(scopeToggle().textContent).toContain('#3 (0)');
     });
-    expect(rowTitles()).toHaveLength(TOTAL);
+    expect(cardTexts()).toHaveLength(TOTAL);
     expect(scopeToggle().getAttribute('data-tip')).toBe(
       'this phase has no sessions of its own — showing the whole plan; click to narrow anyway',
     );
@@ -433,7 +453,7 @@ describe('plan sessions column — a phase with no sessions of its own', () => {
     await waitFor(() => {
       expect(screen.getByText('no sessions for this phase')).toBeTruthy();
     });
-    expect(rowTitles()).toHaveLength(0);
+    expect(cardTexts()).toHaveLength(0);
     // The plan's real size is still on screen, so the empty column is legible
     // as "filtered", not as "this plan never ran" (SC-7).
     expect(scopeToggle().textContent).toContain(`all (${String(TOTAL)})`);
@@ -448,16 +468,16 @@ describe('plan sessions column — the pick does NOT leak to another plan (SC-4)
     // Stand on a manual "all" in the FIRST plan.
     openPhase(1, 'Scope model');
     await waitFor(() => {
-      expect(rowTitles()).toHaveLength(2);
+      expect(cardTexts()).toHaveLength(2);
     });
     fireEvent.click(scopeToggle());
     await waitFor(() => {
-      expect(rowTitles()).toHaveLength(TOTAL);
+      expect(cardTexts()).toHaveLength(TOTAL);
     });
 
     selectPlan('some other plan');
     await waitFor(() => {
-      expect(rowTitles().some((t) => t.includes('other plan run'))).toBe(true);
+      expect(cardTexts()).toHaveLength(1);
     });
     openPhase(1, 'Other work');
 
@@ -466,17 +486,16 @@ describe('plan sessions column — the pick does NOT leak to another plan (SC-4)
     await waitFor(() => {
       expect(scopeToggle().getAttribute('aria-pressed')).toBe('true');
     });
-    expect(rowTitles()).toHaveLength(1);
-    expect(rowTitles()[0]).toContain('other plan run');
+    expect(cardTexts()).toHaveLength(1);
+    expect(cardTexts()[0]).toContain('executor');
+    expectNoPromptLeak();
   });
 });
 
 describe('plan sessions column — a plan that never ran', () => {
   it('says so even with a phase open, and offers no dead toggle', async () => {
     epics = [emptyEpic()];
-    render(
-      <PlansAtRoute />,
-    );
+    render(<PlansAtRoute />);
     fireEvent.click(await screen.findByRole('button', { name: 'sessions' }));
     await screen.findByText('no sessions ran this plan');
 
@@ -498,7 +517,7 @@ describe('plan sessions column — the toggle explains itself in every state', (
 
     openPhase(1, 'Scope model');
     await waitFor(() => {
-      expect(rowTitles()).toHaveLength(2);
+      expect(cardTexts()).toHaveLength(2);
     });
     expect(scopeToggle().getAttribute('aria-pressed')).toBe('true');
     expect(scopeToggle().getAttribute('data-tip')).toBe(
@@ -510,7 +529,7 @@ describe('plan sessions column — the toggle explains itself in every state', (
 
     fireEvent.click(scopeToggle());
     await waitFor(() => {
-      expect(rowTitles()).toHaveLength(TOTAL);
+      expect(cardTexts()).toHaveLength(TOTAL);
     });
     expect(scopeToggle().getAttribute('aria-pressed')).toBe('false');
     expect(scopeToggle().getAttribute('data-tip')).toBe(

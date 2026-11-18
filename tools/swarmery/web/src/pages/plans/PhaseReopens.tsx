@@ -1,18 +1,17 @@
-// A phase's reopen ledger in its Runs tab (phase-run outcomes plan, phase 1):
-// the "Reopened" history — every time the finished phase was sent back because a
-// defect slipped past its gates, and which gate caught it — and, on a Done
-// phase, the Reopen action. Reopening records the reason, the fix URL and the
-// gate, and unticks the chosen criteria in the doc (POST …/reopen); the form's
-// checkbox list is the doc's ticked criteria as the server normalises them, so a
-// chosen label always matches.
+// A phase's single "Reopen…" action, at the bottom of its Runs tab (plan
+// D-31): every reopen's own reason now reads as the caption of the attempt
+// group it started (runsModel.ts / PlanSessions.tsx), so this component keeps
+// only the action itself and, when it is not offered, the one sentence saying
+// why. Reopening records the reason, the fix URL and the gate, and unticks
+// the chosen criteria in the doc (POST …/reopen); the form's checkbox list is
+// the doc's ticked criteria as the server normalises them, so a chosen label
+// always matches.
 
 import { t } from '@lingui/core/macro';
 import { Trans, useLingui } from '@lingui/react/macro';
 import { useEffect, useId, useState } from 'react';
 import { fetchPhaseReopens, reopenPhase } from '../../api/phasereport';
-import type { PhaseReopen, ReopenCaughtBy } from '../../api/types';
-import { fmtAgo } from '../../lib/format';
-import { safeHref } from '../../lib/safeHref';
+import type { ReopenCaughtBy } from '../../api/types';
 
 /** The gates in the form's select. Labels are locale getters, read at render. */
 export const CAUGHT_BY: readonly { value: ReopenCaughtBy; label: string }[] = [
@@ -42,24 +41,9 @@ export const CAUGHT_BY: readonly { value: ReopenCaughtBy; label: string }[] = [
   },
 ];
 
-const CAUGHT_CLS: Record<ReopenCaughtBy, string> = {
-  verifier: 'border-green/40 text-green',
-  review: 'border-green/40 text-green',
-  operator: 'border-amber/40 text-amber',
-  none: 'border-red/40 text-red',
-};
-
-/** "caught by review" / "caught by nobody" — the chip text. */
-export function caughtByText(c: ReopenCaughtBy): string {
-  if (c === 'none') return t`caught by nobody`;
-  const gate = CAUGHT_BY.find((g) => g.value === c)?.label ?? c;
-  return t`caught by ${gate}`;
-}
-
 export interface PhaseReopensProps {
   taskId: number;
   phaseId: number;
-  reopens: PhaseReopen[];
   /** The phase is Done and not running — the only state a reopen makes sense in. */
   canReopen: boolean;
   /** After a reopen: refetch the plan (the doc and its counts changed). */
@@ -223,59 +207,32 @@ function ReopenForm({
   );
 }
 
-export function PhaseReopens({ taskId, phaseId, reopens, canReopen, onReopened }: PhaseReopensProps): JSX.Element | null {
-  const { t } = useLingui();
+export function PhaseReopens({ taskId, phaseId, canReopen, onReopened }: PhaseReopensProps): JSX.Element {
   const [open, setOpen] = useState(false);
   // Stepping to another phase closes a half-filled form.
   useEffect(() => {
     setOpen(false);
   }, [phaseId]);
-  if (reopens.length === 0 && !canReopen) return null;
-  const count = String(reopens.length);
   return (
-    <div className="mt-3">
-      {reopens.length > 0 && (
-        <section aria-label={t`Reopened`}>
-          <h3 className="font-mono text-[10px] tracking-[0.14em] text-amber uppercase">
-            <Trans>Reopened · {count}</Trans>
-          </h3>
-          <ul className="mt-1 grid gap-1.5">
-            {reopens.map((r) => (
-              <li key={r.id} className="rounded-md border border-amber/30 px-2.5 py-1.5 text-[12px]">
-                <div className="flex flex-wrap items-center gap-1.5 font-mono text-[10px] text-ink-faint">
-                  <span className={`rounded border px-1.5 py-px text-[9px] ${CAUGHT_CLS[r.caughtBy]}`}>
-                    {caughtByText(r.caughtBy)}
-                  </span>
-                  <span title={r.createdAt}>{fmtAgo(r.createdAt)}</span>
-                  {r.fixUrl !== '' && (
-                    <a href={safeHref(r.fixUrl) ?? undefined} target="_blank" rel="noreferrer" className="text-brand hover:underline">
-                      <Trans>fix →</Trans>
-                    </a>
-                  )}
-                </div>
-                <p className="mt-1 text-ink-2">{r.reason}</p>
-                {r.criteria.length > 0 && (
-                  <ul className="mt-1 list-inside list-disc font-mono text-[10.5px] text-ink-dim">
-                    {r.criteria.map((c) => (
-                      <li key={c}>{c}</li>
-                    ))}
-                  </ul>
-                )}
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
-      {canReopen && !open && (
-        <button
-          type="button"
-          onClick={() => setOpen(true)}
-          className="mt-2 rounded-md border border-amber/40 px-2 py-1 font-mono text-[10px] text-amber hover:bg-amber/10"
-        >
-          <Trans>Reopen…</Trans>
-        </button>
-      )}
-      {canReopen && open && (
+    <div className="mt-3 border-t border-line pt-3">
+      {!canReopen ? (
+        <p className="font-mono text-[10.5px] text-ink-faint">
+          <Trans>Reopen… is offered once this phase is Done and no run is live.</Trans>
+        </p>
+      ) : !open ? (
+        <>
+          <button
+            type="button"
+            onClick={() => setOpen(true)}
+            className="rounded-md border border-amber/40 px-2 py-1 font-mono text-[10px] text-amber hover:bg-amber/10"
+          >
+            <Trans>Reopen…</Trans>
+          </button>
+          <p className="mt-1.5 font-mono text-[10.5px] text-ink-faint">
+            <Trans>Sends this phase back for another attempt — untick what slipped through and say why.</Trans>
+          </p>
+        </>
+      ) : (
         <ReopenForm
           taskId={taskId}
           phaseId={phaseId}

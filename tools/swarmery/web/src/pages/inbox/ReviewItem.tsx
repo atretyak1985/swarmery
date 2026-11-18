@@ -6,7 +6,7 @@
 // the link to the plan). InboxDetail owns the Ack button, bound to `e` like every
 // kind's primary.
 //
-// The verdict badge is shared with the phase panel's Runs tab (plans/RunsReviewBlock).
+// The verdict badge is shared with the phase panel's Review tab.
 
 import { Trans, useLingui } from '@lingui/react/macro';
 import { Link } from 'react-router-dom';

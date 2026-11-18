@@ -1,15 +1,23 @@
 // A plan phase's Review tab: what the run committed on its branch, whether a
 // verifier confirmed it, where the branch is on its way to the code host, and
-// the three exits — Push, Push + open <change request>, Return to agent.
+// the three exits — Push, Push + open <change request>, Return to agent. Read
+// top to bottom (plan D19-D26, phase 5): a one-sentence verdict, a next-step
+// card with at most one primary and one secondary action, the state as rows
+// (ReviewStateLedger), then ReviewFindings (rendered by the caller, right
+// after this component).
 //
 // Every label that names the host's objects comes from `terms` (the project's
 // GET /vcs answer, else the terms the review response itself carries): this
 // file never branches on which provider a project uses (SC-11).
 //
-// Failures are shown the way the board card's Land shows them
-// (workspace/task/TaskActions.tsx): a 422 is the server's `error` + `hint`
-// (the exact commands to finish by hand) + redacted `detail`, verbatim in a
+// Failures from an action just taken (push/pr/return) still render inline,
+// the way the board card's Land shows them (workspace/task/TaskActions.tsx): a
+// 422 is the server's `error` + `hint` + redacted `detail`, verbatim in a
 // <pre>; a 409 is a refusal with a known code, mapped to one inline sentence.
+// The phase's STORED last-landing-failure (`landing.error`, which can be stale
+// — from a run that has since changed) is not live feedback on anything the
+// operator just clicked, so it moves into the "what git said" disclosure
+// instead of sitting on the tab as a loose red line (D24/D25).
 
 import { t } from '@lingui/core/macro';
 import { Trans, useLingui } from '@lingui/react/macro';
@@ -25,12 +33,12 @@ import type {
 } from '../../api/types';
 import { DiffView } from '../../components/DiffView';
 import { ConfirmDialog, Loading } from '../../components/ui';
-import { fmtAgo } from '../../lib/format';
-import { safeHref } from '../../lib/safeHref';
-import { phaseGuard } from '../../api/guard';
-import { GuardBadge } from './GuardBadge';
-import { canLand, canReturn, landingLabel, prLinkText } from './landingModel';
-import { LandingStatus } from './LandingStatus';
+import { answerGuardDecision, phaseGuard } from '../../api/guard';
+import { DecisionReplyModal } from './DecisionReplyModal';
+import { isEmptyGuardDecision, isStopDecision } from './guardDecisionView';
+import { canReturn, NEUTRAL_TERMS } from './landingModel';
+import { reviewNextStep, type ReviewActionId } from './reviewNextStep';
+import { ReviewStateLedger } from './ReviewStateLedger';
 import { VerifyVerdictChip } from './VerifyVerdictChip';
 
 // The same button primitives as TaskActions.tsx.
@@ -110,36 +118,6 @@ export function LandFailure({ err, terms }: { err: unknown; terms: ProviderTerms
   );
 }
 
-/** The mono meta line: state pill · change-request link · when · last error. */
-function LandingStrip({ landing, terms }: { landing: PhaseLanding; terms: ProviderTerms }): JSX.Element {
-  const link = prLinkText(landing, terms);
-  const mergedAgo = landing.landedAt !== null ? fmtAgo(landing.landedAt) : '';
-  const tone =
-    landing.state === 'merged' || landing.state === 'pr_open'
-      ? 'border-green/40 bg-green/10 text-green'
-      : landing.state === 'ready' || landing.state === 'pushed'
-        ? 'border-brand/40 bg-brand/10 text-brand'
-        : landing.state === 'returned'
-          ? 'border-amber/40 bg-amber/10 text-amber'
-          : 'border-line text-ink-faint';
-  return (
-    <div className="flex flex-wrap items-center gap-2 font-mono text-[10.5px] text-ink-faint">
-      <span className={`rounded border px-1.5 py-px text-[9.5px] ${tone}`}>{landingLabel(landing.state, terms)}</span>
-      {link !== null && landing.prUrl !== null && (
-        <a href={safeHref(landing.prUrl) ?? undefined} target="_blank" rel="noreferrer" className="text-brand hover:underline">
-          {link}
-        </a>
-      )}
-      {/* landedAt is the merge time: shown for a merged phase only. */}
-      {landing.state === 'merged' && landing.landedAt !== null && (
-        <span>
-          <Trans>merged {mergedAgo}</Trans>
-        </span>
-      )}
-    </div>
-  );
-}
-
 /** The plan's header names a branch the run did not use. Land always pushes the
  *  run branch (the header's is a reference only), so this says so before Push. */
 function BranchMismatchNote({ headerBranch, runBranch }: { headerBranch: string; runBranch: string }): JSX.Element | null {
@@ -152,6 +130,123 @@ function BranchMismatchNote({ headerBranch, runBranch }: { headerBranch: string;
         header's branch is a reference only.
       </Trans>
     </div>
+  );
+}
+
+const DOT_TONE = { success: 'bg-green', warn: 'bg-amber', danger: 'bg-red', neutral: 'bg-ink-faint' } as const;
+
+/** D19: a one-sentence verdict — a tone dot, a bold lead clause and the rest,
+ *  the same shape as a session header's one-line state. The phase's state is
+ *  named exactly once on the tab; nothing below repeats it as a sentence. */
+function VerdictLine({ tone, lead, rest }: { tone: keyof typeof DOT_TONE; lead: string; rest: string }): JSX.Element {
+  return (
+    <p className="flex items-start gap-2 text-[13.5px] leading-[1.5] text-ink-2">
+      <span aria-hidden="true" className={`mt-[5px] h-2 w-2 shrink-0 rounded-full ${DOT_TONE[tone]}`} />
+      <span>
+        <strong className="font-semibold text-ink">{lead}</strong> {rest}
+      </span>
+    </p>
+  );
+}
+
+/** D21: the next-step card — at most one primary (filled) and one secondary
+ *  (outlined) action, with a reason under the title, and the unavailable
+ *  actions listed under it with why. Renders a quiet note instead when there
+ *  is nothing to do. */
+function NextStepCard({
+  primary,
+  secondary,
+  note,
+  unavailable,
+  busy,
+  busyAction,
+  onAction,
+}: {
+  primary: ReturnType<typeof reviewNextStep>['primary'];
+  secondary: ReturnType<typeof reviewNextStep>['secondary'];
+  note: string | null;
+  unavailable: ReturnType<typeof reviewNextStep>['unavailable'];
+  busy: boolean;
+  /** The action currently in flight, if any — its button's label switches to
+   *  the "…ing" word and carries aria-busy. */
+  busyAction: ReviewActionId | null;
+  onAction: (id: ReviewActionId) => void;
+}): JSX.Element {
+  const label = (a: NonNullable<typeof primary>): string => (busyAction === a.id ? BUSY_LABEL[a.id]() : a.label);
+  return (
+    <div className="rounded-lg border border-brand/40 bg-brand-bg px-3 py-2.5">
+      <div className="font-mono text-[10px] tracking-[0.14em] text-brand uppercase">
+        <Trans>next step</Trans>
+      </div>
+      {primary !== null ? (
+        <>
+          <div className="mt-1 text-[13.5px] font-semibold text-ink">{primary.label}</div>
+          <p className="mt-0.5 text-[12px] leading-[1.45] text-ink-2">{primary.reason}</p>
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              className={PRIMARY}
+              disabled={busy}
+              aria-busy={busyAction === primary.id}
+              onClick={() => onAction(primary.id)}
+            >
+              {label(primary)}
+            </button>
+            {secondary !== null && (
+              <button
+                type="button"
+                className={PLAIN}
+                disabled={busy}
+                aria-busy={busyAction === secondary.id}
+                onClick={() => onAction(secondary.id)}
+              >
+                {label(secondary)}
+              </button>
+            )}
+          </div>
+        </>
+      ) : (
+        note !== null && <p className="mt-1 text-[12.5px] leading-[1.5] text-ink-dim">{note}</p>
+      )}
+      {unavailable.length > 0 && (
+        <ul className="mt-2 space-y-0.5 border-t border-brand/20 pt-2 font-mono text-[10.5px] text-ink-faint">
+          {unavailable.map((u) => (
+            <li key={u.id}>
+              {UNAVAIL_LABEL[u.id]()} — {u.reason}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+const UNAVAIL_LABEL: Record<'push' | 'pr' | 'return', () => string> = {
+  push: () => t`Push`,
+  pr: () => t`Push + open`,
+  return: () => t`Return to agent`,
+};
+
+const BUSY_LABEL: Record<ReviewActionId, () => string> = {
+  push: () => t`Pushing…`,
+  pr: () => t`Opening…`,
+  return: () => t`Return to agent…`,
+  'answer-decision': () => t`Answering…`,
+  'close-guard': () => t`Closing…`,
+};
+
+/** D25: the raw landing failure the daemon has stored, tucked away so it
+ *  stops being a loose red line on the tab — visible only once opened. */
+function GitSaidDisclosure({ text }: { text: string }): JSX.Element | null {
+  const { t } = useLingui();
+  if (text === '') return null;
+  return (
+    <details className="rounded-lg border border-line bg-surface/40 px-2.5 py-1.5">
+      <summary className="cursor-pointer font-mono text-[10.5px] text-ink-dim hover:text-ink">{t`what git said`}</summary>
+      <pre className="mt-1.5 max-h-[220px] overflow-auto font-mono text-[10.5px] whitespace-pre-wrap break-words text-amber">
+        {text}
+      </pre>
+    </details>
   );
 }
 
@@ -172,6 +267,11 @@ export function PhaseReview({ epic, phase, terms, onLanded }: PhaseReviewProps):
   // run branch, looked up through the landing refresh.
   const [finding, setFinding] = useState(false);
   const [findError, setFindError] = useState<unknown>(null);
+  // D24/D25: the in-place reply to an open guard decision, and D26's one-button
+  // close for a decision that would add nothing to scope.
+  const [decisionOpen, setDecisionOpen] = useState(false);
+  const [closingGuard, setClosingGuard] = useState(false);
+  const [guardCloseError, setGuardCloseError] = useState<unknown>(null);
 
   // The phase this instance currently shows. The panel keeps the instance
   // (and the tab) on ↑/↓ step navigation, so a response that comes back after
@@ -222,17 +322,16 @@ export function PhaseReview({ epic, phase, terms, onLanded }: PhaseReviewProps):
     setFeedback('');
     setFinding(false);
     setFindError(null);
+    setDecisionOpen(false);
+    setClosingGuard(false);
+    setGuardCloseError(null);
   }, [phase.id]);
 
   const vocab: ProviderTerms | null = terms ?? review?.terms ?? null;
   const landing: PhaseLanding | null = landed ?? review?.landing ?? phase.landing ?? null;
-  const gate = { runState: phase.runState, runSessionUuid: phase.runSessionUuid, landing };
   const running = phase.runState === 'running';
   const noBranch = loadError instanceof LandError && loadError.code === 'no-run-branch';
-  const landable = !noBranch && canLand(gate);
-  const returnable = !noBranch && canReturn(gate);
-  const findable = !noBranch && (landing?.state === 'ready' || landing?.state === 'pushed');
-  const busy = inFlight !== null || finding;
+  const busy = inFlight !== null || finding || closingGuard;
 
   const find = (): void => {
     const forPhase = phase.id;
@@ -279,11 +378,17 @@ export function PhaseReview({ epic, phase, terms, onLanded }: PhaseReviewProps):
       });
   };
 
-  const landTitle = running
-    ? t`the run is still live — land it once it finishes`
-    : !landable
-      ? t`nothing to land in this state`
-      : undefined;
+  const closeEmptyGuard = (): void => {
+    const decision = phase.guardDecision;
+    if (decision == null) return;
+    setClosingGuard(true);
+    setGuardCloseError(null);
+    answerGuardDecision(decision.taskId, decision.phaseId, decision.decisionId, 'reject', '')
+      .then(() => onLanded?.())
+      .catch((e: unknown) => setGuardCloseError(e))
+      .finally(() => setClosingGuard(false));
+  };
+
   const change = vocab?.change ?? '';
   // No (or an empty) short term: the same neutral word findMissSentence uses,
   // never a bare "Find ".
@@ -292,34 +397,120 @@ export function PhaseReview({ epic, phase, terms, onLanded }: PhaseReviewProps):
   const landingError = landing?.error ?? '';
   const verdict = review?.verifyVerdict ?? phase.verifyVerdict;
   const verdictDetail = review?.verifyDetail ?? phase.verifyDetail;
+  const guardDecision = phase.guardDecision ?? null;
+  const findable = !noBranch && guardDecision == null && (landing?.state === 'ready' || landing?.state === 'pushed');
+
+  const gitErrored = actionError !== null || (loadError !== null && !noBranch);
+  const next = reviewNextStep({
+    phase: {
+      runState: phase.runState,
+      runSessionUuid: phase.runSessionUuid,
+      landing,
+      guardDecision,
+      manualOpen: phase.manualOpen,
+      landOpen: phase.landOpen,
+      checkboxesDone: phase.checkboxesDone,
+      checkboxesTotal: phase.checkboxesTotal,
+    },
+    gitErrored,
+    branchGone: noBranch,
+    terms: vocab ?? NEUTRAL_TERMS,
+  });
+
+  const returnable =
+    !noBranch && guardDecision == null && canReturn({ runState: phase.runState, runSessionUuid: phase.runSessionUuid, landing });
+  const showSmallReturn = returnable && next.primary?.id !== 'return';
+
+  const runAction = (id: ReviewActionId): void => {
+    switch (id) {
+      case 'push':
+        act({ action: 'push' });
+        break;
+      case 'pr':
+        act({ action: 'pr', draft });
+        break;
+      case 'return':
+        setActionError(null);
+        setReturnOpen(true);
+        break;
+      case 'answer-decision':
+        setDecisionOpen(true);
+        break;
+      case 'close-guard':
+        closeEmptyGuard();
+        break;
+    }
+  };
+
+  const showsDraft = (next.primary?.id === 'pr' || next.secondary?.id === 'pr') && !noBranch;
 
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-2">
-        {landing !== null && vocab !== null && <LandingStrip landing={landing} terms={vocab} />}
         <VerifyVerdictChip verdict={verdict} detail={verdictDetail} />
-        <GuardBadge guard={phaseGuard(phase)} />
       </div>
-      {landing !== null && (
-        <LandingStatus
-          taskId={epic.taskId}
-          phaseId={phase.id}
-          landing={landing}
-          onRefreshed={(next) => {
-            const moved = next.state !== landing.state;
-            setLanded(next);
-            // A merge moves the phase list too (its chip, its landed date).
-            if (moved) onLanded?.();
-          }}
-        />
-      )}
-      {landingError !== '' && (
-        <div className="font-mono text-[10.5px] break-words text-amber">
-          <Trans>last landing failure: {landingError}</Trans>
-        </div>
-      )}
+
+      <VerdictLine tone={next.verdict.tone} lead={next.verdict.lead} rest={next.verdict.rest} />
 
       {review !== null && <BranchMismatchNote headerBranch={review.headerBranch} runBranch={review.branch} />}
+
+      <NextStepCard
+        primary={next.primary}
+        secondary={next.secondary}
+        note={next.note}
+        unavailable={next.unavailable}
+        busy={busy || running}
+        busyAction={inFlight ?? (closingGuard ? 'close-guard' : null)}
+        onAction={runAction}
+      />
+
+      {showsDraft && (
+        <label className="flex items-center gap-1.5 font-mono text-[11px] text-ink-2">
+          <input type="checkbox" checked={draft} disabled={busy || running} onChange={(e) => setDraft(e.target.checked)} />
+          <Trans>Draft</Trans>
+        </label>
+      )}
+
+      <div className="flex flex-wrap items-center gap-2">
+        {!running && findable && (
+          <button
+            type="button"
+            className={PLAIN}
+            disabled={busy}
+            aria-busy={finding}
+            title={t`look up a ${change} already opened for this phase's run branch`}
+            onClick={find}
+          >
+            {finding ? t`Looking…` : t`Find ${changeShort}`}
+          </button>
+        )}
+        {showSmallReturn && (
+          <button
+            type="button"
+            className={PLAIN}
+            disabled={busy}
+            aria-busy={inFlight === 'return'}
+            onClick={() => {
+              setActionError(null);
+              setReturnOpen(true);
+            }}
+          >
+            <Trans>Return to agent…</Trans>
+          </button>
+        )}
+      </div>
+
+      {actionError !== null && !returnOpen && <LandFailure err={actionError} terms={vocab} />}
+      {findMiss !== null ? (
+        <div role="status" className="font-mono text-[10.5px] break-words text-amber">
+          {findMiss}
+        </div>
+      ) : (
+        findError !== null && <LandFailure err={findError} terms={vocab} />
+      )}
+      {guardCloseError !== null && <LandFailure err={guardCloseError} terms={vocab} />}
+
+      <GitSaidDisclosure text={landingError} />
 
       <div className="rounded-lg border border-line bg-surface/40 px-2.5 py-2">
         {loading && review === null ? (
@@ -335,72 +526,40 @@ export function PhaseReview({ epic, phase, terms, onLanded }: PhaseReviewProps):
         ) : null}
       </div>
 
-      {vocab !== null && !noBranch && (
-        <div className="flex flex-wrap items-center gap-2">
-          <button
-            type="button"
-            className={PRIMARY}
-            disabled={busy || running || !landable}
-            aria-busy={inFlight === 'push'}
-            title={landTitle ?? t`push the run branch to origin`}
-            onClick={() => act({ action: 'push' })}
-          >
-            {inFlight === 'push' ? t`Pushing…` : t`Push`}
-          </button>
-          <button
-            type="button"
-            className={PRIMARY}
-            disabled={busy || running || !landable}
-            aria-busy={inFlight === 'pr'}
-            title={landTitle ?? t`push the run branch and open a ${change}`}
-            onClick={() => act({ action: 'pr', draft })}
-          >
-            {inFlight === 'pr' ? t`Opening…` : t`Push + open ${change}`}
-          </button>
-          <label className="flex items-center gap-1.5 font-mono text-[11px] text-ink-2">
-            <input
-              type="checkbox"
-              checked={draft}
-              disabled={busy || running || !landable}
-              onChange={(e) => setDraft(e.target.checked)}
-            />
-            <Trans>Draft</Trans>
-          </label>
-          {findable && (
-            <button
-              type="button"
-              className={PLAIN}
-              disabled={busy || running}
-              aria-busy={finding}
-              title={t`look up a ${change} already opened for this phase's run branch`}
-              onClick={find}
-            >
-              {finding ? t`Looking…` : t`Find ${changeShort}`}
-            </button>
-          )}
-          <button
-            type="button"
-            className={`${PLAIN} ml-auto`}
-            disabled={busy || running || !returnable}
-            aria-busy={inFlight === 'return'}
-            title={running ? t`the run is still live` : t`send the phase back to its agent with your feedback`}
-            onClick={() => {
-              setActionError(null);
-              setReturnOpen(true);
-            }}
-          >
-            <Trans>Return to agent…</Trans>
-          </button>
-        </div>
+      {vocab !== null && (
+        <ReviewStateLedger
+          taskId={epic.taskId}
+          phaseId={phase.id}
+          runBranch={noBranch ? '' : phase.runBranch}
+          landing={landing}
+          terms={vocab}
+          checkboxesDone={phase.checkboxesDone}
+          checkboxesTotal={phase.checkboxesTotal}
+          manualOpen={phase.manualOpen}
+          guardDecision={guardDecision}
+          guard={phaseGuard(phase)}
+          onRefreshed={(nextLanding) => {
+            const moved = nextLanding.state !== landing?.state;
+            setLanded(nextLanding);
+            // A merge moves the phase list too (its chip, its landed date).
+            if (moved) onLanded?.();
+          }}
+          {...(guardDecision != null && !isStopDecision(guardDecision) && isEmptyGuardDecision(guardDecision)
+            ? { onCloseEmptyGuard: closeEmptyGuard, closingGuard }
+            : {})}
+        />
       )}
 
-      {actionError !== null && !returnOpen && <LandFailure err={actionError} terms={vocab} />}
-      {findMiss !== null ? (
-        <div role="status" className="font-mono text-[10.5px] break-words text-amber">
-          {findMiss}
-        </div>
-      ) : (
-        findError !== null && <LandFailure err={findError} terms={vocab} />
+      {guardDecision != null && (
+        <DecisionReplyModal
+          open={decisionOpen}
+          decision={guardDecision}
+          onAnswered={() => {
+            setDecisionOpen(false);
+            onLanded?.();
+          }}
+          onClose={() => setDecisionOpen(false)}
+        />
       )}
 
       <ConfirmDialog

@@ -44,11 +44,6 @@ msgstr "(сесія без назви)"
 msgid "{0, plural, one {{decisions} phase waits on a decision.} few {{decisions} phases wait on a decision.} many {{decisions} phases wait on a decision.} other {{decisions} phases wait on a decision.}}"
 msgstr "{0, plural, one {{decisions} фаза чекає на рішення.} few {{decisions} фази чекають на рішення.} many {{decisions} фаз чекають на рішення.} other {{decisions} фази чекають на рішення.}}"
 
-#. placeholder {0}: f.blocked
-#: src/pages/NeedsYou.tsx
-msgid "{0, plural, one {# blocked attempt} few {# blocked attempts} many {# blocked attempts} other {# blocked attempts}}"
-msgstr "{0, plural, one {# заблокована спроба} few {# заблоковані спроби} many {# заблокованих спроб} other {# заблокованих спроб}}"
-
 #. placeholder {0}: i.farOffPlan
 #: src/pages/today/loopModel.ts
 msgid "{0, plural, one {# landed far from the plan.} few {# landed far from the plan.} many {# landed far from the plan.} other {# landed far from the plan.}}"
@@ -78,11 +73,6 @@ msgstr "{0, plural, one {# справа чекає на вас · працює: 
 #: src/pages/detail/ContextHogsCard.tsx
 msgid "{0, plural, one {# unattributed result} few {# unattributed results} many {# unattributed results} other {# unattributed results}}"
 msgstr "{0, plural, one {# результат без атрибуції} few {# результати без атрибуції} many {# результатів без атрибуції} other {# результату без атрибуції}}"
-
-#. placeholder {0}: f.changed.length
-#: src/pages/NeedsYou.tsx
-msgid "{0, plural, one {touched # protected file} few {touched # protected files} many {touched # protected files} other {touched # protected files}}"
-msgstr "{0, plural, one {зачеплено # захищений файл} few {зачеплено # захищені файли} many {зачеплено # захищених файлів} other {зачеплено # захищених файлів}}"
 
 #: src/pages/today/loopModel.ts
 msgid "{advisorFindings, plural, one {{count} Advisor finding} few {{count} Advisor findings} many {{count} Advisor findings} other {{count} Advisor findings}}"
@@ -921,10 +911,6 @@ msgstr "прибрати"
 msgid "dispatched task"
 msgstr "відправлена задача"
 
-#: src/pages/NeedsYou.tsx
-msgid "doc copy mismatch"
-msgstr "копія документа не збігається"
-
 #: src/pages/Overview.tsx
 #: src/pages/ProjectOverview.tsx
 #: src/pages/Sessions.tsx
@@ -1135,10 +1121,6 @@ msgstr "вже {waited} · {tool}: {command}"
 #: src/pages/ProjectOverview.tsx
 msgid "generate insights"
 msgstr "згенерувати інсайти"
-
-#: src/pages/NeedsYou.tsx
-msgid "guard block unreadable"
-msgstr "блок guard не прочитати"
 
 #: src/pages/today/feedModel.ts
 msgid "Guard stopped phase {seq}"

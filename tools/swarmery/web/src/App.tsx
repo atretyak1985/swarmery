@@ -123,27 +123,35 @@ function AppShell(): JSX.Element {
           )}
         </Sidebar>
 
-        {/* Fill routes (lib/fillRoute.ts) own their own scroll: this container
+        {/* Fill routes (lib/fillRoute.ts) own their own scroll: the inner div
             hands it over — overflow-hidden plus the flex/min-h-0 chain the page
             needs to size itself against the leftover height. Every other route
             keeps the byte-identical scroller it has always had. The mobile
             bottom-nav inset (pb-[72px]) applies in both modes.
             [-webkit-overflow-scrolling:touch] belongs to whatever scrolls, so it
-            drops here and moves onto the page's own pane in the page phases. */}
-        <main
-          // Marks the container whose overflow the fill flag flips, in BOTH
-          // modes. The two shells hand off scroll at different depths (here it is
-          // <main>, in the workspace shell it is a div inside it), so the
-          // screenshot harness needs one selector that finds the right node in
-          // either — see assertShellScroll in scripts/screenshot.mjs.
-          data-shell-scroller=""
-          className={
-            fill
-              ? 'flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden pb-[72px] desk:pb-0'
-              : 'min-w-0 flex-1 overflow-y-auto pb-[72px] [-webkit-overflow-scrolling:touch] desk:pb-0'
-          }
-        >
-          <Outlet />
+            drops here and moves onto the page's own pane in the page phases.
+            <main> itself is always overflow-hidden, exactly like the workspace
+            shell's own <main> (workspace/ProjectWorkspaceLayout.tsx) — so a route
+            that renders straight into <Outlet/> (e.g. PlaceLayout, no wrapper of
+            its own) lands one level BELOW data-shell-scroller in both shells,
+            never sharing its depth with it (scripts/screenshot.mjs's
+            assertNoNestedVerticalScroll relies on that one extra level). */}
+        <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+          <div
+            // Marks the container whose overflow the fill flag flips, in BOTH
+            // modes. The two shells hand off scroll at the same depth now (a div
+            // inside <main>, never <main> itself), so the screenshot harness
+            // needs one selector that finds the right node in either — see
+            // assertShellScroll in scripts/screenshot.mjs.
+            data-shell-scroller=""
+            className={
+              fill
+                ? 'flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden pb-[72px] desk:pb-0'
+                : 'min-w-0 flex-1 overflow-y-auto pb-[72px] [-webkit-overflow-scrolling:touch] desk:pb-0'
+            }
+          >
+            <Outlet />
+          </div>
         </main>
       </div>
 
