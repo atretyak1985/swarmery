@@ -10,8 +10,9 @@ import { phaseGuard } from '../../api/guard';
 import type { DecisionHoldRef, Epic, EpicPhase, PlanRevision, ProviderTerms, Session } from '../../api/types';
 import { BlockerBanner } from '../../components/place/DetailHeader';
 import { actionClass } from '../../components/place/PageDetail';
+import type { NumberItem } from '../../components/place/NumbersStrip';
 import { Loading } from '../../components/ui';
-import { fmtAgo } from '../../lib/format';
+import { fmtAgo, fmtElapsed } from '../../lib/format';
 import { Markdown } from '../../lib/markdown';
 import { safeHref } from '../../lib/safeHref';
 import { useSessionHref } from '../../lib/sessionHref';
@@ -19,13 +20,16 @@ import { useProjectWorkspace } from '../../workspace/ProjectContext';
 import { REVIEW_VERDICT_UI } from '../inbox/inboxModel';
 import { CriterionLint } from './CriterionLint';
 import { ForecastStory } from './ForecastStory';
-import { ForecastSection, RailSection } from './ForecastVsActual';
+import { ForecastSection, forecastsOf, RailSection } from './ForecastVsActual';
 import { LandCriterionAction } from './LandCriterionAction';
 import { hasReviewTab, showsReviewTab } from './landingModel';
-import { STAGE_TONE } from './PhaseLedger';
+import { runSpan, STAGE_TONE } from './PhaseLedger';
 import {
+  phaseCost,
+  phaseNote,
   phaseRuns,
   phaseStage,
+  phaseStateLine,
   heldByDecision,
   stageLabel,
 } from './phaseLedgerModel';
@@ -49,7 +53,7 @@ import {
 } from './PhaseRunPickers';
 import { PlainSummary } from './PlainSummary';
 import { type Check, DocEditor, extractChecks } from './planDetailShell';
-import { computeResolvedSeqs, extractSection, phaseGoal, phaseNeedsYou, phaseStatus } from './planModel';
+import { computeResolvedSeqs, extractSection, fmtSpent, phaseGoal, phaseNeedsYou, phaseStatus } from './planModel';
 import type { PhaseDetailTab } from './plansTarget';
 import { ReviewFindings } from './ReviewFindings';
 import { DOT, guardRowView, Row, type RowTone } from './ReviewStateLedger';
@@ -164,6 +168,7 @@ export function PhaseDetailPanel({
   onCancelRun,
   reverify,
   onReverify,
+  now,
   onOpenOutcome,
   onDocChanged,
   revisions,
@@ -202,6 +207,8 @@ export function PhaseDetailPanel({
   onOpenRevisions: () => void;
   /** The project's code-host vocabulary for the Review tab (null until loaded). */
   terms: ProviderTerms | null;
+  /** The page's clock tick: run spans and the elapsed time follow it. */
+  now: number;
 }): JSX.Element {
   const { t, i18n } = useLingui();
   const { slug: projectSlug } = useProjectWorkspace();
@@ -281,6 +288,24 @@ export function PhaseDetailPanel({
   const runs = phaseRuns(sessions, phase.id);
   const done = phase.checkboxesDone;
   const total = phase.checkboxesTotal;
+
+  // The header's own state sentence and numbers (D-16) — the same facts the
+  // Runs tab's chips and the ledger row already carry, surfaced where every tab
+  // can see them without switching to Runs.
+  const cost = phaseCost(runs);
+  const forecast = forecastsOf(phase).at(-1);
+  const forecastBand =
+    forecast === undefined ? '' : [forecast.sizeBand, forecast.durationBand].filter((b) => b !== '').join(' · ');
+  const stats: NumberItem[] = [
+    { label: t`spent`, value: cost === null ? '—' : fmtSpent(cost), tone: 'brand' },
+    ...(forecastBand === '' ? [] : [{ label: t`forecast`, value: forecastBand, tone: 'faint' as const }]),
+    { label: t`runs`, value: String(runs.length) },
+    { label: t`criteria`, value: `${String(done)}/${String(total)}`, tone: total > 0 && done === total ? 'green' : 'default' },
+    { label: t`duration`, value: runs.length === 0 ? '—' : runs.map((r) => runSpan(r, now)).join(' + ') },
+  ];
+  const elapsed = phase.runStartedAt === null ? '' : fmtElapsed(phase.runStartedAt, now);
+  const note = phaseNote(phase, status, depsUnmet, elapsed, terms?.changeShort ?? null);
+  const stateLine = phaseStateLine(phase, status, depsUnmet, note);
 
   // Runs tab (plan D-27…D-31): the verdict sentence and the "last result"
   // rows, one per stage of the pipeline — never the badge strip they replace.
@@ -441,6 +466,8 @@ export function PhaseDetailPanel({
       stage={{ label: stageLabel(stage), tone: STAGE_TONE[stage] }}
       hrefFor={tabHref}
       banner={blocker !== null ? <BlockerBanner to={needsHref} lead={blocker} /> : undefined}
+      stateLine={stateLine}
+      stats={stats}
       tabCounts={tabCounts}
       actions={actions}
     >

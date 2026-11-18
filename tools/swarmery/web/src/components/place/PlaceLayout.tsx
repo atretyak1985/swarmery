@@ -34,10 +34,17 @@ export type NarrowPane = 'both' | 'list' | 'detail';
 export function PlaceLayout({
   list,
   detail,
+  bareDetail = false,
   narrow = 'both',
 }: {
   list: ReactNode;
   detail: ReactNode;
+  /** Strips the detail pane's own border, background and scroll (Plans only,
+   * D-17): `detail` builds its own two stacked islands — a fixed band and a
+   * scrolling one, 8px apart — instead of sharing this one frame. Below `desk`
+   * there is still one column: `detail` keeps flowing plainly, same as a framed
+   * pane would. */
+  bareDetail?: boolean;
   /** Below `desk`: which pane shows. From `desk` up both always do. */
   narrow?: NarrowPane;
 }): JSX.Element {
@@ -53,9 +60,11 @@ export function PlaceLayout({
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto desk:contents">
         <div className={narrow === 'detail' ? 'hidden desk:contents' : 'contents'}>{list}</div>
         <div
-          className={`min-h-0 min-w-0 bg-surface desk:block desk:overflow-y-auto desk:rounded-xl desk:border desk:border-line ${
-            narrow === 'list' ? 'hidden' : narrow === 'detail' ? 'flex-1' : ''
-          }`}
+          className={`min-h-0 min-w-0 ${
+            bareDetail
+              ? 'desk:flex desk:min-h-0 desk:flex-col desk:gap-2'
+              : 'bg-surface desk:block desk:overflow-y-auto desk:rounded-xl desk:border desk:border-line'
+          } ${narrow === 'list' ? 'hidden' : narrow === 'detail' ? 'flex-1' : ''}`}
         >
           {detail}
         </div>

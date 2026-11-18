@@ -398,7 +398,8 @@ describe('a blocked phase nothing has changed for', () => {
     expect(runCalls()[1]?.init?.body).toBe('{"force":true}');
   });
 
-  // On a phase page the strip is the column's first thing: it needs air above it too.
+  // On a phase page the strip sits in the scrolling island's own top padding —
+  // it is not flush against the island's edge.
   it('keeps the refusal off the column top on a phase page', async () => {
     runReplies = [blocked];
     await mountPlans();
@@ -406,7 +407,7 @@ describe('a blocked phase nothing has changed for', () => {
     fireEvent.click(segment as HTMLElement);
     fireEvent.click(await screen.findByRole('button', { name: '▶ run this phase now' }));
     await screen.findByRole('button', { name: 'Run anyway' });
-    expect(screen.getByTestId('run-error').className).toContain('my-3');
+    expect(screen.getByTestId('run-error').className).toContain('mb-[18px]');
   });
 
   // Force overrides that ONE refusal; the model the operator chose still rides along.

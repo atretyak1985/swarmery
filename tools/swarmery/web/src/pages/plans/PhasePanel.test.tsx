@@ -151,12 +151,29 @@ describe('PhasePanel', () => {
     renderPanel();
     const band = screen.getByRole('heading', { level: 3 }).parentElement?.parentElement as HTMLElement;
     expect(band.className).toContain('border-b');
-    // One step lighter than the plan's band, and pinned right under it.
-    expect(band.className).toContain('bg-surface');
-    expect(band.style.top).toBe('var(--detail-parent-band-h, 0px)');
+    // The phase's own band (D-15): page colour, and sticky to the top of its OWN
+    // scrolling island — the plan above it (the condensed PlanBar) is a separate,
+    // non-scrolling island, so this band needs no parent band height to chain to.
+    expect(band.className).toContain('bg-bg');
+    expect(band.className).toContain('desk:sticky');
+    expect(band.className).toContain('desk:top-0');
+    expect(band.style.top).toBe('');
     expect(band.contains(screen.getByRole('tablist'))).toBe(true);
     expect(screen.getByRole('tablist').parentElement?.className).not.toContain('border-b');
     expect(band.contains(screen.getByRole('tabpanel'))).toBe(false);
+  });
+
+  it('shows the state sentence and the numbers line between the name and the tabs (D-16)', () => {
+    renderPanel({
+      stateLine: { state: 'working', lead: 'Executing', rest: 'running · 4m' },
+      stats: [{ label: 'criteria', value: '0/8' }],
+    });
+    const lead = screen.getByText('Executing');
+    expect(lead.parentElement?.textContent).toBe('Executing · running · 4m');
+    expect(screen.getByText('0/8')).toBeTruthy();
+    const band = screen.getByRole('heading', { level: 3 }).parentElement?.parentElement as HTMLElement;
+    expect(band.contains(lead)).toBe(true);
+    expect(band.contains(screen.getByRole('tablist'))).toBe(true);
   });
 
   it('stands the banner above the breadcrumb, inside the band', () => {

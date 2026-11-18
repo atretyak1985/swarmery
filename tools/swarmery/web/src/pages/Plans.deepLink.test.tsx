@@ -361,13 +361,16 @@ describe('SC-2 — a phase URL opens the phase panel on that tab', () => {
     expect(within(d).getByRole('tab', { name: 'Story' }).getAttribute('aria-selected')).toBe('true');
   });
 
-  it('nests the phase under the plan header, which stays on the page', async () => {
+  it('collapses the plan to its condensed bar while the phase is open, which stays on the page', async () => {
     mount(`${BASE}/${B.externalId}/phase/3`);
     const d = await screen.findByRole('region', { name: 'Beta 3' });
     expect(within(d).getByRole('heading', { level: 3, name: 'Beta 3' })).toBeTruthy();
-    const plan = screen.getByRole('heading', { level: 2 });
-    expect(d.contains(plan)).toBe(false);
-    expect(plan.compareDocumentPosition(d) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    // The full header's own <h2> title is gone (D-14/D-15) — the plan's identity
+    // survives as the condensed bar's title button, ahead of the phase region.
+    expect(screen.queryByRole('heading', { level: 2 })).toBeNull();
+    const planTitle = screen.getByRole('button', { name: B.title });
+    expect(d.contains(planTitle)).toBe(false);
+    expect(planTitle.compareDocumentPosition(d) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
   it('an invalid tab string is canonicalised to Story by replace', async () => {

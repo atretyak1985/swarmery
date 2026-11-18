@@ -1,5 +1,13 @@
 // A plan on screen: its header, then the phases or the plan's details. An open
 // phase is a page of its own and takes the whole column.
+//
+// Two islands from `desk` up (D-17): a fixed band on top — the full header, or
+// (a phase open) the amber blocker plus the condensed PlanBar — and a scrolling
+// one under it holding everything else, 8px apart. `Plans.tsx` strips the single
+// island PlaceLayout would otherwise draw around this whole component
+// (`bareDetail`), so these two can be their own. Below `desk` there is still one
+// column: both divs drop their border, background and independent scroll and the
+// content just flows.
 
 import { Trans, useLingui } from '@lingui/react/macro';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -215,75 +223,84 @@ export function EpicDetail({
   const onPhasePage = detail?.kind === 'phase';
 
   return (
-    <div>
-      <PlanHeader
-        epic={epic}
-        resolvedSeqs={resolvedSeqs}
-        complete={complete}
-        now={now}
-        terminal={planTerminal}
-        busyLifecycle={busyLifecycle}
-        onLifecycle={onLifecycle}
-        planRunBusy={planRunBusy}
-        phaseRunActive={phaseRunActive}
-        onRunPlan={onRunPlan}
-        onCancelPlanRun={onCancelPlanRun}
-        onOpenPlan={onOpenPlan}
-        stagedCount={stagedCount}
-        reviseBusy={reviseBusy}
-        onRevise={() => {
-          setReviseErr(null);
-          setReviseOpenRevId(null);
-          setReviseOpen(true);
-        }}
-        phaseRunModel={phaseRunModel}
-        phaseRunEffort={phaseRunEffort}
-        nested={onPhasePage}
-      />
+    <div className="desk:flex desk:min-h-0 desk:flex-1 desk:flex-col desk:gap-2">
+      {/* The fixed island (D-17): the full header, or — a phase open — the amber
+          blocker over the condensed PlanBar. Never scrolls. */}
+      <div className="shrink-0 desk:overflow-hidden desk:rounded-xl desk:border desk:border-line desk:bg-bg">
+        <PlanHeader
+          epic={epic}
+          resolvedSeqs={resolvedSeqs}
+          complete={complete}
+          now={now}
+          terminal={planTerminal}
+          busyLifecycle={busyLifecycle}
+          onLifecycle={onLifecycle}
+          planRunBusy={planRunBusy}
+          phaseRunActive={phaseRunActive}
+          onRunPlan={onRunPlan}
+          onCancelPlanRun={onCancelPlanRun}
+          onOpenPlan={onOpenPlan}
+          stagedCount={stagedCount}
+          reviseBusy={reviseBusy}
+          onRevise={() => {
+            setReviseErr(null);
+            setReviseOpenRevId(null);
+            setReviseOpen(true);
+          }}
+          phaseRunModel={phaseRunModel}
+          phaseRunEffort={phaseRunEffort}
+          nested={onPhasePage}
+          onBack={onCloseDetail}
+        />
+      </div>
 
-      {/* Leaving the details is the first thing offered while they are open. */}
-      {detail?.kind === 'plan' && (
-        <div className="mt-[22px]">
-          <BackToPhases onBack={onCloseDetail} />
-        </div>
-      )}
+      {/* The scrolling island: everything else. The phase's own header (inside
+          PhaseDetailPanel → PhasePanel) is `sticky top-0` of THIS scroll, not
+          chained to the fixed band above — the two islands never share one. */}
+      <div className="min-h-0 px-4 pt-[18px] pb-10 desk:flex-1 desk:overflow-y-auto desk:rounded-xl desk:border desk:border-line desk:bg-surface desk:px-7">
+        {/* Leaving the details is the first thing offered while they are open. */}
+        {detail?.kind === 'plan' && (
+          <div className="mb-[18px]">
+            <BackToPhases onBack={onCloseDetail} />
+          </div>
+        )}
 
-      {runMsg !== null && (
-        <div
-          data-testid="run-error"
-          // On a phase page it stands between the plan's band and the phase's.
-          className={`${onPhasePage ? 'my-3' : 'mt-3'} flex items-start gap-2 rounded-md border border-red/40 bg-red/10 px-2.5 py-1.5 font-mono text-[10.5px] text-red`}
-        >
-          <div className="min-w-0 flex-1">
-            <span>{runMsg}</span>
-            {runBranches.length > 0 && (
-              <DepsUnmergedActions
-                taskId={epic.taskId}
-                phases={epic.phases}
-                branches={runBranches}
-                // A failed /vcs fetch must not hide the way out: neutral words.
-                terms={terms ?? NEUTRAL_TERMS}
-                onLanded={onDocChanged}
-              />
+        {runMsg !== null && (
+          <div
+            data-testid="run-error"
+            className="mb-[18px] flex items-start gap-2 rounded-md border border-red/40 bg-red/10 px-2.5 py-1.5 font-mono text-[10.5px] text-red"
+          >
+            <div className="min-w-0 flex-1">
+              <span>{runMsg}</span>
+              {runBranches.length > 0 && (
+                <DepsUnmergedActions
+                  taskId={epic.taskId}
+                  phases={epic.phases}
+                  branches={runBranches}
+                  // A failed /vcs fetch must not hide the way out: neutral words.
+                  terms={terms ?? NEUTRAL_TERMS}
+                  onLanded={onDocChanged}
+                />
+              )}
+            </div>
+            {onForceRun !== null && (
+              <button
+                type="button"
+                disabled={runBusy !== null}
+                onClick={onForceRun}
+                data-tip={t`run this phase again even though nothing has changed since it blocked`}
+                className="shrink-0 rounded-md border border-red/40 px-2 py-0.5 font-mono text-[10.5px] text-red transition-colors hover:bg-red/10 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <Trans>Run anyway</Trans>
+              </button>
             )}
           </div>
-          {onForceRun !== null && (
-            <button
-              type="button"
-              disabled={runBusy !== null}
-              onClick={onForceRun}
-              data-tip={t`run this phase again even though nothing has changed since it blocked`}
-              className="shrink-0 rounded-md border border-red/40 px-2 py-0.5 font-mono text-[10.5px] text-red transition-colors hover:bg-red/10 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              <Trans>Run anyway</Trans>
-            </button>
-          )}
-        </div>
-      )}
+        )}
 
-      {/* The plan's details open in place of the ledger; "← all phases" (or Escape)
-          backs out to it. The sessions stay under either, and under a phase's Runs. */}
-      <div className={`${onPhasePage ? '' : detail?.kind === 'plan' ? 'mt-[22px]' : 'mt-[18px]'} min-w-0`}>
+        {/* The plan's details open in place of the ledger; "← all phases" (or
+            Escape) backs out to it. The sessions stay under either, and under a
+            phase's Runs. */}
+        <div className="min-w-0">
           {detail?.kind === 'phase' ? (
             <PhaseDetailPanel
               epic={epic}
@@ -309,6 +326,7 @@ export function EpicDetail({
               revisions={revisions}
               onOpenRevisions={() => onOpenPlan('revisions')}
               terms={terms}
+              now={now}
             />
           ) : detail?.kind === 'plan' ? (
             <PlanDetailPanel
@@ -343,27 +361,28 @@ export function EpicDetail({
               phaseHref={phaseHref}
             />
           )}
-        {/* Mounted through a phase's other tabs: the operator's pick of the slice
-            belongs to the plan and has to outlive them. */}
-        <div hidden={onPhasePage && detail.tab !== 'runs'}>
-          <PlanSessions
-            epic={epic}
-            activePhaseId={detail?.kind === 'phase' ? detail.phase.id : null}
-            sessions={sessions}
-            err={sessionsErr}
-          />
-          {/* "Перевідкрити…" (D-31): one action at the bottom of the Runs tab,
-              below the cards it reopens — not inside the panel above them. */}
-          {detail?.kind === 'phase' && (
-            <PhaseReopens
-              taskId={epic.taskId}
-              phaseId={detail.phase.id}
-              canReopen={
-                phaseStatus(detail.phase, resolvedSeqs) === 'done' && detail.phase.runState !== 'running'
-              }
-              onReopened={onDocChanged}
+          {/* Mounted through a phase's other tabs: the operator's pick of the slice
+              belongs to the plan and has to outlive them. */}
+          <div hidden={onPhasePage && detail.tab !== 'runs'}>
+            <PlanSessions
+              epic={epic}
+              activePhaseId={detail?.kind === 'phase' ? detail.phase.id : null}
+              sessions={sessions}
+              err={sessionsErr}
             />
-          )}
+            {/* "Перевідкрити…" (D-31): one action at the bottom of the Runs tab,
+                below the cards it reopens — not inside the panel above them. */}
+            {detail?.kind === 'phase' && (
+              <PhaseReopens
+                taskId={epic.taskId}
+                phaseId={detail.phase.id}
+                canReopen={
+                  phaseStatus(detail.phase, resolvedSeqs) === 'done' && detail.phase.runState !== 'running'
+                }
+                onReopened={onDocChanged}
+              />
+            )}
+          </div>
         </div>
       </div>
 

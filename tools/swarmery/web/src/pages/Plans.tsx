@@ -459,6 +459,12 @@ export function Plans(): JSX.Element {
     <>
       <PlaceLayout
         narrow={detail !== null ? 'detail' : 'both'}
+        // Two stacked islands, only once a plan is open (D-17): EpicDetail builds
+        // its own fixed header band and scrolling content band, 8px apart, so the
+        // one island PlaceLayout would otherwise draw around this whole pane has
+        // to stand down. The empty "select an epic" state keeps that single
+        // island — there is nothing here to split in two.
+        bareDetail={activeEpic !== null}
         list={
           <PlanList
             epics={epics}
@@ -475,11 +481,11 @@ export function Plans(): JSX.Element {
         }
         detail={
           // No padding above: the plan's and the phase's bands start at the column's top.
-          <div className="px-4 pb-10 desk:px-7">
+          <>
             {actionError !== null && (
               <div
                 role="alert"
-                className="my-3 flex items-center gap-2 rounded-lg border border-red/40 bg-red/10 px-3 py-1.5 font-mono text-[11px] text-red"
+                className="mx-4 my-3 flex items-center gap-2 rounded-lg border border-red/40 bg-red/10 px-3 py-1.5 font-mono text-[11px] text-red desk:mx-7"
               >
                 <span className="min-w-0 flex-1">{actionError}</span>
                 <button type="button" onClick={() => setActionError(null)} aria-label={t`dismiss`} className="text-red/70">
@@ -492,7 +498,7 @@ export function Plans(): JSX.Element {
             {notice !== null && (
               <div
                 role="status"
-                className="my-3 flex items-center gap-2 rounded-lg border border-amber/40 bg-amber/10 px-3 py-1.5 font-mono text-[11px] text-amber"
+                className="mx-4 my-3 flex items-center gap-2 rounded-lg border border-amber/40 bg-amber/10 px-3 py-1.5 font-mono text-[11px] text-amber desk:mx-7"
               >
                 <span className="min-w-0 flex-1">{notice}</span>
                 <button type="button" onClick={() => setNotice(null)} aria-label={t`dismiss notice`} className="text-amber/70">
@@ -502,7 +508,7 @@ export function Plans(): JSX.Element {
             )}
             {activeEpic === null ? (
               epics.length === 0 ? null : (
-                <div className="pt-[22px]">
+                <div className="px-4 pt-[22px] pb-10 desk:px-7">
                   <Empty>
                     {filtered.length === 0 ? <Trans>no {filterLabel} plans</Trans> : <Trans>select an epic</Trans>}
                   </Empty>
@@ -554,7 +560,7 @@ export function Plans(): JSX.Element {
               onOpenOutcome={setOutcomeFor}
             />
             )}
-          </div>
+          </>
         }
       />
 
