@@ -21,9 +21,18 @@ msgstr " — agent {agent}"
 msgid " · live"
 msgstr " · live"
 
+#: src/pages/plans/PlanSessions.tsx
 #: src/pages/plans/ReviewStateLedger.tsx
 msgid "—"
 msgstr "—"
+
+#: src/pages/plans/runsModel.ts
+msgid "— {done}/{total} criteria checked."
+msgstr "— {done}/{total} criteria checked."
+
+#: src/pages/plans/runsModel.ts
+msgid "— {label}."
+msgstr "— {label}."
 
 #: src/pages/plans/reviewNextStep.ts
 msgid "— an empty guard check is open; close it from the Guard row."
@@ -45,6 +54,10 @@ msgstr "— but review on the merged {change} did not pass."
 msgid "— check back once the run finishes."
 msgstr "— check back once the run finishes."
 
+#: src/pages/plans/runsModel.ts
+msgid "— every criterion is checked."
+msgstr "— every criterion is checked."
+
 #: src/pages/plans/reviewNextStep.ts
 msgid "— fix it on the branch, or send the phase back to its agent."
 msgstr "— fix it on the branch, or send the phase back to its agent."
@@ -65,6 +78,10 @@ msgstr "— nothing is written until you approve the diff."
 msgid "— re-run it, then push again."
 msgstr "— re-run it, then push again."
 
+#: src/pages/plans/runsModel.ts
+msgid "— the executor is working on this phase."
+msgstr "— the executor is working on this phase."
+
 #: src/pages/plans/reviewNextStep.ts
 msgid "— the guard stopped the run and is waiting for your answer."
 msgstr "— the guard stopped the run and is waiting for your answer."
@@ -84,6 +101,10 @@ msgstr "— there is nothing more to land here."
 #: src/pages/plans/reviewNextStep.ts
 msgid "— there is nothing to review."
 msgstr "— there is nothing to review."
+
+#: src/pages/plans/runsModel.ts
+msgid "— this phase starts when the previous one lands."
+msgstr "— this phase starts when the previous one lands."
 
 #: src/pages/PlanningMode.tsx
 msgid "— tracked as <0>{planId}</0>"
@@ -411,6 +432,11 @@ msgstr "{total} · {landed} landed"
 msgid "{turns, plural, one {{model} (# turn)} few {{model} (# turns)} many {{model} (# turns)} other {{model} (# turns)}}"
 msgstr "{turns, plural, one {{model} (# turn)} few {{model} (# turns)} many {{model} (# turns)} other {{model} (# turns)}}"
 
+#. placeholder {0}: p.name
+#: src/pages/plans/runsModel.ts
+msgid "#{seq} {0}"
+msgstr "#{seq} {0}"
+
 #: src/pages/plans/PhasePanel.tsx
 msgid "← all phases"
 msgstr "← all phases"
@@ -730,6 +756,15 @@ msgstr "as {outcome}"
 msgid "as forecast"
 msgstr "as forecast"
 
+#. placeholder {0}: String(n)
+#: src/pages/plans/runsModel.ts
+msgid "Attempt {0}"
+msgstr "Attempt {0}"
+
+#: src/pages/plans/runsModel.ts
+msgid "Attempt 1"
+msgstr "Attempt 1"
+
 #: src/pages/plans/PhaseDetailPanel.tsx
 #: src/pages/plans/PlanRunControls.tsx
 msgid "auto"
@@ -830,14 +865,6 @@ msgstr "Catch-up"
 msgid "caught by"
 msgstr "caught by"
 
-#: src/pages/plans/PhaseReopens.tsx
-msgid "caught by {gate}"
-msgstr "caught by {gate}"
-
-#: src/pages/plans/PhaseReopens.tsx
-msgid "caught by nobody"
-msgstr "caught by nobody"
-
 #: src/pages/plans/PhaseReview.tsx
 msgid "change request"
 msgstr "change request"
@@ -916,10 +943,6 @@ msgstr "closed by push / PR / merge — ticked when the change request merges"
 msgid "Closing…"
 msgstr "Closing…"
 
-#: src/pages/plans/RunsReviewBlock.tsx
-msgid "code review"
-msgstr "code review"
-
 #: src/pages/plans/ForecastVsActual.tsx
 msgid "confidence"
 msgstr "confidence"
@@ -947,10 +970,6 @@ msgstr "copies the markdown into the project so its prompts become editable"
 #: src/pages/plans/PhaseLedger.tsx
 msgid "cost"
 msgstr "cost"
-
-#: src/pages/plans/RunsReviewBlock.tsx
-msgid "couldn't load the findings: {error}"
-msgstr "couldn't load the findings: {error}"
 
 #: src/pages/Board.tsx
 msgid "counting…"
@@ -1060,12 +1079,10 @@ msgstr "Delete routine?"
 msgid "Delete this routine"
 msgstr "Delete this routine"
 
-#: src/pages/plans/PhaseDetailPanel.tsx
 #: src/pages/plans/PhaseLedger.tsx
 msgid "dependency pending"
 msgstr "dependency pending"
 
-#: src/pages/plans/PhaseDetailPanel.tsx
 #: src/pages/plans/PhaseLedger.tsx
 msgid "dependency resolved"
 msgstr "dependency resolved"
@@ -1163,6 +1180,7 @@ msgid "done"
 msgstr "done"
 
 #: src/pages/Board.tsx
+#: src/pages/plans/runsModel.ts
 #: src/pages/Routines.tsx
 msgid "Done"
 msgstr "Done"
@@ -1290,9 +1308,14 @@ msgstr "execution mode"
 msgid "execution record"
 msgstr "execution record"
 
+#: src/pages/plans/runsModel.ts
 #: src/pages/plans/StalledBadge.tsx
 msgid "executor"
 msgstr "executor"
+
+#: src/pages/plans/PhaseDetailPanel.tsx
+msgid "Executor"
+msgstr "Executor"
 
 #: src/pages/plans/ForecastStory.tsx
 msgid "expected"
@@ -1345,14 +1368,6 @@ msgstr "filter plans"
 msgid "Find {changeShort}"
 msgstr "Find {changeShort}"
 
-#: src/pages/plans/RunsReviewBlock.tsx
-msgid "findings ({count})"
-msgstr "findings ({count})"
-
-#: src/pages/plans/RunsReviewBlock.tsx
-msgid "findings (none blocking)"
-msgstr "findings (none blocking)"
-
 #: src/pages/plans/ReviewFindings.tsx
 msgid "finished before review findings were recorded — nothing is missing and nothing is required"
 msgstr "finished before review findings were recorded — nothing is missing and nothing is required"
@@ -1368,18 +1383,6 @@ msgstr "finishing the work"
 #: src/pages/plans/forecastStoryModel.ts
 msgid "finishing with some concerns"
 msgstr "finishing with some concerns"
-
-#: src/pages/plans/RunsReviewBlock.tsx
-msgid "first review"
-msgstr "first review"
-
-#: src/pages/plans/PhaseReopens.tsx
-msgid "fix →"
-msgstr "fix →"
-
-#: src/pages/plans/RunsReviewBlock.tsx
-msgid "fix round {roundNo}"
-msgstr "fix round {roundNo}"
 
 #: src/pages/plans/PhaseReopens.tsx
 msgid "fix URL (optional)"
@@ -1435,6 +1438,10 @@ msgstr "guard block unreadable"
 msgid "guard check"
 msgstr "guard check"
 
+#: src/pages/plans/PhaseDetailPanel.tsx
+msgid "Guard check"
+msgstr "Guard check"
+
 #: src/pages/plans/planModel.ts
 msgid "guard stop"
 msgstr "guard stop"
@@ -1454,10 +1461,6 @@ msgstr "hand the whole plan to one agent, headlessly, in an isolated worktree"
 #: src/pages/plans/ForecastStory.tsx
 msgid "happened"
 msgstr "happened"
-
-#: src/pages/plans/PhaseDetailPanel.tsx
-msgid "headless run in progress"
-msgstr "headless run in progress"
 
 #: src/pages/plans/ForecastVsActual.tsx
 msgid "held"
@@ -1519,17 +1522,21 @@ msgstr "In plain words"
 msgid "in progress"
 msgstr "in progress"
 
+#: src/pages/plans/runsModel.ts
+msgid "In progress"
+msgstr "In progress"
+
 #: src/pages/plans/ReviewFindings.tsx
 msgid "incomplete"
 msgstr "incomplete"
 
 #: src/pages/plans/PlanSessions.tsx
-msgid "inferred"
-msgstr "inferred"
-
-#: src/pages/plans/PlanSessions.tsx
 msgid "inferred from files this session edited under plan/"
 msgstr "inferred from files this session edited under plan/"
+
+#: src/pages/plans/PlanSessions.tsx
+msgid "inferred session"
+msgstr "inferred session"
 
 #: src/pages/plans/PlanRunControls.tsx
 msgid "inline"
@@ -1584,6 +1591,14 @@ msgstr "Landing"
 msgid "last {lastRun}"
 msgstr "last {lastRun}"
 
+#: src/pages/plans/PhaseDetailPanel.tsx
+msgid "last result"
+msgstr "last result"
+
+#: src/pages/plans/PhaseDetailPanel.tsx
+msgid "Last result"
+msgstr "Last result"
+
 #: src/pages/Routines.tsx
 msgid "last run"
 msgstr "last run"
@@ -1605,8 +1620,8 @@ msgid "let the run-plan skill triage the route from the phase DAG"
 msgstr "let the run-plan skill triage the route from the phase DAG"
 
 #: src/pages/plans/PlanSessions.tsx
-msgid "linked"
-msgstr "linked"
+msgid "linked session"
+msgstr "linked session"
 
 #: src/pages/plans/PlanSessions.tsx
 msgid "linked to this plan by the daemon"
@@ -1906,9 +1921,9 @@ msgstr "No routines yet. Create one to schedule recurring work."
 msgid "no run branch yet"
 msgstr "no run branch yet"
 
-#: src/pages/plans/PhaseDetailPanel.tsx
-msgid "No runs yet — this phase starts when the previous one lands."
-msgstr "No runs yet — this phase starts when the previous one lands."
+#: src/pages/plans/runsModel.ts
+msgid "No runs yet"
+msgstr "No runs yet"
 
 #: src/pages/Routines.tsx
 msgid "No runs yet."
@@ -1958,6 +1973,10 @@ msgstr "nobody (it shipped)"
 msgid "not delivered"
 msgstr "not delivered"
 
+#: src/pages/plans/PhaseDetailPanel.tsx
+msgid "not graded yet"
+msgstr "not graded yet"
+
 #: src/pages/plans/DecisionTable.tsx
 msgid "not implemented"
 msgstr "not implemented"
@@ -1974,10 +1993,18 @@ msgstr "not live"
 msgid "not opened yet"
 msgstr "not opened yet"
 
+#: src/pages/plans/PhaseDetailPanel.tsx
+msgid "not reviewed yet"
+msgstr "not reviewed yet"
+
 #. placeholder {0}: block.scopeLeft.join(', ')
 #: src/pages/plans/ReviewFindings.tsx
 msgid "not reviewed: {0}"
 msgstr "not reviewed: {0}"
+
+#: src/pages/plans/PhaseDetailPanel.tsx
+msgid "not run yet"
+msgstr "not run yet"
 
 #: src/pages/plans/ForecastVsActual.tsx
 msgid "not run yet — a score appears once a run of this phase has finished and been measured"
@@ -2097,6 +2124,10 @@ msgstr "Open {changeShort}"
 msgid "Open {changeShort} for {branch}"
 msgstr "Open {changeShort} for {branch}"
 
+#: src/pages/plans/PhaseDetailPanel.tsx
+msgid "open →"
+msgstr "open →"
+
 #: src/pages/plans/ReviewStateLedger.tsx
 msgid "open ↗"
 msgstr "open ↗"
@@ -2158,6 +2189,10 @@ msgstr "opus 5.5"
 #: src/pages/PlanningMode.tsx
 msgid "opus 5.5 — default"
 msgstr "opus 5.5 — default"
+
+#: src/pages/plans/PlanSessions.tsx
+msgid "other sessions"
+msgstr "other sessions"
 
 #: src/pages/plans/ForecastVsActual.tsx
 msgid "outcome"
@@ -2300,7 +2335,6 @@ msgstr "Plain words"
 
 #: src/pages/plans/PlanDetailPanel.tsx
 #: src/pages/plans/PlanHeader.tsx
-#: src/pages/plans/PlanSessions.tsx
 msgid "plan"
 msgstr "plan"
 
@@ -2319,6 +2353,10 @@ msgstr "Plan #{id} not found"
 #: src/pages/plans/PlanHeader.tsx
 msgid "plan actions"
 msgstr "plan actions"
+
+#: src/pages/plans/PhaseDetailPanel.tsx
+msgid "Plan compliance"
+msgstr "Plan compliance"
 
 #: src/pages/plans/PlanDetailPanel.tsx
 msgid "plan details tabs"
@@ -2349,6 +2387,14 @@ msgstr "plan review passed"
 #: src/pages/plans/ReviewFindings.tsx
 msgid "Plan round"
 msgstr "Plan round"
+
+#: src/pages/plans/runsModel.ts
+msgid "plan run"
+msgstr "plan run"
+
+#: src/pages/plans/runsModel.ts
+msgid "Plan run"
+msgstr "Plan run"
 
 #: src/pages/plans/PlanRunControls.tsx
 msgid "plan run failed"
@@ -2643,12 +2689,8 @@ msgid "Reopen…"
 msgstr "Reopen…"
 
 #: src/pages/plans/PhaseReopens.tsx
-msgid "Reopened"
-msgstr "Reopened"
-
-#: src/pages/plans/PhaseReopens.tsx
-msgid "Reopened · {count}"
-msgstr "Reopened · {count}"
+msgid "Reopen… is offered once this phase is Done and no run is live."
+msgstr "Reopen… is offered once this phase is Done and no run is live."
 
 #: src/pages/plans/PhaseReopens.tsx
 msgid "reopening…"
@@ -2710,14 +2752,19 @@ msgstr "revert"
 #: src/pages/plans/DecisionTable.tsx
 #: src/pages/plans/phaseLedgerModel.ts
 #: src/pages/plans/PhaseReopens.tsx
-#: src/pages/plans/RunsReviewBlock.tsx
 msgid "review"
 msgstr "review"
 
+#: src/pages/plans/PhaseDetailPanel.tsx
 #: src/pages/plans/PhasePanel.tsx
 #: src/pages/plans/ReviewStateLedger.tsx
 msgid "Review"
 msgstr "Review"
+
+#. placeholder {0}: REVIEW_VERDICT_UI[latestReview.verdict] ?? latestReview.verdict
+#: src/pages/plans/PhaseDetailPanel.tsx
+msgid "review {0}"
+msgstr "review {0}"
 
 #: src/pages/PlanningMode.tsx
 msgid "Review changes →"
@@ -2754,10 +2801,6 @@ msgstr "Review incomplete — not a passed review"
 #: src/pages/PlanningMode.tsx
 msgid "Review it on the <0>Plans page</0> — phases run from there."
 msgstr "Review it on the <0>Plans page</0> — phases run from there."
-
-#: src/pages/plans/RunsReviewBlock.tsx
-msgid "review of the fix re-run"
-msgstr "review of the fix re-run"
 
 #: src/pages/plans/reviewNextStep.ts
 msgid "Review on the open {change} did not pass"
@@ -2893,13 +2936,14 @@ msgid "run_one (one catch-up)"
 msgstr "run_one (one catch-up)"
 
 #: src/pages/plans/phaseChips.tsx
+#: src/pages/plans/PhaseDetailPanel.tsx
 #: src/pages/plans/phaseLedgerModel.ts
 #: src/pages/plans/planModel.ts
 msgid "running"
 msgstr "running"
 
 #: src/pages/Board.tsx
-#: src/pages/plans/PhaseDetailPanel.tsx
+#: src/pages/plans/runsModel.ts
 msgid "Running"
 msgstr "Running"
 
@@ -2918,10 +2962,6 @@ msgstr "Running plan"
 #: src/pages/plans/PhasePanel.tsx
 msgid "Runs"
 msgstr "Runs"
-
-#: src/pages/plans/PhaseDetailPanel.tsx
-msgid "runs of this phase"
-msgstr "runs of this phase"
 
 #: src/pages/Routines.tsx
 msgid "runs…"
@@ -2992,7 +3032,12 @@ msgstr "Sends the phase back to its agent: your feedback is appended to the next
 msgid "Sends the phase back with your feedback; a new run can push a fix."
 msgstr "Sends the phase back with your feedback; a new run can push a fix."
 
+#: src/pages/plans/PhaseReopens.tsx
+msgid "Sends this phase back for another attempt — untick what slipped through and say why."
+msgstr "Sends this phase back for another attempt — untick what slipped through and say why."
+
 #: src/pages/plans/PlanRunControls.tsx
+#: src/pages/plans/runsModel.ts
 msgid "session"
 msgstr "session"
 
@@ -3136,6 +3181,11 @@ msgstr "started"
 #: src/pages/PlanningMode.tsx
 msgid "started {startedAgo}"
 msgstr "started {startedAgo}"
+
+#. placeholder {0}: group.reason
+#: src/pages/plans/PlanSessions.tsx
+msgid "started because: {0}"
+msgstr "started because: {0}"
 
 #: src/pages/planning/ReviseModal.tsx
 #: src/pages/PlanningMode.tsx
@@ -3282,6 +3332,10 @@ msgstr "The guard stopped the run on protected paths; answer here to let it cont
 #: src/pages/plans/reviewNextStep.ts
 msgid "the last attempt failed — see what git said below"
 msgstr "the last attempt failed — see what git said below"
+
+#: src/pages/plans/runsModel.ts
+msgid "The last run did not finish the phase"
+msgstr "The last run did not finish the phase"
 
 #: src/pages/plans/PhaseCard.tsx
 msgid "The last run failed."
@@ -3608,6 +3662,7 @@ msgstr "updated {ago} ago"
 msgid "verification could not conclude"
 msgstr "verification could not conclude"
 
+#: src/pages/plans/PhaseDetailPanel.tsx
 #: src/pages/plans/VerifyVerdictChip.tsx
 msgid "verified"
 msgstr "verified"
@@ -3617,14 +3672,20 @@ msgstr "verified"
 msgid "verifier"
 msgstr "verifier"
 
+#: src/pages/plans/PhaseDetailPanel.tsx
+msgid "Verifier"
+msgstr "Verifier"
+
 #: src/pages/plans/useReverify.ts
 msgid "Verify again"
 msgstr "Verify again"
 
+#: src/pages/plans/PhaseDetailPanel.tsx
 #: src/pages/plans/VerifyVerdictChip.tsx
 msgid "verify failed"
 msgstr "verify failed"
 
+#: src/pages/plans/PhaseDetailPanel.tsx
 #: src/pages/plans/VerifyVerdictChip.tsx
 msgid "verify inconclusive"
 msgstr "verify inconclusive"

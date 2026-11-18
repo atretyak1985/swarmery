@@ -13,10 +13,11 @@ import { NEUTRAL_TERMS } from './landingModel';
 import { useNow } from './phaseChips';
 import { PhaseDetailPanel } from './PhaseDetailPanel';
 import { PhaseLedger } from './PhaseLedger';
+import { PhaseReopens } from './PhaseReopens';
 import type { PhaseRunEffort, PhaseRunModel } from './PhaseRunPickers';
 import { PlanDetailPanel } from './PlanDetailPanel';
 import { PlanHeader } from './PlanHeader';
-import { computeResolvedSeqs, planComplete } from './planModel';
+import { computeResolvedSeqs, phaseStatus, planComplete } from './planModel';
 import { PlanSessions, usePlanSessions } from './PlanSessions';
 import type { DetailSel, PhaseDetailTab } from './plansTarget';
 import type { PlanDetailTab } from './plansUrl';
@@ -293,7 +294,6 @@ export function EpicDetail({
               onStep={(seq) => onOpenPhase(seq, detail.tab)}
               onBack={onCloseDetail}
               sessions={sessions}
-              now={now}
               runBusy={runBusy}
               planRunning={planRunning}
               phaseRunModel={phaseRunModel}
@@ -352,6 +352,18 @@ export function EpicDetail({
             sessions={sessions}
             err={sessionsErr}
           />
+          {/* "Перевідкрити…" (D-31): one action at the bottom of the Runs tab,
+              below the cards it reopens — not inside the panel above them. */}
+          {detail?.kind === 'phase' && (
+            <PhaseReopens
+              taskId={epic.taskId}
+              phaseId={detail.phase.id}
+              canReopen={
+                phaseStatus(detail.phase, resolvedSeqs) === 'done' && detail.phase.runState !== 'running'
+              }
+              onReopened={onDocChanged}
+            />
+          )}
         </div>
       </div>
 

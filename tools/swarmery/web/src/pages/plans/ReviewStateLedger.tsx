@@ -14,8 +14,9 @@
 // Below the `desk` breakpoint each row stacks into two lines — name + status,
 // the fact underneath — with the link staying at the right (phase 5 step 7).
 
-import { plural } from '@lingui/core/macro';
+import { plural, t } from '@lingui/core/macro';
 import { Trans, useLingui } from '@lingui/react/macro';
+import type { ReactNode } from 'react';
 import type { NeedsYouDecision, PhaseLanding, ProviderTerms } from '../../api/types';
 import { guardFindings } from '../../api/guard';
 import { safeHref } from '../../lib/safeHref';
@@ -24,11 +25,14 @@ import { LandingStatus, ciChip, reviewChip, stateChip, type Chip } from './Landi
 import { landingLabel, prLinkText } from './landingModel';
 
 const ROW_GRID = 'desk:grid desk:grid-cols-[18px_104px_minmax(0,1fr)_auto] desk:items-center desk:gap-2';
-const DOT = { success: 'text-green', danger: 'text-red', warn: 'text-amber', neutral: 'text-ink-faint' } as const;
-type RowTone = keyof typeof DOT;
+export const DOT = { success: 'text-green', danger: 'text-red', warn: 'text-amber', neutral: 'text-ink-faint' } as const;
+export type RowTone = keyof typeof DOT;
 const GLYPH: Record<RowTone, string> = { success: '✓', danger: '✗', warn: '!', neutral: '·' };
 
-function Row({
+/** One fact row — label, status, optional detail and link — shared with the
+ *  Runs tab's "last result" block (runsModel.ts), so both read by the same
+ *  glyph-first, color-second convention. */
+export function Row({
   label,
   tone,
   status,
@@ -38,9 +42,13 @@ function Row({
 }: {
   label: string;
   tone: RowTone;
-  status: string;
+  /** Plain text, or — for a row whose status is itself a clickable chip (the
+   *  Runs tab's Executor row reuses `RunOutcomeChip`/`RunCompletedChip`) — a
+   *  small ReactNode standing in for it. */
+  status: ReactNode;
   detail?: string;
-  link?: { href: string; text: string } | null;
+  /** An external link (opens in a new tab) or an in-app action (tab switch). */
+  link?: { href: string; text: string } | { onClick: () => void; text: string } | null;
   testId: string;
 }): JSX.Element {
   return (
@@ -56,10 +64,14 @@ function Row({
         {status}
         {detail !== undefined && detail !== '' && <span className="block text-[11px] text-ink-faint desk:inline desk:ml-1.5">{detail}</span>}
       </span>
-      {link != null ? (
+      {link != null && 'href' in link ? (
         <a href={safeHref(link.href) ?? undefined} target="_blank" rel="noreferrer" className="justify-self-end font-mono text-[10.5px] text-brand hover:underline">
           {link.text}
         </a>
+      ) : link != null ? (
+        <button type="button" onClick={link.onClick} className="justify-self-end font-mono text-[10.5px] text-brand hover:underline">
+          {link.text}
+        </button>
       ) : (
         <span />
       )}
@@ -68,6 +80,35 @@ function Row({
 }
 
 const chipTone = (c: Chip): RowTone => (c.tone.includes('green') ? 'success' : c.tone.includes('red') ? 'danger' : c.tone.includes('amber') ? 'warn' : 'neutral');
+
+/** The Guard row's tone and status text — shared with the Runs tab's "last
+ *  result" block (runsModel.ts / PhaseDetailPanel.tsx), so both read the
+ *  same findings the same way. */
+export function guardRowView(guard: Parameters<typeof guardFindings>[0]): { tone: RowTone; status: string } {
+  const f = guardFindings(guard);
+  const guardClean = f === null;
+  const tone: RowTone = guardClean ? 'success' : 'danger';
+  const parts: string[] = [];
+  if (f !== null && f.changed.length > 0) {
+    parts.push(
+      plural(f.changed.length, {
+        one: '# protected file changed',
+        few: '# protected files changed',
+        many: '# protected files changed',
+        other: '# protected files changed',
+      }),
+    );
+  }
+  if ((f?.blocked ?? 0) > 0) {
+    parts.push(
+      plural(f?.blocked ?? 0, { one: '# blocked attempt', few: '# blocked attempts', many: '# blocked attempts', other: '# blocked attempts' }),
+    );
+  }
+  if (f?.docCopyMismatch === true) parts.push(t`doc copy mismatch`);
+  if (f?.unreadable === true) parts.push(t`guard block unreadable`);
+  const status = guardClean ? t`clean` : parts.join(' · ');
+  return { tone, status };
+}
 
 export interface ReviewStateLedgerProps {
   taskId: number;
@@ -114,28 +155,7 @@ export function ReviewStateLedger({
   const branchStatus = runBranch === '' ? t`no run branch yet` : landingLabel(state, terms);
   const mergedAgo = landing?.state === 'merged' && landing.landedAt !== null ? fmtAgo(landing.landedAt) : '';
 
-  const f = guardFindings(guard);
-  const guardClean = f === null;
-  const guardTone: RowTone = guardClean ? 'success' : 'danger';
-  const guardParts: string[] = [];
-  if (f !== null && f.changed.length > 0) {
-    guardParts.push(
-      plural(f.changed.length, {
-        one: '# protected file changed',
-        few: '# protected files changed',
-        many: '# protected files changed',
-        other: '# protected files changed',
-      }),
-    );
-  }
-  if ((f?.blocked ?? 0) > 0) {
-    guardParts.push(
-      plural(f?.blocked ?? 0, { one: '# blocked attempt', few: '# blocked attempts', many: '# blocked attempts', other: '# blocked attempts' }),
-    );
-  }
-  if (f?.docCopyMismatch === true) guardParts.push(t`doc copy mismatch`);
-  if (f?.unreadable === true) guardParts.push(t`guard block unreadable`);
-  const guardStatus = guardClean ? t`clean` : guardParts.join(' · ');
+  const { tone: guardTone, status: guardStatus } = guardRowView(guard);
 
   const open = checkboxesTotal - checkboxesDone;
   const criteriaTone: RowTone = open === 0 ? 'success' : manualOpen > 0 ? 'warn' : 'neutral';
