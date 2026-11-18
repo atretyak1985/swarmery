@@ -14,6 +14,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -385,13 +386,35 @@ func (p osProcess) Wait() error { return p.cmd.Wait() }
 // xterm expects, appended last so it wins over anything inherited — os/exec
 // keeps the last occurrence of a duplicated key.
 //
-// A nil env must leave the result byte-identical to what this line produced
-// before the env parameter existed; that is what the term tests pin.
+// When the environment names no locale at all — the norm for a daemon started
+// by launchd or systemd, which pass none — a UTF-8 LANG is added, the same
+// default Terminal.app gives a shell. Without it the login shell runs in the C
+// locale and bash's readline echoes every non-ASCII keystroke (Cyrillic, say)
+// as octal escapes such as \320\277. A locale the operator did set wins.
 func ptyEnv(env []string) []string {
 	if env == nil {
 		env = os.Environ()
 	}
-	return append(env[:len(env):len(env)], "TERM=xterm-256color")
+	out := append(env[:len(env):len(env)], "TERM=xterm-256color")
+	if !hasLocale(env) {
+		out = append(out, defaultLocale)
+	}
+	return out
+}
+
+// defaultLocale is what a dock shell gets when nothing upstream chose a locale.
+const defaultLocale = "LANG=en_US.UTF-8"
+
+// hasLocale reports whether env sets any variable that decides the character
+// encoding (LC_ALL, LC_CTYPE or LANG) to a non-empty value.
+func hasLocale(env []string) bool {
+	for _, kv := range env {
+		k, v, ok := strings.Cut(kv, "=")
+		if ok && v != "" && (k == "LC_ALL" || k == "LC_CTYPE" || k == "LANG") {
+			return true
+		}
+	}
+	return false
 }
 
 func (osPTYStarter) start(shell, cwd string, env []string, cols, rows uint16) (ptyFile, process, error) {
