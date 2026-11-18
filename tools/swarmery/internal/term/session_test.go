@@ -237,7 +237,9 @@ func TestIdleReapWithInjectedClock(t *testing.T) {
 	if sigs := st.procs[0].got(); len(sigs) == 0 {
 		t.Error("reaped session was never signalled")
 	}
-	_ = s
+	if got := s.Reason(); got != ReasonIdle {
+		t.Errorf("Reason() = %q, want %q", got, ReasonIdle)
+	}
 }
 
 func TestCloseGraceEscalatesToSIGKILL(t *testing.T) {
@@ -303,6 +305,35 @@ func TestCloseAll(t *testing.T) {
 	}
 	m.CloseAll()
 	waitFor(t, func() bool { return m.Count() == 0 }, "CloseAll drains every session")
+}
+
+// TestCloseReason: a session the caller closes carries no reason; one the
+// Manager closes says why, and the first reason sticks.
+func TestCloseReason(t *testing.T) {
+	st := &stubStarter{exitOnSIGHUP: true}
+	m := NewManager(Config{starter: st, Shell: "/stub", MaxSessions: 5})
+
+	plain, err := m.Start("/tmp", nil, 80, 24)
+	if err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	plain.Close()
+	if got := plain.Reason(); got != ReasonNone {
+		t.Errorf("caller-closed Reason() = %q, want none", got)
+	}
+
+	s, err := m.Start("/tmp", nil, 80, 24)
+	if err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	m.CloseAll()
+	if got := s.Reason(); got != ReasonShutdown {
+		t.Errorf("CloseAll Reason() = %q, want %q", got, ReasonShutdown)
+	}
+	s.closeWith(ReasonIdle)
+	if got := s.Reason(); got != ReasonShutdown {
+		t.Errorf("Reason() after a second close = %q, want the first (%q)", got, ReasonShutdown)
+	}
 }
 
 func TestShellFallback(t *testing.T) {

@@ -6,9 +6,10 @@
 // reload restores the workspace. The heavy xterm bundle is lazy-loaded: the
 // XTerm wrapper is only fetched when the dock first renders a tab.
 
-import { Trans } from '@lingui/react/macro';
+import { Trans, useLingui } from '@lingui/react/macro';
 import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { TermStatus, XTermHandle } from './XTerm';
+import { TERM_CLOSE_MESSAGE, type TermCloseKind } from './closeReason';
 
 const XTerm = lazy(() => import('./XTerm').then((m) => ({ default: m.XTerm })));
 
@@ -86,7 +87,12 @@ export function TerminalDock({
   const [height, setHeight] = useState(() => readNum(heightKey(projectSlug), DEFAULT_HEIGHT, MIN_HEIGHT, MAX_HEIGHT));
   const [fontSize, setFontSize] = useState(() => readNum(fontKey(projectSlug), FONT_DEFAULT, FONT_MIN, FONT_MAX));
   const [fullscreen, setFullscreen] = useState(false);
-  const [statusById, setStatusById] = useState<Record<string, TermStatus>>({});
+  const { t } = useLingui();
+const [statusById, setStatusById] = useState<Record<string, TermStatus>>({});
+// Why each closed tab closed, for its Restart overlay.
+const [closedById, setClosedById] = useState<Record<string, TermCloseKind>>({});
+// Bumped by Restart: a new key remounts the tab's XTerm, which opens a new PTY.
+const [genById, setGenById] = useState<Record<string, number>>({});
   const termRefs = useRef<Map<string, XTermHandle | null>>(new Map());
   const dragRef = useRef<{ startY: number; startH: number } | null>(null);
 
@@ -98,9 +104,16 @@ export function TerminalDock({
     localStorage.setItem(fontKey(projectSlug), String(fontSize));
   }, [projectSlug, fontSize]);
 
-  const setStatus = useCallback((id: string, s: TermStatus) => {
+  const setStatus = useCallback((id: string, s: TermStatus, closed?: TermCloseKind) => {
     setStatusById((prev) => (prev[id] === s ? prev : { ...prev, [id]: s }));
+    if (closed !== undefined) setClosedById((prev) => ({ ...prev, [id]: closed }));
   }, []);
+
+  /** Start a fresh PTY in a closed tab (same cwd, same command). */
+  const restartTab = (id: string): void => {
+    setClosedById(({ [id]: _gone, ...rest }) => rest);
+    setGenById((prev) => ({ ...prev, [id]: (prev[id] ?? 0) + 1 }));
+  };
 
   // Drag-to-resize: track the pointer on the handle; taller = drag up.
   const onHandleDown = (e: React.PointerEvent): void => {
@@ -212,6 +225,7 @@ export function TerminalDock({
                   <button
                     type="button"
                     onClick={() => onChange({ ...state, activeId: tab.id })}
+                    title={st === 'closed' && closedById[tab.id] !== undefined ? t(TERM_CLOSE_MESSAGE[closedById[tab.id] as TermCloseKind]) : undefined}
                     className="flex items-center gap-1.5"
                   >
                     <span
@@ -305,24 +319,43 @@ export function TerminalDock({
           <Suspense
             fallback={<div className="p-3 font-mono text-[11px] text-ink-faint">loading terminal…</div>}
           >
-            {state.tabs.map((tab) => (
-              <div
-                key={tab.id}
-                className="absolute inset-0 p-1.5"
-                style={{ visibility: tab.id === state.activeId ? 'visible' : 'hidden' }}
-                aria-hidden={tab.id !== state.activeId}
-              >
-                <XTerm
-                  ref={(h) => {
-                    termRefs.current.set(tab.id, h);
-                  }}
-                  cwd={tab.cwd}
-                  initialInput={tab.run}
-                  fontSize={fontSize}
-                  onStatus={(s) => setStatus(tab.id, s)}
-                />
-              </div>
-            ))}
+            {state.tabs.map((tab) => {
+              const closed = statusById[tab.id] === 'closed' ? closedById[tab.id] : undefined;
+              return (
+                <div
+                  key={tab.id}
+                  className="absolute inset-0 p-1.5"
+                  style={{ visibility: tab.id === state.activeId ? 'visible' : 'hidden' }}
+                  aria-hidden={tab.id !== state.activeId}
+                >
+                  <XTerm
+                    key={genById[tab.id] ?? 0}
+                    ref={(h) => {
+                      termRefs.current.set(tab.id, h);
+                    }}
+                    cwd={tab.cwd}
+                    initialInput={tab.run}
+                    fontSize={fontSize}
+                    onStatus={(s, why) => setStatus(tab.id, s, why)}
+                  />
+                  {closed !== undefined && (
+                    <div
+                      role="status"
+                      className="absolute inset-x-3 bottom-3 flex items-center gap-3 rounded-md border border-line bg-surface2 px-3 py-2 font-mono text-[11px] text-ink"
+                    >
+                      <span className="min-w-0 flex-1">{t(TERM_CLOSE_MESSAGE[closed])}</span>
+                      <button
+                        type="button"
+                        onClick={() => restartTab(tab.id)}
+                        className="shrink-0 rounded border border-line-strong px-2 py-0.5 text-ink transition-colors hover:border-brand hover:text-brand"
+                      >
+                        {tab.run === CLAUDE_COMMAND ? <Trans>Restart Claude Code</Trans> : <Trans>Restart</Trans>}
+                      </button>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </Suspense>
           {activeTab === null && (
             <div className="p-3 font-mono text-[11px] text-ink-faint">no terminal open</div>

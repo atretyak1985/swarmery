@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -407,4 +408,90 @@ func TestTermRefusedOnAnExposedListener(t *testing.T) {
 		t.Fatalf("loopback daemon: terminal should upgrade: %v", err)
 	}
 	c.Close(websocket.StatusNormalClosure, "")
+}
+
+// TestTermCloseSaysWhy: when the PTY side ends the socket, the close frame
+// carries the reason the tab shows (web/src/terminal/closeReason.ts): the
+// shell exiting is 1000 "shell-exited", the daemon stopping 1001
+// "daemon-stopping".
+func TestTermCloseSaysWhy(t *testing.T) {
+	dial := func(t *testing.T, srv *httptest.Server, dir string, ctx context.Context) *websocket.Conn {
+		t.Helper()
+		c, _, err := websocket.Dial(ctx, termWSURL(srv, dir), &websocket.DialOptions{
+			HTTPHeader:   localOrigin(srv),
+			Subprotocols: termSessionProtocols(),
+		})
+		if err != nil {
+			t.Fatalf("dial: %v", err)
+		}
+		t.Cleanup(func() { c.Close(websocket.StatusNormalClosure, "") })
+		// Round-trip a byte so the PTY is up before the test ends it.
+		if err := c.Write(ctx, websocket.MessageBinary, []byte("x")); err != nil {
+			t.Fatalf("write: %v", err)
+		}
+		if _, _, err := c.Read(ctx); err != nil {
+			t.Fatalf("first read: %v", err)
+		}
+		return c
+	}
+	// readClose drains output until the server's close frame arrives.
+	readClose := func(t *testing.T, c *websocket.Conn, ctx context.Context) websocket.CloseError {
+		t.Helper()
+		for {
+			_, _, err := c.Read(ctx)
+			if err == nil {
+				continue
+			}
+			var ce websocket.CloseError
+			if !errors.As(err, &ce) {
+				t.Fatalf("read ended without a close frame: %v", err)
+			}
+			return ce
+		}
+	}
+
+	t.Run("shell exits", func(t *testing.T) {
+		srv, projectDir, _ := termTestServer(t)
+		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		defer cancel()
+		c := dial(t, srv, projectDir, ctx)
+		// Ctrl-D at the start of a line is EOF for cat on a PTY: the "shell" exits.
+		if err := c.Write(ctx, websocket.MessageBinary, []byte("\n\x04")); err != nil {
+			t.Fatalf("write EOF: %v", err)
+		}
+		ce := readClose(t, c, ctx)
+		if ce.Code != websocket.StatusNormalClosure || ce.Reason != termCloseShellExited {
+			t.Errorf("close = %d %q, want 1000 %q", ce.Code, ce.Reason, termCloseShellExited)
+		}
+	})
+
+	t.Run("daemon stops", func(t *testing.T) {
+		srv, projectDir, _ := termTestServer(t)
+		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		defer cancel()
+		c := dial(t, srv, projectDir, ctx)
+		go termMgr.CloseAll()
+		ce := readClose(t, c, ctx)
+		if ce.Code != websocket.StatusGoingAway || ce.Reason != termCloseDaemonStopping {
+			t.Errorf("close = %d %q, want 1001 %q", ce.Code, ce.Reason, termCloseDaemonStopping)
+		}
+	})
+}
+
+func TestTermCloseFrame(t *testing.T) {
+	cases := []struct {
+		in     term.CloseReason
+		code   websocket.StatusCode
+		reason string
+	}{
+		{term.ReasonNone, websocket.StatusNormalClosure, termCloseShellExited},
+		{term.ReasonIdle, websocket.StatusNormalClosure, termCloseIdle},
+		{term.ReasonShutdown, websocket.StatusGoingAway, termCloseDaemonStopping},
+	}
+	for _, tc := range cases {
+		code, reason := termCloseFrame(tc.in)
+		if code != tc.code || reason != tc.reason {
+			t.Errorf("termCloseFrame(%q) = %d %q, want %d %q", tc.in, code, reason, tc.code, tc.reason)
+		}
+	}
 }
