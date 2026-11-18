@@ -79,12 +79,13 @@ export function PlansPlace(): JSX.Element {
   const label = current === undefined ? tab : i18n._(current.label);
   useDocumentTitle(tab === 'plans' ? null : `${label} · ${project?.name ?? slug} — Swarmery`);
   if (tab === 'plans') {
+    // No wrapper here: Plans' PlaceLayout must be the shell scroller's direct
+    // child, or index.css's `[data-shell-scroller]:has(> [data-place-layout])`
+    // misses and the page island frames the list and plan islands a second time.
     return (
-      <div className="flex min-h-0 flex-1 flex-col">
-        <Suspense fallback={<Loading label={`${label.toLowerCase()}…`} />}>
-          <Plans />
-        </Suspense>
-      </div>
+      <Suspense fallback={<Loading label={`${label.toLowerCase()}…`} />}>
+        <Plans />
+      </Suspense>
     );
   }
   return (
