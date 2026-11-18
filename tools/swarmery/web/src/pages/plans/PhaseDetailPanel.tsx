@@ -6,6 +6,7 @@ import { Trans, useLingui } from '@lingui/react/macro';
 import { type ReactNode, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { togglePlanCheckbox } from '../../api';
+import { phaseGuard } from '../../api/guard';
 import type { DecisionHoldRef, Epic, EpicPhase, PlanRevision, ProviderTerms, Session } from '../../api/types';
 import { BlockerBanner } from '../../components/place/DetailHeader';
 import { actionClass } from '../../components/place/PageDetail';
@@ -15,12 +16,13 @@ import { Markdown } from '../../lib/markdown';
 import { safeHref } from '../../lib/safeHref';
 import { useSessionHref } from '../../lib/sessionHref';
 import { useProjectWorkspace } from '../../workspace/ProjectContext';
+import { REVIEW_VERDICT_UI } from '../inbox/inboxModel';
 import { CriterionLint } from './CriterionLint';
 import { ForecastStory } from './ForecastStory';
-import { ForecastSection, RailSection, SurpriseChip } from './ForecastVsActual';
+import { ForecastSection, RailSection } from './ForecastVsActual';
 import { LandCriterionAction } from './LandCriterionAction';
 import { hasReviewTab, showsReviewTab } from './landingModel';
-import { RunRow, STAGE_TONE } from './PhaseLedger';
+import { STAGE_TONE } from './PhaseLedger';
 import {
   phaseRuns,
   phaseStage,
@@ -28,9 +30,14 @@ import {
   stageLabel,
 } from './phaseLedgerModel';
 import { PhaseCard } from './PhaseCard';
-import { isUnresolvedOutcome, PhaseActivity, phaseChip, ReverifyButton, runButtonCls, RunCompletedChip, RunOutcomeChip } from './phaseChips';
+import {
+  isUnresolvedOutcome,
+  phaseChip,
+  ReverifyButton,
+  RunCompletedChip,
+  RunOutcomeChip,
+} from './phaseChips';
 import { PhasePanel } from './PhasePanel';
-import { PhaseReopens } from './PhaseReopens';
 import { PhaseReview } from './PhaseReview';
 import {
   DocModelChip,
@@ -45,10 +52,10 @@ import { type Check, DocEditor, extractChecks } from './planDetailShell';
 import { computeResolvedSeqs, extractSection, phaseGoal, phaseNeedsYou, phaseStatus } from './planModel';
 import type { PhaseDetailTab } from './plansTarget';
 import { ReviewFindings } from './ReviewFindings';
-import { RunsReviewBlock } from './RunsReviewBlock';
+import { DOT, guardRowView, Row, type RowTone } from './ReviewStateLedger';
+import { runsVerdict } from './runsModel';
 import { usePlanDoc } from './usePlanDoc';
 import { reverifyAction, type Reverify } from './useReverify';
-import { VerifyVerdictChip } from './VerifyVerdictChip';
 import { WorkaroundHits } from './WorkaroundHits';
 import { Chevron } from '../../components/Chevron';
 
@@ -132,34 +139,6 @@ function ChecksList({
   );
 }
 
-/** Run chip for the phase rail header. Switches on the run's OUTCOME, not its
- * process state, so the panel tells the same four-way story the list does — a
- * `runState: 'done'` process that ticked nothing reads `ran · no progress`,
- * clickable, instead of a green "Run done" the phase never earned. */
-function RunStateChip({
-  phase,
-  onOpenOutcome,
-}: {
-  phase: EpicPhase;
-  onOpenOutcome: () => void;
-}): JSX.Element | null {
-  const { t } = useLingui();
-  if (phase.runOutcome === 'running')
-    return (
-      <span
-        className="inline-flex items-center gap-1 rounded border border-brand/40 bg-brand/10 px-1.5 py-px font-mono text-[9.5px] text-brand"
-        data-tip={t`headless run in progress`}
-      >
-        <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-brand" />
-        <Trans>Running</Trans>
-      </span>
-    );
-  if (phase.runOutcome === 'completed') return <RunCompletedChip phase={phase} />;
-  if (isUnresolvedOutcome(phase.runOutcome))
-    return <RunOutcomeChip phase={phase} outcome={phase.runOutcome} onOpen={onOpenOutcome} />;
-  return null;
-}
-
 /** One phase's page, tabbed: Story (what the phase is for and the PhaseCard's
  * holds and meta), Plain words (the doc's own section, else a generated one),
  * Criteria (interactive checks + the doc), Runs (its sessions, run state,
@@ -175,7 +154,6 @@ export function PhaseDetailPanel({
   onStep,
   onBack,
   sessions,
-  now,
   runBusy,
   planRunning,
   phaseRunModel,
@@ -204,11 +182,9 @@ export function PhaseDetailPanel({
   onBack: () => void;
   /** The plan's sessions; null until they load. */
   sessions: readonly Session[] | null;
-  now: number;
   runBusy: number | null;
   /** A whole-plan run owns the phase docs — per-phase runs stand down. */
   planRunning: boolean;
-  /** The picker's value, for DocModelChip — see PhaseActions' note. */
   phaseRunModel: PhaseRunModel;
   onPhaseRunModel: (m: PhaseRunModel) => void;
   phaseRunEffort: PhaseRunEffort;
@@ -306,6 +282,65 @@ export function PhaseDetailPanel({
   const done = phase.checkboxesDone;
   const total = phase.checkboxesTotal;
 
+  // Runs tab (plan D-27…D-31): the verdict sentence and the "last result"
+  // rows, one per stage of the pipeline — never the badge strip they replace.
+  const verdict = runsVerdict(phase, status, running);
+  const executorRow: { tone: RowTone; status: ReactNode } = {
+    tone: running
+      ? 'neutral'
+      : phase.runOutcome === 'completed'
+        ? 'success'
+        : phase.runOutcome === 'failed'
+          ? 'danger'
+          : phase.runOutcome === 'noop' || phase.runOutcome === 'partial'
+            ? 'warn'
+            : 'neutral',
+    status:
+      running
+        ? t`running`
+        : phase.runOutcome === 'completed'
+          ? <RunCompletedChip phase={phase} />
+          : isUnresolvedOutcome(phase.runOutcome)
+            ? <RunOutcomeChip phase={phase} outcome={phase.runOutcome} onOpen={onOpenOutcome} />
+            : t`not run yet`,
+  };
+  const guardRow = guardRowView(phaseGuard(phase));
+  const verifierRow: { tone: RowTone; status: string } = {
+    tone:
+      phase.verifyVerdict === 'pass'
+        ? 'success'
+        : phase.verifyVerdict === 'fail'
+          ? 'danger'
+          : phase.verifyVerdict === 'inconclusive'
+            ? 'warn'
+            : 'neutral',
+    status:
+      phase.verifyVerdict === 'pass'
+        ? t`verified`
+        : phase.verifyVerdict === 'fail'
+          ? t`verify failed`
+          : phase.verifyVerdict === 'inconclusive'
+            ? t`verify inconclusive`
+            : t`not graded yet`,
+  };
+  const latestReview = phase.reviews?.[0] ?? null;
+  const reviewRow: { tone: RowTone; status: string } = {
+    tone:
+      latestReview === null
+        ? 'neutral'
+        : latestReview.verdict === 'pass'
+          ? 'success'
+          : latestReview.verdict === 'fail'
+            ? 'danger'
+            : 'warn',
+    status: latestReview === null ? t`not reviewed yet` : t`review ${REVIEW_VERDICT_UI[latestReview.verdict] ?? latestReview.verdict}`,
+  };
+  const complianceRow: { tone: RowTone; status: string; detail: string } = {
+    tone: status === 'done' ? 'success' : status === 'blocked' ? 'danger' : status === 'unverified' || status === 'unreported' ? 'warn' : 'neutral',
+    status: i18n._(chip.label),
+    detail: phase.completionBlockers.join(' · '),
+  };
+
   const stage = phaseStage(phase, status);
   const needsYou = phaseNeedsYou(phase);
   const held = heldByDecision(phase);
@@ -337,9 +372,15 @@ export function PhaseDetailPanel({
     <>
       {needsYou ? (
         held ? (
-          <Link to={needsHref} className={actionClass('brand')}>
-            <Trans>answer in Needs you</Trans>
-          </Link>
+          // A guard decision now answers in place on the Review tab's
+          // next-step card (plan D24/D25) — this link would duplicate that
+          // action, so it is omitted for exactly that case; a plain
+          // decisionHold or reviewDecision still points at Needs you.
+          phase.guardDecision != null ? null : (
+            <Link to={needsHref} className={actionClass('brand')}>
+              <Trans>answer in Needs you</Trans>
+            </Link>
+          )
         ) : (
           <button type="button" onClick={() => onTab('criteria')} className={actionClass('brand')}>
             <Trans>tick criteria</Trans>
@@ -472,68 +513,54 @@ export function PhaseDetailPanel({
         </div>
       ) : activeTab === 'runs' ? (
         <>
-          {runs.length > 0 ? (
-            <ol aria-label={t`runs of this phase`} className="m-0 list-none p-0">
-              {runs.map((run) => (
-                <RunRow key={run.id} run={run} now={now} ruled />
-              ))}
-            </ol>
-          ) : (
-            sessions !== null && (
-              <div className="py-5 text-[12.5px] text-ink-dim">
-                <Trans>No runs yet — this phase starts when the previous one lands.</Trans>
-              </div>
-            )
-          )}
-          {status !== 'done' && !running && (
-            <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1.5">
-              <PhaseRunModelPicker
-                value={phaseRunModel}
-                onChange={onPhaseRunModel}
-                disabled={runBusy !== null || planRunning}
+          <div className="text-[13px] leading-[1.5]">
+            <span className={`font-semibold ${DOT[verdict.tone]}`}>{verdict.lead}</span>{' '}
+            <span className="text-ink-dim">{verdict.rest}</span>
+          </div>
+          {/* A phase that never ran has nothing to report yet — the verdict
+              sentence alone says why, with no empty "last result" block under it. */}
+          {phase.runOutcome !== 'idle' && (
+            <section aria-label={t`last result`} className="mt-3 rounded-lg border border-line bg-surface/40 px-2.5 py-2">
+              <h3 className="mb-1 font-mono text-[10px] tracking-[0.14em] text-ink-2 uppercase">
+                <Trans>Last result</Trans>
+              </h3>
+              <Row label={t`Executor`} tone={executorRow.tone} status={executorRow.status} testId="runs-last-executor" />
+              <Row label={t`Guard check`} tone={guardRow.tone} status={guardRow.status} testId="runs-last-guard" />
+              <Row label={t`Verifier`} tone={verifierRow.tone} status={verifierRow.status} testId="runs-last-verifier" />
+              <Row
+                label={t`Review`}
+                tone={reviewRow.tone}
+                status={reviewRow.status}
+                {...(latestReview !== null ? { link: { onClick: () => onTab('review'), text: t`open →` } } : {})}
+                testId="runs-last-review"
               />
-              <PhaseRunEffortPicker
-                value={phaseRunEffort}
-                onChange={onPhaseRunEffort}
-                disabled={runBusy !== null || planRunning}
+              <Row
+                label={t`Plan compliance`}
+                tone={complianceRow.tone}
+                status={complianceRow.status}
+                detail={complianceRow.detail}
+                link={{ onClick: () => onTab('report'), text: t`open →` }}
+                testId="runs-last-compliance"
               />
-            </div>
+            </section>
           )}
-          <div className="mt-3 flex flex-wrap items-center gap-1.5">
-            <span className={`rounded border px-1.5 py-px font-mono text-[9px] ${chip.cls}`}>{i18n._(chip.label)}</span>
-            {/* Only the idle half: while live, RunStateChip already pulses. */}
-            {status === 'in_progress' && !running && (
-              <PhaseActivity docUpdatedAt={phase.docUpdatedAt} running={false} />
+          <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1.5">
+            {status !== 'done' && !running && (
+              <>
+                <PhaseRunModelPicker
+                  value={phaseRunModel}
+                  onChange={onPhaseRunModel}
+                  disabled={runBusy !== null || planRunning}
+                />
+                <PhaseRunEffortPicker
+                  value={phaseRunEffort}
+                  onChange={onPhaseRunEffort}
+                  disabled={runBusy !== null || planRunning}
+                />
+                <DocModelChip phase={phase} picked={phaseRunModel} />
+              </>
             )}
-            <RunStateChip phase={phase} onOpenOutcome={onOpenOutcome} />
             <RunModelChip phase={phase} />
-            <DocModelChip phase={phase} picked={phaseRunModel} />
-            <VerifyVerdictChip verdict={phase.verifyVerdict} detail={phase.verifyDetail} />
-            <SurpriseChip phase={phase} onOpen={() => onTab('story')} />
-            {phase.dependsOn.map((seq) => (
-              <span
-                key={seq}
-                className={`rounded border px-1 py-px font-mono text-[9px] ${
-                  resolvedSeqs.has(seq) ? 'border-green/40 text-green' : 'border-line text-ink-faint'
-                }`}
-                data-tip={resolvedSeqs.has(seq) ? t`dependency resolved` : t`dependency pending`}
-              >
-                ← #{seq}
-              </span>
-            ))}
-            {/* The header's actions name what the page is waiting for, so a phase that
-                waits on the operator keeps its run here. */}
-            {needsYou && primary !== null && (
-              <button
-                type="button"
-                disabled={primary.disabled}
-                data-tip={'tip' in primary ? primary.tip : undefined}
-                onClick={primary.onClick}
-                className={`ml-auto rounded-md border px-2 py-1 font-mono text-[10px] transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${running ? 'border-red/40 text-red hover:bg-red/10' : runButtonCls(phase.runOutcome)}`}
-              >
-                {primary.label}
-              </button>
-            )}
           </div>
           {appliedRevision !== undefined && (
             <div className="mt-2 font-mono text-[10px] text-ink-faint">
@@ -550,21 +577,6 @@ export function PhaseDetailPanel({
               {phase.runError ?? t`run failed`}
             </div>
           )}
-          <PhaseReopens
-            taskId={epic.taskId}
-            phaseId={phase.id}
-            // A daemon older than migration 0104 sends no `reopens`.
-            reopens={phase.reopens ?? []}
-            canReopen={status === 'done' && !running}
-            onReopened={onDocChanged}
-          />
-          <RunsReviewBlock
-            key={phase.id}
-            taskId={epic.taskId}
-            phaseId={phase.id}
-            // A daemon older than migration 0106 sends no `reviews`.
-            reviews={phase.reviews ?? []}
-          />
         </>
       ) : (
         <>

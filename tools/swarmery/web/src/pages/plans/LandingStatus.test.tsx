@@ -1,8 +1,10 @@
 // @vitest-environment jsdom
 //
-// The landing status chips and Refresh (phase-landing plan, phase 7, SC-13):
-// one chip per normalized CI / review / state value (`none` hidden), the time of
-// the last read, and a Refresh that calls the refresh endpoint, shows aria-busy
+// LandingStatus now owns only "checked N ago" + Refresh (phase 5 step 4) — the
+// state/CI/review chips it used to render inline moved to ReviewStateLedger,
+// which is tested against the same `stateChip` / `ciChip` / `reviewChip`
+// helpers in ReviewStateLedger.test.tsx. This file covers: the time of the
+// last read, and a Refresh that calls the refresh endpoint, shows aria-busy
 // while it runs, hands the new landing up, and shows a refusal inline. The API
 // module is mocked except LandError, the real class.
 
@@ -52,41 +54,7 @@ function renderStatus(l: PhaseLanding, onRefreshed = vi.fn()) {
 
 const text = (id: string): string | null => screen.queryByTestId(id)?.textContent ?? null;
 
-describe('LandingStatus chips', () => {
-  it.each([
-    ['success', '✓CI passed'],
-    ['failure', '✗CI failed'],
-    ['pending', '◌CI running'],
-  ] as const)('CI %s reads "%s"', (ci, want) => {
-    renderStatus(landing({ prStatus: status({ ci }) }));
-    expect(text('landing-status-ci')).toBe(want);
-  });
-
-  it.each([
-    ['approved', '✓approved'],
-    ['changes_requested', '✗changes requested'],
-    ['review_required', 'review required'],
-  ] as const)('review %s reads "%s"', (review, want) => {
-    renderStatus(landing({ prStatus: status({ review }) }));
-    expect(text('landing-status-review')).toBe(want);
-  });
-
-  it('hides CI and review when there is none', () => {
-    renderStatus(landing({ prStatus: status({ ci: 'none', review: 'none' }) }));
-    expect(screen.queryByTestId('landing-status-ci')).toBeNull();
-    expect(screen.queryByTestId('landing-status-review')).toBeNull();
-  });
-
-  it.each([
-    [{ state: 'open', draft: false }, 'open'],
-    [{ state: 'open', draft: true }, 'draft'],
-    [{ state: 'merged', draft: false }, '✓merged'],
-    [{ state: 'closed', draft: false }, 'closed'],
-  ] as const)('state %o reads "%s"', (over, want) => {
-    renderStatus(landing({ prStatus: status(over) }));
-    expect(text('landing-status-state')).toBe(want);
-  });
-
+describe('LandingStatus', () => {
   it('shows when the status was last read, relative', () => {
     renderStatus(landing());
     expect(text('landing-status-checked')).toBe('checked 4 min ago');
@@ -94,7 +62,6 @@ describe('LandingStatus chips', () => {
 
   it('says so before the first read', () => {
     renderStatus(landing({ prStatus: null }));
-    expect(screen.queryByTestId('landing-status-state')).toBeNull();
     expect(text('landing-status-checked')).toBe('status not read yet');
     expect(screen.getByRole('button', { name: 'Refresh' })).toBeTruthy();
   });

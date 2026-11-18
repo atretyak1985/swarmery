@@ -7,7 +7,7 @@
 
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '../../test/render';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { Epic, EpicPhase, PhaseLanding, PhaseReview as PhaseReviewData, ProviderTerms } from '../../api/types';
+import type { Epic, EpicPhase, NeedsYouDecision, PhaseLanding, PhaseReview as PhaseReviewData, ProviderTerms } from '../../api/types';
 import { PhaseReview } from './PhaseReview';
 
 const api = vi.hoisted(() => ({
@@ -24,6 +24,12 @@ vi.mock('../../api', async (importOriginal) => {
     landPhase: api.landPhase,
     refreshPhaseLanding: api.refreshPhaseLanding,
   };
+});
+
+const guardApi = vi.hoisted(() => ({ answerGuardDecision: vi.fn() }));
+vi.mock('../../api/guard', async (importOriginal) => {
+  const real = await importOriginal<typeof import('../../api/guard')>();
+  return { ...real, answerGuardDecision: guardApi.answerGuardDecision };
 });
 
 const { LandError } = await import('../../api');
@@ -79,7 +85,22 @@ beforeEach(() => {
   api.getPhaseReview.mockReset();
   api.landPhase.mockReset();
   api.refreshPhaseLanding.mockReset();
+  guardApi.answerGuardDecision.mockReset();
   api.getPhaseReview.mockResolvedValue(review());
+});
+
+const guardDecision = (over: Partial<NeedsYouDecision> = {}): NeedsYouDecision => ({
+  taskId: 9,
+  phaseId: 207,
+  decisionId: 'D-4',
+  question: 'The run touched protected paths: trap_test.go. Allow (add to scope) or reject?',
+  options: [
+    { id: 'allow-add-to-scope', label: 'Allow · add to scope' },
+    { id: 'reject', label: 'Reject' },
+  ],
+  guard: { protectedChanged: ['trap_test.go'] },
+  paths: ['trap_test.go'],
+  ...over,
 });
 
 function renderReview(p: EpicPhase = phase(), terms: ProviderTerms | null = PR_TERMS, onLanded = vi.fn()) {
@@ -118,10 +139,14 @@ describe('PhaseReview', () => {
     const open = landing({ state: 'pr_open', prUrl: 'https://host.example/acme/w/pull/77', prNumber: 77 });
     api.getPhaseReview.mockResolvedValue(review({ landing: open }));
     renderReview(phase({ landing: open }));
-    const link = (await screen.findByRole('link', { name: 'PR #77' })) as HTMLAnchorElement;
+    await screen.findByText('add line items');
+    const pr = screen.getByTestId('review-ledger-pr');
+    expect(within(pr).getByText('PR #77')).toBeTruthy();
+    const link = within(pr).getByRole('link', { name: 'open ↗' }) as HTMLAnchorElement;
     expect(link.href).toBe('https://host.example/acme/w/pull/77');
-    expect(screen.getByText('PR open')).toBeTruthy();
-    expect(button('Push').disabled).toBe(true);
+    expect(screen.getByTestId('review-ledger-branch').textContent).toContain('PR open');
+    // A change request is already open: Push is no longer offered.
+    expect(screen.queryByRole('button', { name: 'Push' })).toBeNull();
   });
 
   it('pr_open embeds the status chips; a refresh that finds it merged replaces the strip and fires onLanded', async () => {
@@ -142,21 +167,22 @@ describe('PhaseReview', () => {
     api.refreshPhaseLanding.mockResolvedValue(merged);
     const { onLanded } = renderReview(phase({ landing: open }));
 
-    expect((await screen.findByTestId('landing-status-ci')).textContent).toBe('◌CI running');
-    expect(screen.queryByText(/^merged \d/)).toBeNull();
+    expect((await screen.findByTestId('review-ledger-ci')).textContent).toContain('CI running');
+    expect(screen.queryByTestId('review-ledger-branch')?.textContent).not.toMatch(/merged \d/);
     fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));
     await waitFor(() => expect(onLanded).toHaveBeenCalledTimes(1));
     expect(api.refreshPhaseLanding).toHaveBeenCalledWith(EPIC.taskId, 207);
-    expect(screen.getByTestId('landing-status-ci').textContent).toBe('✓CI passed');
+    expect(screen.getByTestId('review-ledger-ci').textContent).toContain('CI passed');
     // landedAt (the merge time) shows only now that the phase is merged.
-    expect(screen.getByText(/^merged \d+ s ago$/)).toBeTruthy();
+    expect(screen.getByTestId('review-ledger-branch').textContent).toMatch(/merged \d+ s ago/);
   });
 
   it('pr_open under the other vocabulary reads MR #n', async () => {
     const open = landing({ state: 'pr_open', prUrl: 'https://host.example/acme/w/-/merge_requests/12', prNumber: 12 });
     api.getPhaseReview.mockResolvedValue(review({ landing: open, terms: MR_TERMS }));
     renderReview(phase({ landing: open }), MR_TERMS);
-    expect(await screen.findByRole('link', { name: 'MR #12' })).toBeTruthy();
+    await screen.findByText('add line items');
+    expect(within(screen.getByTestId('review-ledger-pr')).getByText('MR #12')).toBeTruthy();
   });
 
   it('Push sends {action:"push"}; the returned landing replaces the strip and onLanded fires', async () => {
@@ -259,13 +285,13 @@ describe('PhaseReview', () => {
     });
   });
 
-  it('a running phase disables every action', async () => {
+  it('a running phase offers no action — nothing is rendered disabled, it is just not there', async () => {
     renderReview(phase({ runState: 'running', landing: landing({ state: 'none' }) }));
     await screen.findByText('add line items');
-    expect(button('Push').disabled).toBe(true);
-    expect(button('Push + open Pull Request').disabled).toBe(true);
-    expect((screen.getByRole('checkbox', { name: 'Draft' }) as HTMLInputElement).disabled).toBe(true);
-    expect(button('Return to agent…').disabled).toBe(true);
+    expect(screen.queryByRole('button', { name: 'Push' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Push + open Pull Request' })).toBeNull();
+    expect(screen.queryByRole('checkbox', { name: 'Draft' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Return to agent…' })).toBeNull();
   });
 
   it('Return needs feedback text before it can be sent', async () => {
@@ -310,8 +336,11 @@ describe('PhaseReview', () => {
       new LandError(409, { error: 'this phase has no run branch', code: 'no-run-branch' }, 'review failed'),
     );
     renderReview(phase({ landing: landing({ state: 'none' }), runState: 'failed' }));
-    expect(await screen.findByText(/no run branch yet/)).toBeTruthy();
+    expect(await screen.findByText(/This phase has no run branch yet/)).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Push' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Push + open Pull Request' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Return to agent…' })).toBeNull();
+    expect(screen.getByText('The run branch is gone')).toBeTruthy();
   });
 
   describe('header branch vs run branch', () => {
@@ -470,10 +499,10 @@ describe('PhaseReview — Find <change> (land-criteria UX, phase 4)', () => {
     const { onLanded } = renderReview();
     await screen.findByText('add line items');
     fireEvent.click(button('Find PR'));
-    expect(await screen.findByRole('link', { name: 'PR #88' })).toBeTruthy();
+    await waitFor(() => expect(within(screen.getByTestId('review-ledger-pr')).getByText('PR #88')).toBeTruthy());
     expect(api.refreshPhaseLanding).toHaveBeenCalledWith(9, 207);
     expect(onLanded).toHaveBeenCalledTimes(1);
-    expect(screen.getByText('PR open')).toBeTruthy();
+    expect(screen.getByTestId('review-ledger-branch').textContent).toContain('PR open');
     expect(screen.queryByRole('button', { name: /^Find / })).toBeNull();
   });
 
@@ -512,5 +541,70 @@ describe('PhaseReview — Find <change> (land-criteria UX, phase 4)', () => {
     const alert = await screen.findByRole('alert');
     expect(alert.textContent).toContain('not authenticated');
     expect(alert.textContent).toContain('log in');
+  });
+});
+
+describe('PhaseReview — guard decision (plan D24/D25/D26)', () => {
+  it('an open guard decision is the only next step, and answering it in place fires onLanded', async () => {
+    guardApi.answerGuardDecision.mockResolvedValue(undefined);
+    const decision = guardDecision();
+    const { onLanded } = renderReview(phase({ guardDecision: decision }));
+    await screen.findByText('add line items');
+    expect(screen.getByText('Decision D-4 is still open')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Push' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Return to agent…' })).toBeNull();
+
+    fireEvent.click(button('Answer the decision'));
+    const dialog = screen.getByRole('dialog');
+    // Exactly allow-add-to-scope + reject: the two-way shape, answered by one
+    // button each — no radio group to pick from (guardDecisionView.ts).
+    fireEvent.click(within(dialog).getByRole('button', { name: /^Allow · add to scope/ }));
+    await waitFor(() => expect(onLanded).toHaveBeenCalledTimes(1));
+    expect(guardApi.answerGuardDecision).toHaveBeenCalledWith(9, 207, 'D-4', 'allow-add-to-scope', '');
+  });
+
+  it('D26: an empty guard decision closes with one button in the Guard row, not a choice', async () => {
+    guardApi.answerGuardDecision.mockResolvedValue(undefined);
+    const decision = guardDecision({ paths: [] });
+    const { onLanded } = renderReview(phase({ guardDecision: decision }));
+    await screen.findByText('add line items');
+    expect(button('Close · allow nothing')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Answer the decision' })).toBeNull();
+    // D26: an empty decision is never named as the reason anything stopped —
+    // the verdict's own lead clause never says "Decision D-n is still open".
+    expect(screen.queryByText('Decision D-4 is still open')).toBeNull();
+    expect(screen.getByText('Nothing to land yet')).toBeTruthy();
+
+    fireEvent.click(button('Close · allow nothing'));
+    await waitFor(() => expect(onLanded).toHaveBeenCalledTimes(1));
+    expect(guardApi.answerGuardDecision).toHaveBeenCalledWith(9, 207, 'D-4', 'reject', '');
+  });
+
+  it('a stop decision with no paths is never treated as empty', async () => {
+    const decision = guardDecision({ paths: [], trigger: 'protected-path', reason: 'touched a hook' });
+    renderReview(phase({ guardDecision: decision }));
+    await screen.findByText('add line items');
+    expect(button('Answer the decision')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Close · allow nothing' })).toBeNull();
+  });
+});
+
+describe('PhaseReview — "what git said" disclosure (plan D24/D25)', () => {
+  it('keeps the stored landing failure out of the main flow, visible only once opened', async () => {
+    const failed = landing({ state: 'pushed', error: 'push rejected: non-fast-forward (raw git stderr)' });
+    api.getPhaseReview.mockResolvedValue(review({ landing: failed }));
+    renderReview(phase({ landing: failed }));
+    await screen.findByText('add line items');
+    const details = screen.getByText('what git said').closest('details');
+    expect(details).not.toBeNull();
+    expect(details?.textContent).toContain('push rejected: non-fast-forward');
+    // Not sitting on the tab as a loose line outside the disclosure.
+    expect(screen.queryByText(/^last landing failure:/)).toBeNull();
+  });
+
+  it('renders nothing when there is no stored failure', async () => {
+    renderReview();
+    await screen.findByText('add line items');
+    expect(screen.queryByText('what git said')).toBeNull();
   });
 });

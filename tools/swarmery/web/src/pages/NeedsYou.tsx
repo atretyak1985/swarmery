@@ -31,7 +31,7 @@
 // (D-4), so a stray key never allows or answers anything; `x` runs the card's
 // secondary button where it carries the key; `o`/→ go into the pane, ← back.
 
-import { plural, t } from '@lingui/core/macro';
+import { plural } from '@lingui/core/macro';
 import { Trans, useLingui } from '@lingui/react/macro';
 import {
   useCallback,
@@ -52,7 +52,7 @@ import {
   resolveApproval,
   sendSessionMessage,
 } from '../api';
-import { answerGuardDecision, guardFindings } from '../api/guard';
+import { answerGuardDecision } from '../api/guard';
 import type {
   CleanupProofKind,
   NeedsYouCleanupCandidate,
@@ -101,6 +101,13 @@ import { compactSpan } from '../lib/sessionsView';
 import { stepKey } from '../lib/useGlobalKeys';
 import { useNeedsYou } from '../lib/useNeedsYou';
 import { gateTier } from './detail/SessionGate';
+import {
+  guardCheckFacts,
+  guardDecisionOptions,
+  guardDecisionTitle,
+  isStopDecision,
+  isTwoWayGuardDecision,
+} from './plans/guardDecisionView';
 import type { PhaseTab } from './plans/PhasePanel';
 import { plansPath } from './plans/plansUrl';
 import { Chevron } from '../components/Chevron';
@@ -551,33 +558,13 @@ function ConfirmLocally({ ctx }: { ctx: CardContext }): JSX.Element {
 
 /* ----- phase_decision: a guard decision or an agent-declared stop ----- */
 
-/** What the guard found, as one part of the card's mono facts line. */
+/** What the guard found, as one part of the card's mono facts line — the same
+ *  words the Review tab's in-place reply shows for the same decision
+ *  (guardDecisionView.ts, plan D24). */
 function guardFacts(decision: NeedsYouDecision): string {
-  const f = guardFindings(decision.guard);
-  const parts: string[] = [];
-  if (f !== null && f.changed.length > 0) {
-    parts.push(
-      plural(f.changed.length, {
-        one: 'touched # protected file',
-        few: 'touched # protected files',
-        many: 'touched # protected files',
-        other: 'touched # protected files',
-      }),
-    );
-  }
-  if (f?.docCopyMismatch === true) parts.push(t`doc copy mismatch`);
-  if (f !== null && f.blocked > 0) {
-    parts.push(
-      plural(f.blocked, {
-        one: '# blocked attempt',
-        few: '# blocked attempts',
-        many: '# blocked attempts',
-        other: '# blocked attempts',
-      }),
-    );
-  }
-  if (f?.unreadable === true) parts.push(t`guard block unreadable`);
-  return parts.join(' · ');
+  return guardCheckFacts(decision)
+    .map((f) => f.text)
+    .join(' · ');
 }
 
 /** One part of the facts line; the stop's parts keep their test ids. */
@@ -622,11 +609,10 @@ function PhaseDecision({ ctx }: { ctx: CardContext }): JSX.Element | null {
 
   const reviewTo = phaseHref(item, 'review');
   const typed = text.trim();
-  const isStop = decision.trigger !== undefined || decision.freeText === true;
+  const isStop = isStopDecision(decision);
   const options = decision.options;
-  const ids = options.map((o) => o.id);
   // A guard decision is allow-or-reject: two buttons, nothing to pick from.
-  const twoWay = !isStop && options.length === 2 && ids.includes(ALLOW_OPTION) && ids.includes('reject');
+  const twoWay = isTwoWayGuardDecision(decision);
   const owning = field === 'own' && typed !== '';
   const picked = owning ? undefined : options[pick];
   const note = field === 'note' ? typed : '';
@@ -645,7 +631,6 @@ function PhaseDecision({ ctx }: { ctx: CardContext }): JSX.Element | null {
   };
 
   const trigger = decision.trigger !== undefined && decision.trigger !== '' ? decision.trigger : t`no trigger`;
-  const reason = decision.reason !== undefined && decision.reason !== '' ? decision.reason : decision.question;
   const pathList = (decision.paths ?? []).join(', ');
   const flagList = (decision.flags ?? []).join(', ');
   const found = guardFacts(decision);
@@ -662,16 +647,12 @@ function PhaseDecision({ ctx }: { ctx: CardContext }): JSX.Element | null {
       kind={`${kindLabel(item.kind)} · ${decision.decisionId}`}
       kindTone="red"
       meta={ctx.meta}
-      title={isStop ? reason : decision.question}
+      title={guardDecisionTitle(decision)}
       {...(facts.length === 0 ? {} : { facts: <FactsLine facts={facts} /> })}
       {...(twoWay
         ? {}
         : {
-            options: options.map((o) =>
-              o.consequence === undefined || o.consequence === ''
-                ? { id: o.id, label: o.label }
-                : { id: o.id, label: o.label, consequence: o.consequence },
-            ),
+            options: guardDecisionOptions(decision),
             picked: picked?.id ?? null,
             onPick: (id: string) => {
               setPick(options.findIndex((o) => o.id === id));
