@@ -1,11 +1,13 @@
 // @vitest-environment jsdom
 //
-// PhaseReopens: the Runs tab's one "Reopen…" action (plan D-31) — a Done
-// phase offers it with an explanatory sentence, any other phase explains why
-// it is withheld instead — the Reopen form itself (ticked criteria from the
-// server, the request it sends, the refetch after it), and the refusal path.
-// The reopen HISTORY moved to the attempt groups' captions (runsModel.ts);
-// this component no longer renders it.
+// PhaseReopens: the Runs tab's reopen ledger (plan D-31) — the "Reopened"
+// history (gate, fix link, reason, unticked criteria) when the phase was ever
+// reopened, the single "Reopen…" action a Done phase offers with an
+// explanatory sentence, any other phase explains why it is withheld instead
+// — the Reopen form itself (ticked criteria from the server, the request it
+// sends, the refetch after it), and the refusal path. A reopen's reason ALSO
+// becomes its attempt group's caption elsewhere (runsModel.ts), but the full
+// history (gate/fix/criteria) still only lives here.
 
 import { cleanup, fireEvent, render, screen, waitFor, within } from '../../test/render';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -35,15 +37,24 @@ beforeEach(() => {
 
 describe('PhaseReopens', () => {
   it('a not-reopenable phase explains why instead of offering the action', () => {
-    render(<PhaseReopens taskId={1} phaseId={2} canReopen={false} onReopened={vi.fn()} />);
+    render(<PhaseReopens taskId={1} phaseId={2} reopens={[]} canReopen={false} onReopened={vi.fn()} />);
     expect(screen.getByText(/Reopen… is offered once this phase is Done/)).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Reopen…' })).toBeNull();
   });
 
   it('a reopenable phase offers the action with an explanatory sentence', () => {
-    render(<PhaseReopens taskId={1} phaseId={2} canReopen onReopened={vi.fn()} />);
+    render(<PhaseReopens taskId={1} phaseId={2} reopens={[]} canReopen onReopened={vi.fn()} />);
     expect(screen.getByRole('button', { name: 'Reopen…' })).toBeTruthy();
     expect(screen.getByText(/Sends this phase back for another attempt/)).toBeTruthy();
+  });
+
+  it('a reopened phase shows its history — gate, fix link, reason and unticked criteria', () => {
+    render(<PhaseReopens taskId={1} phaseId={2} reopens={[REOPEN]} canReopen onReopened={vi.fn()} />);
+    const history = screen.getByRole('region', { name: 'Reopened' });
+    expect(within(history).getByText('caught by review')).toBeTruthy();
+    expect(within(history).getByText('DELETE left orphaned rows')).toBeTruthy();
+    expect(within(history).getByText('DELETE removes it')).toBeTruthy();
+    expect(within(history).getByRole('link', { name: 'fix →' }).getAttribute('href')).toBe('https://example.test/pr/9');
   });
 
   it('reopens a Done phase: ticked criteria, the request, the refetch', async () => {
@@ -53,7 +64,7 @@ describe('PhaseReopens', () => {
     });
     vi.mocked(api.reopenPhase).mockResolvedValue({ reopen: REOPEN, unticked: 1 });
     const onReopened = vi.fn();
-    render(<PhaseReopens taskId={1} phaseId={2} canReopen onReopened={onReopened} />);
+    render(<PhaseReopens taskId={1} phaseId={2} reopens={[]} canReopen onReopened={onReopened} />);
 
     fireEvent.click(screen.getByRole('button', { name: 'Reopen…' }));
     const form = screen.getByRole('form', { name: 'reopen this phase' });
@@ -84,7 +95,7 @@ describe('PhaseReopens', () => {
     vi.mocked(api.fetchPhaseReopens).mockResolvedValue({ reopens: [], ticked: ['A'] });
     vi.mocked(api.reopenPhase).mockRejectedValue(new Error('none of the named criteria is a ticked criterion'));
     const onReopened = vi.fn();
-    render(<PhaseReopens taskId={1} phaseId={2} canReopen onReopened={onReopened} />);
+    render(<PhaseReopens taskId={1} phaseId={2} reopens={[]} canReopen onReopened={onReopened} />);
     fireEvent.click(screen.getByRole('button', { name: 'Reopen…' }));
     fireEvent.click(await screen.findByRole('checkbox', { name: 'A' }));
     fireEvent.change(screen.getByLabelText('what slipped through'), { target: { value: 'x' } });
@@ -97,7 +108,7 @@ describe('PhaseReopens', () => {
 
   it('says so when the doc has nothing ticked', async () => {
     vi.mocked(api.fetchPhaseReopens).mockResolvedValue({ reopens: [], ticked: [] });
-    render(<PhaseReopens taskId={1} phaseId={2} canReopen onReopened={vi.fn()} />);
+    render(<PhaseReopens taskId={1} phaseId={2} reopens={[]} canReopen onReopened={vi.fn()} />);
     fireEvent.click(screen.getByRole('button', { name: 'Reopen…' }));
     expect(await screen.findByText(/No ticked criteria/)).toBeTruthy();
   });

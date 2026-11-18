@@ -112,6 +112,10 @@ describe('runRole / runCardTitle', () => {
     expect(runRole(session({ planGroup: null }))).toBe('session');
   });
 
+  it('a phase-scoped session that is NOT the attempt’s identified executor reads as a generic session', () => {
+    expect(runRole(session(), 'uuid-someone-else')).toBe('session');
+  });
+
   it('the card title is the role, never the service-prompt title', () => {
     const title = runCardTitle(session());
     expect(title).not.toContain('You are the executor');
@@ -143,12 +147,51 @@ describe('phaseAttemptGroups', () => {
     expect(groups[1]?.costUsd).toBe(2.5);
   });
 
-  it('no reopens: every attempt after the first has no reason', () => {
+  it('no reopens: every session of the phase collapses into attempt 1, whatever the count', () => {
     const groups = phaseAttemptGroups(
       [session({ id: 1, sessionUuid: 'uuid-1' }), session({ id: 2, sessionUuid: 'uuid-2', startedAt: '2026-11-02T09:00:00Z' })],
       [],
     );
-    expect(groups[1]?.reason).toBeNull();
+    expect(groups).toHaveLength(1);
+    expect(groups[0]?.sessions).toHaveLength(2);
+    expect(groups[0]?.reason).toBeNull();
+  });
+
+  it('a reopen only starts a new attempt from its own createdAt — sessions started earlier stay in the prior attempt', () => {
+    const a = session({ id: 1, sessionUuid: 'uuid-a', startedAt: '2026-11-01T09:00:00Z' });
+    const b = session({ id: 2, sessionUuid: 'uuid-b', startedAt: '2026-11-01T09:05:00Z' });
+    const c = session({ id: 3, sessionUuid: 'uuid-c', startedAt: '2026-11-02T10:00:00Z' });
+    const groups = phaseAttemptGroups([a, b, c], [reopen({ createdAt: '2026-11-02T09:00:00Z' })]);
+    expect(groups).toHaveLength(2);
+    expect(groups[0]?.sessions.map((s) => s.sessionUuid)).toEqual(['uuid-a', 'uuid-b']);
+    expect(groups[1]?.sessions.map((s) => s.sessionUuid)).toEqual(['uuid-c']);
+  });
+
+  it('a bucket of several sessions names the executor from the phase’s own runSessionUuid, the rest read as generic sessions', () => {
+    const exec = session({ id: 1, sessionUuid: 'uuid-exec', startedAt: '2026-11-01T09:00:00Z', costUsd: 1 });
+    const verifier = session({ id: 2, sessionUuid: 'uuid-verifier', startedAt: '2026-11-01T09:05:00Z', costUsd: 0.5 });
+    const groups = phaseAttemptGroups([exec, verifier], [], 'uuid-exec');
+    expect(groups).toHaveLength(1);
+    expect(groups[0]?.sessions).toHaveLength(2);
+    expect(groups[0]?.costUsd).toBe(1.5);
+    expect(groups[0]?.executorUuid).toBe('uuid-exec');
+    expect(runRole(exec, groups[0]?.executorUuid)).toBe('executor');
+    expect(runRole(verifier, groups[0]?.executorUuid)).toBe('session');
+  });
+
+  it('a bucket of several sessions with no matching runSessionUuid names no executor — every card reads as a generic session', () => {
+    const a = session({ id: 1, sessionUuid: 'uuid-a', startedAt: '2026-11-01T09:00:00Z' });
+    const b = session({ id: 2, sessionUuid: 'uuid-b', startedAt: '2026-11-01T09:05:00Z' });
+    const groups = phaseAttemptGroups([a, b], [], null);
+    expect(groups[0]?.executorUuid).toBeNull();
+    expect(runRole(a, groups[0]?.executorUuid)).toBe('session');
+    expect(runRole(b, groups[0]?.executorUuid)).toBe('session');
+  });
+
+  it('a lone session in a bucket is always the executor, even with no runSessionUuid to match', () => {
+    const groups = phaseAttemptGroups([session()], [], null);
+    expect(groups[0]?.executorUuid).toBe('uuid-1');
+    expect(runRole(session(), groups[0]?.executorUuid)).toBe('executor');
   });
 });
 
@@ -182,5 +225,15 @@ describe('planPhaseGroups', () => {
     const b = session({ id: 2, sessionUuid: 'uuid-b', costUsd: 2.25 });
     const groups = planPhaseGroups(epic, [a, b]);
     expect(groups[0]?.costUsd).toBe(3.25);
+  });
+
+  it('a phase group with several sessions names the executor from that phase’s own runSessionUuid', () => {
+    const withRunUuid: Pick<Epic, 'phases'> = {
+      phases: [{ id: 11, seq: 1, name: 'Scope model', runSessionUuid: 'uuid-a' } as EpicPhase],
+    };
+    const a = session({ id: 1, sessionUuid: 'uuid-a' });
+    const b = session({ id: 2, sessionUuid: 'uuid-b' });
+    const groups = planPhaseGroups(withRunUuid, [a, b]);
+    expect(groups[0]?.executorUuid).toBe('uuid-a');
   });
 });

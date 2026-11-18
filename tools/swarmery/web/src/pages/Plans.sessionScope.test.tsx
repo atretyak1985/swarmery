@@ -13,9 +13,12 @@
 // A card never shows `s.title` (the start of its boilerplate service prompt) —
 // these fixtures give every session a distinct, recognisable title precisely
 // so a regression that leaked one back onto the card would be visible here.
-// What the column shows instead is the role ("executor" for every phase-scoped
-// session, "plan run" for the controller, "inferred session"/"linked session"
-// for a `linked` row) — see runsModel.ts / PlanSessions.tsx.
+// What the column shows instead is the role ("executor" for the phase-scoped
+// session its own phase's `runSessionUuid` still points to, "plan run" for
+// the controller, "inferred session"/"linked session" for a `linked` row, and
+// a generic "session" for any other phase-scoped row this module cannot
+// positively tell apart from the executor — e.g. a subagent) — see
+// runsModel.ts / PlanSessions.tsx.
 //
 // The fence worth having is SC-6, the negative one: the plan-run controller and
 // the task_sessions rows (`linked` / `inferred`) have no phase coordinate in the
@@ -107,8 +110,10 @@ const phase = (over: Partial<EpicPhase> = {}): EpicPhase => ({
 });
 
 const PHASES: EpicPhase[] = [
-  phase(),
-  phase({ id: PHASE_2, seq: 2, name: 'UI wiring', docRelPath: 'phase-2.md' }),
+  // Phase #1's own runSessionUuid picks session 2 (`uuid-2`) as its executor
+  // out of the two phase-scoped sessions it has — see SESSIONS below.
+  phase({ runSessionUuid: 'uuid-2' }),
+  phase({ id: PHASE_2, seq: 2, name: 'UI wiring', docRelPath: 'phase-2.md', runSessionUuid: 'uuid-4' }),
   phase({ id: PHASE_3, seq: 3, name: 'Nothing ran here', docRelPath: 'phase-3.md' }),
 ];
 
@@ -152,7 +157,7 @@ const otherEpic = (): Epic =>
     taskId: OTHER_TASK_ID,
     externalId: '2026-09-20-some-other-plan',
     title: 'some other plan',
-    phases: [phase({ id: OTHER_PHASE, seq: 1, name: 'Other work' })],
+    phases: [phase({ id: OTHER_PHASE, seq: 1, name: 'Other work', runSessionUuid: 'uuid-5' })],
     rollup: { done: 0, total: 3, pct: 0, incompletePhases: 1 },
     linkedSessions: [],
   });
@@ -204,11 +209,12 @@ function session(id: number, title: string, planGroup: SessionPlanGroup, started
   };
 }
 
-// Phase #1 has a run AND a subagent under it (both read as their own attempt
-// group, since the data carries no explicit attempt number — runsModel.ts's
-// documented approximation), phase #2 has one run, phase #3 has none — so "the
-// pick survived" (SC-4) is distinguishable from "the automatic rule would have
-// done the same thing anyway" when we move from #1 to #2.
+// Phase #1 has a run AND a subagent under it — with no reopen between them
+// they read as ONE attempt group, and phase #1's own `runSessionUuid`
+// (`uuid-2`) is what tells the run apart from the subagent on the card
+// (runsModel.ts's `pickExecutorUuid`). Phase #2 has one run, phase #3 has
+// none — so "the pick survived" (SC-4) is distinguishable from "the automatic
+// rule would have done the same thing anyway" when we move from #1 to #2.
 const SESSIONS: Session[] = [
   session(1, 'the controller', group({ role: 'controller', phaseId: null, phaseSeq: null }), '2026-09-20T09:00:00Z'),
   session(2, 'the executor', group(), '2026-09-20T09:05:00Z'),
@@ -340,7 +346,7 @@ describe('plan sessions column — no phase open', () => {
 });
 
 describe('plan sessions column — a phase with sessions of its own', () => {
-  it('narrows to exactly that phase, as attempt groups, and labels both sides of the toggle (SC-1, SC-3, SC-7)', async () => {
+  it('narrows to exactly that phase, as one attempt group (no reopen between them), naming the real run and the subagent apart (SC-1, SC-3, SC-7)', async () => {
     await mountPlans();
     openPhase(1, 'Scope model');
 
@@ -348,10 +354,11 @@ describe('plan sessions column — a phase with sessions of its own', () => {
       expect(cardTexts()).toHaveLength(2);
     });
     const texts = cardTexts();
-    expect(texts.every((t) => t.includes('executor'))).toBe(true);
+    expect(texts.some((t) => t.includes('executor'))).toBe(true);
+    expect(texts.some((t) => t.includes('session'))).toBe(true);
     expectNoPromptLeak();
     expect(screen.getByText('Attempt 1')).toBeTruthy();
-    expect(screen.getByText('Attempt 2')).toBeTruthy();
+    expect(screen.queryByText('Attempt 2')).toBeNull();
 
     const toggle = scopeToggle();
     expect(toggle.textContent).toContain('#1 (2)');

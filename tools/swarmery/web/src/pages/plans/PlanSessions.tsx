@@ -54,10 +54,10 @@ export function usePlanSessions(epic: Epic): { sessions: Session[] | null; error
 /** One session as one card: a state glyph, its role-based name, a mono
  *  `agent · model · status` line, and `date · cost · duration` at the right.
  *  The whole card is the session's link (opens in a new tab on Cmd-click). */
-function SessionCard({ s, now }: { s: Session; now: number }): JSX.Element {
+function SessionCard({ s, now, executorUuid }: { s: Session; now: number; executorUuid: string | null }): JSX.Element {
   const sessionHref = useSessionHref();
   const { t } = useLingui();
-  const title = runCardTitle(s);
+  const title = runCardTitle(s, executorUuid);
   const span = runSpan(s, now);
   return (
     <li>
@@ -129,7 +129,7 @@ function GroupBlock({ group, now }: { group: RunGroup; now: number }): JSX.Eleme
       )}
       <ol className={`${CARD_GRID} list-none p-0`}>
         {group.sessions.map((s) => (
-          <SessionCard key={s.id} s={s} now={now} />
+          <SessionCard key={s.id} s={s} now={now} executorUuid={group.executorUuid} />
         ))}
       </ol>
     </section>
@@ -181,7 +181,7 @@ export function PlanSessions({
   const activePhase = epic.phases.find((p) => p.id === activePhaseId) ?? null;
   const groups = useMemo(() => {
     if (view.scope === 'phase' && activePhase !== null) {
-      return phaseAttemptGroups(view.sessions, activePhase.reopens ?? []);
+      return phaseAttemptGroups(view.sessions, activePhase.reopens ?? [], activePhase.runSessionUuid);
     }
     return planPhaseGroups(epic, view.sessions);
   }, [view.scope, view.sessions, activePhase, epic]);

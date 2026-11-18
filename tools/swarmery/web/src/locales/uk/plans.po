@@ -887,6 +887,14 @@ msgstr "Надолуження"
 msgid "caught by"
 msgstr "хто впіймав"
 
+#: src/pages/plans/PhaseReopens.tsx
+msgid "caught by {gate}"
+msgstr "впіймав: {gate}"
+
+#: src/pages/plans/PhaseReopens.tsx
+msgid "caught by nobody"
+msgstr "ніхто не впіймав"
+
 #: src/pages/plans/PhaseReview.tsx
 msgid "change request"
 msgstr "пул-реквест"
@@ -1419,6 +1427,10 @@ msgstr "завершення роботи"
 #: src/pages/plans/forecastStoryModel.ts
 msgid "finishing with some concerns"
 msgstr "завершення із застереженнями"
+
+#: src/pages/plans/PhaseReopens.tsx
+msgid "fix →"
+msgstr "виправлення →"
 
 #: src/pages/plans/PhaseReopens.tsx
 msgid "fix URL (optional)"
@@ -2750,6 +2762,14 @@ msgstr "Перевідкрити…"
 #: src/pages/plans/PhaseReopens.tsx
 msgid "Reopen… is offered once this phase is Done and no run is live."
 msgstr "«Перевідкрити…» стає доступним, коли фаза готова і немає живого запуску."
+
+#: src/pages/plans/PhaseReopens.tsx
+msgid "Reopened"
+msgstr "Перевідкрито"
+
+#: src/pages/plans/PhaseReopens.tsx
+msgid "Reopened · {count}"
+msgstr "Перевідкрито · {count}"
 
 #: src/pages/plans/PhaseReopens.tsx
 msgid "reopening…"
