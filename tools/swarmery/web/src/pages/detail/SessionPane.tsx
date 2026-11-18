@@ -16,8 +16,8 @@
 // the Steps ledger, which go deeper than the rail.
 //
 // The header stays put and everything under it scrolls, panelRef being the one
-// scroller; the composer sticks to its foot on the Chat tab. From `wide` up the rail is
-// a column beside all of it with its own scroll, below that it is in the flow. A live session opens at the end of
+// scroller; the composer sticks to its foot on the Chat tab. From `desk` up the rail is
+// an island beside the session's own island with its own scroll, below that it is in the flow. A live session opens at the end of
 // the conversation, a finished one at the top. Chat is the tab with no parameter;
 // ?tab=steps|diff deep-link the others, and the old ?tab=timeline|diffs|swarm keep
 // working. Live: session_updated merges header state; event_appended is attributed
@@ -606,7 +606,9 @@ export function SessionPane({
   // gate that waits on the operator (D-11). Both on switching to Chat and on first
   // data load there. A link to the brief is the rail's to land (#handoff), and a file
   // link in the usage fold scrolls to that file's row on the Diff tab instead.
-  const railColumn = useMediaQuery('(min-width: 1280px)');
+  // From `desk` up the rail is an island of its own beside the session's island
+  // (Sessions hands PlaceLayout `bareDetail`), never a block inside its scroll.
+  const railColumn = useMediaQuery('(min-width: 900px)');
   const panelRef = useRef<HTMLDivElement | null>(null);
   const conversationRef = useRef<HTMLDivElement | null>(null);
   // Where the panel stops with the conversation's foot on its own. Not scrollHeight:
@@ -1042,8 +1044,11 @@ export function SessionPane({
   );
 
   return (
-    <div className="flex h-full min-h-0">
-      <div data-testid="session-detail" className="flex h-full min-h-0 min-w-0 flex-1 flex-col">
+    <div className="flex h-full min-h-0 desk:gap-2">
+      <div
+        data-testid="session-detail"
+        className="flex h-full min-h-0 min-w-0 flex-1 flex-col desk:overflow-hidden desk:rounded-xl desk:border desk:border-line desk:bg-surface"
+      >
         <DetailHeader flush>
           <BackLink to={listHref} />
 

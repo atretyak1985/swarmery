@@ -542,6 +542,9 @@ function SessionsPlace(): JSX.Element {
   return (
     <PlaceLayout
       narrow={id === undefined ? 'list' : 'detail'}
+      // An open session draws its own two islands (SessionPane): the session and,
+      // beside it, its context rail. The empty "pick a session" state keeps one.
+      bareDetail={openId !== null}
       list={list}
       detail={
         openId === null ? (
@@ -551,7 +554,7 @@ function SessionsPlace(): JSX.Element {
             </Empty>
           )
         ) : (
-          <div ref={detailRef} tabIndex={-1} aria-label={t`open session`} className="h-full outline-none">
+          <div ref={detailRef} tabIndex={-1} aria-label={t`open session`} className="h-full min-h-0 outline-none desk:flex-1">
           <SessionPane
             key={openId}
             id={openId}
