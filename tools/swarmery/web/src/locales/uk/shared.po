@@ -1352,6 +1352,10 @@ msgstr "закрити без потреби в змінах"
 msgid "Close: no change needed"
 msgstr "Закрити: змін не потрібно"
 
+#: src/terminal/closeReason.ts
+msgid "Closed after 4 hours with no activity."
+msgstr "Закрито після 4 годин без активності."
+
 #: src/workspace/task/TaskActions.tsx
 msgid "closed with no change needed — card moved to done"
 msgstr "закрито без змін — картку перенесено в «Готово»"
@@ -1547,6 +1551,10 @@ msgstr "core керується через attach/detach"
 #: src/api.ts
 msgid "could not complete the connection"
 msgstr "не вдалося завершити під’єднання"
+
+#: src/terminal/closeReason.ts
+msgid "Could not connect: the swarmery daemon is not running, or the dashboard is locked."
+msgstr "Не вдалося під'єднатися: демон swarmery не запущений або дашборд заблоковано."
 
 #: src/api.ts
 msgid "could not disconnect the account"
@@ -2672,6 +2680,10 @@ msgstr "Заблоковано"
 #: src/components/usage/UsageSetupHint.tsx
 msgid "looked in ({sourceCount})"
 msgstr "де шукали ({sourceCount})"
+
+#: src/terminal/closeReason.ts
+msgid "Lost the connection to the swarmery daemon. It was probably restarted."
+msgstr "Зв'язок із демоном swarmery обірвався. Найімовірніше, його перезапустили."
 
 #: src/pages/settings/WorktreesPanel.tsx
 msgid "main"
@@ -3869,6 +3881,14 @@ msgstr "скидається зараз"
 msgid "Resolve what blocks a retry (below), then press Retry run."
 msgstr "Усуньте те, що блокує повторний запуск (нижче), потім натисніть «Повторити запуск»."
 
+#: src/terminal/TerminalDock.tsx
+msgid "Restart"
+msgstr "Перезапустити"
+
+#: src/terminal/TerminalDock.tsx
+msgid "Restart Claude Code"
+msgstr "Перезапустити Claude Code"
+
 #: src/components/ProjectActions.tsx
 msgid "restore"
 msgstr "відновити"
@@ -4617,6 +4637,10 @@ msgstr "Код сплив, перш ніж його ввели. Отримайт
 msgid "The concurrent-run limit (default 2)"
 msgstr "Ліміт паралельних запусків (за умовчанням 2)"
 
+#: src/terminal/closeReason.ts
+msgid "The daemon could not start a shell here."
+msgstr "Демон не зміг запустити тут shell."
+
 #: src/workspace/boardModel.ts
 msgid "The dispatcher picks cards up from here in priority order."
 msgstr "Звідси диспетчер бере картки за пріоритетом."
@@ -4721,6 +4745,10 @@ msgstr "запуск відмітив частину критеріїв, але 
 msgid "The session's link mod is not polling for commands. Enable the swarmery-link \"control\" option and keep the session open."
 msgstr "Мод swarmery link цієї сесії не опитує команди. Увімкніть опцію \"control\" у swarmery-link і не закривайте сесію."
 
+#: src/terminal/closeReason.ts
+msgid "The shell in this tab exited."
+msgstr "Shell у цій вкладці завершився."
+
 #: src/components/VcsSignInDialog.tsx
 msgid "The sign-in was declined."
 msgstr "Вхід відхилено."
@@ -4732,6 +4760,10 @@ msgstr "Введені slug, шлях, корінь робочого прост�
 #: src/components/runOutcome/blockerGuide.ts
 msgid "The stopped run's work ({commits}) is on {branch}"
 msgstr "Робота зупиненого запуску ({commits}) — на {branch}"
+
+#: src/terminal/closeReason.ts
+msgid "The swarmery daemon stopped or restarted, and that closed this terminal."
+msgstr "Демон swarmery зупинився або перезапустився, тому цей термінал закрито."
 
 #: src/workspace/NewTaskModal.tsx
 msgid "The title, prompt, and any advanced settings you've entered will be lost."
@@ -4949,6 +4981,10 @@ msgstr "Токен"
 #: src/api.ts
 msgid "token sign-in failed"
 msgstr "вхід за токеном не вдався"
+
+#: src/terminal/closeReason.ts
+msgid "Too many terminals are open (5 at most). Close one, then restart this tab."
+msgstr "Відкрито забагато терміналів (максимум 5). Закрийте один і перезапустіть цю вкладку."
 
 #: src/lib/sessionRail.ts
 msgid "tracker task"

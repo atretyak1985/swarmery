@@ -8,12 +8,14 @@
 // dock, so the heavy xterm bundle lands in its own chunk fetched only when a
 // terminal is first opened.
 
+import { useLingui } from '@lingui/react/macro';
 import { useEffect, useImperativeHandle, useRef, forwardRef } from 'react';
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import '@xterm/xterm/css/xterm.css';
 import { reportSocketRefused, wsProtocols } from '../lib/dashboardSession';
 import { resizeFrame, termWsUrl, termWsUrlForAccount } from './termSocket';
+import { classifyTermClose, TERM_CLOSE_MESSAGE, type TermCloseKind } from './closeReason';
 
 export type TermStatus = 'connecting' | 'open' | 'closed';
 
@@ -49,10 +51,15 @@ export const XTerm = forwardRef<
     /** A command typed into the shell (followed by Enter) once the PTY connects. */
     initialInput?: string | undefined;
     fontSize: number;
-    onStatus?: (s: TermStatus) => void;
+    /** `closed` comes with why the socket closed (closeReason.ts). */
+    onStatus?: (s: TermStatus, closed?: TermCloseKind) => void;
   }
 >(
   function XTerm({ cwd, account, initialInput, fontSize, onStatus }, ref): JSX.Element {
+    const { t } = useLingui();
+    // Read at close time, so the line follows the current locale.
+    const tRef = useRef(t);
+    tRef.current = t;
     const hostRef = useRef<HTMLDivElement>(null);
     const termRef = useRef<Terminal | null>(null);
     const fitRef = useRef<FitAddon | null>(null);
@@ -131,10 +138,11 @@ export const XTerm = forwardRef<
           term.write(new Uint8Array(ev.data));
         }
       };
-      ws.onclose = () => {
-        if (!opened) reportSocketRefused();
-        statusRef.current?.('closed');
-        term.write('\r\n\x1b[2m[terminal session ended]\x1b[0m\r\n');
+      ws.onclose = (ev: CloseEvent) => {
+        const kind = classifyTermClose(opened, ev.code, ev.reason);
+        if (kind === 'refused') reportSocketRefused();
+        statusRef.current?.('closed', kind);
+        term.write(`\r\n\x1b[2m[${tRef.current(TERM_CLOSE_MESSAGE[kind])}]\x1b[0m\r\n`);
       };
 
       // Keystrokes → PTY as binary frames.

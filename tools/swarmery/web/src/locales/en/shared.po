@@ -1352,6 +1352,10 @@ msgstr "close with no change needed"
 msgid "Close: no change needed"
 msgstr "Close: no change needed"
 
+#: src/terminal/closeReason.ts
+msgid "Closed after 4 hours with no activity."
+msgstr "Closed after 4 hours with no activity."
+
 #: src/workspace/task/TaskActions.tsx
 msgid "closed with no change needed — card moved to done"
 msgstr "closed with no change needed — card moved to done"
@@ -1547,6 +1551,10 @@ msgstr "core is managed via attach/detach"
 #: src/api.ts
 msgid "could not complete the connection"
 msgstr "could not complete the connection"
+
+#: src/terminal/closeReason.ts
+msgid "Could not connect: the swarmery daemon is not running, or the dashboard is locked."
+msgstr "Could not connect: the swarmery daemon is not running, or the dashboard is locked."
 
 #: src/api.ts
 msgid "could not disconnect the account"
@@ -2672,6 +2680,10 @@ msgstr "Locked down"
 #: src/components/usage/UsageSetupHint.tsx
 msgid "looked in ({sourceCount})"
 msgstr "looked in ({sourceCount})"
+
+#: src/terminal/closeReason.ts
+msgid "Lost the connection to the swarmery daemon. It was probably restarted."
+msgstr "Lost the connection to the swarmery daemon. It was probably restarted."
 
 #: src/pages/settings/WorktreesPanel.tsx
 msgid "main"
@@ -3869,6 +3881,14 @@ msgstr "resets now"
 msgid "Resolve what blocks a retry (below), then press Retry run."
 msgstr "Resolve what blocks a retry (below), then press Retry run."
 
+#: src/terminal/TerminalDock.tsx
+msgid "Restart"
+msgstr "Restart"
+
+#: src/terminal/TerminalDock.tsx
+msgid "Restart Claude Code"
+msgstr "Restart Claude Code"
+
 #: src/components/ProjectActions.tsx
 msgid "restore"
 msgstr "restore"
@@ -4617,6 +4637,10 @@ msgstr "The code expired before it was entered. Get a new one."
 msgid "The concurrent-run limit (default 2)"
 msgstr "The concurrent-run limit (default 2)"
 
+#: src/terminal/closeReason.ts
+msgid "The daemon could not start a shell here."
+msgstr "The daemon could not start a shell here."
+
 #: src/workspace/boardModel.ts
 msgid "The dispatcher picks cards up from here in priority order."
 msgstr "The dispatcher picks cards up from here in priority order."
@@ -4721,6 +4745,10 @@ msgstr "the run ticked some criteria but did not finish the phase"
 msgid "The session's link mod is not polling for commands. Enable the swarmery-link \"control\" option and keep the session open."
 msgstr "The session's link mod is not polling for commands. Enable the swarmery-link \"control\" option and keep the session open."
 
+#: src/terminal/closeReason.ts
+msgid "The shell in this tab exited."
+msgstr "The shell in this tab exited."
+
 #: src/components/VcsSignInDialog.tsx
 msgid "The sign-in was declined."
 msgstr "The sign-in was declined."
@@ -4732,6 +4760,10 @@ msgstr "The slug, path, workspace root, and pack selections you've entered will 
 #: src/components/runOutcome/blockerGuide.ts
 msgid "The stopped run's work ({commits}) is on {branch}"
 msgstr "The stopped run's work ({commits}) is on {branch}"
+
+#: src/terminal/closeReason.ts
+msgid "The swarmery daemon stopped or restarted, and that closed this terminal."
+msgstr "The swarmery daemon stopped or restarted, and that closed this terminal."
 
 #: src/workspace/NewTaskModal.tsx
 msgid "The title, prompt, and any advanced settings you've entered will be lost."
@@ -4949,6 +4981,10 @@ msgstr "Token"
 #: src/api.ts
 msgid "token sign-in failed"
 msgstr "token sign-in failed"
+
+#: src/terminal/closeReason.ts
+msgid "Too many terminals are open (5 at most). Close one, then restart this tab."
+msgstr "Too many terminals are open (5 at most). Close one, then restart this tab."
 
 #: src/lib/sessionRail.ts
 msgid "tracker task"

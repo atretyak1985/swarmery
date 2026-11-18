@@ -2,7 +2,7 @@
 // PTY. The XTerm wrapper must hand xterm a link handler that opens only
 // http(s) URLs — never a script or other scheme.
 
-import { render } from '@testing-library/react';
+import { render } from '../test/render';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 interface CapturedOptions {

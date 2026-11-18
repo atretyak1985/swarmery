@@ -45,7 +45,7 @@ class FakeSocket {
   binaryType = '';
   onopen: (() => void) | null = null;
   onmessage: (() => void) | null = null;
-  onclose: (() => void) | null = null;
+  onclose: ((ev?: { code: number; reason: string }) => void) | null = null;
   onerror: (() => void) | null = null;
   constructor(
     readonly url: string,
@@ -74,6 +74,9 @@ afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
 });
+
+/** What a browser hands onclose when the upgrade is refused: 1006, no reason. */
+const REFUSED = { code: 1006, reason: '' };
 
 describe('live-updates socket', () => {
   it('offers swarmery.v1 and the session subprotocol when a session exists', () => {
@@ -131,7 +134,7 @@ describe('dead session detection on a refused socket', () => {
     const fetchMock = vi.fn(async () => new Response(null, { status: 204 }));
     vi.stubGlobal('fetch', fetchMock);
     render(<XTerm cwd="/tmp/x" fontSize={12} />);
-    FakeSocket.instances.at(-1)?.onclose?.();
+    FakeSocket.instances.at(-1)?.onclose?.(REFUSED);
     await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
     expect(fetchMock.mock.calls[0]?.[0]).toBe('/api/session');
     expect(isLockedNoticeShown()).toBe(false);
@@ -152,7 +155,7 @@ describe('terminal socket', () => {
     render(<XTerm cwd="/tmp/x" fontSize={12} />);
     const ws = FakeSocket.instances.at(-1);
     expect(ws?.protocols).toEqual(['swarmery.v1']);
-    ws?.onclose?.();
+    ws?.onclose?.(REFUSED);
     expect(isLockedNoticeShown()).toBe(true);
   });
 });

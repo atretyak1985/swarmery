@@ -37,6 +37,20 @@ const (
 // ErrTooManySessions is returned by Start when the concurrency cap is reached.
 var ErrTooManySessions = errors.New("term: too many concurrent sessions")
 
+// CloseReason says who ended a Session, so the WebSocket bridge can tell the
+// browser why its terminal went away instead of a bare "ended".
+type CloseReason string
+
+const (
+	// ReasonNone: nobody closed it from this side — the shell exited on its
+	// own, or the client hung up.
+	ReasonNone CloseReason = ""
+	// ReasonIdle: the idle reaper closed it after DefaultIdleTimeout with no I/O.
+	ReasonIdle CloseReason = "idle"
+	// ReasonShutdown: the daemon is stopping (CloseAll).
+	ReasonShutdown CloseReason = "shutdown"
+)
+
 // ptyFile is the subset of *os.File a live PTY master needs. Abstracted so the
 // mock starter can hand back an in-memory pipe pair instead of a real device.
 type ptyFile interface {
@@ -81,6 +95,7 @@ type Session struct {
 
 	mu       sync.Mutex
 	lastIO   time.Time
+	reason   CloseReason
 	resizeFn func(cols, rows uint16) error
 }
 
@@ -121,6 +136,25 @@ func (s *Session) idleSince() time.Time {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.lastIO
+}
+
+// Reason reports why the session was closed by the Manager (ReasonNone when it
+// was not — the shell exited or the caller closed it).
+func (s *Session) Reason() CloseReason {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.reason
+}
+
+// closeWith records the reason before tearing the session down, so a reader
+// that wakes on the closed master already sees it. The first reason wins.
+func (s *Session) closeWith(r CloseReason) {
+	s.mu.Lock()
+	if s.reason == ReasonNone {
+		s.reason = r
+	}
+	s.mu.Unlock()
+	s.Close()
 }
 
 // Close signals the PTY's process group (SIGHUP, then SIGKILL after the grace)
@@ -293,7 +327,7 @@ func (m *Manager) reapIdle() {
 	}
 	m.mu.Unlock()
 	for _, s := range stale {
-		s.Close()
+		s.closeWith(ReasonIdle)
 	}
 }
 
@@ -323,7 +357,7 @@ func (m *Manager) CloseAll() {
 	}
 	m.mu.Unlock()
 	for _, s := range all {
-		s.Close()
+		s.closeWith(ReasonShutdown)
 	}
 }
 

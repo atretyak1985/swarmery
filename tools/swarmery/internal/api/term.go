@@ -157,9 +157,34 @@ func (h *Handler) term(w http.ResponseWriter, r *http.Request) {
 	bridgeTermSession(r.Context(), c, sess)
 }
 
+// Close reasons the bridge sends when the PTY side ends the socket. They are a
+// contract with web/src/terminal/closeReason.ts, which turns them into the
+// line the tab shows: keep the two in step.
+const (
+	termCloseShellExited    = "shell-exited"
+	termCloseIdle           = "idle"
+	termCloseDaemonStopping = "daemon-stopping"
+)
+
+// termCloseFrame picks the close status and reason for a socket whose PTY ended
+// first. The daemon stopping is 1001 Going Away; the shell exiting or the idle
+// reaper is a normal 1000.
+func termCloseFrame(r term.CloseReason) (websocket.StatusCode, string) {
+	switch r {
+	case term.ReasonShutdown:
+		return websocket.StatusGoingAway, termCloseDaemonStopping
+	case term.ReasonIdle:
+		return websocket.StatusNormalClosure, termCloseIdle
+	default:
+		return websocket.StatusNormalClosure, termCloseShellExited
+	}
+}
+
 // bridgeTermSession pumps bytes both ways until either side closes, then tears
-// the PTY down (process-group kill). Split into its own function so the pump
-// logic is unit-testable with an in-memory session.
+// the PTY down (process-group kill). When the PTY ended first, the browser gets
+// a close frame saying why (termCloseFrame), so the tab can say "the shell
+// exited" or "the daemon restarted" instead of a bare "ended". Split into its
+// own function so the pump logic is unit-testable with an in-memory session.
 func bridgeTermSession(ctx context.Context, c *websocket.Conn, sess termSession) {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
@@ -181,6 +206,12 @@ func bridgeTermSession(ctx context.Context, c *websocket.Conn, sess termSession)
 				}
 			}
 			if err != nil {
+				// The PTY ended first: the shell exited, or the Manager closed the
+				// session. Say why in the close frame. Close here, not via cancel:
+				// cancelling the main loop's Read would drop the socket with no
+				// reason. Close also unblocks that Read.
+				code, reason := termCloseFrame(sess.Reason())
+				_ = c.Close(code, reason)
 				return
 			}
 		}
@@ -209,6 +240,7 @@ type termSession interface {
 	Read(p []byte) (int, error)
 	Write(p []byte) (int, error)
 	Resize(cols, rows uint16) error
+	Reason() term.CloseReason
 	Close()
 }
 
