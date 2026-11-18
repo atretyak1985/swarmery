@@ -201,7 +201,7 @@ const [genById, setGenById] = useState<Record<string, number>>({});
       )}
 
       <div
-        className="flex min-h-0 flex-1 flex-col overflow-hidden border-t border-line bg-bg desk:rounded-xl desk:border"
+        className="flex shrink-0 flex-col overflow-hidden border-t border-line bg-bg desk:rounded-xl desk:border"
         style={{ height: fullscreen ? '75vh' : effHeight }}
       >
         {/* Header: the dock's own tone, a mono "terminal" caption, then the tab

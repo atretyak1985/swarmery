@@ -25,6 +25,10 @@
 // needs a flex parent to claim the wrapper's full height, or SessionPane's own
 // `h-full` root resolves to its content height instead and its internal
 // scroller (panelRef) stops scrolling — the header scrolls away with it.
+//
+// When both panes show below `desk` (`narrow === 'both'`), they are still two
+// islands, not one flat stack: each gets the desk frame, 8px apart and 8px in
+// from the edges, so the list never reads as part of the detail under it.
 
 import type { ReactNode } from 'react';
 import { PANEL_EASE, usePanels } from '../../lib/panels';
@@ -49,6 +53,7 @@ export function PlaceLayout({
   narrow?: NarrowPane;
 }): JSX.Element {
   const { list: collapsed } = usePanels();
+  const stacked = narrow === 'both';
   const columns = collapsed
     ? 'desk:grid-cols-[34px_minmax(0,1fr)]'
     : 'desk:grid-cols-[clamp(280px,28vw,360px)_minmax(0,1fr)]';
@@ -57,14 +62,28 @@ export function PlaceLayout({
       data-place-layout=""
       className={`flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden transition-[grid-template-columns] desk:grid desk:grid-rows-[minmax(0,1fr)] desk:gap-2 ${columns} ${PANEL_EASE}`}
     >
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto desk:contents">
-        <div className={narrow === 'detail' ? 'hidden desk:contents' : 'contents'}>{list}</div>
+      <div
+        className={`flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto desk:contents ${stacked ? 'gap-2 p-2' : ''}`}
+      >
+        <div
+          className={
+            narrow === 'detail'
+              ? 'hidden desk:contents'
+              : stacked
+                ? 'flex shrink-0 flex-col overflow-hidden rounded-xl border border-line desk:contents'
+                : 'contents'
+          }
+        >
+          {list}
+        </div>
         <div
           className={`min-h-0 min-w-0 ${
             bareDetail
               ? 'desk:flex desk:min-h-0 desk:flex-col desk:gap-2'
               : 'bg-surface desk:block desk:overflow-y-auto desk:rounded-xl desk:border desk:border-line'
-          } ${narrow === 'list' ? 'hidden' : narrow === 'detail' ? 'flex-1' : ''}`}
+          } ${narrow === 'list' ? 'hidden' : narrow === 'detail' ? 'flex-1' : ''} ${
+            stacked ? 'max-desk:shrink-0 max-desk:overflow-hidden max-desk:rounded-xl max-desk:border max-desk:border-line' : ''} ${stacked && bareDetail ? 'max-desk:bg-bg' : ''
+          }`}
         >
           {detail}
         </div>
