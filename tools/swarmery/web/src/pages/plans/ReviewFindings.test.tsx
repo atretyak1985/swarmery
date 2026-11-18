@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 //
-// ReviewFindings: the Review tab's findings table — rounds oldest first, each
-// finding's columns and resolution, the round chips (verdict, source,
+// ReviewFindings: the Review tab's findings (plan D22) — rounds oldest first,
+// each finding as a row (id, a meta line, evidence clamped with an expander,
+// resolution) instead of a wide table, the round chips (verdict, source,
 // incomplete, unparsable) and the D21 legacy badge.
 
 import { cleanup, fireEvent, render, screen, waitFor, within } from '../../test/render';
@@ -89,20 +90,20 @@ describe('ReviewFindings', () => {
     const r1 = rounds[0]!;
     expect(within(r1).getByText('FAIL')).toBeTruthy();
     expect(within(r1).getByText('backfilled')).toBeTruthy();
-    const rows = within(r1).getAllByRole('row').slice(1); // minus the header
+    const rows = within(r1).getAllByTestId('finding-row');
     expect(rows).toHaveLength(2);
     const first = within(rows[0]!);
     expect(first.getByText('R1-1')).toBeTruthy();
     expect(first.getByText('silent-failure')).toBeTruthy();
     expect(first.getByText('internal/x.go:84')).toBeTruthy();
     expect(first.getByText('SC-3')).toBeTruthy();
-    expect(first.getByText('yes')).toBeTruthy();
-    expect(first.getByText('TestClassifyRedactsBeforeTruncating')).toBeTruthy();
-    expect(first.getByText('secret survived the cut')).toBeTruthy();
+    expect(first.getByText('test caught')).toBeTruthy();
+    expect(first.getByText(/TestClassifyRedactsBeforeTruncating/)).toBeTruthy();
+    expect(first.getByText(/secret survived the cut/)).toBeTruthy();
     expect(first.getByText('resolved in round 2')).toBeTruthy();
     const second = within(rows[1]!);
     expect(second.getByText('web/a.ts')).toBeTruthy();
-    expect(second.getByText('no')).toBeTruthy();
+    expect(second.getByText('no test caught')).toBeTruthy();
     expect(second.getByText('open')).toBeTruthy();
 
     const r2 = rounds[1]!;
@@ -168,6 +169,24 @@ describe('ReviewFindings', () => {
     fireEvent.click(within(banner).getByRole('button', { name: 'Repeat the review' }));
     expect((await screen.findByRole('alert')).textContent).toBe('the phase has no recorded run branch to review');
     expect(answer).toHaveBeenCalledWith(7, 42, 'D-5', 'repeat-review', '');
+  });
+
+  it('D22: clamps long evidence to three lines, with an expander', () => {
+    const longEvidence = 'x'.repeat(200);
+    const round: ReviewBlock = { ...ROUND1, findings: [{ ...ROUND1.findings[0]!, evidence: longEvidence, note: '' }] };
+    render(<ReviewFindings blocks={[round]} legacy={false} />);
+    const row = screen.getByTestId('finding-row');
+    const text = within(row).getByText(longEvidence);
+    expect(text.className).toContain('line-clamp-3');
+    fireEvent.click(within(row).getByRole('button', { name: 'show more' }));
+    expect(within(row).getByText(longEvidence).className).not.toContain('line-clamp-3');
+    expect(within(row).getByRole('button', { name: 'show less' })).toBeTruthy();
+  });
+
+  it('short evidence has no expander', () => {
+    const round: ReviewBlock = { ...ROUND1, findings: [{ ...ROUND1.findings[0]!, evidence: 'short', note: '' }] };
+    render(<ReviewFindings blocks={[round]} legacy={false} />);
+    expect(screen.queryByRole('button', { name: /^show (more|less)$/ })).toBeNull();
   });
 
   it('names the plan round', () => {

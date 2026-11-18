@@ -337,9 +337,15 @@ export function PhaseDetailPanel({
     <>
       {needsYou ? (
         held ? (
-          <Link to={needsHref} className={actionClass('brand')}>
-            <Trans>answer in Needs you</Trans>
-          </Link>
+          // A guard decision now answers in place on the Review tab's
+          // next-step card (plan D24/D25) — this link would duplicate that
+          // action, so it is omitted for exactly that case; a plain
+          // decisionHold or reviewDecision still points at Needs you.
+          phase.guardDecision != null ? null : (
+            <Link to={needsHref} className={actionClass('brand')}>
+              <Trans>answer in Needs you</Trans>
+            </Link>
+          )
         ) : (
           <button type="button" onClick={() => onTab('criteria')} className={actionClass('brand')}>
             <Trans>tick criteria</Trans>

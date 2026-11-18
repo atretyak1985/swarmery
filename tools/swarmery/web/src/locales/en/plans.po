@@ -21,13 +21,77 @@ msgstr " — agent {agent}"
 msgid " · live"
 msgstr " · live"
 
+#: src/pages/plans/ReviewStateLedger.tsx
+msgid "—"
+msgstr "—"
+
+#: src/pages/plans/reviewNextStep.ts
+msgid "— an empty guard check is open; close it from the Guard row."
+msgstr "— an empty guard check is open; close it from the Guard row."
+
+#: src/pages/plans/reviewNextStep.ts
+msgid "— and the run branch has since been deleted."
+msgstr "— and the run branch has since been deleted."
+
+#: src/pages/plans/reviewNextStep.ts
+msgid "— but CI on the merged {change} failed."
+msgstr "— but CI on the merged {change} failed."
+
+#: src/pages/plans/reviewNextStep.ts
+msgid "— but review on the merged {change} did not pass."
+msgstr "— but review on the merged {change} did not pass."
+
+#: src/pages/plans/reviewNextStep.ts
+msgid "— check back once the run finishes."
+msgstr "— check back once the run finishes."
+
+#: src/pages/plans/reviewNextStep.ts
+msgid "— fix it on the branch, or send the phase back to its agent."
+msgstr "— fix it on the branch, or send the phase back to its agent."
+
+#: src/pages/plans/reviewNextStep.ts
+msgid "— no {change} open yet."
+msgstr "— no {change} open yet."
+
+#: src/pages/plans/reviewNextStep.ts
+msgid "— nothing has been pushed yet."
+msgstr "— nothing has been pushed yet."
+
 #: src/pages/PlanningMode.tsx
 msgid "— nothing is written until you approve the diff."
 msgstr "— nothing is written until you approve the diff."
 
+#: src/pages/plans/reviewNextStep.ts
+msgid "— re-run it, then push again."
+msgstr "— re-run it, then push again."
+
+#: src/pages/plans/reviewNextStep.ts
+msgid "— the guard stopped the run and is waiting for your answer."
+msgstr "— the guard stopped the run and is waiting for your answer."
+
+#: src/pages/plans/reviewNextStep.ts
+msgid "— there is nothing left to do here."
+msgstr "— there is nothing left to do here."
+
+#: src/pages/plans/reviewNextStep.ts
+msgid "— there is nothing left to push or return."
+msgstr "— there is nothing left to push or return."
+
+#: src/pages/plans/reviewNextStep.ts
+msgid "— there is nothing more to land here."
+msgstr "— there is nothing more to land here."
+
+#: src/pages/plans/reviewNextStep.ts
+msgid "— there is nothing to review."
+msgstr "— there is nothing to review."
+
 #: src/pages/PlanningMode.tsx
 msgid "— tracked as <0>{planId}</0>"
 msgstr "— tracked as <0>{planId}</0>"
+
+#: src/pages/plans/reviewNextStep.ts
+msgid "— waiting on CI and review."
+msgstr "— waiting on CI and review."
 
 #: src/pages/plans/PhaseCard.tsx
 msgid "({before} before)"
@@ -80,6 +144,18 @@ msgstr "{0, plural, one {{landed} of # phase landed} few {{landed} of # phases l
 msgid "{0, plural, one {{ticked} of the # criterion ticked} few {{ticked} of the # criteria ticked} many {{ticked} of the # criteria ticked} other {{ticked} of the # criteria ticked}}"
 msgstr "{0, plural, one {{ticked} of the # criterion ticked} few {{ticked} of the # criteria ticked} many {{ticked} of the # criteria ticked} other {{ticked} of the # criteria ticked}}"
 
+#. placeholder {0}: f.blocked
+#. placeholder {0}: f?.blocked ?? 0
+#: src/pages/plans/guardDecisionView.ts
+#: src/pages/plans/ReviewStateLedger.tsx
+msgid "{0, plural, one {# blocked attempt} few {# blocked attempts} many {# blocked attempts} other {# blocked attempts}}"
+msgstr "{0, plural, one {# blocked attempt} few {# blocked attempts} many {# blocked attempts} other {# blocked attempts}}"
+
+#. placeholder {0}: f.changed.length
+#: src/pages/plans/ReviewStateLedger.tsx
+msgid "{0, plural, one {# protected file changed} few {# protected files changed} many {# protected files changed} other {# protected files changed}}"
+msgstr "{0, plural, one {# protected file changed} few {# protected files changed} many {# protected files changed} other {# protected files changed}}"
+
 #. placeholder {0}: p.checkboxesTotal
 #: src/pages/plans/forecastStoryModel.ts
 msgid "{0, plural, one {none of the # criterion ticked} few {none of the # criteria ticked} many {none of the # criteria ticked} other {none of the # criteria ticked}}"
@@ -99,6 +175,11 @@ msgstr "{0, plural, one {session scope: phase {seqLabel} only, {phaseCount} of #
 #: src/pages/plans/forecastStoryModel.ts
 msgid "{0, plural, one {touched # area{offNote}} few {touched # areas{offNote}} many {touched # areas{offNote}} other {touched # areas{offNote}}}"
 msgstr "{0, plural, one {touched # area{offNote}} few {touched # areas{offNote}} many {touched # areas{offNote}} other {touched # areas{offNote}}}"
+
+#. placeholder {0}: f.changed.length
+#: src/pages/plans/guardDecisionView.ts
+msgid "{0, plural, one {touched # protected file} few {touched # protected files} many {touched # protected files} other {touched # protected files}}"
+msgstr "{0, plural, one {touched # protected file} few {touched # protected files} many {touched # protected files} other {touched # protected files}}"
 
 #. placeholder {0}: epic.rollup.done
 #. placeholder {1}: epic.rollup.total
@@ -246,6 +327,10 @@ msgstr "{manual, plural, one {# criterion [MANUAL] — only you can close it} fe
 msgid "{manualOpen, plural, one {# manual check only you can close} few {# manual checks only you can close} many {# manual checks only you can close} other {# manual checks only you can close}}"
 msgstr "{manualOpen, plural, one {# manual check only you can close} few {# manual checks only you can close} many {# manual checks only you can close} other {# manual checks only you can close}}"
 
+#: src/pages/plans/ReviewStateLedger.tsx
+msgid "{manualOpen, plural, one {# manual check open} few {# manual checks open} many {# manual checks open} other {# manual checks open}}"
+msgstr "{manualOpen, plural, one {# manual check open} few {# manual checks open} many {# manual checks open} other {# manual checks open}}"
+
 #: src/pages/plans/ReviewFindings.tsx
 msgid "{n, plural, one {# review round} few {# review rounds} many {# review rounds} other {# review rounds}}"
 msgstr "{n, plural, one {# review round} few {# review rounds} many {# review rounds} other {# review rounds}}"
@@ -391,6 +476,14 @@ msgstr "30 to 90 min"
 msgid "90 min to 4 h"
 msgstr "90 min to 4 h"
 
+#: src/pages/plans/reviewNextStep.ts
+msgid "a {change} is already open for this branch"
+msgstr "a {change} is already open for this branch"
+
+#: src/pages/plans/reviewNextStep.ts
+msgid "A {change} is open"
+msgstr "A {change} is open"
+
 #: src/pages/planning/RevisionReview.tsx
 msgid "a file changed since staging — reload before applying"
 msgstr "a file changed since staging — reload before applying"
@@ -398,6 +491,10 @@ msgstr "a file changed since staging — reload before applying"
 #: src/pages/planning/RevisionReview.tsx
 msgid "a file is stale — reload the review first"
 msgstr "a file is stale — reload the review first"
+
+#: src/pages/plans/reviewNextStep.ts
+msgid "a guard decision is still open — nothing lands until it is answered"
+msgstr "a guard decision is still open — nothing lands until it is answered"
 
 #: src/pages/plans/forecastStoryModel.ts
 msgid "a large"
@@ -490,6 +587,18 @@ msgstr "all landed"
 msgid "all phases"
 msgstr "all phases"
 
+#: src/pages/plans/DecisionReplyModal.tsx
+msgid "Allow · add to scope"
+msgstr "Allow · add to scope"
+
+#: src/pages/plans/guardDecisionView.ts
+msgid "allow releases: {pathList}"
+msgstr "allow releases: {pathList}"
+
+#: src/pages/plans/reviewNextStep.ts
+msgid "already merged — there is nothing left to push"
+msgstr "already merged — there is nothing left to push"
+
 #: src/pages/plans/PhaseCard.tsx
 msgid "An agent is working on this phase now."
 msgstr "An agent is working on this phase now."
@@ -506,6 +615,7 @@ msgstr "an extra-small"
 msgid "an unmeasured time"
 msgstr "an unmeasured time"
 
+#: src/pages/plans/DecisionReplyModal.tsx
 #: src/pages/plans/PhaseLedger.tsx
 msgid "answer"
 msgstr "answer"
@@ -518,6 +628,10 @@ msgstr "answer in Needs you"
 msgid "answer it →"
 msgstr "answer it →"
 
+#: src/pages/plans/reviewNextStep.ts
+msgid "Answer the decision"
+msgstr "Answer the decision"
+
 #: src/pages/PlanningMode.tsx
 msgid "answer the planner"
 msgstr "answer the planner"
@@ -529,6 +643,10 @@ msgstr "answer the planner…"
 #: src/pages/plans/ReviewFindings.tsx
 msgid "answering…"
 msgstr "answering…"
+
+#: src/pages/plans/PhaseReview.tsx
+msgid "Answering…"
+msgstr "Answering…"
 
 #: src/pages/plans/PlanDetailPanel.tsx
 msgid "applied"
@@ -671,6 +789,10 @@ msgstr "board view"
 msgid "board…"
 msgstr "board…"
 
+#: src/pages/plans/ReviewStateLedger.tsx
+msgid "Branch"
+msgstr "Branch"
+
 #: src/pages/Routines.tsx
 msgid "busy — already running"
 msgstr "busy — already running"
@@ -681,6 +803,7 @@ msgstr "by {decidedBy}"
 
 #: src/pages/Board.tsx
 #: src/pages/PlanningMode.tsx
+#: src/pages/plans/DecisionReplyModal.tsx
 #: src/pages/plans/PhaseReopens.tsx
 #: src/pages/plans/PlanRunControls.tsx
 msgid "cancel"
@@ -735,9 +858,17 @@ msgstr "cheap to change"
 msgid "checked {checkedAgo}"
 msgstr "checked {checkedAgo}"
 
+#: src/pages/plans/ReviewStateLedger.tsx
+msgid "CI"
+msgstr "CI"
+
 #: src/pages/plans/LandingStatus.tsx
 msgid "CI failed"
 msgstr "CI failed"
+
+#: src/pages/plans/reviewNextStep.ts
+msgid "CI on the open {change} failed"
+msgstr "CI on the open {change} failed"
 
 #: src/pages/plans/LandingStatus.tsx
 msgid "CI passed"
@@ -751,6 +882,10 @@ msgstr "CI running"
 msgid "Claude is writing a plain-language explanation…"
 msgstr "Claude is writing a plain-language explanation…"
 
+#: src/pages/plans/ReviewStateLedger.tsx
+msgid "clean"
+msgstr "clean"
+
 #: src/pages/Board.tsx
 msgid "clear label filter"
 msgstr "clear label filter"
@@ -760,6 +895,14 @@ msgstr "clear label filter"
 msgid "close"
 msgstr "close"
 
+#: src/pages/plans/ReviewStateLedger.tsx
+msgid "Close · allow nothing"
+msgstr "Close · allow nothing"
+
+#: src/pages/plans/reviewNextStep.ts
+msgid "Close the remaining checks by hand; landing will not do it for you."
+msgstr "Close the remaining checks by hand; landing will not do it for you."
+
 #: src/pages/plans/LandingStatus.tsx
 msgid "closed"
 msgstr "closed"
@@ -767,6 +910,11 @@ msgstr "closed"
 #: src/pages/plans/CriterionLint.tsx
 msgid "closed by push / PR / merge — ticked when the change request merges"
 msgstr "closed by push / PR / merge — ticked when the change request merges"
+
+#: src/pages/plans/PhaseReview.tsx
+#: src/pages/plans/ReviewStateLedger.tsx
+msgid "Closing…"
+msgstr "Closing…"
 
 #: src/pages/plans/RunsReviewBlock.tsx
 msgid "code review"
@@ -787,6 +935,10 @@ msgstr "continue on failure"
 #: src/pages/planning/RunningPlanPanel.tsx
 msgid "Continue with the plan"
 msgstr "Continue with the plan"
+
+#: src/pages/plans/guardDecisionView.ts
+msgid "contract broken: {flagList}"
+msgstr "contract broken: {flagList}"
 
 #: src/pages/Playbooks.tsx
 msgid "copies the markdown into the project so its prompts become editable"
@@ -829,6 +981,7 @@ msgid "criteria"
 msgstr "criteria"
 
 #: src/pages/plans/PhasePanel.tsx
+#: src/pages/plans/ReviewStateLedger.tsx
 msgid "Criteria"
 msgstr "Criteria"
 
@@ -839,10 +992,6 @@ msgstr "criteria to untick"
 #: src/pages/plans/PhaseDetailPanel.tsx
 msgid "criteria…"
 msgstr "criteria…"
-
-#: src/pages/plans/ReviewFindings.tsx
-msgid "criterion"
-msgstr "criterion"
 
 #: src/pages/Routines.tsx
 msgid "Cron (5-field, blank = manual/webhook only)"
@@ -872,6 +1021,11 @@ msgstr "decided {decided} by {by}"
 #: src/pages/plans/planModel.ts
 msgid "decision"
 msgstr "decision"
+
+#. placeholder {0}: decision.decisionId
+#: src/pages/plans/reviewNextStep.ts
+msgid "Decision {0} is still open"
+msgstr "Decision {0} is still open"
 
 #. placeholder {0}: linkedTurn.seq
 #: src/pages/PlanningMode.tsx
@@ -984,6 +1138,8 @@ msgid "doc"
 msgstr "doc"
 
 #: src/pages/plans/GuardBadge.tsx
+#: src/pages/plans/guardDecisionView.ts
+#: src/pages/plans/ReviewStateLedger.tsx
 msgid "doc copy mismatch"
 msgstr "doc copy mismatch"
 
@@ -1118,7 +1274,6 @@ msgid "every minute"
 msgstr "every minute"
 
 #: src/pages/plans/DecisionTable.tsx
-#: src/pages/plans/ReviewFindings.tsx
 msgid "evidence"
 msgstr "evidence"
 
@@ -1266,7 +1421,13 @@ msgstr "grade this phase's run branch again with the read-only verifier — no e
 msgid "Graph"
 msgstr "Graph"
 
+#: src/pages/plans/ReviewStateLedger.tsx
+msgid "Guard"
+msgstr "Guard"
+
 #: src/pages/plans/GuardBadge.tsx
+#: src/pages/plans/guardDecisionView.ts
+#: src/pages/plans/ReviewStateLedger.tsx
 msgid "guard block unreadable"
 msgstr "guard block unreadable"
 
@@ -1338,7 +1499,6 @@ msgid "how hard the planning interview thinks, on every turn of this wizard — 
 msgstr "how hard the planning interview thinks, on every turn of this wizard — the first spawn and each resume. Leave it on the default to let the daemon's knob and the planner's pinned default decide. Note that NO effort is not the cheap end — an unpinned claude run thinks at xhigh, the deepest setting."
 
 #: src/pages/plans/DecisionTable.tsx
-#: src/pages/plans/ReviewFindings.tsx
 msgid "id"
 msgstr "id"
 
@@ -1395,6 +1555,10 @@ msgstr "Interview done — staging the revision"
 msgid "invalid cron — need 5 fields"
 msgstr "invalid cron — need 5 fields"
 
+#: src/pages/plans/reviewNextStep.ts
+msgid "It already landed; a red check here is informational only."
+msgstr "It already landed; a red check here is informational only."
+
 #: src/pages/PlanningMode.tsx
 msgid "keep the plan card"
 msgstr "keep the plan card"
@@ -1412,13 +1576,13 @@ msgstr "landed"
 msgid "landed · {change}"
 msgstr "landed · {change}"
 
+#: src/pages/plans/ReviewStateLedger.tsx
+msgid "Landing"
+msgstr "Landing"
+
 #: src/pages/Routines.tsx
 msgid "last {lastRun}"
 msgstr "last {lastRun}"
-
-#: src/pages/plans/PhaseReview.tsx
-msgid "last landing failure: {landingError}"
-msgstr "last landing failure: {landingError}"
 
 #: src/pages/Routines.tsx
 msgid "last run"
@@ -1534,7 +1698,11 @@ msgstr "medium — scoped work"
 msgid "merged"
 msgstr "merged"
 
-#: src/pages/plans/PhaseReview.tsx
+#: src/pages/plans/reviewNextStep.ts
+msgid "Merged"
+msgstr "Merged"
+
+#: src/pages/plans/ReviewStateLedger.tsx
 msgid "merged {mergedAgo}"
 msgstr "merged {mergedAgo}"
 
@@ -1618,13 +1786,13 @@ msgstr "next phase · ↓"
 msgid "next run"
 msgstr "next run"
 
+#: src/pages/plans/PhaseReview.tsx
+msgid "next step"
+msgstr "next step"
+
 #: src/pages/Routines.tsx
 msgid "nightly advisor re-run"
 msgstr "nightly advisor re-run"
-
-#: src/pages/plans/ReviewFindings.tsx
-msgid "no"
-msgstr "no"
 
 #: src/pages/Plans.tsx
 msgid "no {filterLabel} plans"
@@ -1734,6 +1902,10 @@ msgstr "no revisions — \"Revise plan\" in the action row starts one"
 msgid "No routines yet. Create one to schedule recurring work."
 msgstr "No routines yet. Create one to schedule recurring work."
 
+#: src/pages/plans/ReviewStateLedger.tsx
+msgid "no run branch yet"
+msgstr "no run branch yet"
+
 #: src/pages/plans/PhaseDetailPanel.tsx
 msgid "No runs yet — this phase starts when the previous one lands."
 msgstr "No runs yet — this phase starts when the previous one lands."
@@ -1762,9 +1934,17 @@ msgstr "no summary of the work written — the executor left neither a <0>## Com
 msgid "no summary written for this phase"
 msgstr "no summary written for this phase"
 
+#: src/pages/plans/ReviewFindings.tsx
+msgid "no test caught"
+msgstr "no test caught"
+
 #: src/pages/plans/PhaseReopens.tsx
 msgid "No ticked criteria in this phase's doc — nothing to reopen."
 msgstr "No ticked criteria in this phase's doc — nothing to reopen."
+
+#: src/pages/plans/guardDecisionView.ts
+msgid "no trigger"
+msgstr "no trigger"
 
 #: src/pages/planning/HistoryDrawer.tsx
 msgid "no turns yet"
@@ -1789,6 +1969,10 @@ msgstr "not landed"
 #: src/pages/plans/TerminalBadge.tsx
 msgid "not live"
 msgstr "not live"
+
+#: src/pages/plans/ReviewStateLedger.tsx
+msgid "not opened yet"
+msgstr "not opened yet"
 
 #. placeholder {0}: block.scopeLeft.join(', ')
 #: src/pages/plans/ReviewFindings.tsx
@@ -1820,6 +2004,10 @@ msgstr "not verified"
 msgid "Not verified: {reason}"
 msgstr "Not verified: {reason}"
 
+#: src/pages/plans/DecisionReplyModal.tsx
+msgid "note — recorded with the answer (optional)"
+msgstr "note — recorded with the answer (optional)"
+
 #: src/pages/planning/RevisionReview.tsx
 msgid "note (optional)"
 msgstr "note (optional)"
@@ -1832,17 +2020,29 @@ msgstr "Nothing archived."
 msgid "Nothing follows: the run landed on plan."
 msgstr "Nothing follows: the run landed on plan."
 
+#: src/pages/plans/reviewNextStep.ts
+msgid "Nothing left to do here."
+msgstr "Nothing left to do here."
+
 #: src/pages/plans/PlanHeader.tsx
 msgid "nothing new starts until you resume"
 msgstr "nothing new starts until you resume"
+
+#: src/pages/plans/reviewNextStep.ts
+msgid "Nothing to do here until the run finishes."
+msgstr "Nothing to do here until the run finishes."
 
 #: src/pages/plans/PlainSummary.tsx
 msgid "nothing to explain yet — the doc has no text for this"
 msgstr "nothing to explain yet — the doc has no text for this"
 
-#: src/pages/plans/PhaseReview.tsx
-msgid "nothing to land in this state"
-msgstr "nothing to land in this state"
+#: src/pages/plans/reviewNextStep.ts
+msgid "Nothing to land right now"
+msgstr "Nothing to land right now"
+
+#: src/pages/plans/reviewNextStep.ts
+msgid "Nothing to land yet"
+msgstr "Nothing to land yet"
 
 #: src/pages/plans/LandingStatus.tsx
 msgid "Nothing to refresh: this phase has no open change request."
@@ -1872,6 +2072,14 @@ msgstr "on plan"
 msgid "only a human can close it — you tick it after checking by hand"
 msgstr "only a human can close it — you tick it after checking by hand"
 
+#: src/pages/plans/reviewNextStep.ts
+msgid "Only manual checks are left"
+msgstr "Only manual checks are left"
+
+#: src/pages/plans/reviewNextStep.ts
+msgid "only manual checks are left open, and only a person closes those"
+msgstr "only manual checks are left open, and only a person closes those"
+
 #: src/pages/plans/LandingStatus.tsx
 #: src/pages/plans/ReviewFindings.tsx
 msgid "open"
@@ -1888,6 +2096,10 @@ msgstr "Open {changeShort}"
 #: src/pages/plans/DepsUnmergedActions.tsx
 msgid "Open {changeShort} for {branch}"
 msgstr "Open {changeShort} for {branch}"
+
+#: src/pages/plans/ReviewStateLedger.tsx
+msgid "open ↗"
+msgstr "open ↗"
 
 #: src/pages/plans/DepsUnmergedActions.tsx
 msgid "Open a {change} for each unmerged branch"
@@ -2268,11 +2480,20 @@ msgstr "proposed changes"
 msgid "Pros / Cons"
 msgstr "Pros / Cons"
 
+#: src/pages/plans/ReviewStateLedger.tsx
+msgid "Pull request"
+msgstr "Pull request"
+
 #: src/pages/plans/PhaseReview.tsx
+#: src/pages/plans/reviewNextStep.ts
 msgid "Push"
 msgstr "Push"
 
 #: src/pages/plans/PhaseReview.tsx
+msgid "Push + open"
+msgstr "Push + open"
+
+#: src/pages/plans/reviewNextStep.ts
 msgid "Push + open {change}"
 msgstr "Push + open {change}"
 
@@ -2284,17 +2505,21 @@ msgstr "Push + open {changeShort}"
 msgid "push the run branch {runBranch} and open a {changeShort}"
 msgstr "push the run branch {runBranch} and open a {changeShort}"
 
-#: src/pages/plans/PhaseReview.tsx
-msgid "push the run branch and open a {change}"
-msgstr "push the run branch and open a {change}"
-
-#: src/pages/plans/PhaseReview.tsx
-msgid "push the run branch to origin"
-msgstr "push the run branch to origin"
-
 #: src/pages/plans/landingModel.ts
 msgid "pushed"
 msgstr "pushed"
+
+#: src/pages/plans/reviewNextStep.ts
+msgid "Pushed"
+msgstr "Pushed"
+
+#: src/pages/plans/reviewNextStep.ts
+msgid "Pushes the branch without opening a {change}."
+msgstr "Pushes the branch without opening a {change}."
+
+#: src/pages/plans/reviewNextStep.ts
+msgid "Pushes the run's branch and opens a {change} for it."
+msgstr "Pushes the run's branch and opens a {change} for it."
 
 #: src/pages/plans/PhaseReview.tsx
 msgid "Pushing…"
@@ -2336,6 +2561,10 @@ msgstr "readme…"
 msgid "ready to land"
 msgstr "ready to land"
 
+#: src/pages/plans/reviewNextStep.ts
+msgid "Ready to land"
+msgstr "Ready to land"
+
 #: src/pages/plans/DecisionTable.tsx
 msgid "reason: {rowReason}"
 msgstr "reason: {rowReason}"
@@ -2369,6 +2598,7 @@ msgid "Refused: the run branch {branch} is the base branch{base}, so landing wou
 msgstr "Refused: the run branch {branch} is the base branch{base}, so landing would push straight onto it. Set swarmery.vcs.allowPushToBase=true in .claude/settings.local.json to allow it."
 
 #: src/pages/planning/RevisionReview.tsx
+#: src/pages/plans/DecisionReplyModal.tsx
 msgid "Reject"
 msgstr "Reject"
 
@@ -2453,16 +2683,25 @@ msgid "return"
 msgstr "return"
 
 #: src/pages/plans/PhaseReview.tsx
+msgid "Return to agent"
+msgstr "Return to agent"
+
+#: src/pages/plans/PhaseReview.tsx
 msgid "Return to agent?"
 msgstr "Return to agent?"
 
 #: src/pages/plans/PhaseReview.tsx
+#: src/pages/plans/reviewNextStep.ts
 msgid "Return to agent…"
 msgstr "Return to agent…"
 
 #: src/pages/plans/landingModel.ts
 msgid "returned to agent"
 msgstr "returned to agent"
+
+#: src/pages/plans/reviewNextStep.ts
+msgid "Returned to the agent"
+msgstr "Returned to the agent"
 
 #: src/pages/plans/planDetailShell.tsx
 msgid "revert"
@@ -2476,6 +2715,7 @@ msgid "review"
 msgstr "review"
 
 #: src/pages/plans/PhasePanel.tsx
+#: src/pages/plans/ReviewStateLedger.tsx
 msgid "Review"
 msgstr "Review"
 
@@ -2519,9 +2759,17 @@ msgstr "Review it on the <0>Plans page</0> — phases run from there."
 msgid "review of the fix re-run"
 msgstr "review of the fix re-run"
 
+#: src/pages/plans/reviewNextStep.ts
+msgid "Review on the open {change} did not pass"
+msgstr "Review on the open {change} did not pass"
+
 #: src/pages/plans/LandingStatus.tsx
 msgid "review required"
 msgstr "review required"
+
+#: src/pages/plans/ReviewStateLedger.tsx
+msgid "Review state"
+msgstr "Review state"
 
 #: src/pages/planning/ReviseModal.tsx
 msgid "review the open revision →"
@@ -2627,6 +2875,10 @@ msgstr "Run phase"
 msgid "run started"
 msgstr "run started"
 
+#: src/pages/plans/reviewNextStep.ts
+msgid "Run the phase first; a review needs a finished run."
+msgstr "Run the phase first; a review needs a finished run."
+
 #: src/pages/plans/EpicDetail.tsx
 msgid "run this phase again even though nothing has changed since it blocked"
 msgstr "run this phase again even though nothing has changed since it blocked"
@@ -2728,10 +2980,6 @@ msgstr "select an epic"
 msgid "Selectable execution recipes. A task picks one on the board; the dispatcher runs its stages sequentially in one worktree. <0/> Built-ins are read-only — duplicate one to edit its prompts."
 msgstr "Selectable execution recipes. A task picks one on the board; the dispatcher runs its stages sequentially in one worktree. <0/> Built-ins are read-only — duplicate one to edit its prompts."
 
-#: src/pages/plans/PhaseReview.tsx
-msgid "send the phase back to its agent with your feedback"
-msgstr "send the phase back to its agent with your feedback"
-
 #: src/pages/planning/QuestionCard.tsx
 msgid "sending…"
 msgstr "sending…"
@@ -2739,6 +2987,10 @@ msgstr "sending…"
 #: src/pages/plans/PhaseReview.tsx
 msgid "Sends the phase back to its agent: your feedback is appended to the next run's prompt."
 msgstr "Sends the phase back to its agent: your feedback is appended to the next run's prompt."
+
+#: src/pages/plans/reviewNextStep.ts
+msgid "Sends the phase back with your feedback; a new run can push a fix."
+msgstr "Sends the phase back with your feedback; a new run can push a fix."
 
 #: src/pages/plans/PlanRunControls.tsx
 msgid "session"
@@ -2767,6 +3019,14 @@ msgstr "Show all {allCount}"
 #: src/pages/plans/WorkaroundHits.tsx
 msgid "Show fewer"
 msgstr "Show fewer"
+
+#: src/pages/plans/ReviewFindings.tsx
+msgid "show less"
+msgstr "show less"
+
+#: src/pages/plans/ReviewFindings.tsx
+msgid "show more"
+msgstr "show more"
 
 #: src/pages/plans/ForecastStory.tsx
 msgid "show the score breakdown"
@@ -2886,8 +3146,11 @@ msgstr "starting…"
 msgid "starts when {deps} lands"
 msgstr "starts when {deps} lands"
 
+#: src/pages/plans/ReviewStateLedger.tsx
+msgid "State"
+msgstr "State"
+
 #: src/pages/plans/DecisionTable.tsx
-#: src/pages/plans/ReviewFindings.tsx
 msgid "status"
 msgstr "status"
 
@@ -2984,6 +3247,10 @@ msgstr "The {stage} of this phase has stopped working. Notification only — not
 msgid "The agent's own words where it went around something. Read these first; each is a place to check, not a verdict."
 msgstr "The agent's own words where it went around something. Read these first; each is a place to check, not a verdict."
 
+#: src/pages/plans/reviewNextStep.ts
+msgid "The branch this run used no longer exists."
+msgstr "The branch this run used no longer exists."
+
 #: src/pages/plans/ForecastVsActual.tsx
 msgid "the Completion Report carries no “Where reality diverged” paragraph"
 msgstr "the Completion Report carries no “Where reality diverged” paragraph"
@@ -3007,6 +3274,14 @@ msgstr "The forecast named no size, duration or outcome."
 #: src/pages/plans/PhaseDetailPanel.tsx
 msgid "the guard stop waits on your answer"
 msgstr "the guard stop waits on your answer"
+
+#: src/pages/plans/reviewNextStep.ts
+msgid "The guard stopped the run on protected paths; answer here to let it continue."
+msgstr "The guard stopped the run on protected paths; answer here to let it continue."
+
+#: src/pages/plans/reviewNextStep.ts
+msgid "the last attempt failed — see what git said below"
+msgstr "the last attempt failed — see what git said below"
 
 #: src/pages/plans/PhaseCard.tsx
 msgid "The last run failed."
@@ -3132,6 +3407,14 @@ msgstr "the review waits on you · {id}"
 msgid "the reviewer wrote no readable kind: review block — its own words are in the doc"
 msgstr "the reviewer wrote no readable kind: review block — its own words are in the doc"
 
+#: src/pages/plans/reviewNextStep.ts
+msgid "the run branch is gone"
+msgstr "the run branch is gone"
+
+#: src/pages/plans/reviewNextStep.ts
+msgid "The run branch is gone"
+msgstr "The run branch is gone"
+
 #: src/pages/plans/GuardBadge.tsx
 msgid "the run changed protected paths: {changedList}"
 msgstr "the run changed protected paths: {changedList}"
@@ -3151,14 +3434,6 @@ msgstr "the run failed — click for why"
 #: src/pages/plans/phaseChips.tsx
 msgid "the run finished but ticked no acceptance criteria — click for why"
 msgstr "the run finished but ticked no acceptance criteria — click for why"
-
-#: src/pages/plans/PhaseReview.tsx
-msgid "the run is still live"
-msgstr "the run is still live"
-
-#: src/pages/plans/PhaseReview.tsx
-msgid "the run is still live — land it once it finishes"
-msgstr "the run is still live — land it once it finishes"
 
 #: src/pages/plans/phaseChips.tsx
 msgid "the run ticked every acceptance criterion"
@@ -3200,6 +3475,10 @@ msgstr "the wizard finished; its staged diff is being picked up by the daemon…
 msgid "the work is confirmed; the phase doc's Completion Report is empty"
 msgstr "the work is confirmed; the phase doc's Completion Report is empty"
 
+#: src/pages/plans/reviewNextStep.ts
+msgid "There is nothing this decision would add to scope — close it from the Guard row below."
+msgstr "There is nothing this decision would add to scope — close it from the Guard row below."
+
 #: src/pages/plans/PhaseDetailPanel.tsx
 msgid "this doc was changed by an applied revision {revisedAgo} — <0>see Revisions</0>"
 msgstr "this doc was changed by an applied revision {revisedAgo} — <0>see Revisions</0>"
@@ -3212,9 +3491,17 @@ msgstr "this is a project playbook — edit its file directly; it overrides the 
 msgid "this phase"
 msgstr "this phase"
 
+#: src/pages/plans/reviewNextStep.ts
+msgid "This phase already landed."
+msgstr "This phase already landed."
+
 #: src/pages/plans/ForecastVsActual.tsx
 msgid "this phase declares no ## Forecast, so its run has nothing to be scored against"
 msgstr "this phase declares no ## Forecast, so its run has nothing to be scored against"
+
+#: src/pages/plans/reviewNextStep.ts
+msgid "this phase has no run branch yet"
+msgstr "this phase has no run branch yet"
 
 #: src/pages/plans/PhaseReview.tsx
 msgid "This phase has no run branch yet — run it first; there is nothing to push."
@@ -3223,6 +3510,10 @@ msgstr "This phase has no run branch yet — run it first; there is nothing to p
 #: src/pages/plans/PlanSessions.tsx
 msgid "this phase has no sessions of its own — showing the whole plan; click to narrow anyway"
 msgstr "this phase has no sessions of its own — showing the whole plan; click to narrow anyway"
+
+#: src/pages/plans/reviewNextStep.ts
+msgid "This phase has not run yet"
+msgstr "This phase has not run yet"
 
 #: src/pages/plans/LandCriterionAction.tsx
 msgid "This phase was not run by the daemon — there is no branch to land. Tick the criterion by hand after the merge."
@@ -3269,10 +3560,6 @@ msgstr "trigger"
 #: src/pages/plans/WorkaroundHits.tsx
 msgid "turn {0}"
 msgstr "turn {0}"
-
-#: src/pages/plans/ReviewFindings.tsx
-msgid "type"
-msgstr "type"
 
 #: src/pages/plans/PhaseDetailPanel.tsx
 msgid "un-tick this criterion in the doc"
@@ -3378,6 +3665,10 @@ msgstr "webhook trigger enabled"
 msgid "what a phase run started now uses"
 msgstr "what a phase run started now uses"
 
+#: src/pages/plans/PhaseReview.tsx
+msgid "what git said"
+msgstr "what git said"
+
 #: src/pages/plans/ForecastStory.tsx
 msgid "what next"
 msgstr "what next"
@@ -3410,10 +3701,6 @@ msgstr "what was shipped — per-phase executed work"
 #: src/pages/plans/phaseChips.tsx
 msgid "when this phase doc was last edited — no run is attached to it"
 msgstr "when this phase doc was last edited — no run is attached to it"
-
-#: src/pages/plans/ReviewFindings.tsx
-msgid "where"
-msgstr "where"
 
 #: src/pages/plans/ForecastVsActual.tsx
 msgid "where reality diverged"
@@ -3481,10 +3768,6 @@ msgstr "written to the doc after the run had already changed another file — no
 #: src/pages/plans/PhaseRunPickers.tsx
 msgid "xhigh — deepest, slowest"
 msgstr "xhigh — deepest, slowest"
-
-#: src/pages/plans/ReviewFindings.tsx
-msgid "yes"
-msgstr "yes"
 
 #: src/pages/Board.tsx
 msgid "Yes, archive {amnestyMatched}"

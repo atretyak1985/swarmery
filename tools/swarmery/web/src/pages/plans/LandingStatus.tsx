@@ -1,6 +1,10 @@
 // A landed phase's change-request status (phase-landing plan, phase 7, SC-13):
-// state, CI and review chips from the daemon's last read (`landing.prStatus`),
-// when that read was, and a Refresh button that asks the code host now.
+// when the daemon last read it (`landing.prStatus`), and a Refresh button that
+// asks the code host now. The state/CI/review CHIPS this used to render inline
+// moved to the Review tab's state ledger (plan D20, ReviewStateLedger.tsx),
+// which reads the same `stateChip` / `ciChip` / `reviewChip` helpers below —
+// this component now owns only the "checked N ago" + Refresh part of a block
+// header, per phase 5 step 4.
 //
 // The status is the daemon's normalized vocabulary (repoprovider.ChangeStatus),
 // identical for every provider, so nothing here branches on which provider a
@@ -20,7 +24,7 @@ const BAD = 'border-red/40 bg-red/10 text-red';
 const WAIT = 'border-amber/40 bg-amber/10 text-amber';
 const QUIET = 'border-line text-ink-faint';
 
-type Chip = { glyph?: string; text: string; tone: string };
+export type Chip = { glyph?: string; text: string; tone: string };
 
 /** The state chip: an open change request marked draft reads "draft". */
 export function stateChip(s: PhaseChangeStatus): Chip {
@@ -57,7 +61,7 @@ export function reviewChip(review: PhaseChangeStatus['review']): Chip | null {
   }
 }
 
-function ChipView({ chip, testId }: { chip: Chip; testId: string }): JSX.Element {
+export function ChipView({ chip, testId }: { chip: Chip; testId: string }): JSX.Element {
   return (
     <span data-testid={testId} className={`${CHIP} ${chip.tone}`}>
       {chip.glyph !== undefined && <span aria-hidden="true">{chip.glyph}</span>}
@@ -123,15 +127,10 @@ export function LandingStatus({ taskId, phaseId, landing, onRefreshed }: Landing
   };
 
   const checkedAgo = status === null ? '' : fmtAgo(status.checkedAt);
-  const ci = status === null ? null : ciChip(status.ci);
-  const review = status === null ? null : reviewChip(status.review);
 
   return (
     <div data-testid="landing-status" className="space-y-1">
       <div className="flex flex-wrap items-center gap-1.5 font-mono text-[10.5px] text-ink-faint">
-        {status !== null && <ChipView chip={stateChip(status)} testId="landing-status-state" />}
-        {ci !== null && <ChipView chip={ci} testId="landing-status-ci" />}
-        {review !== null && <ChipView chip={review} testId="landing-status-review" />}
         <span data-testid="landing-status-checked">
           {status === null ? <Trans>status not read yet</Trans> : <Trans>checked {checkedAgo}</Trans>}
         </span>

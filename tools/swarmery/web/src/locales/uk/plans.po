@@ -21,13 +21,77 @@ msgstr " — агент {agent}"
 msgid " · live"
 msgstr " · наживо"
 
+#: src/pages/plans/ReviewStateLedger.tsx
+msgid "—"
+msgstr "—"
+
+#: src/pages/plans/reviewNextStep.ts
+msgid "— an empty guard check is open; close it from the Guard row."
+msgstr "— відкрита порожня перевірка guard; закрийте її в рядку Guard."
+
+#: src/pages/plans/reviewNextStep.ts
+msgid "— and the run branch has since been deleted."
+msgstr "— а гілку запуску тим часом видалено."
+
+#: src/pages/plans/reviewNextStep.ts
+msgid "— but CI on the merged {change} failed."
+msgstr "— але CI на злитому {change} впав."
+
+#: src/pages/plans/reviewNextStep.ts
+msgid "— but review on the merged {change} did not pass."
+msgstr "— але рев'ю на злитому {change} не пройшло."
+
+#: src/pages/plans/reviewNextStep.ts
+msgid "— check back once the run finishes."
+msgstr "— перевірте знову, коли запуск завершиться."
+
+#: src/pages/plans/reviewNextStep.ts
+msgid "— fix it on the branch, or send the phase back to its agent."
+msgstr "— виправте гілку або поверніть фазу агенту."
+
+#: src/pages/plans/reviewNextStep.ts
+msgid "— no {change} open yet."
+msgstr "— {change} ще не відкрито."
+
+#: src/pages/plans/reviewNextStep.ts
+msgid "— nothing has been pushed yet."
+msgstr "— ще нічого не запушено."
+
 #: src/pages/PlanningMode.tsx
 msgid "— nothing is written until you approve the diff."
 msgstr "— нічого не записується, доки ви не схвалите дифф."
 
+#: src/pages/plans/reviewNextStep.ts
+msgid "— re-run it, then push again."
+msgstr "— перезапустіть і запуште знову."
+
+#: src/pages/plans/reviewNextStep.ts
+msgid "— the guard stopped the run and is waiting for your answer."
+msgstr "— guard зупинив запуск і чекає на вашу відповідь."
+
+#: src/pages/plans/reviewNextStep.ts
+msgid "— there is nothing left to do here."
+msgstr "— тут більше нічого робити."
+
+#: src/pages/plans/reviewNextStep.ts
+msgid "— there is nothing left to push or return."
+msgstr "— нічого запушити чи повернути."
+
+#: src/pages/plans/reviewNextStep.ts
+msgid "— there is nothing more to land here."
+msgstr "— тут більше нічого приземляти."
+
+#: src/pages/plans/reviewNextStep.ts
+msgid "— there is nothing to review."
+msgstr "— тут нічого рецензувати."
+
 #: src/pages/PlanningMode.tsx
 msgid "— tracked as <0>{planId}</0>"
 msgstr "— відстежується як <0>{planId}</0>"
+
+#: src/pages/plans/reviewNextStep.ts
+msgid "— waiting on CI and review."
+msgstr "— очікування CI і рев'ю."
 
 #: src/pages/plans/PhaseCard.tsx
 msgid "({before} before)"
@@ -80,6 +144,18 @@ msgstr "{0, plural, one {{landed} з # фази злито} few {{landed} з # �
 msgid "{0, plural, one {{ticked} of the # criterion ticked} few {{ticked} of the # criteria ticked} many {{ticked} of the # criteria ticked} other {{ticked} of the # criteria ticked}}"
 msgstr "{0, plural, one {{ticked} з # критерію відмічено} few {{ticked} із # критеріїв відмічено} many {{ticked} із # критеріїв відмічено} other {{ticked} з # критерію відмічено}}"
 
+#. placeholder {0}: f.blocked
+#. placeholder {0}: f?.blocked ?? 0
+#: src/pages/plans/guardDecisionView.ts
+#: src/pages/plans/ReviewStateLedger.tsx
+msgid "{0, plural, one {# blocked attempt} few {# blocked attempts} many {# blocked attempts} other {# blocked attempts}}"
+msgstr "{0, plural, one {# заблокована спроба} few {# заблоковані спроби} many {# заблокованих спроб} other {# заблокованої спроби}}"
+
+#. placeholder {0}: f.changed.length
+#: src/pages/plans/ReviewStateLedger.tsx
+msgid "{0, plural, one {# protected file changed} few {# protected files changed} many {# protected files changed} other {# protected files changed}}"
+msgstr "{0, plural, one {змінено # захищений файл} few {змінено # захищені файли} many {змінено # захищених файлів} other {змінено # захищеного файлу}}"
+
 #. placeholder {0}: p.checkboxesTotal
 #: src/pages/plans/forecastStoryModel.ts
 msgid "{0, plural, one {none of the # criterion ticked} few {none of the # criteria ticked} many {none of the # criteria ticked} other {none of the # criteria ticked}}"
@@ -99,6 +175,11 @@ msgstr "{0, plural, one {охоплення сесій: лише фаза {seqLa
 #: src/pages/plans/forecastStoryModel.ts
 msgid "{0, plural, one {touched # area{offNote}} few {touched # areas{offNote}} many {touched # areas{offNote}} other {touched # areas{offNote}}}"
 msgstr "{0, plural, one {змінено # область{offNote}} few {змінено # області{offNote}} many {змінено # областей{offNote}} other {змінено # області{offNote}}}"
+
+#. placeholder {0}: f.changed.length
+#: src/pages/plans/guardDecisionView.ts
+msgid "{0, plural, one {touched # protected file} few {touched # protected files} many {touched # protected files} other {touched # protected files}}"
+msgstr "{0, plural, one {торкнувся # захищеного файлу} few {торкнувся # захищених файлів} many {торкнувся # захищених файлів} other {торкнувся # захищеного файлу}}"
 
 #. placeholder {0}: epic.rollup.done
 #. placeholder {1}: epic.rollup.total
@@ -246,6 +327,10 @@ msgstr "{manual, plural, one {# критерій [MANUAL] — закрити м�
 msgid "{manualOpen, plural, one {# manual check only you can close} few {# manual checks only you can close} many {# manual checks only you can close} other {# manual checks only you can close}}"
 msgstr "{manualOpen, plural, one {# ручна перевірка, яку закриєте лише ви} few {# ручні перевірки, які закриєте лише ви} many {# ручних перевірок, які закриєте лише ви} other {# ручної перевірки, які закриєте лише ви}}"
 
+#: src/pages/plans/ReviewStateLedger.tsx
+msgid "{manualOpen, plural, one {# manual check open} few {# manual checks open} many {# manual checks open} other {# manual checks open}}"
+msgstr "{manualOpen, plural, one {# ручна перевірка відкрита} few {# ручні перевірки відкриті} many {# ручних перевірок відкрито} other {# ручної перевірки відкрито}}"
+
 #: src/pages/plans/ReviewFindings.tsx
 msgid "{n, plural, one {# review round} few {# review rounds} many {# review rounds} other {# review rounds}}"
 msgstr "{n, plural, one {# раунд рев’ю} few {# раунди рев’ю} many {# раундів рев’ю} other {# раунду рев’ю}}"
@@ -391,6 +476,14 @@ msgstr "30–90 хв"
 msgid "90 min to 4 h"
 msgstr "від 90 хв до 4 год"
 
+#: src/pages/plans/reviewNextStep.ts
+msgid "a {change} is already open for this branch"
+msgstr "для цієї гілки вже відкрито {change}"
+
+#: src/pages/plans/reviewNextStep.ts
+msgid "A {change} is open"
+msgstr "{change} відкрито"
+
 #: src/pages/planning/RevisionReview.tsx
 msgid "a file changed since staging — reload before applying"
 msgstr "файл змінився після підготовки — перезавантажте перед застосуванням"
@@ -398,6 +491,10 @@ msgstr "файл змінився після підготовки — перез
 #: src/pages/planning/RevisionReview.tsx
 msgid "a file is stale — reload the review first"
 msgstr "файл застарів — спершу перезавантажте перегляд"
+
+#: src/pages/plans/reviewNextStep.ts
+msgid "a guard decision is still open — nothing lands until it is answered"
+msgstr "рішення guard досі відкрите — нічого не приземлиться, доки на нього не відповісти"
 
 #: src/pages/plans/forecastStoryModel.ts
 msgid "a large"
@@ -490,6 +587,18 @@ msgstr "усе злито"
 msgid "all phases"
 msgstr "усі фази"
 
+#: src/pages/plans/DecisionReplyModal.tsx
+msgid "Allow · add to scope"
+msgstr "Дозволити · додати до обсягу"
+
+#: src/pages/plans/guardDecisionView.ts
+msgid "allow releases: {pathList}"
+msgstr "дозвіл відкриває: {pathList}"
+
+#: src/pages/plans/reviewNextStep.ts
+msgid "already merged — there is nothing left to push"
+msgstr "вже злито — нічого запушити"
+
 #: src/pages/plans/PhaseCard.tsx
 msgid "An agent is working on this phase now."
 msgstr "Над цією фазою зараз працює агент."
@@ -506,6 +615,7 @@ msgstr "дуже мала"
 msgid "an unmeasured time"
 msgstr "невиміряний час"
 
+#: src/pages/plans/DecisionReplyModal.tsx
 #: src/pages/plans/PhaseLedger.tsx
 msgid "answer"
 msgstr "відповідь"
@@ -518,6 +628,10 @@ msgstr "відповісти в «Потребує вас»"
 msgid "answer it →"
 msgstr "відповісти →"
 
+#: src/pages/plans/reviewNextStep.ts
+msgid "Answer the decision"
+msgstr "Відповісти на рішення"
+
 #: src/pages/PlanningMode.tsx
 msgid "answer the planner"
 msgstr "відповісти планувальнику"
@@ -529,6 +643,10 @@ msgstr "відповісти планувальнику…"
 #: src/pages/plans/ReviewFindings.tsx
 msgid "answering…"
 msgstr "відповідаємо…"
+
+#: src/pages/plans/PhaseReview.tsx
+msgid "Answering…"
+msgstr "Відповідаємо…"
 
 #: src/pages/plans/PlanDetailPanel.tsx
 msgid "applied"
@@ -671,6 +789,10 @@ msgstr "вигляд дошки"
 msgid "board…"
 msgstr "дошка…"
 
+#: src/pages/plans/ReviewStateLedger.tsx
+msgid "Branch"
+msgstr "Гілка"
+
 #: src/pages/Routines.tsx
 msgid "busy — already running"
 msgstr "зайнято — уже виконується"
@@ -681,6 +803,7 @@ msgstr "від {decidedBy}"
 
 #: src/pages/Board.tsx
 #: src/pages/PlanningMode.tsx
+#: src/pages/plans/DecisionReplyModal.tsx
 #: src/pages/plans/PhaseReopens.tsx
 #: src/pages/plans/PlanRunControls.tsx
 msgid "cancel"
@@ -735,9 +858,17 @@ msgstr "дешево змінити"
 msgid "checked {checkedAgo}"
 msgstr "перевірено {checkedAgo}"
 
+#: src/pages/plans/ReviewStateLedger.tsx
+msgid "CI"
+msgstr "CI"
+
 #: src/pages/plans/LandingStatus.tsx
 msgid "CI failed"
 msgstr "CI впав"
+
+#: src/pages/plans/reviewNextStep.ts
+msgid "CI on the open {change} failed"
+msgstr "CI на відкритому {change} впав"
 
 #: src/pages/plans/LandingStatus.tsx
 msgid "CI passed"
@@ -751,6 +882,10 @@ msgstr "CI виконується"
 msgid "Claude is writing a plain-language explanation…"
 msgstr "Claude пише пояснення простими словами…"
 
+#: src/pages/plans/ReviewStateLedger.tsx
+msgid "clean"
+msgstr "чисто"
+
 #: src/pages/Board.tsx
 msgid "clear label filter"
 msgstr "скинути фільтр міток"
@@ -760,6 +895,14 @@ msgstr "скинути фільтр міток"
 msgid "close"
 msgstr "закрити"
 
+#: src/pages/plans/ReviewStateLedger.tsx
+msgid "Close · allow nothing"
+msgstr "Закрити · дозволяти нічого"
+
+#: src/pages/plans/reviewNextStep.ts
+msgid "Close the remaining checks by hand; landing will not do it for you."
+msgstr "Закрийте решту перевірок вручну; приземлення цього не зробить."
+
 #: src/pages/plans/LandingStatus.tsx
 msgid "closed"
 msgstr "закрито"
@@ -767,6 +910,11 @@ msgstr "закрито"
 #: src/pages/plans/CriterionLint.tsx
 msgid "closed by push / PR / merge — ticked when the change request merges"
 msgstr "закривається push / PR / злиттям — відмічається, коли пул-реквест злито"
+
+#: src/pages/plans/PhaseReview.tsx
+#: src/pages/plans/ReviewStateLedger.tsx
+msgid "Closing…"
+msgstr "Закриваємо…"
 
 #: src/pages/plans/RunsReviewBlock.tsx
 msgid "code review"
@@ -787,6 +935,10 @@ msgstr "продовжувати при невдачі"
 #: src/pages/planning/RunningPlanPanel.tsx
 msgid "Continue with the plan"
 msgstr "Продовжити план"
+
+#: src/pages/plans/guardDecisionView.ts
+msgid "contract broken: {flagList}"
+msgstr "контракт порушено: {flagList}"
 
 #: src/pages/Playbooks.tsx
 msgid "copies the markdown into the project so its prompts become editable"
@@ -829,6 +981,7 @@ msgid "criteria"
 msgstr "критерії"
 
 #: src/pages/plans/PhasePanel.tsx
+#: src/pages/plans/ReviewStateLedger.tsx
 msgid "Criteria"
 msgstr "Критерії"
 
@@ -839,10 +992,6 @@ msgstr "критерії, які зняти"
 #: src/pages/plans/PhaseDetailPanel.tsx
 msgid "criteria…"
 msgstr "критерії…"
-
-#: src/pages/plans/ReviewFindings.tsx
-msgid "criterion"
-msgstr "критерій"
 
 #: src/pages/Routines.tsx
 msgid "Cron (5-field, blank = manual/webhook only)"
@@ -872,6 +1021,11 @@ msgstr "вирішено {decided} ({by})"
 #: src/pages/plans/planModel.ts
 msgid "decision"
 msgstr "рішення"
+
+#. placeholder {0}: decision.decisionId
+#: src/pages/plans/reviewNextStep.ts
+msgid "Decision {0} is still open"
+msgstr "Рішення {0} досі відкрите"
 
 #. placeholder {0}: linkedTurn.seq
 #: src/pages/PlanningMode.tsx
@@ -984,6 +1138,8 @@ msgid "doc"
 msgstr "документ"
 
 #: src/pages/plans/GuardBadge.tsx
+#: src/pages/plans/guardDecisionView.ts
+#: src/pages/plans/ReviewStateLedger.tsx
 msgid "doc copy mismatch"
 msgstr "копія документа не збігається"
 
@@ -1118,7 +1274,6 @@ msgid "every minute"
 msgstr "щохвилини"
 
 #: src/pages/plans/DecisionTable.tsx
-#: src/pages/plans/ReviewFindings.tsx
 msgid "evidence"
 msgstr "докази"
 
@@ -1266,7 +1421,13 @@ msgstr "ще раз оцінити гілку запуску цієї фази �
 msgid "Graph"
 msgstr "Граф"
 
+#: src/pages/plans/ReviewStateLedger.tsx
+msgid "Guard"
+msgstr "Guard"
+
 #: src/pages/plans/GuardBadge.tsx
+#: src/pages/plans/guardDecisionView.ts
+#: src/pages/plans/ReviewStateLedger.tsx
 msgid "guard block unreadable"
 msgstr "блок guard не прочитати"
 
@@ -1338,7 +1499,6 @@ msgid "how hard the planning interview thinks, on every turn of this wizard — 
 msgstr "наскільки глибоко думає інтерв’ю планування на кожному ході цього майстра — при першому запуску й кожному відновленні. Лишіть типове значення, щоб вирішували налаштування демона й закріплений типовий рівень планувальника. Зауважте: БЕЗ effort — це не найдешевший варіант: незакріплений запуск claude думає на xhigh, найглибшому рівні."
 
 #: src/pages/plans/DecisionTable.tsx
-#: src/pages/plans/ReviewFindings.tsx
 msgid "id"
 msgstr "id"
 
@@ -1395,6 +1555,10 @@ msgstr "Інтерв’ю завершено — ревізія готуєтьс
 msgid "invalid cron — need 5 fields"
 msgstr "хибний cron — потрібно 5 полів"
 
+#: src/pages/plans/reviewNextStep.ts
+msgid "It already landed; a red check here is informational only."
+msgstr "Це вже приземлилось; червона позначка тут лише інформаційна."
+
 #: src/pages/PlanningMode.tsx
 msgid "keep the plan card"
 msgstr "лишити картку плану"
@@ -1412,13 +1576,13 @@ msgstr "злито"
 msgid "landed · {change}"
 msgstr "злито · {change}"
 
+#: src/pages/plans/ReviewStateLedger.tsx
+msgid "Landing"
+msgstr "Приземлення"
+
 #: src/pages/Routines.tsx
 msgid "last {lastRun}"
 msgstr "останній {lastRun}"
-
-#: src/pages/plans/PhaseReview.tsx
-msgid "last landing failure: {landingError}"
-msgstr "остання невдача здачі: {landingError}"
 
 #: src/pages/Routines.tsx
 msgid "last run"
@@ -1534,7 +1698,11 @@ msgstr "medium — окреслена робота"
 msgid "merged"
 msgstr "злито"
 
-#: src/pages/plans/PhaseReview.tsx
+#: src/pages/plans/reviewNextStep.ts
+msgid "Merged"
+msgstr "Злито"
+
+#: src/pages/plans/ReviewStateLedger.tsx
 msgid "merged {mergedAgo}"
 msgstr "злито {mergedAgo}"
 
@@ -1618,13 +1786,13 @@ msgstr "наступна фаза · ↓"
 msgid "next run"
 msgstr "наступний запуск"
 
+#: src/pages/plans/PhaseReview.tsx
+msgid "next step"
+msgstr "наступний крок"
+
 #: src/pages/Routines.tsx
 msgid "nightly advisor re-run"
 msgstr "нічний перезапуск радника"
-
-#: src/pages/plans/ReviewFindings.tsx
-msgid "no"
-msgstr "ні"
 
 #: src/pages/Plans.tsx
 msgid "no {filterLabel} plans"
@@ -1734,6 +1902,10 @@ msgstr "ревізій немає — «Ревізія плану» в рядк�
 msgid "No routines yet. Create one to schedule recurring work."
 msgstr "Рутин ще немає. Створіть одну, щоб запланувати повторювану роботу."
 
+#: src/pages/plans/ReviewStateLedger.tsx
+msgid "no run branch yet"
+msgstr "ще немає гілки запуску"
+
 #: src/pages/plans/PhaseDetailPanel.tsx
 msgid "No runs yet — this phase starts when the previous one lands."
 msgstr "Запусків ще немає — ця фаза почнеться, коли зіллється попередня."
@@ -1762,9 +1934,17 @@ msgstr "підсумок роботи не написано — виконаве
 msgid "no summary written for this phase"
 msgstr "для цієї фази підсумок не написано"
 
+#: src/pages/plans/ReviewFindings.tsx
+msgid "no test caught"
+msgstr "тест не спіймав"
+
 #: src/pages/plans/PhaseReopens.tsx
 msgid "No ticked criteria in this phase's doc — nothing to reopen."
 msgstr "У документі цієї фази немає відмічених критеріїв — нічого перевідкривати."
+
+#: src/pages/plans/guardDecisionView.ts
+msgid "no trigger"
+msgstr "без тригера"
 
 #: src/pages/planning/HistoryDrawer.tsx
 msgid "no turns yet"
@@ -1789,6 +1969,10 @@ msgstr "не здано"
 #: src/pages/plans/TerminalBadge.tsx
 msgid "not live"
 msgstr "не наживо"
+
+#: src/pages/plans/ReviewStateLedger.tsx
+msgid "not opened yet"
+msgstr "ще не відкрито"
 
 #. placeholder {0}: block.scopeLeft.join(', ')
 #: src/pages/plans/ReviewFindings.tsx
@@ -1820,6 +2004,10 @@ msgstr "не перевірено"
 msgid "Not verified: {reason}"
 msgstr "Не перевірено: {reason}"
 
+#: src/pages/plans/DecisionReplyModal.tsx
+msgid "note — recorded with the answer (optional)"
+msgstr "примітка — записується разом із відповіддю (необов'язково)"
+
 #: src/pages/planning/RevisionReview.tsx
 msgid "note (optional)"
 msgstr "нотатка (необов’язково)"
@@ -1832,17 +2020,29 @@ msgstr "В архіві нічого немає."
 msgid "Nothing follows: the run landed on plan."
 msgstr "Нічого не випливає: запуск пройшов за планом."
 
+#: src/pages/plans/reviewNextStep.ts
+msgid "Nothing left to do here."
+msgstr "Тут більше нічого робити."
+
 #: src/pages/plans/PlanHeader.tsx
 msgid "nothing new starts until you resume"
 msgstr "нічого нового не запуститься, доки ви не відновите"
+
+#: src/pages/plans/reviewNextStep.ts
+msgid "Nothing to do here until the run finishes."
+msgstr "Тут нічого робити, доки запуск не завершиться."
 
 #: src/pages/plans/PlainSummary.tsx
 msgid "nothing to explain yet — the doc has no text for this"
 msgstr "поки нічого пояснювати — у документі ще немає тексту для цього"
 
-#: src/pages/plans/PhaseReview.tsx
-msgid "nothing to land in this state"
-msgstr "у цьому стані нічого здавати"
+#: src/pages/plans/reviewNextStep.ts
+msgid "Nothing to land right now"
+msgstr "Зараз нічого приземляти"
+
+#: src/pages/plans/reviewNextStep.ts
+msgid "Nothing to land yet"
+msgstr "Ще нічого приземляти"
 
 #: src/pages/plans/LandingStatus.tsx
 msgid "Nothing to refresh: this phase has no open change request."
@@ -1872,6 +2072,14 @@ msgstr "за планом"
 msgid "only a human can close it — you tick it after checking by hand"
 msgstr "закрити може лише людина — ви відмічаєте після ручної перевірки"
 
+#: src/pages/plans/reviewNextStep.ts
+msgid "Only manual checks are left"
+msgstr "Лишились тільки ручні перевірки"
+
+#: src/pages/plans/reviewNextStep.ts
+msgid "only manual checks are left open, and only a person closes those"
+msgstr "лишились тільки ручні перевірки, а їх закриває лише людина"
+
 #: src/pages/plans/LandingStatus.tsx
 #: src/pages/plans/ReviewFindings.tsx
 msgid "open"
@@ -1888,6 +2096,10 @@ msgstr "Відкрити {changeShort}"
 #: src/pages/plans/DepsUnmergedActions.tsx
 msgid "Open {changeShort} for {branch}"
 msgstr "Відкрити {changeShort} для {branch}"
+
+#: src/pages/plans/ReviewStateLedger.tsx
+msgid "open ↗"
+msgstr "відкрити ↗"
 
 #: src/pages/plans/DepsUnmergedActions.tsx
 msgid "Open a {change} for each unmerged branch"
@@ -2268,11 +2480,20 @@ msgstr "запропоновані зміни"
 msgid "Pros / Cons"
 msgstr "Плюси / мінуси"
 
+#: src/pages/plans/ReviewStateLedger.tsx
+msgid "Pull request"
+msgstr "Pull request"
+
 #: src/pages/plans/PhaseReview.tsx
+#: src/pages/plans/reviewNextStep.ts
 msgid "Push"
 msgstr "Запушити"
 
 #: src/pages/plans/PhaseReview.tsx
+msgid "Push + open"
+msgstr "Запушити + відкрити"
+
+#: src/pages/plans/reviewNextStep.ts
 msgid "Push + open {change}"
 msgstr "Запушити + відкрити {change}"
 
@@ -2284,17 +2505,21 @@ msgstr "Запушити + відкрити {changeShort}"
 msgid "push the run branch {runBranch} and open a {changeShort}"
 msgstr "запушити гілку запуску {runBranch} й відкрити {changeShort}"
 
-#: src/pages/plans/PhaseReview.tsx
-msgid "push the run branch and open a {change}"
-msgstr "запушити гілку запуску й відкрити {change}"
-
-#: src/pages/plans/PhaseReview.tsx
-msgid "push the run branch to origin"
-msgstr "запушити гілку запуску в origin"
-
 #: src/pages/plans/landingModel.ts
 msgid "pushed"
 msgstr "запушено"
+
+#: src/pages/plans/reviewNextStep.ts
+msgid "Pushed"
+msgstr "Запушено"
+
+#: src/pages/plans/reviewNextStep.ts
+msgid "Pushes the branch without opening a {change}."
+msgstr "Запушує гілку без відкриття {change}."
+
+#: src/pages/plans/reviewNextStep.ts
+msgid "Pushes the run's branch and opens a {change} for it."
+msgstr "Запушує гілку запуску і відкриває для неї {change}."
 
 #: src/pages/plans/PhaseReview.tsx
 msgid "Pushing…"
@@ -2336,6 +2561,10 @@ msgstr "readme…"
 msgid "ready to land"
 msgstr "готово до здачі"
 
+#: src/pages/plans/reviewNextStep.ts
+msgid "Ready to land"
+msgstr "Готово приземлятись"
+
 #: src/pages/plans/DecisionTable.tsx
 msgid "reason: {rowReason}"
 msgstr "причина: {rowReason}"
@@ -2369,6 +2598,7 @@ msgid "Refused: the run branch {branch} is the base branch{base}, so landing wou
 msgstr "Відхилено: гілка запуску {branch} — це базова гілка{base}, тож здача запушила б прямо в неї. Щоб дозволити це, задайте swarmery.vcs.allowPushToBase=true у .claude/settings.local.json."
 
 #: src/pages/planning/RevisionReview.tsx
+#: src/pages/plans/DecisionReplyModal.tsx
 msgid "Reject"
 msgstr "Відхилити"
 
@@ -2453,16 +2683,25 @@ msgid "return"
 msgstr "повернути"
 
 #: src/pages/plans/PhaseReview.tsx
+msgid "Return to agent"
+msgstr "Повернути агенту"
+
+#: src/pages/plans/PhaseReview.tsx
 msgid "Return to agent?"
 msgstr "Повернути агенту?"
 
 #: src/pages/plans/PhaseReview.tsx
+#: src/pages/plans/reviewNextStep.ts
 msgid "Return to agent…"
 msgstr "Повернути агенту…"
 
 #: src/pages/plans/landingModel.ts
 msgid "returned to agent"
 msgstr "повернуто агенту"
+
+#: src/pages/plans/reviewNextStep.ts
+msgid "Returned to the agent"
+msgstr "Повернуто агенту"
 
 #: src/pages/plans/planDetailShell.tsx
 msgid "revert"
@@ -2476,6 +2715,7 @@ msgid "review"
 msgstr "рев’ю"
 
 #: src/pages/plans/PhasePanel.tsx
+#: src/pages/plans/ReviewStateLedger.tsx
 msgid "Review"
 msgstr "Рев’ю"
 
@@ -2519,9 +2759,17 @@ msgstr "Перегляньте його на <0>сторінці Плани</0> 
 msgid "review of the fix re-run"
 msgstr "рев’ю повторного запуску після виправлення"
 
+#: src/pages/plans/reviewNextStep.ts
+msgid "Review on the open {change} did not pass"
+msgstr "Рев'ю на відкритому {change} не пройшло"
+
 #: src/pages/plans/LandingStatus.tsx
 msgid "review required"
 msgstr "потрібне рев’ю"
+
+#: src/pages/plans/ReviewStateLedger.tsx
+msgid "Review state"
+msgstr "Стан рев'ю"
 
 #: src/pages/planning/ReviseModal.tsx
 msgid "review the open revision →"
@@ -2627,6 +2875,10 @@ msgstr "Запустити фазу"
 msgid "run started"
 msgstr "запуск почато"
 
+#: src/pages/plans/reviewNextStep.ts
+msgid "Run the phase first; a review needs a finished run."
+msgstr "Спершу запустіть фазу; для рев'ю потрібен завершений запуск."
+
 #: src/pages/plans/EpicDetail.tsx
 msgid "run this phase again even though nothing has changed since it blocked"
 msgstr "запустити цю фазу знову, хоч після блокування нічого не змінилося"
@@ -2728,10 +2980,6 @@ msgstr "оберіть епік"
 msgid "Selectable execution recipes. A task picks one on the board; the dispatcher runs its stages sequentially in one worktree. <0/> Built-ins are read-only — duplicate one to edit its prompts."
 msgstr "Рецепти виконання на вибір. Задача обирає один на дошці; диспетчер виконує його етапи послідовно в одному worktree. <0/> Вбудовані лише для читання — дублюйте, щоб редагувати промпти."
 
-#: src/pages/plans/PhaseReview.tsx
-msgid "send the phase back to its agent with your feedback"
-msgstr "повернути фазу її агенту з вашим відгуком"
-
 #: src/pages/planning/QuestionCard.tsx
 msgid "sending…"
 msgstr "надсилаємо…"
@@ -2739,6 +2987,10 @@ msgstr "надсилаємо…"
 #: src/pages/plans/PhaseReview.tsx
 msgid "Sends the phase back to its agent: your feedback is appended to the next run's prompt."
 msgstr "Повертає фазу її агенту: ваш відгук додається до промпта наступного запуску."
+
+#: src/pages/plans/reviewNextStep.ts
+msgid "Sends the phase back with your feedback; a new run can push a fix."
+msgstr "Повертає фазу з вашим фідбеком; новий запуск може запушити виправлення."
 
 #: src/pages/plans/PlanRunControls.tsx
 msgid "session"
@@ -2767,6 +3019,14 @@ msgstr "Показати всі {allCount}"
 #: src/pages/plans/WorkaroundHits.tsx
 msgid "Show fewer"
 msgstr "Показати менше"
+
+#: src/pages/plans/ReviewFindings.tsx
+msgid "show less"
+msgstr "показати менше"
+
+#: src/pages/plans/ReviewFindings.tsx
+msgid "show more"
+msgstr "більше"
 
 #: src/pages/plans/ForecastStory.tsx
 msgid "show the score breakdown"
@@ -2886,8 +3146,11 @@ msgstr "запуск…"
 msgid "starts when {deps} lands"
 msgstr "почнеться, коли злито {deps}"
 
+#: src/pages/plans/ReviewStateLedger.tsx
+msgid "State"
+msgstr "Стан"
+
 #: src/pages/plans/DecisionTable.tsx
-#: src/pages/plans/ReviewFindings.tsx
 msgid "status"
 msgstr "статус"
 
@@ -2984,6 +3247,10 @@ msgstr "Етап «{stage}» цієї фази перестав працюват
 msgid "The agent's own words where it went around something. Read these first; each is a place to check, not a verdict."
 msgstr "Власні слова агента там, де він щось обійшов. Прочитайте їх першими: кожне — місце для перевірки, а не вирок."
 
+#: src/pages/plans/reviewNextStep.ts
+msgid "The branch this run used no longer exists."
+msgstr "Гілки, яку використовував цей запуск, більше немає."
+
 #: src/pages/plans/ForecastVsActual.tsx
 msgid "the Completion Report carries no “Where reality diverged” paragraph"
 msgstr "у Completion Report немає абзацу «Where reality diverged»"
@@ -3007,6 +3274,14 @@ msgstr "Прогноз не назвав ні розміру, ні тривал�
 #: src/pages/plans/PhaseDetailPanel.tsx
 msgid "the guard stop waits on your answer"
 msgstr "зупинка guard чекає на вашу відповідь"
+
+#: src/pages/plans/reviewNextStep.ts
+msgid "The guard stopped the run on protected paths; answer here to let it continue."
+msgstr "Guard зупинив запуск на захищених шляхах; відповідьте тут, щоб він продовжився."
+
+#: src/pages/plans/reviewNextStep.ts
+msgid "the last attempt failed — see what git said below"
+msgstr "остання спроба не вдалась — див. «що сказав git» нижче"
 
 #: src/pages/plans/PhaseCard.tsx
 msgid "The last run failed."
@@ -3132,6 +3407,14 @@ msgstr "рев’ю чекає на вас · {id}"
 msgid "the reviewer wrote no readable kind: review block — its own words are in the doc"
 msgstr "рецензент не написав читабельного блоку kind: review — його власні слова є в документі"
 
+#: src/pages/plans/reviewNextStep.ts
+msgid "the run branch is gone"
+msgstr "гілки запуску більше немає"
+
+#: src/pages/plans/reviewNextStep.ts
+msgid "The run branch is gone"
+msgstr "Гілки запуску більше немає"
+
 #: src/pages/plans/GuardBadge.tsx
 msgid "the run changed protected paths: {changedList}"
 msgstr "запуск змінив захищені шляхи: {changedList}"
@@ -3151,14 +3434,6 @@ msgstr "запуск невдалий — клікніть, щоб дізнат�
 #: src/pages/plans/phaseChips.tsx
 msgid "the run finished but ticked no acceptance criteria — click for why"
 msgstr "запуск завершився, але не відмітив жодного критерію приймання — клікніть, щоб дізнатись чому"
-
-#: src/pages/plans/PhaseReview.tsx
-msgid "the run is still live"
-msgstr "запуск ще триває"
-
-#: src/pages/plans/PhaseReview.tsx
-msgid "the run is still live — land it once it finishes"
-msgstr "запуск ще триває — здайте, коли він завершиться"
 
 #: src/pages/plans/phaseChips.tsx
 msgid "the run ticked every acceptance criterion"
@@ -3200,6 +3475,10 @@ msgstr "майстер завершив роботу; демон підхопл�
 msgid "the work is confirmed; the phase doc's Completion Report is empty"
 msgstr "робота підтверджена; розділ Completion Report у документі фази порожній"
 
+#: src/pages/plans/reviewNextStep.ts
+msgid "There is nothing this decision would add to scope — close it from the Guard row below."
+msgstr "Це рішення нічого не додало б у межі — закрийте його в рядку Guard нижче."
+
 #: src/pages/plans/PhaseDetailPanel.tsx
 msgid "this doc was changed by an applied revision {revisedAgo} — <0>see Revisions</0>"
 msgstr "цей документ змінила застосована ревізія {revisedAgo} — <0>див. Ревізії</0>"
@@ -3212,9 +3491,17 @@ msgstr "це плейбук проєкту — редагуйте його фа�
 msgid "this phase"
 msgstr "ця фаза"
 
+#: src/pages/plans/reviewNextStep.ts
+msgid "This phase already landed."
+msgstr "Ця фаза вже приземлилась."
+
 #: src/pages/plans/ForecastVsActual.tsx
 msgid "this phase declares no ## Forecast, so its run has nothing to be scored against"
 msgstr "ця фаза не має розділу ## Forecast, тож її запуск ні з чим порівнювати"
+
+#: src/pages/plans/reviewNextStep.ts
+msgid "this phase has no run branch yet"
+msgstr "у цієї фази ще немає гілки запуску"
 
 #: src/pages/plans/PhaseReview.tsx
 msgid "This phase has no run branch yet — run it first; there is nothing to push."
@@ -3223,6 +3510,10 @@ msgstr "У цієї фази ще немає гілки запуску — сп�
 #: src/pages/plans/PlanSessions.tsx
 msgid "this phase has no sessions of its own — showing the whole plan; click to narrow anyway"
 msgstr "у цієї фази немає власних сесій — показано весь план; клікніть, щоб усе ж звузити"
+
+#: src/pages/plans/reviewNextStep.ts
+msgid "This phase has not run yet"
+msgstr "Ця фаза ще не запускалась"
 
 #: src/pages/plans/LandCriterionAction.tsx
 msgid "This phase was not run by the daemon — there is no branch to land. Tick the criterion by hand after the merge."
@@ -3269,10 +3560,6 @@ msgstr "тригер"
 #: src/pages/plans/WorkaroundHits.tsx
 msgid "turn {0}"
 msgstr "хід {0}"
-
-#: src/pages/plans/ReviewFindings.tsx
-msgid "type"
-msgstr "тип"
 
 #: src/pages/plans/PhaseDetailPanel.tsx
 msgid "un-tick this criterion in the doc"
@@ -3378,6 +3665,10 @@ msgstr "тригер вебхука увімкнено"
 msgid "what a phase run started now uses"
 msgstr "що використає запуск фази, стартований зараз"
 
+#: src/pages/plans/PhaseReview.tsx
+msgid "what git said"
+msgstr "що сказав git"
+
 #: src/pages/plans/ForecastStory.tsx
 msgid "what next"
 msgstr "що далі"
@@ -3410,10 +3701,6 @@ msgstr "що доставлено — виконана робота по фаз�
 #: src/pages/plans/phaseChips.tsx
 msgid "when this phase doc was last edited — no run is attached to it"
 msgstr "коли цей документ фази редагували останнього разу — запуску до нього не прив’язано"
-
-#: src/pages/plans/ReviewFindings.tsx
-msgid "where"
-msgstr "де"
 
 #: src/pages/plans/ForecastVsActual.tsx
 msgid "where reality diverged"
@@ -3481,10 +3768,6 @@ msgstr "записано в документ після того, як запу�
 #: src/pages/plans/PhaseRunPickers.tsx
 msgid "xhigh — deepest, slowest"
 msgstr "xhigh — найглибше, найповільніше"
-
-#: src/pages/plans/ReviewFindings.tsx
-msgid "yes"
-msgstr "так"
 
 #: src/pages/Board.tsx
 msgid "Yes, archive {amnestyMatched}"
