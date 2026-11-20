@@ -69,7 +69,7 @@ func landpollBootLine(every time.Duration, on bool) string {
 func newLandPoller(db *sql.DB, runRoot func(phaseID int64) (string, error), review landpoll.PlanReviewHook, branches landpoll.RunBranches) *landpoll.Poller {
 	return &landpoll.Poller{
 		Branches: branches,
-		DB: db,
+		DB:       db,
 		Factory: func(k repoprovider.Kind) (repoprovider.Provider, error) {
 			return providers.Factory(k, repoprovider.OSExec{}, credstore.Env)
 		},

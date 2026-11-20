@@ -70,7 +70,7 @@ func (h *Handler) newLandPoller() *landpoll.Poller {
 	}
 	return &landpoll.Poller{
 		Branches: branches,
-		DB: h.DB,
+		DB:       h.DB,
 		Factory: func(k repoprovider.Kind) (repoprovider.Provider, error) {
 			return providers.Factory(k, ex, credstore.Env)
 		},
