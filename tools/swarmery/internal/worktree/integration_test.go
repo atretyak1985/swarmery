@@ -597,3 +597,50 @@ func TestDiffFileCountUsesMergeBaseIntegration(t *testing.T) {
 			"an unmeasurable base must not be reported as a count")
 	}
 }
+
+// TestBranchPresentIntegration: a run branch counts as present while it is a
+// local branch OR a remote-tracking origin/<branch>, absent only when neither
+// ref is there, and a repo git cannot read is an error, not "absent".
+func TestBranchPresentIntegration(t *testing.T) {
+	if testing.Short() {
+		t.Skip("integration test needs a real git binary; skipped in -short")
+	}
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not on PATH")
+	}
+	repo := t.TempDir()
+	git := ExecGit{}
+	run := func(args ...string) {
+		t.Helper()
+		if out, err := git.Run(repo, args...); err != nil {
+			t.Fatalf("git %s: %v\n%s", strings.Join(args, " "), err, out)
+		}
+	}
+	run("init", "-q", "-b", "main")
+	run("config", "user.email", "test@example.com")
+	run("config", "user.name", "Test")
+	mustWrite(t, filepath.Join(repo, "README.md"), "hello\n")
+	run("add", "README.md")
+	run("commit", "-q", "-m", "init")
+	m := &Manager{Git: git, Root: filepath.Join(t.TempDir(), "wts")}
+
+	check := func(what string, want bool) {
+		t.Helper()
+		got, err := m.BranchPresent(repo, "swarm/phase-1")
+		if err != nil || got != want {
+			t.Fatalf("%s: BranchPresent = %v, %v; want %v, nil", what, got, err, want)
+		}
+	}
+	check("never created", false)
+	run("branch", "swarm/phase-1")
+	check("local branch", true)
+	run("update-ref", "refs/remotes/origin/swarm/phase-1", "HEAD")
+	run("branch", "-D", "swarm/phase-1")
+	check("remote-tracking only", true)
+	run("update-ref", "-d", "refs/remotes/origin/swarm/phase-1")
+	check("both deleted", false)
+
+	if _, err := m.BranchPresent(t.TempDir(), "swarm/phase-1"); err == nil {
+		t.Fatal("BranchPresent in a non-repo: err = nil, want git's failure")
+	}
+}

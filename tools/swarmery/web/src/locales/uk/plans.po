@@ -3557,6 +3557,14 @@ msgstr "рев’ю чекає на вас · {id}"
 msgid "the reviewer wrote no readable kind: review block — its own words are in the doc"
 msgstr "рецензент не написав читабельного блоку kind: review — його власні слова є в документі"
 
+#: src/pages/plans/PhaseReview.tsx
+msgid "The run branch {branch} no longer exists, so there is nothing to push — the phase is counted as landed (its work reached the base another way)."
+msgstr "Гілки запуску {branch} більше немає, тож пушити нічого — фазу зараховано як приземлену (її робота потрапила в базу іншим шляхом)."
+
+#: src/pages/plans/PhaseReview.tsx
+msgid "The run branch {branch} no longer exists, so there is nothing to push. The phase is not finished, so it is not counted as landed — run it again for a new branch."
+msgstr "Гілки запуску {branch} більше немає, тож пушити нічого. Фаза не завершена, тому її не зараховано як приземлену — запустіть її ще раз, щоб отримати нову гілку."
+
 #: src/pages/plans/reviewNextStep.ts
 msgid "the run branch is gone"
 msgstr "гілки запуску більше немає"

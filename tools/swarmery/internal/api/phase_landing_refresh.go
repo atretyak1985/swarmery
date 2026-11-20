@@ -62,10 +62,14 @@ func PublishPlanUpdated(taskID int64) { publishPlanUpdated(taskID) }
 func (h *Handler) newLandPoller() *landpoll.Poller {
 	ex := landStatusExec
 	svc := phaserunSvc
+	var branches landpoll.RunBranches // only a live service has the worktree manager
 	if svc == nil {
 		svc = &phaserun.Service{DB: h.DB}
+	} else {
+		branches = svc
 	}
 	return &landpoll.Poller{
+		Branches: branches,
 		DB: h.DB,
 		Factory: func(k repoprovider.Kind) (repoprovider.Provider, error) {
 			return providers.Factory(k, ex, credstore.Env)

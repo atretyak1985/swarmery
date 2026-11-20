@@ -540,6 +540,9 @@ func (h *Handler) landPhase(w http.ResponseWriter, r *http.Request) {
 		writeConflict(w, codeNoRunBranch, "this phase has no run branch — there is nothing to push")
 		return
 	}
+	if h.refuseGoneRunBranch(w, r, t) {
+		return
+	}
 	repoDir, ok := h.landingRepoDir(w, phaseID)
 	if !ok {
 		return
@@ -675,6 +678,46 @@ func (h *Handler) landPhase(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, map[string]any{
 		"branch": branch, "base": baseName, "action": action, "landing": landing, "terms": terms,
 	}, nil)
+}
+
+// refuseGoneRunBranch answers a land whose run branch is no longer in the repo
+// with 409 run-branch-gone instead of letting `git push` fail on it. A finished
+// phase is settled as merged first (landpoll settle: a deleted run branch means
+// its work reached the base another way), and the body carries the new landing.
+// It reports whether it wrote the response. Without a live phase-run service
+// (no worktree manager) nothing can be probed and the land goes on as before.
+func (h *Handler) refuseGoneRunBranch(w http.ResponseWriter, r *http.Request, t landingTarget) bool {
+	svc := phaserunSvc
+	if svc == nil {
+		return false
+	}
+	gone, err := svc.RunBranchGone(t.PhaseID)
+	if err != nil || !gone {
+		return false // a probe git could not answer says nothing; the push reports its own failure
+	}
+	settled, err := h.newLandPoller().SettleOne(context.WithoutCancel(r.Context()), t.PhaseID)
+	if err != nil {
+		writeErr(w, err)
+		return true
+	}
+	if !settled {
+		writeConflictFields(w, codeRunBranchGone,
+			"the run branch "+t.RunBranch+" no longer exists, so there is nothing to push. "+
+				"The phase is not finished (a criterion is still open, or its run did not complete), so it is not counted as landed — "+
+				"run the phase again for a new branch",
+			map[string]any{"branch": t.RunBranch})
+		return true
+	}
+	landing, err := h.phaseLanding(t.PhaseID)
+	if err != nil {
+		writeErr(w, err)
+		return true
+	}
+	writeConflictFields(w, codeRunBranchGone,
+		"the run branch "+t.RunBranch+" no longer exists, so there is nothing to push — "+
+			"the phase is counted as landed (its work reached the base another way)",
+		map[string]any{"branch": t.RunBranch, "landing": landing})
+	return true
 }
 
 // landFailureHints are the stage-specific sentences of a land 422.

@@ -67,6 +67,12 @@ export function conflictSentence(err: LandError, terms: ProviderTerms | null): s
       return t`The phase is still running — land it once the run has finished.`;
     case 'no-run-branch':
       return t`This phase has no run branch yet — run it first; there is nothing to push.`;
+    case 'run-branch-gone': {
+      const branch = err.branch ?? '';
+      return err.settled
+        ? t`The run branch ${branch} no longer exists, so there is nothing to push — the phase is counted as landed (its work reached the base another way).`
+        : t`The run branch ${branch} no longer exists, so there is nothing to push. The phase is not finished, so it is not counted as landed — run it again for a new branch.`;
+    }
     case 'push-to-base-refused': {
       const branch = err.branch ?? '';
       const base = err.base !== undefined && err.base !== '' ? ` (${err.base})` : '';
@@ -371,6 +377,9 @@ export function PhaseReview({ epic, phase, terms, onLanded }: PhaseReviewProps):
         setFeedback('');
       })
       .catch((e: unknown) => {
+        // A gone run branch settled as merged did change the phase: refetch so
+        // the page shows it landed, and keep the sentence that says why.
+        if (e instanceof LandError && e.settled) onLanded?.();
         if (current()) setActionError(e);
       })
       .finally(() => {

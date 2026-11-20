@@ -1388,10 +1388,21 @@ export class LandError extends Error {
   /** 409 `push-to-base-refused`: the run branch and the base it equals. */
   readonly branch: string | undefined;
   readonly base: string | undefined;
+  /** 409 `run-branch-gone`: the phase was settled as merged (the body carried
+   *  its new `landing`). */
+  readonly settled: boolean;
 
   constructor(
     status: number,
-    body: { error?: string; code?: PhaseLandErrorCode; hint?: string; detail?: string; branch?: string; base?: string },
+    body: {
+      error?: string;
+      code?: PhaseLandErrorCode;
+      hint?: string;
+      detail?: string;
+      branch?: string;
+      base?: string;
+      landing?: unknown;
+    },
     fallback: string,
   ) {
     super(body.error ?? `${fallback}: ${String(status)}`);
@@ -1402,6 +1413,7 @@ export class LandError extends Error {
     this.detail = body.detail ?? '';
     this.branch = body.branch;
     this.base = body.base;
+    this.settled = body.landing !== undefined && body.landing !== null;
   }
 }
 

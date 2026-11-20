@@ -67,6 +67,9 @@ var (
 	// branch that does not exist, and deleting it would report success while the
 	// branch actually holding the commits survives (409).
 	ErrNoRunBranch = errors.New("phase has no recorded run branch")
+	// ErrNoWorktrees: the service was built without a worktree manager (the api's
+	// DB-only fallback), so it cannot ask git about a run branch.
+	ErrNoWorktrees = errors.New("phase runs have no worktree manager attached")
 )
 
 // ErrManualOnly: every criterion of the phase that is still open is a
@@ -1779,6 +1782,9 @@ func (s *Service) Cancel(phaseID int64) bool {
 // way — the UI then clears its dirty-branch banner on nothing. Same shape as
 // planrun.DeleteRunBranch, so the two run surfaces never disagree.
 func (s *Service) DeleteRunBranch(phaseID int64) (branch string, existed bool, err error) {
+	if s.Wt == nil {
+		return "", false, ErrNoWorktrees
+	}
 	info, err := s.loadPhase(phaseID)
 	if err != nil {
 		return "", false, err
@@ -1814,6 +1820,43 @@ func (s *Service) DeleteRunBranch(phaseID int64) (branch string, existed bool, e
 		log.Printf("phaserun: deleted run branch %s (phase=%d)", branch, phaseID)
 	}
 	return branch, existed, nil
+}
+
+// branchProber is the optional part of the worktree manager RunBranchGone needs
+// (*worktree.Manager implements it). Optional rather than a runcore.WorktreeManager
+// method so the read-only probe does not widen every engine's seam.
+type branchProber interface {
+	BranchPresent(repoRoot, branch string) (bool, error)
+}
+
+// RunBranchGone reports whether a phase's stamped run branch is absent from the
+// repository its run resolved to — neither a local branch nor origin/<branch>.
+// The landing poller reads it to settle a phase whose work reached the base by
+// another road (a hand-made PR, a local merge): the same rule resolveBase uses,
+// a deleted run branch is the operator saying its work is accounted for.
+// ErrNoWorktrees without a worktree manager that can probe branches
+// (branchProber); ErrNoRunBranch when none is stamped.
+func (s *Service) RunBranchGone(phaseID int64) (bool, error) {
+	prober, ok := s.Wt.(branchProber)
+	if !ok {
+		return false, ErrNoWorktrees
+	}
+	info, err := s.loadPhase(phaseID)
+	if err != nil {
+		return false, err
+	}
+	if info.RunBranch == "" {
+		return false, ErrNoRunBranch
+	}
+	root, err := s.runRoot(info)
+	if err != nil {
+		return false, err
+	}
+	present, err := prober.BranchPresent(root, info.RunBranch)
+	if err != nil {
+		return false, err
+	}
+	return !present, nil
 }
 
 // HealStale settles every epic_phases row left 'running' by a crashed or

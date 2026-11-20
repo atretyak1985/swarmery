@@ -78,6 +78,10 @@ const (
 	// row simply has no branch STAMPED on it (migration 0043), so there is nothing to
 	// delete and re-deriving a name is exactly the bug the stamp exists to prevent.
 	codeNoRunBranch = "no-run-branch"
+	// codeRunBranchGone: a land asked to push a run branch that is no longer in the
+	// repo (neither local nor origin/<branch>). When the phase is finished it was
+	// settled as merged on the spot (landpoll settle) and the body carries `landing`.
+	codeRunBranchGone = "run-branch-gone"
 
 	// Branch lifecycle — the worktree sentinels (see worktreeConflict).
 	codeBranchDirty      = "branch-dirty"
