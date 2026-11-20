@@ -5297,6 +5297,9 @@ export interface PhaseLandResponse {
 export type PhaseLandErrorCode =
   | 'phase-running'
   | 'no-run-branch'
+  /** 409: the run branch is gone from the repo. A finished phase was settled
+   *  as merged on the spot (the body then carries `landing`). */
+  | 'run-branch-gone'
   | 'push-to-base-refused'
   | 'fork-workflow-unsupported'
   | 'not-authenticated'

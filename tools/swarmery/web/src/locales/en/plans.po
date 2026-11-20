@@ -3557,6 +3557,14 @@ msgstr "the review waits on you · {id}"
 msgid "the reviewer wrote no readable kind: review block — its own words are in the doc"
 msgstr "the reviewer wrote no readable kind: review block — its own words are in the doc"
 
+#: src/pages/plans/PhaseReview.tsx
+msgid "The run branch {branch} no longer exists, so there is nothing to push — the phase is counted as landed (its work reached the base another way)."
+msgstr "The run branch {branch} no longer exists, so there is nothing to push — the phase is counted as landed (its work reached the base another way)."
+
+#: src/pages/plans/PhaseReview.tsx
+msgid "The run branch {branch} no longer exists, so there is nothing to push. The phase is not finished, so it is not counted as landed — run it again for a new branch."
+msgstr "The run branch {branch} no longer exists, so there is nothing to push. The phase is not finished, so it is not counted as landed — run it again for a new branch."
+
 #: src/pages/plans/reviewNextStep.ts
 msgid "the run branch is gone"
 msgstr "the run branch is gone"

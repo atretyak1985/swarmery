@@ -285,6 +285,33 @@ describe('PhaseReview', () => {
     });
   });
 
+  it('a gone run branch: says why and refetches only when the phase was settled as landed', async () => {
+    const { onLanded } = renderReview();
+    await screen.findByText('add line items');
+
+    api.landPhase.mockRejectedValue(
+      new LandError(409, { error: 'raw', code: 'run-branch-gone', branch: 'swarm/phase-207' }, 'land failed'),
+    );
+    fireEvent.click(button('Push'));
+    await waitFor(() => {
+      expect(screen.getByRole('alert').textContent).toContain('run it again for a new branch');
+    });
+    expect(onLanded).not.toHaveBeenCalled();
+
+    api.landPhase.mockRejectedValue(
+      new LandError(
+        409,
+        { error: 'raw', code: 'run-branch-gone', branch: 'swarm/phase-207', landing: landing({ state: 'merged' }) },
+        'land failed',
+      ),
+    );
+    fireEvent.click(button('Push'));
+    await waitFor(() => {
+      expect(screen.getByRole('alert').textContent).toContain('the phase is counted as landed');
+    });
+    expect(onLanded).toHaveBeenCalledTimes(1);
+  });
+
   it('a running phase offers no action — nothing is rendered disabled, it is just not there', async () => {
     renderReview(phase({ runState: 'running', landing: landing({ state: 'none' }) }));
     await screen.findByText('add line items');

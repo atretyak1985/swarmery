@@ -16,7 +16,9 @@
 //
 // A change request closed without merging keeps landing_state pr_open with
 // status state "closed": the operator may reopen it, and only they decide
-// what a closed PR means for the phase. The poller never deletes a branch.
+// what a closed PR means for the phase. The only branch the poller deletes is a
+// MERGED change request's local run branch (settle.go, through Branches); a
+// finished phase whose run branch is already gone is settled as merged there too.
 //
 // A change request opened outside the dashboard is discovered (land-criteria UX
 // plan, phase 4, D7/D8): each tick also asks the host, through
@@ -148,6 +150,13 @@ type Poller struct {
 	// DiscoverMax caps the phases one RunOnce asks the host to find a change
 	// request for. ≤0 ⇒ DefaultDiscoverMax.
 	DiscoverMax int
+	// Branches probes and deletes run branches (settle.go): a finished phase
+	// whose run branch is gone is settled as merged, and a merged change
+	// request's run branch is deleted. nil ⇒ neither runs.
+	Branches RunBranches
+	// SettleMax caps the phases one RunOnce probes for a gone run branch.
+	// ≤0 ⇒ DefaultSettleMax.
+	SettleMax int
 }
 
 // phaseRow is what one poll needs to know about a phase.
@@ -251,6 +260,11 @@ func (p *Poller) RunOnce(ctx context.Context) (checked, changed int, err error) 
 		if res.changed {
 			changed++
 		}
+	}
+	settled, err := p.settlePass(ctx)
+	changed += settled
+	if err != nil {
+		return checked, changed, err
 	}
 	return checked, changed, nil
 }
@@ -383,6 +397,13 @@ func (p *Poller) RefreshOne(ctx context.Context, phaseID int64) (repoprovider.Ch
 	}
 	if err != nil {
 		return repoprovider.ChangeStatus{}, "", fmt.Errorf("landpoll: load phase %d: %w", phaseID, err)
+	}
+	// A run branch that is gone has no change request to find by its name:
+	// settle it (settle.go) instead of asking the host.
+	if settled, err := p.SettleOne(ctx, phaseID); err != nil {
+		return repoprovider.ChangeStatus{}, r.landingState, err
+	} else if settled {
+		return repoprovider.ChangeStatus{}, StateMerged, nil
 	}
 	if discoverable(r) {
 		res, found, err := p.discover(ctx, r, map[string]detection{}, false)
@@ -542,6 +563,7 @@ func (p *Poller) store(r phaseRow, st repoprovider.ChangeStatus, now time.Time) 
 	if merging {
 		res.state = StateMerged
 		p.tickLand(r)
+		p.cleanupMerged(r)
 	}
 	res.changed = merging || r.landingError.Valid || statusChanged(r.status, st)
 	if res.changed {
@@ -556,18 +578,28 @@ func (p *Poller) store(r phaseRow, st repoprovider.ChangeStatus, now time.Time) 
 // doc that is gone (an archived or renamed plan) has nothing to tick. A tick
 // that leaves the doc with no open criterion hands the phase to PlanReview.
 func (p *Poller) tickLand(r phaseRow) {
+	if p.tickLandOnly(r) > 0 {
+		p.planReviewIfClosed(r)
+	}
+}
+
+// tickLandOnly is tickLand without the plan review hand-off (a settled phase has
+// no branch left to review). It returns how many criteria it ticked.
+func (p *Poller) tickLandOnly(r phaseRow) int {
 	if r.docPath == "" {
-		return
+		return 0
 	}
 	n, err := wsingest.TickCriteriaByClass(r.docPath, wsingest.ClassLand)
 	switch {
 	case err != nil && errors.Is(err, fs.ErrNotExist):
+		return 0
 	case err != nil:
 		p.logf("landpoll: phase %d (task %d) merged, but ticking its [LAND] criteria failed: %v", r.phaseID, r.taskID, err)
+		return 0
 	case n > 0:
 		p.logf("landpoll: phase %d (task %d) merged: ticked %d [LAND] criteria", r.phaseID, r.taskID, n)
-		p.planReviewIfClosed(r)
 	}
+	return n
 }
 
 // planReviewIfClosed hands r's phase to PlanReview when its doc, re-read after

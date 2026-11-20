@@ -649,6 +649,25 @@ func (m *Manager) branchExists(repoRoot, branch string) (bool, error) {
 	return false, fmt.Errorf("worktree: probe branch %s: %w: %s", branch, err, strings.TrimSpace(out))
 }
 
+// BranchPresent reports whether branch is still in repoRoot, as a local branch
+// (refs/heads/<branch>) or as its remote-tracking ref (refs/remotes/origin/<branch>).
+// Local only, no fetch: a branch pushed and deleted on the host but still tracked
+// here counts as present, which errs on the side of "not landed yet". Like
+// branchExists it tells "absent" from "git could not answer".
+func (m *Manager) BranchPresent(repoRoot, branch string) (bool, error) {
+	if ok, err := m.branchExists(repoRoot, branch); err != nil || ok {
+		return ok, err
+	}
+	out, err := m.Git.Run(repoRoot, "rev-parse", "--verify", "--quiet", "refs/remotes/origin/"+branch)
+	if err == nil {
+		return true, nil
+	}
+	if strings.TrimSpace(out) == "" {
+		return false, nil
+	}
+	return false, fmt.Errorf("worktree: probe branch origin/%s: %w: %s", branch, err, strings.TrimSpace(out))
+}
+
 // checkBranchReclaimable reports whether branch exists and is safe to delete:
 // it must live in the swarm/ namespace, must not be the repo's HEAD branch, and
 // must not be checked out in a worktree. A missing branch is (false, nil) —
