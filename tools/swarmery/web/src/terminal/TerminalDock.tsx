@@ -1,7 +1,7 @@
 // Bottom terminal dock (fusion phase 15). Hangs off ProjectWorkspaceLayout,
 // toggled by the StatusBar "Terminal" button (Fusion's bottom-bar position).
 // Owns a tab strip (each tab is one live PTY), a toolbar (font − / reset / +,
-// Clear, fullscreen, close-all), and a height-resizable drag handle. Open state,
+// Clear), and a height-resizable drag handle. Open state,
 // height, and the tab list are persisted per project in localStorage so a
 // reload restores the workspace. The heavy xterm bundle is lazy-loaded: the
 // XTerm wrapper is only fetched when the dock first renders a tab.
@@ -86,7 +86,6 @@ export function TerminalDock({
 }): JSX.Element | null {
   const [height, setHeight] = useState(() => readNum(heightKey(projectSlug), DEFAULT_HEIGHT, MIN_HEIGHT, MAX_HEIGHT));
   const [fontSize, setFontSize] = useState(() => readNum(fontKey(projectSlug), FONT_DEFAULT, FONT_MIN, FONT_MAX));
-  const [fullscreen, setFullscreen] = useState(false);
   const { t } = useLingui();
 const [statusById, setStatusById] = useState<Record<string, TermStatus>>({});
 // Why each closed tab closed, for its Restart overlay.
@@ -160,16 +159,11 @@ const [genById, setGenById] = useState<Record<string, number>>({});
       activeId: state.activeId === id ? (remaining[remaining.length - 1]?.id ?? null) : state.activeId,
     });
   };
-  const closeAll = (): void => {
-    termRefs.current.clear();
-    onChange({ open: false, tabs: [], activeId: null });
-    setFullscreen(false);
-  };
 
   // Keep the dock mounted whenever there are tabs, even while collapsed, so
   // collapsing the footer "Terminal" toggle hides the panel via CSS instead of
   // unmounting XTerm (which would close the PTY WebSocket and kill the
-  // session — see XTerm.tsx's unmount cleanup). Only closeTab/closeAll should
+  // session — see XTerm.tsx's unmount cleanup). Only closeTab should
   // actually tear the dock down. See dockView() for the pure decision.
   const view = dockView(state);
   if (!view.mount) return null;
@@ -177,32 +171,27 @@ const [genById, setGenById] = useState<Record<string, number>>({});
   // Clamp against the viewport too: the shell roots are `h-dvh overflow-hidden`
   // (App.tsx / workspace/WorkspaceShell.tsx), so a dock taller than the window
   // would push the StatusBar — which carries the toggle that closes it — out of
-  // a frame that no longer scrolls. 75vh is the bound fullscreen already uses.
-  const effHeight = fullscreen
-    ? Math.max(height, MAX_HEIGHT)
-    : Math.min(height, Math.round(window.innerHeight * 0.75));
+  // a frame that no longer scrolls.
+  const effHeight = Math.min(height, Math.round(window.innerHeight * 0.75));
 
   return (
     <div className="flex shrink-0 flex-col" hidden={view.hidden} role="region" aria-label="terminal dock">
-      {/* Resize handle: the 8px gap above the island at desk (hidden in
-          fullscreen). Below desk (D-9/D-10/D-11 gate at --breakpoint-desk,
-          index.css:592) the dock isn't an island yet, so this stays the
-          thin h-1 strip main always had. */}
-      {!fullscreen && (
-        <div
-          onPointerDown={onHandleDown}
-          onPointerMove={onHandleMove}
-          onPointerUp={onHandleUp}
-          role="separator"
-          aria-orientation="horizontal"
-          aria-label="resize terminal"
-          className="h-1 shrink-0 cursor-row-resize bg-transparent hover:bg-brand/40 desk:h-2"
-        />
-      )}
+      {/* Resize handle: the 8px gap above the island at desk. Below desk
+          (D-9/D-10/D-11 gate at --breakpoint-desk, index.css:592) the dock
+          isn't an island yet, so this stays the thin h-1 strip main always had. */}
+      <div
+        onPointerDown={onHandleDown}
+        onPointerMove={onHandleMove}
+        onPointerUp={onHandleUp}
+        role="separator"
+        aria-orientation="horizontal"
+        aria-label="resize terminal"
+        className="h-1 shrink-0 cursor-row-resize bg-transparent hover:bg-brand/40 desk:h-2"
+      />
 
       <div
         className="flex shrink-0 flex-col overflow-hidden border-t border-line bg-bg desk:rounded-xl desk:border"
-        style={{ height: fullscreen ? '75vh' : effHeight }}
+        style={{ height: effHeight }}
       >
         {/* Header: the dock's own tone, a mono "terminal" caption, then the tab
             strip + toolbar. Below desk this matches main's plain header
@@ -257,7 +246,7 @@ const [genById, setGenById] = useState<Record<string, number>>({});
             </button>
           </div>
 
-          {/* Toolbar: Claude Code, font − / size / +, Clear, fullscreen, close-all. */}
+          {/* Toolbar: Claude Code, font − / size / +, Clear. */}
           <div className="flex shrink-0 items-center gap-1 font-mono text-[10.5px] text-ink-dim">
             <button
               type="button"
@@ -293,22 +282,6 @@ const [genById, setGenById] = useState<Record<string, number>>({});
               className="rounded border border-line px-2 py-0.5 transition-colors hover:text-ink"
             >
               Clear
-            </button>
-            <button
-              type="button"
-              aria-label={fullscreen ? 'restore terminal' : 'maximize terminal'}
-              onClick={() => setFullscreen((v) => !v)}
-              className="rounded border border-line px-1.5 py-0.5 transition-colors hover:text-ink"
-            >
-              {fullscreen ? '▽' : '△'}
-            </button>
-            <button
-              type="button"
-              aria-label="close all terminals"
-              onClick={closeAll}
-              className="rounded border border-line px-2 py-0.5 transition-colors hover:text-ink"
-            >
-              Close
             </button>
           </div>
         </div>

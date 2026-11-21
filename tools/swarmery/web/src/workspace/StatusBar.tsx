@@ -13,7 +13,6 @@ import { useHealth, versionLabel, versionTitle } from '../lib/health';
 import { projectScopeKey } from './scopeKey';
 import type { BoardCounts } from './boardModel';
 import { Chevron } from '../components/Chevron';
-import { ClaudeCodeLabel } from '../terminal/TerminalDock';
 
 const POLL_MS = 15_000;
 
@@ -26,7 +25,6 @@ export function StatusBar({
   projectId,
   terminalOpen = false,
   onToggleTerminal,
-  onOpenClaude,
 }: {
   counts: BoardCounts;
   projectId: number | null;
@@ -35,9 +33,6 @@ export function StatusBar({
   /** Toggles the bottom terminal dock; omitted (button hidden) until the
    * project path resolves. */
   onToggleTerminal?: (() => void) | undefined;
-  /** Opens a new dock tab running `claude` in the project root; omitted
-   * (button hidden) until the project path resolves. */
-  onOpenClaude?: (() => void) | undefined;
 }): JSX.Element {
   const { t } = useLingui();
   const { health } = useHealth();
@@ -102,17 +97,6 @@ export function StatusBar({
       <VcsAuthBanner projectId={projectId} placement="status" />
 
       <span className="ml-auto flex items-center gap-3">
-        {onOpenClaude !== undefined && (
-          <button
-            type="button"
-            onClick={onOpenClaude}
-            aria-label={t`open Claude Code in a new terminal`}
-            data-tip={t`Open Claude Code in a new terminal tab`}
-            className="flex items-center gap-1 rounded-md border border-line px-2 py-0.5 text-[10px] text-ink transition-colors hover:border-line-strong"
-          >
-            <ClaudeCodeLabel />
-          </button>
-        )}
         {onToggleTerminal !== undefined && (
           <button
             type="button"

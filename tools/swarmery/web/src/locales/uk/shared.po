@@ -3133,14 +3133,6 @@ msgstr "Відкрити {verificationUri}"
 msgid "open a terminal in this card's worktree"
 msgstr "відкрити термінал у worktree цієї картки"
 
-#: src/workspace/StatusBar.tsx
-msgid "open Claude Code in a new terminal"
-msgstr "відкрити Claude Code у новому терміналі"
-
-#: src/workspace/StatusBar.tsx
-msgid "Open Claude Code in a new terminal tab"
-msgstr "Відкрити Claude Code у новій вкладці терміналу"
-
 #: src/components/usage/UsageConnect.tsx
 msgid "open login terminal"
 msgstr "відкрити термінал входу"
