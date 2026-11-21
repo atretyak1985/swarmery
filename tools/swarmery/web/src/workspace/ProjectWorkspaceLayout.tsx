@@ -19,7 +19,6 @@ import { useFillRoute } from '../lib/fillRoute';
 import {
   TerminalDock,
   emptyDock,
-  openClaudeTerminal,
   openWorktreeTerminal,
   toggleDock,
   type DockState,
@@ -105,10 +104,6 @@ function WorkspaceInner(): JSX.Element {
   const toggleTerminal = useCallback(() => {
     setDock((prev) => toggleDock(prev, projectPath));
   }, [projectPath]);
-  // StatusBar "Claude Code": a new project-root tab that runs `claude`.
-  const openClaude = useCallback(() => {
-    setDock((prev) => openClaudeTerminal(prev, projectPath));
-  }, [projectPath]);
   const openWorktree = useCallback((taskLabel: string, worktreePath: string) => {
     setDock((prev) => openWorktreeTerminal(prev, taskLabel, worktreePath));
   }, []);
@@ -157,7 +152,6 @@ function WorkspaceInner(): JSX.Element {
             projectId={project?.id ?? null}
             terminalOpen={dock.open && dock.tabs.length > 0}
             onToggleTerminal={projectPath === '' ? undefined : toggleTerminal}
-            onOpenClaude={projectPath === '' ? undefined : openClaude}
           />
         </div>
       </div>
