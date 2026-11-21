@@ -623,19 +623,24 @@ type phaseCols struct{ seq, name, doc, dep, repo int }
 // `Repo` is matched EXACTLY (plus Repos/Repository): plans in the wild also carry
 // a "Repo area" column that names a subsystem, not a checkout, and treating that
 // as a run root would send a run into a directory that does not exist.
+//
+// The Ukrainian names are accepted beside the English ones: a plan written in
+// Ukrainian titles its columns in Ukrainian, and a header this function does not
+// know drops the whole table — every phase then indexes with no dependencies and
+// a dependent phase is started on the base without its dependencies' work.
 func phaseTableCols(cells []string) (cols phaseCols, ok bool) {
 	cols = phaseCols{seq: -1, name: -1, doc: -1, dep: -1, repo: -1}
 	for i, c := range cells {
 		switch h := strings.ToLower(strings.TrimSpace(c)); {
-		case h == "#" || h == "seq":
+		case h == "#" || h == "seq" || h == "№":
 			cols.seq = i
-		case h == "phase" || h == "name":
+		case h == "phase" || h == "name" || h == "фаза" || h == "назва":
 			cols.name = i
-		case h == "doc" || h == "file":
+		case h == "doc" || h == "file" || h == "документ" || h == "док" || h == "файл":
 			cols.doc = i
-		case h == "repo" || h == "repos" || h == "repository":
+		case h == "repo" || h == "repos" || h == "repository" || h == "репо" || h == "репозиторій":
 			cols.repo = i
-		case strings.HasPrefix(h, "depends"):
+		case strings.HasPrefix(h, "depends") || strings.HasPrefix(h, "залежить"):
 			cols.dep = i
 		}
 	}

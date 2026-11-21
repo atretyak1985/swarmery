@@ -188,6 +188,30 @@ func TestPhaseTableCols(t *testing.T) {
 	})
 }
 
+// A plan written in Ukrainian names its columns in Ukrainian. Unrecognised, the
+// table was skipped, every phase indexed with no dependencies, and a phase whose
+// dependencies had not merged was started on main — with none of their work in it.
+func TestParsePlanTableUkrainianHeader(t *testing.T) {
+	readme := "# Епік\n\n| # | Фаза | Документ | Репо | Залежить від |\n|---|---|---|---|---|\n" +
+		"| 1 | Дії угоди | `phase-1-deal-actions-host.md` | admin | — |\n" +
+		"| 2 | Борд | `phase-2-board-view.md` | admin | — |\n" +
+		"| 3 | Перетягування | `phase-3-board-moves.md` | admin | 1, 2 |\n" +
+		"| 4 | Quality gate | `phase-4-quality-gate.md` | admin | 3 |\n"
+	phases := parsePlanTable(readme)
+	if len(phases) != 4 {
+		t.Fatalf("phases = %d, want 4", len(phases))
+	}
+	if got := phases[2].dependsOn; len(got) != 2 || got[0] != 1 || got[1] != 2 {
+		t.Errorf("phase 3 dependsOn = %v, want [1 2]", got)
+	}
+	if got := phases[3].dependsOn; len(got) != 1 || got[0] != 3 {
+		t.Errorf("phase 4 dependsOn = %v, want [3]", got)
+	}
+	if phases[0].name != "Дії угоди" || phases[0].repo != "admin" {
+		t.Errorf("phase 1 = %+v", phases[0])
+	}
+}
+
 func TestParseDocRepo(t *testing.T) {
 	cases := []struct{ name, in, want string }{
 		{
