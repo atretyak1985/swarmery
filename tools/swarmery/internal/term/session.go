@@ -1,9 +1,10 @@
 // Package term runs interactive PTY sessions for the embedded terminal
 // (fusion phase 15). A Manager owns every live PTY, enforces a hard concurrency
 // cap and an idle timeout, and guarantees no orphaned shell processes: each PTY
-// is started in its own process group and, on close, the whole group is signalled
-// (kill(-pgid)) after a short grace so children spawned by the shell are reaped
-// too — the same exec+pty gotcha the phase-7 executor hit.
+// is started in its own process group and, on close, that group and the job in
+// the terminal's foreground (a group of its own under a job-control shell) are
+// signalled, then SIGKILLed after a short grace, so children spawned by the
+// shell are reaped too — the same exec+pty gotcha the phase-7 executor hit.
 //
 // The OS-level PTY spawn sits behind the ptyStarter interface so unit tests can
 // drive the full lifecycle against a stub command without spawning a real shell.
@@ -20,6 +21,7 @@ import (
 	"time"
 
 	"github.com/creack/pty"
+	"golang.org/x/sys/unix"
 )
 
 const (
@@ -65,6 +67,14 @@ type process interface {
 	SignalGroup(sig syscall.Signal) error
 	// Wait blocks until the child exits.
 	Wait() error
+	// ForegroundJob returns the process group in the PTY's foreground when it
+	// is not the shell's own, or 0. A job-control shell (bash, zsh) runs each
+	// command it starts — a `claude` typed into the dock — in a group of its
+	// own, which kill(-shell) never reaches.
+	ForegroundJob() int
+	// SignalJob sends sig to process group pgid; sig 0 probes it, and an error
+	// means the group is gone.
+	SignalJob(pgid int, sig syscall.Signal) error
 }
 
 // ptyStarter spawns a shell attached to a PTY. The production implementation is
@@ -159,11 +169,26 @@ func (s *Session) closeWith(r CloseReason) {
 }
 
 // Close signals the PTY's process group (SIGHUP, then SIGKILL after the grace)
-// and closes the master. Idempotent.
+// and the job in its foreground, then closes the master. Idempotent.
+//
+// The foreground job needs its own signals: the shell leaves it in a separate
+// process group, and once the shell has exited on the hang-up, a job that
+// outlived it (claude does) is left on a dead terminal, stopped by SIGTTIN or
+// SIGTTOU at its next read or write — a process that never exits and never
+// answers.
 func (s *Session) Close() {
 	s.closeOnce.Do(func() {
+		// Read before the hang-up: once the shell is gone the PTY no longer names it.
+		job := s.proc.ForegroundJob()
+		deadline := time.Now().Add(killGrace)
+
 		// Hang up the controlling terminal first so a well-behaved shell exits.
 		_ = s.proc.SignalGroup(syscall.SIGHUP)
+		if job > 0 {
+			_ = s.proc.SignalJob(job, syscall.SIGHUP)
+			// A stopped job acts on the hang-up only once it runs again.
+			_ = s.proc.SignalJob(job, syscall.SIGCONT)
+		}
 
 		done := make(chan struct{})
 		go func() {
@@ -172,14 +197,31 @@ func (s *Session) Close() {
 		}()
 		select {
 		case <-done:
-		case <-time.After(killGrace):
+		case <-time.After(time.Until(deadline)):
 			// Grace elapsed — SIGKILL the whole group so no child survives.
 			_ = s.proc.SignalGroup(syscall.SIGKILL)
 			<-done
 		}
+		if job > 0 {
+			s.reapJob(job, deadline)
+		}
 		_ = s.pty.Close()
 		close(s.closed)
 	})
+}
+
+// jobPollInterval is how often Close checks whether the foreground job left.
+const jobPollInterval = 50 * time.Millisecond
+
+// reapJob waits until the deadline for process group pgid to go, then SIGKILLs it.
+func (s *Session) reapJob(pgid int, deadline time.Time) {
+	for time.Now().Before(deadline) {
+		if s.proc.SignalJob(pgid, 0) != nil {
+			return
+		}
+		time.Sleep(jobPollInterval)
+	}
+	_ = s.proc.SignalJob(pgid, syscall.SIGKILL)
 }
 
 // Config tunes a Manager. Zero values fall back to the package defaults.
@@ -367,8 +409,12 @@ func (m *Manager) CloseAll() {
 // osPTYStarter spawns a login shell on a real PTY in its own process group.
 type osPTYStarter struct{}
 
-// osProcess wraps an *exec.Cmd so the whole process group can be signalled.
-type osProcess struct{ cmd *exec.Cmd }
+// osProcess wraps an *exec.Cmd so the whole process group can be signalled,
+// and the PTY master it runs on so the terminal's foreground job can be read.
+type osProcess struct {
+	cmd *exec.Cmd
+	tty *os.File
+}
 
 func (p osProcess) SignalGroup(sig syscall.Signal) error {
 	if p.cmd.Process == nil {
@@ -380,6 +426,32 @@ func (p osProcess) SignalGroup(sig syscall.Signal) error {
 }
 
 func (p osProcess) Wait() error { return p.cmd.Wait() }
+
+func (p osProcess) ForegroundJob() int {
+	if p.cmd.Process == nil || p.tty == nil {
+		return 0
+	}
+	// SyscallConn, not Fd: Fd would switch the master to blocking mode.
+	rc, err := p.tty.SyscallConn()
+	if err != nil {
+		return 0
+	}
+	pgid, ierr := 0, error(nil)
+	if err := rc.Control(func(fd uintptr) { pgid, ierr = unix.IoctlGetInt(int(fd), unix.TIOCGPGRP) }); err != nil || ierr != nil {
+		return 0
+	}
+	if pgid <= 0 || pgid == p.cmd.Process.Pid {
+		return 0
+	}
+	return pgid
+}
+
+func (p osProcess) SignalJob(pgid int, sig syscall.Signal) error {
+	if pgid <= 0 {
+		return syscall.ESRCH
+	}
+	return syscall.Kill(-pgid, sig)
+}
 
 // ptyEnv composes the child environment for a dock session: the caller's whole
 // environment (nil ⇒ the daemon's own) plus the terminal type the frontend's
@@ -422,11 +494,12 @@ func (osPTYStarter) start(shell, cwd string, env []string, cols, rows uint16) (p
 	cmd.Dir = cwd
 	cmd.Env = ptyEnv(env)
 	// pty.StartWithSize forces Setsid=true + Setctty=true, so the child becomes a
-	// session AND process-group leader (pgid == pid). kill(-pid) therefore reaps
-	// the shell AND every descendant it spawned — no orphaned processes.
+	// session AND process-group leader (pgid == pid). kill(-pid) reaches the
+	// shell and what stays in its group; a job-control shell moves each job it
+	// starts into a group of its own, which Close reaches through ForegroundJob.
 	f, err := pty.StartWithSize(cmd, &pty.Winsize{Cols: cols, Rows: rows})
 	if err != nil {
 		return nil, nil, err
 	}
-	return f, osProcess{cmd: cmd}, nil
+	return f, osProcess{cmd: cmd, tty: f}, nil
 }
