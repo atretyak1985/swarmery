@@ -18,6 +18,29 @@ export function heldByDecision(p: EpicPhase): boolean {
   return p.decisionHold != null || p.guardDecision != null || p.reviewDecision != null;
 }
 
+/** A report that opens by declaring the phase blocked: "**Blocked — …**",
+ * "**Status: PHASE BLOCKED — …**", "Заблоковано: …". Only the first line counts —
+ * a report that ships work and mentions a blocker further down is not a refusal. */
+const BLOCKED_REPORT_RE = /\bblocked\b|заблоковано/i;
+
+/** The executor refused the phase on purpose and wrote why in its Completion
+ * Report, and nobody has touched the doc since the run ended.
+ *
+ * A retry re-runs the SAME doc, so it reaches the same refusal: offering "↻ retry"
+ * here sends the operator round a loop that spends a run per lap. The ledger shows
+ * the reason instead. An edit to the doc after the run (the operator fixing what
+ * the report names) brings the retry back — the doc's mtime against the run's end
+ * is the signal, because the executor writes its report before the run ends. */
+export function executorBlocked(p: EpicPhase): boolean {
+  if (p.runOutcome !== 'noop') return false;
+  const first = (p.completionReport ?? '').split('\n').find((l) => l.trim() !== '') ?? '';
+  if (!BLOCKED_REPORT_RE.test(first)) return false;
+  if (p.docUpdatedAt !== null && p.runEndedAt !== null) {
+    return new Date(p.docUpdatedAt).getTime() <= new Date(p.runEndedAt).getTime();
+  }
+  return true;
+}
+
 /** Where the phase is. What waits on the operator outranks everything, because a
  * done phase can still hold an open review decision. */
 export function phaseStage(p: EpicPhase, status: PhaseStatus): PhaseStage {
