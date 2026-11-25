@@ -22,7 +22,10 @@ export interface TermTab {
    * A command typed into the shell once its PTY connects (e.g. `claude` for a
    * Claude Code tab). It goes through the shell like a keystroke, so the
    * daemon's PTY protocol is unchanged and exiting the command drops back to
-   * the shell. It replays when a reload restores the tab.
+   * the shell. It runs only on an explicit action in this page load (opening
+   * the tab, Restart): a tab restored by a reload or a remount opens a plain
+   * shell with a Start button instead, because every automatic replay started
+   * a new, empty Claude session.
    */
   run?: string;
 }
@@ -92,6 +95,14 @@ const [statusById, setStatusById] = useState<Record<string, TermStatus>>({});
 const [closedById, setClosedById] = useState<Record<string, TermCloseKind>>({});
 // Bumped by Restart: a new key remounts the tab's XTerm, which opens a new PTY.
 const [genById, setGenById] = useState<Record<string, number>>({});
+  // Tabs whose `run` command types itself on the next PTY connect: armed only
+  // by an explicit action here, disarmed once that connect opens.
+  const [armed, setArmed] = useState<ReadonlySet<string>>(() => new Set());
+  // Tabs whose command has run in this page load, so the Start strip hides.
+  const [started, setStarted] = useState<ReadonlySet<string>>(() => new Set());
+  // setStatus is a stable callback; it reads the current arms through this.
+  const armedRef = useRef(armed);
+  armedRef.current = armed;
   const termRefs = useRef<Map<string, XTermHandle | null>>(new Map());
   const dragRef = useRef<{ startY: number; startH: number } | null>(null);
 
@@ -106,12 +117,28 @@ const [genById, setGenById] = useState<Record<string, number>>({});
   const setStatus = useCallback((id: string, s: TermStatus, closed?: TermCloseKind) => {
     setStatusById((prev) => (prev[id] === s ? prev : { ...prev, [id]: s }));
     if (closed !== undefined) setClosedById((prev) => ({ ...prev, [id]: closed }));
+    if (s === 'open') {
+      // XTerm captured the armed command before reporting `open`; drop the arm
+      // so a later remount of this tab does not type it again.
+      if (armedRef.current.has(id)) {
+        setArmed((prev) => withoutId(prev, id));
+        setStarted((prev) => withId(prev, id));
+      }
+    }
   }, []);
 
-  /** Start a fresh PTY in a closed tab (same cwd, same command). */
+  /** Start a fresh PTY in a closed tab (same cwd, same command — run again on purpose). */
   const restartTab = (id: string): void => {
     setClosedById(({ [id]: _gone, ...rest }) => rest);
+    setArmed((prev) => withId(prev, id));
     setGenById((prev) => ({ ...prev, [id]: (prev[id] ?? 0) + 1 }));
+  };
+
+  /** Type a restored tab's command into its live shell (the Start strip). */
+  const startRun = (tab: TermTab): void => {
+    if (tab.run === undefined || tab.run === '') return;
+    termRefs.current.get(tab.id)?.send(`${tab.run}\r`);
+    setStarted((prev) => withId(prev, tab.id));
   };
 
   // Drag-to-resize: track the pointer on the handle; taller = drag up.
@@ -148,7 +175,12 @@ const [genById, setGenById] = useState<Record<string, number>>({});
   const newClaudeTab = (): void => {
     const cwd = projectPath !== '' ? projectPath : (state.tabs[0]?.cwd ?? '');
     if (cwd === '') return;
-    onChange(openClaudeTerminal(state, cwd));
+    const next = openClaudeTerminal(state, cwd);
+    if (next.activeId !== null) {
+      const id = next.activeId;
+      setArmed((prev) => withId(prev, id));
+    }
+    onChange(next);
   };
   const closeTab = (id: string): void => {
     const remaining = state.tabs.filter((t) => t.id !== id);
@@ -178,7 +210,8 @@ const [genById, setGenById] = useState<Record<string, number>>({});
     <div className="flex shrink-0 flex-col" hidden={view.hidden} role="region" aria-label="terminal dock">
       {/* Resize handle: the 8px gap above the island at desk. Below desk
           (D-9/D-10/D-11 gate at --breakpoint-desk, index.css:592) the dock
-          isn't an island yet, so this stays the thin h-1 strip main always had. */}
+          isn't an island yet, so this stays the thin h-1 strip main always had.
+          The whole gap stays the hit area; hover only paints a 1px centred line. */}
       <div
         onPointerDown={onHandleDown}
         onPointerMove={onHandleMove}
@@ -186,7 +219,7 @@ const [genById, setGenById] = useState<Record<string, number>>({});
         role="separator"
         aria-orientation="horizontal"
         aria-label="resize terminal"
-        className="h-1 shrink-0 cursor-row-resize bg-transparent hover:bg-brand/40 desk:h-2"
+        className="relative h-1 shrink-0 cursor-row-resize before:absolute before:inset-x-0 before:top-1/2 before:h-px before:-translate-y-1/2 before:bg-transparent hover:before:bg-brand/60 desk:h-2"
       />
 
       <div
@@ -294,6 +327,12 @@ const [genById, setGenById] = useState<Record<string, number>>({});
           >
             {state.tabs.map((tab) => {
               const closed = statusById[tab.id] === 'closed' ? closedById[tab.id] : undefined;
+              const awaitingStart =
+                statusById[tab.id] === 'open' &&
+                tab.run !== undefined &&
+                tab.run !== '' &&
+                !armed.has(tab.id) &&
+                !started.has(tab.id);
               return (
                 <div
                   key={tab.id}
@@ -307,7 +346,7 @@ const [genById, setGenById] = useState<Record<string, number>>({});
                       termRefs.current.set(tab.id, h);
                     }}
                     cwd={tab.cwd}
-                    initialInput={tab.run}
+                    initialInput={armed.has(tab.id) ? tab.run : undefined}
                     fontSize={fontSize}
                     onStatus={(s, why) => setStatus(tab.id, s, why)}
                   />
@@ -326,6 +365,31 @@ const [genById, setGenById] = useState<Record<string, number>>({});
                       </button>
                     </div>
                   )}
+                  {awaitingStart && (
+                    <div
+                      role="status"
+                      className="absolute inset-x-3 bottom-3 flex items-center gap-3 rounded-md border border-line bg-surface2 px-3 py-2 font-mono text-[11px] text-ink"
+                    >
+                      <span className="min-w-0 flex-1">
+                        <Trans>Restored after a reload — the command is not started, so no empty session is created.</Trans>
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => startRun(tab)}
+                        className="shrink-0 rounded border border-line-strong px-2 py-0.5 text-ink transition-colors hover:border-brand hover:text-brand"
+                      >
+                        {tab.run === CLAUDE_COMMAND ? <Trans>Start Claude Code</Trans> : <Trans>Run</Trans>}
+                      </button>
+                      <button
+                        type="button"
+                        aria-label={t`dismiss`}
+                        onClick={() => setStarted((prev) => withId(prev, tab.id))}
+                        className="shrink-0 text-ink-faint transition-colors hover:text-ink"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  )}
                 </div>
               );
             })}
@@ -337,6 +401,15 @@ const [genById, setGenById] = useState<Record<string, number>>({});
       </div>
     </div>
   );
+}
+
+function withId(set: ReadonlySet<string>, id: string): ReadonlySet<string> {
+  return set.has(id) ? set : new Set([...set, id]);
+}
+function withoutId(set: ReadonlySet<string>, id: string): ReadonlySet<string> {
+  const next = new Set(set);
+  next.delete(id);
+  return next;
 }
 
 /** Build the initial (empty, closed) dock state. */
