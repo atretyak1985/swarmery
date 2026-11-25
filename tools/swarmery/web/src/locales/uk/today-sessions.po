@@ -2259,8 +2259,8 @@ msgid "session is running in a terminal — a message is delivered when the curr
 msgstr "сесія працює в терміналі — повідомлення буде доставлено, щойно завершиться поточний хід."
 
 #: src/pages/detail/CommandInput.tsx
-msgid "session is running in a terminal without link control — turn on swarmery-link's \"control\" option, or stop the process from the ⋯ menu above to take over and continue the conversation here."
-msgstr "сесія працює в терміналі без керування через link. Увімкніть опцію «control» у swarmery-link або зупиніть процес через меню ⋯ вгорі, щоб перейняти сесію й продовжити розмову тут."
+msgid "session is running in a terminal without link control — turn on swarmery-link's \"control\" option (it only takes effect for sessions started after that), or stop the process from the ⋯ menu above to take over and continue the conversation here."
+msgstr "сесія працює в терміналі без керування через link. Увімкніть опцію «control» у swarmery-link (вона діє лише для сесій, запущених після цього) або зупиніть процес через меню ⋯ вгорі, щоб перейняти сесію й продовжити розмову тут."
 
 #: src/pages/detail/SessionPane.tsx
 msgid "session outcome"
@@ -2603,6 +2603,10 @@ msgstr "Це розгортання в продакшн: підтвердьте 
 #: src/pages/detail/SessionRail.tsx
 msgid "this session {spent}"
 msgstr "ця сесія {spent}"
+
+#: src/pages/detail/CommandInput.tsx
+msgid "this session's terminal was closed and its process stopped without it. Send a message — the dashboard will take the session over."
+msgstr "термінал цієї сесії закрито, а процес зупинився без нього. Надішліть повідомлення — дашборд перейме сесію."
 
 #: src/pages/ProjectOverview.tsx
 msgid "This week"

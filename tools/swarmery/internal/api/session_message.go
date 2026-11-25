@@ -5,11 +5,13 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log"
 	"net/http"
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/claudebin"
@@ -120,20 +122,22 @@ func (h *Handler) PostSessionMessage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var (
-		sessionUUID string
-		procState   sql.NullString
-		cwd         sql.NullString
-		account     sql.NullString
-		branch      sql.NullString
-		repoRoot    sql.NullString
+		sessionUUID   string
+		procState     sql.NullString
+		cwd           sql.NullString
+		account       sql.NullString
+		branch        sql.NullString
+		repoRoot      sql.NullString
+		pid           sql.NullInt64
+		procStartedAt sql.NullString
 	)
 	// git_branch and the project path ride along for the worktree recovery below:
 	// a finished run's cwd is gone, but its branch still holds the work.
 	err = h.DB.QueryRow(
-		`SELECT s.session_uuid, s.proc_state, s.cwd, s.account, s.git_branch, p.path
+		`SELECT s.session_uuid, s.proc_state, s.cwd, s.account, s.git_branch, p.path, s.pid, s.proc_started_at
 		   FROM sessions s JOIN projects p ON p.id = s.project_id
 		  WHERE s.id = ?`, id,
-	).Scan(&sessionUUID, &procState, &cwd, &account, &branch, &repoRoot)
+	).Scan(&sessionUUID, &procState, &cwd, &account, &branch, &repoRoot, &pid, &procStartedAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		http.Error(w, `{"error":"session not found"}`, http.StatusNotFound)
 		return
@@ -152,6 +156,19 @@ func (h *Handler) PostSessionMessage(w http.ResponseWriter, r *http.Request) {
 	if procState.String == procwatch.StateRunning || procState.String == procwatch.StateOrphaned {
 		h.sendToLiveSession(w, r, id, text)
 		return
+	}
+	// detached: the terminal that owned this process is gone and it is stopped
+	// (ps STAT contains T) — SIGTERM is never delivered to a stopped process
+	// (it would only take effect after a SIGCONT that never comes), so the
+	// first message from the composer takes the session over: verify the PID
+	// is still the exact claude process recorded, SIGKILL it, wait for it to
+	// actually exit, then fall through into the ordinary headless-resume path
+	// below exactly as a dead/idle session would.
+	if procState.String == procwatch.StateDetached {
+		if err := h.takeOverDetached(id, sessionUUID, pid, procStartedAt); err != nil {
+			writeClientErr(w, http.StatusConflict, err.Error())
+			return
+		}
 	}
 	if !cwd.Valid || strings.TrimSpace(cwd.String) == "" {
 		http.Error(w, `{"error":"session has no known working directory to resume in"}`, http.StatusConflict)
@@ -186,6 +203,56 @@ func (h *Handler) PostSessionMessage(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusAccepted)
 	_ = json.NewEncoder(w).Encode(map[string]string{"status": "started"})
+}
+
+// detachedTakeoverTimeout is how long takeOverDetached waits for a SIGKILLed
+// detached process to actually exit before giving up and refusing the message
+// (detachedTakeoverPoll is the polling interval against killProcInfo). Vars,
+// not consts, so a test can shrink both rather than spend 3 real seconds
+// proving the "never exits" branch refuses.
+var (
+	detachedTakeoverTimeout = 3 * time.Second
+	detachedTakeoverPoll    = 50 * time.Millisecond
+)
+
+// takeOverDetached kills a session's detached process (identity-verified,
+// prockill.go's killVerifiedClaude) and waits for it to exit, so the caller
+// can fall through into the ordinary headless-resume path right after —
+// continuing the SAME conversation rather than leaving it stranded behind a
+// terminal that no longer exists.
+//
+// Unlike KillSession this marks the row 'completed', not 'killed': 'killed' is
+// terminal for ingest (session_message.go's own doc comment on sendToLiveSession,
+// prockill.go's hookSessionStart), and the whole point of a takeover is that the
+// conversation keeps going — the resume this unblocks is a NEW headless process
+// appending to the same transcript, which ingest must still track normally.
+func (h *Handler) takeOverDetached(id int64, sessionUUID string, pid sql.NullInt64, procStartedAt sql.NullString) error {
+	if !pid.Valid || pid.Int64 <= 0 {
+		return errors.New("could not take over: session has no known PID")
+	}
+	if err := killVerifiedClaude(int(pid.Int64), procStartedAt.String, syscall.SIGKILL); err != nil {
+		return fmt.Errorf("could not take over: %w", err)
+	}
+	deadline := time.Now().Add(detachedTakeoverTimeout)
+	for {
+		info, infoErr := killProcInfo(int(pid.Int64))
+		if infoErr == nil && info == nil {
+			break // gone
+		}
+		if !time.Now().Before(deadline) {
+			return fmt.Errorf("could not take over: process %d is still alive", pid.Int64)
+		}
+		time.Sleep(detachedTakeoverPoll)
+	}
+	now := time.Now().UTC().Format(time.RFC3339)
+	if _, err := h.DB.Exec(
+		`UPDATE sessions SET status = 'completed', proc_state = ?, proc_checked_at = ? WHERE id = ?`,
+		procwatch.StateDead, now, id); err != nil {
+		log.Printf("session_message: mark session %d dead after takeover: %v", id, err)
+	}
+	publishSessionUpdated(id)
+	log.Printf("session: took over detached session %s (pid %d)", sessionUUID, pid.Int64)
+	return nil
 }
 
 // errNoLiveChannel is the 409 for a live terminal process nothing can reach: the

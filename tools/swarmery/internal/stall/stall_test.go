@@ -67,11 +67,17 @@ func (f *fixture) phase(seq int, playbook string) (id int64, docPath string) {
 
 // session plants a sessions row; lastTurn > 0 adds one assistant turn ending then.
 func (f *fixture) session(uuid, status string, lastTurn time.Duration) int64 {
+	return f.sessionWithProcState(uuid, status, "", lastTurn)
+}
+
+// sessionWithProcState is session plus an explicit proc_state — for the
+// detached-takes-priority-over-no-turns rule, which reads proc_state, not status.
+func (f *fixture) sessionWithProcState(uuid, status, procState string, lastTurn time.Duration) int64 {
 	f.t.Helper()
 	f.nextID++
 	id := f.nextID
-	f.exec(`INSERT INTO sessions(id, project_id, session_uuid, status, started_at, ended_at)
-		VALUES(?, 1, ?, ?, ?, ?)`, id, uuid, status, ago(2*time.Hour), ago(lastTurn))
+	f.exec(`INSERT INTO sessions(id, project_id, session_uuid, status, proc_state, started_at, ended_at)
+		VALUES(?, 1, ?, ?, ?, ?, ?)`, id, uuid, status, procState, ago(2*time.Hour), ago(lastTurn))
 	if lastTurn > 0 {
 		f.exec(`INSERT INTO turns(session_id, seq, role, started_at, ended_at) VALUES(?, 1, 'assistant', ?, ?)`,
 			id, ago(lastTurn+time.Minute), ago(lastTurn))
@@ -158,6 +164,15 @@ func TestDetect(t *testing.T) {
 				id, _ := f.phase(1, "")
 				f.running(id, "exec-1", time.Hour)
 				f.session("exec-1", "idle", 10*time.Minute)
+				return 0
+			},
+		},
+		{
+			name: "executor detached (terminal closed) and silent 25 min → NOT a no-turns stall",
+			setup: func(f *fixture) int64 {
+				id, _ := f.phase(1, "")
+				f.running(id, "exec-1", time.Hour)
+				f.sessionWithProcState("exec-1", "idle", "detached", 25*time.Minute)
 				return 0
 			},
 		},

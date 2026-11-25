@@ -45,6 +45,28 @@ func (OsProvider) IsOrphaned(pid int) (bool, error) {
 	return ppid == 1 || tty == "??" || tty == "", nil
 }
 
+// IsDetached reports whether pid is stopped (ps STAT contains "T") with no
+// controlling tty. A stopped process that still has a live tty (Ctrl+Z in an
+// ordinary terminal) is reachable with `fg` and is not detached.
+func (OsProvider) IsDetached(pid int) (bool, error) {
+	out, err := exec.Command("ps", "-p", strconv.Itoa(pid), "-o", "stat=,tty=").Output()
+	if err != nil {
+		return false, nil
+	}
+	fields := strings.Fields(string(bytes.TrimSpace(out)))
+	if len(fields) < 2 {
+		return false, nil
+	}
+	return isDetachedStat(fields[0], fields[1]), nil
+}
+
+// isDetachedStat is the pure classification `ps -o stat=,tty=` is reduced to —
+// factored out so the STAT/tty table is unit-testable without shelling out.
+func isDetachedStat(stat, tty string) bool {
+	noTTY := tty == "??" || tty == ""
+	return strings.Contains(stat, "T") && noTTY
+}
+
 func (OsProvider) MatchByDir(dir string) ([]int, error) {
 	// Step 1: find PIDs of processes whose command contains "claude"
 	out, err := exec.Command("ps", "-A", "-o", "pid=,comm=").Output()

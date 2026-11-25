@@ -1,17 +1,19 @@
 import type { Session } from '../api/types';
 import { ExplainPair } from './Explain';
 
-type BadgeKind = 'orphaned' | 'dead';
+type BadgeKind = 'orphaned' | 'detached' | 'dead';
 
 /** Derive the visible badge kind from session fields. */
 export function procBadgeKind(session: Session): BadgeKind | null {
   if (session.procState === 'dead') return 'dead';
+  if (session.procState === 'detached') return 'detached';
   if (session.procState === 'orphaned') return 'orphaned';
   return null;
 }
 
 const BADGE_STYLES: Record<BadgeKind, string> = {
   orphaned: 'border-amber-500/40 bg-amber-500/10 text-amber-500',
+  detached: 'border-amber-500/40 bg-amber-500/10 text-amber-500',
   dead: 'border-ink-dim/40 bg-ink-dim/10 text-ink-dim',
 };
 

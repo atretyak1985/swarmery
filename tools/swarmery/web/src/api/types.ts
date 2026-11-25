@@ -24,8 +24,10 @@ export type SessionStatus =
   | 'completed'
   | 'killed';
 
-/** sessions.proc_state — null when PID is unknown (remote machine / no hook). */
-export type ProcState = 'running' | 'orphaned' | 'dead' | 'unknown';
+/** sessions.proc_state — null when PID is unknown (remote machine / no hook).
+ * 'detached': the process is stopped with no controlling tty — its terminal was
+ * closed while it was suspended, so it will never resume on its own. */
+export type ProcState = 'running' | 'orphaned' | 'detached' | 'dead' | 'unknown';
 
 /** sessions.source */
 /** sessions.source — 'mod' is a row the swarmery link mod minted before any
