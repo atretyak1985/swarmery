@@ -13,6 +13,7 @@ package term
 import (
 	"errors"
 	"io"
+	"log"
 	"os"
 	"os/exec"
 	"strings"
@@ -33,6 +34,10 @@ const (
 	// killGrace is how long a closing PTY has to exit after SIGHUP before the
 	// process group is SIGKILLed.
 	killGrace = 5 * time.Second
+	// closeWaitAfterMaster bounds the last wait for the shell once its master
+	// is closed. A shell that is still not gone is logged and its slot
+	// released anyway: a slot must never outlive its tab.
+	closeWaitAfterMaster = 2 * time.Second
 	// fallbackShell is used when $SHELL is unset (login shells only in v1).
 	fallbackShell = "/bin/zsh"
 )
@@ -104,6 +109,11 @@ type Session struct {
 	closeOnce sync.Once
 	closed    chan struct{}
 
+	// killGrace and closeWaitAfterMaster bound Close; zero (the test seam
+	// struct literal) falls back to the package defaults in Close itself.
+	killGrace            time.Duration
+	closeWaitAfterMaster time.Duration
+
 	mu       sync.Mutex
 	lastIO   time.Time
 	reason   CloseReason
@@ -169,18 +179,36 @@ func (s *Session) closeWith(r CloseReason) {
 }
 
 // Close signals the PTY's process group (SIGHUP, then SIGKILL after the grace)
-// and the job in its foreground, then closes the master. Idempotent.
+// and the job in its foreground, closes the master, then waits for the shell
+// itself for at most closeWaitAfterMaster more before giving up on it too.
+// Idempotent, and always returns within a bounded time and always releases
+// the Manager's slot — no shell's behavior can hold either hostage.
 //
 // The foreground job needs its own signals: the shell leaves it in a separate
 // process group, and once the shell has exited on the hang-up, a job that
 // outlived it (claude does) is left on a dead terminal, stopped by SIGTTIN or
 // SIGTTOU at its next read or write — a process that never exits and never
 // answers.
+//
+// The master is closed before the final wait, not after: a session leader
+// stuck reading or writing its own controlling terminal only lets go once
+// nothing holds the master open, so waiting on it with the master still open
+// can hang forever. Closing it first turns an unbounded wait into one that is
+// also bounded, just in case the shell still doesn't leave.
 func (s *Session) Close() {
 	s.closeOnce.Do(func() {
+		killGraceD := s.killGrace
+		if killGraceD <= 0 {
+			killGraceD = killGrace
+		}
+		waitAfterMaster := s.closeWaitAfterMaster
+		if waitAfterMaster <= 0 {
+			waitAfterMaster = closeWaitAfterMaster
+		}
+
 		// Read before the hang-up: once the shell is gone the PTY no longer names it.
 		job := s.proc.ForegroundJob()
-		deadline := time.Now().Add(killGrace)
+		deadline := time.Now().Add(killGraceD)
 
 		// Hang up the controlling terminal first so a well-behaved shell exits.
 		_ = s.proc.SignalGroup(syscall.SIGHUP)
@@ -200,12 +228,21 @@ func (s *Session) Close() {
 		case <-time.After(time.Until(deadline)):
 			// Grace elapsed — SIGKILL the whole group so no child survives.
 			_ = s.proc.SignalGroup(syscall.SIGKILL)
-			<-done
+			if job > 0 {
+				_ = s.proc.SignalJob(job, syscall.SIGKILL)
+			}
 		}
 		if job > 0 {
 			s.reapJob(job, deadline)
 		}
+		// Close the master before the last wait: a session leader blocked in
+		// exit on its terminal only finishes once nothing holds the master open.
 		_ = s.pty.Close()
+		select {
+		case <-done:
+		case <-time.After(waitAfterMaster):
+			log.Printf("warn: term: shell did not exit %s after its master closed; releasing the slot", waitAfterMaster)
+		}
 		close(s.closed)
 	})
 }
@@ -230,6 +267,11 @@ type Config struct {
 	IdleTimeout time.Duration
 	// Shell overrides $SHELL / the fallback (tests point it at a stub).
 	Shell string
+	// killGrace and closeWaitAfterMaster override the package defaults (5s,
+	// 2s) for every Session this Manager starts. Zero keeps the default —
+	// tests shrink them so a hung shell doesn't make `go test` slow.
+	killGrace            time.Duration
+	closeWaitAfterMaster time.Duration
 	// now and starter are test seams; nil selects the real implementations.
 	now     func() time.Time
 	starter ptyStarter
@@ -316,10 +358,12 @@ func (m *Manager) Start(cwd string, env []string, cols, rows uint16) (*Session, 
 	}
 
 	s := &Session{
-		pty:    f,
-		proc:   proc,
-		closed: make(chan struct{}),
-		lastIO: m.now(),
+		pty:                  f,
+		proc:                 proc,
+		closed:               make(chan struct{}),
+		lastIO:               m.now(),
+		killGrace:            m.cfg.killGrace,
+		closeWaitAfterMaster: m.cfg.closeWaitAfterMaster,
 	}
 	if rf, ok := f.(interface{ Resize(cols, rows uint16) error }); ok {
 		s.resizeFn = rf.Resize

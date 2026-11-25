@@ -68,6 +68,9 @@ type fakeProc struct {
 	exited  chan struct{}
 	// hangOnSIGHUP, when false, ignores SIGHUP so the grace path (SIGKILL) runs.
 	hangOnSIGHUP bool
+	// neverExits, when true, makes Wait block forever regardless of any signal
+	// delivered — the model of a shell Close can never wait out, only bound.
+	neverExits bool
 
 	// job is the foreground job's process group (0: none); jobSignals records
 	// what reached it. jobExitsOnHUP: the job leaves on SIGHUP, else only on SIGKILL.
@@ -120,7 +123,11 @@ func newFakeProc(exitOnSIGHUP bool) *fakeProc {
 func (p *fakeProc) SignalGroup(sig syscall.Signal) error {
 	p.mu.Lock()
 	p.signals = append(p.signals, sig)
+	neverExits := p.neverExits
 	p.mu.Unlock()
+	if neverExits {
+		return nil
+	}
 	if (sig == syscall.SIGHUP && p.hangOnSIGHUP) || sig == syscall.SIGKILL {
 		select {
 		case <-p.exited:
@@ -132,6 +139,12 @@ func (p *fakeProc) SignalGroup(sig syscall.Signal) error {
 }
 
 func (p *fakeProc) Wait() error {
+	p.mu.Lock()
+	neverExits := p.neverExits
+	p.mu.Unlock()
+	if neverExits {
+		select {}
+	}
 	<-p.exited
 	return nil
 }
@@ -428,6 +441,123 @@ func TestShellFallback(t *testing.T) {
 	explicit := NewManager(Config{starter: &stubStarter{}, Shell: "/bin/bash"})
 	if got := explicit.shell(); got != "/bin/bash" {
 		t.Errorf("explicit shell() = %q, want /bin/bash", got)
+	}
+}
+
+// closeAfterMasterProc is a fakeProc whose Wait only returns after the PTY
+// master is closed — the model of a shell stuck reading/writing its own
+// controlling terminal, which only unsticks once nothing holds the master
+// open. It never responds to signals.
+type closeAfterMasterProc struct {
+	pty      *fakePTY
+	signals  []syscall.Signal
+	mu       sync.Mutex
+	returned chan struct{}
+}
+
+func newCloseAfterMasterProc(pty *fakePTY) *closeAfterMasterProc {
+	return &closeAfterMasterProc{pty: pty, returned: make(chan struct{})}
+}
+
+func (p *closeAfterMasterProc) SignalGroup(sig syscall.Signal) error {
+	p.mu.Lock()
+	p.signals = append(p.signals, sig)
+	p.mu.Unlock()
+	return nil
+}
+
+func (p *closeAfterMasterProc) Wait() error {
+	<-p.pty.closed
+	close(p.returned)
+	return nil
+}
+
+func (p *closeAfterMasterProc) ForegroundJob() int { return 0 }
+
+func (p *closeAfterMasterProc) SignalJob(int, syscall.Signal) error { return syscall.ESRCH }
+
+// TestCloseClosesMasterBeforeWaitingOnShell proves Close closes the PTY master
+// before (or without needing) the shell to exit on its own — a shell stuck on
+// its own tty only lets go once nothing holds the master open. On the old code
+// (master closed only after the final, unbounded wait) this deadlocks; bound
+// the assertion itself with a timeout so a regression fails fast instead of
+// hanging the whole `go test` run.
+func TestCloseClosesMasterBeforeWaitingOnShell(t *testing.T) {
+	pty := newFakePTY()
+	proc := newCloseAfterMasterProc(pty)
+	// Shrink killGrace so a regression (master closed only after this unbounded
+	// wait) deadlocks well inside the assertion's own timeout below, instead of
+	// racing the package default (5s) and passing by accident.
+	s := &Session{pty: pty, proc: proc, closed: make(chan struct{}), killGrace: 200 * time.Millisecond}
+
+	done := make(chan struct{})
+	go func() { s.Close(); close(done) }()
+	select {
+	case <-done:
+	case <-time.After(3 * time.Second):
+		t.Fatal("Close deadlocked: the shell's Wait only returns after the master closes, " +
+			"so Close must close the master before (or without) waiting for it unbounded")
+	}
+	select {
+	case <-proc.returned:
+	default:
+		t.Error("shell's Wait never observed the master close")
+	}
+}
+
+// TestCloseReleasesSlotWhenShellNeverExits proves the Manager slot is freed
+// even when the shell never exits at all (Wait blocks forever): Close must
+// still return within a bounded time and the session must untrack.
+func TestCloseReleasesSlotWhenShellNeverExits(t *testing.T) {
+	st := &stubStarter{} // hangOnSIGHUP defaults false, SIGKILL never arrives either: Wait blocks forever below
+	m := NewManager(Config{starter: st, Shell: "/stub", killGrace: 50 * time.Millisecond, closeWaitAfterMaster: 50 * time.Millisecond})
+	s, err := m.Start("/tmp", nil, 80, 24)
+	if err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	// Replace proc.Wait with one that never returns, regardless of signals.
+	st.procs[0].neverExits = true
+
+	start := time.Now()
+	done := make(chan struct{})
+	go func() { s.Close(); close(done) }()
+	select {
+	case <-done:
+	case <-time.After(m.cfg.killGrace + m.cfg.closeWaitAfterMaster + time.Second):
+		t.Fatal("Close did not return even though the shell never exits")
+	}
+	if took := time.Since(start); took > m.cfg.killGrace+m.cfg.closeWaitAfterMaster+time.Second {
+		t.Errorf("Close took %v, want bounded by killGrace+closeWaitAfterMaster", took)
+	}
+	waitFor(t, func() bool { return m.Count() == 0 }, "slot released though the shell never exits")
+	if _, err := m.Start("/tmp", nil, 80, 24); err != nil {
+		t.Fatalf("Start after the stuck session's Close: %v", err)
+	}
+}
+
+// TestFiveOpenCloseCyclesNeverHitCap proves a hung shell never permanently
+// consumes a slot: five Start→Close cycles against a shell that never exits
+// must each release their slot, so a sixth Start never sees the cap.
+func TestFiveOpenCloseCyclesNeverHitCap(t *testing.T) {
+	st := &stubStarter{}
+	m := NewManager(Config{
+		starter:              st,
+		Shell:                "/stub",
+		MaxSessions:          5,
+		killGrace:            20 * time.Millisecond,
+		closeWaitAfterMaster: 20 * time.Millisecond,
+	})
+	for i := 0; i < 5; i++ {
+		s, err := m.Start("/tmp", nil, 80, 24)
+		if err != nil {
+			t.Fatalf("cycle %d Start: %v", i, err)
+		}
+		st.procs[i].neverExits = true
+		s.Close()
+		waitFor(t, func() bool { return m.Count() == 0 }, "cycle slot released")
+	}
+	if _, err := m.Start("/tmp", nil, 80, 24); err != nil {
+		t.Fatalf("sixth Start after five hung cycles: %v, want success (no dead slots)", err)
 	}
 }
 
