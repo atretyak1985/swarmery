@@ -2041,6 +2041,10 @@ msgstr "Виконавець сказав: {said}"
 msgid "executor's reason:"
 msgstr "причина виконавця:"
 
+#: src/terminal/TerminalDock.tsx
+msgid "exit full screen"
+msgstr "вийти з повноекранного режиму"
+
 #: src/components/KillButton.tsx
 msgid "exited"
 msgstr "завершився"
@@ -2260,6 +2264,10 @@ msgstr "із сесії #{id}"
 msgid "full offboard — also remove <0>project.json</0> and the statusline scripts (local agents/skills are never touched)"
 msgstr "повне відключення — також видалити <0>project.json</0> і скрипти statusline (локальні агенти й скіли не чіпаються)"
 
+#: src/terminal/TerminalDock.tsx
+msgid "full screen"
+msgstr "на весь екран"
+
 #: src/components/ImproveModal.tsx
 msgid "Generate proposal"
 msgstr "Згенерувати пропозицію"
@@ -2333,6 +2341,14 @@ msgstr "сховати зі списку проєктів (можна повер
 msgid "hide terminal"
 msgstr "сховати термінал"
 
+#: src/workspace/StatusBar.tsx
+msgid "hide terminal ({n} open)"
+msgstr "сховати термінал (відкрито: {n})"
+
+#: src/terminal/TerminalDock.tsx
+msgid "Hide the terminal — its programs keep running"
+msgstr "Сховати термінал — його програми працюватимуть далі"
+
 #: src/components/usage/UsageWindowRow.tsx
 msgid "hide this window"
 msgstr "сховати це вікно"
@@ -2341,6 +2357,10 @@ msgstr "сховати це вікно"
 #: src/workspace/TaskCard.tsx
 msgid "History"
 msgstr "Історія"
+
+#: src/terminal/TerminalDock.tsx
+msgid "Hold Esc to exit full screen"
+msgstr "Утримуйте Esc, щоб вийти з повноекранного режиму"
 
 #: src/workspace/TaskCard.tsx
 msgid "hold this card in the queue without losing its place"
@@ -2718,6 +2738,14 @@ msgstr "маркетплейс v{marketplaceVersion} · ремонти й пер
 msgid "matches you"
 msgstr "збігається з вами"
 
+#: src/terminal/TerminalDock.tsx
+msgid "maximize terminal"
+msgstr "розгорнути термінал"
+
+#: src/terminal/TerminalDock.tsx
+msgid "Maximize the terminal over the page"
+msgstr "Розгорнути термінал на місце сторінки"
+
 #: src/components/runOutcome/blockerGuide.ts
 msgid "merge or delete the leftover branch first — until then a retry is refused"
 msgstr "спершу злийте або видаліть залишкову гілку — до того повторний запуск буде відхилено"
@@ -2733,6 +2761,10 @@ msgstr "Повідомлення"
 #: src/lib/docFigures.tsx
 msgid "Migrate routine config to v2"
 msgstr "Перенести конфіг рутин на v2"
+
+#: src/terminal/TerminalDock.tsx
+msgid "minimize terminal"
+msgstr "згорнути термінал"
 
 #: src/components/ProjectPlugins.tsx
 msgid "missing: {missing}"
@@ -3894,6 +3926,14 @@ msgstr "відновлення не вдалося: {status}"
 msgid "Restore project"
 msgstr "Відновити проєкт"
 
+#: src/terminal/TerminalDock.tsx
+msgid "restore terminal size"
+msgstr "відновити розмір термінала"
+
+#: src/terminal/TerminalDock.tsx
+msgid "Restore the terminal size (Esc)"
+msgstr "Відновити розмір термінала (Esc)"
+
 #: src/components/AttachModal.tsx
 msgid "restored"
 msgstr "відновлено"
@@ -4285,6 +4325,14 @@ msgstr "показати приховані ({hiddenCount})"
 #: src/workspace/StatusBar.tsx
 msgid "show terminal"
 msgstr "показати термінал"
+
+#: src/workspace/StatusBar.tsx
+msgid "show terminal ({n} open)"
+msgstr "показати термінал (відкрито: {n})"
+
+#: src/terminal/TerminalDock.tsx
+msgid "Show the terminal full screen"
+msgstr "Показати термінал на весь екран"
 
 #: src/components/usage/UsageWindowRow.tsx
 msgid "show this window"
@@ -5255,6 +5303,10 @@ msgstr "буде видалено"
 #: src/components/AttachModal.tsx
 msgid "will restore"
 msgstr "буде відновлено"
+
+#: src/terminal/TerminalDock.tsx
+msgid "window controls"
+msgstr "керування вікном"
 
 #: src/components/runOutcome/blockerGuide.ts
 msgid "Work you don't want: press Delete branch, and the retry recreates it from {base}."

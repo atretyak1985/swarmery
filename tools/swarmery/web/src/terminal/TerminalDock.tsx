@@ -10,6 +10,7 @@ import { Trans, useLingui } from '@lingui/react/macro';
 import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { TermStatus, XTermHandle } from './XTerm';
 import { TERM_CLOSE_MESSAGE, type TermCloseKind } from './closeReason';
+import { ExitFullscreenIcon, FullscreenIcon, MaximizeIcon, MinimizeIcon, RestoreIcon } from './DockIcons';
 
 const XTerm = lazy(() => import('./XTerm').then((m) => ({ default: m.XTerm })));
 
@@ -60,6 +61,9 @@ const DEFAULT_HEIGHT = 280;
 const FONT_MIN = 10;
 const FONT_MAX = 20;
 const FONT_DEFAULT = 14;
+/** A header window-control button: icon only, label on aria-label + title. */
+const WINDOW_BUTTON =
+  'flex h-6 w-6 items-center justify-center rounded transition-colors hover:bg-bg hover:text-ink';
 
 function heightKey(projectSlug: string): string {
   return `swarmery.term.height.${projectSlug}`;
@@ -75,17 +79,66 @@ function readNum(key: string, fallback: number, lo: number, hi: number): number 
   return Number.isFinite(n) ? Math.min(hi, Math.max(lo, n)) : fallback;
 }
 
+/** The Keyboard Lock API surface used here (not in lib.dom for every target). */
+interface KeyboardLock {
+  lock: (keys?: string[]) => Promise<void>;
+  unlock: () => void;
+}
+
+/** navigator.keyboard when the browser implements Keyboard Lock, else null. */
+function keyboardLock(): KeyboardLock | null {
+  if (typeof navigator === 'undefined' || !('keyboard' in navigator)) return null;
+  const kb: unknown = (navigator as Navigator & { keyboard?: unknown }).keyboard;
+  if (typeof kb !== 'object' || kb === null) return null;
+  if (!('lock' in kb) || typeof kb.lock !== 'function') return null;
+  if (!('unlock' in kb) || typeof kb.unlock !== 'function') return null;
+  return kb as KeyboardLock;
+}
+
+/**
+ * In full screen, hold Escape for the page so a single Esc reaches Claude Code
+ * (the browser then exits full screen on a long Esc press). Best effort: any
+ * failure leaves the browser's default Esc behaviour.
+ */
+function lockEscape(): void {
+  const kb = keyboardLock();
+  if (kb === null) return;
+  try {
+    kb.lock(['Escape']).catch(() => undefined);
+  } catch {
+    /* unsupported in this context — keep the default */
+  }
+}
+function unlockKeyboard(): void {
+  try {
+    keyboardLock()?.unlock();
+  } catch {
+    /* nothing was locked */
+  }
+}
+
+/** Is `el` inside a terminal (xterm.js renders into a `.xterm` element)? */
+function inTerminal(el: Element | null): boolean {
+  return el !== null && el.closest('.xterm') !== null;
+}
+
 export function TerminalDock({
   projectSlug,
   projectPath,
   state,
   onChange,
+  maximized = false,
+  onMaximizedChange,
 }: {
   projectSlug: string;
   /** The project's on-disk root — cwd for a "+" (new project shell) tab. */
   projectPath: string;
   state: DockState;
   onChange: (next: DockState) => void;
+  /** Whether the dock covers the page column (the layout hides its <main>). */
+  maximized?: boolean;
+  /** Asks the layout to maximize / restore the dock. */
+  onMaximizedChange?: (next: boolean) => void;
 }): JSX.Element | null {
   const [height, setHeight] = useState(() => readNum(heightKey(projectSlug), DEFAULT_HEIGHT, MIN_HEIGHT, MAX_HEIGHT));
   const [fontSize, setFontSize] = useState(() => readNum(fontKey(projectSlug), FONT_DEFAULT, FONT_MIN, FONT_MAX));
@@ -105,6 +158,33 @@ const [genById, setGenById] = useState<Record<string, number>>({});
   armedRef.current = armed;
   const termRefs = useRef<Map<string, XTermHandle | null>>(new Map());
   const dragRef = useRef<{ startY: number; startH: number } | null>(null);
+  // The dock root: the element that goes full screen.
+  const rootRef = useRef<HTMLDivElement>(null);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+
+  // Track full screen from the browser, so Esc / F11 / the OS exit all sync.
+  useEffect(() => {
+    const onFullscreenChange = (): void => {
+      const on = rootRef.current !== null && document.fullscreenElement === rootRef.current;
+      setIsFullscreen(on);
+      if (!on) unlockKeyboard();
+    };
+    document.addEventListener('fullscreenchange', onFullscreenChange);
+    return () => document.removeEventListener('fullscreenchange', onFullscreenChange);
+  }, []);
+
+  // Esc restores a maximized dock — but never while focus is in a terminal:
+  // Claude Code (and every TUI) needs that key.
+  useEffect(() => {
+    if (!maximized || !state.open || onMaximizedChange === undefined) return undefined;
+    const onKeyDown = (e: KeyboardEvent): void => {
+      if (e.key !== 'Escape' || e.defaultPrevented) return;
+      if (inTerminal(document.activeElement)) return;
+      onMaximizedChange(false);
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [maximized, state.open, onMaximizedChange]);
 
   // Persist height / font per project.
   useEffect(() => {
@@ -192,6 +272,36 @@ const [genById, setGenById] = useState<Record<string, number>>({});
     });
   };
 
+  const enterFullscreen = (): void => {
+    const el = rootRef.current;
+    if (el === null || typeof el.requestFullscreen !== 'function') return;
+    try {
+      Promise.resolve(el.requestFullscreen()).then(lockEscape, () => undefined);
+    } catch {
+      /* refused (no user gesture, iframe policy) — stay in the page */
+    }
+  };
+  const exitFullscreenIfAny = (): void => {
+    if (rootRef.current === null || document.fullscreenElement !== rootRef.current) return;
+    if (typeof document.exitFullscreen !== 'function') return;
+    try {
+      Promise.resolve(document.exitFullscreen()).catch(() => undefined);
+    } catch {
+      /* already left */
+    }
+  };
+  const toggleFullscreen = (): void => {
+    if (isFullscreen) exitFullscreenIfAny();
+    else enterFullscreen();
+  };
+
+  /** "—": hide the dock without closing a tab, so every PTY keeps running (D-5). */
+  const minimize = (): void => {
+    exitFullscreenIfAny();
+    onMaximizedChange?.(false);
+    onChange({ ...state, open: false });
+  };
+
   // Keep the dock mounted whenever there are tabs, even while collapsed, so
   // collapsing the footer "Terminal" toggle hides the panel via CSS instead of
   // unmounting XTerm (which would close the PTY WebSocket and kill the
@@ -205,31 +315,44 @@ const [genById, setGenById] = useState<Record<string, number>>({});
   // would push the StatusBar — which carries the toggle that closes it — out of
   // a frame that no longer scrolls.
   const effHeight = Math.min(height, Math.round(window.innerHeight * 0.75));
+  // Maximized or full screen, the island fills its box: no fixed height and no
+  // resize handle. Only classes change — the XTerm subtree is never remounted.
+  const fills = maximized || isFullscreen;
+  const rootClass = isFullscreen
+    ? 'flex h-full flex-col bg-bg'
+    : maximized
+      ? 'flex min-h-0 flex-1 flex-col'
+      : 'flex shrink-0 flex-col';
+  const islandClass = fills
+    ? `flex min-h-0 flex-1 flex-col overflow-hidden border-t border-line bg-bg${isFullscreen ? ' h-full' : ' desk:rounded-xl desk:border'}`
+    : 'flex shrink-0 flex-col overflow-hidden border-t border-line bg-bg desk:rounded-xl desk:border';
 
   return (
-    <div className="flex shrink-0 flex-col" hidden={view.hidden} role="region" aria-label="terminal dock">
+    <div ref={rootRef} className={rootClass} hidden={view.hidden} role="region" aria-label="terminal dock">
       {/* Resize handle: the 8px gap above the island at desk. Below desk
           (D-9/D-10/D-11 gate at --breakpoint-desk, index.css:592) the dock
           isn't an island yet, so this stays the thin h-1 strip main always had.
           The whole gap stays the hit area; hover only paints a 1px centred line. */}
-      <div
-        onPointerDown={onHandleDown}
-        onPointerMove={onHandleMove}
-        onPointerUp={onHandleUp}
-        role="separator"
-        aria-orientation="horizontal"
-        aria-label="resize terminal"
-        className="relative h-1 shrink-0 cursor-row-resize before:absolute before:inset-x-0 before:top-1/2 before:h-px before:-translate-y-1/2 before:bg-transparent hover:before:bg-brand/60 desk:h-2"
-      />
+      {!fills && (
+        <div
+          onPointerDown={onHandleDown}
+          onPointerMove={onHandleMove}
+          onPointerUp={onHandleUp}
+          role="separator"
+          aria-orientation="horizontal"
+          aria-label="resize terminal"
+          className="relative h-1 shrink-0 cursor-row-resize before:absolute before:inset-x-0 before:top-1/2 before:h-px before:-translate-y-1/2 before:bg-transparent hover:before:bg-brand/60 desk:h-2"
+        />
+      )}
 
-      <div
-        className="flex shrink-0 flex-col overflow-hidden border-t border-line bg-bg desk:rounded-xl desk:border"
-        style={{ height: effHeight }}
-      >
+      <div className={islandClass} style={fills ? undefined : { height: effHeight }}>
         {/* Header: the dock's own tone, a mono "terminal" caption, then the tab
-            strip + toolbar. Below desk this matches main's plain header
-            (no surface2 fill, no caption) per the review's R1-1 finding. */}
-        <div className="flex items-center gap-1 border-b border-line px-2 py-1 desk:gap-1.5 desk:bg-surface2">
+            strip + toolbar + window controls. Below desk this matches main's
+            plain header (no surface2 fill, no caption) per the review's R1-1 finding. */}
+        <div
+          data-testid="dock-header"
+          className="flex h-9 shrink-0 items-center gap-1 border-b border-line px-2 desk:h-10 desk:gap-1.5 desk:bg-surface2"
+        >
           <span className="hidden shrink-0 font-mono text-[10px] text-ink-2 uppercase tracking-[0.12em] desk:inline-flex">
             <Trans>terminal</Trans>
           </span>
@@ -240,7 +363,7 @@ const [genById, setGenById] = useState<Record<string, number>>({});
               return (
                 <div
                   key={tab.id}
-                  className={`group flex shrink-0 items-center gap-1.5 rounded-md border px-2 py-0.5 font-mono text-[10.5px] ${
+                  className={`group flex shrink-0 items-center gap-1.5 rounded-md border px-2 py-1 font-mono text-[10.5px] ${
                     active ? 'border-line-strong bg-surface2 text-ink' : 'border-transparent text-ink-dim'
                   }`}
                 >
@@ -315,6 +438,46 @@ const [genById, setGenById] = useState<Record<string, number>>({});
               className="rounded border border-line px-2 py-0.5 transition-colors hover:text-ink"
             >
               Clear
+            </button>
+          </div>
+
+          {/* Window controls, last in the header (the WebStorm order):
+              maximize / restore, full screen / exit, minimize "—". */}
+          <div
+            role="group"
+            aria-label={t`window controls`}
+            className="flex shrink-0 items-center gap-0.5 border-l border-line pl-1 text-ink-dim"
+          >
+            {onMaximizedChange !== undefined && (
+              <button
+                type="button"
+                aria-label={maximized ? t`restore terminal size` : t`maximize terminal`}
+                title={maximized ? t`Restore the terminal size (Esc)` : t`Maximize the terminal over the page`}
+                aria-pressed={maximized}
+                onClick={() => onMaximizedChange(!maximized)}
+                className={WINDOW_BUTTON}
+              >
+                {maximized ? <RestoreIcon /> : <MaximizeIcon />}
+              </button>
+            )}
+            <button
+              type="button"
+              aria-label={isFullscreen ? t`exit full screen` : t`full screen`}
+              title={isFullscreen ? t`Hold Esc to exit full screen` : t`Show the terminal full screen`}
+              aria-pressed={isFullscreen}
+              onClick={toggleFullscreen}
+              className={WINDOW_BUTTON}
+            >
+              {isFullscreen ? <ExitFullscreenIcon /> : <FullscreenIcon />}
+            </button>
+            <button
+              type="button"
+              aria-label={t`minimize terminal`}
+              title={t`Hide the terminal — its programs keep running`}
+              onClick={minimize}
+              className={WINDOW_BUTTON}
+            >
+              <MinimizeIcon />
             </button>
           </div>
         </div>
@@ -441,6 +604,16 @@ export function toggleDock(state: DockState, projectPath: string): DockState {
  */
 export function dockView(state: DockState): { mount: boolean; hidden: boolean } {
   return { mount: state.tabs.length > 0, hidden: !state.open };
+}
+
+/**
+ * Does a maximized dock cover the page column? Only while it is visible: a
+ * minimized or empty dock gives the page back. The layout sets `hidden` on its
+ * <main> from this (display:none — the Outlet stays mounted, pages keep state).
+ */
+export function dockCoversPage(state: DockState, maximized: boolean): boolean {
+  const view = dockView(state);
+  return maximized && view.mount && !view.hidden;
 }
 
 /** Open a fresh project-root terminal, appending a tab and revealing the dock. */

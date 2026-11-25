@@ -18,6 +18,7 @@ import { VcsAuthBanner } from '../components/VcsAuthBanner';
 import { useFillRoute } from '../lib/fillRoute';
 import {
   TerminalDock,
+  dockCoversPage,
   emptyDock,
   openWorktreeTerminal,
   toggleDock,
@@ -98,6 +99,18 @@ function WorkspaceInner(): JSX.Element {
     localStorage.setItem(dockKey(slug), JSON.stringify(dock));
   }, [slug, dock]);
 
+  // A maximized dock covers the page column. CSS-only state (D-3): never
+  // persisted, dropped on a project switch and when the last tab closes.
+  const [maximized, setMaximized] = useState(false);
+  useEffect(() => {
+    setMaximized(false);
+  }, [slug]);
+  const hasTabs = dock.tabs.length > 0;
+  useEffect(() => {
+    if (!hasTabs) setMaximized(false);
+  }, [hasTabs]);
+  const pageCovered = dockCoversPage(dock, maximized);
+
   const projectPath = project?.path ?? '';
   // StatusBar toggle: opens a first project-root terminal if none exist, else
   // just flips the dock's visibility.
@@ -123,7 +136,9 @@ function WorkspaceInner(): JSX.Element {
           liveSessions={liveSessions}
         />
         <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-          <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+          {/* `hidden` (display:none) under a maximized dock: the Outlet stays
+              mounted, so every page keeps its state. */}
+          <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden" hidden={pageCovered}>
             {/* Mobile tab strip (the desktop rail is hidden < desk). */}
             <MobileNav slug={slug} variant="strip" />
             {/* The code-host sign-in banner: renders nothing while the daemon
@@ -146,11 +161,19 @@ function WorkspaceInner(): JSX.Element {
               <Outlet />
             </div>
           </main>
-          <TerminalDock projectSlug={slug} projectPath={projectPath} state={dock} onChange={setDock} />
+          <TerminalDock
+            projectSlug={slug}
+            projectPath={projectPath}
+            state={dock}
+            onChange={setDock}
+            maximized={maximized}
+            onMaximizedChange={setMaximized}
+          />
           <StatusBar
             counts={counts}
             projectId={project?.id ?? null}
-            terminalOpen={dock.open && dock.tabs.length > 0}
+            terminalOpen={dock.open && hasTabs}
+            terminalCount={dock.tabs.length}
             onToggleTerminal={projectPath === '' ? undefined : toggleTerminal}
           />
         </div>

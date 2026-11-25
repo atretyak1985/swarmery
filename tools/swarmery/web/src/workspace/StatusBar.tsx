@@ -24,12 +24,15 @@ export function StatusBar({
   counts,
   projectId,
   terminalOpen = false,
+  terminalCount = 0,
   onToggleTerminal,
 }: {
   counts: BoardCounts;
   projectId: number | null;
   /** Whether the terminal dock is currently visible (drives the chevron). */
   terminalOpen?: boolean;
+  /** Open terminal tabs — shown on the toggle, minimized or not. */
+  terminalCount?: number;
   /** Toggles the bottom terminal dock; omitted (button hidden) until the
    * project path resolves. */
   onToggleTerminal?: (() => void) | undefined;
@@ -64,6 +67,16 @@ export function StatusBar({
   const projectPaused =
     dispatch !== null && projectId !== null && dispatch.pausedScopes.includes(projectScopeKey(projectId));
   const globalPaused = dispatch?.globalPaused ?? false;
+
+  const n = terminalCount;
+  const terminalAriaLabel =
+    n > 0
+      ? terminalOpen
+        ? t`hide terminal (${n} open)`
+        : t`show terminal (${n} open)`
+      : terminalOpen
+        ? t`hide terminal`
+        : t`show terminal`;
 
   const togglePause = (): void => {
     if (projectId === null || dispatch === null) return;
@@ -101,7 +114,7 @@ export function StatusBar({
           <button
             type="button"
             onClick={onToggleTerminal}
-            aria-label={terminalOpen ? t`hide terminal` : t`show terminal`}
+            aria-label={terminalAriaLabel}
             aria-pressed={terminalOpen}
             className={`flex items-center gap-1 rounded-md border px-2 py-0.5 text-[10px] transition-colors ${
               terminalOpen
@@ -111,6 +124,7 @@ export function StatusBar({
           >
             <span aria-hidden="true">❯_</span>
             <Trans>Terminal</Trans>
+            {terminalCount > 0 && <span className="tabular-nums">{terminalCount}</span>}
             <span aria-hidden="true"><Chevron open={terminalOpen} /></span>
           </button>
         )}
