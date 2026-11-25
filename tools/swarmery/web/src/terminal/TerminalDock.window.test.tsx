@@ -203,6 +203,60 @@ describe('full screen (SC-5)', () => {
     expect(screen.getByRole('button', { name: 'full screen' })).toBeTruthy();
     expect(mountCount).toBe(1);
   });
+
+  describe('Keyboard Lock', () => {
+    const lock = vi.fn((_keys?: string[]) => Promise.resolve());
+    const unlock = vi.fn();
+
+    beforeEach(() => {
+      lock.mockClear();
+      unlock.mockClear();
+      Object.defineProperty(navigator, 'keyboard', { configurable: true, value: { lock, unlock } });
+      proto.requestFullscreen = vi.fn(() => Promise.resolve());
+    });
+    afterEach(() => {
+      Reflect.deleteProperty(navigator, 'keyboard');
+    });
+
+    it('holds Escape in full screen and releases it on exit', async () => {
+      render(<Harness />);
+      await screen.findByTestId('xterm');
+
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'full screen' }));
+        await Promise.resolve();
+      });
+      expect(lock).toHaveBeenCalledWith(['Escape']);
+
+      fullscreenElement = screen.getByRole('region', { name: 'terminal dock' });
+      act(() => {
+        document.dispatchEvent(new Event('fullscreenchange'));
+      });
+      expect(unlock).not.toHaveBeenCalled();
+
+      fullscreenElement = null;
+      act(() => {
+        document.dispatchEvent(new Event('fullscreenchange'));
+      });
+      expect(unlock).toHaveBeenCalled();
+    });
+
+    it('releases Escape when the dock unmounts in full screen', async () => {
+      const { unmount } = render(<Harness />);
+      await screen.findByTestId('xterm');
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'full screen' }));
+        await Promise.resolve();
+      });
+      fullscreenElement = screen.getByRole('region', { name: 'terminal dock' });
+      act(() => {
+        document.dispatchEvent(new Event('fullscreenchange'));
+      });
+
+      unmount();
+      expect(unlock).toHaveBeenCalled();
+    });
+  });
 });
 
 describe('StatusBar terminal count (SC-3)', () => {

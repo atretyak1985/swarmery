@@ -170,7 +170,12 @@ const [genById, setGenById] = useState<Record<string, number>>({});
       if (!on) unlockKeyboard();
     };
     document.addEventListener('fullscreenchange', onFullscreenChange);
-    return () => document.removeEventListener('fullscreenchange', onFullscreenChange);
+    return () => {
+      document.removeEventListener('fullscreenchange', onFullscreenChange);
+      // Unmounted in full screen: the browser leaves full screen once the
+      // element is gone, but this listener can no longer release the Esc lock.
+      unlockKeyboard();
+    };
   }, []);
 
   // Esc restores a maximized dock — but never while focus is in a terminal:
