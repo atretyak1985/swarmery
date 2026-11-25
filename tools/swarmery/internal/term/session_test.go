@@ -68,6 +68,49 @@ type fakeProc struct {
 	exited  chan struct{}
 	// hangOnSIGHUP, when false, ignores SIGHUP so the grace path (SIGKILL) runs.
 	hangOnSIGHUP bool
+
+	// job is the foreground job's process group (0: none); jobSignals records
+	// what reached it. jobExitsOnHUP: the job leaves on SIGHUP, else only on SIGKILL.
+	job           int
+	jobExitsOnHUP bool
+	jobGone       bool
+	jobSignals    []syscall.Signal
+}
+
+func (p *fakeProc) ForegroundJob() int {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.job
+}
+
+func (p *fakeProc) SignalJob(pgid int, sig syscall.Signal) error {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if pgid != p.job {
+		return syscall.ESRCH
+	}
+	// every attempt is recorded, as a real kill(2) is made even to a group that left
+	p.jobSignals = append(p.jobSignals, sig)
+	if p.jobGone {
+		return syscall.ESRCH
+	}
+	if sig == syscall.SIGKILL || (sig == syscall.SIGHUP && p.jobExitsOnHUP) {
+		p.jobGone = true
+	}
+	return nil
+}
+
+// gotJob returns the signals the foreground job received, probes (0) left out.
+func (p *fakeProc) gotJob() []syscall.Signal {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	var out []syscall.Signal
+	for _, sig := range p.jobSignals {
+		if sig != 0 {
+			out = append(out, sig)
+		}
+	}
+	return out
 }
 
 func newFakeProc(exitOnSIGHUP bool) *fakeProc {
@@ -262,6 +305,42 @@ func TestCloseGraceEscalatesToSIGKILL(t *testing.T) {
 	sigs := st.procs[0].got()
 	if len(sigs) < 2 || sigs[len(sigs)-1] != syscall.SIGKILL {
 		t.Errorf("signals = %v, want SIGHUP then SIGKILL escalation", sigs)
+	}
+}
+
+// The shell exits on the hang-up but its foreground job sits in a process
+// group of its own: it must get the hang-up (and SIGCONT, in case it is
+// stopped) itself, and no SIGKILL once it leaves.
+func TestCloseHangsUpForegroundJob(t *testing.T) {
+	p := newFakeProc(true)
+	p.job, p.jobExitsOnHUP = 4242, true
+	s := &Session{pty: newFakePTY(), proc: p, closed: make(chan struct{})}
+	s.Close()
+	got := p.gotJob()
+	if len(got) != 2 || got[0] != syscall.SIGHUP || got[1] != syscall.SIGCONT {
+		t.Errorf("job signals = %v, want [SIGHUP SIGCONT]", got)
+	}
+}
+
+// A foreground job that outlives the hang-up (claude does) is SIGKILLed after
+// the grace, even though the shell itself already left.
+func TestCloseKillsForegroundJobThatSurvivesHangUp(t *testing.T) {
+	p := newFakeProc(true)
+	p.job = 4242
+	s := &Session{pty: newFakePTY(), proc: p, closed: make(chan struct{})}
+	done := make(chan struct{})
+	go func() { s.Close(); close(done) }()
+	select {
+	case <-done:
+	case <-time.After(killGrace + 3*time.Second):
+		t.Fatal("Close did not return within the grace window")
+	}
+	got := p.gotJob()
+	if len(got) == 0 || got[len(got)-1] != syscall.SIGKILL {
+		t.Errorf("job signals = %v, want SIGHUP, SIGCONT, then SIGKILL", got)
+	}
+	if sigs := p.got(); len(sigs) != 1 || sigs[0] != syscall.SIGHUP {
+		t.Errorf("shell signals = %v, want only SIGHUP (it exited)", sigs)
 	}
 }
 

@@ -1887,6 +1887,7 @@ msgstr "disconnecting…"
 #: src/components/AccountReadyBanner.tsx
 #: src/components/AccountsSection.tsx
 #: src/components/DashboardLockedBanner.tsx
+#: src/terminal/TerminalDock.tsx
 msgid "dismiss"
 msgstr "dismiss"
 
@@ -3897,6 +3898,10 @@ msgstr "Restore project"
 msgid "restored"
 msgstr "restored"
 
+#: src/terminal/TerminalDock.tsx
+msgid "Restored after a reload — the command is not started, so no empty session is created."
+msgstr "Restored after a reload — the command is not started, so no empty session is created."
+
 #: src/components/CommandPalette.tsx
 msgid "results scoped to {scopeLabel}"
 msgstr "results scoped to {scopeLabel}"
@@ -3988,6 +3993,7 @@ msgid "run"
 msgstr "run"
 
 #: src/lib/docFigures.tsx
+#: src/terminal/TerminalDock.tsx
 msgid "Run"
 msgstr "Run"
 
@@ -4375,6 +4381,10 @@ msgstr "Spinning and pulsing state glyphs"
 #: src/workspace/boardModel.ts
 msgid "stale"
 msgstr "stale"
+
+#: src/terminal/TerminalDock.tsx
+msgid "Start Claude Code"
+msgstr "Start Claude Code"
 
 #: src/workspace/NewTaskModal.tsx
 msgid "start immediately — the dispatcher picks it up"
