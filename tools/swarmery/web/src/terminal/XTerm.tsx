@@ -19,10 +19,12 @@ import { classifyTermClose, TERM_CLOSE_MESSAGE, type TermCloseKind } from './clo
 
 export type TermStatus = 'connecting' | 'open' | 'closed';
 
-/** Imperative handle the dock uses for toolbar actions (Clear, refit). */
+/** Imperative handle the dock uses for toolbar actions (Clear, refit, type a command). */
 export interface XTermHandle {
   clear: () => void;
   fit: () => void;
+  /** Types `text` into the live PTY as keystrokes; a no-op while it is not open. */
+  send: (text: string) => void;
 }
 
 // Palette matched to the app's Tailwind tokens (see index.css :root) so the
@@ -75,6 +77,10 @@ export const XTerm = forwardRef<
     useImperativeHandle(ref, () => ({
       clear: () => termRef.current?.clear(),
       fit: () => fitRef.current?.fit(),
+      send: (text: string) => {
+        const ws = wsRef.current;
+        if (ws !== null && ws.readyState === WebSocket.OPEN) ws.send(new TextEncoder().encode(text));
+      },
     }));
 
     // Mount once per cwd: build the terminal, open the socket, wire both ways.
@@ -121,11 +127,13 @@ export const XTerm = forwardRef<
 
       ws.onopen = () => {
         opened = true;
+        // Read before reporting `open`: the dock disarms a one-shot command on
+        // that status, so it must already be captured here.
+        const run = initialInputRef.current;
         statusRef.current?.('open');
         sendResize(); // tell the PTY our initial window size
         // The PTY buffers the bytes until the shell finishes its rc files and
         // reads stdin, so the command runs as if typed at the first prompt.
-        const run = initialInputRef.current;
         if (run !== undefined && run !== '') {
           ws.send(new TextEncoder().encode(`${run}\r`));
         }

@@ -1887,6 +1887,7 @@ msgstr "від’єднуємо…"
 #: src/components/AccountReadyBanner.tsx
 #: src/components/AccountsSection.tsx
 #: src/components/DashboardLockedBanner.tsx
+#: src/terminal/TerminalDock.tsx
 msgid "dismiss"
 msgstr "прибрати"
 
@@ -3897,6 +3898,10 @@ msgstr "Відновити проєкт"
 msgid "restored"
 msgstr "відновлено"
 
+#: src/terminal/TerminalDock.tsx
+msgid "Restored after a reload — the command is not started, so no empty session is created."
+msgstr "Відновлено після перезавантаження: команду не запущено, щоб не створювати порожню сесію."
+
 #: src/components/CommandPalette.tsx
 msgid "results scoped to {scopeLabel}"
 msgstr "результати в межах {scopeLabel}"
@@ -3988,6 +3993,7 @@ msgid "run"
 msgstr "запуск"
 
 #: src/lib/docFigures.tsx
+#: src/terminal/TerminalDock.tsx
 msgid "Run"
 msgstr "Запуск"
 
@@ -4375,6 +4381,10 @@ msgstr "Гліфи стану обертаються й пульсують"
 #: src/workspace/boardModel.ts
 msgid "stale"
 msgstr "застаріло"
+
+#: src/terminal/TerminalDock.tsx
+msgid "Start Claude Code"
+msgstr "Запустити Claude Code"
 
 #: src/workspace/NewTaskModal.tsx
 msgid "start immediately — the dispatcher picks it up"
