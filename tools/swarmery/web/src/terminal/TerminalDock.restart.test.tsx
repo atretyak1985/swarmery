@@ -91,14 +91,15 @@ describe('restored Claude Code tab', () => {
   });
   afterEach(cleanup);
 
-  it('opens a plain shell and starts claude only on Start', async () => {
+  it('opens a plain shell and starts claude, bound to a session id, only on Start', async () => {
     renderDock('claude');
     await screen.findByTestId('xterm');
     expect(mounts[0]?.initialInput).toBeUndefined();
 
     act(() => mounts[0]?.onStatus('open'));
     fireEvent.click(screen.getByRole('button', { name: 'Start Claude Code' }));
-    expect(sent).toEqual(['claude\r']);
+    expect(sent).toHaveLength(1);
+    expect(sent[0]).toMatch(/^claude --session-id [0-9a-f-]{36}\r$/);
     expect(screen.queryByRole('button', { name: 'Start Claude Code' })).toBeNull();
   });
 
@@ -128,14 +129,14 @@ describe('new Claude Code tab', () => {
   });
   afterEach(cleanup);
 
-  it('types claude on its first connect and shows no Start strip', async () => {
+  it('types claude with a fresh session id on its first connect and shows no Start strip', async () => {
     const shell: DockState = { open: true, tabs: [{ id: 's1', label: 'shell 1', cwd: '/tmp/project' }], activeId: 's1' };
     render(<StatefulDock initial={shell} />);
     await screen.findByTestId('xterm');
 
     fireEvent.click(screen.getByRole('button', { name: 'open Claude Code in a new terminal' }));
     await vi.waitFor(() => expect(mounts).toHaveLength(2));
-    expect(mounts[1]?.initialInput).toBe('claude');
+    expect(mounts[1]?.initialInput).toMatch(/^claude --session-id [0-9a-f-]{36}$/);
 
     act(() => mounts[1]?.onStatus('open'));
     expect(screen.queryByRole('button', { name: 'Start Claude Code' })).toBeNull();
