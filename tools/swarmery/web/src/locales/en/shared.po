@@ -2041,6 +2041,10 @@ msgstr "Executor said: {said}"
 msgid "executor's reason:"
 msgstr "executor's reason:"
 
+#: src/terminal/TerminalDock.tsx
+msgid "exit full screen"
+msgstr "exit full screen"
+
 #: src/components/KillButton.tsx
 msgid "exited"
 msgstr "exited"
@@ -2260,6 +2264,10 @@ msgstr "from session #{id}"
 msgid "full offboard — also remove <0>project.json</0> and the statusline scripts (local agents/skills are never touched)"
 msgstr "full offboard — also remove <0>project.json</0> and the statusline scripts (local agents/skills are never touched)"
 
+#: src/terminal/TerminalDock.tsx
+msgid "full screen"
+msgstr "full screen"
+
 #: src/components/ImproveModal.tsx
 msgid "Generate proposal"
 msgstr "Generate proposal"
@@ -2333,6 +2341,14 @@ msgstr "hide from the projects list (reversible)"
 msgid "hide terminal"
 msgstr "hide terminal"
 
+#: src/workspace/StatusBar.tsx
+msgid "hide terminal ({n} open)"
+msgstr "hide terminal ({n} open)"
+
+#: src/terminal/TerminalDock.tsx
+msgid "Hide the terminal — its programs keep running"
+msgstr "Hide the terminal — its programs keep running"
+
 #: src/components/usage/UsageWindowRow.tsx
 msgid "hide this window"
 msgstr "hide this window"
@@ -2341,6 +2357,10 @@ msgstr "hide this window"
 #: src/workspace/TaskCard.tsx
 msgid "History"
 msgstr "History"
+
+#: src/terminal/TerminalDock.tsx
+msgid "Hold Esc to exit full screen"
+msgstr "Hold Esc to exit full screen"
 
 #: src/workspace/TaskCard.tsx
 msgid "hold this card in the queue without losing its place"
@@ -2718,6 +2738,14 @@ msgstr "marketplace v{marketplaceVersion} · repairs and toggles take effect in 
 msgid "matches you"
 msgstr "matches you"
 
+#: src/terminal/TerminalDock.tsx
+msgid "maximize terminal"
+msgstr "maximize terminal"
+
+#: src/terminal/TerminalDock.tsx
+msgid "Maximize the terminal over the page"
+msgstr "Maximize the terminal over the page"
+
 #: src/components/runOutcome/blockerGuide.ts
 msgid "merge or delete the leftover branch first — until then a retry is refused"
 msgstr "merge or delete the leftover branch first — until then a retry is refused"
@@ -2733,6 +2761,10 @@ msgstr "Messages"
 #: src/lib/docFigures.tsx
 msgid "Migrate routine config to v2"
 msgstr "Migrate routine config to v2"
+
+#: src/terminal/TerminalDock.tsx
+msgid "minimize terminal"
+msgstr "minimize terminal"
 
 #: src/components/ProjectPlugins.tsx
 msgid "missing: {missing}"
@@ -3894,6 +3926,14 @@ msgstr "restore failed: {status}"
 msgid "Restore project"
 msgstr "Restore project"
 
+#: src/terminal/TerminalDock.tsx
+msgid "restore terminal size"
+msgstr "restore terminal size"
+
+#: src/terminal/TerminalDock.tsx
+msgid "Restore the terminal size (Esc)"
+msgstr "Restore the terminal size (Esc)"
+
 #: src/components/AttachModal.tsx
 msgid "restored"
 msgstr "restored"
@@ -4285,6 +4325,14 @@ msgstr "show hidden ({hiddenCount})"
 #: src/workspace/StatusBar.tsx
 msgid "show terminal"
 msgstr "show terminal"
+
+#: src/workspace/StatusBar.tsx
+msgid "show terminal ({n} open)"
+msgstr "show terminal ({n} open)"
+
+#: src/terminal/TerminalDock.tsx
+msgid "Show the terminal full screen"
+msgstr "Show the terminal full screen"
 
 #: src/components/usage/UsageWindowRow.tsx
 msgid "show this window"
@@ -5255,6 +5303,10 @@ msgstr "will remove"
 #: src/components/AttachModal.tsx
 msgid "will restore"
 msgstr "will restore"
+
+#: src/terminal/TerminalDock.tsx
+msgid "window controls"
+msgstr "window controls"
 
 #: src/components/runOutcome/blockerGuide.ts
 msgid "Work you don't want: press Delete branch, and the retry recreates it from {base}."
