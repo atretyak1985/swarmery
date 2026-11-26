@@ -4,8 +4,12 @@
 // you can keep typing, and what Send does depends on how the message can reach
 // the conversation.
 //
-//   • idle / finished → Send resumes the conversation headlessly
-//     (`claude -r <uuid> -p`); its new turns arrive via the WS bus.
+//   • idle / finished / detached → Send resumes the conversation headlessly
+//     (`claude -r <uuid> -p`); its new turns arrive via the WS bus. detached
+//     (hasLiveProcess is false for it, same as idle) additionally shows a
+//     banner: the daemon takes over the stopped-with-no-terminal process
+//     first (identity-verified SIGKILL), server-side, inside that same
+//     /message request — Send itself behaves exactly as idle.
 //   • our own headless resume in flight (resumeInFlight) → Send QUEUES the
 //     message here. When the reply finishes, the queue goes out as one message
 //     (Claude Code merges queued prompts the same way). Stop cancels the run
@@ -200,12 +204,14 @@ export function CommandInput({
 
   const hint =
     mode === 'blocked'
-      ? t`session is running in a terminal without link control — turn on swarmery-link's "control" option, or stop the process from the ⋯ menu above to take over and continue the conversation here.`
+      ? t`session is running in a terminal without link control — turn on swarmery-link's "control" option (it only takes effect for sessions started after that), or stop the process from the ⋯ menu above to take over and continue the conversation here.`
       : mode === 'queue'
         ? t`a reply is being generated — messages you send now are queued and go out when it finishes.`
         : mode === 'link'
           ? t`session is running in a terminal — a message is delivered when the current turn ends.`
-          : null;
+          : procState === 'detached'
+            ? t`this session's terminal was closed and its process stopped without it. Send a message — the dashboard will take the session over.`
+            : null;
 
   const sendLabel = sending ? t`Sending…` : mode === 'queue' ? t`Queue` : t`Send`;
 

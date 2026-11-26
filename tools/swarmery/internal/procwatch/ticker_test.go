@@ -272,3 +272,60 @@ func TestCheckAll_FinishedSessionWithLiveProcIsLeftAlone(t *testing.T) {
 		t.Errorf("expected completed/running untouched, got %s/%s", status, state)
 	}
 }
+
+// TestCheckAll_DetachedClassification is the table from the phase doc: a
+// stopped process with no controlling tty is detached, a stopped process with
+// a live tty is still running (reachable with `fg`), and a merely-orphaned
+// (not stopped) process with no tty stays orphaned.
+func TestCheckAll_DetachedClassification(t *testing.T) {
+	cases := []struct {
+		name     string
+		detached bool
+		orphaned bool
+		want     string
+	}{
+		{"stopped, no tty -> detached", true, false, "detached"},
+		{"stopped, live tty -> running (fg-able)", false, false, "running"},
+		{"not stopped, no tty -> orphaned", false, true, "orphaned"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			db := openTestDB(t)
+			insertProject(t, db)
+			id := insertSession(t, db, 6001, "running", "/tmp/proj")
+			fake := &procwatch.FakeProvider{Procs: []procwatch.FakeProcess{
+				{PID: 6001, StartTime: "Mon Jan  1 00:00:00 2024", Command: "claude",
+					Detached: c.detached, Orphaned: c.orphaned},
+			}}
+			ticker := &procwatch.Ticker{DB: db, Provider: fake}
+			if _, err := ticker.CheckAll(time.Now()); err != nil {
+				t.Fatalf("CheckAll: %v", err)
+			}
+			var state string
+			db.QueryRow(`SELECT proc_state FROM sessions WHERE id = ?`, id).Scan(&state)
+			if state != c.want {
+				t.Errorf("expected proc_state=%q, got %q", c.want, state)
+			}
+		})
+	}
+}
+
+// Detached takes priority over orphaned when a FakeProvider (misleadingly, in
+// production the two are mutually exclusive by construction) reports both.
+func TestCheckAll_DetachedTakesPriorityOverOrphaned(t *testing.T) {
+	db := openTestDB(t)
+	insertProject(t, db)
+	id := insertSession(t, db, 6002, "running", "/tmp/proj")
+	fake := &procwatch.FakeProvider{Procs: []procwatch.FakeProcess{
+		{PID: 6002, StartTime: "Mon Jan  1 00:00:00 2024", Command: "claude", Detached: true, Orphaned: true},
+	}}
+	ticker := &procwatch.Ticker{DB: db, Provider: fake}
+	if _, err := ticker.CheckAll(time.Now()); err != nil {
+		t.Fatalf("CheckAll: %v", err)
+	}
+	var state string
+	db.QueryRow(`SELECT proc_state FROM sessions WHERE id = ?`, id).Scan(&state)
+	if state != "detached" {
+		t.Errorf("expected proc_state=detached, got %q", state)
+	}
+}

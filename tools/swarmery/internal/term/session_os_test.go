@@ -48,6 +48,79 @@ func TestCloseReapsForegroundJobOnRealPTY(t *testing.T) {
 	}
 }
 
+// A real bash on a real PTY that ignores SIGHUP and blocks writing to its own
+// controlling terminal (nothing reads the master once Close stops the bridge's
+// read pump) — the scenario this phase fixes: the shell never reacts to a
+// signal, so Close can only make it finish by taking the master away from
+// under it. Close must still return within killGrace+closeWaitAfterMaster and
+// the process group must be gone.
+func TestCloseUnsticksShellBlockedOnItsOwnTTYOnRealPTY(t *testing.T) {
+	if testing.Short() {
+		t.Skip("spawns a real shell and waits out the kill grace")
+	}
+	m := NewManager(Config{Shell: "/bin/bash", killGrace: 500 * time.Millisecond, closeWaitAfterMaster: 500 * time.Millisecond})
+	s, err := m.Start(t.TempDir(), []string{"HOME=" + t.TempDir(), "PS1=$ "}, 80, 24)
+	if err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	defer s.Close()
+
+	// echo its own pid (== the process group, Setsid+Setctty made it the
+	// leader), ignore HUP, then block writing to /dev/tty forever — nobody
+	// reads the master once this test stops draining it below.
+	if _, err := s.Write([]byte("echo JOB=$$; trap '' HUP; exec yes > /dev/tty\n")); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	// This pid IS the shell's own (Setsid+Setctty made it the session/group
+	// leader) — not a distinct foreground job, so read for the marker line
+	// directly instead of readJobPID's ForegroundJob-equality wait.
+	pgid := readPID(t, s)
+
+	start := time.Now()
+	s.Close()
+	took := time.Since(start)
+	if took > m.cfg.killGrace+m.cfg.closeWaitAfterMaster+time.Second {
+		t.Errorf("Close took %v, want at most killGrace+closeWaitAfterMaster", took)
+	}
+	for deadline := time.Now().Add(2 * time.Second); time.Now().Before(deadline); time.Sleep(20 * time.Millisecond) {
+		if err = syscall.Kill(-pgid, 0); errors.Is(err, syscall.ESRCH) {
+			return
+		}
+	}
+	_ = syscall.Kill(-pgid, syscall.SIGKILL)
+	t.Fatalf("shell group %d survived Close (kill -0: %v)", pgid, err)
+}
+
+// readPID reads the PTY until the marker line prints its pid, with no wait on
+// ForegroundJob (the caller's command IS the shell, not a distinct job).
+func readPID(t *testing.T, s *Session) int {
+	t.Helper()
+	found := make(chan int, 1)
+	go func() {
+		var out bytes.Buffer
+		buf := make([]byte, 4096)
+		for {
+			n, err := s.Read(buf)
+			out.Write(buf[:n])
+			if m := jobLine.FindSubmatch(out.Bytes()); m != nil {
+				pid, _ := strconv.Atoi(string(m[1]))
+				found <- pid
+				return
+			}
+			if err != nil {
+				return
+			}
+		}
+	}()
+	select {
+	case pid := <-found:
+		return pid
+	case <-time.After(10 * time.Second):
+		t.Fatal("the marker line never printed its pid")
+		return 0
+	}
+}
+
 var jobLine = regexp.MustCompile(`JOB=(\d+)`)
 
 // readJobPID reads the PTY until the job prints its pid (the leader of its

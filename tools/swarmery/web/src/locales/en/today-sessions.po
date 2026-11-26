@@ -2259,8 +2259,8 @@ msgid "session is running in a terminal — a message is delivered when the curr
 msgstr "session is running in a terminal — a message is delivered when the current turn ends."
 
 #: src/pages/detail/CommandInput.tsx
-msgid "session is running in a terminal without link control — turn on swarmery-link's \"control\" option, or stop the process from the ⋯ menu above to take over and continue the conversation here."
-msgstr "session is running in a terminal without link control — turn on swarmery-link's \"control\" option, or stop the process from the ⋯ menu above to take over and continue the conversation here."
+msgid "session is running in a terminal without link control — turn on swarmery-link's \"control\" option (it only takes effect for sessions started after that), or stop the process from the ⋯ menu above to take over and continue the conversation here."
+msgstr "session is running in a terminal without link control — turn on swarmery-link's \"control\" option (it only takes effect for sessions started after that), or stop the process from the ⋯ menu above to take over and continue the conversation here."
 
 #: src/pages/detail/SessionPane.tsx
 msgid "session outcome"
@@ -2603,6 +2603,10 @@ msgstr "This is a production deploy: confirm it in the session's own terminal"
 #: src/pages/detail/SessionRail.tsx
 msgid "this session {spent}"
 msgstr "this session {spent}"
+
+#: src/pages/detail/CommandInput.tsx
+msgid "this session's terminal was closed and its process stopped without it. Send a message — the dashboard will take the session over."
+msgstr "this session's terminal was closed and its process stopped without it. Send a message — the dashboard will take the session over."
 
 #: src/pages/ProjectOverview.tsx
 msgid "This week"

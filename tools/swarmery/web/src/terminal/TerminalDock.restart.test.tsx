@@ -99,6 +99,7 @@ describe('restored Claude Code tab', () => {
 
     act(() => mounts[0]?.onStatus('open'));
     fireEvent.click(screen.getByRole('button', { name: 'Start Claude Code' }));
+    // A restored tab saved without a session id is bound to a fresh one on Start.
     expect(sent).toHaveLength(1);
     expect(sent[0]).toMatch(/^claude --session-id [0-9a-f-]{36}\r$/);
     expect(screen.queryByRole('button', { name: 'Start Claude Code' })).toBeNull();

@@ -8,6 +8,7 @@ type FakeProcess struct {
 	StartTime string
 	Command   string
 	Orphaned  bool
+	Detached  bool
 	CWD       string
 	TTY       string
 }
@@ -30,6 +31,15 @@ func (f *FakeProvider) IsOrphaned(pid int) (bool, error) {
 	for _, p := range f.Procs {
 		if p.PID == pid {
 			return p.Orphaned, nil
+		}
+	}
+	return false, nil
+}
+
+func (f *FakeProvider) IsDetached(pid int) (bool, error) {
+	for _, p := range f.Procs {
+		if p.PID == pid {
+			return p.Detached, nil
 		}
 	}
 	return false, nil

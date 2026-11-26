@@ -1,11 +1,17 @@
 // Package procwatch checks whether the OS processes backing active Claude Code
-// sessions are still alive and classifies them as running/orphaned/dead.
+// sessions are still alive and classifies them as running/orphaned/detached/dead.
 package procwatch
 
 // ProcState values stored in sessions.proc_state.
 const (
 	StateRunning  = "running"
 	StateOrphaned = "orphaned"
+	// StateDetached is a process ps reports stopped (STAT contains "T") with no
+	// controlling tty: the terminal that owned it was closed while it was
+	// suspended, so it will never resume on its own (no shell left to `fg` it).
+	// A stopped process with a live tty (Ctrl+Z in an ordinary terminal) is NOT
+	// detached — it is still reachable with `fg` and classifies as running.
+	StateDetached = "detached"
 	StateDead     = "dead"
 	StateUnknown  = "unknown"
 )
@@ -27,6 +33,10 @@ type Provider interface {
 	Info(pid int) (*ProcInfo, error)
 	// IsOrphaned returns true when PPID==1 or tty=="??".
 	IsOrphaned(pid int) (bool, error)
+	// IsDetached returns true when the process is stopped (ps STAT contains
+	// "T") and has no controlling tty — its terminal is gone and nothing can
+	// `fg` it back. A stopped process with a live tty is not detached.
+	IsDetached(pid int) (bool, error)
 	// MatchByDir returns PIDs of processes whose command contains "claude"
 	// and whose open cwd matches dir. Returns empty slice on no match.
 	MatchByDir(dir string) ([]int, error)

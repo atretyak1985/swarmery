@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Session } from '../../api/types';
-import { redirectChannel } from './redirectChannel';
+import { hasLiveProcess, redirectChannel } from './redirectChannel';
 
 type Input = Parameters<typeof redirectChannel>[0];
 
@@ -22,5 +22,14 @@ describe('redirectChannel', () => {
 
   it('is the link mod with the composer off and a mod polling', () => {
     expect(redirectChannel(session({ procState: 'running', link: link(true) }))).toBe('link');
+  });
+
+  // Deliberate: a detached process's terminal is gone and nothing can `fg` it
+  // back — the dashboard is the only channel left, so a detached session must
+  // route through the composer exactly like idle, never read as "live".
+  it('treats detached as composer-reachable, not a live process', () => {
+    expect(hasLiveProcess('detached')).toBe(false);
+    expect(redirectChannel(session({ procState: 'detached' }))).toBe('composer');
+    expect(redirectChannel(session({ procState: 'detached', link: link(true) }))).toBe('composer');
   });
 });
