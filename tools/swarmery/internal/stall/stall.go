@@ -28,6 +28,7 @@ import (
 
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/guards"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/playbooks"
+	"github.com/atretyak1985/swarmery/tools/swarmery/internal/procwatch"
 	"github.com/atretyak1985/swarmery/tools/swarmery/internal/staleness"
 )
 
@@ -204,6 +205,7 @@ type session struct {
 	found          bool
 	id             int64
 	ended          bool
+	procState      string
 	lastActivity   time.Time // newest turn, else the session's start
 	pendingRequest int64     // oldest pending permission request, 0 when none
 	pendingSince   time.Time
@@ -284,6 +286,15 @@ func evaluate(c candidate, a active, s session, playbook string, now time.Time, 
 		return Stalled{}, false
 	}
 
+	// A detached session (procwatch.StateDetached) is quiet for a known, already
+	// surfaced reason — its terminal closed while the process was stopped — not
+	// because the agent silently stopped working. The dashboard's own banner
+	// (web CommandInput) already tells the operator to take it over with a
+	// reply; a second "no new turn" webhook on top of that would be noise
+	// pointing at the wrong fix (nothing to wait out — a message is needed).
+	if s.procState == procwatch.StateDetached {
+		return Stalled{}, false
+	}
 	if quiet >= silence {
 		st.Reason, st.Since = ReasonNoTurns, last
 		return st, true
@@ -355,6 +366,7 @@ func loadSession(db *sql.DB, uuid string) (session, error) {
 	}
 	s.found = true
 	s.ended = staleness.SessionEnded(status, procState)
+	s.procState = procState
 	s.lastActivity = parseTS(lastTurn)
 	if s.lastActivity.IsZero() {
 		s.lastActivity = parseTS(started)

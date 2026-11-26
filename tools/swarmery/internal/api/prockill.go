@@ -44,6 +44,30 @@ func isSameClaudeProc(info *procwatch.ProcInfo, procStartedAt string) bool {
 	return procStartedAt == "" || info.StartTime == procStartedAt
 }
 
+// killProcInfo resolves process info for the identity re-check immediately
+// before a signal is sent — swappable in tests (pattern: sessionStartProcInfo).
+var killProcInfo = procwatch.OsProvider{}.Info
+
+// killSignal sends the actual signal — swappable in tests so the identity
+// guard can be exercised without signalling a real (or, worse, reused) PID.
+var killSignal = syscall.Kill
+
+// killVerifiedClaude re-verifies that pid is still the exact claude process
+// recorded at procStartedAt (command name + start time, isSameClaudeProc) and
+// only then signals it. Shared by KillSession and the detached-session
+// takeover (session_message.go) so neither path can signal a PID that was
+// recycled to something else since the row was last checked.
+func killVerifiedClaude(pid int, procStartedAt string, sig syscall.Signal) error {
+	info, err := killProcInfo(pid)
+	if err != nil {
+		return fmt.Errorf("process info for pid %d: %w", pid, err)
+	}
+	if !isSameClaudeProc(info, procStartedAt) {
+		return fmt.Errorf("pid %d is not the recorded claude process", pid)
+	}
+	return killSignal(pid, sig)
+}
+
 // escalateKill waits delay, then SIGKILLs pid if it is still the same live
 // claude process. It re-runs the full identity guard (command name +
 // start-time) so a PID recycled to another process after SIGTERM is never
@@ -290,27 +314,13 @@ func (h *Handler) KillSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Re-verify process identity immediately before signaling.
-	info, err := procwatch.OsProvider{}.Info(int(pid.Int64))
-	if err != nil || info == nil {
-		http.Error(w, `{"error":"process not found"}`, http.StatusConflict)
-		return
-	}
-	if !strings.Contains(strings.ToLower(info.Command), "claude") {
-		http.Error(w, `{"error":"PID does not belong to a claude process"}`, http.StatusConflict)
-		return
-	}
-	if procStartedAt.Valid && procStartedAt.String != "" && info.StartTime != procStartedAt.String {
-		http.Error(w, `{"error":"PID reused — refusing to kill"}`, http.StatusConflict)
-		return
-	}
-
 	sig := syscall.SIGTERM
 	if req.Force {
 		sig = syscall.SIGKILL
 	}
-	if err := syscall.Kill(int(pid.Int64), sig); err != nil {
-		writeErr(w, fmt.Errorf("kill pid %d sig %d: %w", pid.Int64, sig, err))
+	// Re-verify process identity immediately before signaling (killVerifiedClaude).
+	if err := killVerifiedClaude(int(pid.Int64), procStartedAt.String, sig); err != nil {
+		http.Error(w, `{"error":"process not found or no longer the recorded claude process"}`, http.StatusConflict)
 		return
 	}
 	log.Printf("prockill: sent sig %d to pid %d (session %s, force=%v)", sig, pid.Int64, sessionUUID, req.Force)

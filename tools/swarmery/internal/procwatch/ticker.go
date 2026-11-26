@@ -121,7 +121,7 @@ func (t *Ticker) settleFinished(nowStr string) ([]int64, error) {
 		SELECT id, pid, proc_started_at, proc_state
 		FROM sessions
 		WHERE status NOT IN ('active','idle','awaiting_reply')
-		  AND proc_state IN ('running','orphaned') AND pid IS NOT NULL`)
+		  AND proc_state IN ('running','orphaned','detached') AND pid IS NOT NULL`)
 	if err != nil {
 		return nil, err
 	}
@@ -179,6 +179,14 @@ func (t *Ticker) checkOne(pid int, procStartedAt, currentState string) string {
 	}
 	if !strings.Contains(strings.ToLower(info.Command), "claude") {
 		return StateDead
+	}
+	detached, err := t.Provider.IsDetached(pid)
+	if err != nil {
+		log.Printf("procwatch: detached check pid %d: %v", pid, err)
+		return StateRunning // err → assume alive
+	}
+	if detached {
+		return StateDetached
 	}
 	orphaned, err := t.Provider.IsOrphaned(pid)
 	if err != nil {

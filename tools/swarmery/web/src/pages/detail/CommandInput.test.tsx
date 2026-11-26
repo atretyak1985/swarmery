@@ -154,4 +154,15 @@ describe('CommandInput', () => {
     expect(screen.getByText(/^not sent: .*"control" option/)).toBeTruthy();
     expect(box().value).toBe('yes, go on');
   });
+
+  it('shows the takeover banner for a detached session and sends like idle', () => {
+    const { onSent } = setup({ procState: 'detached' });
+    expect(screen.getByText(/terminal was closed/)).toBeTruthy();
+    type('take it over');
+    expect(screen.getByRole('button', { name: 'Send' }).disabled).toBe(false);
+    fireEvent.click(button('Send'));
+    expect(api.sendSessionMessage).toHaveBeenCalledWith(7, 'take it over');
+    expect(onSent).toHaveBeenCalledWith('take it over');
+    expect(box().value).toBe('');
+  });
 });
