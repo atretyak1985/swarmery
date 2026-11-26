@@ -2999,6 +2999,10 @@ msgstr "жоден провайдер використання не відпов
 msgid "no worktrees on this machine"
 msgstr "на цій машині немає worktree"
 
+#: src/terminal/closeReason.ts
+msgid "Nobody reattached to this terminal in time, so it was closed."
+msgstr "Ніхто не підключився до цього термінала вчасно, тому його закрито."
+
 #: src/components/usage/LimitsPanel.tsx
 msgid "none"
 msgstr "немає"
@@ -4970,9 +4974,17 @@ msgstr "Це запускає модель на доказах вище і ст�
 msgid "this session had touched the file when the card was captured"
 msgstr "ця сесія торкалася файлу на момент захоплення картки"
 
+#: src/terminal/closeReason.ts
+msgid "This terminal is already closed."
+msgstr "Цей термінал уже закрито."
+
 #: src/components/usage/UsageConnect.tsx
 msgid "This terminal runs under <0>{account}</0>'s config dir. Run <1>claude</1> and complete the login — when you exit the shell, the account is re-checked automatically."
 msgstr "Цей термінал працює з config-текою акаунта <0>{account}</0>. Запустіть <1>claude</1> і завершіть вхід — коли ви вийдете з оболонки, акаунт перевіриться автоматично."
+
+#: src/terminal/closeReason.ts
+msgid "This terminal was reattached from another tab or window."
+msgstr "До цього термінала підключилися з іншої вкладки чи вікна."
 
 #: src/main.tsx
 msgid "This view failed to render."

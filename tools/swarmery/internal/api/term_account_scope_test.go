@@ -89,15 +89,13 @@ func TestTermAccountQueryGates(t *testing.T) {
 			t.Fatalf("dial should have upgraded for a known account: %v", err)
 		}
 		defer c.Close(websocket.StatusNormalClosure, "")
+		readTermHello(t, ctx, c)
 		if err := c.Write(ctx, websocket.MessageBinary, []byte("ping\n")); err != nil {
 			t.Fatalf("write: %v", err)
 		}
-		typ, data, err := c.Read(ctx)
-		if err != nil {
-			t.Fatalf("read echo: %v", err)
-		}
-		if typ != websocket.MessageBinary || !strings.Contains(string(data), "ping") {
-			t.Errorf("echo = (%v, %q), want a binary 'ping'", typ, data)
+		data := readTermBinary(t, ctx, c)
+		if !strings.Contains(string(data), "ping") {
+			t.Errorf("echo = %q, want a binary 'ping'", data)
 		}
 	})
 

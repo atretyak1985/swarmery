@@ -91,23 +91,20 @@ func TestCloseUnsticksShellBlockedOnItsOwnTTYOnRealPTY(t *testing.T) {
 	t.Fatalf("shell group %d survived Close (kill -0: %v)", pgid, err)
 }
 
-// readPID reads the PTY until the marker line prints its pid, with no wait on
+// readPID reads the PTY (via Attach — the Session's readLoop is the one and
+// only PTY reader now) until the marker line prints its pid, with no wait on
 // ForegroundJob (the caller's command IS the shell, not a distinct job).
 func readPID(t *testing.T, s *Session) int {
 	t.Helper()
+	_, data, _ := s.Attach()
 	found := make(chan int, 1)
 	go func() {
 		var out bytes.Buffer
-		buf := make([]byte, 4096)
-		for {
-			n, err := s.Read(buf)
-			out.Write(buf[:n])
+		for chunk := range data {
+			out.Write(chunk)
 			if m := jobLine.FindSubmatch(out.Bytes()); m != nil {
 				pid, _ := strconv.Atoi(string(m[1]))
 				found <- pid
-				return
-			}
-			if err != nil {
 				return
 			}
 		}
@@ -123,23 +120,20 @@ func readPID(t *testing.T, s *Session) int {
 
 var jobLine = regexp.MustCompile(`JOB=(\d+)`)
 
-// readJobPID reads the PTY until the job prints its pid (the leader of its
-// group), then waits for the shell to have handed it the foreground.
+// readJobPID reads the PTY (via Attach) until the job prints its pid (the
+// leader of its group), then waits for the shell to have handed it the
+// foreground.
 func readJobPID(t *testing.T, s *Session) int {
 	t.Helper()
+	_, data, _ := s.Attach()
 	found := make(chan int, 1)
 	go func() {
 		var out bytes.Buffer
-		buf := make([]byte, 4096)
-		for {
-			n, err := s.Read(buf)
-			out.Write(buf[:n])
+		for chunk := range data {
+			out.Write(chunk)
 			if m := jobLine.FindSubmatch(out.Bytes()); m != nil {
 				pid, _ := strconv.Atoi(string(m[1]))
 				found <- pid
-				return
-			}
-			if err != nil {
 				return
 			}
 		}

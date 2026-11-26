@@ -2999,6 +2999,10 @@ msgstr "no usage providers reported"
 msgid "no worktrees on this machine"
 msgstr "no worktrees on this machine"
 
+#: src/terminal/closeReason.ts
+msgid "Nobody reattached to this terminal in time, so it was closed."
+msgstr "Nobody reattached to this terminal in time, so it was closed."
+
 #: src/components/usage/LimitsPanel.tsx
 msgid "none"
 msgstr "none"
@@ -4970,9 +4974,17 @@ msgstr "This runs the model on the evidence above and creates a diff proposal yo
 msgid "this session had touched the file when the card was captured"
 msgstr "this session had touched the file when the card was captured"
 
+#: src/terminal/closeReason.ts
+msgid "This terminal is already closed."
+msgstr "This terminal is already closed."
+
 #: src/components/usage/UsageConnect.tsx
 msgid "This terminal runs under <0>{account}</0>'s config dir. Run <1>claude</1> and complete the login — when you exit the shell, the account is re-checked automatically."
 msgstr "This terminal runs under <0>{account}</0>'s config dir. Run <1>claude</1> and complete the login — when you exit the shell, the account is re-checked automatically."
+
+#: src/terminal/closeReason.ts
+msgid "This terminal was reattached from another tab or window."
+msgstr "This terminal was reattached from another tab or window."
 
 #: src/main.tsx
 msgid "This view failed to render."
