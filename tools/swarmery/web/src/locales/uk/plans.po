@@ -825,6 +825,10 @@ msgstr "діапазони й результат"
 msgid "blocked"
 msgstr "блок"
 
+#: src/pages/plans/PhaseLedger.tsx
+msgid "blocked · why"
+msgstr "заблоковано · чому"
+
 #: src/pages/Board.tsx
 #: src/pages/plans/PlansPlace.tsx
 msgid "Board"
@@ -3412,6 +3416,10 @@ msgstr "Дифф не виміряно, тож не скажемо, яких з�
 #: src/pages/plans/phaseChips.tsx
 msgid "the executor is actively editing this phase doc"
 msgstr "виконавець активно редагує цей документ фази"
+
+#: src/pages/plans/PhaseLedger.tsx
+msgid "the executor stopped on purpose and wrote why in the Completion Report — a retry of the same doc stops again; fix what it names in the doc and the retry comes back"
+msgstr "виконавець зупинився свідомо й пояснив чому у Completion Report — повтор того самого доку зупиниться знову; виправте в доку те, що він називає, і повтор повернеться"
 
 #: src/pages/plans/forecastStoryModel.ts
 msgid "The forecast named no size, duration or outcome."

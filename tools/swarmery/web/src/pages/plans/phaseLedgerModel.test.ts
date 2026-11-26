@@ -7,6 +7,7 @@ import { describe, expect, it } from 'vitest';
 import type { EpicPhase, NeedsYouDecision, Session } from '../../api/types';
 import { phaseStatus } from './planModel';
 import {
+  executorBlocked,
   phaseCost,
   phaseCostBand,
   phaseGlyph,
@@ -151,5 +152,37 @@ describe('sessionGlyph', () => {
     expect(sessionGlyph('waiting_approval')).toBe('needs');
     expect(sessionGlyph('completed')).toBe('done');
     expect(sessionGlyph('killed')).toBe('stopped');
+  });
+});
+
+describe('executorBlocked', () => {
+  const ended = '2026-11-24T18:00:00Z';
+  const blocked = (over: Partial<EpicPhase> = {}): EpicPhase =>
+    phase({
+      runOutcome: 'noop',
+      runEndedAt: ended,
+      docUpdatedAt: '2026-11-24T17:59:50Z',
+      completionReport: '\n**Blocked — premise mismatch, no work performed.**\n\nThis worktree checks out the wrong repo.',
+      ...over,
+    });
+
+  it('a no-progress run whose report opens with a refusal is blocked', () => {
+    expect(executorBlocked(blocked())).toBe(true);
+    expect(executorBlocked(blocked({ completionReport: '**Status: PHASE BLOCKED — not attempted.**' }))).toBe(true);
+    expect(executorBlocked(blocked({ completionReport: 'Заблоковано: фаза операторська.' }))).toBe(true);
+  });
+
+  it('an edit to the doc after the run brings the retry back', () => {
+    expect(executorBlocked(blocked({ docUpdatedAt: '2026-11-24T18:05:00Z' }))).toBe(false);
+  });
+
+  it('a blocker mentioned below the first line is not a refusal', () => {
+    expect(executorBlocked(blocked({ completionReport: 'Shipped the parser.\n\nBlocked on CI for the rest.' }))).toBe(false);
+  });
+
+  it('only a no-progress run counts', () => {
+    expect(executorBlocked(blocked({ runOutcome: 'failed' }))).toBe(false);
+    expect(executorBlocked(blocked({ runOutcome: 'partial' }))).toBe(false);
+    expect(executorBlocked(blocked({ completionReport: null }))).toBe(false);
   });
 });

@@ -181,9 +181,28 @@ func parseDocStatus(text string) string {
 var (
 	// The phase doc's header table row: `| **Repo** | `sk-next` (`/abs/sk-next`) |`.
 	docRepoRowRe = regexp.MustCompile(`(?i)^\|\s*\*\*Repos?\*\*\s*\|\s*(.+?)\s*\|\s*$`)
-	// The prose header form: `**Repo:** `/Volumes/Work/swarmery``.
-	docRepoLineRe = regexp.MustCompile(`(?i)^\s*\*\*Repos?:\*\*\s*(.+?)\s*$`)
+	// The prose header form: `**Repo:** `/Volumes/Work/swarmery``, optionally as a
+	// list item, and the unbolded spelling planners also write — `- Repo: `/abs` ·
+	// Branch: …`, `Repo(s): …`. An unread header is not harmless: with no declared
+	// repo the run falls back to the overlay's mainApp and executes, in full, in a
+	// repository the phase never named. The colon is required, so a "Repo area"
+	// prose line is not read as a checkout.
+	docRepoLineRe = regexp.MustCompile(`(?i)^\s*(?:[-*]\s+)?(?:\*\*)?Repo(?:s|\(s\)|sitory)?:(?:\*\*)?\s*(.+?)\s*$`)
+	// docNextFieldRe finds where the next header field starts on a joined line: a
+	// `**Label:**` field or the ` · ` separator the plain form uses between fields.
+	docNextFieldRe = regexp.MustCompile(`\*\*[^*\n]+:\*\*|·`)
 )
+
+// repoCellOnly cuts a prose Repo value at the next header field. The joined form
+// `**Repo:** `/abs/repo` · **Branch:** `feat/x` · …` would otherwise hand the
+// branch's backticked token to repopath as a second repo, and planrun would refuse
+// a single-repo plan as one that "spans N repositories" named after its branches.
+func repoCellOnly(v string) string {
+	if loc := docNextFieldRe.FindStringIndex(v); loc != nil {
+		v = v[:loc[0]]
+	}
+	return strings.TrimSpace(strings.TrimRight(strings.TrimSpace(v), "|,"))
+}
 
 // VerifyOff / VerifyNormal / VerifyStrict are the phase-doc verification modes.
 // Exported because internal/phaserun switches on them and epic_phases stores them;
@@ -306,20 +325,6 @@ func parseDocRepo(text string) string {
 		}
 	}
 	return ""
-}
-
-// docNextFieldRe finds the next `**Label:**` field on a joined header line.
-var docNextFieldRe = regexp.MustCompile(`\*\*[^*\n]+:\*\*`)
-
-// repoCellOnly cuts a prose Repo value at the next header field. The joined form
-// `**Repo:** `/abs/repo` · **Branch:** `feat/x` · …` would otherwise hand the
-// branch's backticked token to repopath as a second repo, and planrun would refuse
-// a single-repo plan as one that "spans N repositories" named after its branches.
-func repoCellOnly(v string) string {
-	if loc := docNextFieldRe.FindStringIndex(v); loc != nil {
-		v = v[:loc[0]]
-	}
-	return strings.TrimSpace(strings.TrimRight(strings.TrimSpace(v), "·|,"))
 }
 
 // SpecCriterion is one SC-tagged acceptance-criterion checkbox from plan/spec.md.
