@@ -5,6 +5,14 @@
 // login fallback (?account = account key: the PTY runs under that account's
 // CLAUDE_CONFIG_DIR, in the operator's home).
 //
+// Phase 4 (registry + reattach): a dropped socket no longer kills the PTY —
+// the daemon-side Session keeps running, detached, for term.Config.DetachGrace
+// (internal/term). GET /api/term/ws?attach=<id> reattaches to it, replaying
+// whatever accumulated while nobody was listening. The handler tells the
+// client which session it got with a "hello" text frame — {"type":"hello",
+// "id":"<id>"} — the FIRST frame on every successful upgrade, new session or
+// reattach alike, so the client always knows the id to reattach to later.
+//
 // Security contract (normative, phase-15 spec):
 //   - The endpoint is browser-originated, so the origin gate is STRICTER than
 //     requireLocalOrigin: a MISSING Origin is rejected too (only the daemon's own
@@ -15,12 +23,21 @@
 //     (subprotocol swarmery.session.<token>) or link auth (session.go). The
 //     101 selects exactly swarmery.v1.
 //   - cwd MUST EvalSymlinks to either a registered project path or a live task
-//     worktree_path — anything else (e.g. /etc, a symlink escape) is 403.
+//     worktree_path — anything else (e.g. /etc, a symlink escape) is 403. An
+//     ?attach=<id> request skips cwd/account resolution entirely — the id
+//     alone names an already-admitted session — but runs every OTHER gate
+//     above (origin, loopback, dashboard auth) exactly like a fresh ws does.
 //   - account MUST be a well-formed key (claudeacct.ValidKey) naming an account
 //     the registry actually reports; it is NEVER used as a path, and it is
 //     mutually exclusive with cwd. All of it runs BEFORE the upgrade.
-//   - The PTY runs in its own process group; the bridge Closes the Session on
-//     disconnect, which SIGHUPs (then SIGKILLs) the whole group — no orphans.
+//   - The PTY runs in its own process group; the Session's own readLoop is its
+//     one and only reader (internal/term) and outlives a dropped socket; the
+//     bridge Detaches on a plain socket drop and only Closes (SIGHUP, then
+//     SIGKILL) when the PTY itself ended, the reaper decided DetachGrace
+//     elapsed, or the explicit DELETE below asked for it — no orphans either way.
+//   - GET /api/term/sessions and DELETE /api/term/sessions/{id} are
+//     requireLocalOrigin (same fence as every other daemon-only write/list —
+//     a browser dashboard session is not accepted there, only a local caller).
 //
 // This is NOT part of the frozen event bus (ws.go): a dedicated PTY socket is
 // separate infrastructure and adds no message types to that bus.
@@ -89,42 +106,46 @@ func (h *Handler) term(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	attachID := strings.TrimSpace(r.URL.Query().Get("attach"))
 	reqCwd := r.URL.Query().Get("cwd")
 	reqAccount := strings.TrimSpace(r.URL.Query().Get("account"))
+	label := r.URL.Query().Get("label")
 
 	var cwd string
 	var env []string
-	switch {
-	case reqAccount != "" && reqCwd != "":
-		// Two targets is no target: the caller must say which surface it wants.
-		writeJSONStatus(w, http.StatusBadRequest,
-			map[string]string{"error": "account and cwd are mutually exclusive"})
-		return
-	case reqAccount != "":
-		var ok bool
-		cwd, env, ok = resolveTermAccount(reqAccount)
-		if !ok {
-			writeJSONStatus(w, http.StatusNotFound,
-				map[string]string{"error": "unknown account"})
+	if attachID == "" {
+		switch {
+		case reqAccount != "" && reqCwd != "":
+			// Two targets is no target: the caller must say which surface it wants.
+			writeJSONStatus(w, http.StatusBadRequest,
+				map[string]string{"error": "account and cwd are mutually exclusive"})
 			return
+		case reqAccount != "":
+			var ok bool
+			cwd, env, ok = resolveTermAccount(reqAccount)
+			if !ok {
+				writeJSONStatus(w, http.StatusNotFound,
+					map[string]string{"error": "unknown account"})
+				return
+			}
+		default:
+			var projectPath string
+			var ok bool
+			cwd, projectPath, ok = h.resolveTermCwd(reqCwd)
+			if !ok {
+				writeJSONStatus(w, http.StatusForbidden,
+					map[string]string{"error": "cwd is not a registered project or live worktree path"})
+				return
+			}
+			// Run the dock shell under the project's Claude account. The account is
+			// resolved from projectPath, NEVER from cwd: a task worktree_path carries no
+			// .claude/settings.local.json of its own (that file lives at the PROJECT
+			// root), so resolving from cwd would silently fall back to the default
+			// account for every worktree terminal — the same A3 trap dispatch/verify
+			// guard against by resolving from the project instead of the spawn cwd. cwd
+			// still chdirs the PTY into the worktree; only the account lookup moves.
+			env = termAccountEnv(projectPath)
 		}
-	default:
-		var projectPath string
-		var ok bool
-		cwd, projectPath, ok = h.resolveTermCwd(reqCwd)
-		if !ok {
-			writeJSONStatus(w, http.StatusForbidden,
-				map[string]string{"error": "cwd is not a registered project or live worktree path"})
-			return
-		}
-		// Run the dock shell under the project's Claude account. The account is
-		// resolved from projectPath, NEVER from cwd: a task worktree_path carries no
-		// .claude/settings.local.json of its own (that file lives at the PROJECT
-		// root), so resolving from cwd would silently fall back to the default
-		// account for every worktree terminal — the same A3 trap dispatch/verify
-		// guard against by resolving from the project instead of the spawn cwd. cwd
-		// still chdirs the PTY into the worktree; only the account lookup moves.
-		env = termAccountEnv(projectPath)
 	}
 
 	c, err := websocket.Accept(w, r, &websocket.AcceptOptions{
@@ -143,7 +164,28 @@ func (h *Handler) term(w http.ResponseWriter, r *http.Request) {
 	c.SetReadLimit(termReadLimit)
 	defer c.Close(websocket.StatusInternalError, "server error")
 
-	sess, err := termMgr.Start(cwd, env, 0, 0)
+	// Captured once, not read back off the package global inside the bridge:
+	// a concurrent AttachTermManager(nil) (daemon shutdown, test teardown)
+	// must never turn a live connection's own Detach/Close call into a nil
+	// pointer dereference.
+	mgr := termMgr
+
+	if attachID != "" {
+		sess, snapshot, data, evicted, err := mgr.Attach(attachID)
+		if err != nil {
+			// 4404: a private-use WS close code for "no such terminal" — the
+			// client shows "Термінал уже закрито" + a Start button (closeReason.ts).
+			c.Close(websocket.StatusCode(4404), termCloseNotFound)
+			return
+		}
+		if err := sendTermHello(r.Context(), c, attachID); err != nil {
+			return
+		}
+		bridgeTermStream(r.Context(), mgr, attachID, c, sess, snapshot, data, evicted)
+		return
+	}
+
+	sess, err := mgr.StartWithLabel(cwd, env, 0, 0, label)
 	if err != nil {
 		if errors.Is(err, term.ErrTooManySessions) {
 			// 1013 Try Again Later — the browser surfaces a "too many terminals".
@@ -154,94 +196,133 @@ func (h *Handler) term(w http.ResponseWriter, r *http.Request) {
 		c.Close(websocket.StatusInternalError, "cannot start terminal")
 		return
 	}
-	bridgeTermSession(r.Context(), c, sess)
+	// Attach this very request as the session's first listener: it owns the
+	// PTY's output from the moment it's created, same as before this phase.
+	snapshot, data, evicted := sess.Attach()
+	if err := sendTermHello(r.Context(), c, sess.ID); err != nil {
+		return
+	}
+	bridgeTermStream(r.Context(), mgr, sess.ID, c, sess, snapshot, data, evicted)
 }
 
-// Close reasons the bridge sends when the PTY side ends the socket. They are a
-// contract with web/src/terminal/closeReason.ts, which turns them into the
-// line the tab shows: keep the two in step.
+// sendTermHello is the first frame on every successful upgrade — new session
+// or reattach alike — so the client always knows the id to reattach to later.
+func sendTermHello(ctx context.Context, c *websocket.Conn, id string) error {
+	wctx, cancel := context.WithTimeout(ctx, termWriteTimeout)
+	defer cancel()
+	payload, err := json.Marshal(struct {
+		Type string `json:"type"`
+		ID   string `json:"id"`
+	}{Type: "hello", ID: id})
+	if err != nil {
+		return err
+	}
+	return c.Write(wctx, websocket.MessageText, payload)
+}
+
+// Close reasons the bridge sends when the PTY side ends the socket, or when
+// the attach layer itself refuses/evicts a connection. They are a contract
+// with web/src/terminal/closeReason.ts, which turns them into the line the
+// tab shows: keep the two in step.
 const (
-	termCloseShellExited    = "shell-exited"
-	termCloseIdle           = "idle"
-	termCloseDaemonStopping = "daemon-stopping"
+	termCloseShellExited       = "shell-exited"
+	termCloseIdle              = "idle"
+	termCloseDaemonStopping    = "daemon-stopping"
+	termCloseDetachExpired     = "detach-expired"
+	termCloseAttachedElsewhere = "attached-elsewhere"
+	termCloseNotFound          = "not-found"
 )
 
 // termCloseFrame picks the close status and reason for a socket whose PTY ended
-// first. The daemon stopping is 1001 Going Away; the shell exiting or the idle
-// reaper is a normal 1000.
+// first. The daemon stopping is 1001 Going Away; the shell exiting, the idle
+// reaper and the detach-grace reaper are a normal 1000.
 func termCloseFrame(r term.CloseReason) (websocket.StatusCode, string) {
 	switch r {
 	case term.ReasonShutdown:
 		return websocket.StatusGoingAway, termCloseDaemonStopping
 	case term.ReasonIdle:
 		return websocket.StatusNormalClosure, termCloseIdle
+	case term.ReasonDetachExpired:
+		return websocket.StatusNormalClosure, termCloseDetachExpired
 	default:
 		return websocket.StatusNormalClosure, termCloseShellExited
 	}
 }
 
-// bridgeTermSession pumps bytes both ways until either side closes, then tears
-// the PTY down (process-group kill). When the PTY ended first, the browser gets
-// a close frame saying why (termCloseFrame), so the tab can say "the shell
-// exited" or "the daemon restarted" instead of a bare "ended". Split into its
-// own function so the pump logic is unit-testable with an in-memory session.
-func bridgeTermSession(ctx context.Context, c *websocket.Conn, sess termSession) {
+// bridgeTermStream pumps bytes both ways until either side ends, then either
+// Detaches (a plain dropped socket — the PTY keeps running, detached) or lets
+// the close frame explain why the PTY itself ended (shell exit, idle reap,
+// detach-grace reap, daemon shutdown) or why this connection in particular
+// was dropped (evicted by a newer attach). snapshot is written once, up
+// front, before anything newly read from the PTY: it is everything the ring
+// buffer accumulated before this connection attached.
+func bridgeTermStream(ctx context.Context, mgr *term.Manager, id string, c *websocket.Conn, sess *term.Session, snapshot []byte, data <-chan []byte, evicted <-chan struct{}) {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
-	// Closing the PTY on the way out is the no-orphan guarantee.
-	defer sess.Close()
 
-	// PTY → WS: stream master output as binary frames.
+	if len(snapshot) > 0 {
+		wctx, wcancel := context.WithTimeout(ctx, termWriteTimeout)
+		_ = c.Write(wctx, websocket.MessageBinary, snapshot)
+		wcancel()
+	}
+
+	pumpDone := make(chan struct{})
+	var evictedHere bool
+	// PTY (via the Session's own reader) → WS: stream new output as binary
+	// frames; react to eviction (a newer attach took over) or the Session
+	// ending (shell exit / idle / detach-grace / shutdown).
 	go func() {
-		defer cancel()
-		buf := make([]byte, 32*1024)
+		defer close(pumpDone)
 		for {
-			n, err := sess.Read(buf)
-			if n > 0 {
+			select {
+			case chunk, ok := <-data:
+				if !ok {
+					return
+				}
 				wctx, wcancel := context.WithTimeout(ctx, termWriteTimeout)
-				werr := c.Write(wctx, websocket.MessageBinary, buf[:n])
+				werr := c.Write(wctx, websocket.MessageBinary, chunk)
 				wcancel()
 				if werr != nil {
 					return
 				}
-			}
-			if err != nil {
-				// The PTY ended first: the shell exited, or the Manager closed the
-				// session. Say why in the close frame. Close here, not via cancel:
-				// cancelling the main loop's Read would drop the socket with no
-				// reason. Close also unblocks that Read.
+			case <-evicted:
+				evictedHere = true
+				_ = c.Close(websocket.StatusCode(4409), termCloseAttachedElsewhere)
+				return
+			case <-sess.Done():
 				code, reason := termCloseFrame(sess.Reason())
 				_ = c.Close(code, reason)
+				return
+			case <-ctx.Done():
 				return
 			}
 		}
 	}()
 
 	// WS → PTY: binary frames are raw keystrokes; text frames are JSON control.
+readLoop:
 	for {
-		typ, data, err := c.Read(ctx)
+		typ, msg, err := c.Read(ctx)
 		if err != nil {
-			return
+			break readLoop
 		}
 		switch typ {
 		case websocket.MessageBinary:
-			if _, err := sess.Write(data); err != nil {
-				return
+			if _, err := sess.Write(msg); err != nil {
+				break readLoop
 			}
 		case websocket.MessageText:
-			applyTermControl(sess, data)
+			applyTermControl(sess, msg)
 		}
 	}
-}
-
-// termSession is the slice of *term.Session the bridge needs — a seam so the
-// pump can be tested without a real PTY.
-type termSession interface {
-	Read(p []byte) (int, error)
-	Write(p []byte) (int, error)
-	Resize(cols, rows uint16) error
-	Reason() term.CloseReason
-	Close()
+	cancel()
+	<-pumpDone
+	// A plain dropped socket detaches the PTY (it keeps running); an eviction
+	// means a NEWER attach already owns the listener slot, so detaching here
+	// would wrongly clear that newer attachment's state instead.
+	if !evictedHere {
+		mgr.Detach(id)
+	}
 }
 
 // termControl is the JSON text-frame control protocol. Only resize in v1.
@@ -249,7 +330,7 @@ type termControl struct {
 	Resize *term.Resize `json:"resize,omitempty"`
 }
 
-func applyTermControl(sess termSession, data []byte) {
+func applyTermControl(sess *term.Session, data []byte) {
 	var ctl termControl
 	if err := json.Unmarshal(data, &ctl); err != nil {
 		return // ignore malformed control frames; keystrokes are unaffected
@@ -427,4 +508,70 @@ func (h *Handler) scanColumn(query string) []string {
 		}
 	}
 	return out
+}
+
+// termSessionDTO is the JSON shape of term.Info for GET /api/term/sessions.
+type termSessionDTO struct {
+	ID         string `json:"id"`
+	Cwd        string `json:"cwd"`
+	Label      string `json:"label,omitempty"`
+	StartedAt  string `json:"startedAt"`
+	Attached   bool   `json:"attached"`
+	DetachedAt string `json:"detachedAt,omitempty"`
+	Foreground string `json:"foreground,omitempty"`
+}
+
+// listTermSessions handles GET /api/term/sessions?cwdPrefix=<path> —
+// requireLocalOrigin (routes.go), the same fence as every other daemon-only
+// list: the dock dashboard calls this from the daemon's own origin, which
+// requireLocalOrigin accepts, but it is not the stricter dashboard-session
+// gate the ws upgrade itself needs. cwdPrefix narrows the list to one
+// project and its worktrees (a task's worktree_path lives under the
+// project's own path); omitted or empty lists every live session.
+func (h *Handler) listTermSessions(w http.ResponseWriter, r *http.Request) {
+	if termMgr == nil {
+		writeJSONStatus(w, http.StatusServiceUnavailable,
+			map[string]string{"error": "terminal service not attached"})
+		return
+	}
+	prefix := r.URL.Query().Get("cwdPrefix")
+	out := make([]termSessionDTO, 0)
+	for _, info := range termMgr.List() {
+		if prefix != "" && !strings.HasPrefix(info.Cwd, prefix) {
+			continue
+		}
+		dto := termSessionDTO{
+			ID:         info.ID,
+			Cwd:        info.Cwd,
+			Label:      info.Label,
+			StartedAt:  info.StartedAt.UTC().Format(time.RFC3339),
+			Attached:   info.Attached,
+			Foreground: info.Foreground,
+		}
+		if !info.DetachedAt.IsZero() {
+			dto.DetachedAt = info.DetachedAt.UTC().Format(time.RFC3339)
+		}
+		out = append(out, dto)
+	}
+	writeJSON(w, out, nil)
+}
+
+// deleteTermSession handles DELETE /api/term/sessions/{id} —
+// requireLocalOrigin (routes.go), mirroring POST /api/sessions/{id}/kill.
+// Closes the PTY outright (SIGHUP, then SIGKILL) regardless of whether it is
+// currently attached or detached; an unknown id is a 404.
+func (h *Handler) deleteTermSession(w http.ResponseWriter, r *http.Request) {
+	if termMgr == nil {
+		writeJSONStatus(w, http.StatusServiceUnavailable,
+			map[string]string{"error": "terminal service not attached"})
+		return
+	}
+	id := r.PathValue("id")
+	sess, ok := termMgr.Get(id)
+	if !ok {
+		http.Error(w, `{"error":"terminal not found"}`, http.StatusNotFound)
+		return
+	}
+	sess.Close()
+	writeJSON(w, map[string]bool{"closed": true}, nil)
 }

@@ -19,7 +19,40 @@ export function termWsUrlForAccount(account: string): string {
   return `${proto}://${window.location.host}/api/term/ws?account=${encodeURIComponent(account)}`;
 }
 
+/**
+ * ws(s)://<host>/api/term/ws?attach=<id> — reattach to a session that is
+ * still alive on the daemon (phase 4: a dropped socket detaches rather than
+ * kills the PTY, for term.Config.DetachGrace). The first frame on the
+ * resulting socket is still the hello frame (see {@link parseTermHello}),
+ * followed by one binary frame replaying whatever accumulated while nobody
+ * was listening, then live output.
+ */
+export function termWsUrlForAttach(id: string): string {
+  const proto = window.location.protocol === 'https:' ? 'wss' : 'ws';
+  return `${proto}://${window.location.host}/api/term/ws?attach=${encodeURIComponent(id)}`;
+}
+
 /** A resize control frame — the only text-frame message the PTY protocol has. */
 export function resizeFrame(cols: number, rows: number): string {
   return JSON.stringify({ resize: { cols, rows } });
+}
+
+/** A hello frame: the mandatory first text frame on every successful upgrade
+ *  (new session or reattach alike), naming the session id to reattach to. */
+export interface TermHello {
+  type: 'hello';
+  id: string;
+}
+
+/** Parses a hello frame's text payload, or returns null when it isn't one. */
+export function parseTermHello(text: string): TermHello | null {
+  try {
+    const parsed = JSON.parse(text);
+    if (parsed && typeof parsed === 'object' && parsed.type === 'hello' && typeof parsed.id === 'string') {
+      return parsed as TermHello;
+    }
+  } catch {
+    // not JSON — not a hello frame
+  }
+  return null;
 }

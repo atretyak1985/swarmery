@@ -2,6 +2,7 @@ package term
 
 import (
 	"io"
+	"strings"
 	"sync"
 	"syscall"
 	"testing"
@@ -217,15 +218,18 @@ func TestSessionLifecycleEcho(t *testing.T) {
 		t.Fatal("PTY never received the write")
 	}
 
-	// PTY → client: bytes pushed into the fake master surface through Read.
+	// PTY → client: bytes pushed into the fake master surface arrive on the
+	// attached listener's channel (the Session's own readLoop is the one and
+	// only reader of the PTY now).
+	_, data, _ := s.Attach()
 	st.ptys[0].in <- []byte("On branch main\n")
-	out := make([]byte, 64)
-	n, err := s.Read(out)
-	if err != nil {
-		t.Fatalf("Read: %v", err)
-	}
-	if string(out[:n]) != "On branch main\n" {
-		t.Errorf("Read = %q, want %q", out[:n], "On branch main\n")
+	select {
+	case got := <-data:
+		if string(got) != "On branch main\n" {
+			t.Errorf("attached read = %q, want %q", got, "On branch main\n")
+		}
+	case <-time.After(time.Second):
+		t.Fatal("attached listener never received the PTY output")
 	}
 
 	s.Close()
@@ -573,4 +577,179 @@ func waitFor(t *testing.T, cond func() bool, msg string) {
 		time.Sleep(2 * time.Millisecond)
 	}
 	t.Fatalf("timeout waiting: %s", msg)
+}
+
+// ── phase 4: registry, detach-grace, reattach ───────────────────────────────
+
+// TestListReportsIDCwdLabelAttached proves List() surfaces every field the
+// dashboard needs to show an open terminal and let the operator pick one.
+func TestListReportsIDCwdLabelAttached(t *testing.T) {
+	st := &stubStarter{exitOnSIGHUP: true}
+	m := NewManager(Config{starter: st, Shell: "/stub"})
+	s, err := m.StartWithLabel("/tmp/proj", nil, 80, 24, "build")
+	if err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	defer s.Close()
+
+	infos := m.List()
+	if len(infos) != 1 {
+		t.Fatalf("List() = %d entries, want 1", len(infos))
+	}
+	got := infos[0]
+	if got.ID != s.ID || got.Cwd != "/tmp/proj" || got.Label != "build" {
+		t.Errorf("List()[0] = %+v, want ID=%s Cwd=/tmp/proj Label=build", got, s.ID)
+	}
+	if got.Attached {
+		t.Error("a freshly started, never-attached session reports Attached=true")
+	}
+	if !got.DetachedAt.IsZero() {
+		t.Errorf("DetachedAt = %v, want zero (never attached, so never detached either)", got.DetachedAt)
+	}
+
+	// Get by id finds the same Session.
+	byID, ok := m.Get(s.ID)
+	if !ok || byID != s {
+		t.Errorf("Get(%q) = %v, %v, want the Session Start returned", s.ID, byID, ok)
+	}
+}
+
+// TestDetachGraceReaperClosesAfterTimeout proves a detached session survives
+// until Config.DetachGrace elapses with nobody reattaching, then the reaper
+// closes it — the Go-test half of SC "detach-expired".
+func TestDetachGraceReaperClosesAfterTimeout(t *testing.T) {
+	st := &stubStarter{exitOnSIGHUP: true}
+	now := time.Unix(1_000_000, 0)
+	clock := func() time.Time { return now }
+	m := NewManager(Config{starter: st, Shell: "/stub", DetachGrace: 15 * time.Minute, now: clock})
+
+	s, err := m.Start("/tmp", nil, 80, 24)
+	if err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	s.Attach() // the creating connection's own attach
+	s.Detach() // then the socket drops
+
+	if infos := m.List(); len(infos) != 1 || infos[0].Attached || infos[0].DetachedAt.IsZero() {
+		t.Fatalf("List() after Detach = %+v, want one entry, Attached=false, DetachedAt set", infos)
+	}
+
+	// Not yet past the grace: the reaper leaves it alone.
+	m.reapDetached()
+	if m.Count() != 1 {
+		t.Fatalf("session reaped before DetachGrace elapsed (Count = %d)", m.Count())
+	}
+
+	// Advance past the grace → reaped, with the detach-expired reason.
+	now = now.Add(20 * time.Minute)
+	m.reapDetached()
+	waitFor(t, func() bool { return m.Count() == 0 }, "detached session reaped after DetachGrace")
+	if got := s.Reason(); got != ReasonDetachExpired {
+		t.Errorf("Reason() = %q, want %q", got, ReasonDetachExpired)
+	}
+}
+
+// TestAttachReplaysOutputWrittenWhileDetached proves the ring buffer keeps
+// what the shell wrote between a Detach and the next Attach, so a reattach
+// never loses output.
+func TestAttachReplaysOutputWrittenWhileDetached(t *testing.T) {
+	st := &stubStarter{exitOnSIGHUP: true}
+	m := NewManager(Config{starter: st, Shell: "/stub"})
+	s, err := m.Start("/tmp", nil, 80, 24)
+	if err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	defer s.Close()
+
+	_, data1, _ := s.Attach()
+	s.Detach()
+
+	// The shell keeps writing while nobody is attached — the Session's own
+	// readLoop is still the one reader, so this lands in the ring buffer.
+	st.ptys[0].in <- []byte("missed this\n")
+	// Give the readLoop a moment to drain it into the ring before reattaching.
+	waitFor(t, func() bool { return len(s.ring.snapshot()) > 0 }, "ring buffer received the missed output")
+
+	snapshot, data2, _ := s.Attach()
+	if !strings.Contains(string(snapshot), "missed this\n") {
+		t.Errorf("snapshot = %q, want it to contain %q", snapshot, "missed this\n")
+	}
+	// The old listener is dead; draining it must not block forever.
+	select {
+	case <-data1:
+	default:
+	}
+	_ = data2
+}
+
+// TestSecondAttachEvictsFirstWithAttachedElsewhere proves only one listener
+// can be live at a time: a second Attach wakes the first on its evicted
+// channel instead of letting two connections race over the same PTY.
+func TestSecondAttachEvictsFirstWithAttachedElsewhere(t *testing.T) {
+	st := &stubStarter{exitOnSIGHUP: true}
+	m := NewManager(Config{starter: st, Shell: "/stub"})
+	s, err := m.Start("/tmp", nil, 80, 24)
+	if err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	defer s.Close()
+
+	_, _, evicted1 := s.Attach()
+	select {
+	case <-evicted1:
+		t.Fatal("the first attachment was evicted before a second one ever happened")
+	default:
+	}
+
+	_, _, _ = s.Attach()
+	select {
+	case <-evicted1:
+	case <-time.After(time.Second):
+		t.Fatal("the second Attach never evicted the first")
+	}
+}
+
+// TestRingBufferStaysBounded proves the ring buffer never grows past its cap,
+// trimming the oldest bytes first.
+func TestRingBufferStaysBounded(t *testing.T) {
+	r := newRingBuffer(16)
+	r.write([]byte("0123456789"))
+	r.write([]byte("abcdefghij"))
+	got := r.snapshot()
+	if len(got) != 16 {
+		t.Fatalf("len(snapshot) = %d, want 16", len(got))
+	}
+	if string(got) != "456789abcdefghij" {
+		t.Errorf("snapshot = %q, want the most recent 16 bytes", got)
+	}
+}
+
+// TestDetachedSessionsCountTowardTheCap proves DefaultMaxSessions counts
+// every live session, attached or detached — a detached session still holds
+// its slot until the reaper or an explicit Close frees it.
+func TestDetachedSessionsCountTowardTheCap(t *testing.T) {
+	st := &stubStarter{exitOnSIGHUP: true}
+	m := NewManager(Config{starter: st, Shell: "/stub", MaxSessions: 5})
+	for i := 0; i < 5; i++ {
+		s, err := m.Start("/tmp", nil, 80, 24)
+		if err != nil {
+			t.Fatalf("Start %d: %v", i, err)
+		}
+		defer s.Close()
+		s.Attach()
+		s.Detach()
+	}
+	if _, err := m.Start("/tmp", nil, 80, 24); err != ErrTooManySessions {
+		t.Fatalf("6th Start with 5 detached sessions = %v, want ErrTooManySessions", err)
+	}
+}
+
+// TestAttachUnknownIDReturnsNotFound proves Manager.Attach reports
+// ErrSessionNotFound for an id that is not live — closed already, or never
+// existed.
+func TestAttachUnknownIDReturnsNotFound(t *testing.T) {
+	m := NewManager(Config{starter: &stubStarter{}, Shell: "/stub"})
+	if _, _, _, _, err := m.Attach("no-such-id"); err != ErrSessionNotFound {
+		t.Errorf("Attach(unknown) err = %v, want ErrSessionNotFound", err)
+	}
 }
