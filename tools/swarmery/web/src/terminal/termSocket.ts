@@ -32,6 +32,23 @@ export function termWsUrlForAttach(id: string): string {
   return `${proto}://${window.location.host}/api/term/ws?attach=${encodeURIComponent(id)}`;
 }
 
+/**
+ * Picks the ws(s) URL for a tab's PTY: attach when it already has a `ptyId`
+ * (a page reload, or taking a background/elsewhere session over), else a
+ * fresh cwd or account PTY. `ptyId` wins over `cwd`/`account` — a tab that
+ * once connected always reattaches to that same session, never starts a new
+ * one silently.
+ */
+export function termWsUrlFor(target: {
+  ptyId?: string | undefined;
+  cwd?: string | undefined;
+  account?: string | undefined;
+}): string {
+  if (target.ptyId !== undefined && target.ptyId !== '') return termWsUrlForAttach(target.ptyId);
+  if (target.account !== undefined) return termWsUrlForAccount(target.account);
+  return termWsUrl(target.cwd ?? '');
+}
+
 /** A resize control frame — the only text-frame message the PTY protocol has. */
 export function resizeFrame(cols: number, rows: number): string {
   return JSON.stringify({ resize: { cols, rows } });

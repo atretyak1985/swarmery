@@ -187,11 +187,14 @@ function prune(node: LayoutNode): LayoutNode | null {
 /** A persisted tab, or null when it has no string `id`/`cwd`. Known fields only. */
 function parseTab(raw: unknown): DockTab | null {
   if (!isRecord(raw)) return null;
-  const { id, cwd, label, run, sessionId } = raw;
+  const { id, cwd, label, run, sessionId, ptyId } = raw;
   if (typeof id !== 'string' || id === '' || typeof cwd !== 'string') return null;
   const tab: DockTab = { id, label: typeof label === 'string' ? label : id, cwd };
   if (typeof run === 'string') tab.run = run;
   if (typeof sessionId === 'string') tab.sessionId = sessionId;
+  // Phase 5: the daemon-side session id to reattach to on a reload instead of
+  // starting a fresh PTY — see TermTab.ptyId and termSocket.ts's termWsUrlFor.
+  if (typeof ptyId === 'string') tab.ptyId = ptyId;
   return tab;
 }
 

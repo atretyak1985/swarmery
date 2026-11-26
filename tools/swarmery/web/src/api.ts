@@ -21,6 +21,7 @@ import type {
   DetachResponse,
   DiscardTaskResponse,
   DispatchStatus,
+  DockTermSession,
   LandTaskResponse,
   PhaseLandErrorCode,
   PhaseLandRequest,
@@ -2197,6 +2198,33 @@ export function stopLinkTurn(id: number): Promise<LinkCommandQueued> {
  */
 export function sendLinkPrompt(id: number, text: string, asUser: boolean): Promise<LinkCommandQueued> {
   return linkCommand(`/api/sessions/${String(id)}/link/prompt`, { text, asUser });
+}
+
+/**
+ * GET /api/term/sessions?cwdPrefix=<path> — every live dock PTY under a
+ * project's path (its own root and its task worktrees alike): the dock's
+ * "background terminals" list. requireLocalOrigin (term.go) — the daemon's
+ * own origin is enough, no dashboard session subprotocol is needed here.
+ */
+export async function listDockTermSessions(cwdPrefix: string): Promise<DockTermSession[]> {
+  if (MOCK) return [];
+  const qs = cwdPrefix === '' ? '' : `?cwdPrefix=${encodeURIComponent(cwdPrefix)}`;
+  return get(`/api/term/sessions${qs}`);
+}
+
+/**
+ * DELETE /api/term/sessions/{id} — closes the PTY outright (SIGHUP, then
+ * SIGKILL), attached or detached alike. A 404 (already gone, e.g. a race with
+ * the detach-grace reaper) is swallowed: the caller's goal — this id no
+ * longer runs — is already true.
+ */
+export async function deleteDockTermSession(id: string): Promise<void> {
+  if (MOCK) return;
+  const res = await apiFetch(`/api/term/sessions/${encodeURIComponent(id)}`, { method: 'DELETE' });
+  if (!res.ok && res.status !== 404) {
+    const data = (await res.json().catch(() => ({}))) as { error?: string };
+    throw new Error(data.error ?? t`close terminal failed: ${{ status: res.status }}`);
+  }
 }
 
 /**
