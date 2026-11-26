@@ -661,6 +661,14 @@ func Routes(root *http.ServeMux, h *Handler) {
 	// term.go; both run before the upgrade.
 	mux.HandleFunc("GET /api/term/ws", h.term)
 
+	// Phase 4 (registry + reattach): the open-terminal roster and explicit
+	// close. requireLocalOrigin — the same fence every other daemon-only
+	// list/write carries, NOT the ws upgrade's stricter dashboard-session
+	// gate (session.go); the terminal's own Attach/Detach security still
+	// runs entirely inside the ws upgrade above.
+	mux.HandleFunc("GET /api/term/sessions", requireLocalOrigin(h.listTermSessions))
+	mux.HandleFunc("DELETE /api/term/sessions/{id}", requireLocalOrigin(h.deleteTermSession))
+
 	// fusion phase 18: system hub — the catalog-wide extension of the agent-hub
 	// pattern grouped by ROLE (system_hub.go). Aggregation over the existing
 	// registry + events telemetry + config-lint; NO new tables. The per-type

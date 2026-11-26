@@ -11,26 +11,38 @@
 package term
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"errors"
 	"io"
 	"log"
 	"os"
 	"os/exec"
+	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"syscall"
 	"time"
+	"unicode/utf8"
 
 	"github.com/creack/pty"
 	"golang.org/x/sys/unix"
 )
 
 const (
-	// DefaultMaxSessions caps concurrent PTYs. The HTTP layer maps an
-	// ErrTooManySessions to 429.
+	// DefaultMaxSessions caps concurrent PTYs, attached and detached alike —
+	// a session that nobody has reattached still holds its slot until the
+	// reaper (DefaultDetachGrace) or the operator closes it.
 	DefaultMaxSessions = 5
 	// DefaultIdleTimeout reaps a PTY with no I/O for this long.
 	DefaultIdleTimeout = 4 * time.Hour
+	// DefaultScrollbackBytes bounds the ring buffer each Session keeps so a
+	// reattach can replay what it missed.
+	DefaultScrollbackBytes = 256 * 1024
+	// DefaultDetachGrace is how long a detached (socket dropped, nobody
+	// reattached) session is kept alive before the reaper closes it.
+	DefaultDetachGrace = 15 * time.Minute
 	// killGrace is how long a closing PTY has to exit after SIGHUP before the
 	// process group is SIGKILLed.
 	killGrace = 5 * time.Second
@@ -40,10 +52,17 @@ const (
 	closeWaitAfterMaster = 2 * time.Second
 	// fallbackShell is used when $SHELL is unset (login shells only in v1).
 	fallbackShell = "/bin/zsh"
+	// maxLabelRunes bounds the client-supplied Label.
+	maxLabelRunes = 64
 )
 
 // ErrTooManySessions is returned by Start when the concurrency cap is reached.
 var ErrTooManySessions = errors.New("term: too many concurrent sessions")
+
+// ErrSessionNotFound is returned by Attach (and reported by Get) when no live
+// Session carries the given ID — reattach has nothing to resume, and the
+// reaper or an explicit Close already won the race.
+var ErrSessionNotFound = errors.New("term: session not found")
 
 // CloseReason says who ended a Session, so the WebSocket bridge can tell the
 // browser why its terminal went away instead of a bare "ended".
@@ -57,6 +76,9 @@ const (
 	ReasonIdle CloseReason = "idle"
 	// ReasonShutdown: the daemon is stopping (CloseAll).
 	ReasonShutdown CloseReason = "shutdown"
+	// ReasonDetachExpired: nobody reattached within DetachGrace of the socket
+	// dropping, so the reaper closed it.
+	ReasonDetachExpired CloseReason = "detach-expired"
 )
 
 // ptyFile is the subset of *os.File a live PTY master needs. Abstracted so the
@@ -99,12 +121,86 @@ type Resize struct {
 	Rows uint16 `json:"rows"`
 }
 
-// Session is one live PTY. Read/Write proxy the master; Resize adjusts the
-// window; Close tears the process group down. It is safe for one reader
-// goroutine and one writer goroutine to use concurrently (the WS bridge model).
+// Info is the read-only snapshot Manager.List reports for one Session — what
+// the dashboard shows to let the operator pick a PTY to reattach.
+type Info struct {
+	ID         string
+	Cwd        string
+	Label      string
+	StartedAt  time.Time
+	Attached   bool
+	DetachedAt time.Time
+	// Foreground is the comm of the process group in the PTY's foreground,
+	// empty when that is the shell itself (nothing distinct is running).
+	Foreground string
+}
+
+// sessionListener is the one live reattach a Session can have at a time.
+// Attach replaces it (closing the previous one's evicted channel); Detach
+// (or the Session closing) clears it.
+type sessionListener struct {
+	data    chan []byte
+	evicted chan struct{}
+}
+
+// ringBuffer keeps the most recent output a Session produced, bounded to cap
+// bytes, so a reattach can replay what happened while nobody was listening.
+// Implemented as a trimmed slice rather than a true circular buffer: at the
+// default 256 KiB cap the occasional O(n) trim is cheap, and a slice is far
+// simpler to get right than wraparound indexing for a buffer this size.
+type ringBuffer struct {
+	mu  sync.Mutex
+	buf []byte
+	cap int
+}
+
+func newRingBuffer(capacity int) *ringBuffer {
+	if capacity <= 0 {
+		capacity = DefaultScrollbackBytes
+	}
+	return &ringBuffer{cap: capacity}
+}
+
+func (r *ringBuffer) write(p []byte) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.buf = append(r.buf, p...)
+	if over := len(r.buf) - r.cap; over > 0 {
+		r.buf = r.buf[over:]
+	}
+}
+
+// snapshot returns a copy of everything currently buffered.
+func (r *ringBuffer) snapshot() []byte {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	out := make([]byte, len(r.buf))
+	copy(out, r.buf)
+	return out
+}
+
+// Session is one live PTY. Write sends keystrokes; Resize adjusts the window;
+// Close tears the process group down. Output is read exclusively by the
+// Session's own readLoop goroutine (started by Manager.Start) — never by the
+// caller directly — and fanned out through Attach/Detach so a dropped socket
+// never starves the PTY of a reader.
 type Session struct {
+	// ID, Cwd, Label and StartedAt are set once at construction and never
+	// change, so they need no lock to read.
+	ID        string
+	Cwd       string
+	Label     string
+	StartedAt time.Time
+
 	pty  ptyFile
 	proc process
+
+	// nowFn is the Manager's clock (real or injected); nil (the test-literal
+	// seam used by the Close-focused tests, which never call Attach/Detach)
+	// falls back to time.Now.
+	nowFn func() time.Time
+
+	ring *ringBuffer
 
 	closeOnce sync.Once
 	closed    chan struct{}
@@ -118,15 +214,141 @@ type Session struct {
 	lastIO   time.Time
 	reason   CloseReason
 	resizeFn func(cols, rows uint16) error
+
+	attachMu   sync.Mutex
+	listener   *sessionListener
+	attached   bool
+	detachedAt time.Time
 }
 
-// Read proxies the PTY master and stamps activity for the idle reaper.
-func (s *Session) Read(p []byte) (int, error) {
-	n, err := s.pty.Read(p)
-	if n > 0 {
-		s.touch()
+// now returns the Session's clock, defaulting to time.Now for the Close-test
+// literals that never populate nowFn.
+func (s *Session) now() time.Time {
+	if s.nowFn != nil {
+		return s.nowFn()
 	}
-	return n, err
+	return time.Now()
+}
+
+// Done is closed once Close has fully torn the Session down — the signal the
+// WS bridge waits on to learn the PTY side ended and send a close frame.
+func (s *Session) Done() <-chan struct{} { return s.closed }
+
+// readLoop is the Session's one and only PTY reader (fusion phase 15's "one
+// reader per session" rule): it runs for the Session's whole life, feeding
+// every byte into the ring buffer and, while someone is attached, onto their
+// channel too. Started once by Manager.Start/StartWithLabel.
+func (s *Session) readLoop() {
+	buf := make([]byte, 32*1024)
+	for {
+		n, err := s.pty.Read(buf)
+		if n > 0 {
+			chunk := append([]byte(nil), buf[:n]...)
+			s.touch()
+			s.ring.write(chunk)
+			s.deliver(chunk)
+		}
+		if err != nil {
+			// The PTY ended on its own (shell exited) — the Manager-level
+			// Close/CloseAll/reaper paths close it too, but this is the only
+			// path that observes exit on a live, nobody's-fault read.
+			s.closeWith(ReasonNone)
+			return
+		}
+	}
+}
+
+// deliver hands chunk to the current listener, if any, blocking (the same
+// backpressure the old direct-read bridge had via its websocket write
+// timeout) until it's consumed, the listener is evicted, or the Session
+// closes — whichever comes first, so a stalled browser can never wedge the
+// one PTY reader.
+func (s *Session) deliver(chunk []byte) {
+	s.attachMu.Lock()
+	l := s.listener
+	s.attachMu.Unlock()
+	if l == nil {
+		return
+	}
+	select {
+	case l.data <- chunk:
+	case <-l.evicted:
+	case <-s.closed:
+	}
+}
+
+// Attach registers the caller as the Session's one live listener, replacing
+// (and waking, on its evicted channel, with ReasonAttachedElsewhere-shaped
+// semantics the HTTP layer names) any previous one. Returns everything the
+// ring buffer has accumulated — including while nobody was listening — plus
+// the channel new output will arrive on from here.
+func (s *Session) Attach() (snapshot []byte, data <-chan []byte, evicted <-chan struct{}) {
+	s.attachMu.Lock()
+	defer s.attachMu.Unlock()
+	if s.listener != nil {
+		close(s.listener.evicted)
+	}
+	l := &sessionListener{data: make(chan []byte, 256), evicted: make(chan struct{})}
+	s.listener = l
+	s.attached = true
+	s.detachedAt = time.Time{}
+	return s.ring.snapshot(), l.data, l.evicted
+}
+
+// Detach drops the live listener and starts the detach-grace countdown (the
+// reaper closes the Session if nobody Attaches again within Config.DetachGrace).
+func (s *Session) Detach() {
+	s.attachMu.Lock()
+	s.listener = nil
+	s.attached = false
+	s.detachedAt = s.now()
+	s.attachMu.Unlock()
+}
+
+// snapshotAttach reports the Attached/DetachedAt pair for Info/the reaper.
+func (s *Session) snapshotAttach() (attached bool, detachedAt time.Time) {
+	s.attachMu.Lock()
+	defer s.attachMu.Unlock()
+	return s.attached, s.detachedAt
+}
+
+// info builds the Info the dashboard sees for this Session.
+func (s *Session) info() Info {
+	attached, detachedAt := s.snapshotAttach()
+	return Info{
+		ID:         s.ID,
+		Cwd:        s.Cwd,
+		Label:      s.Label,
+		StartedAt:  s.StartedAt,
+		Attached:   attached,
+		DetachedAt: detachedAt,
+		Foreground: foregroundComm(s.proc),
+	}
+}
+
+// foregroundComm reports the comm of the process group in the PTY's
+// foreground (ForegroundJob), or "" when that is the shell itself (nothing
+// distinct running) or the lookup fails — e.g. in unit tests against a stub
+// process, or a job that already exited between the check and the ps call.
+func foregroundComm(proc process) string {
+	pgid := proc.ForegroundJob()
+	if pgid <= 0 {
+		return ""
+	}
+	out, err := exec.Command("ps", "-o", "comm=", "-p", strconv.Itoa(pgid)).Output()
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(out))
+}
+
+// trimLabel bounds a client-supplied Label to maxLabelRunes.
+func trimLabel(label string) string {
+	if utf8.RuneCountInString(label) <= maxLabelRunes {
+		return label
+	}
+	runes := []rune(label)
+	return string(runes[:maxLabelRunes])
 }
 
 // Write proxies to the PTY master and stamps activity.
@@ -265,6 +487,12 @@ func (s *Session) reapJob(pgid int, deadline time.Time) {
 type Config struct {
 	MaxSessions int
 	IdleTimeout time.Duration
+	// ScrollbackBytes bounds each Session's ring buffer (DefaultScrollbackBytes
+	// when zero).
+	ScrollbackBytes int
+	// DetachGrace is how long a detached session is kept before the reaper
+	// closes it (DefaultDetachGrace when zero).
+	DetachGrace time.Duration
 	// Shell overrides $SHELL / the fallback (tests point it at a stub).
 	Shell string
 	// killGrace and closeWaitAfterMaster override the package defaults (5s,
@@ -277,14 +505,16 @@ type Config struct {
 	starter ptyStarter
 }
 
-// Manager owns the live PTY set, the concurrency cap, and the idle reaper.
+// Manager owns the live PTY set, the concurrency cap, and the idle/detach
+// reapers. Sessions are keyed by their random ID so a reattach can look one
+// up without holding a *Session from before the socket dropped.
 type Manager struct {
 	cfg     Config
 	starter ptyStarter
 	now     func() time.Time
 
 	mu   sync.Mutex
-	live map[*Session]struct{}
+	live map[string]*Session
 }
 
 // NewManager builds a Manager and starts its idle reaper. Call Close to stop the
@@ -296,6 +526,12 @@ func NewManager(cfg Config) *Manager {
 	if cfg.IdleTimeout <= 0 {
 		cfg.IdleTimeout = DefaultIdleTimeout
 	}
+	if cfg.ScrollbackBytes <= 0 {
+		cfg.ScrollbackBytes = DefaultScrollbackBytes
+	}
+	if cfg.DetachGrace <= 0 {
+		cfg.DetachGrace = DefaultDetachGrace
+	}
 	now := cfg.now
 	if now == nil {
 		now = time.Now
@@ -304,15 +540,70 @@ func NewManager(cfg Config) *Manager {
 	if starter == nil {
 		starter = osPTYStarter{}
 	}
-	m := &Manager{cfg: cfg, starter: starter, now: now, live: map[*Session]struct{}{}}
+	m := &Manager{cfg: cfg, starter: starter, now: now, live: map[string]*Session{}}
 	return m
 }
 
-// Count reports the number of live sessions (for the 429 decision and health).
+// Count reports the number of live sessions, attached and detached alike (for
+// the 429 decision and health).
 func (m *Manager) Count() int {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	return len(m.live)
+}
+
+// Get returns the live Session for id, or ok=false when none exists (a
+// reattach racing the reaper, a typo, or an id that never existed).
+func (m *Manager) Get(id string) (*Session, bool) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	s, ok := m.live[id]
+	if !ok || s.pty == nil { // pty == nil: placeholder mid-Start, not yet real
+		return nil, false
+	}
+	return s, true
+}
+
+// List reports every live session, oldest first, for the dashboard's "open
+// terminals" view.
+func (m *Manager) List() []Info {
+	m.mu.Lock()
+	sessions := make([]*Session, 0, len(m.live))
+	for _, s := range m.live {
+		if s.pty == nil {
+			continue
+		}
+		sessions = append(sessions, s)
+	}
+	m.mu.Unlock()
+
+	out := make([]Info, 0, len(sessions))
+	for _, s := range sessions {
+		out = append(out, s.info())
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].StartedAt.Before(out[j].StartedAt) })
+	return out
+}
+
+// Attach reattaches the caller to the live session named by id, evicting any
+// previous attachment. Returns ErrSessionNotFound when no such session is
+// live (closed already, or the id never existed).
+func (m *Manager) Attach(id string) (*Session, []byte, <-chan []byte, <-chan struct{}, error) {
+	s, ok := m.Get(id)
+	if !ok {
+		return nil, nil, nil, nil, ErrSessionNotFound
+	}
+	snapshot, data, evicted := s.Attach()
+	return s, snapshot, data, evicted, nil
+}
+
+// Detach marks the session named by id as detached (a no-op when the id is
+// unknown — the caller is tearing down a socket for a session that is
+// already gone, which is not an error).
+func (m *Manager) Detach(id string) {
+	if s, ok := m.Get(id); ok {
+		s.Detach()
+	}
 }
 
 // Start spawns a new PTY in cwd sized cols×rows. Returns ErrTooManySessions when
@@ -333,12 +624,19 @@ func (m *Manager) Count() int {
 // the resolve out of here means that gap is closable at the handler without
 // touching the PTY layer.
 func (m *Manager) Start(cwd string, env []string, cols, rows uint16) (*Session, error) {
+	return m.StartWithLabel(cwd, env, cols, rows, "")
+}
+
+// StartWithLabel is Start plus a client-supplied Label (trimmed to
+// maxLabelRunes) shown alongside Cwd in Manager.List.
+func (m *Manager) StartWithLabel(cwd string, env []string, cols, rows uint16, label string) (*Session, error) {
 	if cols == 0 {
 		cols = 80
 	}
 	if rows == 0 {
 		rows = 24
 	}
+	id := newSessionID()
 	m.mu.Lock()
 	if len(m.live) >= m.cfg.MaxSessions {
 		m.mu.Unlock()
@@ -346,20 +644,26 @@ func (m *Manager) Start(cwd string, env []string, cols, rows uint16) (*Session, 
 	}
 	// Reserve the slot before the (slow) spawn so a burst can't overshoot.
 	placeholder := &Session{}
-	m.live[placeholder] = struct{}{}
+	m.live[id] = placeholder
 	m.mu.Unlock()
 
 	f, proc, err := m.starter.start(m.shell(), cwd, env, cols, rows)
 	if err != nil {
 		m.mu.Lock()
-		delete(m.live, placeholder)
+		delete(m.live, id)
 		m.mu.Unlock()
 		return nil, err
 	}
 
 	s := &Session{
+		ID:                   id,
+		Cwd:                  cwd,
+		Label:                trimLabel(label),
+		StartedAt:            m.now(),
 		pty:                  f,
 		proc:                 proc,
+		nowFn:                m.now,
+		ring:                 newRingBuffer(m.cfg.ScrollbackBytes),
 		closed:               make(chan struct{}),
 		lastIO:               m.now(),
 		killGrace:            m.cfg.killGrace,
@@ -374,18 +678,29 @@ func (m *Manager) Start(cwd string, env []string, cols, rows uint16) (*Session, 
 	}
 
 	m.mu.Lock()
-	delete(m.live, placeholder)
-	m.live[s] = struct{}{}
+	m.live[id] = s
 	m.mu.Unlock()
+
+	// The Session's own, sole PTY reader — started here so a session started
+	// outside a test (or a Close-focused test literal) never loses output.
+	go s.readLoop()
 
 	// Untrack the session when it closes so Count stays honest.
 	go func() {
 		<-s.closed
 		m.mu.Lock()
-		delete(m.live, s)
+		delete(m.live, id)
 		m.mu.Unlock()
 	}()
 	return s, nil
+}
+
+// newSessionID returns 16 random bytes, hex-encoded — crypto/rand.Read never
+// errors on the platforms Go supports, so no fallback path is needed.
+func newSessionID() string {
+	b := make([]byte, 16)
+	_, _ = rand.Read(b)
+	return hex.EncodeToString(b)
 }
 
 func (m *Manager) shell() string {
@@ -404,7 +719,7 @@ func (m *Manager) reapIdle() {
 	cutoff := m.now().Add(-m.cfg.IdleTimeout)
 	m.mu.Lock()
 	var stale []*Session
-	for s := range m.live {
+	for _, s := range m.live {
 		if s.pty == nil { // placeholder mid-Start
 			continue
 		}
@@ -418,8 +733,30 @@ func (m *Manager) reapIdle() {
 	}
 }
 
-// Reap runs the idle reaper until stop is closed. The daemon runs this in a
-// goroutine; tests call reapIdle directly and skip it.
+// reapDetached closes every session that has been detached longer than
+// Config.DetachGrace — nobody came back to reattach it in time. Exposed for
+// the reaper loop and for deterministic tests (inject Config.now).
+func (m *Manager) reapDetached() {
+	cutoff := m.now().Add(-m.cfg.DetachGrace)
+	m.mu.Lock()
+	var stale []*Session
+	for _, s := range m.live {
+		if s.pty == nil { // placeholder mid-Start
+			continue
+		}
+		if attached, detachedAt := s.snapshotAttach(); !attached && !detachedAt.IsZero() && detachedAt.Before(cutoff) {
+			stale = append(stale, s)
+		}
+	}
+	m.mu.Unlock()
+	for _, s := range stale {
+		s.closeWith(ReasonDetachExpired)
+	}
+}
+
+// Reap runs the idle and detach-grace reapers until stop is closed. The
+// daemon runs this in a goroutine; tests call reapIdle/reapDetached directly
+// and skip it.
 func (m *Manager) Reap(stop <-chan struct{}) {
 	t := time.NewTicker(time.Minute)
 	defer t.Stop()
@@ -429,6 +766,7 @@ func (m *Manager) Reap(stop <-chan struct{}) {
 			return
 		case <-t.C:
 			m.reapIdle()
+			m.reapDetached()
 		}
 	}
 }
@@ -437,7 +775,7 @@ func (m *Manager) Reap(stop <-chan struct{}) {
 func (m *Manager) CloseAll() {
 	m.mu.Lock()
 	var all []*Session
-	for s := range m.live {
+	for _, s := range m.live {
 		if s.pty != nil {
 			all = append(all, s)
 		}
