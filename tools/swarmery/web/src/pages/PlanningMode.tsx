@@ -646,7 +646,10 @@ export function PlanningMode(): JSX.Element {
   );
 
   return (
-    <div className="min-w-0 px-4 pt-6 pb-10 desk:px-8 desk:pt-8 desk:pb-[60px]">
+    // A flex column that fills the tab panel (PlansPlace's `flex-1 flex-col`),
+    // so the thinking card below can take every pixel left under the header
+    // instead of leaving the bottom of the page empty.
+    <div className="flex min-w-0 flex-1 flex-col px-4 pt-6 pb-6 desk:px-8 desk:pt-8 desk:pb-8">
       {/* The explainer rides the subtitle, not the h1 — the idiom Playbooks.tsx
           uses for `worktree`. This heading is long enough to wrap at phone
           width, and an inline-flex h1 shrink-wraps: the text would wrap inside
@@ -921,7 +924,7 @@ export function PlanningMode(): JSX.Element {
 
       {/* IDLE / FAILED / "start another plan" — idea intake */}
       {showIntake && (
-        <div className="mt-5 max-w-[80ch]">
+        <div className="mt-5">
           {newPlanMode && (
             <div className="mb-1.5 font-mono text-[10.5px] tracking-[0.1em] text-ink-faint uppercase">
               <Trans>next idea</Trans>
@@ -1001,10 +1004,18 @@ export function PlanningMode(): JSX.Element {
           column, RunningPlanPanel in the right column (buttons disabled because
           status !== 'awaiting_answer'). This keeps the running plan visible
           between questions — matching the Fusion reference UX. */}
+      {/* flex-1 + a 1fr row stretch the thinking card down to the bottom of the
+          page; the reasoning <pre> is the part that grows (and scrolls inside
+          itself), so a long reasoning tail never pushes the page past the fold.
+          Below `desk` the running plan stacks in an auto row under it. */}
       {thinking && (
-        <div className="mt-3 grid items-start gap-3 desk:grid-cols-3">
-          <div className="min-w-0 desk:col-span-2">
-            <Card>
+        <div
+          className={`mt-3 grid flex-1 gap-3 desk:grid-cols-3 ${
+            status?.runningPlan != null ? 'grid-rows-[1fr_auto] desk:grid-rows-[1fr]' : 'grid-rows-[1fr]'
+          }`}
+        >
+          <div className="flex min-w-0 flex-col desk:col-span-2">
+            <Card className="flex flex-1 flex-col">
               {runHeader(wstatus === 'proceeding' ? t`Writing the plan` : t`Planner thinking`, true)}
               <div className="mt-3 flex items-center gap-2 font-mono text-[11.5px] text-ink-dim">
                 <span
@@ -1019,11 +1030,11 @@ export function PlanningMode(): JSX.Element {
                 {status?.startedAt != null && <span>· {fmtElapsed(status.startedAt, nowMs)}</span>}
               </div>
               {lastReasoning !== '' && (
-                <div className="mt-3">
+                <div className="mt-3 flex flex-1 flex-col">
                   <div className="mb-1 font-mono text-[10.5px] tracking-[0.1em] text-ink-faint uppercase">
                     <Trans>latest reasoning</Trans>
                   </div>
-                  <pre className="max-h-40 overflow-y-auto rounded-lg border border-line bg-bg px-3 py-2.5 font-mono text-[10.5px] leading-relaxed whitespace-pre-wrap text-ink-2">
+                  <pre className="min-h-40 flex-1 basis-0 overflow-y-auto rounded-lg border border-line bg-bg px-3 py-2.5 font-mono text-[10.5px] leading-relaxed whitespace-pre-wrap text-ink-2">
                     {lastReasoning}
                   </pre>
                 </div>
@@ -1031,7 +1042,7 @@ export function PlanningMode(): JSX.Element {
             </Card>
           </div>
           {status?.runningPlan != null && (
-            <div className="min-w-0 desk:sticky desk:top-4">
+            <div className="min-w-0 self-start desk:sticky desk:top-4">
               <RunningPlanPanel
                 plan={status.runningPlan}
                 status={wstatus}
