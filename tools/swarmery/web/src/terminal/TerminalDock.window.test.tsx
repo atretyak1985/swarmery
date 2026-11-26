@@ -39,12 +39,13 @@ vi.mock('../api', async (importOriginal) => ({
 
 import { StatusBar } from '../workspace/StatusBar';
 import { TerminalDock, dockCoversPage, type DockState } from './TerminalDock';
+import { migrateDock } from './layout';
 
-const OPEN: DockState = {
+const OPEN: DockState = migrateDock({
   open: true,
   tabs: [{ id: 't1', label: 'shell 1', cwd: '/tmp/project' }],
   activeId: 't1',
-};
+});
 
 /** The dock wired the way ProjectWorkspaceLayout wires it, plus a reopen button. */
 function Harness({ onMax }: { onMax?: (next: boolean) => void }): JSX.Element {
@@ -162,7 +163,7 @@ describe('maximize (SC-4)', () => {
     expect(dockCoversPage(OPEN, true)).toBe(true);
     expect(dockCoversPage(OPEN, false)).toBe(false);
     expect(dockCoversPage({ ...OPEN, open: false }, true)).toBe(false);
-    expect(dockCoversPage({ open: true, tabs: [], activeId: null }, true)).toBe(false);
+    expect(dockCoversPage(migrateDock({ open: true, tabs: [], activeId: null }), true)).toBe(false);
   });
 });
 

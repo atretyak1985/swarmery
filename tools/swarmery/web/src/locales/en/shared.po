@@ -689,6 +689,10 @@ msgstr "accounts →"
 msgid "acting"
 msgstr "acting"
 
+#: src/terminal/TabStrip.tsx
+msgid "Actions for {caption}"
+msgstr "Actions for {caption}"
+
 #: src/components/usage/LimitsPanel.tsx
 #: src/components/usage/UsageProviderCard.tsx
 #: src/lib/sessionsView.ts
@@ -1321,6 +1325,7 @@ msgstr "close"
 #: src/components/PlanBranchDirtyModal.tsx
 #: src/components/RunOutcomeModal.tsx
 #: src/components/VcsSignInDialog.tsx
+#: src/terminal/TerminalDock.tsx
 msgid "Close"
 msgstr "Close"
 
@@ -2806,6 +2811,14 @@ msgstr "Motion"
 msgid "move ▾"
 msgstr "move ▾"
 
+#: src/terminal/TerminalDock.tsx
+msgid "Move left"
+msgstr "Move left"
+
+#: src/terminal/TerminalDock.tsx
+msgid "Move right"
+msgstr "Move right"
+
 #: src/pages/Settings.tsx
 msgid "move selection"
 msgstr "move selection"
@@ -2818,6 +2831,10 @@ msgstr "move task to column"
 #: src/workspace/task/TaskActions.tsx
 msgid "move to"
 msgstr "move to"
+
+#: src/terminal/TerminalDock.tsx
+msgid "Move to group {n}"
+msgstr "Move to group {n}"
 
 #: src/theme/palettes.ts
 msgid "muted green canopy"
@@ -3902,6 +3919,10 @@ msgstr "resets in {totalMin}m"
 msgid "resets now"
 msgstr "resets now"
 
+#: src/terminal/TerminalDock.tsx
+msgid "Resize split"
+msgstr "Resize split"
+
 #: src/components/runOutcome/blockerGuide.ts
 msgid "Resolve what blocks a retry (below), then press Retry run."
 msgstr "Resolve what blocks a retry (below), then press Retry run."
@@ -4426,6 +4447,14 @@ msgstr "spawned by verification to repair {externalId}"
 msgid "Spinning and pulsing state glyphs"
 msgstr "Spinning and pulsing state glyphs"
 
+#: src/terminal/TerminalDock.tsx
+msgid "Split down"
+msgstr "Split down"
+
+#: src/terminal/TerminalDock.tsx
+msgid "Split right"
+msgstr "Split right"
+
 #: src/workspace/boardModel.ts
 msgid "stale"
 msgstr "stale"
@@ -4584,6 +4613,10 @@ msgstr "System"
 #: src/main.tsx
 msgid "system…"
 msgstr "system…"
+
+#: src/terminal/TabStrip.tsx
+msgid "Tab actions"
+msgstr "Tab actions"
 
 #: src/components/usage/UsageConnect.tsx
 msgid "tab didn't open? authorize here"

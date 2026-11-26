@@ -12,6 +12,7 @@ import { describe, expect, it } from 'vitest';
 import {
   CLAUDE_COMMAND,
   type DockState,
+  activeTabId,
   dockView,
   emptyDock,
   openClaudeTerminal,
@@ -28,7 +29,7 @@ describe('toggleDock', () => {
     expect(next.open).toBe(true);
     expect(next.tabs).toHaveLength(1);
     expect(next.tabs[0].cwd).toBe(PATH);
-    expect(next.activeId).toBe(next.tabs[0].id);
+    expect(activeTabId(next)).toBe(next.tabs[0].id);
   });
 
   it('is a no-op while the project path is unresolved', () => {
@@ -43,7 +44,7 @@ describe('toggleDock', () => {
     // The bug was clearing tabs on the second click; assert they persist so the
     // shell + scrollback are kept alive behind a hidden panel.
     expect(collapsed.tabs).toEqual(open.tabs);
-    expect(collapsed.activeId).toBe(open.activeId);
+    expect(activeTabId(collapsed)).toBe(activeTabId(open));
   });
 
   it('expands the same tabs back on the next click (round-trip is identity)', () => {
@@ -58,7 +59,7 @@ describe('toggleDock', () => {
     const collapsed = toggleDock(b, PATH);
     expect(collapsed.tabs).toHaveLength(2);
     expect(collapsed.tabs).toEqual(b.tabs);
-    expect(collapsed.activeId).toBe(b.activeId);
+    expect(activeTabId(collapsed)).toBe(activeTabId(b));
   });
 });
 
@@ -87,7 +88,7 @@ describe('openClaudeTerminal', () => {
     expect(next.open).toBe(true);
     expect(next.tabs).toHaveLength(1);
     expect(next.tabs[0]).toMatchObject({ cwd: PATH, run: CLAUDE_COMMAND, label: 'Claude Code' });
-    expect(next.activeId).toBe(next.tabs[0].id);
+    expect(activeTabId(next)).toBe(next.tabs[0].id);
   });
 
   it('opens a new tab on every click and numbers the later ones', () => {

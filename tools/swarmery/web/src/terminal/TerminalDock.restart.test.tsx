@@ -39,13 +39,14 @@ vi.mock('./XTerm', async () => {
 });
 
 import { TerminalDock, type DockState } from './TerminalDock';
+import { migrateDock } from './layout';
 
 function renderDock(run?: string): void {
-  const state: DockState = {
+  const state: DockState = migrateDock({
     open: true,
     tabs: [{ id: 't1', label: run === undefined ? 'shell 1' : 'Claude Code', cwd: '/tmp/project', run }],
     activeId: 't1',
-  };
+  });
   render(<TerminalDock projectSlug="proj" projectPath="/tmp/project" state={state} onChange={() => undefined} />);
 }
 
@@ -91,7 +92,7 @@ describe('restored Claude Code tab', () => {
   });
   afterEach(cleanup);
 
-  it('opens a plain shell and starts claude only on Start', async () => {
+  it('opens a plain shell and starts claude, bound to a session id, only on Start', async () => {
     renderDock('claude');
     await screen.findByTestId('xterm');
     expect(mounts[0]?.initialInput).toBeUndefined();
@@ -130,8 +131,12 @@ describe('new Claude Code tab', () => {
   });
   afterEach(cleanup);
 
-  it('types claude on its first connect and shows no Start strip', async () => {
-    const shell: DockState = { open: true, tabs: [{ id: 's1', label: 'shell 1', cwd: '/tmp/project' }], activeId: 's1' };
+  it('types claude with a fresh session id on its first connect and shows no Start strip', async () => {
+    const shell: DockState = migrateDock({
+      open: true,
+      tabs: [{ id: 's1', label: 'shell 1', cwd: '/tmp/project' }],
+      activeId: 's1',
+    });
     render(<StatefulDock initial={shell} />);
     await screen.findByTestId('xterm');
 
