@@ -11,6 +11,10 @@ import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } fro
 import type { TermStatus, XTermHandle } from './XTerm';
 import { TERM_CLOSE_MESSAGE, type TermCloseKind } from './closeReason';
 import { ExitFullscreenIcon, FullscreenIcon, MaximizeIcon, MinimizeIcon, RestoreIcon } from './DockIcons';
+import { CLAUDE_COMMAND, claudeCommandFor, newSessionId, shortTitle } from './claudeSession';
+import { useTabSessionTitles } from './useTabSessionTitles';
+
+export { CLAUDE_COMMAND };
 
 const XTerm = lazy(() => import('./XTerm').then((m) => ({ default: m.XTerm })));
 
@@ -29,10 +33,17 @@ export interface TermTab {
    * a new, empty Claude session.
    */
   run?: string;
+  /**
+   * The UUID of the Claude session a Claude Code tab (`run === CLAUDE_COMMAND`)
+   * is bound to. Minted when the tab opens, so the tab types
+   * `claude --session-id <uuid>` first and `claude --resume <uuid>` once the
+   * daemon has ingested it, and takes its caption from that session's title.
+   * Absent on other tabs, and on Claude tabs saved before sessions were bound
+   * (those get one on their next Start / Restart).
+   */
+  sessionId?: string;
 }
 
-/** The command a "Claude Code" dock tab runs in its shell. */
-export const CLAUDE_COMMAND = 'claude';
 /** Tab label for a Claude Code tab — a product name, never translated. */
 const CLAUDE_LABEL = 'Claude Code';
 
@@ -212,8 +223,24 @@ const [genById, setGenById] = useState<Record<string, number>>({});
     }
   }, []);
 
+  // The daemon's title + ingest state for every Claude tab's session.
+  const titles = useTabSessionTitles(state.tabs);
+
+  /** The command a tab types: a Claude tab resumes its session once the daemon has it. */
+  const commandFor = (tab: TermTab): string | undefined => claudeCommandFor(tab, titles[tab.id]?.known ?? false);
+
+  /** A Claude tab saved before sessions were bound gets its session id now. */
+  const bindSession = (tab: TermTab): TermTab => {
+    if (tab.run !== CLAUDE_COMMAND || (tab.sessionId !== undefined && tab.sessionId !== '')) return tab;
+    const bound: TermTab = { ...tab, sessionId: newSessionId() };
+    onChange({ ...state, tabs: state.tabs.map((t) => (t.id === tab.id ? bound : t)) });
+    return bound;
+  };
+
   /** Start a fresh PTY in a closed tab (same cwd, same command — run again on purpose). */
-  const restartTab = (id: string): void => {
+  const restartTab = (tab: TermTab): void => {
+    const { id } = tab;
+    bindSession(tab);
     setClosedById(({ [id]: _gone, ...rest }) => rest);
     setArmed((prev) => withId(prev, id));
     setGenById((prev) => ({ ...prev, [id]: (prev[id] ?? 0) + 1 }));
@@ -221,8 +248,9 @@ const [genById, setGenById] = useState<Record<string, number>>({});
 
   /** Type a restored tab's command into its live shell (the Start strip). */
   const startRun = (tab: TermTab): void => {
-    if (tab.run === undefined || tab.run === '') return;
-    termRefs.current.get(tab.id)?.send(`${tab.run}\r`);
+    const command = commandFor(bindSession(tab));
+    if (command === undefined || command === '') return;
+    termRefs.current.get(tab.id)?.send(`${command}\r`);
     setStarted((prev) => withId(prev, tab.id));
   };
 
@@ -365,6 +393,15 @@ const [genById, setGenById] = useState<Record<string, number>>({});
             {state.tabs.map((tab) => {
               const active = tab.id === state.activeId;
               const st = statusById[tab.id];
+              // A Claude tab shows its session's title, read from the daemon on
+              // every render so a dashboard rename shows at once; the saved
+              // label is the fallback until the session has a title.
+              const fullTitle = titles[tab.id]?.title ?? null;
+              const caption = shortTitle(fullTitle) ?? tab.label;
+              const closedWhy =
+                st === 'closed' && closedById[tab.id] !== undefined
+                  ? t(TERM_CLOSE_MESSAGE[closedById[tab.id] as TermCloseKind])
+                  : undefined;
               return (
                 <div
                   key={tab.id}
@@ -375,7 +412,7 @@ const [genById, setGenById] = useState<Record<string, number>>({});
                   <button
                     type="button"
                     onClick={() => onChange({ ...state, activeId: tab.id })}
-                    title={st === 'closed' && closedById[tab.id] !== undefined ? t(TERM_CLOSE_MESSAGE[closedById[tab.id] as TermCloseKind]) : undefined}
+                    title={closedWhy}
                     className="flex items-center gap-1.5"
                   >
                     <span
@@ -384,11 +421,13 @@ const [genById, setGenById] = useState<Record<string, number>>({});
                         st === 'open' ? 'bg-green' : st === 'closed' ? 'bg-red' : 'bg-amber'
                       }`}
                     />
-                    <span className="max-w-[140px] truncate">{tab.label}</span>
+                    <span className="max-w-[140px] truncate" title={fullTitle ?? undefined}>
+                      {caption}
+                    </span>
                   </button>
                   <button
                     type="button"
-                    aria-label={`close ${tab.label}`}
+                    aria-label={`close ${caption}`}
                     onClick={() => closeTab(tab.id)}
                     className="text-ink-faint transition-colors hover:text-red"
                   >
@@ -514,7 +553,7 @@ const [genById, setGenById] = useState<Record<string, number>>({});
                       termRefs.current.set(tab.id, h);
                     }}
                     cwd={tab.cwd}
-                    initialInput={armed.has(tab.id) ? tab.run : undefined}
+                    initialInput={armed.has(tab.id) ? commandFor(tab) : undefined}
                     fontSize={fontSize}
                     onStatus={(s, why) => setStatus(tab.id, s, why)}
                   />
@@ -526,7 +565,7 @@ const [genById, setGenById] = useState<Record<string, number>>({});
                       <span className="min-w-0 flex-1">{t(TERM_CLOSE_MESSAGE[closed])}</span>
                       <button
                         type="button"
-                        onClick={() => restartTab(tab.id)}
+                        onClick={() => restartTab(tab)}
                         className="shrink-0 rounded border border-line-strong px-2 py-0.5 text-ink transition-colors hover:border-brand hover:text-brand"
                       >
                         {tab.run === CLAUDE_COMMAND ? <Trans>Restart Claude Code</Trans> : <Trans>Restart</Trans>}
@@ -630,14 +669,16 @@ export function openProjectTerminal(state: DockState, projectPath: string): Dock
 
 /**
  * Open a fresh Claude Code tab in `cwd`: a project shell that runs `claude` as
- * soon as it connects (the WebStorm "Claude Code" terminal button). Every click
- * opens a new tab — parallel Claude sessions are a normal workflow.
+ * soon as it connects (the WebStorm "Claude Code" terminal button), bound to a
+ * newly minted session id. Every click opens a new tab — parallel Claude
+ * sessions are a normal workflow.
  */
 export function openClaudeTerminal(state: DockState, cwd: string): DockState {
   const id = `t-${Date.now().toString(36)}`;
   const n = state.tabs.filter((t) => t.run === CLAUDE_COMMAND).length;
   const label = n === 0 ? CLAUDE_LABEL : `${CLAUDE_LABEL} (${n + 1})`;
-  return { open: true, tabs: [...state.tabs, { id, label, cwd, run: CLAUDE_COMMAND }], activeId: id };
+  const tab: TermTab = { id, label, cwd, run: CLAUDE_COMMAND, sessionId: newSessionId() };
+  return { open: true, tabs: [...state.tabs, tab], activeId: id };
 }
 
 /** Open a worktree terminal for a task, deduped by cwd (focus if already open). */
