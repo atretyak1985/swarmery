@@ -14,7 +14,7 @@ import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import '@xterm/xterm/css/xterm.css';
 import { reportSocketRefused, wsProtocols } from '../lib/dashboardSession';
-import { resizeFrame, termWsUrl, termWsUrlForAccount } from './termSocket';
+import { parseTermHello, resizeFrame, termWsUrlFor } from './termSocket';
 import { classifyTermClose, TERM_CLOSE_MESSAGE, type TermCloseKind } from './closeReason';
 
 export type TermStatus = 'connecting' | 'open' | 'closed';
@@ -46,18 +46,32 @@ export function openWebLink(uri: string): void {
 export const XTerm = forwardRef<
   XTermHandle,
   {
-    /** Working directory for a project/worktree PTY. Ignored when `account` is set. */
+    /** Working directory for a project/worktree PTY. Ignored when `ptyId` or `account` is set. */
     cwd?: string;
-    /** Account key for an ACCOUNT-scoped PTY (the connect flow's login fallback). */
+    /** Account key for an ACCOUNT-scoped PTY (the connect flow's login fallback). Ignored when `ptyId` is set. */
     account?: string;
+    /**
+     * A session id to reattach to (phase 5) instead of starting a fresh PTY —
+     * set once this tab's `onHello` fires, and persisted on the tab so a page
+     * reload or a remount reattaches rather than opening a new shell. Wins
+     * over `cwd`/`account` (see {@link termWsUrlFor}).
+     */
+    ptyId?: string | undefined;
     /** A command typed into the shell (followed by Enter) once the PTY connects. */
     initialInput?: string | undefined;
     fontSize: number;
     /** `closed` comes with why the socket closed (closeReason.ts). */
     onStatus?: (s: TermStatus, closed?: TermCloseKind) => void;
+    /**
+     * The hello frame's session id — the FIRST frame on every successful
+     * upgrade, new session or reattach alike (internal/api/term.go). The dock
+     * stores it on the tab so a later reload/remount reattaches instead of
+     * starting a new PTY.
+     */
+    onHello?: (id: string) => void;
   }
 >(
-  function XTerm({ cwd, account, initialInput, fontSize, onStatus }, ref): JSX.Element {
+  function XTerm({ cwd, account, ptyId, initialInput, fontSize, onStatus, onHello }, ref): JSX.Element {
     const { t } = useLingui();
     // Read at close time, so the line follows the current locale.
     const tRef = useRef(t);
@@ -73,6 +87,8 @@ export const XTerm = forwardRef<
     // Read once at connect time; a later prop change must not recreate the PTY.
     const initialInputRef = useRef(initialInput);
     initialInputRef.current = initialInput;
+    const onHelloRef = useRef(onHello);
+    onHelloRef.current = onHello;
 
     useImperativeHandle(ref, () => ({
       clear: () => termRef.current?.clear(),
@@ -110,11 +126,11 @@ export const XTerm = forwardRef<
 
       statusRef.current?.('connecting');
       // The session rides as a subprotocol: the daemon refuses a terminal
-      // upgrade without one.
-      const ws = new WebSocket(
-        account !== undefined ? termWsUrlForAccount(account) : termWsUrl(cwd ?? ''),
-        wsProtocols(),
-      );
+      // upgrade without one. ptyId is read once here, at connect time, same as
+      // cwd/account below: a hello frame sets it on the tab AFTER this socket
+      // is already open (see onmessage), and that must never tear this one
+      // down and reconnect — only the NEXT mount (a reload, a remount) reattaches.
+      const ws = new WebSocket(termWsUrlFor({ ptyId, cwd, account }), wsProtocols());
       ws.binaryType = 'arraybuffer';
       wsRef.current = ws;
       let opened = false;
@@ -141,6 +157,14 @@ export const XTerm = forwardRef<
       };
       ws.onmessage = (ev: MessageEvent<ArrayBuffer | string>) => {
         if (typeof ev.data === 'string') {
+          // The hello frame is the one text frame the protocol defines (every
+          // other text message would be malformed); everything else is PTY
+          // output and goes straight to the terminal, binary or not.
+          const hello = parseTermHello(ev.data);
+          if (hello !== null) {
+            onHelloRef.current?.(hello.id);
+            return;
+          }
           term.write(ev.data);
         } else {
           term.write(new Uint8Array(ev.data));
@@ -184,7 +208,11 @@ export const XTerm = forwardRef<
         fitRef.current = null;
         wsRef.current = null;
       };
-      // cwd/account identify the PTY; fontSize is applied live via the effect below.
+      // cwd/account identify the PTY; ptyId is read once above (see the comment
+      // at the WebSocket construction) and deliberately excluded here — it
+      // changes value, via a hello frame, on an ALREADY-open connection, and
+      // must never be the trigger for tearing that connection down. fontSize
+      // is applied live via the effect below.
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [cwd, account]);
 

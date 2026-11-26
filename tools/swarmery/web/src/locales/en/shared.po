@@ -990,6 +990,10 @@ msgstr "Asking for a code…"
 msgid "attach"
 msgstr "attach"
 
+#: src/terminal/BackgroundTerminals.tsx
+msgid "Attach"
+msgstr "Attach"
+
 #: src/pages/Settings.tsx
 msgid "attach · archive · plugins"
 msgstr "attach · archive · plugins"
@@ -1005,6 +1009,11 @@ msgstr "attach failed: {status}"
 #: src/components/AttachModal.tsx
 msgid "Attach project"
 msgstr "Attach project"
+
+#. placeholder {0}: rowLabelText(s)
+#: src/terminal/BackgroundTerminals.tsx
+msgid "attach to {0}"
+msgstr "attach to {0}"
 
 #: src/lib/sessionsView.ts
 msgid "attempt {count}"
@@ -1058,6 +1067,14 @@ msgstr "Awaiting reply"
 #: src/workspace/WorkspaceShell.tsx
 msgid "back to all projects"
 msgstr "back to all projects"
+
+#: src/terminal/TerminalDock.tsx
+msgid "Background"
+msgstr "Background"
+
+#: src/terminal/TerminalDock.tsx
+msgid "background terminals"
+msgstr "background terminals"
 
 #: src/components/AttachModal.tsx
 #: src/components/DetachModal.tsx
@@ -1325,9 +1342,15 @@ msgstr "close"
 #: src/components/PlanBranchDirtyModal.tsx
 #: src/components/RunOutcomeModal.tsx
 #: src/components/VcsSignInDialog.tsx
+#: src/terminal/BackgroundTerminals.tsx
 #: src/terminal/TerminalDock.tsx
 msgid "Close"
 msgstr "Close"
+
+#. placeholder {0}: rowLabelText(s)
+#: src/terminal/BackgroundTerminals.tsx
+msgid "close {0}"
+msgstr "close {0}"
 
 #: src/api.ts
 msgid "close failed"
@@ -1336,6 +1359,10 @@ msgstr "close failed"
 #: src/components/usage/LimitsPanel.tsx
 msgid "Close limits"
 msgstr "Close limits"
+
+#: src/api.ts
+msgid "close terminal failed: {status}"
+msgstr "close terminal failed: {status}"
 
 #: src/workspace/task/TaskActions.tsx
 msgid "close the card and move it to done"
@@ -1790,6 +1817,10 @@ msgstr "detach failed: {status}"
 #: src/components/DetachModal.tsx
 msgid "Detach project"
 msgstr "Detach project"
+
+#: src/terminal/BackgroundTerminals.tsx
+msgid "detached {since} min ago · closes in {left} min"
+msgstr "detached {since} min ago · closes in {left} min"
 
 #: src/workspace/task/RunLog.tsx
 msgid "detail"
@@ -2922,6 +2953,10 @@ msgstr "No agent — playbook stages only"
 #: src/components/PermissionPresets.tsx
 msgid "No auto-approval AND the dispatcher refuses to run this project’s queued tasks."
 msgstr "No auto-approval AND the dispatcher refuses to run this project’s queued tasks."
+
+#: src/terminal/BackgroundTerminals.tsx
+msgid "No background terminals."
+msgstr "No background terminals."
 
 #: src/components/RunOutcomeModal.tsx
 msgid "No blockers detected — the executor exited without ticking criteria; open the session to see why."
@@ -4331,6 +4366,10 @@ msgstr "setup needed"
 msgid "shared files"
 msgstr "shared files"
 
+#: src/terminal/BackgroundTerminals.tsx
+msgid "shell"
+msgstr "shell"
+
 #: src/components/PermissionPresets.tsx
 msgid "Shell commands (any Bash)"
 msgstr "Shell commands (any Bash)"
@@ -4641,6 +4680,10 @@ msgstr "tags for {projectName}"
 #: src/workspace/TaskCard.tsx
 msgid "take it back out of the queue — nothing has run yet"
 msgstr "take it back out of the queue — nothing has run yet"
+
+#: src/terminal/TerminalDock.tsx
+msgid "Take over here"
+msgstr "Take over here"
 
 #: src/workspace/TaskCard.tsx
 #: src/workspace/TaskModal.tsx
@@ -5094,6 +5137,7 @@ msgid "Triage"
 msgstr "Triage"
 
 #: src/components/RetroImproveCard.tsx
+#: src/terminal/TerminalDock.tsx
 msgid "Try again"
 msgstr "Try again"
 

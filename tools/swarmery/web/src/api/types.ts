@@ -4925,6 +4925,20 @@ export interface TerminalSession {
   live: boolean;
 }
 
+/** One row of GET /api/term/sessions — a live dock PTY, mirrors termSessionDTO
+ *  in internal/api/term.go. `detachedAt` is present only while nobody is
+ *  attached (a background terminal); `foreground` is the shell's current
+ *  foreground process (e.g. `claude`), when the daemon could read it. */
+export interface DockTermSession {
+  id: string;
+  cwd: string;
+  label?: string;
+  startedAt: string;
+  attached: boolean;
+  detachedAt?: string;
+  foreground?: string;
+}
+
 /** One epic (a workspace plan) — mirrors epicDTO in internal/api/epics.go.
  * `status` is the derived planStatus (zone > README > rollup precedence). */
 export interface Epic {

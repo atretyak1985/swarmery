@@ -19,10 +19,13 @@
 
 import { Trans, useLingui } from '@lingui/react/macro';
 import { type CSSProperties, Suspense, lazy, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import type { DockTermSession } from '../api/types';
+import { deleteDockTermSession, listDockTermSessions } from '../api';
 import type { TermStatus, XTermHandle } from './XTerm';
 import { TERM_CLOSE_MESSAGE, type TermCloseKind } from './closeReason';
 import { ExitFullscreenIcon, FullscreenIcon, MaximizeIcon, MinimizeIcon, RestoreIcon } from './DockIcons';
 import { CLAUDE_COMMAND, claudeCommandFor, newSessionId, shortTitle } from './claudeSession';
+import { TermSessionList } from './BackgroundTerminals';
 import {
   type DockStateV2,
   type Edge,
@@ -77,6 +80,15 @@ export interface TermTab {
    * (those get one on their next Start / Restart).
    */
   sessionId?: string;
+  /**
+   * The daemon-side session id this tab's PTY is bound to (phase 5), set once
+   * its `hello` frame arrives (XTerm's `onHello`). Persisted in the same
+   * localStorage dock state as every other tab field, so a page reload opens
+   * `?attach=<ptyId>` instead of a brand-new shell — see XTerm.tsx and
+   * termSocket.ts's `termWsUrlFor`. Absent until the first hello, and on a
+   * tab saved before this phase.
+   */
+  ptyId?: string | undefined;
 }
 
 /** Tab label for a Claude Code tab — a product name, never translated. */
@@ -252,6 +264,14 @@ export function TerminalDock({
   const [dropZone, setDropZone] = useState<{ groupId: string; zone: Edge | 'center' } | null>(null);
   // A tab whose button takes focus after the next render (a menu action moved it).
   const pendingFocusRef = useRef<string | null>(null);
+  // "Background terminals" menu: PTYs under this project that are not open in
+  // any current tab. Fetched on open and every 30s while the dock is open —
+  // a REST poll, not a second WS channel (GET /api/term/sessions).
+  const [bgMenuOpen, setBgMenuOpen] = useState(false);
+  const [bgSessions, setBgSessions] = useState<readonly DockTermSession[]>([]);
+  // Every live session, fetched only once a tab's Start overlay actually needs
+  // it (closedById has a 'too-many' entry) — the list the limit overlay shows.
+  const [tooManySessions, setTooManySessions] = useState<readonly DockTermSession[]>([]);
 
   // Track full screen from the browser, so Esc / F11 / the OS exit all sync.
   useEffect(() => {
@@ -322,6 +342,44 @@ export function TerminalDock({
     return () => window.removeEventListener('dragend', end, true);
   }, [dragging]);
 
+  // Refresh "Background terminals" when the menu opens, and every 30s while
+  // the dock itself is open (so the badge count stays roughly live even with
+  // the menu closed) — one REST poll, no dedicated WS channel.
+  useEffect(() => {
+    if (!state.open || projectPath === '') return undefined;
+    let cancelled = false;
+    const refresh = (): void => {
+      listDockTermSessions(projectPath)
+        .then((list) => {
+          if (!cancelled) setBgSessions(list);
+        })
+        .catch(() => undefined);
+    };
+    refresh();
+    const iv = window.setInterval(refresh, 30_000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(iv);
+    };
+  }, [state.open, projectPath]);
+
+  // The too-many overlay's own session list: fetched once some tab actually
+  // shows that overlay, refreshed whenever the set of such tabs changes (a
+  // Close in the overlay, or a newly full daemon).
+  const anyTooMany = Object.values(closedById).includes('too-many');
+  useEffect(() => {
+    if (!anyTooMany) return undefined;
+    let cancelled = false;
+    listDockTermSessions(projectPath)
+      .then((list) => {
+        if (!cancelled) setTooManySessions(list);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [anyTooMany, projectPath]);
+
   // Hand focus to the tab a menu action just moved (its button may have changed strip).
   useEffect(() => {
     const id = pendingFocusRef.current;
@@ -360,13 +418,42 @@ export function TerminalDock({
     return bound;
   };
 
-  /** Start a fresh PTY in a closed tab (same cwd, same command — run again on purpose). */
+  /**
+   * Start a fresh PTY in a closed tab (same cwd, same command — run again on
+   * purpose). Binds a Claude tab's session id and drops its stale `ptyId` (a
+   * fresh PTY gets a fresh one on its next hello) in ONE onChange — bindSession's
+   * own onChange would otherwise be built from the same pre-update `state` and
+   * get clobbered by a second, separate call.
+   */
   const restartTab = (tab: TermTab): void => {
     const { id } = tab;
-    bindSession(tab);
+    const bound =
+      tab.run === CLAUDE_COMMAND && (tab.sessionId === undefined || tab.sessionId === '')
+        ? { ...tab, sessionId: newSessionId() }
+        : tab;
+    const next: TermTab = { ...bound, ptyId: undefined };
+    onChange({ ...state, tabs: state.tabs.map((t) => (t.id === id ? next : t)) });
     setClosedById(({ [id]: _gone, ...rest }) => rest);
     setArmed((prev) => withId(prev, id));
     setGenById((prev) => ({ ...prev, [id]: (prev[id] ?? 0) + 1 }));
+  };
+
+  /**
+   * Reconnect a closed tab to the SAME PTY (`attached-elsewhere`'s "Take over
+   * here", or a `not-found`/`detach-expired` retry) — a plain remount, which
+   * reattaches via the tab's existing `ptyId` (XTerm.tsx) rather than typing
+   * `run` into a new shell. A no-op once the id is truly gone: the remount
+   * just reports `not-found` again.
+   */
+  const reattachTab = (tab: TermTab): void => {
+    const { id } = tab;
+    setClosedById(({ [id]: _gone, ...rest }) => rest);
+    setGenById((prev) => ({ ...prev, [id]: (prev[id] ?? 0) + 1 }));
+  };
+
+  /** This tab's PTY id, once its `hello` frame named one. */
+  const handleHello = (id: string, ptyId: string): void => {
+    onChange({ ...state, tabs: state.tabs.map((t) => (t.id === id ? { ...t, ptyId } : t)) });
   };
 
   /** Type a restored tab's command into its live shell (the Start strip). */
@@ -408,12 +495,39 @@ export function TerminalDock({
     if (id !== null) setArmed((prev) => withId(prev, id));
     onChange(next);
   };
-  /** Close a tab; returns the next state so a menu can move focus on. */
+  /**
+   * Close a tab; returns the next state so a menu can move focus on. The ×
+   * ends the PTY itself (DELETE /api/term/sessions/{ptyId}) — a plain unmount
+   * (reload, navigation, a remount for Restart/attach) must NOT do this, or
+   * every reload would kill the very session it is trying to reattach to; see
+   * XTerm.tsx's unmount cleanup, which only closes the socket (a detach, not a
+   * close). Fire-and-forget: a 404 (already gone) or a network hiccup is not
+   * this tab's problem any more, it is already removed.
+   */
   const closeTab = (id: string): DockState => {
+    const ptyId = state.tabs.find((t) => t.id === id)?.ptyId;
+    if (ptyId !== undefined) void deleteDockTermSession(ptyId).catch(() => undefined);
     termRefs.current.delete(id);
     const next = closeDockTab(state, id);
     onChange(next);
     return next;
+  };
+
+  /** Attach a background PTY as a new tab, then close the menu. */
+  const attachBackground = (s: DockTermSession): void => {
+    const tab: TermTab = { id: newTabId(state.tabs), label: s.label ?? s.foreground ?? 'shell', cwd: s.cwd, ptyId: s.id };
+    onChange(addTab(state, tab));
+    setBgMenuOpen(false);
+  };
+  /** Close a background PTY from the menu, without touching any open tab. */
+  const closeBackground = (s: DockTermSession): void => {
+    void deleteDockTermSession(s.id).catch(() => undefined);
+    setBgSessions((prev) => prev.filter((x) => x.id !== s.id));
+  };
+  /** Close a session from the too-many overlay's own list. */
+  const closeTooMany = (s: DockTermSession): void => {
+    void deleteDockTermSession(s.id).catch(() => undefined);
+    setTooManySessions((prev) => prev.filter((x) => x.id !== s.id));
   };
 
   const enterFullscreen = (): void => {
@@ -464,6 +578,11 @@ export function TerminalDock({
   const shownIds = new Set(groups.map((g) => g.activeId));
   const focusedTabId = activeTabId(state);
   const tabById = new Map(state.tabs.map((tab) => [tab.id, tab]));
+  // "Background terminals": sessions under this project that no open tab's
+  // ptyId already names — a tab yet to receive its first hello (ptyId still
+  // undefined) is simply not excluded, same as any other PTY not ours.
+  const openPtyIds = new Set(state.tabs.flatMap((tab) => (tab.ptyId !== undefined ? [tab.ptyId] : [])));
+  const backgroundSessions = bgSessions.filter((s) => !openPtyIds.has(s.id));
 
   /** A group's whole box (strip included), positioned in the body. */
   const groupBox = (groupId: string): CSSProperties => {
@@ -730,6 +849,34 @@ export function TerminalDock({
             >
               Clear
             </button>
+            <div className="relative">
+              <button
+                type="button"
+                aria-label={t`background terminals`}
+                aria-expanded={bgMenuOpen}
+                onClick={() => setBgMenuOpen((o) => !o)}
+                className="flex items-center gap-1 rounded border border-line px-2 py-0.5 transition-colors hover:text-ink"
+              >
+                <Trans>Background</Trans>
+                {backgroundSessions.length > 0 && (
+                  <span className="tabular-nums">{backgroundSessions.length}</span>
+                )}
+              </button>
+              {bgMenuOpen && (
+                <div
+                  role="dialog"
+                  aria-label={t`background terminals`}
+                  className="absolute right-0 top-full z-30 mt-1 max-h-72 w-72 overflow-y-auto rounded-md border border-line-strong bg-surface2 p-1.5 font-mono text-[11px] text-ink shadow-lg"
+                >
+                  <TermSessionList
+                    sessions={backgroundSessions}
+                    projectPath={projectPath}
+                    onAttach={attachBackground}
+                    onClose={closeBackground}
+                  />
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Window controls, last in the header (the WebStorm order):
@@ -808,11 +955,44 @@ export function TerminalDock({
                         termRefs.current.set(tab.id, h);
                       }}
                       cwd={tab.cwd}
+                      ptyId={tab.ptyId}
                       initialInput={armed.has(tab.id) ? commandFor(tab) : undefined}
                       fontSize={fontSize}
                       onStatus={(s, why) => setStatus(tab.id, s, why)}
+                      onHello={(id) => handleHello(tab.id, id)}
                     />
-                    {closed !== undefined && (
+                    {closed === 'attached-elsewhere' && (
+                      <div
+                        role="status"
+                        className="absolute inset-x-3 bottom-3 flex items-center gap-3 rounded-md border border-line bg-surface2 px-3 py-2 font-mono text-[11px] text-ink"
+                      >
+                        <span className="min-w-0 flex-1">{t(TERM_CLOSE_MESSAGE[closed])}</span>
+                        <button
+                          type="button"
+                          onClick={() => reattachTab(tab)}
+                          className="shrink-0 rounded border border-line-strong px-2 py-0.5 text-ink transition-colors hover:border-brand hover:text-brand"
+                        >
+                          <Trans>Take over here</Trans>
+                        </button>
+                      </div>
+                    )}
+                    {closed === 'too-many' && (
+                      <div
+                        role="status"
+                        className="absolute inset-x-3 bottom-3 flex max-h-56 flex-col gap-2 overflow-y-auto rounded-md border border-line bg-surface2 px-3 py-2 font-mono text-[11px] text-ink"
+                      >
+                        <span className="min-w-0">{t(TERM_CLOSE_MESSAGE[closed])}</span>
+                        <TermSessionList sessions={tooManySessions} projectPath={projectPath} onClose={closeTooMany} />
+                        <button
+                          type="button"
+                          onClick={() => restartTab(tab)}
+                          className="shrink-0 self-end rounded border border-line-strong px-2 py-0.5 text-ink transition-colors hover:border-brand hover:text-brand"
+                        >
+                          <Trans>Try again</Trans>
+                        </button>
+                      </div>
+                    )}
+                    {closed !== undefined && closed !== 'attached-elsewhere' && closed !== 'too-many' && (
                       <div
                         role="status"
                         className="absolute inset-x-3 bottom-3 flex items-center gap-3 rounded-md border border-line bg-surface2 px-3 py-2 font-mono text-[11px] text-ink"
