@@ -302,10 +302,24 @@ func parseDocRepo(text string) string {
 			return strings.TrimSpace(m[1])
 		}
 		if m := docRepoLineRe.FindStringSubmatch(line); m != nil {
-			return strings.TrimSpace(m[1])
+			return repoCellOnly(m[1])
 		}
 	}
 	return ""
+}
+
+// docNextFieldRe finds the next `**Label:**` field on a joined header line.
+var docNextFieldRe = regexp.MustCompile(`\*\*[^*\n]+:\*\*`)
+
+// repoCellOnly cuts a prose Repo value at the next header field. The joined form
+// `**Repo:** `/abs/repo` · **Branch:** `feat/x` · …` would otherwise hand the
+// branch's backticked token to repopath as a second repo, and planrun would refuse
+// a single-repo plan as one that "spans N repositories" named after its branches.
+func repoCellOnly(v string) string {
+	if loc := docNextFieldRe.FindStringIndex(v); loc != nil {
+		v = v[:loc[0]]
+	}
+	return strings.TrimSpace(strings.TrimRight(strings.TrimSpace(v), "·|,"))
 }
 
 // SpecCriterion is one SC-tagged acceptance-criterion checkbox from plan/spec.md.

@@ -225,6 +225,12 @@ func TestParseDocRepo(t *testing.T) {
 			want: "`/Volumes/Work/swarmery`",
 		},
 		{
+			// The joined header form: the branch is a later field, not a second repo.
+			name: "joined header line stops at the next field",
+			in:   "# Phase 1\n\n**Repo:** `/Volumes/Work/swarmery` · **Branch:** `feat/x` · **Depends on:** — · **Estimate:** M\n",
+			want: "`/Volumes/Work/swarmery`",
+		},
+		{
 			name: "plural spelling",
 			in:   "# Phase 1\n\n| **Repos** | `a` |\n",
 			want: "`a`",
