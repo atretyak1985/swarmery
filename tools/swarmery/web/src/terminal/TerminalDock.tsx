@@ -1,17 +1,52 @@
 // Bottom terminal dock (fusion phase 15). Hangs off ProjectWorkspaceLayout,
 // toggled by the StatusBar "Terminal" button (Fusion's bottom-bar position).
-// Owns a tab strip (each tab is one live PTY), a toolbar (font − / reset / +,
-// Clear), and a height-resizable drag handle. Open state,
+// Owns the tab groups (each tab is one live PTY), a toolbar (font − / reset / +,
+// Clear), and a height-resizable drag handle. Open state, the split layout,
 // height, and the tab list are persisted per project in localStorage so a
 // reload restores the workspace. The heavy xterm bundle is lazy-loaded: the
 // XTerm wrapper is only fetched when the dock first renders a tab.
+//
+// Splits (terminal-dock-webstorm phase 4): the state is DockStateV2 from
+// ./layout, a tree of tab groups. The body renders two layers. The terminal
+// layer holds every tab's XTerm wrapper, keyed by tab id under ONE parent in
+// `state.tabs` order, and only moves them (left/top/width/height + visibility)
+// into their group's rectangle — a split, a move or a merge never re-parents an
+// XTerm, so it never unmounts and its PTY lives on. The chrome layer on top
+// holds the per-group tab strips, the focus ring and the resize handles; drop
+// overlays exist only while a tab is being dragged, so xterm keeps its pointer
+// input the rest of the time. A single group keeps the classic look: its strip
+// sits in the header and its terminals fill the body.
 
 import { Trans, useLingui } from '@lingui/react/macro';
-import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { type CSSProperties, Suspense, lazy, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { TermStatus, XTermHandle } from './XTerm';
 import { TERM_CLOSE_MESSAGE, type TermCloseKind } from './closeReason';
 import { ExitFullscreenIcon, FullscreenIcon, MaximizeIcon, MinimizeIcon, RestoreIcon } from './DockIcons';
 import { CLAUDE_COMMAND, claudeCommandFor, newSessionId, shortTitle } from './claudeSession';
+import {
+  type DockStateV2,
+  type Edge,
+  type LayoutGroup,
+  type LayoutNode,
+  type LayoutSplit,
+  type Rect,
+  activateTab,
+  addTab,
+  allGroups,
+  closeTab as closeDockTab,
+  dropTarget,
+  emptyDockV2,
+  focusGroup,
+  groupOf,
+  layoutRects,
+  moveTab,
+  reorderTab,
+  resizeSplit,
+  splitWithTab,
+} from './layout';
+import { SplitHandle } from './SplitHandle';
+import type { TabMenuItem } from './TabMenu';
+import { type StripTab, TAB_MIME, TabStrip, hasDraggedTab } from './TabStrip';
 import { useTabSessionTitles } from './useTabSessionTitles';
 
 export { CLAUDE_COMMAND };
@@ -59,12 +94,12 @@ export function ClaudeCodeLabel(): JSX.Element {
   );
 }
 
-/** Dock state the layout owns (so the TaskModal can push a worktree tab). */
-export interface DockState {
-  open: boolean;
-  tabs: TermTab[];
-  activeId: string | null;
-}
+/**
+ * Dock state the layout owns (so the TaskModal can push a worktree tab): the v2
+ * split tree. Each group keeps its own active tab; activeTabId() reads the
+ * focused group's.
+ */
+export type DockState = DockStateV2;
 
 const MIN_HEIGHT = 140;
 const MAX_HEIGHT = 720;
@@ -75,6 +110,21 @@ const FONT_DEFAULT = 14;
 /** A header window-control button: icon only, label on aria-label + title. */
 const WINDOW_BUTTON =
   'flex h-6 w-6 items-center justify-center rounded transition-colors hover:bg-bg hover:text-ink';
+/** Height of a group's own tab strip once the dock is split, in px. */
+const STRIP_H = 28;
+/** Gap between split neighbours; the resize handle fills it. */
+const GUTTER = 4;
+/** The whole body: a lone group fills it, exactly as the unsplit dock always did. */
+const FILL: CSSProperties = { left: 0, top: 0, right: 0, bottom: 0 };
+const NO_RECT: Rect = { x: 0, y: 0, w: 0, h: 0 };
+/** The part of a group a drop zone highlights. */
+const ZONE_BOX: Record<Edge | 'center', CSSProperties> = {
+  center: { left: 0, top: 0, right: 0, bottom: 0 },
+  left: { left: 0, top: 0, width: '50%', height: '100%' },
+  right: { right: 0, top: 0, width: '50%', height: '100%' },
+  top: { left: 0, top: 0, width: '100%', height: '50%' },
+  bottom: { left: 0, bottom: 0, width: '100%', height: '50%' },
+};
 
 function heightKey(projectSlug: string): string {
   return `swarmery.term.height.${projectSlug}`;
@@ -133,6 +183,28 @@ function inTerminal(el: Element | null): boolean {
   return el !== null && el.closest('.xterm') !== null;
 }
 
+/** Every split in the tree, by id. */
+function splitsById(node: LayoutNode, out: Map<string, LayoutSplit> = new Map()): Map<string, LayoutSplit> {
+  if (node.kind === 'split') {
+    out.set(node.id, node);
+    for (const c of node.children) splitsById(c, out);
+  }
+  return out;
+}
+
+/**
+ * The px length a split's sizes share: the span of its groups' rectangles along
+ * its axis, minus the gutters between its children.
+ */
+function splitExtent(split: LayoutSplit, rects: Record<string, Rect>): number {
+  const row = split.dir === 'row';
+  const boxes = allGroups(split).map((g) => rects[g.id] ?? NO_RECT);
+  if (boxes.length === 0) return 0;
+  const lo = Math.min(...boxes.map((r) => (row ? r.x : r.y)));
+  const hi = Math.max(...boxes.map((r) => (row ? r.x + r.w : r.y + r.h)));
+  return Math.max(0, hi - lo - GUTTER * (split.children.length - 1));
+}
+
 export function TerminalDock({
   projectSlug,
   projectPath,
@@ -154,11 +226,11 @@ export function TerminalDock({
   const [height, setHeight] = useState(() => readNum(heightKey(projectSlug), DEFAULT_HEIGHT, MIN_HEIGHT, MAX_HEIGHT));
   const [fontSize, setFontSize] = useState(() => readNum(fontKey(projectSlug), FONT_DEFAULT, FONT_MIN, FONT_MAX));
   const { t } = useLingui();
-const [statusById, setStatusById] = useState<Record<string, TermStatus>>({});
-// Why each closed tab closed, for its Restart overlay.
-const [closedById, setClosedById] = useState<Record<string, TermCloseKind>>({});
-// Bumped by Restart: a new key remounts the tab's XTerm, which opens a new PTY.
-const [genById, setGenById] = useState<Record<string, number>>({});
+  const [statusById, setStatusById] = useState<Record<string, TermStatus>>({});
+  // Why each closed tab closed, for its Restart overlay.
+  const [closedById, setClosedById] = useState<Record<string, TermCloseKind>>({});
+  // Bumped by Restart: a new key remounts the tab's XTerm, which opens a new PTY.
+  const [genById, setGenById] = useState<Record<string, number>>({});
   // Tabs whose `run` command types itself on the next PTY connect: armed only
   // by an explicit action here, disarmed once that connect opens.
   const [armed, setArmed] = useState<ReadonlySet<string>>(() => new Set());
@@ -172,6 +244,14 @@ const [genById, setGenById] = useState<Record<string, number>>({});
   // The dock root: the element that goes full screen.
   const rootRef = useRef<HTMLDivElement>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  // The body's px size: layoutRects lays the groups out in it.
+  const bodyRef = useRef<HTMLDivElement>(null);
+  const [size, setSize] = useState({ w: 0, h: 0 });
+  // The tab being dragged (drop overlays exist only meanwhile), and the zone under the pointer.
+  const [dragging, setDragging] = useState<string | null>(null);
+  const [dropZone, setDropZone] = useState<{ groupId: string; zone: Edge | 'center' } | null>(null);
+  // A tab whose button takes focus after the next render (a menu action moved it).
+  const pendingFocusRef = useRef<string | null>(null);
 
   // Track full screen from the browser, so Esc / F11 / the OS exit all sync.
   useEffect(() => {
@@ -209,6 +289,49 @@ const [genById, setGenById] = useState<Record<string, number>>({});
   useEffect(() => {
     localStorage.setItem(fontKey(projectSlug), String(fontSize));
   }, [projectSlug, fontSize]);
+
+  // Measure the body before paint, then follow its resizes (dock drag, maximize,
+  // full screen). Re-run when the dock (re)mounts its body.
+  const mounted = state.tabs.length > 0;
+  useLayoutEffect(() => {
+    const el = bodyRef.current;
+    if (el === null) return undefined;
+    const measure = (): void => {
+      const r = el.getBoundingClientRect();
+      // A collapsed dock (display:none) measures 0 × 0. Keep the last real size:
+      // laying the groups out in 0 px would shrink every split terminal — and the
+      // program in its PTY — to a couple of columns until the dock reopens.
+      if (r.width === 0 || r.height === 0) return;
+      setSize((p) => (p.w === r.width && p.h === r.height ? p : { w: r.width, h: r.height }));
+    };
+    measure();
+    if (typeof ResizeObserver === 'undefined') return undefined;
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [mounted]);
+
+  // A drag that ends anywhere (Esc, a drop outside the dock) drops the overlays.
+  useEffect(() => {
+    if (dragging === null) return undefined;
+    const end = (): void => {
+      setDragging(null);
+      setDropZone(null);
+    };
+    window.addEventListener('dragend', end, true);
+    return () => window.removeEventListener('dragend', end, true);
+  }, [dragging]);
+
+  // Hand focus to the tab a menu action just moved (its button may have changed strip).
+  useEffect(() => {
+    const id = pendingFocusRef.current;
+    if (id === null) return;
+    pendingFocusRef.current = null;
+    const buttons = rootRef.current?.querySelectorAll<HTMLElement>('[data-tab-button]') ?? [];
+    Array.from(buttons)
+      .find((b) => b.dataset.tabButton === id)
+      ?.focus();
+  });
 
   const setStatus = useCallback((id: string, s: TermStatus, closed?: TermCloseKind) => {
     setStatusById((prev) => (prev[id] === s ? prev : { ...prev, [id]: s }));
@@ -270,39 +393,27 @@ const [genById, setGenById] = useState<Record<string, number>>({});
     (e.target as HTMLElement).releasePointerCapture(e.pointerId);
   };
 
-  const activeTab = useMemo(
-    () => state.tabs.find((t) => t.id === state.activeId) ?? null,
-    [state.tabs, state.activeId],
-  );
-
-  const openTab = (tab: TermTab): void => {
-    onChange({ open: true, tabs: [...state.tabs, tab], activeId: tab.id });
-  };
+  /** cwd for a new project tab: the project root, else the first tab's cwd. */
+  const newTabCwd = (): string => (projectPath !== '' ? projectPath : (state.tabs[0]?.cwd ?? ''));
+  // "+" always opens in the project root (worktree tabs come from the
+  // TaskModal), in the focused group.
   const newProjectTab = (): void => {
-    const id = `t-${Date.now().toString(36)}`;
-    // A "+" tab always opens in the project root (worktree tabs come from the
-    // TaskModal). Fall back to the first tab's cwd only if the path is unknown.
-    const cwd = projectPath !== '' ? projectPath : (state.tabs[0]?.cwd ?? '');
-    openTab({ id, label: `shell ${state.tabs.length + 1}`, cwd });
+    onChange(openProjectTerminal(state, newTabCwd()));
   };
   const newClaudeTab = (): void => {
-    const cwd = projectPath !== '' ? projectPath : (state.tabs[0]?.cwd ?? '');
+    const cwd = newTabCwd();
     if (cwd === '') return;
     const next = openClaudeTerminal(state, cwd);
-    if (next.activeId !== null) {
-      const id = next.activeId;
-      setArmed((prev) => withId(prev, id));
-    }
+    const id = activeTabId(next);
+    if (id !== null) setArmed((prev) => withId(prev, id));
     onChange(next);
   };
-  const closeTab = (id: string): void => {
-    const remaining = state.tabs.filter((t) => t.id !== id);
+  /** Close a tab; returns the next state so a menu can move focus on. */
+  const closeTab = (id: string): DockState => {
     termRefs.current.delete(id);
-    onChange({
-      open: remaining.length > 0 ? state.open : false,
-      tabs: remaining,
-      activeId: state.activeId === id ? (remaining[remaining.length - 1]?.id ?? null) : state.activeId,
-    });
+    const next = closeDockTab(state, id);
+    onChange(next);
+    return next;
   };
 
   const enterFullscreen = (): void => {
@@ -343,6 +454,191 @@ const [genById, setGenById] = useState<Record<string, number>>({});
   const view = dockView(state);
   if (!view.mount) return null;
 
+  // ---- Layout: the groups' rectangles inside the measured body ----
+  const groups = allGroups(state.layout);
+  const split = groups.length > 1;
+  const { groups: rects, handles } = layoutRects(state.layout, { x: 0, y: 0, w: size.w, h: size.h }, GUTTER);
+  const splits = splitsById(state.layout);
+  const groupIdOf = new Map<string, string>();
+  for (const g of groups) for (const id of g.tabIds) groupIdOf.set(id, g.id);
+  const shownIds = new Set(groups.map((g) => g.activeId));
+  const focusedTabId = activeTabId(state);
+  const tabById = new Map(state.tabs.map((tab) => [tab.id, tab]));
+
+  /** A group's whole box (strip included), positioned in the body. */
+  const groupBox = (groupId: string): CSSProperties => {
+    if (!split) return FILL;
+    const r = rects[groupId] ?? NO_RECT;
+    return { left: r.x, top: r.y, width: r.w, height: r.h };
+  };
+  /** A group's terminal area: its box minus its own strip once the dock is split. */
+  const contentBox = (groupId: string): CSSProperties => {
+    if (!split) return FILL;
+    const r = rects[groupId] ?? NO_RECT;
+    return { left: r.x, top: r.y + STRIP_H, width: r.w, height: Math.max(0, r.h - STRIP_H) };
+  };
+
+  // ---- Tabs as the strips show them ----
+  const stripTab = (tab: TermTab): StripTab => {
+    const st = statusById[tab.id];
+    // A Claude tab shows its session's title, read from the daemon on every
+    // render so a dashboard rename shows at once; the saved label is the
+    // fallback until the session has a title.
+    const fullTitle = titles[tab.id]?.title ?? null;
+    const closedKind = closedById[tab.id];
+    return {
+      id: tab.id,
+      caption: shortTitle(fullTitle) ?? tab.label,
+      fullTitle,
+      status: st,
+      closedWhy: st === 'closed' && closedKind !== undefined ? t(TERM_CLOSE_MESSAGE[closedKind]) : undefined,
+    };
+  };
+  const stripTabs = (g: LayoutGroup): StripTab[] =>
+    g.tabIds.flatMap((id) => {
+      const tab = tabById.get(id);
+      return tab === undefined ? [] : [stripTab(tab)];
+    });
+
+  // ---- Focus, drag and drop ----
+  /** Pointer or focus inside a tab's terminal focuses that tab's group. */
+  const focusGroupOf = (tabId: string): void => {
+    const gid = groupIdOf.get(tabId);
+    if (gid !== undefined && gid !== state.focusedGroupId) onChange(focusGroup(state, gid));
+  };
+  const endDrag = (): void => {
+    setDragging(null);
+    setDropZone(null);
+  };
+  const accepts = (e: React.DragEvent): boolean => dragging !== null || hasDraggedTab(e.dataTransfer);
+  const draggedId = (e: React.DragEvent): string | null => {
+    const id = e.dataTransfer.getData(TAB_MIME) || dragging;
+    return id !== null && tabById.has(id) ? id : null;
+  };
+  /** A tab dropped on a strip before its tab at `index` (counted with the dragged tab in place). */
+  const dropOnStrip = (groupId: string, tabId: string, index: number): void => {
+    endDrag();
+    const home = groupOf(state, tabId);
+    if (home === null || !tabById.has(tabId)) return;
+    if (home.id !== groupId) {
+      onChange(moveTab(state, tabId, groupId, index));
+      return;
+    }
+    // reorderTab takes the final position, i.e. the index once the tab is lifted out.
+    const from = home.tabIds.indexOf(tabId);
+    const to = index > from ? index - 1 : index;
+    if (to !== from) onChange(reorderTab(state, tabId, to));
+  };
+  /** A tab dropped on a group's terminal area: the centre moves it in, an edge splits. */
+  const dropOnGroup = (groupId: string, tabId: string, zone: Edge | 'center'): void => {
+    endDrag();
+    if (zone !== 'center') {
+      onChange(splitWithTab(state, tabId, groupId, zone));
+      return;
+    }
+    const home = groupOf(state, tabId);
+    onChange(home?.id === groupId ? activateTab(state, tabId) : moveTab(state, tabId, groupId));
+  };
+  const zoneAt = (e: React.DragEvent<HTMLElement>): Edge | 'center' => {
+    const r = e.currentTarget.getBoundingClientRect();
+    return dropTarget({ x: r.left, y: r.top, w: r.width, h: r.height }, { x: e.clientX, y: e.clientY });
+  };
+
+  // ---- The tab menu: every drag action, by keyboard ----
+  /** Apply a menu action, then focus `focusId`'s tab button wherever it now lives. */
+  const menuAct = (focusId: string | null, next: DockState): void => {
+    pendingFocusRef.current = focusId;
+    onChange(next);
+  };
+  const menuItems = (tabId: string): TabMenuItem[] => {
+    const home = groupOf(state, tabId);
+    if (home === null) return [];
+    const at = home.tabIds.indexOf(tabId);
+    const alone = home.tabIds.length < 2;
+    const items: TabMenuItem[] = [
+      {
+        key: 'split-right',
+        label: t`Split right`,
+        disabled: alone,
+        onSelect: () => menuAct(tabId, splitWithTab(state, tabId, home.id, 'right')),
+      },
+      {
+        key: 'split-down',
+        label: t`Split down`,
+        disabled: alone,
+        onSelect: () => menuAct(tabId, splitWithTab(state, tabId, home.id, 'bottom')),
+      },
+      {
+        key: 'move-left',
+        label: t`Move left`,
+        disabled: at <= 0,
+        onSelect: () => menuAct(tabId, reorderTab(state, tabId, at - 1)),
+      },
+      {
+        key: 'move-right',
+        label: t`Move right`,
+        disabled: at >= home.tabIds.length - 1,
+        onSelect: () => menuAct(tabId, reorderTab(state, tabId, at + 1)),
+      },
+    ];
+    groups.forEach((g, i) => {
+      if (g.id === home.id) return;
+      const n = i + 1;
+      items.push({
+        key: `move-to-${g.id}`,
+        label: t`Move to group ${n}`,
+        onSelect: () => menuAct(tabId, moveTab(state, tabId, g.id)),
+      });
+    });
+    items.push({
+      key: 'close',
+      label: t`Close`,
+      onSelect: () => {
+        pendingFocusRef.current = activeTabId(closeTab(tabId));
+      },
+    });
+    return items;
+  };
+
+  /** One group's strip; `className`/`style` place it in the header or on top of the group. */
+  const renderStrip = (
+    g: LayoutGroup,
+    className: string,
+    style?: CSSProperties,
+    trailing?: JSX.Element,
+  ): JSX.Element => (
+    <TabStrip
+      key={g.id}
+      groupId={g.id}
+      tabs={stripTabs(g)}
+      activeId={g.activeId}
+      className={className}
+      style={style}
+      dragging={dragging}
+      onActivate={(id) => onChange(activateTab(state, id))}
+      onClose={(id) => {
+        closeTab(id);
+      }}
+      onDragStart={setDragging}
+      onDragEnd={endDrag}
+      onDropTab={(id, index) => dropOnStrip(g.id, id, index)}
+      menuItems={menuItems}
+    >
+      {trailing}
+    </TabStrip>
+  );
+
+  const newTabButton = (
+    <button
+      type="button"
+      aria-label="new terminal"
+      onClick={newProjectTab}
+      className="shrink-0 rounded-md border border-line px-1.5 py-0.5 font-mono text-[11px] text-ink-dim transition-colors hover:border-line-strong hover:text-ink"
+    >
+      +
+    </button>
+  );
+
   // Clamp against the viewport too: the shell roots are `h-dvh overflow-hidden`
   // (App.tsx / workspace/WorkspaceShell.tsx), so a dock taller than the window
   // would push the StatusBar — which carries the toggle that closes it — out of
@@ -359,6 +655,7 @@ const [genById, setGenById] = useState<Record<string, number>>({});
   const islandClass = fills
     ? `flex min-h-0 flex-1 flex-col overflow-hidden border-t border-line bg-bg${isFullscreen ? ' h-full' : ' desk:rounded-xl desk:border'}`
     : 'flex shrink-0 flex-col overflow-hidden border-t border-line bg-bg desk:rounded-xl desk:border';
+  const loneGroup = groups[0];
 
   return (
     <div ref={rootRef} className={rootClass} hidden={view.hidden} role="region" aria-label="terminal dock">
@@ -380,8 +677,9 @@ const [genById, setGenById] = useState<Record<string, number>>({});
 
       <div className={islandClass} style={fills ? undefined : { height: effHeight }}>
         {/* Header: the dock's own tone, a mono "terminal" caption, then the tab
-            strip + toolbar + window controls. Below desk this matches main's
-            plain header (no surface2 fill, no caption) per the review's R1-1 finding. */}
+            strip (a lone group's — split groups carry their own) + toolbar +
+            window controls. Below desk this matches main's plain header (no
+            surface2 fill, no caption) per the review's R1-1 finding. */}
         <div
           data-testid="dock-header"
           className="flex h-9 shrink-0 items-center gap-1 border-b border-line px-2 desk:h-10 desk:gap-1.5 desk:bg-surface2"
@@ -389,62 +687,11 @@ const [genById, setGenById] = useState<Record<string, number>>({});
           <span className="hidden shrink-0 font-mono text-[10px] text-ink-2 uppercase tracking-[0.12em] desk:inline-flex">
             <Trans>terminal</Trans>
           </span>
-          <div className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto">
-            {state.tabs.map((tab) => {
-              const active = tab.id === state.activeId;
-              const st = statusById[tab.id];
-              // A Claude tab shows its session's title, read from the daemon on
-              // every render so a dashboard rename shows at once; the saved
-              // label is the fallback until the session has a title.
-              const fullTitle = titles[tab.id]?.title ?? null;
-              const caption = shortTitle(fullTitle) ?? tab.label;
-              const closedWhy =
-                st === 'closed' && closedById[tab.id] !== undefined
-                  ? t(TERM_CLOSE_MESSAGE[closedById[tab.id] as TermCloseKind])
-                  : undefined;
-              return (
-                <div
-                  key={tab.id}
-                  className={`group flex shrink-0 items-center gap-1.5 rounded-md border px-2 py-1 font-mono text-[10.5px] ${
-                    active ? 'border-line-strong bg-surface2 text-ink' : 'border-transparent text-ink-dim'
-                  }`}
-                >
-                  <button
-                    type="button"
-                    onClick={() => onChange({ ...state, activeId: tab.id })}
-                    title={closedWhy}
-                    className="flex items-center gap-1.5"
-                  >
-                    <span
-                      aria-hidden="true"
-                      className={`inline-block h-[6px] w-[6px] rounded-full ${
-                        st === 'open' ? 'bg-green' : st === 'closed' ? 'bg-red' : 'bg-amber'
-                      }`}
-                    />
-                    <span className="max-w-[140px] truncate" title={fullTitle ?? undefined}>
-                      {caption}
-                    </span>
-                  </button>
-                  <button
-                    type="button"
-                    aria-label={`close ${caption}`}
-                    onClick={() => closeTab(tab.id)}
-                    className="text-ink-faint transition-colors hover:text-red"
-                  >
-                    ×
-                  </button>
-                </div>
-              );
-            })}
-            <button
-              type="button"
-              aria-label="new terminal"
-              onClick={newProjectTab}
-              className="shrink-0 rounded-md border border-line px-1.5 py-0.5 font-mono text-[11px] text-ink-dim transition-colors hover:border-line-strong hover:text-ink"
-            >
-              +
-            </button>
-          </div>
+          {!split && loneGroup !== undefined ? (
+            renderStrip(loneGroup, 'flex min-w-0 flex-1 items-center gap-1 overflow-x-auto', undefined, newTabButton)
+          ) : (
+            <div className="flex min-w-0 flex-1 items-center gap-1">{newTabButton}</div>
+          )}
 
           {/* Toolbar: Claude Code, font − / size / +, Clear. */}
           <div className="flex shrink-0 items-center gap-1 font-mono text-[10.5px] text-ink-dim">
@@ -478,7 +725,7 @@ const [genById, setGenById] = useState<Record<string, number>>({});
             </button>
             <button
               type="button"
-              onClick={() => termRefs.current.get(state.activeId ?? '')?.clear()}
+              onClick={() => termRefs.current.get(focusedTabId ?? '')?.clear()}
               className="rounded border border-line px-2 py-0.5 transition-colors hover:text-ink"
             >
               Clear
@@ -526,84 +773,173 @@ const [genById, setGenById] = useState<Record<string, number>>({});
           </div>
         </div>
 
-        {/* Panes: every tab is kept mounted (its PTY stays live); only the active
-            one is visible so switching tabs doesn't kill the shell. */}
-        <div className="relative min-h-0 flex-1 bg-[#0b0d10]">
+        {/* Body: the terminal layer, then the chrome layer, then (mid-drag) the drop overlays. */}
+        <div ref={bodyRef} data-testid="dock-body" className="relative min-h-0 flex-1 bg-[#0b0d10]">
           <Suspense
             fallback={<div className="p-3 font-mono text-[11px] text-ink-faint">loading terminal…</div>}
           >
-            {state.tabs.map((tab) => {
-              const closed = statusById[tab.id] === 'closed' ? closedById[tab.id] : undefined;
-              const awaitingStart =
-                statusById[tab.id] === 'open' &&
-                tab.run !== undefined &&
-                tab.run !== '' &&
-                !armed.has(tab.id) &&
-                !started.has(tab.id);
-              return (
-                <div
-                  key={tab.id}
-                  className="absolute inset-0 p-1.5"
-                  style={{ visibility: tab.id === state.activeId ? 'visible' : 'hidden' }}
-                  aria-hidden={tab.id !== state.activeId}
-                >
-                  <XTerm
-                    key={genById[tab.id] ?? 0}
-                    ref={(h) => {
-                      termRefs.current.set(tab.id, h);
-                    }}
-                    cwd={tab.cwd}
-                    initialInput={armed.has(tab.id) ? commandFor(tab) : undefined}
-                    fontSize={fontSize}
-                    onStatus={(s, why) => setStatus(tab.id, s, why)}
-                  />
-                  {closed !== undefined && (
-                    <div
-                      role="status"
-                      className="absolute inset-x-3 bottom-3 flex items-center gap-3 rounded-md border border-line bg-surface2 px-3 py-2 font-mono text-[11px] text-ink"
-                    >
-                      <span className="min-w-0 flex-1">{t(TERM_CLOSE_MESSAGE[closed])}</span>
-                      <button
-                        type="button"
-                        onClick={() => restartTab(tab)}
-                        className="shrink-0 rounded border border-line-strong px-2 py-0.5 text-ink transition-colors hover:border-brand hover:text-brand"
+            {/* Terminal layer: every tab stays mounted (its PTY stays live) under
+                this one parent, in `state.tabs` order; only each wrapper's box and
+                visibility follow the layout, so no split, move or merge remounts it. */}
+            <div className="absolute inset-0">
+              {state.tabs.map((tab) => {
+                const groupId = groupIdOf.get(tab.id) ?? '';
+                const shown = shownIds.has(tab.id);
+                const closed = statusById[tab.id] === 'closed' ? closedById[tab.id] : undefined;
+                const awaitingStart =
+                  statusById[tab.id] === 'open' &&
+                  tab.run !== undefined &&
+                  tab.run !== '' &&
+                  !armed.has(tab.id) &&
+                  !started.has(tab.id);
+                return (
+                  <div
+                    key={tab.id}
+                    data-term-tab={tab.id}
+                    className="absolute p-1.5"
+                    style={{ ...contentBox(groupId), visibility: shown ? 'visible' : 'hidden' }}
+                    aria-hidden={!shown}
+                    onPointerDown={() => focusGroupOf(tab.id)}
+                    onFocus={() => focusGroupOf(tab.id)}
+                  >
+                    <XTerm
+                      key={genById[tab.id] ?? 0}
+                      ref={(h) => {
+                        termRefs.current.set(tab.id, h);
+                      }}
+                      cwd={tab.cwd}
+                      initialInput={armed.has(tab.id) ? commandFor(tab) : undefined}
+                      fontSize={fontSize}
+                      onStatus={(s, why) => setStatus(tab.id, s, why)}
+                    />
+                    {closed !== undefined && (
+                      <div
+                        role="status"
+                        className="absolute inset-x-3 bottom-3 flex items-center gap-3 rounded-md border border-line bg-surface2 px-3 py-2 font-mono text-[11px] text-ink"
                       >
-                        {tab.run === CLAUDE_COMMAND ? <Trans>Restart Claude Code</Trans> : <Trans>Restart</Trans>}
-                      </button>
-                    </div>
-                  )}
-                  {awaitingStart && (
-                    <div
-                      role="status"
-                      className="absolute inset-x-3 bottom-3 flex items-center gap-3 rounded-md border border-line bg-surface2 px-3 py-2 font-mono text-[11px] text-ink"
-                    >
-                      <span className="min-w-0 flex-1">
-                        <Trans>Restored after a reload — the command is not started, so no empty session is created.</Trans>
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => startRun(tab)}
-                        className="shrink-0 rounded border border-line-strong px-2 py-0.5 text-ink transition-colors hover:border-brand hover:text-brand"
+                        <span className="min-w-0 flex-1">{t(TERM_CLOSE_MESSAGE[closed])}</span>
+                        <button
+                          type="button"
+                          onClick={() => restartTab(tab)}
+                          className="shrink-0 rounded border border-line-strong px-2 py-0.5 text-ink transition-colors hover:border-brand hover:text-brand"
+                        >
+                          {tab.run === CLAUDE_COMMAND ? <Trans>Restart Claude Code</Trans> : <Trans>Restart</Trans>}
+                        </button>
+                      </div>
+                    )}
+                    {awaitingStart && (
+                      <div
+                        role="status"
+                        className="absolute inset-x-3 bottom-3 flex items-center gap-3 rounded-md border border-line bg-surface2 px-3 py-2 font-mono text-[11px] text-ink"
                       >
-                        {tab.run === CLAUDE_COMMAND ? <Trans>Start Claude Code</Trans> : <Trans>Run</Trans>}
-                      </button>
-                      <button
-                        type="button"
-                        aria-label={t`dismiss`}
-                        onClick={() => setStarted((prev) => withId(prev, tab.id))}
-                        className="shrink-0 text-ink-faint transition-colors hover:text-ink"
-                      >
-                        ×
-                      </button>
-                    </div>
-                  )}
-                </div>
-              );
-            })}
+                        <span className="min-w-0 flex-1">
+                          <Trans>Restored after a reload — the command is not started, so no empty session is created.</Trans>
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => startRun(tab)}
+                          className="shrink-0 rounded border border-line-strong px-2 py-0.5 text-ink transition-colors hover:border-brand hover:text-brand"
+                        >
+                          {tab.run === CLAUDE_COMMAND ? <Trans>Start Claude Code</Trans> : <Trans>Run</Trans>}
+                        </button>
+                        <button
+                          type="button"
+                          aria-label={t`dismiss`}
+                          onClick={() => setStarted((prev) => withId(prev, tab.id))}
+                          className="shrink-0 text-ink-faint transition-colors hover:text-ink"
+                        >
+                          ×
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
           </Suspense>
-          {activeTab === null && (
-            <div className="p-3 font-mono text-[11px] text-ink-faint">no terminal open</div>
+
+          {/* Chrome layer (split only): a strip on top of each group, a ring on the
+              focused one, a handle in every gutter. Only its children take the pointer. */}
+          {split && (
+            <div className="pointer-events-none absolute inset-0">
+              {groups.map((g) => {
+                const r = rects[g.id] ?? NO_RECT;
+                return renderStrip(
+                  g,
+                  'pointer-events-auto absolute flex items-center gap-1 overflow-x-auto border-b border-line bg-surface2 px-1',
+                  { left: r.x, top: r.y, width: r.w, height: STRIP_H },
+                );
+              })}
+              <div
+                data-testid="group-focus"
+                data-group-id={state.focusedGroupId}
+                className="pointer-events-none absolute ring-1 ring-brand/60 ring-inset"
+                style={groupBox(state.focusedGroupId)}
+              />
+              {handles.map((h) => {
+                const node = splits.get(h.splitId);
+                if (node === undefined) return null;
+                return (
+                  <SplitHandle
+                    key={`${h.splitId}:${h.index}`}
+                    dir={h.dir}
+                    rect={h.rect}
+                    index={h.index}
+                    sizes={node.sizes}
+                    extent={splitExtent(node, rects)}
+                    label={t`Resize split`}
+                    onResize={(sizes) => onChange(resizeSplit(state, h.splitId, sizes))}
+                  />
+                );
+              })}
+            </div>
           )}
+
+          {/* Drop overlays, only mid-drag (xterm owns the pointer otherwise): the
+              centre of a group's terminal area moves the tab in, an edge splits. */}
+          {dragging !== null &&
+            groups.map((g) => (
+              <div
+                key={g.id}
+                data-testid="drop-zone"
+                data-group-id={g.id}
+                className="absolute z-20"
+                style={contentBox(g.id)}
+                onDragOver={(e) => {
+                  if (!accepts(e)) return;
+                  e.preventDefault();
+                  e.dataTransfer.dropEffect = 'move';
+                  const zone = zoneAt(e);
+                  setDropZone((p) => (p?.groupId === g.id && p.zone === zone ? p : { groupId: g.id, zone }));
+                }}
+                onDragLeave={(e) => {
+                  const next = e.relatedTarget;
+                  if (next instanceof Node && e.currentTarget.contains(next)) return;
+                  setDropZone((p) => (p?.groupId === g.id ? null : p));
+                }}
+                onDrop={(e) => {
+                  if (!accepts(e)) return;
+                  e.preventDefault();
+                  const id = draggedId(e);
+                  if (id === null) {
+                    endDrag();
+                    return;
+                  }
+                  dropOnGroup(g.id, id, zoneAt(e));
+                }}
+              >
+                {dropZone?.groupId === g.id && (
+                  <div
+                    data-testid="drop-highlight"
+                    data-zone={dropZone.zone}
+                    className="pointer-events-none absolute rounded-sm border border-brand bg-brand/15"
+                    style={ZONE_BOX[dropZone.zone]}
+                  />
+                )}
+              </div>
+            ))}
+
+          {focusedTabId === null && <div className="p-3 font-mono text-[11px] text-ink-faint">no terminal open</div>}
         </div>
       </div>
     </div>
@@ -619,9 +955,25 @@ function withoutId(set: ReadonlySet<string>, id: string): ReadonlySet<string> {
   return next;
 }
 
+/** A fresh tab id, unique among `tabs` even when two open within one millisecond. */
+function newTabId(tabs: readonly TermTab[]): string {
+  const base = `t-${Date.now().toString(36)}`;
+  const taken = new Set(tabs.map((tab) => tab.id));
+  if (!taken.has(base)) return base;
+  let n = 1;
+  while (taken.has(`${base}-${n}`)) n += 1;
+  return `${base}-${n}`;
+}
+
 /** Build the initial (empty, closed) dock state. */
 export function emptyDock(): DockState {
-  return { open: false, tabs: [], activeId: null };
+  return emptyDockV2();
+}
+
+/** The active tab of the focused group — the tab the toolbar acts on — or null. */
+export function activeTabId(state: DockState): string | null {
+  const groups = allGroups(state.layout);
+  return (groups.find((g) => g.id === state.focusedGroupId) ?? groups[0])?.activeId ?? null;
 }
 
 /**
@@ -660,37 +1012,30 @@ export function dockCoversPage(state: DockState, maximized: boolean): boolean {
   return maximized && view.mount && !view.hidden;
 }
 
-/** Open a fresh project-root terminal, appending a tab and revealing the dock. */
+/** Open a fresh project-root terminal in the focused group, revealing the dock. */
 export function openProjectTerminal(state: DockState, projectPath: string): DockState {
-  const id = `t-${Date.now().toString(36)}`;
   const label = `shell ${state.tabs.length + 1}`;
-  return { open: true, tabs: [...state.tabs, { id, label, cwd: projectPath }], activeId: id };
+  return addTab(state, { id: newTabId(state.tabs), label, cwd: projectPath });
 }
 
 /**
- * Open a fresh Claude Code tab in `cwd`: a project shell that runs `claude` as
- * soon as it connects (the WebStorm "Claude Code" terminal button), bound to a
- * newly minted session id. Every click opens a new tab — parallel Claude
- * sessions are a normal workflow.
+ * Open a fresh Claude Code tab in `cwd`, in the focused group: a project shell
+ * that runs `claude` as soon as it connects (the WebStorm "Claude Code"
+ * terminal button), bound to a newly minted session id. Every click opens a new
+ * tab — parallel Claude sessions are a normal workflow.
  */
 export function openClaudeTerminal(state: DockState, cwd: string): DockState {
-  const id = `t-${Date.now().toString(36)}`;
   const n = state.tabs.filter((t) => t.run === CLAUDE_COMMAND).length;
   const label = n === 0 ? CLAUDE_LABEL : `${CLAUDE_LABEL} (${n + 1})`;
-  const tab: TermTab = { id, label, cwd, run: CLAUDE_COMMAND, sessionId: newSessionId() };
-  return { open: true, tabs: [...state.tabs, tab], activeId: id };
+  const tab: TermTab = { id: newTabId(state.tabs), label, cwd, run: CLAUDE_COMMAND, sessionId: newSessionId() };
+  return addTab(state, tab);
 }
 
 /** Open a worktree terminal for a task, deduped by cwd (focus if already open). */
 export function openWorktreeTerminal(state: DockState, taskLabel: string, worktreePath: string): DockState {
   const existing = state.tabs.find((t) => t.cwd === worktreePath);
   if (existing !== undefined) {
-    return { ...state, open: true, activeId: existing.id };
+    return { ...activateTab(state, existing.id), open: true };
   }
-  const id = `t-${Date.now().toString(36)}`;
-  return {
-    open: true,
-    tabs: [...state.tabs, { id, label: taskLabel, cwd: worktreePath }],
-    activeId: id,
-  };
+  return addTab(state, { id: newTabId(state.tabs), label: taskLabel, cwd: worktreePath });
 }

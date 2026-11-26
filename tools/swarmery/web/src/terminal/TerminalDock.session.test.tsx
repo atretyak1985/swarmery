@@ -63,6 +63,7 @@ vi.mock('../lib/ws', async () => {
 });
 
 import { TerminalDock, type DockState, type TermTab } from './TerminalDock';
+import { migrateDock } from './layout';
 
 const UUID = '3f2b9c1e-8d4a-4f6b-9a1c-2e7d5b8f0a11';
 const SESSION_CMD = /^claude --session-id ([0-9a-f-]{36})$/;
@@ -86,7 +87,7 @@ function StatefulDock({ initial }: { initial: DockState }): JSX.Element {
 }
 
 function oneTab(tab: Omit<TermTab, 'id' | 'cwd'>): DockState {
-  return { open: true, tabs: [{ id: 't1', cwd: '/tmp/project', ...tab }], activeId: 't1' };
+  return migrateDock({ open: true, tabs: [{ id: 't1', cwd: '/tmp/project', ...tab }], activeId: 't1' });
 }
 
 describe('Claude Code tab session binding', () => {
@@ -100,7 +101,11 @@ describe('Claude Code tab session binding', () => {
   afterEach(cleanup);
 
   it('mints a session id for a new Claude tab and types claude --session-id with it', async () => {
-    const shell: DockState = { open: true, tabs: [{ id: 's1', label: 'shell 1', cwd: '/tmp/project' }], activeId: 's1' };
+    const shell: DockState = migrateDock({
+      open: true,
+      tabs: [{ id: 's1', label: 'shell 1', cwd: '/tmp/project' }],
+      activeId: 's1',
+    });
     render(<StatefulDock initial={shell} />);
     await screen.findByTestId('xterm');
 

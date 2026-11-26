@@ -24,6 +24,7 @@ import {
   toggleDock,
   type DockState,
 } from '../terminal/TerminalDock';
+import { migrateDock } from '../terminal/layout';
 import { ProjectWorkspaceProvider, useProjectWorkspace } from './ProjectContext';
 import { StatusBar } from './StatusBar';
 import { boardCounts } from './boardModel';
@@ -48,18 +49,21 @@ export function useWorkspaceTerminal(): ((taskLabel: string, worktreePath: strin
   return useContext(WorkspaceTerminalContext);
 }
 
-// Per-project persistence of the dock (open + tabs + active). Height/font live
-// in TerminalDock's own keys; this stores the tab set so a reload restores it.
+// Per-project persistence of the dock (open + tabs + split layout, with each
+// group's active tab). Height/font live in TerminalDock's own keys; this stores
+// the tab set so a reload restores it.
 function dockKey(slug: string): string {
   return `swarmery.term.dock.${slug}`;
 }
-function loadDock(slug: string): DockState {
+/**
+ * The project's saved dock, as a v2 state: a v1 value (`{open, tabs, activeId}`,
+ * saved before splits) becomes one group holding every tab; garbage → empty.
+ */
+export function loadDock(slug: string): DockState {
   try {
     const raw = localStorage.getItem(dockKey(slug));
     if (raw === null) return emptyDock();
-    const parsed = JSON.parse(raw) as DockState;
-    if (!Array.isArray(parsed.tabs)) return emptyDock();
-    return parsed;
+    return migrateDock(JSON.parse(raw));
   } catch {
     return emptyDock();
   }

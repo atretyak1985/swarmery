@@ -689,6 +689,10 @@ msgstr "акаунти →"
 msgid "acting"
 msgstr "діє"
 
+#: src/terminal/TabStrip.tsx
+msgid "Actions for {caption}"
+msgstr "Дії для {caption}"
+
 #: src/components/usage/LimitsPanel.tsx
 #: src/components/usage/UsageProviderCard.tsx
 #: src/lib/sessionsView.ts
@@ -1321,6 +1325,7 @@ msgstr "закрити"
 #: src/components/PlanBranchDirtyModal.tsx
 #: src/components/RunOutcomeModal.tsx
 #: src/components/VcsSignInDialog.tsx
+#: src/terminal/TerminalDock.tsx
 msgid "Close"
 msgstr "Закрити"
 
@@ -2806,6 +2811,14 @@ msgstr "Анімація"
 msgid "move ▾"
 msgstr "перенести ▾"
 
+#: src/terminal/TerminalDock.tsx
+msgid "Move left"
+msgstr "Перемістити ліворуч"
+
+#: src/terminal/TerminalDock.tsx
+msgid "Move right"
+msgstr "Перемістити праворуч"
+
 #: src/pages/Settings.tsx
 msgid "move selection"
 msgstr "рух по рядках"
@@ -2818,6 +2831,10 @@ msgstr "перемістити задачу в колонку"
 #: src/workspace/task/TaskActions.tsx
 msgid "move to"
 msgstr "перемістити в"
+
+#: src/terminal/TerminalDock.tsx
+msgid "Move to group {n}"
+msgstr "Перемістити в групу {n}"
 
 #: src/theme/palettes.ts
 msgid "muted green canopy"
@@ -3902,6 +3919,10 @@ msgstr "скидання через {totalMin} хв"
 msgid "resets now"
 msgstr "скидається зараз"
 
+#: src/terminal/TerminalDock.tsx
+msgid "Resize split"
+msgstr "Змінити розмір панелей"
+
 #: src/components/runOutcome/blockerGuide.ts
 msgid "Resolve what blocks a retry (below), then press Retry run."
 msgstr "Усуньте те, що блокує повторний запуск (нижче), потім натисніть «Повторити запуск»."
@@ -4426,6 +4447,14 @@ msgstr "створено перевіркою для виправлення {ext
 msgid "Spinning and pulsing state glyphs"
 msgstr "Гліфи стану обертаються й пульсують"
 
+#: src/terminal/TerminalDock.tsx
+msgid "Split down"
+msgstr "Розділити донизу"
+
+#: src/terminal/TerminalDock.tsx
+msgid "Split right"
+msgstr "Розділити праворуч"
+
 #: src/workspace/boardModel.ts
 msgid "stale"
 msgstr "застаріло"
@@ -4584,6 +4613,10 @@ msgstr "Система"
 #: src/main.tsx
 msgid "system…"
 msgstr "система…"
+
+#: src/terminal/TabStrip.tsx
+msgid "Tab actions"
+msgstr "Дії з вкладкою"
 
 #: src/components/usage/UsageConnect.tsx
 msgid "tab didn't open? authorize here"
