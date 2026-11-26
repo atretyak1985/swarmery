@@ -169,8 +169,12 @@ function stripTabIds(strip: HTMLElement): string[] {
 
 async function renderDock(initial: DockStateV2): Promise<void> {
   render(<StatefulDock initial={initial} />);
-  await vi.waitFor(() => expect(screen.getAllByTestId('xterm')).toHaveLength(initial.tabs.length));
-  expect(mounts).toBe(initial.tabs.length);
+  // Wait for the mount effects too, not only the DOM: after the lazy XTerm's
+  // Suspense reveal, passive effects can run a tick after its nodes appear.
+  await vi.waitFor(() => {
+    expect(screen.getAllByTestId('xterm')).toHaveLength(initial.tabs.length);
+    expect(mounts).toBe(initial.tabs.length);
+  });
 }
 
 /** Shift+F10 on a tab's button, then ↓ `steps` times; returns the focused menu item. */
