@@ -20,6 +20,11 @@ import { useSessionHref } from '../../lib/sessionHref';
  * meaningful. What the skill cannot derive is the call an interactive session
  * always asks about: dispatch per-phase executors, or do the work inline. */
 const PLAN_RUN_MODES: { id: PlanRunMode; label: MessageDescriptor; hint: MessageDescriptor }[] = [
+  {
+    id: 'orchestrate',
+    label: msg`orchestrate`,
+    hint: msg`start every phase as its own run, chain dependents as they finish, open a PR per phase — works across repositories`,
+  },
   { id: 'auto', label: msg`auto`, hint: msg`let the run-plan skill triage the route from the phase DAG` },
   {
     id: 'subagents',
@@ -106,7 +111,11 @@ export function PlanRunDialog({
     fetchSystemItems('agents')
       .then((items) => {
         if (!alive) return;
-        const names = [...new Set(items.map((i) => i.name))].sort((a, b) => a.localeCompare(b));
+        // Only agents written to take a whole plan (frontmatter `planExecutor: true`);
+        // a reviewer or a domain specialist handed a plan directory does nothing useful.
+        const names = [...new Set(items.filter((i) => i.planExecutor).map((i) => i.name))].sort((a, b) =>
+          a.localeCompare(b),
+        );
         setAgents(names);
       })
       .catch(() => {

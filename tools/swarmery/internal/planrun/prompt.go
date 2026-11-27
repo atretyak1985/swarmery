@@ -17,6 +17,7 @@ import (
 // skill deliberately passes phase content to its executors as file references,
 // not pasted text.
 type Phase struct {
+	ID        int64 // epic_phases.id — the {phaseId} of the phase-run API
 	Seq       int
 	Name      string
 	DocPath   string // absolute path — the doc lives outside the repo worktree
@@ -44,6 +45,12 @@ const (
 	ModeSubagents Mode = "subagents"
 	// ModeInline forces the controller to do the work itself in this session.
 	ModeInline Mode = "inline"
+	// ModeOrchestrate makes the controller a pure orchestrator: it writes no code
+	// and has no worktree, and hands every phase to its OWN daemon phase run (a
+	// fresh session in its own worktree) through the daemon API, chaining
+	// dependents as their dependencies finish and opening a change request per
+	// finished phase. The only mode that runs a plan spanning repositories.
+	ModeOrchestrate Mode = "orchestrate"
 )
 
 // ValidMode normalizes a caller-supplied mode; anything unknown degrades to
@@ -54,6 +61,8 @@ func ValidMode(m string) Mode {
 		return ModeSubagents
 	case ModeInline:
 		return ModeInline
+	case ModeOrchestrate:
+		return ModeOrchestrate
 	default:
 		return ModeAuto
 	}
@@ -213,4 +222,76 @@ func multiRepoNote(repoRoot, projectPath string) string {
 			"Paths in this plan may be written from the project root (e.g. `%s/src/...`); inside your worktree that same file is `src/...`. "+
 			"Do NOT create a `%s/` directory to make such a path resolve.\n",
 		name, repoRoot, projectPath, name, name)
+}
+
+// orchestrateManifest is manifest() plus each phase's API id, which is what the
+// orchestrator addresses phase runs by (the seq is only the plan's numbering).
+func orchestrateManifest(phases []Phase) string {
+	var b strings.Builder
+	for _, p := range phases {
+		state := "TODO"
+		if p.complete() {
+			state = "DONE"
+		}
+		deps := "none"
+		if len(p.DependsOn) > 0 {
+			ds := make([]string, len(p.DependsOn))
+			for i, d := range p.DependsOn {
+				ds[i] = fmt.Sprintf("%d", d)
+			}
+			deps = strings.Join(ds, ", ")
+		}
+		fmt.Fprintf(&b, "- Phase %d (phaseId %d) [%s] %s — %d/%d criteria, depends on: %s\n  doc: %s\n",
+			p.Seq, p.ID, state, p.Name, p.Done, p.Total, deps, p.DocPath)
+	}
+	return b.String()
+}
+
+// orchestrateTemplate hands a whole plan to a controller that ORCHESTRATES
+// daemon phase runs instead of executing phases itself.
+//
+// The procedure lives in the run-plan skill (route D,
+// plugins/core/skills/run-plan/resources/daemon-orchestration.md) for the same
+// reason promptTemplate defers to it: one maintained contract, not a prompt
+// string that silently forks it. This template states only what the skill cannot
+// know — the plan's ids, the binary to call, and the headless constraints.
+var orchestrateTemplate = template.Must(template.New("planrun-orchestrate").Parse(
+	`You are the ORCHESTRATOR of an entire approved plan, running HEADLESSLY (claude -p) in the project root (your cwd). You do NOT implement phases and you have NO worktree: every phase is executed by its own daemon phase run — a fresh session, in its own worktree, on its own swarm/phase-<id> branch — which you start, watch, check and land through the swarmery daemon API.
+
+Invoke the ` + "`run-plan`" + ` skill with the Skill tool (skill: run-plan) and this plan directory, and follow its ROUTE D — daemon orchestration (resources/daemon-orchestration.md). That resource IS your procedure; do not invent another one.
+
+PLAN DIRECTORY: {{.PlanDir}}
+PLAN TASK ID (the {taskId} of every API path): {{.TaskID}}
+DAEMON CLIENT: {{.Bin}} api <METHOD> <path> [--data <json>]   (signed; exit 0 = 2xx, 1 = other status with the body on stdout, 2 = no answer)
+
+Constraints this run adds, because THERE IS NO HUMAN in this session:
+- Never edit code, never run git in any repository, never commit, push or merge yourself. Phase runs commit on their own branches; you land them only through the API (` + "`land {\"action\":\"pr\"}`" + `).
+- NEVER merge a change request. A human merges. Delete a phase's run branch only AFTER its landing state is ` + "`merged`" + ` — deleting an unmerged branch destroys the work, and dependent phases are stacked on it.
+- A phase whose work is a human activity (a field trip, a manual test, anything with no automatable acceptance criteria) is not started: record it as waiting on the operator and carry on with everything that does not depend on it.
+- ENDING YOUR TURN ENDS THIS PROCESS. Phase runs are daemon processes and survive you, but nothing starts their dependents after you exit. While any phase run you started is still running, keep polling (a Bash ` + "`sleep`" + ` of at most 540 seconds between polls) — never reply that you are waiting.
+- If you reach a decision that genuinely needs a human — a phase that failed twice, a review FAIL at round 2, a phase decision the daemon holds — STOP and end your reply with: PLAN BLOCKED at phase <n>: <one-line reason>.
+- When no phase is left that you can start or are waiting on, end with PLAN DONE if every phase is complete, otherwise with PLAN BLOCKED at phase <n>: <what the operator must do>.
+
+{{.TurnContract}}
+
+PHASE MANIFEST (state at start — re-read the live state from the API before every decision):
+{{.Manifest}}
+PLAN README:
+----------------------------------------
+{{.Readme}}
+----------------------------------------`))
+
+// BuildOrchestratePrompt renders the ModeOrchestrate prompt. bin is the swarmery
+// binary the controller calls; budget as in BuildPromptIn.
+func BuildOrchestratePrompt(taskID int64, planDir, readme string, phases []Phase, bin string, budget runcore.Budget) string {
+	var b strings.Builder
+	_ = orchestrateTemplate.Execute(&b, struct {
+		TaskID       int64
+		PlanDir      string
+		Bin          string
+		Manifest     string
+		Readme       string
+		TurnContract string
+	}{taskID, planDir, bin, orchestrateManifest(phases), readme, runcore.TurnContract(budget)})
+	return b.String()
 }

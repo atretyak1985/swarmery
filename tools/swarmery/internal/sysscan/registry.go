@@ -60,7 +60,8 @@ func (s *Scanner) scanAgentFile(f mdFile, st *Stats, counter *int, seen map[int6
 	}
 
 	id, isNew, wasDeleted, err := s.upsertAgentRow(f, name,
-		nullStr(strField(fm, "model")), toolsJSON, nullStr(strField(fm, "description")))
+		nullStr(strField(fm, "model")), toolsJSON, nullStr(strField(fm, "description")),
+		planExecutor(fm))
 	if err != nil {
 		warn("agent %s: upsert: %v", f.path, err)
 		return
@@ -93,7 +94,16 @@ func (s *Scanner) scanAgentFile(f mdFile, st *Stats, counter *int, seen map[int6
 	}
 }
 
-func (s *Scanner) upsertAgentRow(f mdFile, name string, model, toolsJSON, description any) (id int64, isNew, wasDeleted bool, err error) {
+// planExecutor reads the frontmatter's `planExecutor: true` — the agent may be
+// handed a whole plan (migration 0137). Anything but an explicit true is false.
+func planExecutor(fm map[string]any) int {
+	if strings.EqualFold(strField(fm, "planExecutor"), "true") {
+		return 1
+	}
+	return 0
+}
+
+func (s *Scanner) upsertAgentRow(f mdFile, name string, model, toolsJSON, description any, planExec int) (id int64, isNew, wasDeleted bool, err error) {
 	var deleted int
 	err = s.db.QueryRow(
 		`SELECT id, deleted FROM agents WHERE name = ? AND scope = ? AND project_id IS ?`,
@@ -101,10 +111,10 @@ func (s *Scanner) upsertAgentRow(f mdFile, name string, model, toolsJSON, descri
 	switch {
 	case errors.Is(err, sql.ErrNoRows):
 		res, ierr := s.db.Exec(
-			`INSERT INTO agents (name, scope, project_id, file_path, model, tools_json, description, origin, plugin_name, deleted)
-			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0)`,
+			`INSERT INTO agents (name, scope, project_id, file_path, model, tools_json, description, origin, plugin_name, plan_executor, deleted)
+			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)`,
 			name, f.src.scope, f.src.projectID, f.path, model, toolsJSON, description,
-			f.src.origin, nullStr(f.src.plugin))
+			f.src.origin, nullStr(f.src.plugin), planExec)
 		if ierr != nil {
 			return 0, false, false, ierr
 		}
@@ -115,8 +125,8 @@ func (s *Scanner) upsertAgentRow(f mdFile, name string, model, toolsJSON, descri
 	}
 	_, err = s.db.Exec(
 		`UPDATE agents SET file_path = ?, model = ?, tools_json = ?, description = ?,
-		        origin = ?, plugin_name = ?, deleted = 0 WHERE id = ?`,
-		f.path, model, toolsJSON, description, f.src.origin, nullStr(f.src.plugin), id)
+		        origin = ?, plugin_name = ?, plan_executor = ?, deleted = 0 WHERE id = ?`,
+		f.path, model, toolsJSON, description, f.src.origin, nullStr(f.src.plugin), planExec, id)
 	return id, false, deleted == 1, err
 }
 

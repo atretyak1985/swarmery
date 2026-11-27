@@ -637,3 +637,40 @@ func TestCollisionPrefersInstalledMarketplace(t *testing.T) {
 		t.Errorf("root = %q, want the zzz-mkt 2.0.0 version dir", roots[0].root)
 	}
 }
+
+// planExecutor: true in an agent's frontmatter lands in agents.plan_executor
+// (migration 0137), and flipping it back off clears the column on the next scan.
+func TestScanRecordsPlanExecutor(t *testing.T) {
+	db, cfg, _ := setup(t)
+	dir := filepath.Join(cfg.ClaudeDir, "agents")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	write := func(name, extra string) {
+		body := "---\nname: " + name + "\ndescription: d\n" + extra + "---\n\n# Role\n"
+		if err := os.WriteFile(filepath.Join(dir, name+".md"), []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write("orchestrator-x", "planExecutor: true\n")
+	write("reviewer-x", "")
+
+	s := New(db, cfg, nil)
+	if _, err := s.Scan(); err != nil {
+		t.Fatalf("scan: %v", err)
+	}
+	flag := func(name string) int64 {
+		return intQuery(t, db, `SELECT plan_executor FROM agents WHERE name = ?`, name)
+	}
+	if flag("orchestrator-x") != 1 || flag("reviewer-x") != 0 {
+		t.Fatalf("plan_executor = %d/%d, want 1/0", flag("orchestrator-x"), flag("reviewer-x"))
+	}
+
+	write("orchestrator-x", "")
+	if _, err := s.Scan(); err != nil {
+		t.Fatalf("rescan: %v", err)
+	}
+	if flag("orchestrator-x") != 0 {
+		t.Error("plan_executor stayed 1 after the frontmatter dropped the key")
+	}
+}

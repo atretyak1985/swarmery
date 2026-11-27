@@ -131,6 +131,9 @@ type systemItemDTO struct {
 	// active (sysscan/lint.go). It rides the SAME aggregate lint JOIN as
 	// LintMax/Dead — never a per-row subquery.
 	Documented bool `json:"documented"`
+	// PlanExecutor is the agent's frontmatter `planExecutor: true` (migration
+	// 0137): it may be handed a whole plan. Always false for skills.
+	PlanExecutor bool `json:"planExecutor"`
 	// Usage metrics folded by normalised component name (usageByName), since
 	// events carry no populated agent_id/skill_id: lastUsed = newest run,
 	// tasks30d = distinct sessions in the last 30 days. Never-run items serve
@@ -397,14 +400,15 @@ func (h *Handler) listSystemSkills(w http.ResponseWriter, r *http.Request) {
 // `undoc` → the `documented` field — plus the insights `undocumented` list, so
 // nothing is hidden by keeping the two axes separate.
 func systemItemSelect(k systemKind) string {
-	model := `NULL`
+	model, planExec := `NULL`, `0`
 	if k.hasModel {
 		model = `t.model`
+		planExec = `t.plan_executor` // agents only (migration 0137)
 	}
 	return `
 		SELECT t.id, t.name, t.scope, p.slug, t.origin, t.plugin_name, ` + model + `,
 		       t.description, t.` + k.pathCol + `, lf.sev, COALESCE(lf.dead, 0),
-		       COALESCE(lf.undoc, 0)
+		       COALESCE(lf.undoc, 0), ` + planExec + `
 		FROM ` + k.table + ` t
 		LEFT JOIN projects p ON p.id = t.project_id
 		LEFT JOIN (
@@ -520,7 +524,7 @@ func (h *Handler) listSystemItems(w http.ResponseWriter, r *http.Request, k syst
 		var dead, undoc int64
 		if err := rows.Scan(&it.ID, &it.Name, &it.Scope, &it.ProjectSlug, &it.Origin,
 			&it.PluginName, &it.Model, &it.Description, &it.Path,
-			&sev, &dead, &undoc); err != nil {
+			&sev, &dead, &undoc, &it.PlanExecutor); err != nil {
 			writeErr(w, err)
 			return
 		}
@@ -607,7 +611,7 @@ func (h *Handler) getSystemItem(w http.ResponseWriter, r *http.Request, k system
 	var dead, undoc int64
 	err := h.DB.QueryRow(sel, id).Scan(
 		&d.ID, &d.Name, &d.Scope, &d.ProjectSlug, &d.Origin, &d.PluginName,
-		&d.Model, &d.Description, &d.Path, &sev, &dead, &undoc,
+		&d.Model, &d.Description, &d.Path, &sev, &dead, &undoc, &d.PlanExecutor,
 		&deleted, &d.CurrentVersionID)
 	if errors.Is(err, sql.ErrNoRows) {
 		http.Error(w, `{"error":"`+k.kind+` not found"}`, http.StatusNotFound)

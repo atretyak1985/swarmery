@@ -2255,6 +2255,10 @@ msgstr "opus 5.5"
 msgid "opus 5.5 — default"
 msgstr "opus 5.5 — типово"
 
+#: src/pages/plans/PlanRunControls.tsx
+msgid "orchestrate"
+msgstr "оркестрація"
+
 #: src/pages/plans/PlanSessions.tsx
 msgid "other sessions"
 msgstr "інші сесії"
@@ -3257,6 +3261,10 @@ msgstr "Почати знову"
 #: src/pages/PlanningMode.tsx
 msgid "Start another plan"
 msgstr "Ще один план"
+
+#: src/pages/plans/PlanRunControls.tsx
+msgid "start every phase as its own run, chain dependents as they finish, open a PR per phase — works across repositories"
+msgstr "кожна фаза — окремий запуск; залежні стартують, щойно готові попередні; PR на кожну фазу — працює з кількома репозиторіями"
 
 #: src/pages/PlanningMode.tsx
 msgid "Start planning"

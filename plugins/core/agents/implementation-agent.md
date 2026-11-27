@@ -4,6 +4,7 @@ description: Execute code changes as a leaf executor (step_file input), or orche
 model: opus
 effort: high
 memory: project
+planExecutor: true
 color: blue
 maxTurns: 120
 isolation: worktree

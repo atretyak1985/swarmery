@@ -4,6 +4,7 @@ description: Orchestrate development work — understand the task, surface unkno
 model: opus
 effort: medium
 memory: project
+planExecutor: true
 color: purple
 maxTurns: 200
 skills:

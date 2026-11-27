@@ -52,6 +52,7 @@ const SKILL_HUB: SkillHub = {
   lintMax: null,
   dead: false,
   documented: false,
+  planExecutor: false,
   lastUsed: daysAgoISO(0),
   tasks30d: 12,
   usage: {

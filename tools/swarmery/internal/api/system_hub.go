@@ -873,7 +873,7 @@ func (h *Handler) systemItemByID(k systemKind, id int64) (systemItemDTO, bool, e
 	var dead, undoc int64
 	err := h.DB.QueryRow(systemItemSelect(k)+` WHERE t.id = ? AND t.deleted = 0`, id).Scan(
 		&it.ID, &it.Name, &it.Scope, &it.ProjectSlug, &it.Origin, &it.PluginName,
-		&it.Model, &it.Description, &it.Path, &sev, &dead, &undoc)
+		&it.Model, &it.Description, &it.Path, &sev, &dead, &undoc, &it.PlanExecutor)
 	if errors.Is(err, sql.ErrNoRows) {
 		return it, false, nil
 	}

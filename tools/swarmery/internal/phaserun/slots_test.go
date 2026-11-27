@@ -32,6 +32,18 @@ func TestStart_RefusesDuringALivePlanRun(t *testing.T) {
 	}
 }
 
+// An ORCHESTRATED plan run exists to start this plan's phase runs; it edits no
+// docs and holds no worktree, so it must not refuse them.
+func TestStart_AllowedDuringAnOrchestratedPlanRun(t *testing.T) {
+	db, taskID, p1, _ := fixture(t)
+	mustExec(t, db, `INSERT INTO plan_runs (workspace_task_id, mode, run_state) VALUES (?, 'orchestrate', 'running')`, taskID)
+
+	s := newTestService(db, &stubRunner{}, &stubWt{})
+	if _, err := s.Start(p1, "", ""); err != nil {
+		t.Fatalf("Start during an orchestrated plan run: %v", err)
+	}
+}
+
 // A plan run that has ENDED must not block anything — the gate reads the live
 // state, not the history.
 func TestStart_AllowedAfterThePlanRunEnded(t *testing.T) {

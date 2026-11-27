@@ -51,12 +51,14 @@ allow = {e.strip() for e in os.environ.get('CROSS_PLUGIN_ALLOW', '').split() if 
 # permissionMode does not contradict this rule: that list covers project and
 # user agents, not plugin ones. (Verified 2026-09-02 against
 # code.claude.com/docs/en/plugins-reference — re-check before relaxing.)
-# `docs` is ours, not Claude Code's: the provenance block scripts/docgen/ and
-# internal/sysscan read. `color` is listed for subagents generally; harmless
+# `docs` and `planExecutor` are ours, not Claude Code's: `docs` is the
+# provenance block scripts/docgen/ and internal/sysscan read; `planExecutor:
+# true` marks an agent the Plans page may hand a whole plan (sysscan →
+# agents.plan_executor, migration 0137). `color` is listed for subagents generally; harmless
 # either way since an unread key changes no behaviour.
 AGENT_KEYS = {'name', 'description', 'model', 'tools', 'disallowedTools',
               'skills', 'memory', 'isolation', 'background', 'color',
-              'maxTurns', 'docs', 'effort'}
+              'maxTurns', 'docs', 'effort', 'planExecutor'}
 MODEL_ALIASES = {'opus', 'sonnet', 'haiku', 'inherit'}
 EFFORT_LEVELS = {'low', 'medium', 'high', 'xhigh', 'max'}
 RETIRED_MODEL = re.compile(r'sonnet-4-6|opus-4-8|claude-(?:sonnet|opus)-4(?![0-9])[0-9a-z.\-]*')

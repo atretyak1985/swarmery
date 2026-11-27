@@ -1909,10 +1909,16 @@ func (s *Service) HealStale() error {
 // table. DB, not the slot registry: a plan run started by a PREVIOUS daemon and
 // adopted after a restart is 'running' in plan_runs, and the honest answer to
 // "is something already driving this plan" must include it.
+//
+// An ORCHESTRATED plan run (mode 'orchestrate', planrun.ModeOrchestrate) is not
+// counted: it edits no docs and has no worktree — its whole job is to start
+// this plan's phase runs, so refusing them would make it unable to do anything.
+// The literal mirrors planrun.ModeOrchestrate; phaserun does not import planrun.
 func (s *Service) planRunActive(workspaceTaskID int64) (bool, error) {
 	var n int
 	err := s.DB.QueryRow(
-		`SELECT COUNT(*) FROM plan_runs WHERE workspace_task_id = ? AND run_state = 'running'`,
+		`SELECT COUNT(*) FROM plan_runs
+		  WHERE workspace_task_id = ? AND run_state = 'running' AND mode <> 'orchestrate'`,
 		workspaceTaskID).Scan(&n)
 	return n > 0, err
 }
