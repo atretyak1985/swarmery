@@ -225,9 +225,44 @@ func TestParseDocRepo(t *testing.T) {
 			want: "`/Volumes/Work/swarmery`",
 		},
 		{
+			// The joined header form: the branch is a later field, not a second repo.
+			name: "joined header line stops at the next field",
+			in:   "# Phase 1\n\n**Repo:** `/Volumes/Work/swarmery` · **Branch:** `feat/x` · **Depends on:** — · **Estimate:** M\n",
+			want: "`/Volumes/Work/swarmery`",
+		},
+		{
 			name: "plural spelling",
 			in:   "# Phase 1\n\n| **Repos** | `a` |\n",
 			want: "`a`",
+		},
+		{
+			// The plan-format template's joined line: the Branch token must not
+			// become a second repo.
+			name: "joined bold header line is cut at the next field",
+			in:   "# Phase 1\n\n**Repo:** `/abs/repo` · **Branch:** `feat/x` · **Depends on:** —\n",
+			want: "`/abs/repo`",
+		},
+		{
+			name: "bold header as a list item",
+			in:   "# Phase 1\n\n- **Repo:** `/abs/repo`\n",
+			want: "`/abs/repo`",
+		},
+		{
+			// The unbolded form a planner wrote; unread, the run fell back to the
+			// overlay's mainApp and executed in a repository the phase never named.
+			name: "plain bullet header line",
+			in:   "# Phase 4\n\n- Repo: `/Volumes/Work/b/b` · Branch: one short branch per package off `dev` · Depends on: Phase 3\n",
+			want: "`/Volumes/Work/b/b`",
+		},
+		{
+			name: "plain Repo(s) spelling",
+			in:   "# Phase 1\n- Repo(s): new `/abs/mono` (→ `Org/mono`) · Branches: `main`, `dev`\n",
+			want: "new `/abs/mono` (→ `Org/mono`)",
+		},
+		{
+			name: "a Repo-prefixed word without a colon is not a header",
+			in:   "# Phase 1\n\nRepo area changes are small.\n",
+			want: "",
 		},
 		{name: "absent", in: "# Phase 1\n\nno repo here\n", want: ""},
 		{

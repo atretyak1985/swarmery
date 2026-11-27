@@ -20,6 +20,7 @@ import { compactSpan } from '../../lib/sessionsView';
 import { useProjectWorkspace } from '../../workspace/ProjectContext';
 import { isUnresolvedOutcome } from './phaseChips';
 import {
+  executorBlocked,
   heldByDecision,
   phaseCost,
   phaseCostBand,
@@ -283,6 +284,18 @@ function LedgerAction({
     );
   }
   if (!active || depsUnmet.length > 0) return null;
+  if (executorBlocked(phase)) {
+    return (
+      <Link
+        to={phaseHref(phase.seq, 'report')}
+        onClick={stop}
+        data-tip={t`the executor stopped on purpose and wrote why in the Completion Report — a retry of the same doc stops again; fix what it names in the doc and the retry comes back`}
+        className={`${PILL} border-amber/40 bg-amber/10 text-amber hover:border-amber`}
+      >
+        <Trans>blocked · why</Trans>
+      </Link>
+    );
+  }
   const retry = isUnresolvedOutcome(phase.runOutcome);
   return (
     <button
