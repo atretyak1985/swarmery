@@ -2255,6 +2255,10 @@ msgstr "opus 5.5"
 msgid "opus 5.5 — default"
 msgstr "opus 5.5 — default"
 
+#: src/pages/plans/PlanRunControls.tsx
+msgid "orchestrate"
+msgstr "orchestrate"
+
 #: src/pages/plans/PlanSessions.tsx
 msgid "other sessions"
 msgstr "other sessions"
@@ -3257,6 +3261,10 @@ msgstr "Start again"
 #: src/pages/PlanningMode.tsx
 msgid "Start another plan"
 msgstr "Start another plan"
+
+#: src/pages/plans/PlanRunControls.tsx
+msgid "start every phase as its own run, chain dependents as they finish, open a PR per phase — works across repositories"
+msgstr "start every phase as its own run, chain dependents as they finish, open a PR per phase — works across repositories"
 
 #: src/pages/PlanningMode.tsx
 msgid "Start planning"

@@ -1,4 +1,4 @@
-# run-plan — loading the plan, triage, isolation, and the three routes
+# run-plan — loading the plan, triage, isolation, and the routes
 
 ## Step 0 — Locate and load the plan
 
@@ -25,6 +25,12 @@
 | All phases sequential (every `parallel_group` null) | **S — sequential loop** (default; most plans) |
 | 2–4 phases share a `parallel_group` | **P — parallel group dispatch** |
 | ≥5 independent same-shaped items (audit/migration/sweep) | **W — Workflow script** |
+| Run by the swarmery daemon in mode `orchestrate` (its prompt says ROUTE D), or the operator asks for each phase to run as its own daemon session | **D — daemon orchestration** (`resources/daemon-orchestration.md`) |
+
+Route D replaces steps 2–3 below entirely: the controller creates no worktree,
+dispatches no subagent and edits no code. Every phase is a daemon phase run with
+its own session, worktree and branch, so D is the route for a plan spanning
+several repositories.
 
 **Hand-off alternative:** a strictly-sequential flat plan (`@planner` output —
 `phase-N` docs; legacy `step-NN` plans read the same way) can instead be given

@@ -112,7 +112,7 @@ func WorktreeCount(db *sql.DB) (int, error) {
 		    WHERE source='queue' AND worktree_path IS NOT NULL
 		      AND board_column='in_progress')
 		+ (SELECT COUNT(*) FROM epic_phases WHERE run_state='running')
-		+ (SELECT COUNT(*) FROM plan_runs   WHERE run_state='running')`).Scan(&n)
+		+ (SELECT COUNT(*) FROM plan_runs   WHERE run_state='running' AND mode <> 'orchestrate')`).Scan(&n)
 	return n, err
 }
 
@@ -154,11 +154,14 @@ func WorktreeKeys(db *sql.DB) (map[WorktreeKey]bool, error) {
 
 	// Plan runs: the deterministic plan-<taskID> name, which is what Start reclaims
 	// and Acquire derives.
+	// An orchestrated plan run (mode 'orchestrate') holds no checkout — its phase
+	// runs do, and they are counted above — so it is not counted here or in
+	// WorktreeCount.
 	if err := scanKeys(db, held, `
 		SELECT t.project_id, '`+PlanBranchPrefix+`' || r.workspace_task_id
 		  FROM plan_runs r
 		  JOIN tasks t ON t.id = r.workspace_task_id
-		 WHERE r.run_state='running'`); err != nil {
+		 WHERE r.run_state='running' AND r.mode <> 'orchestrate'`); err != nil {
 		return nil, err
 	}
 

@@ -2982,6 +2982,8 @@ export interface SystemItem {
    * deliberately drops.
    */
   documented: boolean;
+  /** Agents only: frontmatter `planExecutor: true` — may be handed a whole plan. */
+  planExecutor: boolean;
   /** MAX(events.ts) by agent_id/skill_id; null while never referenced. */
   lastUsed: string | null;
   /** COUNT(DISTINCT session_id) over the last 30 days. */
@@ -5002,7 +5004,7 @@ export interface LinkedSession {
 /** How a plan run executes its phases. `auto` leaves the run-plan skill's own
  * DAG triage authoritative; the other two force the one call it cannot derive
  * from the manifest. */
-export type PlanRunMode = 'auto' | 'subagents' | 'inline';
+export type PlanRunMode = 'orchestrate' | 'auto' | 'subagents' | 'inline';
 
 /** The plan_runs row for one epic. */
 export interface PlanRun {

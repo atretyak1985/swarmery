@@ -318,7 +318,7 @@ export function PlanHeader({
           <div className="border-b border-line bg-surface2 px-4 pb-3 desk:px-7">
             <PlanRunDialog
               initialAgent={run?.agent ?? ''}
-              initialMode={run?.mode ?? 'auto'}
+              initialMode={run?.mode ?? 'orchestrate'}
               onCancel={() => setDialogOpen(false)}
               onRun={(agent, mode) => {
                 setDialogOpen(false);
@@ -449,7 +449,7 @@ export function PlanHeader({
         {dialogOpen && (
           <PlanRunDialog
             initialAgent={run?.agent ?? ''}
-            initialMode={run?.mode ?? 'auto'}
+            initialMode={run?.mode ?? 'orchestrate'}
             onCancel={() => setDialogOpen(false)}
             onRun={(agent, mode) => {
               setDialogOpen(false);

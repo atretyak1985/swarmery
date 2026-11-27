@@ -226,7 +226,9 @@ describe('PlanHeader', () => {
     const { onRunPlan } = mount(epic());
     fireEvent.click(screen.getByRole('button', { name: '▶ run plan' }));
     fireEvent.click(screen.getByRole('button', { name: '▶ Run' }));
-    expect(onRunPlan).toHaveBeenCalledWith('', 'auto');
+    // Orchestrate is the default: a whole plan is handed to an orchestrator that
+    // starts each phase as its own run.
+    expect(onRunPlan).toHaveBeenCalledWith('', 'orchestrate');
   });
 
   it('offers pause while a run is live, and keeps its Cancel', () => {

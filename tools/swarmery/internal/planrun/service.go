@@ -180,6 +180,9 @@ type Service struct {
 	// refuses Start with a *runcore.AccountBreakerError and stamps nothing.
 	// nil ⇒ runcore.CheckAccount.
 	AccountCheck runcore.AccountCheckFunc
+	// SwarmeryBin overrides the binary path written into the orchestrate prompt
+	// (see swarmeryBin). "" ⇒ os.Executable().
+	SwarmeryBin string
 }
 
 // NewService builds a plan-run service. The caller wires DB + Run
@@ -309,12 +312,18 @@ func (s *Service) Start(taskID int64, agent, mode string) (sessionUUID string, e
 	if allComplete(info.Phases) {
 		return "", ErrComplete
 	}
-	busy, err := s.phaseRunActive(taskID)
-	if err != nil {
-		return "", err
-	}
-	if busy {
-		return "", ErrPhaseRunning
+	runMode := ValidMode(mode)
+	// An orchestrating controller drives the phase runs itself, so phase runs
+	// already in flight are its own work (a resumed orchestration) and not a
+	// competing mechanism editing the same docs.
+	if runMode != ModeOrchestrate {
+		busy, err := s.phaseRunActive(taskID)
+		if err != nil {
+			return "", err
+		}
+		if busy {
+			return "", ErrPhaseRunning
+		}
 	}
 	state, err := s.runState(taskID)
 	if err != nil {
@@ -361,9 +370,15 @@ func (s *Service) Start(taskID int64, agent, mode string) (sessionUUID string, e
 	// die during admission with git's "fatal: not a git repository". Still ahead of
 	// the single-flight slot — a resolution failure is an admission verdict and
 	// must leave no state behind.
-	info.RepoRoot, err = s.runRoot(info)
-	if err != nil {
-		return "", err
+	//
+	// An orchestrating controller has no repository: it writes no code and each
+	// phase run it starts resolves its own repo, so a plan spanning repos is
+	// exactly what it is for and the one-worktree refusal does not apply.
+	if runMode != ModeOrchestrate {
+		info.RepoRoot, err = s.runRoot(info)
+		if err != nil {
+			return "", err
+		}
 	}
 	// Account quota: the last admission verdict before the slot. A fresh reading
 	// below the floor is refused as itself (*runcore.LowQuotaError — the API
@@ -388,7 +403,6 @@ func (s *Service) Start(taskID int64, agent, mode string) (sessionUUID string, e
 	if agent == "" {
 		agent = DefaultAgent()
 	}
-	runMode := ValidMode(mode)
 
 	// Run slot BEFORE the (slow, git-touching) Acquire so a concurrent Start cannot
 	// double-spawn; released on any admission failure below. The slot is now
@@ -420,22 +434,30 @@ func (s *Service) Start(taskID int64, agent, mode string) (sessionUUID string, e
 	// when it is empty; refuse loudly when it holds work. The literal below must
 	// come from runcore, which owns the derivation worktree.Acquire performs
 	// Acquire derives from the taskName passed just after.
-	taskName := runcore.PlanTaskName(taskID)
-	branch := runcore.PlanBranch(taskID)
-	ahead, err := s.Wt.ReclaimEmptyBranch(info.RepoRoot, branch)
-	if err != nil {
-		release()
-		return "", fmt.Errorf("reclaim run branch: %w", err)
-	}
-	if ahead > 0 {
-		release()
-		return "", &BranchDirtyError{Branch: branch, CommitsAhead: ahead, Base: s.baseBranch(info.RepoRoot)}
-	}
+	// An orchestrating controller gets no worktree and no run branch: it runs in
+	// the project root and its only writes are API calls. acq stays zero, which
+	// removeWorktree treats as "nothing to remove".
+	var acq worktree.Acquired
+	cwd := info.ProjectPath
+	if runMode != ModeOrchestrate {
+		taskName := runcore.PlanTaskName(taskID)
+		branch := runcore.PlanBranch(taskID)
+		ahead, err := s.Wt.ReclaimEmptyBranch(info.RepoRoot, branch)
+		if err != nil {
+			release()
+			return "", fmt.Errorf("reclaim run branch: %w", err)
+		}
+		if ahead > 0 {
+			release()
+			return "", &BranchDirtyError{Branch: branch, CommitsAhead: ahead, Base: s.baseBranch(info.RepoRoot)}
+		}
 
-	acq, err := s.Wt.Acquire(info.RepoRoot, info.ProjectSlug, taskName)
-	if err != nil {
-		release()
-		return "", fmt.Errorf("worktree acquire: %w", err)
+		acq, err = s.Wt.Acquire(info.RepoRoot, info.ProjectSlug, taskName)
+		if err != nil {
+			release()
+			return "", fmt.Errorf("worktree acquire: %w", err)
+		}
+		cwd = acq.Path
 	}
 
 	// Resolved ONCE and from the SAME instant run_started_at records: the prompt
@@ -459,20 +481,28 @@ func (s *Service) Start(taskID int64, agent, mode string) (sessionUUID string, e
 	// at exit and wsingest's reconcile pass converges whatever is still missing.
 	runcore.LinkSession(s.DB, Engine, taskID, uuid)
 
-	log.Printf("planrun: start plan=%d agent=%s mode=%s uuid=%s worktree=%q phases=%d",
-		taskID, agent, runMode, uuid, acq.Path, len(info.Phases))
+	log.Printf("planrun: start plan=%d agent=%s mode=%s uuid=%s cwd=%q phases=%d",
+		taskID, agent, runMode, uuid, cwd, len(info.Phases))
 	s.notify(taskID)
 
-	prompt := BuildPromptIn(info.PlanDir, string(readme), info.Phases, runMode, info.RepoRoot, info.ProjectPath, acq.Path, budget)
+	var prompt, settingsFile string
+	if runMode == ModeOrchestrate {
+		// cwd IS the project root, so its own .claude settings load as they would
+		// for any session there; there is nothing to inherit.
+		prompt = BuildOrchestratePrompt(taskID, info.PlanDir, string(readme), info.Phases, s.swarmeryBin(), budget)
+	} else {
+		prompt = BuildPromptIn(info.PlanDir, string(readme), info.Phases, runMode, info.RepoRoot, info.ProjectPath, acq.Path, budget)
+		settingsFile = repopath.InheritedSettings(info.ProjectPath, info.RepoRoot, acq.Path)
+	}
 	if s.InjectLessons != nil {
 		prompt += s.InjectLessons(taskID, uuid)
 	}
 	spec := RunSpec{
 		Prompt:       prompt,
 		SessionUUID:  uuid,
-		Cwd:          acq.Path,
+		Cwd:          cwd,
 		Agent:        agent,
-		SettingsFile: repopath.InheritedSettings(info.ProjectPath, info.RepoRoot, acq.Path),
+		SettingsFile: settingsFile,
 		ProjectPath:  info.ProjectPath,
 	}
 	if spec.SettingsFile != "" {
@@ -483,6 +513,20 @@ func (s *Service) Start(taskID int64, agent, mode string) (sessionUUID string, e
 	runcore.ClearRunEvents(s.DB, Engine, taskID)
 	s.spawn(func() { s.runAndHandle(ctx, cancel, releaseSlot, info, acq, spec, budget) })
 	return uuid, nil
+}
+
+// SwarmeryBin is the absolute path of the swarmery binary an orchestrating
+// controller calls (`<bin> api …`) to start and land phase runs. "" ⇒ the
+// running executable (the daemon itself), falling back to "swarmery" on PATH.
+// A field so tests pin it.
+func (s *Service) swarmeryBin() string {
+	if s.SwarmeryBin != "" {
+		return s.SwarmeryBin
+	}
+	if exe, err := os.Executable(); err == nil {
+		return exe
+	}
+	return "swarmery"
 }
 
 // allComplete reports whether every phase already has all its criteria ticked.
@@ -764,7 +808,9 @@ func (s *Service) baseBranch(repoRoot string) string {
 // removeWorktree best-effort removes the run's worktree, KEEPING the branch
 // (its commits stay reachable for the user — mirrors phaserun.removeWorktree).
 func (s *Service) removeWorktree(repoRoot string, acq worktree.Acquired) {
-	if s.Wt == nil {
+	// A zero acq is an orchestrated run, which never had a worktree. Guarded here
+	// rather than at the call sites so no path can hand Remove an empty path.
+	if s.Wt == nil || acq.Path == "" {
 		return
 	}
 	if err := s.Wt.Remove(repoRoot, acq, true /* keepBranch */); err != nil {
@@ -914,7 +960,7 @@ func (s *Service) loadPlan(taskID int64) (planInfo, error) {
 // loadPhases reads the plan's phases in execution order.
 func (s *Service) loadPhases(taskID int64) ([]Phase, error) {
 	rows, err := s.DB.Query(`
-		SELECT seq, name, doc_path, depends_on, checkboxes_done, checkboxes_total, repo
+		SELECT id, seq, name, doc_path, depends_on, checkboxes_done, checkboxes_total, repo
 		  FROM epic_phases
 		 WHERE workspace_task_id = ?
 		 ORDER BY seq, id`, taskID)
@@ -929,7 +975,7 @@ func (s *Service) loadPhases(taskID int64) ([]Phase, error) {
 			depsJSON string
 			repo     sql.NullString
 		)
-		if err := rows.Scan(&p.Seq, &p.Name, &p.DocPath, &depsJSON, &p.Done, &p.Total, &repo); err != nil {
+		if err := rows.Scan(&p.ID, &p.Seq, &p.Name, &p.DocPath, &depsJSON, &p.Done, &p.Total, &repo); err != nil {
 			return nil, err
 		}
 		p.Repo = repo.String
