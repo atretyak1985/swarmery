@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 )
 
@@ -232,22 +233,51 @@ func pickVersionDir(pluginDir string) string {
 	if err != nil {
 		return ""
 	}
-	var versions []string
+	// Several versions can carry `.in_use` at once: every live Claude Code
+	// session marks the version it loaded, and an old session keeps its marker
+	// after an update. Returning the FIRST marked dir (ReadDir order = oldest)
+	// pinned the scan to the oldest version still open somewhere, so an update
+	// never reached the index. The NEWEST marked version wins; with no marker,
+	// the newest version overall.
+	var versions, inUse []string
 	for _, e := range entries {
 		if !e.IsDir() || strings.HasPrefix(e.Name(), ".") {
 			continue
 		}
-		dir := filepath.Join(pluginDir, e.Name())
-		if _, err := os.Stat(filepath.Join(dir, ".in_use")); err == nil {
-			return dir
-		}
 		versions = append(versions, e.Name())
+		if _, err := os.Stat(filepath.Join(pluginDir, e.Name(), ".in_use")); err == nil {
+			inUse = append(inUse, e.Name())
+		}
 	}
-	if len(versions) == 0 {
+	pick := inUse
+	if len(pick) == 0 {
+		pick = versions
+	}
+	if len(pick) == 0 {
 		return ""
 	}
-	sort.Strings(versions)
-	return filepath.Join(pluginDir, versions[len(versions)-1])
+	sort.Slice(pick, func(i, j int) bool { return versionLess(pick[i], pick[j]) })
+	return filepath.Join(pluginDir, pick[len(pick)-1])
+}
+
+// versionLess orders version dir names: dot-separated fields compare
+// numerically when both are numbers ("3.9.0" < "3.10.0"), else as strings.
+// Names are opaque (semver, `unknown`, git-sha prefixes), so a non-numeric
+// field never fails — it just sorts lexically.
+func versionLess(a, b string) bool {
+	as, bs := strings.Split(a, "."), strings.Split(b, ".")
+	for i := 0; i < len(as) && i < len(bs); i++ {
+		if as[i] == bs[i] {
+			continue
+		}
+		an, aerr := strconv.Atoi(as[i])
+		bn, berr := strconv.Atoi(bs[i])
+		if aerr == nil && berr == nil {
+			return an < bn
+		}
+		return as[i] < bs[i]
+	}
+	return len(as) < len(bs)
 }
 
 // settingsCandidates enumerates every hooks source file for this scan pass.
